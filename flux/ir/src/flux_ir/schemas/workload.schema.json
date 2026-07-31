@@ -1,0 +1,88 @@
+{
+  "$id": "https://flux.dev/schemas/workload.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flux Workload IR",
+  "description": "Lowered, DSE-oriented view of a workload. See docs/04.md §3.1. Not a replacement for ONNX/MLIR — produced from them by a frontend. Amended by docs/00-decisions.md D1: the affine/einsum core is the flagship case but not the only one; 'compute_kernel' is the general-SoC escape hatch alongside 'data_dependent'.",
+  "type": "object",
+  "required": ["schema_version", "id", "ops"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "enum": ["onnx", "mlir", "pytorch", "yaml", "handwritten"] },
+        "file_sha256": { "type": "string" },
+        "importer": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "tensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "rank", "dtype"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "rank": { "type": "array", "items": { "type": "string" } },
+          "dtype": { "type": "string" },
+          "scale": { "type": "string" },
+          "residency": { "type": "string", "enum": ["transient", "persistent"] },
+          "growth": { "type": "string", "enum": ["fixed", "append"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "ops": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/op" }
+    },
+    "phases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dynamism": {
+      "type": "object",
+      "properties": {
+        "symbolic_dims": { "type": "array", "items": { "type": "string" } },
+        "distributions": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "op": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["einsum", "data_dependent", "compute_kernel"],
+          "description": "einsum: affine core, matches ZigZag/Timeloop nested-for-loop semantics. data_dependent: shape/behavior driven by runtime data (MoE routing, speculative decoding, ...), carries a distribution instead of a fixed shape. compute_kernel: general-SoC escape hatch (D1) for non-tensor compute (protocol engines, control logic) that isn't affine and isn't data-dependent in the MoE sense."
+        },
+        "expr": { "type": "string" },
+        "bounds": { "type": "object" },
+        "sparsity": { "type": "object" },
+        "semantics": { "type": "object" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "einsum" } } },
+          "then": { "required": ["expr", "bounds"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "data_dependent" } } },
+          "then": { "required": ["semantics"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "compute_kernel" } } },
+          "then": { "required": ["semantics"] }
+        }
+      ]
+    }
+  }
+}

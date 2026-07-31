@@ -1,0 +1,4 @@
+.venv/
+.nix-bin/
+__pycache__/
+*.pyc

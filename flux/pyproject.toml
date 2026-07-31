@@ -1,0 +1,14 @@
+[project]
+name = "flux"
+version = "0.0.0"
+description = "IR + evaluator contract + calibration/provenance layer for SoC design-space exploration, agent-first."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "TBD — see docs/00-decisions.md still-open items (licensing floor not yet resolved)" }
+
+# Skeleton only. No dependencies pinned yet — Phase 1 ("Spine", docs/05.md) adds the IR/evaluator-ABI
+# packages and their real dependencies (schema validation, ZigZag/Timeloop adapters, etc.).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

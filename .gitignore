@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Rust
+target/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local data / results — content-addressed stores should not be committed wholesale
+flux/stores/local/

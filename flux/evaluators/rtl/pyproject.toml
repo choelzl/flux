@@ -1,0 +1,21 @@
+[project]
+name = "flux-evaluator-rtl"
+version = "0.1.0"
+description = "RTL-sim (Verilator) backend adapter for the Flux Evaluator ABI (docs/04.md §4.4, §5's escalation rung)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-ir",
+    "flux-evaluator-abi",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_rtl"]
+
+# reference/ lives inside src/flux_evaluator_rtl/ (not as a sibling of src/) specifically so it
+# ships as real package data in a built wheel, not just under an editable install — same G11
+# (docs/03.md, docs/05.md) fix as evaluators/ir's schemas/ and evaluators/timeloop's reference/.

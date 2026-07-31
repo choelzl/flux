@@ -1,0 +1,6 @@
+id: mlp-gemm0-simple-npu-1d-v2
+workload_path: ir/workload/examples/mlp-gemm0.yaml
+arch_path: ir/architecture/examples/simple-npu-1d-v2.yaml
+description: >
+  GEMM MLP layer on the 1D NPU at X=4. One of three widths (with v1, v3) used to fit
+  calibration/'s residual statistics — see docs/calibration-report.md Finding 3.

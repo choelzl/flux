@@ -1,0 +1,27 @@
+# A 3D 4x4x4 mesh NoC (64 router nodes across 3 die-stacked layers, TSV-connected) — the k-ary
+# n-cube family generalises directly from 2D to 3D by adding one more dimension (n=3, k=4).
+# Same node count as noc-mesh-2d-v1.yaml (64) for a direct, fair 2D-vs-3D comparison
+# (docs/00-decisions.md D5/D6): real Booksim2 simulation shows the 3D topology's shorter average
+# hop count (real diameter reduction from adding a dimension, not a fabricated difference) —
+# see tests/integration/test_booksim_adapter_live.py.
+#
+# Honest scope limit: this models topology/routing only. It does NOT model TSV count/placement,
+# inter-die link characteristics distinct from in-die links, or thermal (3D stacking's actual
+# dominant real-world constraint — see docs/05.md Phase 5's still-unstarted 3D-ICE integration).
+schema_version: "0.1.0"
+id: noc/mesh-3d/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: router_fabric
+    class: interconnect
+    attrs: {node_count: 64}
+interconnect:
+  noc:
+    topology: mesh
+    dimensions: [4, 4, 4]
+    routing_function: dor
+    num_vcs: 8
+    vc_buf_size: 8
+    traffic: transpose
+    injection_rate: 0.005
+    packet_size: 20

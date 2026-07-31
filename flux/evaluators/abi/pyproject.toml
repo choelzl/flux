@@ -1,0 +1,14 @@
+[project]
+name = "flux-evaluator-abi"
+version = "0.1.0"
+description = "Flux Evaluator ABI v0.1: the evaluate()/evaluate_batch() contract and its Result shape (docs/04.md §4)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_abi"]

@@ -1,0 +1,17 @@
+[project]
+name = "flux-evaluator-booksim"
+version = "0.1.0"
+description = "Real NoC evaluator (docs/00-decisions.md D5/D6): 2D/3D k-ary n-cube simulation via Booksim2."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-ir",
+    "flux-evaluator-abi",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_booksim"]

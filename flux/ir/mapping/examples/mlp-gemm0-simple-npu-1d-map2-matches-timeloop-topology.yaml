@@ -1,0 +1,39 @@
+# The literal mapping structure Timeloop's own real mapper found optimal for this exact
+# (workload, architecture) pair — reverse-translated from timeloop-mapper.map.yaml's real
+# output, not designed by hand: spatial split on K (Timeloop calls it M) at size 8, a single
+# flat temporal loop nest with C outermost / B middle / K innermost, and every operand loaded
+# from `dram` to `gbuf` exactly once (Timeloop's own dump shows zero temporal iteration at the
+# `dram` level — see docs/phase1-exit-criterion-report.md). Run through ZigZag via this
+# translator, the *textually equivalent* mapping gives 1666 cycles, not Timeloop's 512 — the
+# key data point closing this project's search-algorithm investigation: even given the literal
+# mapping topology Timeloop itself found optimal, ZigZag's cost model computes a ~3.25x higher
+# latency for it. That's evidence of a genuine cost-model accounting difference between the two
+# tools for an equivalent mapping, not a mapping-search-quality or mapping-expressiveness gap.
+schema_version: "0.1.0"
+id: mlp/gemm0/simple-npu-1d-v1/map-matches-timeloops-winning-topology
+for_op: mlp.gemm0
+operands:
+  I:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+  W:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+  O:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+spatial:
+  - {dim: K, array_dim: X, size: 8}
+compatibility:
+  expressible_in: [flux, zigzag, timeloop]
+  not_expressible_in: []
+  reason: "a single shared flat loop order, which both tools' mapping formats can express; timeloop's own mapper produced this exact structure, evaluators/timeloop just doesn't have a Mapping IR translator yet to accept it as input rather than only emit it"

@@ -1,0 +1,21 @@
+# Purpose-built as the common denominator both evaluators/zigzag's and evaluators/timeloop's
+# Architecture IR translators can consume — unlike simple-npu-v1.yaml (2D, X/Y), this has a
+# single compute dimension because Timeloop's translator (v0.1) only models a single spatial
+# `meshX` container, not an N-dimensional array. This is what makes a true same-architecture
+# cross-backend comparison possible; see docs/phase1-exit-criterion-report.md.
+schema_version: "0.1.0"
+id: simple-npu-1d/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: dram
+    class: memory
+    attrs: {size_kb: 1048576}   # 1 GiB, effectively unconstrained at this problem scale
+  - level: gbuf
+    class: memory
+    attrs: {size_kb: 512}
+  - level: pe_array
+    class: compute
+    attrs: {dims: {X: 8}}
+constraints:
+  - {kind: area_mm2, max: 4.0}
+  - {kind: tdp_w, max: 2.0}

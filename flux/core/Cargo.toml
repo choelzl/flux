@@ -1,0 +1,13 @@
+[package]
+name = "flux-core"
+version = "0.0.0"
+edition = "2021"
+description = "Native enumeration, cost model, and batch evaluation core for Flux (docs/04.md §9)."
+publish = false
+
+# Skeleton only — no dependencies yet. Native core is a Phase 3 ("Search and speed", docs/05.md)
+# concern; adapters come first.
+
+[lib]
+name = "flux_core"
+path = "src/lib.rs"

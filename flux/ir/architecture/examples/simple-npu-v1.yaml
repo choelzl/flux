@@ -1,0 +1,20 @@
+# Purpose-built for evaluators/zigzag's Architecture IR translator (architecture_translator.py)
+# — small and uniform (every memory holds every operand, one shared port) rather than
+# illustrating IR breadth the way my-npu-v3.yaml / generic-riscv-soc-v1.yaml do. Compute array
+# kept small (8x8) to keep ZigZag's spatial-mapping search fast.
+schema_version: "0.1.0"
+id: simple-npu/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: dram
+    class: memory
+    attrs: {size_kb: 1048576}   # 1 GiB, effectively unconstrained at this problem scale
+  - level: gbuf
+    class: memory
+    attrs: {size_kb: 512}
+  - level: pe_array
+    class: compute
+    attrs: {dims: {X: 8, Y: 8}}
+constraints:
+  - {kind: area_mm2, max: 4.0}
+  - {kind: tdp_w, max: 2.0}

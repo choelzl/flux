@@ -1,0 +1,27 @@
+# Reference example, from docs/04.md §3.3 — an uneven mapping (Q, KV, O get different loop
+# nests), expressible in Flux and ZigZag but not Timeloop. The `compatibility` block is what
+# makes that fact machine-readable instead of a footnote.
+schema_version: "0.1.0"
+id: llama3-8b/decode/layer0/attn.qk/map0
+for_op: attn.qk
+operands:
+  Q:
+    - {level: gbuf, loops: [{dim: h, size: 8, order: 0}]}
+    - {level: reg, loops: [{dim: d, size: 128, order: 0}]}
+  KV:
+    - {level: gbuf, loops: [{dim: h, size: 8, order: 0}]}
+  O:
+    - {level: gbuf, loops: [{dim: h, size: 8, order: 0}]}
+spatial:
+  - {dim: h, array_dim: X, size: 32}
+  - {dim: d, array_dim: Y, size: 32}
+fusion:
+  group: [attn.qk, attn.softmax, attn.av]
+  tile: {s: 64}
+  granularity: fine
+placement:
+  core: cluster0.core3
+compatibility:
+  expressible_in: [flux, zigzag]
+  not_expressible_in: [timeloop]
+  reason: uneven_operand_blocking

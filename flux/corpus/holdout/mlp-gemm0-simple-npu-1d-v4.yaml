@@ -1,0 +1,9 @@
+id: mlp-gemm0-simple-npu-1d-v4
+workload_path: ir/workload/examples/mlp-gemm0.yaml
+arch_path: ir/architecture/examples/simple-npu-1d-v4.yaml
+description: >
+  GEMM MLP layer on the 1D NPU at X=32 — deliberately kept out of calibration's training data
+  (see ir/architecture/examples/simple-npu-1d-v4.yaml's own header and
+  docs/calibration-report.md Finding 3, which showed the tight 3-point pattern from v1-v3 breaks
+  at this point: naive extrapolation would have been wrong by 48%). Never expose this entry to
+  a search strategy or an agent — see corpus/README.md and CorpusStore.all_entries().

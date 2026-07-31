@@ -1,0 +1,86 @@
+{
+  "$id": "https://flux.dev/schemas/architecture.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flux Architecture IR",
+  "description": "Component classes + attributes + actions, generalising Accelergy's plug-in pattern beyond energy to area/leakage/latency/thermal. See docs/04.md §3.2. Amended by docs/00-decisions.md D1: covers full-SoC hierarchies (memory/compute/interconnect), not DNN-accelerator-only.",
+  "type": "object",
+  "required": ["schema_version", "id", "hierarchy"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "tech": {
+      "type": "object",
+      "properties": {
+        "node": { "type": "string" },
+        "pdk_class": { "type": "string", "enum": ["open", "commercial"] },
+        "vt_flavors": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "hierarchy": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["level", "class"],
+        "properties": {
+          "level": { "type": "string", "minLength": 1 },
+          "class": {
+            "type": "string",
+            "enum": ["memory", "compute", "interconnect", "other"],
+            "description": "'other' is the general-SoC escape hatch (D1) for components that aren't memory/compute/interconnect in the DNN-accelerator sense — e.g. protocol bridges, clock/power domains."
+          },
+          "attrs": { "type": "object" },
+          "interconnect": { "type": "object" },
+          "estimator_hints": {
+            "type": "object",
+            "description": "Accelergy-style plug-in keying: which estimator plugin(s) to use for this component, generalised to any cost dimension, not just energy."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "interconnect": {
+      "type": "object",
+      "description": "System-level interconnect (NoC/D2D), distinct from per-level 'interconnect' attrs on a hierarchy entry.",
+      "properties": {
+        "noc": {
+          "type": "object",
+          "description": "Free-form by design (existing examples use a descriptive `topology` string like 'mesh_4x4' or 'crossbar' with no further structure — see my-npu-v3.yaml, generic-riscv-soc-v1.yaml). `dimensions`, when present alongside `topology: mesh` or `topology: torus`, describes a real k-ary n-cube network (docs/00-decisions.md D5): n=2 is a 2D mesh/torus, n=3 is a real 3D NoC (die-stacked, TSV-connected layers) — same topology family, one more dimension. That specific shape maps onto evaluators/booksim's real Booksim2 integration (KNCube network, verified against real 2D and 3D simulations, not assumed); evaluators/booksim raises NotExpressibleError, not a schema error, for a `noc` block that doesn't have it — narrow validation belongs in the adapter, matching every other translator in this repo, not in this shared schema.",
+          "properties": {
+            "dimensions": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 1 },
+              "minItems": 1,
+              "description": "One entry per network dimension, e.g. [8, 8] for a 2D 8x8 mesh, [4, 4, 4] for a 3D 4x4x4 mesh."
+            },
+            "routing_function": { "type": "string", "description": "Booksim2 routing function name, e.g. 'dor' (dimension-order routing)." },
+            "num_vcs": { "type": "integer", "minimum": 1 },
+            "vc_buf_size": { "type": "integer", "minimum": 1 },
+            "traffic": { "type": "string", "description": "Booksim2 synthetic traffic pattern name, e.g. 'uniform', 'transpose' — see evaluators/booksim/README.md for why traffic is an architecture-level (not workload-level) parameter in v0.1." },
+            "injection_rate": { "type": "number", "exclusiveMinimum": 0 },
+            "packet_size": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Machine-checkable, independent of the cost model — enforced by the validity checker even when the cost model has no opinion (anti-reward-hacking, G14).",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": { "type": "string" },
+          "max": { "type": "number" },
+          "min": { "type": "number" },
+          "model": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

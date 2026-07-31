@@ -1,0 +1,71 @@
+{
+  "_comment": "Pinned baseline residuals for drift-detection CI (docs/04.md \u00a75). Captured from real live evaluator runs (ZigZag, Timeloop, and RTL-sim ground truth via Verilator) on 2026-08-03 -- see tests/integration/test_drift_detection.py, which re-evaluates every point live and fails if the fresh residual moves beyond `tolerance` from the value pinned here. Regenerate deliberately (not silently) after any change to an evaluator's cost model.",
+  "points": [
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v2.yaml",
+      "evaluator": "zigzag@3.8.5",
+      "metric": "latency_cycles",
+      "reference_value": 1057.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 3106.0,
+      "baseline_relative_residual": 1.9385052034058656,
+      "tolerance": 0.15
+    },
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v2.yaml",
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "metric": "latency_cycles",
+      "reference_value": 1057.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 1024.0,
+      "baseline_relative_residual": -0.03122043519394513,
+      "tolerance": 0.15
+    },
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v1.yaml",
+      "evaluator": "zigzag@3.8.5",
+      "metric": "latency_cycles",
+      "reference_value": 529.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 1554.0,
+      "baseline_relative_residual": 1.9376181474480152,
+      "tolerance": 0.15
+    },
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v1.yaml",
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "metric": "latency_cycles",
+      "reference_value": 529.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 512.0,
+      "baseline_relative_residual": -0.03213610586011342,
+      "tolerance": 0.15
+    },
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v3.yaml",
+      "evaluator": "zigzag@3.8.5",
+      "metric": "latency_cycles",
+      "reference_value": 265.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 778.0,
+      "baseline_relative_residual": 1.9358490566037736,
+      "tolerance": 0.15
+    },
+    {
+      "workload_path": "ir/workload/examples/mlp-gemm0.yaml",
+      "arch_path": "ir/architecture/examples/simple-npu-1d-v3.yaml",
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "metric": "latency_cycles",
+      "reference_value": 265.0,
+      "reference_source": "rtl_sim",
+      "baseline_predicted_value": 256.0,
+      "baseline_relative_residual": -0.033962264150943396,
+      "tolerance": 0.15
+    }
+  ]
+}

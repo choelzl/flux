@@ -1,0 +1,21 @@
+[project]
+name = "flux-ir"
+version = "0.1.0"
+description = "Flux IR: Workload/Architecture/Mapping schemas, canonicalisation, and content-addressed hashing (docs/04.md §3)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "jsonschema>=4.20",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_ir"]
+
+# schemas/ lives inside src/flux_ir/ (not as a sibling of src/) specifically so it ships as real
+# package data in a built wheel, not just under an editable install — closes G11 (docs/03.md,
+# docs/05.md) for this package.
