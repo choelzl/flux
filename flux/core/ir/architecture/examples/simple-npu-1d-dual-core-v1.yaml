@@ -1,0 +1,45 @@
+# A real, genuine multi-core architecture (docs/decisions.md D82) — two independent compute
+# cores, each `simple-npu-1d-v1.yaml`'s own gbuf/pe_array shape (minus its own `dram` level: a
+# multi_core architecture's real off-chip access is modelled once, centrally, via
+# `offchip_core_id`, not duplicated per core — see architecture_translator.py's own module
+# docstring for why). The top-level `hierarchy` is deliberately empty: this architecture's real
+# structure lives entirely inside `interconnect.multi_core`.
+schema_version: "0.1.0"
+id: simple-npu-1d-dual-core/v1
+tech: {node: n28, pdk_class: open}
+hierarchy: []
+interconnect:
+  multi_core:
+    cores:
+      - id: 0
+        coordinates: [0, 0]
+        architecture:
+          schema_version: "0.1.0"
+          id: simple-npu-1d-dual-core/v1-core0
+          hierarchy:
+            - level: gbuf
+              class: memory
+              attrs: {size_kb: 512}
+            - level: pe_array
+              class: compute
+              attrs: {dims: {X: 8}}
+      - id: 1
+        coordinates: [1, 0]
+        architecture:
+          schema_version: "0.1.0"
+          id: simple-npu-1d-dual-core/v1-core1
+          hierarchy:
+            - level: gbuf
+              class: memory
+              attrs: {size_kb: 512}
+            - level: pe_array
+              class: compute
+              attrs: {dims: {X: 8}}
+    offchip_core_id: 2
+    core_links:
+      - cores: [0, 1]
+        bandwidth: 32
+      - cores: [0, 2]
+        bandwidth: 128
+      - cores: [1, 2]
+        bandwidth: 128

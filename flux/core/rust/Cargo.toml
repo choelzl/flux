@@ -1,0 +1,25 @@
+[package]
+name = "flux-core"
+version = "0.1.0"
+edition = "2021"
+description = "Native enumeration, cost model, and batch evaluation core for Flux (docs/architecture.md)."
+publish = false
+
+# The first real capability here (docs/decisions.md D75): a genuinely native, in-repo compute-bound
+# roofline cost model — not wrapping an external tool, unlike every other evaluator this repo has.
+# `roofline.rs` is pure Rust (only `serde_json`), unit-tested via plain `cargo test`, no Python
+# needed. The `python` feature below adds the PyO3 extension-module edge on top of it; `cargo test`
+# never needs that feature (and so never needs to link libpython) — the hot loop stays real,
+# allocation-free-in-spirit Rust regardless of whether the Python edge is even built.
+
+[lib]
+name = "flux_core"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = "1"
+pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }
+
+[features]
+python = ["dep:pyo3"]

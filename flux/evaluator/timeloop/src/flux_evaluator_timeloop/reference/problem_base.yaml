@@ -1,0 +1,71 @@
+# Base problem shape, vendored from the same tutorial exercise's inputs/problem.yaml (the
+# `shape` block is unchanged — it defines what a "convolution" means to Timeloop and must stay
+# fixed for the mapper's spatial constraints in arch.yaml to keep meaning what they mean).
+#
+# The `instance` block here is the *degenerate* case workload_translator.py starts from: every
+# dim forced to a no-op value (single "pixel", 1x1 kernel, no padding/dilation/stride) so that
+# the whole problem reduces to a plain GEMM. `einsum_op_to_timeloop_instance()` only overrides
+# N (batch), C (reduction dim), M (output dim) — see its docstring for the naming convention.
+problem:
+  version: 0.4
+  instance:
+    C: 1
+    G: 1
+    H: 1
+    Hdilation: 1
+    Hpad: 0
+    Hstride: 1
+    M: 1
+    N: 1
+    P: 1
+    Q: 1
+    R: 1
+    S: 1
+    W: 1
+    Wdilation: 1
+    Wpad: 0
+    Wstride: 1
+  shape:
+    coefficients:
+    - {name: Wstride, default: 1}
+    - {name: Hstride, default: 1}
+    - {name: Wdilation, default: 1}
+    - {name: Hdilation, default: 1}
+    data_spaces:
+    - name: Weights
+      projection:
+      - - - C
+      - - - M
+      - - - R
+      - - - S
+      - - - G
+    - name: Inputs
+      projection:
+      - - - N
+      - - - C
+      - - - R
+          - Wdilation
+        - - P
+          - Wstride
+      - - - S
+          - Hdilation
+        - - Q
+          - Hstride
+      - - - G
+    - name: Outputs
+      projection:
+      - - - N
+      - - - M
+      - - - Q
+      - - - P
+      - - - G
+      read_write: true
+    dimensions:
+    - C
+    - M
+    - R
+    - S
+    - N
+    - P
+    - Q
+    - G

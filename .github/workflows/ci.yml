@@ -1,0 +1,208 @@
+# CI for Flux (docs/decisions.md D155).
+#
+# This exists because of a measured gap, not as a formality: `tests/integration/` is excluded from
+# the standard regression command, so for a long time nothing ran it — and when it finally was run
+# it produced four real defects that 1036 green unit tests had missed, including a Verilator
+# upgrade that silently broke RTL generation (D119, D122, D129, D153).
+#
+# What CI genuinely covers, and what it cannot:
+#   * unit + conformance      — every push. Conformance needs Docker (Timeloop runs in it).
+#   * integration, partial    — nightly. Tests needing a local Ollama skip themselves rather than
+#                               fail, so the generation suites are NOT covered here. That is a real
+#                               hole, stated rather than papered over: those are exactly the tests
+#                               that caught D153, and they still need a machine with a model on it.
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"   # nightly, for the integration sweep
+  workflow_dispatch:
+
+concurrency:
+  # The event is part of the group, and scheduled runs are never cancelled. Without both, a push to
+  # `main` cancels a nightly already running on `main` — they share workflow and ref — and the
+  # integration sweep is a 350-minute job, so on any active day it would simply never finish. A
+  # cancelled run reports as cancelled, not failed, so nothing would have drawn attention to it:
+  # the same "an unknown reads as a pass" shape D129 records, one level up in the stack.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  regression:
+    name: unit + conformance
+    runs-on: ubuntu-latest
+    # Generous only for the cold-bootstrap runs: the nixchip toolchain (verilator, yosys,
+    # systemc, cacti, dramsim3) has no public binary cache and builds from source on 4 vCPUs.
+    # Steady state (warm cache) is a few minutes.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # The flake builds zigzag-dse and chia from source (neither is packaged in nixpkgs), so a
+      # cold store is expensive; the shared setup (D242) frees the runner disk and keeps the
+      # closure between runs in the GitHub actions cache.
+      - uses: ./.github/actions/nix-setup
+
+      # Building the shell as its own step separates "the environment could not be built" from
+      # "a test failed" in the job UI — the 2026-08 failures were the former wearing the
+      # latter's name (D242). df on both sides pins disk exhaustion if it ever recurs.
+      - name: Build the dev shell
+        working-directory: flux
+        # The cap is INTERNAL and below the job timeout (D247): a job-level timeout CANCELS the
+        # run, and cancellation kills the cache-save post step — the first cold run then banks
+        # nothing and every run starts cold again (measured: 90 min, cancelled, zero saved).
+        # Failing instead lets the post steps save the partial store, and the next run resumes
+        # from it. This is a bootstrap ratchet: expect the first one or two pushes to fail here
+        # with the message below, then stay green.
+        run: |
+          if ! timeout 5400 nix develop --command true; then
+            echo "::error::dev shell build hit the 90-min cap — partial store is cached; re-run to resume the build"
+            exit 1
+          fi
+          df -h /
+
+      - name: Regression suite
+        working-directory: flux
+        # No PYTHONPATH prefix: the dev shell puts every local package on it itself (D123).
+        run: nix develop --command python3 -m pytest tests/unit tests/conformance -q
+
+  integration:
+    name: integration sweep (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/nix-setup
+
+      - name: Build the dev shell
+        working-directory: flux
+        # Same internal-cap-below-job-timeout rule as the regression job (D247).
+        run: |
+          if ! timeout 5400 nix develop --command true; then
+            echo "::error::dev shell build hit the 90-min cap — partial store is cached; re-run to resume the build"
+            exit 1
+          fi
+          df -h /
+
+      - name: Integration suite
+        working-directory: flux
+        # Per-file, so one slow file cannot silently consume the budget and turn the rest into
+        # unknowns. That failure mode is the reason this job exists in this shape: a 420s cap once
+        # hid two real failures behind "timed out", and an unknown reads as a pass in a summary
+        # (D129). 40 minutes per file is above the slowest real one measured (gem5, ~30 min).
+        run: |
+          fail=0
+          for f in tests/integration/*.py; do
+            echo "::group::$f"
+            nix develop --command timeout 2400 python3 -m pytest "$f" -q --tb=short || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
+
+  physical:
+    name: openroad physical rung (nightly)
+    # Same shape and reason as timeloop-hermetic below (D207/D230): the sweep runs every file
+    # under the default shell, where the openroad-gated tests skip themselves, and a file whose
+    # tests all skip exits 0 — so the from-source OpenROAD build, the D229 liberty repair and
+    # the routed flow would all rot green without this job.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # or-tools + openroad build from source on a cold cache (uncached upstream: broken-marked).
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/nix-setup
+        with:
+          key-suffix: physical
+
+      - name: Build the physical shell
+        working-directory: flux
+        # Internal cap below the job timeout (D247); or-tools + OpenROAD from source is the
+        # largest build in the repo, so the ratchet may need a few runs to converge.
+        run: |
+          if ! timeout 9000 nix develop .#physical --command true; then
+            echo "::error::physical shell build hit the 150-min cap — partial store is cached; re-run to resume"
+            exit 1
+          fi
+          df -h /
+
+      - name: OpenROAD PPA + mixed-fidelity campaign (docs/decisions.md D225-D229)
+        working-directory: flux
+        run: |
+          set -o pipefail
+          nix develop .#physical --command python3 -m pytest \
+            tests/integration/test_openroad_ppa_live.py \
+            tests/integration/test_campaign_mixed_fidelity_live.py \
+            tests/integration/test_composition_area_frontier_live.py \
+            tests/integration/test_sram_macro_flow_live.py \
+            tests/integration/test_openram_crosscheck_live.py \
+            -q --tb=short -rs \
+            | tee "$RUNNER_TEMP/physical.txt"
+          if grep -q "skipped" "$RUNNER_TEMP/physical.txt"; then
+            echo "::error::the physical shell provided no usable openroad — tests skipped"
+            exit 1
+          fi
+
+  timeloop-hermetic:
+    name: hermetic timeloop equivalence (nightly)
+    # Its own job because it needs its own shell. The nightly sweep above runs every integration
+    # file under the default shell, where `test_timeloop_local_equivalence_live.py` skips itself —
+    # and a skipped file exits 0, so drift in the from-source Timeloop build would read as a pass.
+    # That is precisely the "an unknown reads as a pass" failure D129 records.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Generous only for the cold-cache case: Timeloop and barvinok are from-source C++ builds. The
+    # tests themselves run in seconds once the shell exists.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/nix-setup
+        with:
+          key-suffix: timeloop
+
+      - name: Build the hermetic Timeloop shell
+        working-directory: flux
+        # Internal cap below the job timeout (D247).
+        run: |
+          if ! timeout 4200 nix develop .#timeloop --command true; then
+            echo "::error::timeloop shell build hit the 70-min cap — partial store is cached; re-run to resume"
+            exit 1
+          fi
+          df -h /
+
+      - name: Timeloop equivalence (docs/decisions.md D206)
+        working-directory: flux
+        run: |
+          # `| tee` makes the pipeline's status tee's, not pytest's — the exact mistake D199
+          # records, where every command in a loop reported rc=0 regardless of what happened.
+          set -o pipefail
+          nix develop .#timeloop --command python3 -m pytest \
+            tests/integration/test_timeloop_local_equivalence_live.py -q --tb=short -rs \
+            | tee "$RUNNER_TEMP/timeloop-equivalence.txt"
+          # A skip here means the shell did not provide what it promises — a build failure wearing
+          # a pass, since every test in that file skips itself when no hermetic Timeloop is found.
+          # Asserted on the *absence of skips* rather than on a test count, which would break
+          # confusingly the first time someone adds a case.
+          if grep -q "skipped" "$RUNNER_TEMP/timeloop-equivalence.txt"; then
+            echo "::error::the hermetic Timeloop shell provided no usable timeloop — tests skipped"
+            exit 1
+          fi
+
+      - name: The rest of the Timeloop suite, on the hermetic runner
+        working-directory: flux
+        # The equivalence check above pins three architectures; these exercise sparsity, mapping
+        # and architecture translation. All were measured to pass identically on both runners
+        # (D206), so a failure here is a real divergence rather than a known gap. No skip
+        # assertion: these files legitimately skip nothing *and* gate on nothing, so pytest's own
+        # exit code is the whole signal.
+        run: |
+          set -o pipefail
+          FLUX_TIMELOOP_LOCAL=1 nix develop .#timeloop --command python3 -m pytest \
+            tests/integration/test_timeloop_adapter_live.py \
+            tests/integration/test_timeloop_architecture_translation_live.py \
+            tests/integration/test_timeloop_mapping_translation_live.py \
+            tests/integration/test_timeloop_sparsity_live.py \
+            -q --tb=short

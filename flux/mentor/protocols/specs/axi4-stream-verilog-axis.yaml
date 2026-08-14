@@ -1,0 +1,99 @@
+schema_version: "0.1.0"
+id: axi4-stream
+version: "verilog-axis-48ff7a7e"
+title: AXI4-Stream as implemented by alexforencich/verilog-axis
+kind: stream
+summary: >-
+  A single unidirectional channel with a tvalid/tready handshake carrying tdata, plus optional
+  qualifiers: tkeep (which bytes are valid), tlast (end of packet), tid and tdest (routing), and
+  tuser (sideband). No address, no response channel — unlike the axi4 bus in this directory.
+roles: [source, sink]
+
+provenance:
+  document: "alexforencich/verilog-axis: rtl/axis_register.v"
+  url: https://github.com/alexforencich/verilog-axis/tree/48ff7a7e2ef7
+  publisher: Alex Forencich
+  licence: MIT
+  redistributable: true
+  normative: false
+  version_retrieved: 48ff7a7e2ef7 (master, 2025-02-27)
+  retrieved: "2026-08-14"
+  implements:
+    standard: Arm AMBA AXI4-Stream
+    document: Arm IHI0051
+    redistributable: false
+    note: >-
+      As for axi4 and axi4-lite in this directory: the normative specification cannot be reproduced
+      (docs/decisions.md D31 records Arm's terms verbatim), so this document is evidence about what
+      this implementation does, not about what the standard requires. It is a *different* source
+      from the axi4/axi4-lite documents here — pulp-platform/axi has no AXI-Stream typedefs — so its
+      naming conventions are its own and need not line up with theirs.
+  note: >-
+    Licence read from the MIT grant in the source file's own header ("Permission is hereby granted,
+    free of charge, to any person obtaining a copy of this software..."), which is also what the
+    repository's COPYING file carries.
+
+coverage_note: >-
+  Signal names, widths and directions read from the port list of one representative module
+  (axis_register). Signals are named unprefixed (tdata, tvalid, ...) — the source writes them as
+  `s_axis_tdata`/`m_axis_tdata` because a module has both a sink and a source interface, and the
+  s_/m_ prefix identifies which port, not the signal. Direction is carried by driver/receiver here
+  instead. No prose descriptions: the source is RTL, and its parameter comments are recorded as
+  parameter descriptions rather than being expanded into signal prose from memory of the Arm
+  specification. Which qualifiers are *optional* is taken from the source's own ENABLE parameters,
+  not assumed.
+
+parameters:
+  - name: DATA_WIDTH
+    default: 8
+    description: Width of AXI stream interfaces in bits.
+    section: axis_register.v
+  - name: KEEP_WIDTH
+    default: null
+    description: tkeep signal width (words per cycle). The source computes it as ((DATA_WIDTH+7)/8).
+    section: axis_register.v
+  - name: KEEP_ENABLE
+    default: null
+    description: Propagate tkeep signal. The source defaults it to (DATA_WIDTH>8).
+    section: axis_register.v
+  - name: LAST_ENABLE
+    default: 1
+    description: Propagate tlast signal.
+    section: axis_register.v
+  - name: ID_ENABLE
+    default: 0
+    description: Propagate tid signal.
+    section: axis_register.v
+  - name: ID_WIDTH
+    default: 8
+    description: tid signal width.
+    section: axis_register.v
+  - name: DEST_ENABLE
+    default: 0
+    description: Propagate tdest signal.
+    section: axis_register.v
+  - name: DEST_WIDTH
+    default: 8
+    description: tdest signal width.
+    section: axis_register.v
+  - name: USER_ENABLE
+    default: 1
+    description: Propagate tuser signal.
+    section: axis_register.v
+  - name: USER_WIDTH
+    default: 1
+    description: tuser signal width.
+    section: axis_register.v
+
+signals:
+  - {name: clk,    driver: global, receiver: global, width: 1, section: axis_register.v}
+  - {name: rst,    driver: global, receiver: global, width: 1, section: axis_register.v}
+
+  - {name: tdata,  driver: source, receiver: sink,   width: DATA_WIDTH, section: axis_register.v}
+  - {name: tvalid, driver: source, receiver: sink,   width: 1,          section: axis_register.v}
+  - {name: tready, driver: sink,   receiver: source, width: 1,          section: axis_register.v}
+  - {name: tkeep,  driver: source, receiver: sink,   width: KEEP_WIDTH, required: false, section: axis_register.v}
+  - {name: tlast,  driver: source, receiver: sink,   width: 1,          required: false, section: axis_register.v}
+  - {name: tid,    driver: source, receiver: sink,   width: ID_WIDTH,   required: false, section: axis_register.v}
+  - {name: tdest,  driver: source, receiver: sink,   width: DEST_WIDTH, required: false, section: axis_register.v}
+  - {name: tuser,  driver: source, receiver: sink,   width: USER_WIDTH, required: false, section: axis_register.v}

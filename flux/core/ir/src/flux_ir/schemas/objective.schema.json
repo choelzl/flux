@@ -1,0 +1,278 @@
+{
+  "$id": "https://flux.dev/schemas/objective.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flux Objective IR",
+  "description": "What a campaign is trying to achieve: the metrics to improve and in which direction, the hard constraints, the search space and strategy, and a hard budget ledger. The fourth IR document kind (docs/decisions.md D216) \u2014 the declarative input a long-horizon autonomous loop consumes, content-hashed like every other IR document so a campaign has lineage.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "objectives",
+    "mode",
+    "workload",
+    "base_arch",
+    "backends",
+    "search",
+    "strategy",
+    "budget"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "metric",
+          "direction"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "type": "string",
+            "minLength": 1
+          },
+          "direction": {
+            "enum": [
+              "minimize",
+              "maximize"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "measured_at": {
+            "enum": [
+              "screen",
+              "escalation"
+            ],
+            "description": "Where this metric is measured (docs/decisions.md D226). screen (default): the screening backend must produce it, every trial. escalation: the screening backend cannot produce it (e.g. area_mm2 through zigzag) and it enters the frontier only at escalation fidelity."
+          }
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "pareto",
+        "weighted"
+      ],
+      "description": "pareto keeps a frontier; weighted scalarizes via the per-objective weights (required on every objective in that mode)."
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "metric_max",
+              "metric_min",
+              "validity"
+            ]
+          },
+          "metric": {
+            "type": "string"
+          },
+          "max": {
+            "type": "number"
+          },
+          "min": {
+            "type": "number"
+          },
+          "checker": {
+            "type": "string"
+          },
+          "measured_at": {
+            "enum": [
+              "screen",
+              "escalation"
+            ]
+          }
+        }
+      }
+    },
+    "workload": {
+      "$ref": "#/$defs/docref"
+    },
+    "base_arch": {
+      "$ref": "#/$defs/docref"
+    },
+    "backends": {
+      "type": "object",
+      "required": [
+        "screening"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "screening": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Backend registry name (flows/cli registry), never an instance."
+        },
+        "escalation": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Escalation rungs in order; may be empty or absent."
+        }
+      }
+    },
+    "search": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "enum": [
+            "architecture_width",
+            "memory_size",
+            "joint",
+            "noc_topology",
+            "open_architecture",
+            "composition_width",
+            "composition_system",
+            "interconnect_topology"
+          ]
+        }
+      },
+      "description": "The search space, reusing flux_search vocabulary. architecture_width requires widths: [int]; memory_size requires level + sizes_kb: [number]; joint requires widths + level + sizes_kb; noc_topology requires variants: [[topology, [dims]]]. additionalProperties stays open for per-kind fields; the Objective view validates them per kind."
+    },
+    "strategy": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "grid",
+            "agentic",
+            "generative",
+            "generative_interconnect"
+          ]
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "llm_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_proposals": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many candidates an open-ended LLM strategy may propose before the campaign moves on to escalation. Without it a generative strategy proposes until the budget latches, and escalation never runs \u2014 the round measures nothing (docs/decisions.md D269)."
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "evaluations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Count of real screening evaluator calls; cache hits are free (they spent nothing)."
+        },
+        "wall_clock_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Sum of measured per-call wall clock, not calendar time."
+        },
+        "usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Honest only where a backend reports usd_cost; local backends report null and are never charged."
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "no_improvement_evaluations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Stop after N consecutive ok trials that leave the frontier's membership unchanged."
+        },
+        "target": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "metric"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              },
+              "max": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              }
+            }
+          },
+          "description": "Stop when some single frontier point meets ALL entries."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "docref": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A content hash of a document already in the store, or an inline document (hashed on first use). Exactly one of the two.",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inline": {
+          "type": "object"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "ref"
+          ]
+        },
+        {
+          "required": [
+            "inline"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+# Paired with the same (workload, architecture) as
+# ir/mapping/examples/mlp-gemm0-simple-npu-1d-map0.yaml, but this one spatially unrolls C
+# (not K) across the array, with K as the outermost temporal loop. Empirically (real ZigZag,
+# not derived): this exact configuration reproduces ZigZag's own auto-search result exactly —
+# 1554 cycles, 1117367.53 pJ — for both orderings of the two innermost loops (K>B>C and K>C>B).
+# This is the important counterpart to map0 (which forces a worse order, 1666 cycles): it shows
+# ZigZag's auto-search isn't leaving an easy win on the table within this translator's flat,
+# single-loop-per-dim search space — the auto-search already finds (or matches) the actual
+# optimum reachable here. See docs/phase1-exit-criterion-report.md and
+# tests/integration/test_zigzag_mapping_translation_live.py.
+schema_version: "0.1.0"
+id: mlp/gemm0/simple-npu-1d-v1/map-matches-auto-search-optimum
+for_op: mlp.gemm0
+operands:
+  I:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 32, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 4, order: 2}
+  W:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 32, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 4, order: 2}
+  O:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 32, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 4, order: 2}
+spatial:
+  - {dim: C, array_dim: X, size: 8}
+compatibility:
+  expressible_in: [flux, zigzag]
+  not_expressible_in: [timeloop]
+  reason: "evaluators/timeloop does not implement Mapping IR translation yet (v0.1 implementation status, not a representational gap)"

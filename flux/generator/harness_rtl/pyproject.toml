@@ -1,0 +1,24 @@
+[project]
+name = "flux-codegen-rtl-harness"
+version = "0.1.0"
+description = "Design-agnostic build/trace/verify harness for generated Verilog modules (docs/decisions.md D43): real Verilator compile+run+VCD-trace against a deterministically-generated testbench. Sibling to flux-codegen-systemc-harness, sharing its DesignSpec (already language-agnostic — nothing SystemC-specific in it) rather than forking it."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-codegen-systemc-harness",
+    # asap7.py's public entry point enforces the confidentiality policy itself (D96) — the
+    # policy package has zero runtime dependencies of its own, so no cycle.
+    "flux-redaction",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_codegen_rtl_harness"]
+
+# asap7_pdk/ lives inside src/flux_codegen_rtl_harness/ (not as a sibling of src/) specifically
+# so the real, vendored ASAP7 liberty library ships as real package data in a built wheel, not
+# just under an editable install — same G11 (docs/gap-analysis.md) fix as evaluators/ir's
+# schemas/, evaluators/rtl's reference/, and evaluators/timeloop's reference/ (docs/decisions.md D92).
