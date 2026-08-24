@@ -1,0 +1,52 @@
+# Documentation site (docs/decisions.md D387): MkDocs Material over website/, deployed to
+# GitHub Pages. Deliberately nix-free: the one part of the site that needs the dev shell — the
+# generated tool catalog — is committed, and `tests/unit/test_site_catalog_freshness.py` (run
+# by ci.yml's unit job, inside nix) fails the build when it drifts. So this workflow is a plain
+# pip install and finishes in under a minute, instead of a cold nixchip bootstrap.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Same pin as the local-preview venv (docs/decisions.md D387), so a local
+      # `mkdocs build --strict` predicts this job exactly.
+      - run: pip install "mkdocs-material==9.6.*"
+      - uses: actions/configure-pages@v5
+        with:
+          # First run enables Pages on the repo (source: GitHub Actions); later runs no-op.
+          enablement: true
+      - run: mkdocs build -f website/mkdocs.yml --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

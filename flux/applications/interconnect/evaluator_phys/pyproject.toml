@@ -1,0 +1,17 @@
+[project]
+name = "flux-evaluator-interconnect-phys"
+version = "0.1.0"
+description = "Interconnect fabric evaluator (real Yosys + OpenROAD on ASAP7), docs/decisions.md D261."
+requires-python = ">=3.11"
+dependencies = [
+    "flux-evaluator-abi",
+    "flux-interconnect",
+    "flux-evaluator-openroad",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_interconnect_phys"]

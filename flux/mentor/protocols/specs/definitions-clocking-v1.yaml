@@ -1,0 +1,102 @@
+schema_version: "0.1.0"
+id: definitions-clocking
+version: "1"
+title: Clocking, reset and handshake vocabulary used across Flux protocol documents
+kind: definitions
+summary: >-
+  Shared terms the bus documents in this directory lean on. Each definition below is quoted from one
+  of those documents, so this file introduces no vocabulary of its own — it collects, per term, what
+  a specification Flux already ships actually says.
+roles: []
+
+provenance:
+  document: >-
+    Compiled from the protocol documents in this directory: wbspec_b4.pdf (public domain) and
+    OBI-v1.6.0.pdf (Solderpad-2.0)
+  publisher: OpenCores; Silicon Labs, Inc. (OpenHW Group)
+  licence: public-domain (WISHBONE B4) and Solderpad-2.0 (OBI 1.6.0)
+  redistributable: true
+  normative: false
+  retrieved: "2026-08-14"
+  implements:
+    standard: none — this is a compilation, not an implementation or a specification
+    note: >-
+      normative=false because no standards body publishes this file; it is a Flux-assembled index
+      into documents that ARE normative, and every rule below carries the id of the document it came
+      from. The alternative — writing general definitions of setup/hold/CDC from memory of IEEE
+      1800 or a textbook — would produce authoritative-looking text with no source, which is exactly
+      what this module's provenance guard exists to prevent. Terms Flux has no open source for are
+      listed in coverage_note as absent rather than invented.
+
+coverage_note: >-
+  Covers clocking, reset and handshake as the two open bus specifications here define them.
+  DELIBERATELY ABSENT, because no verified open source for them has been checked: setup/hold time
+  definitions, clock-domain-crossing requirements, metastability windows, and any numeric timing
+  values (these are technology- and library-specific, and Flux gets real timing from Verilator/
+  synthesis runs, not from a document). IEEE 1800 and IEEE 1364 are not redistributable and have
+  not been consulted. If a Flux module needs one of these terms, add it here WITH its source rather
+  than assuming this file's silence means the concept doesn't apply.
+
+rules:
+  # Clocking
+  - id: "WISHBONE B4 / 2.2.2 CLK_I"
+    text: >-
+      The clock input [CLK_I] coordinates all activities for the internal logic within the WISHBONE
+      interconnect. All WISHBONE output signals are registered at the rising edge of [CLK_I]. All
+      WISHBONE input signals are stable before the rising edge of [CLK_I].
+    section: WISHBONE B4 section 2.2.2
+  - id: "OBI 1.6.0 / Table 1 clk"
+    text: >-
+      The bus clock times all bus transfers. All signal timings are related to the rising edge of
+      clk.
+    section: OBI 1.6.0 Table 1
+
+  # Reset
+  - id: "OBI 1.6.0 / Table 1 reset_n"
+    text: >-
+      The bus reset signal is active LOW and resets the system and the bus. This is the only active
+      LOW signal.
+    section: OBI 1.6.0 Table 1
+  - id: "OBI 1.6.0 / R-2.1"
+    text: During reset assertion req shall be driven low.
+    section: OBI 1.6.0 section 3.3.1
+  - id: "OBI 1.6.0 / R-2.2"
+    text: During reset assertion rvalid shall be driven low.
+    section: OBI 1.6.0 section 3.3.1
+  - id: "WISHBONE B4 / RULE 3.00"
+    text: >-
+      All WISHBONE interfaces MUST initialize themselves at the rising [CLK_I] edge following the
+      assertion of [RST_I]. They MUST stay in the initialized state until the rising [CLK_I] edge
+      that follows the negation of [RST_I].
+    section: WISHBONE B4 section 3.1.2
+  - id: "WISHBONE B4 / RULE 3.05"
+    text: "[RST_I] MUST be asserted for at least one complete clock cycle on all WISHBONE interfaces."
+    section: WISHBONE B4 section 3.1.2
+  - id: "WISHBONE B4 / RULE 2.30"
+    text: All WISHBONE interface signals MUST use active high logic.
+    section: WISHBONE B4 section 2.1.3
+
+  # Handshake
+  - id: "OBI 1.6.0 / R-3"
+    text: >-
+      The address channel A shall use a two-way control handshake (req+gnt) between manager and
+      subordinate.
+    section: OBI 1.6.0 section 3.3.2
+  - id: "OBI 1.6.0 / R-3.1.2"
+    text: >-
+      The manager shall not de-assert (retract) req until after the last cycle of the address
+      phase.
+    section: OBI 1.6.0 section 3.3.2
+  - id: "OBI 1.6.0 / R-4"
+    text: >-
+      The response channel R shall use a two-way control (rvalid+rready) between subordinate and
+      manager.
+    section: OBI 1.6.0 section 3.3.2
+  # The document's sentence ends in a colon introducing sub-rules R-21.1..R-21.3 (the concrete
+  # signal pairs); the lead-in is quoted in full rather than truncated at "inputs." as if the
+  # sentence ended there.
+  - id: "OBI 1.6.0 / R-21"
+    text: >-
+      OBI link outputs (excluding gnt and gntpar) shall not combinatorially depend on OBI link
+      inputs, specifically (but not limited to):
+    section: OBI 1.6.0 section 3.5

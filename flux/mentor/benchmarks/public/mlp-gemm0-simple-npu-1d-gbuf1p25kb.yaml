@@ -1,0 +1,13 @@
+id: mlp-gemm0-simple-npu-1d-gbuf1p25kb
+workload_path: core/ir/workload/examples/mlp-gemm0.yaml
+arch_path: core/ir/architecture/examples/simple-npu-1d-gbuf-1p25kb.yaml
+description: >
+  GEMM MLP layer on the 1D NPU at X=8, gbuf=1.25 KiB — a second, real benchmark family
+  (docs/decisions.md D58) alongside the width-axis entries above, sharing the same workload but
+  varying the memory-hierarchy size instead: the real, smallest-feasible, minimum-energy point
+  D26/D27 established for this workload/arch pair (energy_pj=1116618.0081255918, re-verified
+  before this entry was added).
+
+objective:
+  metric: energy_pj
+  minimize: true

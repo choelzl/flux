@@ -1,0 +1,13 @@
+[project]
+name = "flux-nlu"
+version = "0.1.0"
+description = "FP16 non-linear-unit design study: the model picks methods, sharing and pipelining; exhaustive ULP truth, yosys/OpenROAD PPA (docs/decisions.md D408)."
+requires-python = ">=3.11"
+dependencies = ["numpy"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_nlu"]

@@ -1,0 +1,17 @@
+[project]
+name = "flux-evaluator-dramsim3"
+version = "0.1.0"
+description = "Real DRAM bank/refresh-timing evaluator (docs/decisions.md D74): DRAMsim3, cloned and built on first use."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-ir",
+    "flux-evaluator-abi",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_dramsim3"]

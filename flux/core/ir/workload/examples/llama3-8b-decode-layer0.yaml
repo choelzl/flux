@@ -1,0 +1,24 @@
+# Reference example, from docs/ir.md. DNN-accelerator flagship case: affine einsum core
+# plus the data_dependent escape hatch for MoE routing.
+schema_version: "0.1.0"
+id: llama3-8b/decode/layer0
+provenance:
+  source: onnx
+  file_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  importer: flux-onnx@0.3
+tensors:
+  - {name: Q, rank: [B, H, S, D], dtype: fp8_e4m3, scale: per_head_group}
+  - {name: KV, rank: [B, H, S_ctx, D], dtype: int8, residency: persistent, growth: append}
+ops:
+  - id: attn.qk
+    kind: einsum
+    expr: "b h s d, b h t d -> b h s t"
+    bounds: {b: 1, h: 32, s: {dyn: [1, 1]}, t: {dyn: [1, 131072]}, d: 128}
+    sparsity: {pattern: causal, density_model: structured_mask}
+  - id: moe.route
+    kind: data_dependent
+    semantics: {top_k: 2, experts: 8, distribution: "measured@corpus/moe-v1"}
+phases: [prefill, decode]
+dynamism:
+  symbolic_dims: [s, t]
+  distributions: {t: "empirical@corpus/sharegpt-lens"}

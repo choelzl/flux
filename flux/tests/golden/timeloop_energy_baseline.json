@@ -1,0 +1,23 @@
+{
+  "results": {
+    "simple-npu-1d-v1": {
+      "area_mm2": 0.0,
+      "energy_pj": 620000.0,
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "latency_cycles": 512.0
+    },
+    "simple-npu-1d-v2": {
+      "area_mm2": 0.0,
+      "energy_pj": 620000.0,
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "latency_cycles": 1024.0
+    },
+    "simple-npu-1d-v3": {
+      "area_mm2": 0.0,
+      "energy_pj": 620000.0,
+      "evaluator": "timeloop-docker@timeloopaccelergy/accelergy-timeloop-infrastructure",
+      "latency_cycles": 256.0
+    }
+  },
+  "workload": "mlp-gemm0"
+}

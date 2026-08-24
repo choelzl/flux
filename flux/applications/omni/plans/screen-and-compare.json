@@ -1,0 +1,7 @@
+[
+  {"tool": "load_ir", "args": {"path": "core/ir/workload/examples/mlp-gemm0.yaml"}, "bind": "wl"},
+  {"tool": "load_ir", "args": {"path": "core/ir/architecture/examples/simple-npu-1d-v1.yaml"}, "bind": "arch"},
+  {"tool": "evaluate", "args": {"backend": "zigzag", "workload": "$wl", "arch": "$arch"}, "bind": "base"},
+  {"tool": "search", "args": {"workload": "$wl", "base_arch": "$arch", "screening_backend": "zigzag", "search_kind": "architecture_width", "widths": [4, 8, 16, 32], "metric": "latency_cycles"}, "bind": "sweep"},
+  {"tool": "note", "args": {"text": "Baseline evaluation bound to $base, width sweep bound to $sweep; the demo report reads both."}}
+]

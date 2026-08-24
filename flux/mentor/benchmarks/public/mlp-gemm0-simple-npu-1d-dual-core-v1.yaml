@@ -1,0 +1,18 @@
+id: mlp-gemm0-simple-npu-1d-dual-core-v1
+workload_path: core/ir/workload/examples/mlp-gemm0.yaml
+arch_path: core/ir/architecture/examples/simple-npu-1d-dual-core-v1.yaml
+description: >
+  A real, genuinely different architecture *family* for the corpus's own flagship workload
+  (docs/decisions.md D82) — every prior mlp-gemm0.yaml entry here is a single-core architecture
+  evaluated through real ZigZag; this one is `simple-npu-1d-dual-core-v1.yaml` (two real compute
+  cores, real inter-core links, a real off-chip DRAM core), evaluated through real Stream
+  (`evaluators/stream`, KU Leuven MICAS) — the first corpus entry, and the first leaderboard
+  standing, spanning two structurally different evaluator backends for the same workload/
+  objective. Real Stream number: latency_cycles=1148.0, genuinely faster than real ZigZag's own
+  1554.0 for the single-core `simple-npu-1d-v1.yaml` (X=8) entry — a real, physically sensible
+  finding (splitting one small GEMM's own work across two real compute cores helps, even at this
+  tiny scale), not assumed going in.
+
+objective:
+  metric: latency_cycles
+  minimize: true

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Rust
+target/
+
+# Nix — build-output symlinks and the shellHook-regenerated CLI wrapper.
+# Unanchored `result`: `nix build` drops its symlink in whatever directory it was run from, and
+# the anchored `/result` matched only the repo root — which is how `flux/result` (a symlink into
+# an unrelated /nix/store path) ended up tracked (docs/decisions.md D123).
+result
+result-*
+.nix-bin/
+
+# Test tooling
+.pytest_cache/
+
+# MkDocs build output (website/mkdocs.yml, built by .github/workflows/pages.yml)
+/website/site/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code — machine-local settings and worktrees only; a future shared
+# .claude/settings.json would be tracked
+.claude/settings.local.json
+.claude/worktrees/
+
+# Local data / results — content-addressed stores should not be committed wholesale
+flux/stores/local/
+*.log
+*.db

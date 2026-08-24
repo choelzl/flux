@@ -1,0 +1,12 @@
+id: mlp-gemm0-simple-npu-1d-gbuf64kb
+workload_path: core/ir/workload/examples/mlp-gemm0.yaml
+arch_path: core/ir/architecture/examples/simple-npu-1d-gbuf-64kb.yaml
+description: >
+  GEMM MLP layer on the 1D NPU at X=8, gbuf=64.0 KiB — a real, larger-buffer comparison point on
+  the same memory-size benchmark family as gbuf1p25kb (docs/decisions.md D58): freshly-measured
+  real ZigZag energy (energy_pj=1116738.826398288), confirming the same monotonic-energy-
+  increases-with-size shape D26 found, not assumed from the pattern alone.
+
+objective:
+  metric: energy_pj
+  minimize: true

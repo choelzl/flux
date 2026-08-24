@@ -1,0 +1,16 @@
+{
+  "id": "digits",
+  "statement": "Write the ten decimal digits 0 through 9, one per line, in ascending order, and nothing else.",
+  "contract": "Plain text. Exactly ten lines. No blank lines, no spaces, no trailing text.",
+  "language": "text",
+  "extension": ".txt",
+  "gate": {
+    "test": [
+      "{python}", "-c",
+      "import sys\nwant = [str(i) for i in range(10)]\ngot = open(sys.argv[1]).read().split('\\n')\ngot = [g for g in got if g != ''] if got and got[-1] == '' else got\nbad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 10), 10)) + list(range(10, len(got)))\nfor i in bad:\n    print(f'FAIL line {i + 1}: expected {want[i] if i < 10 else \"nothing\"}, got {got[i] if i < len(got) else \"nothing\"!r}')\nprint(f'{len(bad)} failing of 10')\nsys.exit(1 if bad else 0)",
+      "{artifact}"
+    ],
+    "count_re": "(\\d+) failing"
+  },
+  "budget": {"steps": 2, "repair_attempts": 4, "prototype": false, "compute": false}
+}

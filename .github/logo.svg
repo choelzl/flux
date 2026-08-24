@@ -1,0 +1,46 @@
+<svg font-family="-apple-system-body, ui-sans-serif, -apple-system, system-ui, &quot;Segoe UI&quot;, Helvetica, &quot;Apple Color Emoji&quot;, Arial, sans-serif, &quot;Segoe UI Emoji&quot;, &quot;Segoe UI Symbol&quot;" font-weight="400" data-d-component="svg" fill="currentColor" style="color:rgb(255, 255, 255)" viewBox="0 0 256 256" width="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            .graphite {
+                stroke: #3f5268;
+                fill: none;
+                stroke-width: 18;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+            }
+
+            .forge {
+                stroke: #f66824;
+                fill: none;
+                stroke-width: 18;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+            }
+
+            .pinG {
+                fill: #3f5268;
+            }
+
+            .pinO {
+                fill: #f66824;
+            }
+        </style>
+    </defs>
+    <g class="pinG">
+        <rect x="78" y="8" width="16" height="28" rx="8"/>
+        <rect x="120" y="8" width="16" height="28" rx="8"/>
+        <rect x="162" y="8" width="16" height="28" rx="8"/>
+        <rect x="120" y="220" width="16" height="28" rx="8"/>
+        <rect x="162" y="220" width="16" height="28" rx="8"/>
+        <rect x="8" y="78" width="28" height="16" rx="8"/>
+        <rect x="8" y="120" width="28" height="16" rx="8"/>
+        <rect x="8" y="162" width="28" height="16" rx="8"/>
+        <rect x="220" y="78" width="28" height="16" rx="8"/>
+        <rect x="220" y="120" width="28" height="16" rx="8"/>
+        <rect x="220" y="162" width="28" height="16" rx="8"/>
+    </g>
+    <rect x="78" y="208" width="16" height="40" rx="8" class="pinO"/>
+    <rect x="40" y="40" width="176" height="176" rx="32" class="graphite"/>
+    <path class="forge" d="&#10;          M86 248&#10;          V118&#10;          A32 32 0 0 1 118 86&#10;          H174&#10;        "/>
+    <path class="graphite" d="&#10;          M128 248&#10;          V146&#10;          A18 18 0 0 1 146 128&#10;          H166&#10;        "/>
+</svg>

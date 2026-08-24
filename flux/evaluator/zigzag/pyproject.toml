@@ -1,0 +1,19 @@
+[project]
+name = "flux-evaluator-zigzag"
+version = "0.1.0"
+description = "ZigZag backend adapter for the Flux Evaluator ABI (docs/evaluator-abi.md)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-ir",
+    "flux-evaluator-abi",
+    "zigzag-dse>=3.8.0",
+    "pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_zigzag"]

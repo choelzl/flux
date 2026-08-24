@@ -1,0 +1,14 @@
+[project]
+name = "flux-omni"
+version = "0.1.0"
+description = "The one-to-rule-them-all loop: an agent given a prompt and the whole Flux tool surface plans, executes, and reports (docs/decisions.md D377)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_omni"]

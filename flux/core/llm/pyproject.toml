@@ -1,0 +1,15 @@
+[project]
+name = "flux-llm"
+version = "0.1.0"
+description = "Shared handling of raw LLM output: the proposer Protocol and markdown-fence stripping (docs/decisions.md D200)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-profile",]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_llm"]

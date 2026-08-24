@@ -1,0 +1,21 @@
+[project]
+name = "flux-mcp"
+version = "0.1.0"
+description = "Every flux_chia_nodes function (evaluate/search/calibrate/conformance/validity/knowledge/store/agentic-search/agentic-dse-loop and onward) as a real MCP tool (docs/agent-surface.md's third surface)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-chia-nodes",
+    "flux-llm",
+    "chia @ git+https://github.com/ucb-bar/chia.git",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_mcp"]

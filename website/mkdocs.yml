@@ -1,0 +1,75 @@
+site_name: Flux
+site_description: >-
+  Agent-native design-space exploration for SoC building blocks: runnable design
+  loops that search real problems with real tools.
+site_url: https://choelzl.github.io/flux/
+repo_url: https://github.com/choelzl/flux
+repo_name: choelzl/flux
+
+copyright: "© 2026 Flux"
+
+theme:
+  name: material
+  custom_dir: overrides
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - toc.follow
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Demo loops:
+      - Overview: demos/index.md
+      - Interconnect: demos/interconnect.md
+      - Interconnect mapping: demos/interconnect_mapping.md
+      - Bank mapping: demos/bankmap.md
+      - MAC array: demos/macarray.md
+      - Prefetcher: demos/prefetcher.md
+      - Omni: demos/omni.md
+      - NLU: demos/nlu.md
+  - Build a loop:
+      - The shape every loop shares: guide/loop-shape.md
+      - Build your own loop: guide/build-your-own.md
+      - Loop crafter: guide/loop-crafter.md
+  - Tool catalog:
+      - Overview: catalog/index.md
+      - Design loops: catalog/loops.md
+      - Search and sweeps: catalog/search.md
+      - Campaigns and records: catalog/campaign.md
+      - Evaluation and calibration: catalog/evaluate.md
+      - Generation and synthesis: catalog/generate.md
+      - Knowledge and protocols: catalog/knowledge.md
