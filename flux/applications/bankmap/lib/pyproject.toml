@@ -1,0 +1,14 @@
+[project]
+name = "flux-bankmap"
+version = "0.1.0"
+description = "Conflict-free bank-mapping functions: the space, the checker, the solvers (docs/decisions.md D356)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = ["numpy", "z3-solver"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_bankmap"]

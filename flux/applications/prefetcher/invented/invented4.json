@@ -1,0 +1,14 @@
+{
+  "name": "invented4",
+  "knobs": {
+    "invented4_degree": 8,
+    "invented4_stride_max": 1024
+  },
+  "idea": "",
+  "geomean_alone": 1.00374,
+  "geomean_with_bingo": 1.06193,
+  "reference_bingo": 1.06073,
+  "rung": "screen",
+  "warmup": 2000000,
+  "simulation": 3000000
+}

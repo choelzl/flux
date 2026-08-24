@@ -1,0 +1,19 @@
+{
+  "name": "invented1",
+  "knobs": {
+    "invented1_conf": 3,
+    "invented1_cap": 256
+  },
+  "idea": "I exploit the 84-93% \"delta-pair history\" predictability (the pattern A\u2192B followed by B\u2192C implies A\u2192D, i.e. `addr2 = addr0 + 2*stride`), which the single-step stride prefetcher cannot see. By keying a small per-PC state on the *previous* line, I predict the second-order continuation of a repeating stride pattern (common in the strided FFT/traversals and pointer-chain buffers) at low cost, covering",
+  "geomean_alone": 0.99993,
+  "geomean_with_stack": 1.05531,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride"
+  ],
+  "reference_geomean": 1.05538,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

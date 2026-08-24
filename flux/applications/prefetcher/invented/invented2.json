@@ -1,0 +1,19 @@
+{
+  "name": "invented2",
+  "knobs": {
+    "invented2_conf": 4,
+    "invented2_max_pcs": 4096
+  },
+  "idea": "The existing stack covers constant strides and dense spatial regions, but the traces show 84-93% of accesses follow a repeating (delta_prev, delta_curr) history pattern that no fixed-delta prefetcher can exploit. I implement a lightweight per-PC delta-pair predictor: it learns the most frequent (prev_delta, curr_delta) pair per PC and emits the next predicted delta, capturing the irregular/pointer",
+  "geomean_alone": 1.0045,
+  "geomean_with_stack": 1.05674,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride"
+  ],
+  "reference_geomean": 1.05538,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

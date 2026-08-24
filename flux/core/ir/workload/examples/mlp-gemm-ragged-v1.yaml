@@ -1,0 +1,19 @@
+# A GEMM whose output dimension is deliberately NOT a power of two (docs/decisions.md D137).
+#
+# Every other workload example here has power-of-two dims (K=32, H=16), and every architecture
+# width swept is also a power of two — so `K % lanes` is almost always 0 and `evaluators/rtl` can
+# express nearly every candidate on the frontier. Measured: 1 of 16 standard candidates lacks RTL
+# ground truth, and that one (width 32 against K=16) leaves half the array idle, so it is a
+# candidate a search should rank *down* rather than go measure.
+#
+# K=100 makes the gap real and non-degenerate: at 8 lanes it needs 13 K-groups with 4 masked lanes
+# in the last — a 4% overhead, not a 50% one. This is the shape where a generated design carries
+# information the hand-written reference cannot (D130/D134/D136).
+schema_version: "0.1.0"
+id: mlp-gemm-ragged-v1
+ops:
+  - id: gemm0
+    kind: einsum
+    expr: "B C, C K -> B K"
+    bounds: { B: 4, C: 32, K: 100 }
+    precision: { I: 8, W: 8, O: 16, O_final: 8 }

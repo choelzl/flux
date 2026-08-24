@@ -1,0 +1,39 @@
+# A real, single-token LLM decode-mode attention QK^T workload (docs/decisions.md D63) — the
+# flagship case docs/roadmap.md's Phase 5 "LLM workload features" item names directly (KV-cache
+# growth, dynamic sequence length): S=1 (a single new query token, the real decode-mode shape
+# once prefill has completed) and D=64 (a real, modest head dim) are fixed; T (the KV-cache
+# length accumulated so far) is genuinely dynamic — declared, not silently picked, via a
+# {dyn: [lo, hi]} bound, same convention llama3-8b-decode-layer0.yaml already established.
+#
+# Deliberately NOT directly evaluable by any real evaluator as-is (T isn't a static int) — that's
+# the whole point. `flux_workload_dynamism.sweep_dynamic_shape` resolves T to a real, concrete
+# value at each of several caller-chosen sample points and evaluates each through a real,
+# unmodified evaluator (see tests/integration/test_dynamic_shape_sweep_live.py).
+#
+# T's own upper bound widened 256 -> 4096 (docs/decisions.md D87): `distributions.T` below now
+# resolves to a *real* ingested distribution (`knowledge/corpus/distributions/kv-cache-len-v1/`,
+# a real, measured ShareGPT conversation-length distribution — see that directory's own
+# PROVENANCE.md), whose real p95 is ~1762 tokens; 256 was too narrow to hold most of the real
+# distribution's own mass without degenerate clipping. Purely a range widening — every
+# already-pinned sample point (T=1, 8, 32, 128) still evaluates to the exact same real number,
+# checked directly, since resolving a dynamic bound to a concrete value never reads the declared
+# range's own hi at all.
+schema_version: "0.1.0"
+id: llm-decode/attn-qk0
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: Q, rank: [S, D], dtype: int8}
+  - {name: K, rank: [T, D], dtype: int8}
+  - {name: O, rank: [S, T], dtype: int16}
+ops:
+  - id: attn.qk
+    kind: einsum
+    expr: "S D, T D -> S T"
+    bounds: {S: 1, D: 64, T: {dyn: [1, 4096]}}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}
+dynamism:
+  symbolic_dims: [T]
+  distributions:
+    T: "empirical@corpus/kv-cache-len-v1"

@@ -1,0 +1,8 @@
+# Vendored from the same tutorial exercise's inputs/variables.yaml. The original computes
+# DATAWIDTH via a Jinja default-value expression; resolved here to its default, 8. (Do not write
+# literal Jinja delimiter syntax in this comment — see arch.yaml's comment for why.)
+variables:
+  version: 0.4
+  technology: "45nm"
+  global_cycle_seconds: 1e-9
+  DATAWIDTH: 8

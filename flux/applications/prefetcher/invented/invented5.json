@@ -1,0 +1,19 @@
+{
+  "name": "invented5",
+  "knobs": {
+    "invented5_max_trackers": 256,
+    "invented5_conf": 3
+  },
+  "idea": "The target stack (bingo+sms+stride) only models spatial patterns within a page and 1-step strides, failing to capture the >8-line jumps that constitute the majority of this workload's predictable strides (63\u201368% of stride-repeats). A high-degree stride prefetcher catches these long strides that the target misses, and by keying on the line index within a 4KB page (`(addr >> 6) & 0x3F`) it remains v",
+  "geomean_alone": 0.99208,
+  "geomean_with_stack": 1.04943,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride"
+  ],
+  "reference_geomean": 1.05538,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

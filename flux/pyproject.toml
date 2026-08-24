@@ -1,0 +1,14 @@
+[project]
+name = "flux"
+version = "0.0.0"
+description = "IR + evaluator contract + calibration/provenance layer for SoC design-space exploration, agent-first."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "TBD — not blocked on dependencies (docs/decisions.md D21: every real dependency this repo adapts to, ZigZag/CHIA/Timeloop/Accelergy/Booksim2/Verilator, is permissive and imposes no obligation on this repo's own code); Flux's own license is simply not chosen yet" }
+
+# Skeleton only. No dependencies pinned yet — Phase 1 ("Spine", docs/roadmap.md) adds the IR/evaluator-ABI
+# packages and their real dependencies (schema validation, ZigZag/Timeloop adapters, etc.).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

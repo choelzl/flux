@@ -1,0 +1,7 @@
+{#- Overrides Material's copyright partial (D395): the stock one appends a
+    "Made with Material for MkDocs" notice; this keeps only the site's own line. -#}
+<div class="md-copyright">
+  {% if config.copyright %}
+    <div class="md-copyright__highlight">{{ config.copyright }}</div>
+  {% endif %}
+</div>

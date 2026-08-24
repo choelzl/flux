@@ -1,0 +1,14 @@
+id: mlp-ffn0-simple-npu-1d-v1
+workload_path: core/ir/workload/examples/mlp-ffn0.yaml
+arch_path: core/ir/architecture/examples/simple-npu-1d-v1.yaml
+description: >
+  A real, genuinely different second workload (docs/decisions.md D59) — every corpus entry before
+  this one shared mlp-gemm0.yaml (a single GEMM), varying only the architecture. mlp-ffn0.yaml is
+  a real two-layer feedforward block (down-projection then up-projection), the same X=8 1D-NPU
+  architecture as mlp-gemm0-simple-npu-1d-v1. Real ZigZag numbers: latency_cycles=1560.0,
+  energy_pj=1124668.7583788123 — verified aggregate across both layers (not just the first),
+  re-verified before this entry was added.
+
+objective:
+  metric: latency_cycles
+  minimize: true

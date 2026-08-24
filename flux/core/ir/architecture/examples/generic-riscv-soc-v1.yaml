@@ -1,0 +1,26 @@
+# General-SoC example (docs/decisions.md D1): a plain RISC-V SoC with AXI interconnect and a
+# DMA engine — no NPU. Demonstrates the Architecture IR's memory/compute/interconnect/'other'
+# classes hold up outside the DNN-accelerator case docs/architecture.md was originally scoped around.
+schema_version: "0.1.0"
+id: generic-riscv-soc/v1
+tech: {node: n16, pdk_class: open}
+hierarchy:
+  - level: ddr
+    class: memory
+    attrs: {type: lpddr4, channels: 2, bw_gbps: 25.6}
+    estimator_hints: {plugin: dramsim-lite}
+  - level: l2
+    class: memory
+    attrs: {size_kb: 1024, banks: 4, ports: {r: 2, w: 1}}
+  - level: cpu0
+    class: compute
+    attrs: {isa: rv64gc, cores: 4, freq_ghz: 1.2}
+  - level: dma0
+    class: other
+    attrs: {channels: 8, descriptor_fetch: axi_burst}
+    estimator_hints: {plugin: flux-dma-model}
+interconnect:
+  noc: {topology: crossbar, flit_bits: 128, model: "axi4@2.0"}
+constraints:
+  - {kind: area_mm2, max: 25.0}
+  - {kind: tdp_w, max: 5.0}

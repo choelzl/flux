@@ -1,0 +1,21 @@
+{
+  "name": "invented8",
+  "knobs": {
+    "invented8_max": 4,
+    "invented8_conf": 4
+  },
+  "idea": "",
+  "geomean_alone": 1.00078,
+  "geomean_with_stack": 1.05676,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride",
+    "invented2"
+  ],
+  "reference_geomean": 1.05674,
+  "logic_repairs": 1,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

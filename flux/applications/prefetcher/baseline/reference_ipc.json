@@ -1,0 +1,12 @@
+{
+  "_comment": "No-prefetcher IPC recorded by the project's own baseline runs (proj/baseline/*.out), kept as three numbers instead of 135 KB of simulator log. This is a REFERENCE, not the denominator: run_study measures its own baseline with whatever binary it is using and compares against this, so a different build is reported as drift rather than silently changing every speedup in the study.",
+  "source": "proj/baseline/*_nopref.out",
+  "warmup_instructions": 100000000,
+  "simulation_instructions": 150000000,
+  "binary": "perceptron-no-multi-no-ship-1core",
+  "ipc": {
+    "fdd_su_v1_0": 0.69602,
+    "tdd_dl_mu_v1_0": 0.99071,
+    "tdd_ul_mu_v1_0": 0.80232
+  }
+}

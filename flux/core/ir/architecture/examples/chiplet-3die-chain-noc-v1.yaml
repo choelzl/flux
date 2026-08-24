@@ -1,0 +1,29 @@
+# A real, three-chiplet D2D interconnect (docs/decisions.md D67): three dies in a chain
+# (die0 <-> die1 <-> die2, no direct die0-die2 link), each a single crossbar router serving 4
+# nodes, every D2D link at a real, declared 20-cycle latency. Generalizes D66's own real, narrow
+# two-die/one-link v0.1 — the same Booksim2 `anynet` topology family, more routers and links, no
+# new tool integration. This exact topology was run by hand through a real Booksim2 `anynet`
+# simulation before this file existed: 28.9835 cycles average packet latency (vs. the two-die
+# case's 19.155), the physically correct direction — traffic between die0 and die2 must now cross
+# *two* real D2D links via die1's own router, not one, and Hops average rises from 1.50613 to
+# 1.91529 correspondingly. See tests/integration/test_booksim_chiplet_live.py.
+schema_version: "0.1.0"
+id: chiplet-3die-chain-noc/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: chiplet_fabric
+    class: interconnect
+interconnect:
+  chiplet_noc:
+    dies:
+      - {id: die0, nodes: 4}
+      - {id: die1, nodes: 4}
+      - {id: die2, nodes: 4}
+    d2d_links:
+      - {from: die0, to: die1, latency_cycles: 20}
+      - {from: die1, to: die2, latency_cycles: 20}
+    routing_function: min
+    traffic: uniform
+    injection_rate: 0.01
+    num_vcs: 8
+    vc_buf_size: 8

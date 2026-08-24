@@ -1,0 +1,31 @@
+# A 2D 8x8 mesh NoC (64 router nodes) — the k-ary n-cube family evaluators/booksim's real
+# Booksim2 integration simulates. Same topology as Booksim2's own bundled examples/mesh88_lat
+# reference config (n=2, k=8), but NOT an exact reproduction of it: mesh88_lat's raw config also
+# sets several router-pipeline parameters (input_speedup=2, credit_delay=2,
+# wait_for_tail_credit=1, routing_delay=0) that Flux's current interconnect.noc IR scope has no
+# fields to carry, so this translates to Booksim2's own internal defaults for those instead
+# (input_speedup=1, credit_delay=0, wait_for_tail_credit=0, routing_delay=1 — booksim_config.cpp).
+# Confirmed empirically, not assumed: BooksimEvaluator gives 66.196 cycles here vs. raw Booksim2's
+# 62.828 for mesh88_lat unmodified — a real, quantified ~5.4% gap (docs/decisions.md D25). For an
+# exact, currently-reproducible reference target, see noc-torus-2d-v1.yaml, which matches
+# Booksim2's own examples/torus88 exactly because torus88 sets none of those extra parameters.
+#
+# Paired with noc-mesh-3d-v1.yaml: same node count (64 = 8^2 = 4^3), different dimensionality —
+# the direct 2D-vs-3D comparison docs/decisions.md D5/D6 exists to enable.
+schema_version: "0.1.0"
+id: noc/mesh-2d/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: router_fabric
+    class: interconnect
+    attrs: {node_count: 64}
+interconnect:
+  noc:
+    topology: mesh
+    dimensions: [8, 8]
+    routing_function: dim_order
+    num_vcs: 8
+    vc_buf_size: 8
+    traffic: transpose
+    injection_rate: 0.005
+    packet_size: 20

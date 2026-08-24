@@ -1,0 +1,19 @@
+{
+  "name": "invented3",
+  "knobs": {
+    "invented3_degree": 8,
+    "invented3_max_lines": 4096
+  },
+  "idea": "A bounded (tag \u2192 line) LRU table of recently-referenced cache lines emits a fixed-degree, same-page forward stride on every touch. Because it keys on the accessed line rather than the PC, it survives the 17\u201323k distinct-PC explosion and the pointer/loop patterns where per-PC stride history breaks, catching the >8-line strided and cross-page-reuse accesses the current PC-centric stack misses \u2014 and ",
+  "geomean_alone": 0.96599,
+  "geomean_with_stack": 0.9901,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride"
+  ],
+  "reference_geomean": 1.05538,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

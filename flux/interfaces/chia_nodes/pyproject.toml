@@ -1,0 +1,48 @@
+[project]
+name = "flux-chia-nodes"
+version = "0.1.0"
+description = "Flux evaluators exposed as real CHIA library nodes (docs/agent-surface.md)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-ir",
+    "flux-evaluator-abi",
+    "flux-cli",
+    "flux-search-architecture",
+    "flux-search-agentic",
+    "flux-search-exhaustive",
+    "flux-calibration",
+    "flux-validity",
+    "flux-knowledge",
+    "flux-store",
+    "flux-codegen-systemc-harness",
+    "flux-codegen-rtl-harness",
+    "flux-workload-dynamism",
+    "flux-generation",
+    "flux-redaction",
+    "chia @ git+https://github.com/ucb-bar/chia.git",
+    "openai",
+    "flux-search-campaign",
+    "flux-knowledge-mining",
+    "flux-protocols",
+    "flux-llm",
+]
+# NOTE: flux-evaluator-zigzag/timeloop/rtl/systemc/booksim are deliberately NOT listed here — see
+# flows/cli/registry.py's module docstring. flux_calibrate/flux_conformance_check need
+# flux-evaluator-rtl installed separately to actually use backend="rtl"/reference_backend="rtl",
+# same as flux_evaluate needing any adapter installed separately to use it.
+#
+# "openai" IS listed (unlike the evaluator backends above) because chia.models.ollama.OllamaLLM
+# (used by flux_agentic_*_search) needs it and CHIA's own pyproject.toml doesn't declare it —
+# `openai` is imported lazily inside openai_compat.py, so chia itself installs fine without it,
+# but our agentic nodes actually call OllamaLLM for real and would fail at runtime without it.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_chia_nodes"]

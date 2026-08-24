@@ -1,0 +1,13 @@
+[project]
+name = "flux-records"
+version = "0.1.0"
+description = "The mentor's record layer: results and conclusions as semantics over the campaign store (docs/decisions.md D397)."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_records"]

@@ -1,0 +1,7 @@
+# The library holds papers and documents the model reads (D407). They are OTHER
+# PEOPLE'S WORK -- copyrighted PDFs, downloaded papers, vendor docs -- so nothing
+# here is ever pushed: the folder ships empty and each machine fills its own.
+# (corpus/ is different: licensed standards WITH provenance, committed on purpose.)
+*
+!.gitignore
+!README.md

@@ -1,0 +1,7 @@
+.venv/
+.nix-bin/
+__pycache__/
+*.pyc
+# SQLite side files: a store that is open leaves these beside it
+*.db-wal
+*.db-shm

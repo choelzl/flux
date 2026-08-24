@@ -1,0 +1,14 @@
+[project]
+name = "flux-feedback"
+version = "0.1.0"
+description = "Typed operator guidance for a running design loop -- a stdin channel drained into proposer prompts (docs/decisions.md D388)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_feedback"]

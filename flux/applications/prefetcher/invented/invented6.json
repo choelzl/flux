@@ -1,0 +1,19 @@
+{
+  "name": "invented6",
+  "knobs": {
+    "invented6_conf": 2,
+    "invented6_degree": 2
+  },
+  "idea": "",
+  "geomean_alone": 1.0,
+  "geomean_with_stack": 1.05538,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride"
+  ],
+  "reference_geomean": 1.05538,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

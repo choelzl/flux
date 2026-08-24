@@ -1,0 +1,28 @@
+# A real, two-die stacked chiplet (docs/decisions.md D65): a compute die (`die: 1`, closer to
+# the heat sink) directly stacked on a memory die (`die: 0`, farther from the heat sink) — the
+# same real physical arrangement a 3D-stacked compute-on-memory chiplet uses. Placement/power are
+# real, checked numbers: this exact two-die stack (a 3000x3000 um compute block at 3.0W on the top
+# die, a 3000x3000 um memory block at 0.5W on the bottom die) was run through a real, hand-built
+# 3D-ICE stack description before this file existed, confirming a genuinely non-trivial real
+# result — the memory die runs *hotter* than the compute die despite dissipating 6x less power
+# itself, because it sits farther from the heat sink and absorbs real conducted heat from the
+# compute die stacked above it. See tests/integration/test_thermal_adapter_live.py.
+#
+# This is real *thermal* die stacking only — not a chiplet inter-die (D2D) *interconnect* model
+# (data movement between dies is evaluators/booksim's own, separate territory) — see
+# evaluators/thermal/README.md.
+schema_version: "0.1.0"
+id: chiplet-2die-thermal/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: compute_die
+    class: compute
+    attrs: {dims: {X: 8}, power_w: 3.0}
+    floorplan: {x_um: 0, y_um: 0, width_um: 3000, height_um: 3000, die: 1}
+  - level: memory_die
+    class: memory
+    attrs: {size_kb: 512, power_w: 0.5}
+    floorplan: {x_um: 0, y_um: 0, width_um: 3000, height_um: 3000, die: 0}
+constraints:
+  - {kind: area_mm2, max: 4.0}
+  - {kind: tdp_w, max: 4.0}

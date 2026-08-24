@@ -1,0 +1,15 @@
+[project]
+name = "flux-interconnect"
+version = "0.1.0"
+description = "Interconnect fabric topology models and deterministic RTL generators (docs/decisions.md D261)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-profile",]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_interconnect"]

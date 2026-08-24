@@ -1,0 +1,68 @@
+{
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((2, 128), 56), ((4, 128), 91), ((5, 128), 28)), 3, 'rotate')\"]": {
+    "area_mm2": 0.015891,
+    "cell_count": 136587,
+    "flow_depth": "placement",
+    "fmax_mhz": 843.1347750937988,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0668,
+    "switch": "vendored",
+    "utilization_pct": 68.0
+  },
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((4, 128), 112), ((7, 128), 32), ((8, 128), 28)), 2, '-')\"]": {
+    "area_mm2": 0.018904999999999998,
+    "cell_count": 171895,
+    "flow_depth": "placement",
+    "fmax_mhz": 689.531532276971,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0867,
+    "switch": "vendored",
+    "utilization_pct": 70.0
+  },
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((4, 128), 56), ((7, 128), 32), ((8, 128), 28)), 2, '-')\"]": {
+    "area_mm2": 0.015451,
+    "cell_count": 136654,
+    "flow_depth": "placement",
+    "fmax_mhz": 737.5882339924914,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0678,
+    "switch": "vendored",
+    "utilization_pct": 70.0
+  },
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((4, 128), 56), ((7, 128), 36), ((9, 128), 28)), 2, '-')\"]": {
+    "area_mm2": 0.01555,
+    "cell_count": 138383,
+    "flow_depth": "placement",
+    "fmax_mhz": 809.2251669026907,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0682,
+    "switch": "vendored",
+    "utilization_pct": 70.0
+  },
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((4, 128), 64), ((7, 128), 32), ((8, 128), 28)), 2, '-')\"]": {
+    "area_mm2": 0.015799999999999998,
+    "cell_count": 139089,
+    "flow_depth": "placement",
+    "fmax_mhz": 629.3662282081943,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0751,
+    "switch": "vendored",
+    "utilization_pct": 70.0
+  },
+  "[{\"openroad\": \"nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02\", \"verilator\": \"nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03\", \"yosys\": \"nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02\"}, \"((((4, 128), 64), ((8, 128), 64)), 2, '-')\"]": {
+    "area_mm2": 0.015423999999999998,
+    "cell_count": 135578,
+    "flow_depth": "placement",
+    "fmax_mhz": 798.6454972366867,
+    "in_harness": true,
+    "kind": "xbar_staged",
+    "power_total_w": 0.0622,
+    "switch": "vendored",
+    "utilization_pct": 70.0
+  }
+}

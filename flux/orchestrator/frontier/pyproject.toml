@@ -1,0 +1,13 @@
+[project]
+name = "flux-frontier"
+version = "0.1.0"
+description = "Two-objective frontier bookkeeping (frontier, spread, best_within) and the Pareto-UCT search policy, shared by the studies (docs/decisions.md D362, D368, moved home in D401)"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_frontier"]

@@ -1,0 +1,73 @@
+schema_version: "0.1.0"
+id: axi4-lite
+version: "pulp-0.39.10"
+title: AXI4-Lite as implemented by pulp-platform/axi v0.39.10
+kind: bus
+summary: >-
+  The same five VALID/READY channels as AXI4 with the burst, id, cache, qos, region, atop, user and
+  last signals removed — a single-beat register-access subset. Address channels carry only addr and
+  prot; the write data channel only data and strb.
+roles: [master, slave]
+
+provenance:
+  document: "pulp-platform/axi: src/axi_intf.sv (interface AXI_LITE), include/axi/typedef.svh"
+  url: https://github.com/pulp-platform/axi/tree/a8c53cee2520
+  publisher: pulp-platform (ETH Zurich / University of Bologna)
+  licence: SHL-0.51 (Solderpad 0.51; licensor permits treatment as Apache-2.0)
+  redistributable: true
+  normative: false
+  version_retrieved: v0.39.10
+  retrieved: "2026-08-14"
+  implements:
+    standard: Arm AMBA AXI4-Lite
+    document: Arm IHI0022
+    redistributable: false
+    note: >-
+      As for axi4: the normative specification cannot be reproduced (docs/decisions.md D31 records
+      Arm's terms verbatim), so this document is evidence about pulp-platform's implementation, not
+      about what the standard requires.
+
+coverage_note: >-
+  Signal names, widths and directions only, read from interface AXI_LITE and the AXI_LITE_DECL_*
+  typedef macros. No prose descriptions — the source is RTL and carries none to quote. The signal
+  set is exactly what the source declares: comparing it against axi4 in the same source is the
+  honest way to see what AXI4-Lite drops, rather than trusting a remembered list.
+
+parameters:
+  - name: AXI_ADDR_WIDTH
+    default: null
+    description: Width of the aw_addr and ar_addr signals.
+    section: axi_intf.sv AXI_LITE
+  - name: AXI_DATA_WIDTH
+    default: null
+    description: Width of the w_data and r_data signals.
+    section: axi_intf.sv AXI_LITE
+  - name: AXI_STRB_WIDTH
+    default: null
+    description: Width of the w_strb signal.
+    section: axi_intf.sv AXI_LITE
+
+signals:
+  - {name: aw_addr,  driver: master, receiver: slave,  width: AXI_ADDR_WIDTH, section: axi_intf.sv}
+  - {name: aw_prot,  driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv prot_t}
+  - {name: aw_valid, driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: aw_ready, driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  - {name: w_data,   driver: master, receiver: slave,  width: AXI_DATA_WIDTH, section: axi_intf.sv}
+  - {name: w_strb,   driver: master, receiver: slave,  width: AXI_STRB_WIDTH, section: axi_intf.sv}
+  - {name: w_valid,  driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: w_ready,  driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  - {name: b_resp,   driver: slave,  receiver: master, width: 2,              section: axi_pkg.sv resp_t}
+  - {name: b_valid,  driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+  - {name: b_ready,  driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+
+  - {name: ar_addr,  driver: master, receiver: slave,  width: AXI_ADDR_WIDTH, section: axi_intf.sv}
+  - {name: ar_prot,  driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv prot_t}
+  - {name: ar_valid, driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: ar_ready, driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  - {name: r_data,   driver: slave,  receiver: master, width: AXI_DATA_WIDTH, section: axi_intf.sv}
+  - {name: r_resp,   driver: slave,  receiver: master, width: 2,              section: axi_pkg.sv resp_t}
+  - {name: r_valid,  driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+  - {name: r_ready,  driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}

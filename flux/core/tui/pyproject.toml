@@ -1,0 +1,13 @@
+[project]
+name = "flux-tui"
+version = "0.1.0"
+description = "btop-style curses UI for Flux loops: panels on number keys, live task/timing/results, and a feedback prompt line (docs/decisions.md D390)."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_tui"]

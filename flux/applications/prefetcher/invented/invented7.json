@@ -1,0 +1,21 @@
+{
+  "name": "invented7",
+  "knobs": {
+    "invented7_max": 4096,
+    "invented7_conf": 2
+  },
+  "idea": "The traces show 84-89% of accesses repeat a (previous_delta, current_delta) pair per PC, a two-step history signal that a one-step stride predictor structurally cannot use; by maintaining a compact per-PC history of the last two line-deltas and prefetching the delta observed once before the same (prev,cur) pair, this catches the long-stride (>8 line) and irregular traversals the current stack miss",
+  "geomean_alone": 1.0,
+  "geomean_with_stack": 1.05674,
+  "reference_stack": [
+    "bingo",
+    "sms",
+    "stride",
+    "invented2"
+  ],
+  "reference_geomean": 1.05674,
+  "logic_repairs": 1,
+  "rung": "screen",
+  "warmup": 10000000,
+  "simulation": 15000000
+}

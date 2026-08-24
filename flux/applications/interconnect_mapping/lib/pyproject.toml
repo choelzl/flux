@@ -1,0 +1,14 @@
+[project]
+name = "flux-imapping"
+version = "0.1.0"
+description = "Conflict-aware banked-L1 interconnect study: tensor storage modes, bank hashes, schedules, and a four-cost Pareto with proofs (docs/decisions.md D378)."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_imapping"]

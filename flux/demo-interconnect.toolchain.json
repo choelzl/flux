@@ -1,0 +1,5 @@
+{
+  "openroad": "nix:03ql61r8rsls8f6g9pdxfhi9sjd8g6a1-openroad-unstable-2026-07-02",
+  "verilator": "nix:h7z8f8wjywj78wx9zzj6706wq960b48v-verilator-unstable-2026-07-03",
+  "yosys": "nix:62qaiwbf6h0nj252mwxyskwp8n1q5g3c-yosys-unstable-2026-07-02"
+}
