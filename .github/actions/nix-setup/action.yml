@@ -1,0 +1,50 @@
+# Shared CI nix environment (docs/decisions.md D242).
+#
+# Replaces DeterminateSystems/magic-nix-cache-action, which has authenticated NOTHING since
+# FlakeHub ended anonymous cache access: every run since 2026-08-14 cold-built the full dev
+# shell and failed at a consistent ~43 minutes ("Process completed with exit code 1" thousands
+# of lines into nix build output), across three unrelated commits that are all green locally.
+# The runner's ~14 GB root disk plus a 6 GB runtime closure (build inputs on top) is the
+# best-supported cause; both halves are addressed here rather than guessed between:
+#   1. the preinstalled toolchains nothing in this repo uses are deleted up front (~25 GB back);
+#   2. the store is cached in GitHub's own actions cache — no third-party account required —
+#      via the cache-nix-action + nix-quick-install-action pairing that project documents
+#      (single-user install, so the cache step can read and purge the store it saves).
+# Every job also prints `df -h` before and after its shell build, so if disk is ever the
+# problem again the log says so instead of dying mid-build.
+name: nix with cached store
+description: Free runner disk, install nix (single-user), restore/save /nix via the GitHub actions cache.
+
+inputs:
+  key-suffix:
+    description: Cache namespace per shell closure (default / physical / timeloop).
+    required: false
+    default: default
+
+runs:
+  using: composite
+  steps:
+    - name: Free runner disk
+      shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+          /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force > /dev/null 2>&1 || true
+        df -h /
+
+    - uses: nixbuild/nix-quick-install-action@v35
+
+    - uses: nix-community/cache-nix-action@v7
+      with:
+        # run_id in the key so EVERY run saves (D247): an exact-key hit is never re-saved, so a
+        # partial cold-build save under a stable key would freeze the cache at partial forever —
+        # the bootstrap could then never converge. Restore matches the newest cache by prefix;
+        # the purge below deletes the superseded ones after the new save lands.
+        primary-key: nix-${{ runner.os }}-${{ inputs.key-suffix }}-${{ github.run_id }}
+        restore-prefixes-first-match: nix-${{ runner.os }}-${{ inputs.key-suffix }}-
+        # keep the saved store under the actions-cache budget; gc runs before save, not during
+        gc-max-store-size-linux: 8G
+        purge: true
+        purge-prefixes: nix-${{ runner.os }}-${{ inputs.key-suffix }}-
+        purge-created: 0
+        purge-primary-key: never

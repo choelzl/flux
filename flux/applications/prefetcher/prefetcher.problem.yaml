@@ -1,0 +1,78 @@
+# The Bingo L2 prefetcher study as a PROBLEM DOCUMENT (docs/decisions.md D519, D533; review 2
+# plan step R3, D539/D540).
+#
+# What is searched: the eleven knobs of the Bingo spatial prefetcher in the L2 of a simulated
+# out-of-order core, the partner prefetchers that run beside it in the `multi` slot, the
+# partners' own knobs -- and, when `invent_rounds` is set, NEW prefetchers a model writes in
+# C++, compiled into the simulator and measured beside the tallest stack the kept library can
+# vouch for. Every speedup is a real ChampSim simulation over three 5G baseband traces; only the
+# storage is modelled (the table arithmetic of `inc/bingo.h`, exact). The search runs on a
+# 10M+15M screen, whose numbers order candidates; the finalists spread along the screened
+# speedup-vs-storage frontier are re-measured at 100M+150M before anything is decided (D351).
+# The world -- the space, the storage model, the policies, the measurer and its cache, the
+# invention round, the decision rule -- is `flux_prefetcher`.
+#
+#     nix develop --command flux task check applications/prefetcher/prefetcher.problem.yaml
+#     nix develop --command flux task run applications/prefetcher/prefetcher.problem.yaml --db demo-prefetcher.db --tui
+#
+# Another ask in this world -- a 64 KB storage budget, Bingo alone, four invention rounds -- is
+# a copy of this file with those numbers changed and its own `campaign:`; not a program. The
+# traces (~380 MB, not in git) live under `applications/prefetcher/traces/`; the simulator comes
+# from the flake.
+
+id: prefetcher
+statement: >-
+  The Bingo L2 prefetcher configuration, its partners in the L2 slot and their knobs, for three
+  5G baseband traces: the fastest stack by geomean IPC speedup over no prefetcher, then the
+  smallest design that holds 90% of that gain -- a constraint, so a smaller design below the
+  floor is refused, never offered as a trade-off.
+
+world: flux_prefetcher.world:World
+params:
+  traces_dir: null          # where the three traces live (default: applications/prefetcher/traces)
+  champsim_bin: null        # the simulator; otherwise $FLUX_CHAMPSIM_BIN, then PATH, then the in-tree build
+  stage: 2                  # 1 = the fastest design only; 2 = also the smallest that holds the floor
+  measurements: 24          # configurations MEASURED per stage: the run's cost, three simulations each
+  llm_round: 8              # configurations the model is asked for before the search starts; 0 = none
+  seed: 0                   # the sampled part of the search
+  retention_floor: 0.90     # stage 2 keeps this fraction of stage 1's GAIN (D349: of the gain, not the ratio)
+  strategy: climb           # climb | pareto-uct -- how stage 1 spends its budget (D368)
+  max_storage_bytes: null   # a hard budget on modelled storage; over it is refused unmeasured (D362)
+  compose_rounds: 2         # rounds of adding an L2 partner beside Bingo, each kept only if it earns its place
+  tune_partners: 12         # measurements spent climbing the PARTNERS' own knobs once the stack is chosen
+  include_invented: true    # the kept inventions join the partner menu, on a simulator built with them
+  invent_rounds: 0          # NEW prefetchers a model writes this run, compiled, screened, kept (D353/D361)
+  invented_dir: null        # where inventions are kept (default: applications/prefetcher/invented)
+  problem: null             # what you need, in words, for the proposer and the inventor
+
+# the identity the record is opened under (D524): the campaign's id in the record is this name
+campaign:
+  name: prefetcher
+
+# the first two axes are the frontier (D362): every design faster than everything smaller
+objectives:
+  - {metric: geomean_speedup, direction: maximize}
+  - {metric: storage_bytes, direction: minimize, unit: B}
+
+# the world measures both: ChampSim at 10M+15M instructions on the screen (orders, never
+# quotes), at 100M+150M to confirm the finalists plus the incumbent and the stack's
+# shipped-default reference, so every comparison the report makes is on ONE stage
+stages:
+  - {name: screen, metrics: [geomean_speedup, storage_bytes]}
+  - {name: confirm, metrics: [geomean_speedup, storage_bytes]}
+
+# the world caches for itself: its measurements are keyed on the STOCK simulator and each
+# invention's header digest (D361), so a rebuilt simulator serves what is already known
+cache: false
+
+budget:
+  steps: 96                 # an upper bound on the batches the search yields (seeds, climb waves,
+                            # compose, tune, shrink, invention); the policies stop on their own
+  finalists: 4              # re-measured at full length, spread along the screened frontier; 0 = the screen only
+  workers: 16               # simulations in flight at once (D525); the simulator is memory-bandwidth
+                            # bound, so throughput grows sublinearly with this
+  repair_attempts: 3        # an invented prefetcher that does not compile is handed g++'s first
+                            # diagnostic and asked again, this many times in all
+  critique_rounds: 0
+  prototype: false
+  patching: false

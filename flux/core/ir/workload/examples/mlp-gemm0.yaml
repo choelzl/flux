@@ -1,0 +1,26 @@
+# Pure-einsum, fully-static-bounds example: the flagship case the affine core was designed for
+# (docs/ir.md) and the one that actually round-trips through a real ZigZag evaluation
+# (evaluators/zigzag/). Contrast with llama3-8b-decode-layer0.yaml, whose dynamic bounds
+# (`s`/`t` as {dyn: [...]}) are exactly what ZigZag *cannot* consume — see
+# evaluators/zigzag/src/flux_evaluator_zigzag/workload_translator.py's NotExpressibleError.
+schema_version: "0.1.0"
+id: mlp/gemm0
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: I, rank: [B, C], dtype: int8}
+  - {name: W, rank: [C, K], dtype: int8}
+  - {name: O, rank: [B, K], dtype: int16}
+ops:
+  - id: mlp.gemm0
+    kind: einsum
+    # Dim names C/K (rather than more generic names) are load-bearing here: they must match
+    # evaluators/zigzag's default target — ZigZag's bundled tpu_like accelerator + its default
+    # spatial mapping, which spatially unrolls loop dims literally named K and C across its
+    # 32x32 array (see zigzag/inputs/mapping/default.yaml). B is free — it stays a temporal
+    # loop. Any other dim names are equally valid Flux IR but would need a different ZigZag
+    # mapping to evaluate (see evaluators/zigzag/README.md's documented v0.1 gap).
+    expr: "B C, C K -> B K"
+    bounds: {B: 4, C: 32, K: 32}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}

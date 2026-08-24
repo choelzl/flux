@@ -1,0 +1,63 @@
+# omni -- the loop that picks loops -- as a PROBLEM DOCUMENT (docs/decisions.md D377, D401,
+# D458; review 2 plan step R3 of D539).
+#
+# What is searched is not a design but a PLAN. The task is prose (`params.prompt`); a model
+# plans typed tool calls against the whole introspected Flux tool surface (or the `params.tools`
+# subset), round by round, and answers in words cited from what actually ran. The world -- the
+# catalog replayed from the MCP surface, the typed-plan gate, the executor, the dithering guard,
+# the round prompt -- is `flux_omni`, named once under `world:`. The gate refuses what does not
+# type-check (the reason fed back verbatim), the `run` stage runs the tool, and there is no
+# design to decide between: `objectives:` is empty and the world's `decide` says so.
+#
+#     nix develop --command flux task check applications/omni/omni.problem.yaml
+#     nix develop --command flux task run applications/omni/omni.problem.yaml --db demo-omni.db --tui
+#     ... --steps 8            # the planning rounds; the last one is told to conclude
+#
+# Without a model: a saved plan replays through the same gate and executor -- copy this file
+# and set `params.plan_file` to a canned plan (`applications/omni/plans/*.json`) or to the
+# `omni_run.json` an earlier run wrote; the model is never asked.
+#
+# `flux task run` has no flag that sets a param, so ANOTHER PROMPT is a copy of this file with
+# `params.prompt` changed and its own `campaign:` name. The record is keyed by the prompt
+# (D401): the same prompt resumes its campaign and round 1 reads back what it last concluded;
+# a different prompt must start blind. The CHIA node `flux_omni_run` makes that copy in memory
+# for its caller's prompt, naming the campaign `omni-<sha256(prompt)[:12]>`.
+
+id: omni
+statement: >-
+  One task in prose, answered from what actually ran: a model plans typed tool calls against
+  the introspected Flux tool surface, a gate refuses what does not type-check, real tools
+  execute, and the conclusion cites the executed results, never a remembered number. The
+  task is `params.prompt`.
+
+world: flux_omni.world:World
+params:
+  prompt: >-                # the task, in prose: what the model plans against
+    Evaluate the bundled GEMM workload (core/ir/workload/examples/mlp-gemm0.yaml) on the
+    bundled simple-npu-1d-v1 architecture with the zigzag backend and report its latency in
+    cycles and its energy.
+  tools: null               # the catalog offered: null = every tool the MCP surface registers (minus omni itself, D383), or a list of bare names
+  max_calls: 16             # executed tool calls before an honest budget stop
+  max_steps_per_round: 4    # steps one round may propose; few, decisive steps beat many
+  wall_clock_budget_s: null # seconds; when spent, one conclude-only round over the evidence (D377), never silence
+  workdir: null             # where `write_file` writes and `load_ir` reads first; null = the pass's own trace directory
+  plan_file: null           # a saved plan (a JSON list of steps, or a run's omni_run.json) run as the one batch, no model asked
+
+campaign:
+  name: omni                # the record's id; a copy of this file with another prompt names its own (D401)
+
+objectives: []              # omni answers in words, not with a ranked design: nothing to rank, and the world's `decide` says so
+
+# the world measures the one stage: running the tool IS the measurement (D297 applied to
+# orchestration). A tool that raises is a refused measurement with the error as its reason,
+# and the error is what the model reads next round
+stages:
+  - {name: run, metrics: [elapsed_s]}
+
+cache: false                # a tool call has effects and a run's whole point is that it RAN (D297, D541)
+
+budget:
+  steps: 6                  # the planning rounds, one batch of steps each; the last is told to conclude
+  prototype: false          # nothing to prototype: a step IS the candidate
+  critique_rounds: 0
+  patching: false

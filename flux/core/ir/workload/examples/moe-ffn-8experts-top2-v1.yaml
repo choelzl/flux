@@ -1,0 +1,67 @@
+# A real, single-layer MoE FFN block (docs/decisions.md D68): 8 real expert FFN einsum ops
+# (`expert{i}.ffn`, deliberately real, heterogeneous hidden sizes — H in {8,12,...,36} — for a
+# richer demonstration of flux_workload_dynamism's own honest ci_low/ci_high spread when swept
+# over different real routing choices, not a claim about how real MoE models typically size their
+# experts, which is usually homogeneous) plus one real `moe.route` data_dependent op
+# (docs/ir.md's own MoE escape hatch, present in this repo's flagship reference example,
+# llama3-8b-decode-layer0.yaml, since D1 — never evaluated by anything until now) naming all 8 as
+# `semantics.candidate_ops` with `top_k: 2` — only 2 of the 8 experts are actually computed for
+# any real token, the entire point of sparse MoE routing.
+#
+# Deliberately NOT directly evaluable by any real evaluator as-is (`moe.route`'s own `kind:
+# data_dependent` has no einsum equivalent — checked directly, not assumed: ZigZag's own
+# `workload_to_zigzag_layers` silently skips it and evaluates only the real einsum ops present,
+# which is *all eight* experts unless the routing decision is resolved first, wildly overstating
+# real per-token cost). `flux_workload_dynamism.sweep_moe_routing` resolves the routing decision
+# to a concrete top-2 selection at each of several caller-chosen sample routings and evaluates
+# each through a real, unmodified evaluator (see tests/integration/test_moe_routing_sweep_live.py).
+schema_version: "0.1.0"
+id: moe-ffn-8experts-top2/v1
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: X, rank: [B, H], dtype: int8}
+  - {name: O, rank: [B, K], dtype: int8}
+ops:
+  - id: expert0.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 8}
+  - id: expert1.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 12}
+  - id: expert2.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 16}
+  - id: expert3.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 20}
+  - id: expert4.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 24}
+  - id: expert5.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 28}
+  - id: expert6.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 32}
+  - id: expert7.ffn
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 36}
+  - id: moe.route
+    kind: data_dependent
+    semantics:
+      top_k: 2
+      experts: 8
+      candidate_ops:
+        [expert0.ffn, expert1.ffn, expert2.ffn, expert3.ffn,
+         expert4.ffn, expert5.ffn, expert6.ffn, expert7.ffn]
+      distribution: "measured@corpus/moe-route-v1"

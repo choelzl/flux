@@ -1,0 +1,26 @@
+# simple-npu-1d-v1.yaml's own DRAM level, given a real, bundled DRAMsim3 timing config
+# (docs/decisions.md D74) — "DDR4_8Gb_x8_3200" is one of DRAMsim3's own real, published DDR4-3200
+# configs, not fabricated. `dramsim3_cycles`/`dramsim3_stream` are real, caller-declared DRAMsim3
+# invocation parameters (synthetic traffic, the same honest "traffic is architecture-level, not
+# workload-derived" gap evaluators/booksim's own NoC traffic already has — see
+# evaluators/dramsim3/README.md).
+schema_version: "0.1.0"
+id: simple-npu-1d-dram/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: dram
+    class: memory
+    attrs:
+      size_kb: 1048576
+      dramsim3_config: "DDR4_8Gb_x8_3200"
+      dramsim3_cycles: 100000
+      dramsim3_stream: "random"
+  - level: gbuf
+    class: memory
+    attrs: {size_kb: 512}
+  - level: pe_array
+    class: compute
+    attrs: {dims: {X: 8}}
+constraints:
+  - {kind: area_mm2, max: 4.0}
+  - {kind: tdp_w, max: 2.0}

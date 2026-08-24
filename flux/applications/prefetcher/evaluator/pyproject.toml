@@ -1,0 +1,16 @@
+[project]
+name = "flux-evaluator-champsim-bingo"
+version = "0.1.0"
+description = "ChampSim/Pythia L2 prefetcher evaluator: measured IPC per trace (docs/decisions.md D349)."
+requires-python = ">=3.11"
+dependencies = [
+    "flux-evaluator-abi",
+    "flux-prefetcher",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_evaluator_champsim_bingo"]

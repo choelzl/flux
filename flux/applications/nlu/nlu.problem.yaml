@@ -1,0 +1,78 @@
+# The FP16 non-linear unit as a PROBLEM DOCUMENT (docs/decisions.md D519, review step 5.4).
+#
+# What the campaign is for, in prose and numbers, lives here; the world it runs in -- the
+# FP16 toolkit, the transpiler, the exhaustive ULP gate, the operator mux, the yosys and
+# OpenROAD flows, the prompts -- is the `flux_nlu` package, named once under `world:`.
+#
+#     nix develop --command flux task check applications/nlu/nlu.problem.yaml
+#     nix develop --command flux task run applications/nlu/nlu.problem.yaml --db demo-nlu.db --tui --think
+#
+# Another ask in this world -- other operators, a 2-ULP budget, a 1 GHz clock -- is a copy
+# of this file with those numbers changed and its own `campaign:`; not a program.
+
+id: nlu
+statement: >-
+  An FP16 non-linear unit of seven operators (exp, log, sigmoid, tanh, gelu, recip, rsqrt):
+  each within 1 ULP of the correctly rounded reference on ALL 65536 inputs, composed under
+  one operator mux, at 800 MHz on ASAP7 with the least area and power.
+language: systemverilog
+extension: .sv
+
+# shallowest arithmetic first: the orchestrator's order and the cooldown menu's
+parts: [recip, rsqrt, sigmoid, tanh, gelu, log, exp]
+
+world: flux_nlu.world:World
+params:
+  ulp_budget: 1             # the gate: every input within this many ULP of the reference
+  clock_period_ps: 1250.0   # what the tools are constrained to
+  seed: 0                   # the fast-check floor vectors
+  test_rounds: 1            # the model's test-author rounds per pass
+  evaluator: nlu@exhaustive-ulp
+
+# the identity the record is opened under (D524): `name` is the campaign's id in the record,
+# keyed by this document -- the campaign the demo opened as 6571cd68e823 in demo-nlu.db was
+# renamed to it (`flux migrate demo-nlu.db --rename 6571cd68e823=nlu`); the rest is the
+# identity document the record keeps beside it
+campaign:
+  name: nlu
+  ops: [exp, log, sigmoid, tanh, gelu, recip, rsqrt]
+  ulp_budget: 1
+  clock_period_ps: 1250.0
+
+knowledge:
+  sheet: knowledge/nlu-methods.md      # the methods cheat sheet, beside this file (D514)
+
+# D511: the clock first -- a goal, judged on the deepest stage (D522: full place-and-route,
+# with a 3% margin on every shallower stage (the FLOOR: the loop raises it from the measured
+# route/confirm ratio the record holds, D562 -- 12% routed on the whole, so ~914 placed): a placed design must reach 824, a model's
+# estimate too, so a design a placement over-estimates is not admitted at the edge), a 3%
+# tie band (two designs within it are a tie and the smaller stands) -- then area, then power
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 800, stage: deepest, margin: 0.03, tie: 0.03, unit: MHz}
+  - {metric: area_um2, direction: minimize, unit: um2}
+  - {metric: power_w, direction: minimize, unit: W}
+
+# D517: every step of the improve ladder, the register sweep to 32; a part alone is measured
+# at placement (D522: routing a part costs 47 minutes, the whole is what gets routed)
+ladder: {alone: confirm}
+
+# the world measures all three: yosys + STA at the screen, OpenROAD placement to confirm,
+# full place-and-route for the finalists (over an hour for the whole; cached by source).
+# `timeout_s` is each tool run's limit on that stage (D537); without it the flow's own
+# default (600 s, a part's) cut the route of the 54k-cell whole three times in a row
+stages:
+  - {name: screen, metrics: [fmax_mhz, area_um2], needs: [yosys]}
+  - {name: confirm, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 1800}
+  - {name: route, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 7200}
+
+budget:
+  steps: 24                 # planner steps per pass
+  repair_attempts: 20       # keep fixing one design before starting fresh
+  explore_every: 4          # 1 in N rounds starts fresh instead of reworking the best
+  cooldown_after: 3         # consecutive failures before a part yields the floor
+  finalists: 3              # placed along the frontier
+  prototype_attempts: 30    # turns a prototype pass has (D424)
+  prototype_patience: 8     # turns granted after each new best, past the budget (D506)
+  prototype_attempts_max: 90
+  tool_hops: 6
+  hop_share: 0.5            # a tool round may write half the model's window (D544)

@@ -1,0 +1,54 @@
+# An RTL problem with NO code of its own (docs/decisions.md D579): this document, a prompt
+# (the statement and the contract), a golden model in Python (golden.py) -- and the two
+# commands every RTL problem needs, `flux rtl test` (Verilator against the golden model) and
+# `flux rtl measure` (Yosys + OpenSTA for the screen, OpenROAD for the placement).
+#
+#     nix develop .#physical --command flux task run applications/mul8/mul8.problem.yaml
+#     ... --screen-only        # the synthesis screen alone, no placement
+#     `flow: {generate: {agent: opencode}}` below hands the writing to a coding agent (D575)
+#
+# It lives under applications/ like every other document: that is where custom flows go.
+
+id: mul8
+statement: >-
+  A combinational signed 8x8 -> 16-bit multiplier in SystemVerilog: module `mul8` with inputs
+  `a` and `w` (`input logic signed [7:0]`) and output `p` (`output logic signed [15:0]`), the
+  smallest that makes 1000 MHz placed on ASAP7. Build the product from partial products (a
+  Booth recoding, a compression tree, a Baugh-Wooley array) rather than writing `a * w`.
+contract: >-
+  One module named exactly `mul8`, purely combinational, Verilog-2001 constructs only
+  (wire, assign, always @(*), case; no SystemVerilog casts, no functions, no $ system
+  tasks). p must equal a * w as signed integers for every input.
+language: systemverilog
+extension: .sv
+
+gate:
+  test: ["{python}", "-m", "flux_cli.main", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py"]
+  count_re: "(\\d+) failing"
+
+stages:
+  - name: screen
+    command: ["{python}", "-m", "flux_cli.main", "rtl", "measure", "{artifact}", "--stage", "synth", "--clock-ps", "1000"]
+    metrics_re: {fmax_mhz: "fmax_mhz=([0-9.]+)", area_um2: "area_um2=([0-9.]+)", power_w: "power_w=([0-9.e+-]+)", cell_count: "cell_count=([0-9]+)"}
+    needs: [yosys]
+  - name: confirm
+    command: ["{python}", "-m", "flux_cli.main", "rtl", "measure", "{artifact}", "--stage", "place", "--clock-ps", "1000"]
+    metrics_re: {fmax_mhz: "fmax_mhz=([0-9.]+)", area_um2: "area_um2=([0-9.]+)", power_w: "power_w=([0-9.e+-]+)", cell_count: "cell_count=([0-9]+)"}
+    needs: [openroad]
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 1000, stage: deepest, unit: MHz}
+  - {metric: area_um2, direction: minimize, unit: um2}
+
+campaign:
+  name: mul8
+
+flow:
+  generate: model          # or {agent: opencode}: a coding agent writes the module (D575)
+  plan: none
+
+budget:
+  steps: 4
+  repair_attempts: 6
+  prototype: false
+  finalists: 2

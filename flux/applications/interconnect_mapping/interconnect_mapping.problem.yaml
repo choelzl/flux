@@ -1,0 +1,80 @@
+# The banked-L1 conflict study as a PROBLEM DOCUMENT (docs/decisions.md D519, D533; review 2
+# plan step R3, D539).
+#
+# A 32-bank single-ported L1 of 128-bit rows serves 28 read + 24 write ports across three units
+# (MU 20R/16W with a 16/8/4 operand split, VU 4R/4W, DMA 4R/4W). Data are RxCxL tensors in
+# twelve storage modes (row/col/loop orders, 2x2 and 4x4 blocks, vectors), dims known only at
+# runtime, written with one tile shape and read with another. What is searched is the PAIR:
+# which (bank, line) hash + placement + schedule, carried by which switching fabric, forms the
+# Pareto front over four costs -- area, storage padding, average access latency, throughput --
+# on traffic the hash never tuned on. The world -- the layout model, the cycle law, the curated
+# field, the fabric generator, the two little loops under the big one (D386), the certificates
+# by exhaustion, the Yosys + OpenSTA screen of the finalists' blocks -- is `flux_imapping`,
+# named once under `world:`.
+#
+#     nix develop --command flux task check applications/interconnect_mapping/interconnect_mapping.problem.yaml
+#     nix develop --command flux task run applications/interconnect_mapping/interconnect_mapping.problem.yaml --db demo-imapping.db --tui
+#     ... --screen-only        # the cycle law alone, no synthesis of the finalists' blocks
+#
+# Another ask in this world -- another seed or traffic regime, more climb rounds, model-proposed
+# hashes -- is a copy of this file with those numbers changed and its own `campaign:`; not a
+# program, not a flag.
+
+id: interconnect_mapping
+statement: >-
+  A banked L1 -- 32 single-ported banks of 128-bit rows under 28 read and 24 write ports --
+  serving tensors in twelve storage modes, written with one tile shape and read with another:
+  the map policy (bank hash, placement, schedule) and the switching fabric that together form
+  the Pareto front over area, storage padding, average access latency and throughput, judged
+  on holdout traffic, with conflict-freedom proved by exhaustion where it is claimed.
+
+world: flux_imapping.world:World
+params:
+  seed: 0                     # workload generation; train and holdout use disjoint ranges of it
+  ops: 8                      # MU operations per workload (each contributes several system steps)
+  vu_probability: 0.7         # regime: the chance VU traffic joins a system step
+  dma_probability: 0.6        # regime: the chance a DMA stream joins an operation
+  climb_rounds: 40            # injectivity-gated XOR-tap hill-climb rounds (0 = the curated field only)
+  llm_rounds: 0               # model-proposed hash rounds, one batch each (0 = no model in the run)
+  coordination_rounds: 2      # big-loop rounds alternating the two little loops (0 = the flat cross product)
+  certify_tiles: [[8, 4, 1], [4, 16, 1]]   # (rows, cols, loops) tile sweeps proved or refuted per frontier pair
+  bank_bits: 5                # B = 2^5 = 32 single-ported banks; a bank-row is 4 x 32-bit elements
+  evaluator: imapping         # the gate's evaluator provenance on the record (D426)
+
+# the identity the record is opened under (D524): `name` keys the campaign; the rest is the ask
+# the record's measurements belong to -- another seed or regime is other traffic, so a copy of
+# this document with them changed names its own campaign rather than mixing pairs measured on
+# different workloads into one read-back
+campaign:
+  name: interconnect_mapping
+  seed: 0
+  ops: 8
+  vu_probability: 0.7
+  dma_probability: 0.6
+
+# no goal: the four costs are a Pareto front and the decision is its knee (D511); the world's
+# `frontier` is dominance over all four, not the first two
+objectives:
+  - {metric: area_score, direction: minimize, unit: areaU}
+  - {metric: pad_fraction, direction: minimize}
+  - {metric: holdout_latency, direction: minimize, unit: cy}
+  - {metric: holdout_throughput, direction: maximize, unit: rows/cy}
+
+# the world measures both: the cycle law on train and holdout traffic for every pair (microseconds),
+# then Yosys + OpenSTA on the finalists' distinct hash blocks and fabric elements -- the problem
+# statement's fmax > 600 MHz post-synthesis, and the gate-unit score composed into um2 (a screen,
+# not a placement: D272). The `phys` stage is skipped without the tools and the report says so
+stages:
+  - {name: analytic, metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, train_latency]}
+  - {name: phys, metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps],
+     needs: [yosys, openroad]}
+
+cache: false                  # the cycle law is microseconds and the screen is seconds, once per run
+
+budget:
+  steps: 4                    # 1 (the cross product) + llm_rounds + coordination_rounds + 1: the world
+                              # yields one batch per round; the extra step lets the loop see the search
+                              # end and climb the chain, instead of calling the search cut short
+  finalists: 6                # pairs spread along the front's area axis that the phys stage screens, the knee always among them
+  critique_rounds: 0          # the front is arithmetic; there is nothing for a critic to object to
+  prototype: false            # no design is written; every pair is generated by code

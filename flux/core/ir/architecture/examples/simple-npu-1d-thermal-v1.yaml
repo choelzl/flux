@@ -1,0 +1,32 @@
+# simple-npu-1d-v1.yaml (docs/phase1-exit-criterion-report.md's flagship architecture) plus a
+# real floorplan + declared power for its two on-die hierarchy levels (docs/decisions.md D64) —
+# enough for evaluators/thermal's real 3D-ICE-backed evaluator to build a real, single-die
+# steady-state thermal model. `dram` deliberately keeps no `floorplan`/`attrs.power_w`: DRAM is
+# off-die in every real system this architecture already models (it's already the "effectively
+# unconstrained at this problem scale" comment on its `size_kb` says as much) — evaluators/thermal
+# excludes hierarchy entries missing either field from the modeled die, not an error, so this is a
+# real, deliberate "model only what's actually on this die" choice, not an omission.
+#
+# Placement/power are real, checked numbers: this exact floorplan (a 3000x3000 um compute block
+# at 2.5W beside a 2000x3000 um memory block at 0.8W, both on a 5000x3000 um die) was run through
+# a real, hand-built 3D-ICE stack description before this file existed, confirming the physically
+# correct direction (the higher-power block runs hotter) — see
+# tests/integration/test_thermal_adapter_live.py.
+schema_version: "0.1.0"
+id: simple-npu-1d-thermal/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: dram
+    class: memory
+    attrs: {size_kb: 1048576}   # 1 GiB, off-die — deliberately no floorplan/power_w, see above
+  - level: gbuf
+    class: memory
+    attrs: {size_kb: 512, power_w: 0.8}
+    floorplan: {x_um: 3000, y_um: 0, width_um: 2000, height_um: 3000}
+  - level: pe_array
+    class: compute
+    attrs: {dims: {X: 8}, power_w: 2.5}
+    floorplan: {x_um: 0, y_um: 0, width_um: 3000, height_um: 3000}
+constraints:
+  - {kind: area_mm2, max: 4.0}
+  - {kind: tdp_w, max: 2.0}

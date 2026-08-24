@@ -1,0 +1,60 @@
+# The bank-mapping study as a PROBLEM DOCUMENT (docs/decisions.md D539 review 2, plan step R3;
+# the shape of D519 and D533).
+#
+# A memory of B banks serves N accesses in one cycle only if they land in N different banks.
+# What is searched is the address-to-bank mapping that is CONFLICT-FREE for the request's
+# strides at N concurrent accesses, for EVERY start address -- cheapest and most certain
+# first: the plain modulo checked (not assumed), a pigeonhole proof when no mapping can do it,
+# the XOR-fold family searched exactly with z3, what IS achievable when the request is not,
+# then non-linear mappings a local model proposes, every one checked over the whole address
+# space. The decision is the cheapest conflict-free mapping, with its Verilog; without one, the
+# best partial answer, labelled as partial. The world -- the checker, the pigeonhole, the
+# solver, the model's DSL, the report -- is `flux_bankmap`.
+#
+#     nix develop --command flux task run applications/bankmap/bankmap.problem.yaml --db demo-bankmap.db --tui
+#     ... --steps 2            # solver only: the baseline and the solver's step, no model round
+#
+# Another ask -- strides {1, 8, 16, 17} at 8 of 8 banks (proved impossible), 32 banks behind
+# seven 4x4 crossbars with the wiring free -- is a copy of this file with `params:` changed and
+# its own `campaign:`.
+
+id: bankmap
+statement: >-
+  An address-to-bank mapping for a memory of 8 banks that is conflict-free for 4 concurrent
+  accesses at each of the strides 1, 8 and 16, for every start address of a 20-bit space:
+  the cheapest one the exhaustive checker accepts, or the proof that none exists and what is
+  achievable instead.
+language: verilog
+extension: .v
+
+world: flux_bankmap.world:World
+params:
+  strides: [1, 8, 16]         # access strides, in words
+  concurrent: 4               # N accesses issued together; at most `banks`
+  banks: 8                    # B, a power of two
+  address_bits: 20            # the address space the guarantee must hold over
+  z3_seconds: 60              # solver budget per attempt
+  max_xor_inputs: null        # hardware bound: address bits folded into one bank bit
+  topology: crossbar          # crossbar | staged:GxH | omega | butterfly | clos:n,m,r | benes (D364)
+  stage_capacities: null      # a staged tree: accesses one stage resource carries per cycle, one per stage
+  lanes: null                 # a staged tree: the input width of the first stage's crossbars (D363)
+  stages: []                  # explicit sharing points a layout cannot spell: {bits: [3, 4], capacity: 1, lanes: 4, lane_key: free, blocks: 7}
+  llm_round: 6                # mappings a model may propose per round, once the linear answer is known; 0 = solver only
+  problem: null               # the requirement in words, for the model
+
+campaign:
+  name: bankmap
+
+objectives:
+  - {metric: hardware_cost, direction: minimize, unit: XOR}
+
+# the world measures it: every mapping the exhaustive checker admits costs what its gates cost
+stages:
+  - {name: exhaustive, metrics: [hardware_cost, clean_fraction]}
+
+cache: false                  # the checker answers in microseconds: nothing to cache
+
+budget:
+  steps: 4                    # the baseline, the solver's step, then model rounds told what failed: 4 = two rounds
+  critique_rounds: 0
+  prototype: false

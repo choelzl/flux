@@ -1,0 +1,7 @@
+[
+  {"tool": "load_ir", "args": {"path": "core/ir/workload/examples/mlp-gemm0.yaml"}, "bind": "wl"},
+  {"tool": "load_ir", "args": {"path": "core/ir/architecture/examples/simple-npu-1d-v1.yaml"}, "bind": "arch"},
+  {"tool": "evaluate", "args": {"backend": "zigzag", "workload": "$wl", "arch": "$arch", "metrics": ["latency_cycles", "energy_pj"]}, "bind": "r"},
+  {"tool": "check_validity", "args": {"backend": "zigzag", "workload": "$wl", "arch": "$arch"}, "bind": "v"},
+  {"tool": "backend_health", "args": {}, "bind": "health"}
+]

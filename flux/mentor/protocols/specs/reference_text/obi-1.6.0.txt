@@ -1,0 +1,2168 @@
+# Mechanically extracted with `pdftotext` from OBI-v1.6.0.pdf (github.com/openhwgroup/obi), vendored so the verbatim-quote test
+# (tests/unit/test_protocols.py) runs offline. The PDF is the primary source; this file exists
+# only to check that vendored rule quotes appear in it. Licence: Solderpad-2.0 — see the corresponding
+# spec document's provenance block. Do not edit.
+Page 1 of 28
+OBI 1
+
+OBI 1
+© Silicon Labs, Inc.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 2 of 28
+OBI 1
+
+License Statement
+Copyright 2020 Silicon Labs Inc.
+
+This document, all associated software, and derivatives thereof are licensed under the Solderpad License, Version
+2.0 (the "License").
+Use of this file means you agree to the terms and conditions of the License and are in full compliance with the
+License.
+You may obtain a copy of the License at:
+https://solderpad.org/licenses/SHL-2.0/
+
+Unless required by applicable law or agreed to in writing, software and hardware implementations thereof distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+EITHER EXPRESSED OR IMPLIED.
+See the License for the specific language governing permissions and limitations under the License.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 3 of 28
+OBI 1
+
+Revision History
+Revision
+v1.0_draft00
+v1.0_draft01
+
+Date
+12/2/2019
+1/31/2020
+
+Author
+A.Bink
+A.Bink
+
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+
+v1.0
+
+3/5/2020
+
+A.Bink
+
+•
+•
+•
+•
+•
+•
+
+v1.1_draft00
+v1.1
+
+4/1/2020
+8/21/2020
+
+A.Bink
+A.Bink
+
+v1.2
+
+4/15/2021
+
+A.Bink
+
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+
+v1.3
+v1.4
+
+1/24/2022
+3/8/2022
+
+A.Bink
+A.Bink
+
+•
+•
+•
+
+Comment
+Initial Revision
+Renamed to OBI 1 (Open Bus Interface, version 1).
+Made all OBI signal names lower case and all
+parameter and property names upper case.
+Removed ERROR_SIGNALING,
+RREADY_SIGNALING, and USER_SIGNALING
+properties.
+Redefined DUSER to only be valid for read
+transactions and renamed to ruser.
+Added wuser signal.
+Added ADDR_WIDTH property.
+Introduced COMB_GNT property.
+Defined address and response phase more precisely.
+Defined address and response phase signal validity
+more precisely.
+Restricted DATA_WIDTH to 32 and 64.
+Defined byte lane enables and address LSBs more
+precisely.
+Introduced channel names (A, R).
+Removed definitions related to misaligned load/store
+and address/response phase forwarding (as they are
+not related to the OBI protocol itself).
+Added transaction IDs.
+Clarified address/response phase definition (Figure 4).
+Added comments on unpredictable subordinate
+behavior in case of invalid be, addr signaling.
+Added explanation on required consistency between
+be and addr values.
+Added note that OBI is (only) defined for little-endian
+systems.
+Redefined manner in which outstanding transactions
+are counted.
+Updated proposed CV32E40P subsystem.
+Fixed requirement numbering.
+Clarified that stability requirements do not apply to
+undefined signals (see comments below R-3.1.1: and
+R-4.1.1: ).
+Replaced RI5CY reference with CV32E40P reference.
+Added optional prot signal (Table 1, Table 6, 3.4.5).
+Added optional memtype signal (Table 1, Table 6,
+3.4.6).
+Added optional atop signal (Table 1, Table 6, 3.4.7).
+Added optional exokay signal (Table 1, Table 6, 3.4.9).
+Added definition of ‘atomic transaction’ (3.3).
+Added definition of ‘exclusive transaction’ (3.3).
+Added optional reqpar, gntpar, rvalidpar and rreadypar
+parity signals (3.4.10)
+Added optional achk and rchk checksum signals
+(3.4.11)
+Added optional dbg signal (Table 1, Table 6, 3.4.7).
+Fixed typo in R-18: and R-19: .
+Relaxed achk related requirements for wdata and
+wuser for read transactions from manager’s point of
+view (R-18.2: ).
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 4 of 28
+OBI 1
+•
+•
+•
+
+v1.5.0
+
+7/19/2022
+
+A.Bink
+
+•
+•
+•
+•
+•
+
+v1.6.0
+
+3/15/2023
+
+A.Bink
+
+•
+•
+•
+•
+•
+•
+
+Strengthened achk related requirements for wdata and
+wuser for read transactions from subordinate’s point of
+view. Not backward compatible to v1.2, v1.3 (R-18.2: ).
+Strengthened rchk related requirements for rdata and
+ruser for write transactions from manager’s point of
+view. Not backward compatible to v1.2, v1.3 (R-19.2: ).
+Relaxed rchk related requirements for rdata and ruser
+for write transactions from subordinate’s point of view
+(R-19.2: ).
+Clarification on be signal semantics (R-7.1: ).
+Clarification on integrity checking for atomic
+transactions (R-20: ).
+Clarified alignment restriction for atomic memory
+transactions (R-11.4: ).
+Clarified be restriction for atomic memory transactions
+(R-11.5: ).
+Generalized R-12: to apply for all atomic transactions
+and restricted R-12: to take aid into account.
+Typo fix (Table 4).
+Rephrased R-18.2: and R-19.2: .
+Add INTEGRITY property (Table 2).
+Add FULL_BE property (Table 2, R-7: , R-8: ).
+Inclusive language updates.
+Added (optional) mid signal and MID_WIDTH
+parameter (Table 1, Table 2).
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 5 of 28
+OBI 1
+
+Table of contents
+1
+
+References .......................................................................................................................................................... 11
+
+2
+
+Introduction.......................................................................................................................................................... 12
+2.1
+
+3
+
+General documentation notes ..................................................................................................................... 12
+
+Functional description ......................................................................................................................................... 13
+3.1
+
+Port list........................................................................................................................................................ 14
+
+3.2
+
+Properties ................................................................................................................................................... 15
+
+3.3
+
+Protocol adherence..................................................................................................................................... 15
+
+3.3.1
+
+Clock and reset ...................................................................................................................................... 19
+
+3.3.2
+
+Handshake process................................................................................................................................ 19
+
+3.4
+
+Signals ........................................................................................................................................................ 21
+
+3.4.1
+
+be ........................................................................................................................................................... 21
+
+3.4.2
+
+addr ........................................................................................................................................................ 22
+
+3.4.3
+
+aid, rid .................................................................................................................................................... 22
+
+3.4.4
+
+prot ......................................................................................................................................................... 22
+
+3.4.5
+
+memtype ................................................................................................................................................ 23
+
+3.4.6
+
+dbg ......................................................................................................................................................... 23
+
+3.4.7
+
+atop ........................................................................................................................................................ 23
+
+3.4.8
+
+exokay .................................................................................................................................................... 24
+
+3.4.9
+
+reqpar, gntpar, rvalidpar, rreadypar ........................................................................................................ 25
+
+3.4.10
+
+achk, rchk .......................................................................................................................................... 25
+
+3.5
+
+Dependencies............................................................................................................................................. 26
+
+3.6
+
+Timing ......................................................................................................................................................... 27
+
+3.7
+
+Tie offs ........................................................................................................................................................ 27
+
+3.8
+
+Comparison with the RI5CY bus interface .................................................................................................. 27
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 6 of 28
+OBI 1
+
+List of figures
+Figure 1 RISC-V subsystem (proposal for OpenHW BHAG) ........................................................................................ 13
+Figure 2 Basic OBI transfer (plus its mapping to AHB5) .............................................................................................. 16
+Figure 3 Outstanding (accepted) transactions ............................................................................................................. 18
+Figure 4 Address phase and response phase example ............................................................................................... 21
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 7 of 28
+OBI 1
+
+List of tables
+Table 1 OBI port list ..................................................................................................................................................... 14
+Table 2 OBI properties ................................................................................................................................................. 15
+Table 3 prot signal........................................................................................................................................................ 22
+Table 4 memtype signal ............................................................................................................................................... 23
+Table 5 Relationship between err and exokay ............................................................................................................. 24
+Table 6 OBI default tie offs ........................................................................................................................................... 27
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 8 of 28
+OBI 1
+
+List of requirements
+R-1: OBI links shall rely on a single interface clock (clk) and reset (reset_n) that is common between the manager
+and subordinate. .......................................................................................................................................................... 19
+R-1.1:
+
+Managers and subordinates shall only ever sample OBI signals on the positive edge of clk. ................ 19
+
+R-1.2:
+
+Managers and subordinates shall never generate OBI signals on the negative edge of clk................... 19
+
+R-1.3:
+OBI signals shall not be assumed to remain stable between clk edges (i.e. multi-cycle path exceptions
+shall never be used). ............................................................................................................................................... 19
+R-2: OBI protocol compliance requirements always apply except for during OBI reset assertion. .............................. 19
+R-2.1:
+
+During reset assertion req shall be driven low. ....................................................................................... 19
+
+R-2.2:
+
+During reset assertion rvalid shall be driven low. ................................................................................... 19
+
+R-3: The address channel A shall use a two-way control handshake (req+gnt) between manager and subordinate. 19
+R-3.1:
+
+The manager shall assert req to indicate the validity of the address phase signals. .............................. 19
+
+R-3.1.1:
+
+The manager shall keep its address phase signals stable during the address phase........................ 20
+
+R-3.1.2:
+
+The manager shall not de-assert (retract) req until after the last cycle of the address phase. ........... 20
+
+R-3.2:
+
+The subordinate shall indicate its readiness to accept the address phase transfer by asserting gnt...... 20
+
+R-3.2.1:
+
+The subordinate shall be allowed to assert gnt at any time (even before the corresponding req). .... 20
+
+R-3.2.2:
+
+The subordinate shall be allowed to de-assert (retract) gnt at any time. ............................................ 20
+
+R-4: The response channel R shall use a two-way control (rvalid+rready) between subordinate and manager. ........ 20
+R-4.1:
+
+The subordinate shall assert rvalid to indicate the validity of the response phase signals. .................... 20
+
+R-4.1.1:
+
+The subordinate shall keep its response phase signals stable during the response phase. .............. 20
+
+R-4.1.2:
+
+The subordinate shall not de-assert (retract) rvalid until after the last cycle of the response phase. . 20
+
+R-4.1.3:
+
+Validity of rdata shall only be implied for read transactions. .............................................................. 20
+
+R-4.2:
+
+The manager shall indicate its readiness to accept the response phase transfer by asserting rready. .. 20
+
+R-4.2.1:
+
+The manager shall be allowed to assert rready at any time (even before the corresponding rvalid). 20
+
+R-4.2.2:
+
+The manager shall be allowed to de-assert (retract) rready at any time. ........................................... 20
+
+R-5: The response phase transfer for a transaction shall not start before the corresponding address phase transfer
+has finished (i.e. req and gnt need to have been sampled high before rvalid=1 is allowed). ....................................... 20
+R-6: Response phase transfers shall be sent in the same order as their corresponding address phase transfers. .... 21
+R-7: (BE_FULL = 0) The be values during the address phase of a transaction shall be as follows: ........................... 21
+R-7.1:
+
+be[N] shall be the byte enable signal for (r/w)data[(N*8)+7 : (N*8)+0].................................................... 21
+
+R-8: (BE_FULL = 1) The be values during the address phase of a transaction shall not have any value restrictions. 22
+R-8.1:
+
+be[N] shall be the byte enable signal for (r/w)data[(N*8)+7 : (N*8)+0].................................................... 22
+
+R-9: The least significant addr bits (i.e. addr[1:0] in case DATA_WIDTH = 32, addr[2:0] in case DATA_WIDTH = 64)
+shall be consistent with the be value during the address phase of a transaction, i.e.: ................................................. 22
+R-10:
+For each OBI transaction an OBI subordinate shall ‘mirror back’ the value received on aid via rid (i.e. the
+rid for the response phase transfer shall be equal to the aid of the corresponding address phase transfer). .............. 22
+R-11:
+
+The atop values during the address phase of a transaction shall be as follows: ........................................ 23
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 9 of 28
+OBI 1
+R-11.1:
+atop[5] shall be 1 for a transaction related to any atomic memory transaction (LR.W/D, SC.W/D,
+AMOSWAP.W/D, AMOADD.W/D, AMOXOR.W/D, AMOAND.W/D, AMOOR.W/D, AMOMIN.W/D, AMOMAX.W/D,
+AMOMINU.W/D, AMOMAXU.W/D as specified in [RISC-V-UNPRIV]) and 0 otherwise. ......................................... 23
+R-11.2:
+atop[4:0] shall be equal to bits [31:27] of the instruction as specified in [RISC-V-UNPRIV] if the
+transaction is due to the execution of an Atomic instruction and 0 otherwise: ......................................................... 23
+R-11.3:
+The transaction associated with a LR.W shall have we = 0; the other atomic memory transactions (i.e.
+SC.W, AMO*) shall use we = 1. ............................................................................................................................... 24
+R-11.4:
+
+The address addr used in an atomic memory transaction shall be naturally aligned.............................. 24
+
+R-11.5:
+The byte enables be used in an atomic memory transaction shall indicate a word or double-word
+transfer as implied by the related *.W or *.D instruction. .......................................................................................... 24
+R-11.6:
+
+The required initiator ID for atomic transactions shall be aid. ................................................................. 24
+
+R-12:
+An OBI manager shall prevent initiating a transaction if it would lead to multiple outstanding transactions
+with the same aid of which at least one transaction is an atomic transaction. .............................................................. 24
+R-13:
+
+exokay shall indicate the success (exokay = 1) or failure (exokay = 0) for exclusive transactions. ............ 24
+
+R-13.1:
+For a LR.W/D related transaction (i.e. atop[5] = 1’b1, atop[4:0] = 5’h2) success shall be signaled via
+exokay (only) if the target sending the response supports exclusive accesses. ...................................................... 24
+R-13.2:
+For a SC.W/D related transaction (i.e. atop[5] = 1’b1, atop[4:0] = 5’h3) success shall be signaled via
+exokay (only) if the target sending the response supports exclusive accesses and the related reservation is still
+valid and the reservation set contains the bytes being written. ................................................................................ 24
+R-13.3:
+
+Other transactions (i.e. with atop[5] != 1’b1 or atop[4:0] not in {5’h2, 5’h3}) shall signal exokay = 0. ..... 24
+
+R-13.4:
+
+The exokay and err signals shall adhere to Table 5. .............................................................................. 24
+
+R-14:
+
+The reqpar signal shall be the inverse of req at each rising clk edge (when not in reset). .......................... 25
+
+R-15:
+
+The gntpar signal shall be the inverse of gnt at each rising clk edge (when not in reset). .......................... 25
+
+R-16:
+
+The rvalidpar signal shall be the inverse of rvalid at each rising clk edge (when not in reset). ................... 25
+
+R-17:
+
+The rreadypar signal shall be the inverse of rready at each rising clk edge (when not in reset). ................ 25
+
+R-18:
+The achk signal shall provide a checksum for the other (i.e. not achk itself) address phase signals in a
+platform defined manner. ............................................................................................................................................. 25
+R-18.1:
+The achk only needs to provide a matching checksum for the other address phase signals at rising clk
+edges with req = 1. .................................................................................................................................................. 25
+R-18.2:
+The wdata and wuser are allowed to be excluded from the integrity scheme for read transactions in one
+of the following manners: ......................................................................................................................................... 25
+R-18.2.1:
+
+The achk signal bit(s) can be specified to not depend on wdata or wuser for read transactions, or
+25
+
+R-18.2.2:
+The achk signal bit(s) that do depend on wdata or wuser for read transactions shall be clearly
+documented and shall not be required to be checked for read transactions........................................................ 25
+R-19:
+The rchk signal shall provide a checksum for the other (i.e. not rchk itself) response phase signals in a
+platform defined manner. ............................................................................................................................................. 25
+R-19.1:
+The rchk only needs to provide a matching checksum for the other response phase signals at rising clk
+edges with rvalid = 1. ............................................................................................................................................... 25
+R-19.2:
+The rdata and ruser signals are allowed to be excluded from the integrity scheme for write transactions
+in one of the following manners: .............................................................................................................................. 25
+R-19.2.1:
+
+The rchk signal bit(s) can be specified to not depend on rdata or ruser for write transactions, or . 25
+
+R-19.2.2:
+The rchk signal bit(s) that do depend on rdata or ruser for write transactions shall be clearly
+documented and shall not be required to be checked for write transactions. ...................................................... 26
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 10 of 28
+OBI 1
+R-20:
+usage.
+
+Atomic transactions shall be treated as both a read and a write transaction with respect to achk/rchk
+26
+
+R-21:
+OBI link outputs (excluding gnt and gntpar) shall not combinatorially depend on OBI link inputs, specifically
+(but not limited to): ....................................................................................................................................................... 26
+R-21.1:
+
+For a manager, req shall not combinatorially depend on gnt or rvalid (nor on gntpar or rvalidpar). ....... 26
+
+R-21.2:
+
+For a manager, rready shall not combinatorially depend on gnt or rvalid (nor on gntpar or rvalidpar). .. 26
+
+R-21.3:
+
+For a subordinate, rvalid shall not combinatorially depend on req or rready (nor on reqpar or rreadypar).
+26
+
+R-22:
+(COMB_GNT == False) gnt (and gntpar) shall not combinatorially depend on OBI link inputs (default
+COMB_GNT = false). ................................................................................................................................................... 26
+R-23:
+
+(COMB_GNT == True) gnt (and gntpar) is allowed to combinatorially depend on OBI link inputs.............. 26
+
+Above constraints apply to single OBI links. If a module contains multiple OBI links additional requirements exist
+between these links...................................................................................................................................................... 26
+R-24:
+OBI link outputs of any manager interface shall not combinatorially depend on OBI link inputs of any other
+manager interface. ....................................................................................................................................................... 26
+R-25:
+OBI link outputs of any subordinate interface shall not combinatorially depend on OBI link inputs of any
+other subordinate interface. ......................................................................................................................................... 26
+R-26:
+
+A transaction’s req shall not depend on the gnt (or gntpar) for that transaction.......................................... 26
+
+R-27:
+
+A transaction’s rvalid shall not depend on the rready (or rreadypar) for that transaction. ........................... 27
+
+R-28:
+
+Incompletely connected OBI interfaces shall be tied off as shown in Table 6 unless specified otherwise. . 27
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 11 of 28
+OBI 1
+
+1
+
+References
+
+Reference ID
+[ARM-AMBA5-AHB]
+
+[ARM-AMBA5-AXI]
+
+[OPENHWCV32E40P]
+[LOWRISC-IBEX-UM]
+[RISC-V-UNPRIV]
+
+[RISC-V-PRIV]
+
+Reference Title
+ARM AMBA 5 AHB
+Protocol Specification
+(ARM IHI 0033B.b
+(ID102715))
+AMBA AXI and ACE
+Protocol
+Specification
+(ARM IHI 0022G
+(ID073019))
+CV32E40P User
+Manual
+lowRISC Ibex User
+Manual
+RISC-V Instruction
+Set Manual, Volume
+I: User-Level ISA,
+Document Version
+20191213 (December
+13, 2019)
+RISC-V Instruction
+Set Manual, Volume
+II: Privileged
+Architecture,
+document version
+20190608-BaseRatified (June 8,
+2019).
+
+Comment/Location
+https://developer.arm.com/docs/ihi0033/bb/arm-amba-5-ahb-protocolspecification
+
+https://static.docs.arm.com/ihi0022/g/IHI0022G_amba_axi_protocol_spec
+.pdf
+
+https://cv32e40p.readthedocs.io/en/latest/
+https://ibex-core.readthedocs.io/en/latest/
+https://github.com/riscv/riscv-isa-manual/releases/download/RatifiedIMAFDQC/riscv-spec-20191213.pdf
+
+https://github.com/riscv/riscv-isa-manual/releases/download/RatifiedIMFDQC-and-Priv-v1.11/riscv-privileged-20190608.pdf
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 12 of 28
+OBI 1
+
+2
+
+Introduction
+
+This document is the Architecture Specification for the OBI (Open Bus Interface) standard. To enable future
+extensions this specific document relates to OBI 1 (the version number will be increased for major updates).
+The RISC-V Foundation (only) specifies the RISC-V ISA, not a specific implementation nor a related bus interface.
+OBI is the Open Bus Interface protocol used for point-to-point bus interface connections of CV32E40* CPUs
+([OPENHW-CV32E40P]) and related bus infrastructure components. The protocol is a request-grant based protocol
+similar to the AMBA AXI protocol ([ARM-AMBA5-AXI]).
+The starting point for the OBI definition is the custom bus interface as used on the RI5CY and Ibex ([LOWRISC-IBEXUM]) RISC-V cores. The protocol is clarified, restricted, extended and generalized to ease design of bus
+infrastructure components, to ease interfacing to standard AMBA protocols ([ARM-AMBA5-AHB], [ARM-AMBA5AXI]), and to ease system level timing.
+Bus protocol compliance of bus managers (initiators) and subordinates (targets) is an essential requirement of chip
+platforms. These protocols allow modules to interface with each other in a known standard way. Potential bugs that
+can result from breaking protocol range from low-order issues like incorrect write/read data all the way to full system
+deadlock.
+
+2.1
+
+General documentation notes
+
+This document contains some color-coded text, e.g.:
+•
+•
+
+Highlighted text in yellow are specifications that still have ongoing investigation or may be of particular
+interest to reviewers before ratification
+Red text is used for notes to the reader
+
+Additionally, the documentation contains a commentary format:
+The commentary format is intended to provide relevant background regarding a design decision. It should not be
+used to communicate key architectural elements and specifications. The reader should be able to extract all
+architectural requirements even with ignoring commentary sections
+
+Some requirements only apply under certain conditions. Such conditions are included as (condition) at the start of a
+requirement.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 13 of 28
+OBI 1
+
+3
+
+Functional description
+
+OBI is the bus interface protocol used for point-to-point bus interface connections on CV32E40* and related bus
+infrastructure components. All lines going in and out of the OBI crossbar (OBIXBAR) (and all lines inside the
+OBIXBAR) in Figure 1 are OBI links. Each OBI link consists of a so-called Address Channel (A) and a Response
+Channel (R).
+
+AHB
+(slave)
+
+clk
+
+reset_n
+
+Q channel
+(device)
+
+IRQ[]
+
+CV32E40P_SS
+DMI_JTAG (Debug Module Interface)
+Interrupt
+Controller
+(TBD)
+
+CDC
+
+TAP
+
+DMI
+
+AHB2OBI
+
+CV32E40P
+
+debug_req
+
+DM_TOP (Debug Module)
+DM_SBA
+(System Bus
+Access)
+
+Instr I/F
+
+Data I/F
+
+OBIXBAR
+OBIDEMUX
+
+OBI
+DEC
+ERR
+
+RVCFG
+
+APB itf
+(slave)
+
+OBIDEMUX
+
+OBIDEMUX
+
+OBI
+DEC
+ERR
+
+OBIDEMUX
+
+OBI
+DEC
+ERR
+
+OBI
+DEC
+ERR
+
+OBIMUX
+
+OBIMUX
+
+OBIMUX
+
+OBIMUX
+
+OBIRAM
+(ITCM)
+
+OBI2AHB
+
+OBIRAM
+(DTCM)
+
+DM_MEM
+(Debug
+Memory)
+
+RAM itf
+
+AHB
+(master)
+
+RAM itf
+
+DM_CSRS
+(CSRS)
+
+Figure 1 RISC-V subsystem (proposal for OpenHW BHAG)
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+JTAG
+
+Page 14 of 28
+OBI 1
+
+3.1
+
+Port list
+
+Table 1 shows the pin names used in point-to-point OBI links. Note that this list differs slightly from the used OBI port
+names in RI5CY and CV32E40P (as in these CPUs the OBI port names are prefixed with instr_ or data_ (to
+differentiate the instruction and data side bus interfaces) and postfixed with _i or _o (to indicate the port direction)).
+Furthermore, RI5CY and CV32E40P do not support the err, auser, wuser, atop, memtype, prot, dbg, ruser, aid, mid,
+rid, reqpar, gntpar, rvalidpar, rreadypar, achk, rchk extensions nor the rready handshake signal. Additions to the
+RI5CY bus interface are highlighted in green. Furthermore, non-used signals are omitted from these RISC-V cores
+(e.g. we, be, and wdata on the instruction interface).
+Table 1 OBI port list
+Name
+
+Source
+
+Destination
+
+Description
+
+Global signals
+clk
+
+Clock source
+
+All
+
+reset_n
+
+Reset
+controller
+
+All
+
+A Channel signals
+req
+Manager
+
+Subordinate
+
+gnt
+
+Subordinate
+
+Manager
+
+addr[] 1, 5
+we
+be[] 2, 5
+wdata[] 2, 5
+
+Manager
+Manager
+Manager
+Manager
+
+Subordinate
+Subordinate
+Subordinate
+Subordinate
+
+auser[] 3,4
+wuser[] 3,4
+
+Manager
+Manager
+
+Subordinate
+Subordinate
+
+The bus clock times all bus transfers. All signal timings are related to the
+rising edge of clk.
+The bus reset signal is active LOW and resets the system and the bus.
+This is the only active LOW signal.
+Address transfer request. req=1 signals the availability of valid address
+phase signals.
+Grant. Ready to accept address transfer. Address transfer is accepted on
+rising clk with req=1 and gnt=1.
+Address
+Write Enable, high for writes, low for reads.
+Byte Enable. Is set for the bytes to write/read.
+Write data. Only valid for write transactions. Undefined for read
+transactions.
+Address Phase User signals. Valid for both read and write transactions.
+Additional Address Phase User signals. Only valid for write transactions.
+Undefined for read transactions.
+Address Phase transaction identifier.
+Atomic Operation.
+Memory type attributes.
+Manager ID.
+Protection attributes.
+Debug access.
+Parity bit for req signal (odd parity).
+Parity bit for gnt signal (odd parity).
+Checksum for address phase signals (except achk itself).
+
+aid[] 4
+Manager
+atop[5:0] 4, 6
+Manager
+memtype[1:0] 4
+Manager
+mid[] 4, 8
+Manager
+prot[2:0] 4
+Manager
+dbg
+Manager
+reqpar 4, 7
+Manager
+gntpar 4, 7
+Subordinate
+achk[] 4, 7
+Manager
+R Channel signals
+rvalid
+Subordinate
+
+Subordinate
+Subordinate
+Subordinate
+Subordinate
+Subordinate
+Subordinate
+Subordinate
+Manager
+Subordinate
+
+rready 4
+
+Manager
+
+Subordinate
+
+rdata[] 2, 5
+
+Subordinate
+
+Manager
+
+err 4
+ruser[] 3,4
+
+Subordinate
+Subordinate
+
+Manager
+Manager
+
+rid[] 4
+
+Subordinate
+
+Manager
+
+Response transfer request. rvalid=1 signals the availability of valid
+response phase signals. Used for both reads and writes.
+Ready to accept response transfer. Response transfer is accepted on
+rising clk with rvalid=1 and rready=1.
+Read data. Only valid for read transactions. Undefined for write
+transactions.
+Error.
+Response phase User signals. Only valid for read transactions.
+Undefined for write transactions.
+Response Phase transaction identifier.
+
+exokay 4, 6
+
+Subordinate
+
+Manager
+
+Exclusive transaction okay.
+
+rvalidpar 4, 7
+
+Subordinate
+
+Manager
+
+Parity bit for rvalid signal (odd parity).
+
+Manager
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 15 of 28
+OBI 1
+rreadypar 4, 7
+
+Manager
+
+Subordinate
+
+Parity bit for rready signal (odd parity).
+
+rchk[] 4, 7
+
+Subordinate
+
+Manager
+
+Checksum for address phase signals (except rchk itself).
+
+1 Default address width is 32-bit. Address width is controlled by the ADDR_WIDTH property.
+2 Default data width is 32-bit (so 32-bit rdata and wdata, 4-bit be). Data width is controlled by the DATA_WIDTH property.
+3 Default auser, wuser and ruser are not present (0 width). Their widths are controlled by the AUSER_WIDTH,
+
+WUSER_WIDTH and RUSER_WIDTH properties respectively. The semantics of these signals is implementation defined.
+4 New signals not present on RI5CY, Ibex, or CV32E40P. The tie-off values as specified in section 3.7 shall be assumed if
+signals are not present.
+5 The OBI protocol is defined only for little-endian systems.
+6 Only present on cores that (optionally) support the A extension.
+7 Only present on cores that (optionally) support interface integrity. rreadypar can be omitted if rready is omitted.
+8 Default mid is not present (0 width). Its width is controlled by the MID_WIDTH property. The semantics of this signals is
+implementation defined.
+
+3.2
+
+Properties
+Table 2 OBI properties
+Property
+
+COMB_GNT
+AUSER_WIDTH
+WUSER_WIDTH
+RUSER_WIDTH
+ADDR_WIDTH
+DATA_WIDTH
+
+Default
+Value
+False
+0
+0
+0
+32
+32
+
+ID_WIDTH
+MID_WIDTH
+ACHK_WIDTH
+RCHK_WIDTH
+INTEGRITY
+BE_FULL
+
+0
+0
+0
+0
+0
+0
+
+3.3
+
+Comment
+Defines whether gnt is allowed to combinatorially depend on OBI inputs.
+Width of the auser signal. RI5CY, Ibex, CV32E40P do not have the auser signal.
+Width of the wuser signal. RI5CY, Ibex, CV32E40P do not have the wuser signal.
+Width of the ruser signal. RI5CY, Ibex, CV32E40P do not have the ruser signal.
+Width of the addr signal.
+Width of the rdata and wdata signals. be width is DATA_WIDTH / 8. Valid
+DATA_WIDTH settings are 32 and 64.
+Width of the aid and rid signals.
+Width of the mid signal.
+Width of the achk signal.
+Width of the rchk signal.
+Defines whether interface integrity signals are present.
+Defines whether full be flexibility is allowed.
+
+Protocol adherence
+
+OBI is a point-to-point protocol (between manager and subordinate), similar to a much simplified AXI protocol. The
+protocol works as follows (simplified, details omitted in this initial description).
+An OBI link consists of two channels (plus a global clk and reset_n):
+•
+•
+
+The address channel, called the A channel.
+The response channel, called the R channel.
+
+An OBI transaction consists of two transfers:
+•
+•
+
+An address phase transfer over the A channel.
+A response phase transfer over the R channel.
+
+The address phase transfer is as follows:
+•
+•
+•
+
+The manager indicates the validity of its address phase signals (i.e. addr, wdata, we, be, auser, aid, mid,
+wuser, prot, memtype, dbg, atop, achk) by settings its request (req) high.
+The subordinate indicates its readiness to accept the address phase signals by setting grant (gnt) high.
+The address phase of a transaction starts in the cycle in which req goes high and completes on the rising clk
+edge when both req and gnt are high.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 16 of 28
+OBI 1
+Note that the write data (wdata) is also part of the address phase signals in the A channel.
+The response phase transfer is as follows:
+•
+•
+•
+
+After a granted request (in the A channel), the subordinate indicates the validity of its response phase
+signals (i.e. rdata, err, ruser, rid, exokay, rchk) by setting rvalid high.
+The manager indicates its readiness to accept the response phase signals by setting rready high.
+The response phase of a transaction starts in the cycle in which rvalid goes high and completes on the rising
+clk edge when both rvalid and rready are high.
+
+Note that the response phase of a transaction per definition has no overlap with the address phase of that same
+transaction. However, the response phase does not necessarily immediately follow the address phase as wait
+states can be inserted in between these two phases by keeping rvalid low (and this is not considered part of the
+response phase).
+Figure 2 show a basic (fastest possible) OBI transaction plus its translation to AHB5.
+1
+
+2
+
+3
+
+4
+
+5
+
+clk
+req
+addr
+
+ADDR0
+
+wdata
+
+WDATA0
+
+gnt
+rdata
+
+RDATA0
+
+rvalid
+
+C
+
+rready
+
+HTRANS
+HADDR
+
+IDLE
+
+NSEQ
+
+IDLE
+
+IDLE
+
+ADDR0
+
+HWDATA
+
+WDATA0
+
+HRDATA
+
+RDATA0
+
+HREADYOUT
+
+Figure 2 Basic OBI transfer (plus its mapping to AHB5)
+The following definitions will be used in the remainder of this document:
+•
+
+Address phase signals
+The signals from manager to subordinate of which the validity is controlled by req (and gnt): addr, wdata,
+we, be, auser, wuser, aid, mid, prot, memtype, dbg, atop, achk.
+The value of the address phase signals is undefined outside the address phase.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 17 of 28
+OBI 1
+In figures addr is often used as a representative of the address phase signals. Timing and validity of addr, wdata,
+we, be, auser, wuser, aid, mid, prot, memtype, dbg, atop, achk are equal.
+•
+
+Response phase signals
+The signals from subordinate to manager of which the validity is controlled by rvalid (and rready): rdata, err,
+ruser, rid, exokay.
+The value of the response phase signals is undefined outside the response phase. Note that this also
+implies that the value of err is undefined when rvalid is low.
+
+In figures rdata is often used as a representative of the response phase signals. Timing and validity of rdata, err,
+ruser, rid, exokay, rchk are equal (although rdata and ruser are undefined for write transactions).
+•
+
+Address channel (A)
+The address channel (A) is the combination of req, gnt, and the address phase signals. An address channel
+is similar to AXI’s write address channel, read address channel, and write data channel (although in OBI
+these channels are basically all mapped onto one channel).
+
+•
+
+Response channel (R)
+The response channel (R) is the combination of rvalid, rready, and the response phase signals. A response
+channel is similar to AXI’s write response channel and read data channel (although in OBI these channels
+are basically all mapped onto one channel).
+
+•
+
+OBI link
+An OBI link is the combination of an address channel (A) with its associated response channel (R). An OBI
+link relies on the presence of a global clk and reset_n as well.
+
+•
+
+Address phase
+The first cycle of the address phase is the cycle in which req=1; the last cycle of the address phase is the
+cycle in which both req=1 and gnt=1.
+
+•
+
+Address phase transfer
+The transfer of address phase signals over the A channel from manager to subordinate that takes place
+during the address phase.
+
+•
+
+Response phase
+The first cycle of the response phase is the cycle in which rvalid=1; the last cycle of the response phase is
+the cycle in which both rvalid=1 and rready=1.
+
+•
+
+Response phase transfer
+The transfer of response phase signals over the R channel from subordinate to manager that takes place
+during the response phase.
+
+•
+
+In order
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 18 of 28
+OBI 1
+OBI links are in order, i.e. the response phase transfers are sent in in the same order as their corresponding
+address phase transfers were issued.
+•
+
+Transaction
+An OBI (read or write) transaction consists of an address phase transfer which is (not necessarily
+immediately) followed by an associated response phase transfer. A transaction starts when its address
+phase transfer starts. A transaction ends when its response phase transfer ends.
+
+•
+
+Exclusive transaction
+An exclusive OBI transaction is an OBI transaction with atop[5] = 1 and atop[4:0] = 5'h2 (LR.W/D) or
+atop[4:0] = 5'h3 (SC.W/D).
+A RISC-V core with support for the A extension and an OBI interface would use such transactions on its data
+interface for load-reserved and store-conditional instructions.
+
+•
+
+Atomic transaction
+An atomic OBI transaction is an OBI transaction with atop[5] = 1.
+A RISC-V core with support for the A extension and an OBI interface would use such transactions on its data
+interface for LR.W/D, SC.W/D, AMOSWAP.W/D, AMOADD.W/D, AMOXOR.W/D, AMOAND.W/D, AMOOR.W/D,
+AMOMIN.W/D, AMOMAX.W/D, AMOMINU.W/D, AMOMAXU.W/D
+
+•
+
+Outstanding (accepted) transaction
+A transaction that has been accepted, but has not ended yet is called an outstanding transaction (or
+equivalently, an outstanding accepted transaction). Multiple outstanding transactions can be present at the
+same time as new address phase transfers can be issued by the manager before the subordinate has
+issued all corresponding response transfers.
+Figure 3 gives an example of how the number of outstanding (granted) transactions is counted (assuming 0
+transaction requests in the not-shown preceding cycles):
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+clk
+req
+gnt
+rvalid
+rready
+
+Outstanding transactions
+
+0
+
+0
+
+1
+
+1
+
+0
+
+1
+
+0
+
+Figure 3 Outstanding (accepted) transactions
+•
+
+clk cycle 1: A (default) gnt is present, but req is still 0 and no transactions have been accepted yet,
+so the number of outstanding (accepted) transactions is 0.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 19 of 28
+OBI 1
+
+•
+
+clk cycle 2: req becomes 1 and this request will be accepted on the next rising clk edge. During
+this cycle the number of outstanding (accepted) transactions remains 0.
+
+•
+
+clk cycle 3: The address phase of the first transaction has now been accepted and the
+corresponding response transfer has not started nor finished yet. The number of outstanding
+transactions therefore increases to 1.
+
+•
+
+clk cycle 4: Nothing changes. rvalid=1 and rready=1, but this will only affect the count in the next
+cycle.
+
+•
+
+clk cycle 5: The response phase of the first transaction finished and therefore the number of
+outstanding transactions decreases to 0. req=1 and gnt=1, but this only affects the count in the next
+cycle.
+
+•
+
+clk cycle 6: The address phase of the second transaction has now finished, and therefore the
+outstanding (granted) transaction count increases to 1. rvalid=1 and rready=1, but this will only
+affect the count in the next cycle.
+
+•
+
+clk cycle 7: The response phase of the second transaction finished and therefore the outstanding
+transaction count decreases to 0.
+
+3.3.1 Clock and reset
+R-1:
+
+OBI links shall rely on a single interface clock (clk) and reset (reset_n) that is common between the manager
+and subordinate.
+
+R-1.1:
+
+Managers and subordinates shall only ever sample OBI signals on the positive edge of clk.
+
+Any other sampled address or response channel signals shall be considered unstable and ignored, including data
+sampled on faster clock edges or negative clock edges.
+
+R-1.2:
+
+Managers and subordinates shall never generate OBI signals on the negative edge of clk.
+
+R-1.3:
+
+OBI signals shall not be assumed to remain stable between clk edges (i.e. multi-cycle path
+exceptions shall never be used).
+
+R-2:
+
+OBI protocol compliance requirements always apply except for during OBI reset assertion.
+
+R-2.1:
+
+During reset assertion req shall be driven low.
+
+R-2.2:
+
+During reset assertion rvalid shall be driven low.
+
+OBI manager or subordinate reconfiguration, software-based resets, clock disabling, etc. are no valid reasons to
+break OBI protocol compliance.
+
+3.3.2 Handshake process
+The OBI address channel uses a handshake process to transfer address phase info. The protocol is similar to AXI’s
+VALID/READY handshake process (with OBI’s req signal acting as AXI’s VALID signal, and OBI’s gnt signal acting
+as AXI’s READY signal).
+
+R-3:
+
+The address channel A shall use a two-way control handshake (req+gnt) between manager and
+subordinate.
+
+R-3.1:
+
+The manager shall assert req to indicate the validity of the address phase signals.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 20 of 28
+OBI 1
+
+R-3.1.1: The manager shall keep its address phase signals stable during the address phase.
+This requirement does not apply to undefined signals, i.e. the values of wdata and wuser are not required to be
+kept stable during the address phase of a read transaction.
+The value of the Byte Enable (be) signal does not affect the stability requirement of any signal.
+
+R-3.1.2: The manager shall not de-assert (retract) req until after the last cycle of the address phase.
+Request retraction is allowed during reset activation when both manager and subordinate are being reset.
+
+R-3.2:
+
+The subordinate shall indicate its readiness to accept the address phase transfer by asserting gnt.
+
+R-3.2.1: The subordinate shall be allowed to assert gnt at any time (even before the corresponding req).
+R-3.2.2: The subordinate shall be allowed to de-assert (retract) gnt at any time.
+The OBI response channel uses a handshake process to transfer response phase info. The protocol is similar to
+AXI’s VALID/READY handshake process (with OBI’s rvalid signal acting as AXI’s VALID signal, and OBI’s rready
+signal acting as AXI’s READY signal).
+Certain managers (e.g. RI5CY) do not implement the rready signal. Such managers are always ready to accept the
+response transfer of any transaction they initiated. These managers can be thought of as having rready tied high.
+
+R-4:
+
+The response channel R shall use a two-way control (rvalid+rready) between subordinate and manager.
+
+R-4.1:
+
+The subordinate shall assert rvalid to indicate the validity of the response phase signals.
+
+R-4.1.1: The subordinate shall keep its response phase signals stable during the response phase.
+This requirement does not apply to undefined signals, i.e. the values of rdata and ruser are not required to be kept
+stable during the response phase of a write transaction.
+The value of the Byte Enable (be) signal does not affect the stability requirement of any signal.
+
+R-4.1.2: The subordinate shall not de-assert (retract) rvalid until after the last cycle of the response phase.
+R-4.1.3: Validity of rdata shall only be implied for read transactions.
+R-4.2:
+
+The manager shall indicate its readiness to accept the response phase transfer by asserting
+
+rready.
+
+R-4.2.1: The manager shall be allowed to assert rready at any time (even before the corresponding rvalid).
+R-4.2.2: The manager shall be allowed to de-assert (retract) rready at any time.
+In addition to the above requirements for A and R channels separately, some requirements exist on the interaction
+between the A and R channels.
+
+R-5:
+
+The response phase transfer for a transaction shall not start before the corresponding address phase
+transfer has finished (i.e. req and gnt need to have been sampled high before rvalid=1 is allowed).
+So, for a single transaction the earliest that rvalid=1 can happen is in the clk cycle after both req and gnt have
+been sampled high. A subordinate can postpone its response by keeping rvalid=0 the initial cycles after both req
+and gnt have been sampled high.
+
+Figure 4 shows an example of two OBI transactions with their address and response phases marked:
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 21 of 28
+OBI 1
+•
+
+•
+
+The first transaction has a one cycle long address phase (marked AP0); the corresponding response phase
+(marked RP0) is delayed by the subordinate keeping rvalid = 0 during cycle 3. In this case the response
+phase only starts in cycle 4 and is one cycle long (as both rvalid and rready are 1 in that cycle).
+The second transaction has a three cycle long address phase (marked AP1); the corresponding response
+phase (marked RP1) is not delayed by the subordinate (as it starts the cycle after both req and gnt have
+been sampled high), but in this case the manager stretches the response phase by keeping rready low
+during cycle 6 and 7.
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+clk
+AP0
+
+AP1
+
+req
+gnt
+addr
+
+x
+
+A0
+
+A1
+
+A1
+
+A1
+
+x
+
+RP0
+
+x
+
+x
+
+RP1
+
+rvalid
+rready
+rdata
+
+x
+
+x
+
+x
+
+RD0
+
+x
+
+RD1
+
+RD1
+
+RD1
+
+Figure 4 Address phase and response phase example
+
+R-6:
+
+Response phase transfers shall be sent in the same order as their corresponding address phase transfers.
+
+3.4
+
+Signals
+
+3.4.1 be
+Not all be signal values are considered valid. The only valid be signals values are the ones needed to support
+transfers resulting from (possibly mis-aligned) byte, halfword, word, or double-word (for DATA_WIDTH=64)
+loads/stores.
+A misaligned load/store is a load/store in which the address is not aligned to the related data, i.e. a load/store of
+a halfword with a non-halfword-aligned address or a load/store of a word with a non-word-aligned address.
+Managers that perform misaligned load/stores might have to issue multiple OBI transactions for each such
+load/store.
+
+R-7:
+
+(BE_FULL = 0) The be values during the address phase of a transaction shall be as follows:
+
+•
+•
+
+At least one of the be bits shall be set to 1.
+The 1’s in be shall be contiguous.
+
+So (for DATA_WIDTH=32) be = 4’b1000, be = 4’b0110, be = 4’b1110 are valid values whereas for example be =
+4’b0000 and be = 4’b1010 are not valid values during the address phase of a transaction. Outside of the address
+phase of a transfer the be signal is not constrained and e.g. be = 4’b0000 is allowed.
+
+R-7.1:
+
+be[N] shall be the byte enable signal for (r/w)data[(N*8)+7 : (N*8)+0].
+
+The subordinate behavior in case of invalid be signaling is unpredictable. There is no requirement for subordinates to
+signal an OBI error in case of invalid be signaling.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 22 of 28
+OBI 1
+
+R-8:
+
+(BE_FULL = 1) The be values during the address phase of a transaction shall not have any value
+restrictions.
+All bits in be are allowed to be set to 0. The 1’s in be do not need to be contiguous.
+
+R-8.1:
+
+be[N] shall be the byte enable signal for (r/w)data[(N*8)+7 : (N*8)+0].
+
+3.4.2 addr
+R-9:
+
+The least significant addr bits (i.e. addr[1:0] in case DATA_WIDTH = 32, addr[2:0] in case DATA_WIDTH =
+64) shall be consistent with the be value during the address phase of a transaction, i.e.:
+•
+
+If i is the index of the least signification bit in be that is 1, then the least significant addr bits shall be <= i.
+
+For example for DATA_WIDTH = 32: If be[] = 4’b0001, then as be[0] is the least significant set bit in be[], addr[1:0]
+shall be <= 0; if be[] = 4’b0100, then as be[2] is the least significant set bit in be[], addr[1:0] shall be <= 2; if be[] =
+4’b0110, then as be[1] is the least significant set bit in be[], addr[1:0] shall be <= 1; reversely, addr[1:0] = 2’b00 is
+consistent with all be[] values that are allowed according to R-7: , and addr[1:0] = 2’b11 is consistent only with
+be[] = 4’b1000.
+The subordinate behavior in case of invalid addr signaling is unpredictable. There is no requirement for subordinates
+to signal an OBI error in case of invalid addr-be combinations.
+
+3.4.3 aid, rid
+The transaction identifiers (aid, rid) are intended to be used by interconnect infrastructure to route back the response
+transfers to the manager from which the corresponding address phase transfer originated. For this purpose the
+interconnect will add bits to aid when routing a transfer towards a subordinate. A subordinate will mirror back the
+received aid via the rid of the same transaction, after which the interconnect will use (and strip) the added bits from
+rid to route back the response transfer to the correct manager.
+OBI links are always in-order (no matter aid or rid); the ordering model is not in any way related to the transaction
+identifiers.
+For each OBI transaction an OBI subordinate shall ‘mirror back’ the value received on aid via rid (i.e. the rid
+for the response phase transfer shall be equal to the aid of the corresponding address phase transfer).
+
+R-10:
+
+3.4.4 mid
+The manager identifier (mid) is intended to be used by subordinates to identify the manager that initiated the
+transaction. There is no requirement that all transactions from the same manager use the same identifier (although
+this would be the typical behavior) nor that manager identifiers used by different managers are unique (although
+typically they would be unique). The semantics of this signal is implementation defined.
+
+3.4.5 prot
+The prot signal is used to specify additional protection attributes for a transaction. The prot signal is an optional
+signal. If it is not used, then it is recommended to tie it off as specified in Table 6.
+Table 3 prot signal
+prot bit(s)
+prot[0]
+prot[2:1]
+
+Usage
+Instruction access (1’b0) vs. Data access (1’b1)
+User/Application (2’b00), Supervisor (2’b01),
+Reserved (2’b10), Machine (2’b11)
+
+Comment
+This matches the privilege levels from
+[RISC-V-PRIV].
+
+The prot signal is expected to be extended with the following information in the future:
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 23 of 28
+OBI 1
+-
+
+Trust status of the requesting instruction.
+
+-
+
+Trust status of the memory access.
+
+-
+
+Trusted domain identification.
+
+3.4.6 memtype
+The memtype signal is used to specify additional memory attributes for a transaction. The memtype signal is an
+optional signal. If it is not used, then it is recommended to tie it off as specified in Table 6.
+Table 4 memtype signal
+memtype bit(s)
+
+Usage
+
+memtype[0]
+
+Non-bufferable (0) or Bufferable (1)
+
+memtype[1]
+
+Non-cacheable (0) or Cacheable (1)
+
+Comment
+A manager can drive this signal based on
+its Physical Memory Attribution (PMA)
+definition.
+A manager can drive this signal based on
+its Physical Memory Attribution (PMA)
+definition.
+
+3.4.7 dbg
+The dbg signal is used to specify whether the transaction is initiated (directly or indirectly) by a debugger (dbg = 1’b1)
+or not (dbg = 1’b0). The dbg signal is an optional signal. If it is not used, then it is recommended to tie it off as
+specified in Table 6.
+
+3.4.8 atop
+The atop signal is used to signal the type of atomic memory transaction (from the RISC-V A extension ([RISC-VUNPRIV])) that needs to be performed. The atop signal is an optional signal. If it is not used, then it is recommended
+to tie it off as specified in Table 6.
+
+R-11:
+
+The atop values during the address phase of a transaction shall be as follows:
+
+R-11.1:
+
+atop[5] shall be 1 for a transaction related to any atomic memory transaction (LR.W/D, SC.W/D,
+AMOSWAP.W/D, AMOADD.W/D, AMOXOR.W/D, AMOAND.W/D, AMOOR.W/D, AMOMIN.W/D,
+AMOMAX.W/D, AMOMINU.W/D, AMOMAXU.W/D as specified in [RISC-V-UNPRIV]) and 0 otherwise.
+
+R-11.2:
+
+atop[4:0] shall be equal to bits [31:27] of the instruction as specified in [RISC-V-UNPRIV] if the
+transaction is due to the execution of an Atomic instruction and 0 otherwise:
+
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+•
+
+5'h2 : LR.W/D
+5'h3 : SC.W/D
+5'h1 : AMOSWAP.W/D
+5'h0 : AMOADD.W/D
+5'h4 : AMOXOR.W/D
+5'hC : AMOAND.W/D
+5'h8 : AMOOR.W/D
+5'h10 : AMOMIN.W/D
+5'h14 : AMOMAX.W/D
+5'h18 : AMOMINU.W/D
+5'h1C : AMOMAXU.W/D
+
+The atomic memory operation (AMO*) transactions perform read-modify-write operations as defined in [RISC-VUNPRIV] at the target. For address addr and write data wdata, the AMO* transactions atomically return the
+original content from address addr via rdata, apply the associated operator (e.g. ADD, XOR) to this rdata and
+wdata, and store the resulting data at address addr.
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 24 of 28
+OBI 1
+
+R-11.3:
+
+The transaction associated with a LR.W shall have we = 0; the other atomic memory transactions
+(i.e. SC.W, AMO*) shall use we = 1.
+
+R-11.4:
+
+The address addr used in an atomic memory transaction shall be naturally aligned.
+
+Naturally aligned means eight-byte aligned for 64-bit words (i.e. when related to *.D instructions) and four-byte
+aligned for 32-bit words (i.e. when related to *.W instructions).
+
+R-11.5:
+
+The byte enables be used in an atomic memory transaction shall indicate a word or double-word
+transfer as implied by the related *.W or *.D instruction.
+
+R-11.6:
+
+The required initiator ID for atomic transactions shall be aid.
+
+The aid identifier can be used by the circuit managing the reservation set for a LR.W.
+
+R-12:
+
+An OBI manager shall prevent initiating a transaction if it would lead to multiple outstanding transactions with
+the same aid of which at least one transaction is an atomic transaction.
+
+3.4.9 exokay
+The exokay signal is used to signal success or failure for exclusive transactions (i.e. those transactions resulting from
+RISC-V load-reserved (LR.W/D) and store-conditional instructions (SC.W) ([RISC-V-UNPRIV]). The exokay signal is
+an optional signal. If it is not used, then it is recommended to tie it off as specified in Table 6.
+
+R-13:
+
+exokay shall indicate the success (exokay = 1) or failure (exokay = 0) for exclusive transactions.
+For a LR.W/D related transaction (i.e. atop[5] = 1’b1, atop[4:0] = 5’h2) success shall be signaled via
+exokay (only) if the target sending the response supports exclusive accesses.
+
+R-13.1:
+
+Success indicates that the reservation set has been updated according to the LR.W related transaction.
+For a SC.W/D related transaction (i.e. atop[5] = 1’b1, atop[4:0] = 5’h3) success shall be signaled
+via exokay (only) if the target sending the response supports exclusive accesses and the related reservation is
+still valid and the reservation set contains the bytes being written.
+
+R-13.2:
+
+See [RISC-V-UNPRIV] for more information about LR.W/D and SC.W/D.
+
+R-13.3:
+
+Other transactions (i.e. with atop[5] != 1’b1 or atop[4:0] not in {5’h2, 5’h3}) shall signal exokay = 0.
+
+R-13.4:
+
+The exokay and err signals shall adhere to Table 5.
+Table 5 Relationship between err and exokay
+
+{err, exokay}
+
+2’b00
+2’b01
+2’b10
+2’b11
+
+Usage
+
+Success of non-exclusive transaction
+Failure of exclusive transaction
+Success of exclusive transaction
+Bus error
+Reserved
+
+Comment
+
+Possible for any transaction type.
+Only possible for LR.W/D or SC.W/D.
+E.g. not supported data width, write to read-only location, etc.
+Target shall not issue this.
+
+The exact definition of success for a LR.W/D – SC.W/D transaction pair is platform specific (e.g. the platform needs to
+define the reservation set and potential requirements on other OBI signals as e.g. addr, be, prot).
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 25 of 28
+OBI 1
+
+3.4.10 reqpar, gntpar, rvalidpar, rreadypar
+The reqpar, gntpar, rvalidpar and rreadypar signals are optional OBI interface integrity related signals. The reqpar,
+gntpar, rvalidpar and rreadypar signals are the (odd) parity signals for req, gnt, rvalid and rready respectively. These
+signals can be used to increase robustness of the implementation (e.g. against transient errors). The reqpar, gntpar,
+rvalidpar and rreadypar are neither address phase signals nor response phase signals (they are required to be valid
+always except for during reset).
+
+R-14:
+
+The reqpar signal shall be the inverse of req at each rising clk edge (when not in reset).
+
+R-15:
+
+The gntpar signal shall be the inverse of gnt at each rising clk edge (when not in reset).
+
+R-16:
+
+The rvalidpar signal shall be the inverse of rvalid at each rising clk edge (when not in reset).
+
+R-17:
+
+The rreadypar signal shall be the inverse of rready at each rising clk edge (when not in reset).
+
+3.4.11 achk, rchk
+The achk and rchk signal are optional OBI interface integrity related signals. The achk signal provides a checksum for
+the other (i.e. not achk itself) address phase signals. The actual checksum format (e.g. odd parity or SECDED) as
+well as which exact address phase signals are covered is left open and only specified at the platform level. Similarly,
+rchk provides a checksum for the other (i.e. not rchk itself) response phase signals.
+The actual checksum formats could get specified (or recommended) in a later version of this specification.
+
+R-18:
+
+The achk signal shall provide a checksum for the other (i.e. not achk itself) address phase signals in a
+platform defined manner.
+
+R-18.1:
+
+The achk only needs to provide a matching checksum for the other address phase signals at rising
+clk edges with req = 1.
+
+R-18.2:
+
+The wdata and wuser are allowed to be excluded from the integrity scheme for read transactions in
+one of the following manners:
+
+R-18.2.1:
+
+The achk signal bit(s) can be specified to not depend on wdata or wuser for read
+
+transactions, or
+
+R-18.2.2:
+
+The achk signal bit(s) that do depend on wdata or wuser for read transactions shall be
+clearly documented and shall not be required to be checked for read transactions.
+
+In contrast to version v1.2 and v1.3 of this specification on some platforms it can therefore now be the case that
+certain achk bits shall not be checked for read transactions at the subordinate.
+
+R-19:
+
+The rchk signal shall provide a checksum for the other (i.e. not rchk itself) response phase signals in a
+platform defined manner.
+
+R-19.1:
+
+The rchk only needs to provide a matching checksum for the other response phase signals at rising
+clk edges with rvalid = 1.
+
+R-19.2:
+
+The rdata and ruser signals are allowed to be excluded from the integrity scheme for write
+transactions in one of the following manners:
+
+R-19.2.1:
+
+The rchk signal bit(s) can be specified to not depend on rdata or ruser for write
+
+transactions, or
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 26 of 28
+OBI 1
+
+R-19.2.2:
+
+The rchk signal bit(s) that do depend on rdata or ruser for write transactions shall be
+clearly documented and shall not be required to be checked for write transactions.
+
+In contrast to version v1.2 and v1.3 of this specification on some platforms it can therefore now be the case that
+certain rchk bits shall not be checked for write transactions at the manager.
+
+R-20:
+
+Atomic transactions shall be treated as both a read and a write transaction with respect to achk/rchk usage.
+
+3.5
+
+Dependencies
+
+In order to ease system level integration and system level timing additional requirements are imposed on the OBI
+signals. These requirements are aimed at preventing deadlock, combinatorial loops, and unnecessarily long paths at
+the system level.
+
+R-21:
+
+OBI link outputs (excluding gnt and gntpar) shall not combinatorially depend on OBI link inputs, specifically
+(but not limited to):
+
+R-21.1:
+
+For a manager, req shall not combinatorially depend on gnt or rvalid (nor on gntpar or rvalidpar).
+
+R-21.2:
+
+For a manager, rready shall not combinatorially depend on gnt or rvalid (nor on gntpar or rvalidpar).
+
+R-21.3:
+
+For a subordinate, rvalid shall not combinatorially depend on req or rready (nor on reqpar or
+rreadypar).
+
+R-22:
+
+(COMB_GNT == False) gnt (and gntpar) shall not combinatorially depend on OBI link inputs (default
+COMB_GNT = false).
+
+R-23:
+
+(COMB_GNT == True) gnt (and gntpar) is allowed to combinatorially depend on OBI link inputs.
+
+Requirement R-21: would have been quite restrictive if it would apply to gnt/gntpar as well. For OBI
+implementations with relaxed frequency requirements or for OBI links which are internal to a module, the
+requirements on gnt/gntpar generation can sometimes be relaxed. An OBI link in which the gnt/gntpar output is
+allowed to combinatorially depend on OBI link inputs is called a combinatorial gnt OBI link. Such an OBI link (i.e.
+with COMB_GNT = True) might limit achievable performance and is therefore discouraged; functional behavior is
+however not compromised.
+Above constraints apply to single OBI links. If a module contains multiple OBI links additional requirements exist
+between these links.
+
+R-24:
+
+OBI link outputs of any manager interface shall not combinatorially depend on OBI link inputs of any other
+manager interface.
+For example, a module’s manager port 0 req output shall not depend on that module’s manager port 1 gnt input.
+
+R-25:
+
+OBI link outputs of any subordinate interface shall not combinatorially depend on OBI link inputs of any other
+subordinate interface.
+For example, a module’s subordinate port 0 rvalid output shall not depend on that module’s subordinate port 1
+rready input.
+
+Above constraints are all timing related. The following requirements relate to deadlock prevention.
+
+R-26:
+
+A transaction’s req shall not depend on the gnt (or gntpar) for that transaction.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 27 of 28
+OBI 1
+Note that the above requirement is wider than only disallowing combinatorial paths. The reverse dependency is
+allowed (i.e. gnt is allowed do depend on req (as long as it does not introduce a combinatorial path)).
+
+R-27:
+
+A transaction’s rvalid shall not depend on the rready (or rreadypar) for that transaction.
+
+Note that the above requirement is wider than only disallowing combinatorial paths. The reverse dependency is
+allowed (i.e. rready is allowed do depend on rvalid (as long as it does not introduce a combinatorial path)).
+
+3.6
+
+Timing
+
+OBI signals will have specific timing budgets allocated for manager, subordinate, and interconnect modules. These
+budgets are considered vendor specific (and are not part of this public specification).
+
+3.7
+
+Tie offs
+
+Some modules do not use all the OBI signals shown in Table 1 (e.g. the instruction OBI interface of RI5CY). In case
+such incomplete OBI interfaces need to be converted to a complete OBI interface, the following applies.
+
+R-28:
+
+Incompletely connected OBI interfaces shall be tied off as shown in Table 6 unless specified otherwise.
+Table 6 OBI default tie offs
+
+Name
+rready
+
+Default tie off
+1’b1
+
+Description
+RI5CY, Ibex, and CV32E40P do not have an rready signal. They are always ready
+to accept the response transfer for any granted transaction they issued.
+we
+1’b0
+Read-only
+be[3:0] 1
+4’b1111
+All byte lanes enabled
+rdata[31:0] 1
+32’b0
+All bits 0 (this tie off is for write-only OBI ports)
+wdata[31:0] 1
+32’b0
+Write data ignored
+auser[]
+’b0
+All bits 0
+aid[]
+’b0
+All bits 0
+mid[]
+’b0
+All bits 0
+wuser[]
+’b0
+All bits 0
+prot[2:0]
+3’b111
+Data access, Machine mode
+memtype[1:0]
+2’b0
+Non-bufferable, non-cacheable
+dbg
+1’b0
+Non debug access
+atop[5:0]
+‘b0
+All bits 0 (no atomic/exclusive transaction)
+err
+1’b0
+No error
+ruser[]
+’b0
+All bits 0
+exokay
+1’b0
+Cause exclusive transaction failure
+1 Default data width is 32-bit. Tie offs show the value for the default width only.
+
+No default tie offs are defined for the reqpar, gntpar, rvalidpar, rreadypar, achk, rchk signals (as they are based on
+other dynamically changing signals).
+
+3.8
+
+Comparison with the RI5CY bus interface
+
+The major differences between OBI and the bus interface as used in RI5CY are as follows:
+•
+•
+•
+•
+
+RI5CY does not use a rready signal (it can be thought of as having this signal tied to 1).
+RI5CY does not use an err signal (it can be thought of as ignoring this signal).
+RI5CY does not use an aid signal (it can be thought of as having this signal tied to 0).
+RI5CY does not necessarily keep its address phase signals stable during the address phase (see
+https://github.com/pulp-platform/riscv/issues/128).
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+Page 28 of 28
+OBI 1
+•
+•
+
+RI5CY has combinatorial paths from rvalid to req (see https://github.com/pulp-platform/riscv/issues/126)
+RI5CY does not allow for gnt to be asserted before req (https://github.com/pulp-platform/riscv/issues/127)
+and assumes that subordinates will combinatorially generate a gnt based on req.
+
+© Silicon Labs, Inc. Licensed under the Solderpad License, Version 2.0 (See “License Statement” on page 2)
+
+

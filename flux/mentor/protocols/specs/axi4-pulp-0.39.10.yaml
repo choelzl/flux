@@ -1,0 +1,125 @@
+schema_version: "0.1.0"
+id: axi4
+version: "pulp-0.39.10"
+title: AXI4 as implemented by pulp-platform/axi v0.39.10
+kind: bus
+summary: >-
+  Five independent channels (AW, W, B, AR, R), each a VALID/READY handshake. Write data carries a
+  strobe and a last-beat marker; reads and writes carry an id used to match responses to requests.
+roles: [master, slave]
+
+provenance:
+  document: "pulp-platform/axi: src/axi_intf.sv, src/axi_pkg.sv, include/axi/typedef.svh"
+  url: https://github.com/pulp-platform/axi/tree/a8c53cee2520
+  publisher: pulp-platform (ETH Zurich / University of Bologna)
+  licence: SHL-0.51 (Solderpad 0.51; licensor permits treatment as Apache-2.0)
+  redistributable: true
+  normative: false
+  version_retrieved: v0.39.10
+  retrieved: "2026-08-14"
+  implements:
+    standard: Arm AMBA AXI4
+    document: Arm IHI0022
+    redistributable: false
+    note: >-
+      The normative AXI specification cannot be reproduced here. docs/decisions.md D31 checked and
+      recorded Arm's own terms verbatim: "No part of the document may be reproduced in any form by
+      any means without the express prior written permission of Arm." Everything below is read from
+      a permissively-licensed RTL implementation, so it describes what that implementation does,
+      which is not necessarily what the standard requires. Where the two could differ — optional
+      signals, permitted-but-unimplemented behaviour, exact encodings — the standard governs and
+      this document is not evidence about it.
+  note: >-
+    The version string is deliberately "pulp-0.39.10" rather than "4.0": this document is versioned
+    by the implementation it was read from, because that is what its content is evidence about. An
+    IR reference of "axi4@2.0" will therefore NOT resolve against it, which is correct — see this
+    module's README.
+
+coverage_note: >-
+  Signal names, widths, directions and channel structure only. No prose descriptions: the source is
+  RTL, and it carries none to quote — inventing them from memory of the Arm specification is
+  exactly the fabrication this module's provenance guard exists to prevent. Fixed widths come from
+  axi_pkg.sv typedefs (len_t 8, size_t 3, burst_t 2, cache_t 4, prot_t 3, qos_t 4, region_t 4,
+  resp_t 2, atop_t 6); parameterised widths come from AXI_BUS's own parameters. axi_pkg.sv also
+  defines the burst encodings BURST_FIXED=2'b00, BURST_INCR=2'b01, BURST_WRAP=2'b10 and RESP_OKAY=
+  2'b00, which this schema has no field for yet. AXI4-Stream is not covered: pulp-platform/axi has
+  no AXI-Stream typedefs, and no other verified open source was checked. The role names are the
+  source's own ("modport Master"/"modport Slave"), not the newer manager/subordinate terminology.
+
+parameters:
+  - name: AXI_ID_WIDTH
+    default: null
+    description: Width of the aw_id, b_id, ar_id and r_id signals.
+    section: axi_intf.sv AXI_BUS
+  - name: AXI_ADDR_WIDTH
+    default: null
+    description: Width of the aw_addr and ar_addr signals.
+    section: axi_intf.sv AXI_BUS
+  - name: AXI_DATA_WIDTH
+    default: null
+    description: Width of the w_data and r_data signals.
+    section: axi_intf.sv AXI_BUS
+  - name: AXI_STRB_WIDTH
+    default: null
+    description: Width of the w_strb signal.
+    section: axi_intf.sv AXI_BUS
+  - name: AXI_USER_WIDTH
+    default: null
+    description: Width of the aw_user, w_user, b_user, ar_user and r_user signals.
+    section: axi_intf.sv AXI_BUS
+
+signals:
+  # AW — write address channel
+  - {name: aw_id,     driver: master, receiver: slave,  width: AXI_ID_WIDTH,   section: axi_intf.sv}
+  - {name: aw_addr,   driver: master, receiver: slave,  width: AXI_ADDR_WIDTH, section: axi_intf.sv}
+  - {name: aw_len,    driver: master, receiver: slave,  width: 8,              section: axi_pkg.sv len_t}
+  - {name: aw_size,   driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv size_t}
+  - {name: aw_burst,  driver: master, receiver: slave,  width: 2,              section: axi_pkg.sv burst_t}
+  - {name: aw_lock,   driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: aw_cache,  driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv cache_t}
+  - {name: aw_prot,   driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv prot_t}
+  - {name: aw_qos,    driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv qos_t}
+  - {name: aw_region, driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv region_t}
+  - {name: aw_atop,   driver: master, receiver: slave,  width: 6,              section: axi_pkg.sv atop_t}
+  - {name: aw_user,   driver: master, receiver: slave,  width: AXI_USER_WIDTH, required: false, section: axi_intf.sv}
+  - {name: aw_valid,  driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: aw_ready,  driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  # W — write data channel
+  - {name: w_data,    driver: master, receiver: slave,  width: AXI_DATA_WIDTH, section: axi_intf.sv}
+  - {name: w_strb,    driver: master, receiver: slave,  width: AXI_STRB_WIDTH, section: axi_intf.sv}
+  - {name: w_last,    driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: w_user,    driver: master, receiver: slave,  width: AXI_USER_WIDTH, required: false, section: axi_intf.sv}
+  - {name: w_valid,   driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: w_ready,   driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  # B — write response channel
+  - {name: b_id,      driver: slave,  receiver: master, width: AXI_ID_WIDTH,   section: axi_intf.sv}
+  - {name: b_resp,    driver: slave,  receiver: master, width: 2,              section: axi_pkg.sv resp_t}
+  - {name: b_user,    driver: slave,  receiver: master, width: AXI_USER_WIDTH, required: false, section: axi_intf.sv}
+  - {name: b_valid,   driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+  - {name: b_ready,   driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+
+  # AR — read address channel
+  - {name: ar_id,     driver: master, receiver: slave,  width: AXI_ID_WIDTH,   section: axi_intf.sv}
+  - {name: ar_addr,   driver: master, receiver: slave,  width: AXI_ADDR_WIDTH, section: axi_intf.sv}
+  - {name: ar_len,    driver: master, receiver: slave,  width: 8,              section: axi_pkg.sv len_t}
+  - {name: ar_size,   driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv size_t}
+  - {name: ar_burst,  driver: master, receiver: slave,  width: 2,              section: axi_pkg.sv burst_t}
+  - {name: ar_lock,   driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: ar_cache,  driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv cache_t}
+  - {name: ar_prot,   driver: master, receiver: slave,  width: 3,              section: axi_pkg.sv prot_t}
+  - {name: ar_qos,    driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv qos_t}
+  - {name: ar_region, driver: master, receiver: slave,  width: 4,              section: axi_pkg.sv region_t}
+  - {name: ar_user,   driver: master, receiver: slave,  width: AXI_USER_WIDTH, required: false, section: axi_intf.sv}
+  - {name: ar_valid,  driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}
+  - {name: ar_ready,  driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+
+  # R — read data channel
+  - {name: r_id,      driver: slave,  receiver: master, width: AXI_ID_WIDTH,   section: axi_intf.sv}
+  - {name: r_data,    driver: slave,  receiver: master, width: AXI_DATA_WIDTH, section: axi_intf.sv}
+  - {name: r_resp,    driver: slave,  receiver: master, width: 2,              section: axi_pkg.sv resp_t}
+  - {name: r_last,    driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+  - {name: r_user,    driver: slave,  receiver: master, width: AXI_USER_WIDTH, required: false, section: axi_intf.sv}
+  - {name: r_valid,   driver: slave,  receiver: master, width: 1,              section: axi_intf.sv}
+  - {name: r_ready,   driver: master, receiver: slave,  width: 1,              section: axi_intf.sv}

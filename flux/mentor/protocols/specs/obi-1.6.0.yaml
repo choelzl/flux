@@ -1,0 +1,402 @@
+schema_version: "0.1.0"
+id: obi
+version: "1.6.0"
+title: OBI (Open Bus Interface) v1.6.0
+kind: bus
+summary: >-
+  A point-to-point memory-mapped bus with a two-phase transaction: an address phase handshaked with
+  req/gnt and a response phase handshaked with rvalid/rready. Links are always in order. Used by
+  the OpenHW cores (CV32E40P, Ibex, RI5CY).
+roles: [manager, subordinate]
+
+provenance:
+  document: OBI-v1.6.0.pdf
+  url: https://github.com/openhwgroup/obi/blob/master/OBI-v1.6.0.pdf
+  publisher: Silicon Labs, Inc. (OpenHW Group)
+  licence: Solderpad-2.0
+  redistributable: true
+  normative: true
+  version_retrieved: "1.6.0"
+  retrieved: "2026-08-14"
+  note: >-
+    Licence read from the document itself, page 2, not from a repository LICENSE file (the
+    openhwgroup/obi repository has none) or a search summary: "Copyright 2020 Silicon Labs Inc.
+    This document, all associated software, and derivatives thereof are licensed under the
+    Solderpad License, Version 2.0". Signals below are Table 1 (Port list, page 15); parameters are
+    Table 2 (Properties); rules keep the document's own R-numbering.
+
+coverage_note: >-
+  Signals and properties are complete against Table 1 and Table 2. Rules are a subset — the
+  handshake and reset requirements other Flux code is most likely to check against — not all of
+  R-1..R-21. Absence of a rule here does not mean the specification lacks one.
+
+parameters:
+  - name: ADDR_WIDTH
+    default: 32
+    description: Width of the addr signal.
+    section: "Table 2"
+  - name: DATA_WIDTH
+    default: 32
+    allowed: [32, 64]
+    description: >-
+      Width of the rdata and wdata signals. be width is DATA_WIDTH / 8. Valid DATA_WIDTH settings
+      are 32 and 64.
+    section: "Table 2"
+  - name: ID_WIDTH
+    default: 0
+    description: Width of the aid and rid signals.
+    section: "Table 2"
+  - name: MID_WIDTH
+    default: 0
+    description: Width of the mid signal.
+    section: "Table 2"
+  - name: AUSER_WIDTH
+    default: 0
+    description: Width of the auser signal. RI5CY, Ibex, CV32E40P do not have the auser signal.
+    section: "Table 2"
+  - name: WUSER_WIDTH
+    default: 0
+    description: Width of the wuser signal. RI5CY, Ibex, CV32E40P do not have the wuser signal.
+    section: "Table 2"
+  - name: RUSER_WIDTH
+    default: 0
+    description: Width of the ruser signal. RI5CY, Ibex, CV32E40P do not have the ruser signal.
+    section: "Table 2"
+  - name: ACHK_WIDTH
+    default: 0
+    description: Width of the achk signal.
+    section: "Table 2"
+  - name: RCHK_WIDTH
+    default: 0
+    description: Width of the rchk signal.
+    section: "Table 2"
+  - name: COMB_GNT
+    default: false
+    description: Defines whether gnt is allowed to combinatorially depend on OBI inputs.
+    section: "Table 2"
+  - name: INTEGRITY
+    default: 0
+    description: Defines whether interface integrity signals are present.
+    section: "Table 2"
+  - name: BE_FULL
+    default: 0
+    description: Defines whether full be flexibility is allowed.
+    section: "Table 2"
+
+signals:
+  # Global signals
+  - name: clk
+    driver: global
+    receiver: global
+    width: 1
+    description: >-
+      The bus clock times all bus transfers. All signal timings are related to the rising edge of
+      clk.
+    section: "Table 1"
+  - name: reset_n
+    driver: global
+    receiver: global
+    width: 1
+    description: >-
+      The bus reset signal is active LOW and resets the system and the bus. This is the only active
+      LOW signal.
+    section: "Table 1"
+
+  # A channel (address phase)
+  - name: req
+    driver: manager
+    receiver: subordinate
+    width: 1
+    description: Address transfer request. req=1 signals the availability of valid address phase signals.
+    section: "Table 1"
+  - name: gnt
+    driver: subordinate
+    receiver: manager
+    width: 1
+    description: >-
+      Grant. Ready to accept address transfer. Address transfer is accepted on rising clk with
+      req=1 and gnt=1.
+    section: "Table 1"
+  - name: addr
+    driver: manager
+    receiver: subordinate
+    width: ADDR_WIDTH
+    description: Address.
+    section: "Table 1"
+  - name: we
+    driver: manager
+    receiver: subordinate
+    width: 1
+    description: Write Enable, high for writes, low for reads.
+    section: "Table 1"
+  - name: be
+    driver: manager
+    receiver: subordinate
+    width: DATA_WIDTH/8
+    description: Byte Enable. Is set for the bytes to write/read.
+    section: "Table 1"
+  - name: wdata
+    driver: manager
+    receiver: subordinate
+    width: DATA_WIDTH
+    description: Write data. Only valid for write transactions. Undefined for read transactions.
+    section: "Table 1"
+  - name: auser
+    driver: manager
+    receiver: subordinate
+    width: AUSER_WIDTH
+    required: false
+    description: Address Phase User signals. Valid for both read and write transactions.
+    section: "Table 1"
+  - name: wuser
+    driver: manager
+    receiver: subordinate
+    width: WUSER_WIDTH
+    required: false
+    description: >-
+      Additional Address Phase User signals. Only valid for write transactions. Undefined for read
+      transactions.
+    section: "Table 1"
+  - name: aid
+    driver: manager
+    receiver: subordinate
+    width: ID_WIDTH
+    required: false
+    description: Address Phase transaction identifier.
+    section: "Table 1"
+  - name: atop
+    driver: manager
+    receiver: subordinate
+    width: 6
+    required: false
+    description: Atomic Operation.
+    section: "Table 1"
+  - name: memtype
+    driver: manager
+    receiver: subordinate
+    width: 2
+    required: false
+    description: Memory type attributes.
+    section: "Table 1"
+  - name: mid
+    driver: manager
+    receiver: subordinate
+    width: MID_WIDTH
+    required: false
+    description: Manager ID.
+    section: "Table 1"
+  - name: prot
+    driver: manager
+    receiver: subordinate
+    width: 3
+    required: false
+    description: Protection attributes.
+    section: "Table 1"
+  - name: dbg
+    driver: manager
+    receiver: subordinate
+    width: 1
+    required: false
+    description: Debug access.
+    section: "Table 1"
+  - name: reqpar
+    driver: manager
+    receiver: subordinate
+    width: 1
+    required: false
+    description: Parity bit for req signal (odd parity).
+    section: "Table 1"
+  - name: gntpar
+    driver: subordinate
+    receiver: manager
+    width: 1
+    required: false
+    description: Parity bit for gnt signal (odd parity).
+    section: "Table 1"
+  - name: achk
+    driver: manager
+    receiver: subordinate
+    width: ACHK_WIDTH
+    required: false
+    description: Checksum for address phase signals (except achk itself).
+    section: "Table 1"
+
+  # R channel (response phase)
+  - name: rvalid
+    driver: subordinate
+    receiver: manager
+    width: 1
+    description: >-
+      Response transfer request. rvalid=1 signals the availability of valid response phase signals.
+      Used for both reads and writes.
+    section: "Table 1"
+  - name: rready
+    driver: manager
+    receiver: subordinate
+    width: 1
+    required: false
+    description: >-
+      Ready to accept response transfer. Response transfer is accepted on rising clk with rvalid=1
+      and rready=1.
+    section: "Table 1"
+  - name: rdata
+    driver: subordinate
+    receiver: manager
+    width: DATA_WIDTH
+    description: Read data. Only valid for read transactions. Undefined for write transactions.
+    section: "Table 1"
+  - name: err
+    driver: subordinate
+    receiver: manager
+    width: 1
+    required: false
+    description: Error.
+    section: "Table 1"
+  - name: ruser
+    driver: subordinate
+    receiver: manager
+    width: RUSER_WIDTH
+    required: false
+    description: >-
+      Response phase User signals. Only valid for read transactions. Undefined for write
+      transactions.
+    section: "Table 1"
+  - name: rid
+    driver: subordinate
+    receiver: manager
+    width: ID_WIDTH
+    required: false
+    description: Response Phase transaction identifier.
+    section: "Table 1"
+  - name: exokay
+    driver: subordinate
+    receiver: manager
+    width: 1
+    required: false
+    description: Exclusive transaction okay.
+    section: "Table 1"
+  - name: rvalidpar
+    driver: subordinate
+    receiver: manager
+    width: 1
+    required: false
+    description: Parity bit for rvalid signal (odd parity).
+    section: "Table 1"
+  - name: rreadypar
+    driver: manager
+    receiver: subordinate
+    width: 1
+    required: false
+    description: Parity bit for rready signal (odd parity).
+    section: "Table 1"
+  - name: rchk
+    driver: subordinate
+    receiver: manager
+    width: RCHK_WIDTH
+    required: false
+    description: Checksum for address phase signals (except rchk itself).
+    section: "Table 1"
+
+# Handshake semantics in machine-checkable form (docs/decisions.md D212). Every field cites one
+# of the rules quoted below — the parser rejects anything else — so this block cannot claim more
+# than the vendored normative text states. Payload stability (R-3.1.x beyond retraction) and
+# response ordering are NOT represented here; see coverage_note.
+handshakes:
+  clock: clk
+  active_low_reset: reset_n
+  phases:
+    - name: address
+      requester_role: manager
+      request: req
+      accept: gnt
+      rule_id: R-3
+      no_retract:
+        rule_id: R-3.1.2
+      reset_low:
+        - signal: req
+          rule_id: R-2.1
+      # R-3.1.1's stability, for the address-phase signals it applies to *unconditionally*: the
+      # document itself exempts undefined signals ("the values of wdata and wuser are not required
+      # to be kept stable during the address phase of a read transaction"), and this block cannot
+      # yet express a we-conditional obligation — so wdata is left to prose rather than asserted
+      # wrongly. aid is optional and likewise omitted.
+      stable_until_accept:
+        - signal: addr
+          rule_id: R-3.1.1
+        - signal: we
+          rule_id: R-3.1.1
+        - signal: be
+          rule_id: R-3.1.1
+    - name: response
+      requester_role: subordinate
+      request: rvalid
+      accept: rready
+      rule_id: R-4
+      no_retract:
+        rule_id: R-4.1.2
+      reset_low:
+        - signal: rvalid
+          rule_id: R-2.2
+      # R-4.1.1 (response-phase stability) is vendored above but deliberately NOT machine-checked:
+      # every response payload signal is either optional (err, rid, ruser) or conditional on the
+      # transaction direction (rdata is undefined for writes), and asserting stability on those
+      # would alarm on compliant traffic. A rule the block cannot state truthfully stays prose.
+
+rules:
+  - id: "R-2.1"
+    text: During reset assertion req shall be driven low.
+    section: "3.3.1"
+  - id: "R-2.2"
+    text: During reset assertion rvalid shall be driven low.
+    section: "3.3.1"
+  - id: "R-3"
+    text: >-
+      The address channel A shall use a two-way control handshake (req+gnt) between manager and
+      subordinate.
+    section: "3.3.2"
+  - id: "R-3.1.1"
+    text: The manager shall keep its address phase signals stable during the address phase.
+    section: "3.3.2"
+  - id: "R-3.1.2"
+    text: >-
+      The manager shall not de-assert (retract) req until after the last cycle of the address
+      phase.
+    section: "3.3.2"
+  - id: "R-3.2.1"
+    text: >-
+      The subordinate shall be allowed to assert gnt at any time (even before the corresponding
+      req).
+    section: "3.3.2"
+  - id: "R-4"
+    text: >-
+      The response channel R shall use a two-way control (rvalid+rready) between subordinate and
+      manager.
+    section: "3.3.2"
+  - id: "R-4.1.1"
+    text: The subordinate shall keep its response phase signals stable during the response phase.
+    section: "3.3.2"
+  - id: "R-4.1.2"
+    text: >-
+      The subordinate shall not de-assert (retract) rvalid until after the last cycle of the
+      response phase.
+    section: "3.3.2"
+  - id: "R-7.1"
+    text: "be[N] shall be the byte enable signal for (r/w)data[(N*8)+7 : (N*8)+0]."
+    section: "3.4.1"
+  - id: "R-10"
+    text: >-
+      For each OBI transaction an OBI subordinate shall 'mirror back' the value received on aid via
+      rid (i.e. the rid for the response phase transfer shall be equal to the aid of the
+      corresponding address phase transfer).
+    section: "3.4.3"
+  - id: "R-14"
+    text: The reqpar signal shall be the inverse of req at each rising clk edge (when not in reset).
+    section: "3.4.9"
+  - id: "R-21"
+    text: >-
+      OBI link outputs (excluding gnt and gntpar) shall not combinatorially depend on OBI link
+      inputs, specifically (but not limited to):
+    section: "3.5"
+  - id: "R-21.1"
+    text: For a manager, req shall not combinatorially depend on gnt or rvalid (nor on gntpar or rvalidpar).
+    section: "3.5"

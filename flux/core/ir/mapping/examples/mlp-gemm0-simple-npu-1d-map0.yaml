@@ -1,0 +1,43 @@
+# Paired with ir/workload/examples/mlp-gemm0.yaml and
+# ir/architecture/examples/simple-npu-1d-v1.yaml — the same (workload, architecture) pair used
+# throughout docs/phase1-exit-criterion-report.md and docs/calibration-report.md. Spatially
+# unrolls K across the array's one compute dim (X, size 8; matches one of the candidates
+# ZigZag's own auto-search already tries — "Launching spatial mapping: {D1: {K: 8}}"), then
+# forces a temporal loop order with B innermost. B is the one loop dim neither I nor W depends
+# on with the other held fixed varying least, so putting it innermost is meant to let both
+# operands' tiles stay resident in `gbuf` (which, at 512 KB, is orders of magnitude bigger than
+# either tensor: W is 1024 bits total, I is 256 bits) across the whole B sweep, instead of
+# whatever loop order ZigZag's auto-search converges on. This document exists specifically to
+# test the leading hypothesis for the ZigZag/Timeloop latency gap — that ZigZag's LOMA search
+# picks a lower-reuse mapping than necessary, not that no better mapping exists for this
+# architecture. See tests/integration/test_calibration_live.py's
+# test_mapping_ir_translation_forced_loop_order_* tests and
+# docs/phase1-exit-criterion-report.md for the actual, empirically-measured result.
+schema_version: "0.1.0"
+id: mlp/gemm0/simple-npu-1d-v1/map-b-innermost
+for_op: mlp.gemm0
+operands:
+  I:
+    - level: gbuf
+      loops:
+        - {dim: B, size: 4, order: 0}
+        - {dim: C, size: 32, order: 1}
+        - {dim: K, size: 4, order: 2}
+  W:
+    - level: gbuf
+      loops:
+        - {dim: B, size: 4, order: 0}
+        - {dim: C, size: 32, order: 1}
+        - {dim: K, size: 4, order: 2}
+  O:
+    - level: gbuf
+      loops:
+        - {dim: B, size: 4, order: 0}
+        - {dim: C, size: 32, order: 1}
+        - {dim: K, size: 4, order: 2}
+spatial:
+  - {dim: K, array_dim: X, size: 8}
+compatibility:
+  expressible_in: [flux, zigzag]
+  not_expressible_in: [timeloop]
+  reason: "evaluators/timeloop does not implement Mapping IR translation yet (v0.1 implementation status, not a representational gap)"
