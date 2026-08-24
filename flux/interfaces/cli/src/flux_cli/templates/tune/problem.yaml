@@ -1,0 +1,28 @@
+# Tuning: every point of `space:` is a setting passed to the gate and the stage as `{knob}`.
+#     flux task run __NAME__.problem.yaml --passes 1
+
+id: __NAME__
+statement: >-
+  The fastest block size and loop order for the blocked matrix multiply in workload.py.
+language: text
+
+space:
+  block: [16, 32, 64, 128, 256]
+  order: [ijk, ikj, jki]
+
+flow:
+  dse: sweep                            # or gradient, anneal, genetic, pareto
+
+gate:
+  test: "{python} {home}/check.py {block} {order}"
+  timeout_s: 60
+
+stages:
+  - name: bench
+    command: "{python} {home}/bench.py {block} {order}"
+    metrics: [time_ms]
+
+objectives:
+  - {metric: time_ms, direction: minimize}
+
+budget: {steps: 1, workers: 1}         # one timing at a time

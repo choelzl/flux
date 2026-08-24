@@ -1,0 +1,37 @@
+# The L2 prefetcher configuration -- Bingo, the partners beside it and every knob -- written by the
+# model as a ChampSim .ini and measured on the three 5G baseband traces in traces/.
+#     flux task run applications/prefetcher/prefetcher.problem.yaml --db demo-prefetcher.db --tui
+
+id: prefetcher
+statement: >-
+  The L2 prefetcher configuration for 5G baseband workloads (FFT-heavy signal processing,
+  channel-estimation matrix work, bursty packet buffers): Bingo, the partners that run beside it
+  and their knobs. The fastest configuration by geomean IPC speedup over no prefetcher, then the
+  smallest that holds 90% of that gain.
+language: ini
+
+contract: >-
+  One ChampSim knob file, `name = value` per line, starting with `l2c_prefetcher_types = bingo`
+  plus any partners. Only the knobs and values knobs.md allows; a knob left out takes its shipped
+  value.
+
+knowledge:
+  files: [knobs.md, bingo_default.ini]
+
+# flow: {generate: {agent: opencode}}     # a coding agent writes the file, not the model
+
+gate: "{python} {home}/bingo.py check {artifact}"   # bingo.cc aborts on an illegal configuration
+
+stages:                     # 10M+15M instructions, then 100M+150M for the finalists
+  - {name: screen, command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000",
+     metrics: [geomean_speedup, storage_bytes], needs: [pythia]}
+  - {name: confirm, command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 100000000 --sim 150000000",
+     metrics: [geomean_speedup, storage_bytes], needs: [pythia]}
+
+objectives:
+  - {metric: geomean_speedup, direction: maximize, keep: 0.9, above: 1.0}
+  - {metric: storage_bytes, direction: minimize, unit: B}
+
+budget:
+  repair_attempts: 3        # an illegal file gets the check's reason
+  finalists: 4

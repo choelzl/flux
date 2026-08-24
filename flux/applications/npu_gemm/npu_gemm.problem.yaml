@@ -1,0 +1,27 @@
+# The smallest accelerator for a two-layer feed-forward block that finishes it in 500 cycles:
+# a script writes each architecture from two knobs, ZigZag measures it, no model needed.
+id: npu_gemm
+statement: >-
+  An accelerator for the feed-forward block in workload.yaml: a 1-D PE array and a global
+  buffer. The fewest cycles first (at most 500), then the least area.
+language: yaml
+
+space:
+  pe_x: [4, 8, 16, 32, 64]          # MACs in the array
+  gbuf_kb: [16, 64, 256]            # the global buffer
+
+flow:
+  dse: sweep
+  generate: {command: "{python} {home}/render.py {artifact} {pe_x} {gbuf_kb}"}
+
+gate: "{python} {home}/check.py {artifact}"
+
+stages:                             # ZigZag's cycles and energy, and an area estimate
+  - {name: model, command: "{python} {home}/measure.py {artifact} {home}/workload.yaml",
+     metrics: [latency_cycles, energy_pj, area_mm2]}
+
+objectives:
+  - {metric: latency_cycles, direction: minimize, goal: 500, stage: model}
+  - {metric: area_mm2, direction: minimize}
+
+budget: {steps: 2}

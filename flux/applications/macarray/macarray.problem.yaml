@@ -1,0 +1,40 @@
+# A MAC processing element: every multiplier, reducer and pipeline depth the generator spells,
+# plus multipliers a model invents. The world is `flux_macarray`.
+#     flux task run applications/macarray/macarray.problem.yaml --db demo-macarray.db
+
+id: macarray
+statement: >-
+  One MAC processing element, 8 lanes at the workload's precision: the smallest PE that
+  makes 1000 MHz placed on ASAP7, chosen from every combination of multiplier, reducer,
+  pipeline depth the generator can spell, plus what a model invents.
+language: systemverilog
+
+world: flux_macarray.world:World
+params:
+  lanes: 8
+  accumulate: true
+  target_mhz: 1000.0
+  preserve_fmax: false        # true: the incumbent's measured clock is the floor
+  multipliers: [behavioral, array, booth4, wallace]
+  include_invented: true
+  seed: 0
+  # also: workload, clock_period_ps, reducers, pipelines, problem
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 1000}
+  - {metric: area_um2, direction: minimize}
+
+stages:
+  - {name: screen, metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
+  - {name: confirm, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad]}
+
+flow:
+  dse: sweep
+  analytical: [screen]
+
+budget:
+  steps: 4                    # 1 sweep + 3 invention rounds
+  repair_attempts: 6
+  prototype: false
+  finalists: 4
+  workers: 0                  # 0 = the machine decides

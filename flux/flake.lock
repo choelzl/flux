@@ -1,0 +1,50 @@
+{
+  "nodes": {
+    "nixchip": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1787842830,
+        "narHash": "sha256-qTE2IhE/GMD1bDntTo1+fzPv22Utx3SG6+hei7GsPK0=",
+        "owner": "helcel-net",
+        "repo": "nixchip",
+        "rev": "243ae7e3e598e17345e846cf4493c7477f691550",
+        "type": "github"
+      },
+      "original": {
+        "owner": "helcel-net",
+        "repo": "nixchip",
+        "rev": "243ae7e3e598e17345e846cf4493c7477f691550",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1783224372,
+        "narHash": "sha256-8i/87eeoqiGE4yOTjwSA3Eh/ziJRQEmd/unYU+K27sk=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "d407951447dcd00442e97087bf374aad70c04cea",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixchip": "nixchip",
+        "nixpkgs": [
+          "nixchip",
+          "nixpkgs"
+        ]
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

@@ -1,0 +1,63 @@
+# A new C++ L2 prefetcher, written by the model and measured in ChampSim beside Bingo at its
+# shipped configuration (bingo_default.ini) on the three 5G baseband traces in traces/.
+#     flux task run applications/prefetcher/invent.problem.yaml --db demo-invent.db --tui
+
+id: prefetcher_invent
+statement: >-
+  An L2 cache prefetcher for 5G baseband workloads: FFT-heavy signal processing with large
+  strided array traversals, channel-estimation matrix work and bursty packet buffers. It runs
+  beside `bingo` in the L2 slot and is judged by the geomean IPC speedup of the pair over no
+  prefetcher, so it wins by catching what Bingo misses. Bingo and `sms` are spatial (which
+  offsets of a region are touched together) and `stride` follows constant per-PC deltas; what is
+  not covered is irregular or pointer-chasing access, patterns that repeat across pages rather
+  than within one, and correlations no fixed delta relates. Find a different idea, not a
+  reparameterisation of those.
+language: cpp
+
+contract: |
+  One header holding one class that subclasses ChampSim's `Prefetcher` (inc/prefetcher.h):
+
+      class Prefetcher {
+      protected:
+         std::string type;
+      public:
+         Prefetcher(std::string _type) {type = _type;}
+         virtual void invoke_prefetcher(uint64_t pc, uint64_t address, uint8_t cache_hit,
+                                        uint8_t type, std::vector<uint64_t> &pref_addr) = 0;
+         virtual void dump_stats() = 0;
+         virtual void print_config() = 0;
+      };
+
+  `invoke_prefetcher` runs on every L2 access; push the FULL BYTE ADDRESSES to prefetch into
+  `pref_addr`. `address` is a byte address and LOG2_BLOCK_SIZE (champsim.h) is 6, so
+  `address >> LOG2_BLOCK_SIZE` is the line number. `cache_hit` is 1 on a hit. A prefetch across
+  a 4 KB page boundary is dropped.
+
+  - The class is `<Name>Prefetcher : public Prefetcher`, a name no ChampSim prefetcher has;
+    its constructor takes `std::string type` and passes it to `Prefetcher(type)`.
+  - Every method inline in the class body; all three virtuals implemented (the last two may
+    just print). Guard the header with #ifndef/#define/#endif.
+  - A knob is `namespace knob { extern uint32_t <name>_<knob>; }` at file scope (uint32_t
+    only), its default on one comment line: `// KNOBS: <name>_degree=4, <name>_size=256`.
+  - Include what you use: <cstdint>, <vector>, <iostream>, each container, <algorithm> for
+    std::find/std::sort, and "prefetcher.h", "champsim.h".
+  - C++11; no external libraries, threads, file I/O or rand(). Per-access work small and
+    memory bounded: it runs for 250 million instructions. Under 70 lines.
+
+# flow: {generate: {agent: opencode}}     # a coding agent writes the header, not the model
+
+gate:
+  build: flux champsim build {artifact}
+  test: flux champsim check {artifact} --traces {home}/traces
+
+stages:                     # 10M+15M instructions, then 100M+150M for the finalists
+  - {name: screen, command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 10000000 --sim 15000000",
+     metrics: [geomean_speedup], needs: [pythia]}
+  - {name: confirm, command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 100000000 --sim 150000000",
+     metrics: [geomean_speedup], needs: [pythia]}
+
+objectives:
+  - {metric: geomean_speedup, direction: maximize}
+
+budget:
+  repair_attempts: 3        # a header that does not build gets g++'s first diagnostic

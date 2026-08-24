@@ -1,0 +1,145 @@
+"""`CachingEvaluator` -- a warm-start Evaluator ABI wrapper: before evaluating a candidate for
+real, reuse a result already in the `ResultStore` for that exact
+`(workload_hash, arch_hash, mapping_hash)` triple and evaluator identity.
+
+Any code written against `evaluate`/`evaluate_batch` gets warm-start by being handed a
+`CachingEvaluator` instead of a plain one; it composes with other wrappers by nesting.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from flux_evaluator_abi import Budget, Candidate, Evaluator, Result
+
+from .store import ResultStore
+
+
+@dataclass(frozen=True, slots=True)
+class CacheStats:
+    """Hit/miss counts: how much a `CachingEvaluator` actually saved."""
+
+    hits: int
+    misses: int
+
+    @property
+    def total(self) -> int:
+        return self.hits + self.misses
+
+    @property
+    def hit_rate(self) -> float:
+        return self.hits / self.total if self.total else 0.0
+
+
+class CachingEvaluator:
+    """Wraps `inner` (any real `Evaluator`) with a warm-start cache backed by `store`.
+
+    `evaluator_prefix` states which stored `provenance.evaluator` values are valid substitutes
+    for a call to `inner` -- required, not inferred, because the hash triple alone does not say
+    which evaluator produced a row (a Timeloop estimate must not serve a ZigZag request). Pass
+    the prefix `inner`'s `Result.provenance.evaluator` starts with, e.g. `"zigzag"` for
+    `"zigzag@3.8.5"` -- tolerant of adapter version drift, since the content-addressed inputs
+    already pin what was asked for.
+
+    A cache hit also requires the stored result to already cover every metric the current call
+    requests — a stored `{"latency_cycles"}` result cannot satisfy a request for
+    `{"latency_cycles", "energy_pj"}`, and falls through to a real `inner` call rather than
+    silently returning a partial answer.
+    """
+
+    def __init__(self, inner: Evaluator, store: ResultStore, *, evaluator_prefix: str) -> None:
+        self._inner = inner
+        self._store = store
+        self._evaluator_prefix = evaluator_prefix
+        self._hits = 0
+        self._misses = 0
+
+    @property
+    def stats(self) -> CacheStats:
+        return CacheStats(hits=self._hits, misses=self._misses)
+
+    def evaluate(self, candidate: Candidate, budget: Budget, metrics: frozenset[str]) -> Result:
+        workload_hash, arch_hash, mapping_hash = self._hash_refs(candidate)
+        cached = self._lookup(workload_hash, arch_hash, mapping_hash, metrics)
+        if cached is not None:
+            self._hits += 1
+            return cached
+
+        self._misses += 1
+        result = self._inner.evaluate(candidate, budget, metrics)
+        self._store.put_result(
+            result, workload_hash=workload_hash, arch_hash=arch_hash, mapping_hash=mapping_hash,
+        )
+        return result
+
+    def evaluate_batch(
+        self, candidates: list[Candidate], budget: Budget, metrics: frozenset[str]
+    ) -> list[Result]:
+        """Look up every candidate first, then send only the misses to
+        `inner.evaluate_batch` in one call, so a concurrent inner evaluator still runs them
+        concurrently.
+        """
+        hashes = [self._hash_refs(c) for c in candidates]
+        cached_results: list[Result | None] = [
+            self._lookup(*h, metrics) for h in hashes
+        ]
+
+        miss_indices = [i for i, r in enumerate(cached_results) if r is None]
+        self._hits += len(candidates) - len(miss_indices)
+        self._misses += len(miss_indices)
+
+        if miss_indices:
+            miss_candidates = [candidates[i] for i in miss_indices]
+            miss_results = self._inner.evaluate_batch(miss_candidates, budget, metrics)
+            for i, result in zip(miss_indices, miss_results):
+                cached_results[i] = result
+                workload_hash, arch_hash, mapping_hash = hashes[i]
+                self._store.put_result(
+                    result, workload_hash=workload_hash, arch_hash=arch_hash,
+                    mapping_hash=mapping_hash,
+                )
+
+        assert all(r is not None for r in cached_results)
+        return cached_results  # type: ignore[return-value]
+
+    def _hash_refs(self, candidate: Candidate) -> tuple[str, str | None, str | None]:
+        workload_hash = self._ref_hash(candidate.workload, "workload")
+        assert workload_hash is not None, "Candidate.workload is required by the Evaluator ABI"
+        arch_hash = self._ref_hash(candidate.arch, "architecture")
+        mapping_hash = self._ref_hash(candidate.mapping, "mapping")
+        return workload_hash, arch_hash, mapping_hash
+
+    def _ref_hash(self, ref: object, kind: str) -> str | None:
+        if ref is None:
+            return None
+        if isinstance(ref, str):
+            return ref
+        assert isinstance(ref, dict)
+        return self._store.put_document(kind, ref)
+
+    def _lookup(
+        self, workload_hash: str, arch_hash: str | None, mapping_hash: str | None,
+        metrics: frozenset[str],
+    ) -> Result | None:
+        found = self.lookup(workload_hash, arch_hash, mapping_hash, metrics)
+        return found[1] if found is not None else None
+
+    def lookup(
+        self, workload_hash: str, arch_hash: str | None, mapping_hash: str | None,
+        metrics: frozenset[str],
+    ) -> tuple[int, Result] | None:
+        """The cache probe, returning the stored row's id too: the campaign runner (D217)
+        foreign-keys a trial to it."""
+        # Compare `arch_hash` and `mapping_hash` client-side, never via `find_results`: there
+        # `None` means "don't filter", not "match NULL", so it would match a row for a different
+        # architecture or mapping. `arch=None` is a legal `Candidate` (D172).
+        rows = self._store.find_results(
+            workload_hash=workload_hash, evaluator_prefix=self._evaluator_prefix,
+        )
+        for row in reversed(rows):  # most recently stored first
+            if row["arch_hash"] != arch_hash or row["mapping_hash"] != mapping_hash:
+                continue
+            result = Result.from_dict(row["result"])
+            if metrics <= result.metrics.keys():
+                return (row["id"], result)
+        return None

@@ -1,0 +1,18 @@
+# Same shape as simple-npu-1d-v1.yaml, double the array width — see simple-npu-1d-v2.yaml's
+# comment for why this exists (more real calibration data points).
+schema_version: "0.1.0"
+id: simple-npu-1d/v3
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: dram
+    class: memory
+    attrs: {size_kb: 1048576}
+  - level: gbuf
+    class: memory
+    attrs: {size_kb: 512}
+  - level: pe_array
+    class: compute
+    attrs: {dims: {X: 16}}
+constraints:
+  - {kind: area_mm2, max: 8.0}
+  - {kind: tdp_w, max: 4.0}

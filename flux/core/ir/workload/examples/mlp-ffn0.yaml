@@ -1,0 +1,31 @@
+# A real, genuinely different workload from mlp-gemm0.yaml (docs/decisions.md D59): not just a
+# relabeled single GEMM (ZigZag's v0.1 translator can only ever express a single two-operand
+# bilinear contraction *per op* — there is no conv/depthwise/fused-op support to give a workload
+# a different *op* shape), but a real two-layer feedforward block: a down-projection
+# (B,C)x(C,H)->(B,H) immediately followed by an up-projection (B,H)x(H,K)->(B,K). Genuinely
+# exercises something mlp-gemm0.yaml's single op never does: multi-layer scheduling — real ZigZag
+# aggregates energy/latency across both layers (verified: two layers together are NOT simply
+# double one layer's own numbers — 1560/1124668.76 for both vs 784/565134.38 for the first layer
+# alone — a real, checked non-additive difference, not assumed).
+schema_version: "0.1.0"
+id: mlp/ffn0
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: I, rank: [B, C], dtype: int8}
+  - {name: W1, rank: [C, H], dtype: int8}
+  - {name: H_act, rank: [B, H], dtype: int8}
+  - {name: W2, rank: [H, K], dtype: int8}
+  - {name: O, rank: [B, K], dtype: int16}
+ops:
+  - id: ffn.down
+    kind: einsum
+    expr: "B C, C H -> B H"
+    bounds: {B: 4, C: 32, H: 16}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}
+  - id: ffn.up
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 32}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}

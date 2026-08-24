@@ -1,0 +1,99 @@
+[project]
+name = "flux"
+version = "0.1.0"
+description = "Flux: an AI-driven design-space exploration loop for hardware. A model or a coding agent proposes designs, real tools check and measure them, the loop decides and keeps a record."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Not chosen yet" }
+
+# The loop and the CLI need only these three. Everything else belongs to one application or one
+# backend and is an extra; the EDA tools (Verilator, Yosys, OpenROAD, ChampSim) are not Python
+# and come from the Nix dev shell -- without them, `flux task check` names the stages that skip.
+dependencies = ["pyyaml>=6", "numpy>=1.24", "jsonschema>=4"]
+
+[project.optional-dependencies]
+bankmap = ["z3-solver"]
+nlu = ["scipy"]
+zigzag = ["zigzag-dse"]
+all = ["z3-solver", "scipy", "zigzag-dse"]
+
+[project.scripts]
+flux = "flux_cli.main:main"
+
+# D600: one distribution of the whole workspace, for `pip install -e ./flux` without Nix. Each
+# package under core/, evaluator/, generator/, mentor/, interfaces/ and applications/ keeps its
+# own pyproject.toml; the editable install puts every src/ directory on the path, exactly as the
+# Nix dev shell's PYTHONPATH does (flake.nix).
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+dev-mode-dirs = [
+    "applications/bankmap/lib/src",
+    "applications/interconnect_mapping/lib/src",
+    "applications/macarray/lib/src",
+    "applications/nlu/lib/src",
+    "core/frontier/src",
+    "core/ir/src",
+    "core/llm/src",
+    "core/loop/src",
+    "core/profile/src",
+    "core/stores/src",
+    "core/tui/src",
+    "evaluator/abi/src",
+    "evaluator/cache/src",
+    "evaluator/calibration/src",
+    "evaluator/champsim/src",
+    "evaluator/openroad/src",
+    "evaluator/redaction/src",
+    "evaluator/rtl/src",
+    "evaluator/timeloop/src",
+    "evaluator/zigzag/src",
+    "generator/harness_rtl/src",
+    "generator/harness_spec/src",
+    "interfaces/cli/src",
+    "mentor/feedback/src",
+    "mentor/knowledge/src",
+    "mentor/records/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "applications/bankmap/lib/src/flux_bankmap",
+    "applications/interconnect_mapping/lib/src/flux_imapping",
+    "applications/macarray/lib/src/flux_macarray",
+    "applications/nlu/lib/src/flux_nlu",
+    "core/frontier/src/flux_frontier",
+    "core/ir/src/flux_ir",
+    "core/llm/src/flux_llm",
+    "core/loop/src/flux_loop",
+    "core/profile/src/flux_profile",
+    "core/stores/src/flux_store",
+    "core/tui/src/flux_tui",
+    "evaluator/abi/src/flux_evaluator_abi",
+    "evaluator/cache/src/flux_cache",
+    "evaluator/calibration/src/flux_calibration",
+    "evaluator/champsim/src/flux_evaluator_champsim",
+    "evaluator/openroad/src/flux_evaluator_openroad",
+    "evaluator/redaction/src/flux_redaction",
+    "evaluator/rtl/src/flux_evaluator_rtl",
+    "evaluator/timeloop/src/flux_evaluator_timeloop",
+    "evaluator/zigzag/src/flux_evaluator_zigzag",
+    "generator/harness_rtl/src/flux_codegen_rtl_harness",
+    "generator/harness_spec/src/flux_codegen_harness_spec",
+    "interfaces/cli/src/flux_cli",
+    "mentor/feedback/src/flux_feedback",
+    "mentor/knowledge/src/flux_knowledge",
+    "mentor/records/src/flux_records",
+]
+
+# The lint CI runs: the pyflakes rules (unused and undefined names, redefinitions, f-strings
+# without placeholders). `# noqa` marks a deliberate re-export or a side-effect import.
+[tool.ruff]
+target-version = "py311"
+line-length = 160
+extend-exclude = ["tests", "mentor/knowledge/library", "out", "result"]
+
+[tool.ruff.lint]
+select = ["F"]

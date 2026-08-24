@@ -1,0 +1,29 @@
+# No model: render.py writes one candidate per point of `space:`; the fastest wins.
+#     flux task run __NAME__.problem.yaml --passes 1
+
+id: __NAME__
+statement: >-
+  The fastest way, among those render.py spells, to count the primes below n in Python.
+language: python
+
+space:
+  algorithm: [list_sieve, slice_sieve, odd_sieve]
+  wheel: [0, 1]                         # skip even trial factors (list_sieve only; the others ignore it)
+
+flow:
+  dse: sweep                            # or gradient, anneal, genetic, pareto
+  generate: {command: "{python} {home}/render.py {artifact} {algorithm} {wheel}"}
+
+gate:
+  test: "{python} {home}/check.py {artifact}"
+  timeout_s: 60
+
+stages:
+  - name: bench
+    command: "{python} {home}/bench.py {artifact}"
+    metrics: [time_ms]
+
+objectives:
+  - {metric: time_ms, direction: minimize}
+
+budget: {steps: 1}

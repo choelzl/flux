@@ -1,0 +1,22 @@
+# Real Noxim output, captured 2026-08-14 (docs/decisions.md D183): 10x10 mesh, poisson traffic,
+# -pir 0.000001, -sim 20000, built from source via the adapter's own build path.
+#
+# This run received 8 flits. A separate run with the SAME arguments received zero, and Noxim then
+# printed `-nan` for the average delay — the outcome is probabilistic, so that variant is not
+# captured here; the test for it uses a literal line and says so. Both are real Noxim behaviour
+# at low injection, which is the point: the adapter must handle a present-but-non-numeric value.
+# Real Noxim output, captured 2026-08-14 (docs/decisions.md D183): 10x10 mesh, poisson traffic,
+# -pir 0.000001, -sim 20000. At that injection rate no flit is ever received, so Noxim reports
+# `-nan` for the average delay and `0` for throughput. Both lines are present and well-formed;
+# it is the VALUE that is not a number, which is what the adapter used to misdiagnose.
+% Total received packets: 1
+% Total received flits: 8
+% Received/Ideal flits Ratio: 0.526316
+% Average wireless utilization: 0
+% Global average delay (cycles): 16
+% Max delay (cycles): 16
+% Network throughput (flits/cycle): 0.000421053
+% Average IP throughput (flits/cycle/IP): 4.21053e-06
+% Total energy (J): 2.46908e-05
+% 	Dynamic energy (J): 1.978e-10
+% 	Static energy (J): 2.46906e-05

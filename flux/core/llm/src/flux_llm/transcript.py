@@ -1,0 +1,42 @@
+"""Transcripts (D599): every model and coding-agent turn of a run, one JSON line each, in the
+run's directory (`turns.jsonl`), read back with `flux log <record>`.
+
+The loop names the file when a run registers (`flux_loop.ops.register`); with no file named,
+recording is off. Recording never raises."""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+from typing import Any
+
+__all__ = ["path", "record", "set_path"]
+
+_STATE: dict[str, Any] = {"path": None}
+_LOCK = threading.Lock()
+
+
+def set_path(p: str | None) -> None:
+    _STATE["path"] = p
+
+
+def path() -> str | None:
+    return _STATE["path"]
+
+
+def record(kind: str, **fields: Any) -> None:
+    """One turn: `kind` ("model", "agent"), then whatever the turn has -- the prompt, the reply,
+    the tool calls, the seconds, the error."""
+    p = _STATE["path"]
+    if not p:
+        return
+    line = json.dumps({"ts": time.time(), "kind": kind, **fields}, ensure_ascii=False, default=str)
+    try:
+        with _LOCK:
+            os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
+            with open(p, "a") as f:
+                f.write(line + "\n")
+    except OSError:
+        pass

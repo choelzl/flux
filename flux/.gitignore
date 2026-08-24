@@ -1,0 +1,10 @@
+.venv/
+.nix-bin/
+__pycache__/
+*.pyc
+# SQLite side files: a store that is open leaves these beside it
+*.db-wal
+*.db-shm
+# D578: what a run writes lives beside its document, under out/ -- the record, the decided
+# artifact, the cache sidecar, kept inventions -- and none of it is the repository's
+**/out/

@@ -1,0 +1,125 @@
+# Writing a Flux problem document
+
+A problem document (`problem.yaml`) is everything the design loop needs: what to make, how a
+candidate is checked, how it is measured, what "better" means, and how the search goes. The
+loop generates candidates (a model writes them, a script renders them from knobs, or a coding
+agent writes them), gates each one, measures the survivors stage by stage and decides.
+
+## Keys
+
+Say only what is yours; the rest is inferred.
+
+- `id` (a short name, letters, digits, `_`) and `statement` (the ask in prose: the model reads
+  it). The record is named by `id`, so an edited document resumes it.
+- `contract` (optional): rules every candidate must follow, in prose -- ports, naming, what is
+  forbidden. The model reads it with the statement.
+- `language`: the artifact's language (`systemverilog`, `verilog`, `python`, `c`, `cpp`,
+  `cuda`, `text`, ...); the file extension follows from it.
+- `gate`: how a candidate is refused -- a command (one string, or a list of tokens) that prints
+  `N failing` or exits non-zero. `{build, test}` when a build step comes first (its non-zero
+  exit refuses); `count_re` (one integer group) or `fail_re` (one match per failure) only for a
+  checker that prints something else; `timeout_s` optional.
+- `stages`: the costed measurements, cheapest first, each `{name, command}`. A
+  `flux rtl measure` stage needs nothing more: its metrics and tools are known, and it is
+  skipped where a tool is missing. A command of your own prints `name=value` tokens and says
+  `metrics:` (the names to read) and `needs:` (tools on PATH it requires). Every stage must
+  measure every objective. `timeout_s` optional.
+- `objectives`: a list, the first the goal: `{metric, direction: minimize|maximize, goal: N}`.
+  A goal is judged on the deepest stage (`stage:` names another); a known metric has its unit
+  (`unit:` for one Flux does not know). With a goal on the first, the decision is the best on
+  the second among those that meet it. `{keep: 0.9, above: 1.0}` instead of a goal: keep 90%
+  of the best measured design's gain over 1.0 (the smallest design that stays near the fastest).
+- `knowledge: {files: [...]}`: files the model reads with every prompt (specs, reference code,
+  papers as PDF, notes), paths beside the document. `knowledge: {text: "..."}` for inline notes.
+- `space`: knob -> its choices, in a meaningful order, for a design-space exploration. A knob
+  that only matters for some choices of another: `{values: [...], when: {stack: [b, c]}}`;
+  elsewhere it stays at its first choice and is not measured twice.
+  A component groups knobs: `bingo: {region_size: [...], ...}` is `bingo.region_size`; with
+  `optional: true` the search also switches it on or off (`sms.on`), so it picks the combination.
+  A generator reads the whole point from `{point}`, a JSON file with components nested.
+- `seeds`: points measured before the walk, e.g. the shipped defaults, components nested; a knob
+  left out is at its first choice. The first seed is home: a knob that does nothing (its
+  component off) sits at its home value, and starts from it when switched on. A phase's
+  `knobs`, `hold` and `keep` take globs (`bingo.*`, `"*.on"`).
+- `flow`: who fills each box of the loop -- `generate: model` (the default),
+  `generate: {command: "..."}` (a script renders each candidate; with a `space`, once per
+  point, knobs as `{knob}`), `generate: {agent: opencode|claude|codex}`,
+  `dse: sweep|montecarlo|anneal|gradient|genetic|pareto|llm` or a list of phases,
+  `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
+  `analytical: [surrogate]`, `knowledge: [digest]` (the model's library digest),
+  `extract: mined` (lessons mined from the record), `records: on`. `flow` is the only place
+  a box is said: there is no `roles:`, `generator:`, `critique:` or `decompose:` key.
+  `parts: decompose` asks the orchestrator to divide the statement.
+- `budget`, the knobs people change:
+  - `steps` (work items per pass), `passes` (a cap; default: until stopped),
+    `repair_attempts` (repairs per draft), `finalists` (how many reach the costliest stage),
+    `workers` (measurements at once; 1 for anything timed).
+  - `prototype` (default on with a golden model): the model proves the algorithm first as
+    Python `design(**inputs)` against every input, as a formula; the loop then spells it as
+    RTL (or, for inputs over 20 bits, the model writes the RTL from it). Leave it on for numeric
+    problems (floating point, transcendental functions, fixed point); `false` for plain logic
+    (adders, muxes, counters).
+    `prototype: systemc`: the prototype is a synthesizable `SC_MODULE` instead, checked on
+    every golden vector against libsystemc; the model writes the RTL from it.
+  - `prototype_table_max` (64): the largest module-level table, for coefficients only.
+    `prototype_cost_max` (2,000, about 650 um2 on ASAP7; -1 for none): a prototype costing
+    more is made cheaper first and never synthesised while over it.
+- Advanced `budget` knobs, rarely needed: agent, ahead, budget_s, calibrate, compact,
+  compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_every,
+  hop_share, knowledge_share, max_depth, max_tolerance, parallel_parts, patch_context_lines,
+  patching, plan_file, prototype_attempts, prototype_attempts_max, prototype_patience,
+  prototype_shrink_attempts, prototype_unmeasured_stop, regenerate, regress_after,
+  revert_after, screen_only, structured, tool_hops, tool_result_chars, tools.
+- Advanced keys: `parts` and `max_parts` (pieces of one artifact) and `subtasks`/`split`/`joiner`/
+  `max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
+  package for what a document cannot say), `ladder`, `cache`, `skills`, `brief`, `workload`.
+
+Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
+directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `space`. A command
+starting with `flux` runs this Flux.
+
+## The RTL tools
+
+- `flux rtl test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
+  prints `N failing of M`; exits 3 when the module does not compile (the loop then treats it as
+  a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
+- `flux rtl measure {artifact} --stage synth|place|route --clock-ps P` -- Yosys and OpenROAD
+  on ASAP7 (`synth` times the netlist with OpenROAD's OpenSTA; `place`, `route` lay it out); prints `fmax_mhz= area_um2= power_w=
+  cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its
+  reset); `--repair-design` buffers long wires after placement.
+- `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
+  `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),
+  `SEED`, `VECTORS` (explicit rows), `CLOCK = "clk"` and `LATENCY` (cycles, checked) for a
+  clocked design. Corners of every input, pairwise, are always tested.
+- Every expected value comes out of `golden()` -- never a literal you worked out by hand.
+  `VECTORS` lists inputs only (`[{"x": 0x3C00}, ...]`). Use exact references: `numpy.float16`
+  for half precision -- the bits of an input are READ as a float with
+  `float(np.uint16(x).view(np.float16))` (not `np.float16(x)`, which converts the number) and a
+  result is written back with `int(np.float16(v).view(np.uint16))`; compute the function in full
+  precision (`math`, float64) and round ONCE at the end. Ports that carry float bit patterns are
+  `unsigned: True`.
+- A float output may be off by a unit in the last place: `TOLERANCE_ULP = {"y": 1}` lets port
+  `y` (16, 32 or 64 bits, IEEE) differ from the golden by that many representable values -- a
+  hardware approximation is rarely bit-exact; without it the gate demands exact equality.
+- About a thousand vectors (`COUNT = 1000`, the corners are added) keep each check under a
+  minute; the test bench compiles every vector, so tens of thousands take minutes per repair.
+- Combinational or clocked, say it once and the same way: a design with a clock needs
+  `CLOCK = "clk"` and `LATENCY = n` in golden.py; without them the test bench drives only the
+  golden's ports, and a module with a `clk` port cannot be tested.
+- The document is checked by running your golden model once: it must import, make its
+  vectors and return every output port for each.
+
+## Other problems
+
+The gate and the stages are any commands: a Python script you write beside the document
+(`{python} {home}/check.py {artifact}` printing `N failing`), a test suite
+(`{python} -m pytest -q {home}/tests --rootdir {home}` with a `fail_re`), a simulator, a
+benchmark printing `name=value`. Write every script the document names.
+
+## Rules
+
+- Write `problem.yaml` and every file it names (golden model, scripts, tests) in the working
+  directory. Do not write the design itself unless the ask gives it: the loop generates it.
+- Keep what the ask says -- widths, names, targets -- exact. Where it is silent, choose
+  sensibly and say so in `statement`.
+- Every metric an objective names must be printed by a stage (or the gate).

@@ -1,0 +1,22 @@
+# General-SoC example (docs/decisions.md D1): non-tensor compute, using the compute_kernel
+# escape hatch alongside data_dependent. Not expressible in ZigZag/Timeloop's einsum-only world —
+# see the paired mapping example's `compatibility` block.
+schema_version: "0.1.0"
+id: soc/dma-engine/desc-fetch
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+ops:
+  - id: dma.fetch_descriptor
+    kind: compute_kernel
+    semantics:
+      protocol: axi4
+      burst_len: 16
+      descriptor_bytes: 32
+      trigger: irq
+  - id: dma.transfer
+    kind: data_dependent
+    semantics:
+      distribution: "empirical@corpus/dma-transfer-sizes"
+      unit: bytes
+phases: [setup, transfer]

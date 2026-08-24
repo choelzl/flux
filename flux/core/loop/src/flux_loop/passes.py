@@ -1,0 +1,101 @@
+"""Passes (D593): a campaign runs pass after pass until someone stops it -- `flux stop <record>`,
+Ctrl-C, quitting the TUI -- or until the cap a caller asked for (`--passes N`, the document's
+`budget.passes`), never on its own.
+
+A pass that ends at rest (every ladder spent, nothing sent back) is followed by an
+exploring pass (`LoopRequest.explore`): every admitted design goes back to the model or the
+coding agent with its numbers and what better means from here. The gate and the decision do
+not change, so exploring never admits a design that fails, nor decides one that misses the
+goal over one that meets it.
+
+When nothing can draft a new design (no model or agent generates for the campaign -- a
+renderer over a finite space that is fully measured), another pass would change nothing: the
+run waits for a stop or an operator's note instead of spinning or leaving.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import time
+from typing import Any, Callable
+
+from . import ops
+
+__all__ = ["between_passes", "run_passes"]
+
+
+class _Held:
+    """A feedback channel with notes put back in front: the note that woke a waiting run
+    reaches the next pass's prompts as if it had just been typed."""
+
+    def __init__(self, inner: Any, notes: list) -> None:
+        self._inner, self._held = inner, list(notes)
+        self.active = getattr(inner, "active", True)
+
+    def drain(self) -> list:
+        out, self._held = self._held, []
+        return out + (list(self._inner.drain()) if self._inner is not None else [])
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _scripted_spent(proposer: Any) -> bool:
+    """A scripted proposer is a fixed script, not a model: once every reply was given, more
+    passes would replay its last one. A tuple: any of them spent."""
+    if isinstance(proposer, (tuple, list)):
+        return any(_scripted_spent(p) for p in proposer)
+    replies, prompts = getattr(proposer, "replies", None), getattr(proposer, "prompts", None)
+    return isinstance(replies, list) and isinstance(prompts, list) and len(prompts) >= len(replies)
+
+
+def between_passes(out: Any, n: int, *, passes: int = 0, rests: int = 0, feedback: Any = None,
+                   proposer: Any = None, say: Callable[[str], None] = print,
+                   poll_s: float = 2.0, sleep: Callable[[float], None] = time.sleep) -> tuple[bool, int, Any]:
+    """After pass `n` (1-based) ended with `out`: (go on?, rests in a row, the feedback channel
+    for the next pass). Stops only for a cap, a stop asked for, or a script that is spent."""
+    if passes and n >= passes:
+        return False, rests, feedback
+    asked = ops.stop_requested()
+    if asked:
+        ops.clear_stop()
+        say(f"stopping at the pass boundary: {asked}")
+        return False, rests, feedback
+    if proposer is not None and _scripted_spent(proposer):   # one proposer, or a tuple of them
+        say("the scripted replies are spent; a script has nothing more to try")
+        return False, rests, feedback
+    rests = rests + 1 if getattr(out, "at_rest", False) else 0
+    if rests and not getattr(out, "explorable", True) and passes:
+        say("at rest, and nothing here drafts a new design; the remaining passes would change nothing")
+        return False, rests, feedback
+    if rests and not getattr(out, "explorable", True):
+        say("at rest, and nothing here drafts a new design (no model or coding agent generates for this "
+            "campaign): waiting for a note, or `flux stop` / Ctrl-C to end")
+        while True:
+            asked = ops.stop_requested()
+            if asked:
+                ops.clear_stop()
+                say(f"stopping: {asked}")
+                return False, rests, feedback
+            notes = list(feedback.drain()) if feedback is not None else []
+            if notes:
+                say(f"a note arrived: {getattr(notes[-1], 'text', notes[-1])!s:.120}; another pass")
+                return True, 0, _Held(feedback, notes)
+            sleep(poll_s)
+    return True, rests, feedback
+
+
+def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | None = None, feedback: Any = None,
+               proposer: Any = None, say: Callable[[str], None] = print) -> Any:
+    """`run(request, feedback)` pass after pass, as `between_passes` says; the last result.
+    `passes` None: the request's (the document's `budget.passes`; 0 = until stopped)."""
+    cap = int(request.passes if passes is None else passes)
+    n = rests = 0
+    while True:
+        out = run(dataclasses.replace(request, explore=rests), feedback)
+        n += 1
+        go, rests, feedback = between_passes(out, n, passes=cap, rests=rests, feedback=feedback,
+                                             proposer=proposer, say=say)
+        if not go:
+            return out
+        say(f"\n── pass {n + 1}" + (f": at rest, exploring for a better design ({rests} in a row)" if rests else "") + " ──")

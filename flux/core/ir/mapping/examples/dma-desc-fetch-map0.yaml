@@ -1,0 +1,14 @@
+# General-SoC example (docs/decisions.md D1), paired with
+# ir/workload/examples/soc-dma-desc-fetch.yaml. `not_expressible_in` here lists ZigZag and
+# Timeloop both — the inexpressibility relationship isn't only "ZigZag can, Timeloop can't", it's
+# symmetric once the workload isn't a tensor einsum at all.
+schema_version: "0.1.0"
+id: soc/dma-engine/desc-fetch/map0
+for_op: dma.fetch_descriptor
+operands:
+  descriptor:
+    - {level: l2, loops: [{dim: channel, size: 8, order: 0}]}
+compatibility:
+  expressible_in: [flux]
+  not_expressible_in: [zigzag, timeloop]
+  reason: non_tensor_compute_kernel

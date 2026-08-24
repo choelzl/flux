@@ -1,0 +1,27 @@
+[project]
+name = "flux-loop"
+version = "0.1.0"
+description = "The design loop: problem documents, generation, the gate, the stages, the DSE policies, the decision and the record."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "flux-cache",
+    "flux-codegen-rtl-harness",
+    "flux-evaluator-abi",
+    "flux-feedback",
+    "flux-frontier",
+    "flux-knowledge",
+    "flux-llm",
+    "flux-profile",
+    "flux-records",
+    "flux-store",
+    "numpy",
+    "pyyaml",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flux_loop"]

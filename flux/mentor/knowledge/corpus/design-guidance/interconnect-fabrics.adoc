@@ -1,0 +1,58 @@
+= Interconnect fabrics: choosing a structure for many clients reaching many banks
+
+== The problem and what actually binds
+
+A fabric connecting N clients of W bits to M banks, with clients issuing concurrently, is decided by three quantities that pull against each other: cell area, achievable frequency, and served transfers per cycle. Which one binds is not a matter of taste and is usually not obvious in advance. Repo-measured (docs/decisions.md D265), 28 clients into 32 banks at 128 bits on ASAP7: a direct crossbar closes at roughly 455 MHz, so a 600 MHz target rules it out before area is even discussed. The binding constraint was frequency, and the driver was arbiter fan-in.
+
+Selector ARITY, not selector count, sets the critical path. Repo-measured on ASAP7 at 128 bits: a 2:1 arbitrated selector reaches about 1241 MHz, 4:1 about 772, 8:1 about 754, 16:1 about 589, 28:1 about 455, 32:1 about 406. The practical reading is a rule of thumb about this measurement's own node and cell library, not a general law: a frequency target near 600 MHz at this width admits switches of arity roughly 8 and below, which forces a multistage structure whatever the area budget says. Re-measure before carrying these numbers to another node, library, or width.
+
+A related measurement discipline, learned by getting it wrong (D265): when block PPA is fitted over a range of widths and evaluated at the real width, every arity must be fitted over the SAME widths. Fitting each arity over whichever widths happened to place produced a 32:1 selector with a faster 128-bit path than a 28:1 one, which no arrangement of transistors can do. Delay is also nearly flat in datapath width — a mux's critical path is its select tree, and widening replicates the datapath in parallel — so a per-arity width slope fitted over a few points fits noise and, extrapolated, can invert the arity ordering entirely.
+
+== The families and what each costs
+
+A direct crossbar gives maximum concurrency, and its arity grows with both client and bank count, so it is the family that runs out of frequency before it runs out of area. It is nonetheless the right first build: it bounds throughput from above and settles whether the frequency target is reachable at full connectivity at all.
+
+A concentrating fabric (clients grouped down to a narrower rank, then a small crossbar) cuts area sharply and caps concurrency at the group count, regardless of how many banks exist. It suits offered load well below the client count. Paying for concurrency the traffic never uses is a common overspend, and so is the reverse.
+
+A parallel-switch fabric replaces each monolithic rank crossbar with many small switches: the same rank transition that costs arity-28 selectors as one crossbar costs arity-4 selectors as seven 4x4 switches. This is the standard way to buy frequency, and it is paid for in blocking and in wires.
+
+A radix-R butterfly or delta network grows as ports*log(ports) rather than clients*banks. Repo-measured, 28 into 32 at 128 bits: radix-4 delivered 13.54 words per cycle and radix-8 15.27, against a direct crossbar's 18.85.
+
+A three-stage Clos C(n, m, r) is r ingress switches of n x m, m middle switches of r x r, and r egress switches of m x n. Its published conditions (Clos, Bell System Technical Journal 32(2), 1953: strictly non-blocking for m >= 2n-1; Benes, 1965: rearrangeably non-blocking for m >= n) are statements about CIRCUIT switching — realising a set of point-to-point connections — and they do not assert that a packet-mode fabric under per-cycle random traffic achieves crossbar throughput. Repo-measured at 28 into 32, 128 bits, with rotating path selection: C(n=4,m=2) served 9.00 words per cycle, C(n=4,m=4) 15.46, and C(n=4,m=7) 15.47. The gain arrives at m = n and stops; satisfying the strict-sense condition added about 75% more inter-stage wiring for 0.01 words per cycle. Direction-only guidance: size the middle stage from measured packet-mode throughput, and treat the strict-sense condition as insurance for a connection model you may not be operating in.
+
+== Routing policy is a design variable, not an implementation detail
+
+Repo-measured and the largest single effect found in this study (D267): the SAME radix-4 butterfly served 8.92 words per cycle when each request took the first path that reached its destination, and 13.54 when requests rotate among the equivalent paths. That spread is wider than most topology choices produce. A quoted fabric throughput without its routing policy is not a number.
+
+The same lesson has a sharper form for Clos networks. A Clos measured identically for m = 2, 4, 7 and 8 middle switches when routing was fixed: every request used middle switch 0 and the rest of the middle stage was built and unreachable. A Clos is non-blocking BECAUSE something chooses among the middle switches. A second, subtler failure followed: per-input rotation counters that all start at zero and advance together make every input of a switch pick the same output in the same cycle, collapsing an m-way stage back to one usable port. Path diversity must be checked as a structural property of the built netlist, not assumed from the dimensions.
+
+== Two costs that composed estimates routinely omit
+
+Summing measured block areas prices gates and not the wires between them, which systematically flatters a fabric of many tiny switches — precisely the fabrics that win on that flattered metric. Direction-only guidance: carry inter-stage wiring as its own reported quantity so the omission is visible, rather than folding an unmeasured guess into area.
+
+Analytic throughput models are useful for ranking a large space and should not be quoted as results. The stage-by-stage load model (Patel, IEEE Trans. Computers C-30(10), 1981) assumes each switch input picks among that switch's outputs uniformly at random. Repo-measured against RTL simulation (D266), it is exact for a direct crossbar, within about 10% for fabrics where each destination has one path, and 21% LOW for a Clos at m = n — because the model cannot see that a router load-balances across several valid paths better than chance does.
+
+== A screened frequency is not a placed frequency
+
+Repo-measured (docs/decisions.md D280), 28 clients into 32 banks at 128 bits on ASAP7. Eight
+fabrics were screened by composing per-arity selector measurements, then placed WHOLE as
+complete designs. The composed screen put five of them at 683 MHz or better; placed whole, only
+three of the eight cleared 600 MHz at all, and the spread ran from 430 to 739 MHz. Specific
+pairs, screened against placed: a Clos-into-radix-8-into-crossbar hybrid 707 -> 430 MHz, a
+staged 14x(2x3) -> 2x(21x16) fabric 600 -> 501, a staged 7x(4x8) -> 8x(7x4) fabric 871 -> 575, a
+radix-8 butterfly 871 -> 739.
+
+The direction is consistent and the size is not small. Composing block measurements prices the
+gates and none of the wire between them, so the deeper and wider a fabric is — more stages, more
+inter-stage links — the more optimistic its screened frequency. The butterfly, whose stages are
+narrow and uniform, loses least; the three-layer hybrid with 21,504 link bits loses most.
+
+Direction-only guidance, stated as such: prefer fewer stages and fewer inter-stage links when
+the frequency target is tight, and do not treat a composed frequency as a commitment. Area moves
+the other way and by less — composed area ran HIGH against placed (0.0212 versus 0.0182 mm2 for
+one fabric), because composition multiplies a standalone block's periphery by its count where
+synthesis optimises across the whole design.
+
+== Interfaces
+
+For a request/response memory fabric, OBI (OpenHW Group) fits natively: a losing arbitration is exactly `req` asserted without `gnt`, and the client retries the next cycle, which is the drop-and-retry behaviour an arbitrated fabric already implements. AXI4-Stream does not fit without an adapter, and the reason is worth stating because it is easy to assume otherwise: AXI4-Stream forbids withdrawing a `tvalid` that has not been accepted, so each input needs a skid buffer that holds the beat and re-offers it. That buffer is storage, and it changes the throughput a bufferless fabric measures. Checking this before committing to an interface is cheaper than discovering it in integration.

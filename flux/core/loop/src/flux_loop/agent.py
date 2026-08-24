@@ -1,0 +1,300 @@
+"""A coding agent as the generator (D575): Claude Code, Codex CLI, OpenCode or any terminal
+tool that takes a brief and writes a file. The loop hands it a work directory, a brief
+(`PROMPT.md`: the design prompt, plus the prior artifact and failure on a repair) and a time
+limit, then reads the artifact and runs its own build, check and judge as for a model reply.
+
+    generate: {agent: opencode}                                  # a preset
+    generate: {agent: {preset: opencode, questions: model, max_questions: 2}}
+    generate: {agent: {command: [my-agent, "{prompt_file}", "{artifact}"], timeout_s: 900}}
+
+Questions (D585): a turn that exits cleanly, wrote no artifact and ends on a question is a
+question, and `questions:` says who answers it --
+    decide    (the default) nobody: the brief says so, and a question that comes anyway is
+              answered "choose yourself, say what you chose, write the file"
+    model     the loop's model, as the designer who wrote the brief
+    operator  the person at the TUI's prompt line (or the run's feedback channel), within
+              `wait_s`; unanswered, the model answers, else "choose yourself"
+The answer goes back into the SAME session (OpenCode `--session`, Claude Code `--resume`);
+an agent the loop cannot resume gets a fresh run whose brief carries the exchange. At most
+`max_questions` a draft; every exchange is said in the log and kept on the candidate.
+
+Substitutions in a command: `{prompt}` (the brief's text), `{prompt_file}` (its path),
+`{artifact}` (where to write), `{workdir}`, `{part}`, `{name}`, `{python}`; in a `resume`
+command also `{session}` and `{answer}`.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+__all__ = ["AgentSpec", "DECIDE", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
+
+#: The agents this repository knows how to call headless: the first turn, the turn that
+#: resumes its session with an answer, and how its output says the session and its words.
+PRESETS: dict[str, dict[str, Any]] = {
+    "claude": {"argv": ("claude", "-p", "{prompt}", "--permission-mode", "acceptEdits", "--output-format", "json",
+                        "--disallowedTools", "AskUserQuestion"),
+               "resume": ("claude", "-p", "{answer}", "--resume", "{session}", "--permission-mode", "acceptEdits",
+                          "--output-format", "json", "--disallowedTools", "AskUserQuestion"),
+               "output": "claude"},
+    "codex": {"argv": ("codex", "exec", "--full-auto", "{prompt}"), "resume": None, "output": "text"},
+    "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "{prompt}"),
+                 "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}", "{answer}"),
+                 "output": "opencode"},
+}
+OUTPUTS = ("text", "opencode", "claude")
+POLICIES = ("decide", "model", "operator")
+
+
+@dataclass(frozen=True)
+class AgentSpec:
+    tool: str
+    argv: tuple[str, ...]
+    resume: tuple[str, ...] | None = None
+    output: str = "text"
+    timeout_s: float = 1800.0
+    questions: str = "decide"
+    max_questions: int = 2
+    wait_s: float = 300.0
+
+
+def agent_spec(spec: Any) -> AgentSpec:
+    """The document's `agent:` value: a preset's name, or an object with `preset` or
+    `command` (+ `resume`, `output`) and `timeout_s`, `questions`, `max_questions`, `wait_s`."""
+    if isinstance(spec, str):
+        spec = {"preset": spec}
+    if not isinstance(spec, dict):
+        raise ValueError("agent: a preset's name or {preset|command, timeout_s, questions, ...}")
+    known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s"}
+    unknown = sorted(set(spec) - known)
+    if unknown:
+        raise ValueError(f"agent: {', '.join(unknown)} is not one of {', '.join(sorted(known))}")
+    questions = str(spec.get("questions") or "decide")
+    if questions not in POLICIES:
+        raise ValueError(f"agent.questions is one of {', '.join(POLICIES)}, not {questions!r}")
+    common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
+                  max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0))
+    if spec.get("command"):
+        argv = tuple(str(t) for t in spec["command"])
+        output = str(spec.get("output") or "text")
+        if output not in OUTPUTS:
+            raise ValueError(f"agent.output is one of {', '.join(OUTPUTS)}, not {output!r}")
+        first = next((t for t in argv if not t.startswith("{")), argv[0])       # `{python} my-agent.py`: the script
+        resume = tuple(str(t) for t in spec["resume"]) if spec.get("resume") else None
+        return AgentSpec(str(spec.get("name") or Path(first).name), argv, resume, output, **common)
+    preset = str(spec.get("preset") or "")
+    if preset not in PRESETS:
+        raise ValueError(f"agent {preset!r} is not a preset; presets: {', '.join(PRESETS)}; or give `command: [...]`")
+    p = PRESETS[preset]
+    return AgentSpec(preset, p["argv"], p["resume"], p["output"], **common)
+
+
+#: What the brief says about questions, by policy.
+_ASKING = {
+    "decide": ("Nobody answers questions during this run: where the brief leaves a choice open, make it yourself, "
+               "say in your final line what you chose, and write the file."),
+    "model": ("If a choice the brief leaves open truly blocks you, you may end your reply with ONE question and write "
+              "nothing yet; it will be answered and you will continue. Otherwise decide yourself and write the file."),
+}
+_ASKING["operator"] = _ASKING["model"]
+
+#: The answer when nobody answers.
+DECIDE = ("Nobody is available to answer questions during this run. Choose the option you judge best for the brief, "
+          "say in one line what you chose, and write the file now.")
+
+
+def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
+                prior: str | None, failure: str, questions: str = "decide", check: str = "") -> str:
+    """The brief an agent reads: the static prefix (contract, knowledge), the design or the
+    repair prompt, then what the loop expects of a terminal tool -- including whether its
+    questions will be answered."""
+    # the model half's reply shape (JSON with the artifact) is not how an agent answers: it writes the file
+    prefix = "\n\n".join(p for p in prefix.split("\n\n") if not p.lstrip().startswith("REPLY SHAPE"))
+    parts = [p for p in (prefix.strip(), body.strip()) if p]
+    if prior:
+        parts.append(f"THE LAST DRAFT (refused: {failure.strip()[:2000] or 'see above'}):\n```\n{prior}\n```")
+    parts.append(
+        f"HOW TO ANSWER. You are a coding agent working in `{workdir}`. Write the complete {language} "
+        f"artifact for `{part}` to `{artifact}` (create the file; that file is what gets built and tested, "
+        f"nothing else is read). You may run any tool in this directory to check your work first"
+        + (f"; THE GATE that will judge the file is this command -- run it yourself until it reports no "
+           f"failures, and fix what it prints:\n    {check}\n" if check else ". ")
+        + f"When the file is written, reply with one line saying so. {_ASKING.get(questions, _ASKING['decide'])}")
+    return "\n\n".join(parts) + "\n"
+
+
+@dataclass
+class Turn:
+    """One run of the agent: whether it exited 0, its code, its words (the text it ended on,
+    parsed out of its output format), the session to resume, and the raw streams."""
+
+    ok: bool
+    rc: int
+    text: str
+    session: str | None = None
+    stdout: str = ""
+    stderr: str = ""
+
+
+def _parse(output: str, stdout: str) -> tuple[str, str | None]:
+    """(the agent's words, its session) from its output format."""
+    if output == "opencode":
+        texts, session = [], None
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            session = ev.get("sessionID") or session
+            if ev.get("type") == "text":
+                texts.append(str((ev.get("part") or {}).get("text") or ""))
+        return "\n".join(t for t in texts if t.strip()), session
+    if output == "claude":
+        try:
+            doc = json.loads(stdout.strip().splitlines()[-1]) if stdout.strip() else {}
+        except ValueError:
+            return stdout, None
+        return str(doc.get("result") or ""), doc.get("session_id")
+    return stdout, None
+
+
+def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
+    """The agent run once, recorded in the run's transcript (D599)."""
+    import time
+
+    from flux_llm import transcript
+
+    t0 = time.monotonic()
+    turn = _run_turn(spec, argv, subs, workdir=workdir)
+    transcript.record("agent", agent=spec.tool, workdir=str(workdir), prompt=subs.get("prompt", ""), ok=turn.ok,
+                      rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2))
+    return turn
+
+
+def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
+    """The agent run once. A missing binary or a timeout is a refusal with its own words,
+    never a crash."""
+    cmd = [t.format(**subs) for t in argv]
+    if shutil.which(cmd[0]) is None and not Path(cmd[0]).is_file():
+        return Turn(False, 127, "", stderr=f"{cmd[0]} is not on PATH (the coding agent named by the document)")
+    try:
+        # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
+        # block on the loop's inherited socket until the timeout.
+        # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
+        import os
+
+        env = {**os.environ, "PWD": str(workdir)}
+        r = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=spec.timeout_s,
+                           stdin=subprocess.DEVNULL, env=env)
+    except subprocess.TimeoutExpired:
+        return Turn(False, 124, "", stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
+    text, session = _parse(spec.output, r.stdout or "")
+    return Turn(r.returncode == 0, r.returncode, text, session, r.stdout or "", r.stderr or "")
+
+
+_CODE = re.compile(r"```.*?```", re.S)
+
+
+def question_in(text: str) -> str | None:
+    """The question an agent ended its turn on, or None: the last paragraph of its words
+    (code fences aside), when it asks -- a line ending in `?`, the options under it kept."""
+    words = _CODE.sub("", text or "").strip()
+    if not words:
+        return None
+    last = [p for p in re.split(r"\n\s*\n", words) if p.strip()]
+    tail = "\n\n".join(last[-2:]).strip()
+    return tail[-1500:] if any(ln.rstrip().endswith("?") for ln in tail.splitlines()) else None
+
+
+@dataclass
+class Exchange:
+    question: str
+    answer: str
+    by: str                                  # decide | model | operator
+
+
+def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: Path,
+             answer: Callable[[str], tuple[str, str]], say: Callable[[str], None] = lambda _m: None,
+             prompt_file: Path | None = None) -> tuple[Turn, list[Exchange]]:
+    """The agent's turn, and every question it ends on answered (by `answer(question) ->
+    (text, by)`) until it writes the artifact, stops asking, fails, or has asked
+    `max_questions`. The answer resumes its session; without one, a fresh run's brief
+    carries the exchange."""
+    before = artifact.read_text() if artifact.is_file() else None     # a prototype's file exists to be edited
+
+    def wrote() -> bool:
+        return artifact.is_file() and artifact.read_text() != before
+
+    turn = run_turn(spec, spec.argv, subs, workdir=workdir)
+    asked: list[Exchange] = []
+    while (turn.ok and not wrote() and len(asked) < spec.max_questions
+           and (q := question_in(turn.text)) is not None):
+        text, by = answer(q)
+        asked.append(Exchange(q, text, by))
+        say(f"  agent {spec.tool} asks: {q.splitlines()[0][:160]}" + (" ..." if "\n" in q else ""))
+        say(f"  answered by the {by}: {text.splitlines()[0][:160] if text else '(nothing)'}")
+        if spec.resume and turn.session:
+            turn = run_turn(spec, spec.resume, {**subs, "session": turn.session, "answer": text}, workdir=workdir)
+        else:
+            brief = subs["prompt"] + "".join(f"\n\nYOU ASKED: {e.question}\nTHE ANSWER: {e.answer}" for e in asked)
+            if prompt_file is not None:
+                prompt_file.write_text(brief)
+            turn = run_turn(spec, spec.argv, {**subs, "prompt": brief}, workdir=workdir)
+    # An agent that ends a turn without writing its file is nudged to write it (D618).
+    for n in range(NUDGES):
+        full = overflowed(turn)
+        if (not turn.ok and not full) or wrote() or question_in(turn.text) is not None:
+            break
+        nudge = (f"You have not {'changed' if before is not None else 'written'} `{artifact}` yet. Write the "
+                 f"complete file now with your file-writing tool, run the check command from the brief on it, "
+                 f"and fix what it prints. Then reply with one line saying the file is written.")
+        if full:
+            # A session that outgrew the context window fails on every resume, so a fresh
+            # session starts from the brief and the file.
+            nudge = (f"A previous session on this task ran out of context. `{artifact}` holds its last work, if any: "
+                     f"read it, keep what is right, and finish the task. Keep tool output short (pipe long "
+                     f"output through `tail`). " + nudge)
+            say(f"  agent {spec.tool} ran out of context; a fresh session continues ({n + 1} of {NUDGES})")
+        else:
+            say(f"  agent {spec.tool} ended without writing {artifact.name}; nudged ({n + 1} of {NUDGES})")
+        if spec.resume and turn.session and not full:
+            turn = run_turn(spec, spec.resume, {**subs, "session": turn.session, "answer": nudge}, workdir=workdir)
+        else:
+            brief = subs["prompt"] + f"\n\n{nudge}"
+            if prompt_file is not None:
+                prompt_file.write_text(brief)
+            turn = run_turn(spec, spec.argv, {**subs, "prompt": brief}, workdir=workdir)
+    return turn, asked
+
+
+#: How many times a turn that ended without the file is resumed with a nudge (D618)
+NUDGES = 2
+
+_OVERFLOW = re.compile(r"exceeds the (available )?context|context (length|size|window) (exceeded|has been exceeded)|"
+                       r"maximum context length|prompt is too long|too many tokens", re.I)
+
+
+def overflowed(turn: "Turn") -> bool:
+    """Whether the agent's session outgrew the model's context window (the server's words in its
+    output or its error stream)."""
+    return bool(_OVERFLOW.search("\n".join((turn.text or "", turn.stdout or "", turn.stderr or ""))))
+
+
+def missing_agent(spec: Any) -> list[str]:
+    """The agent's binary when it is not on PATH, for `tools_missing`."""
+    try:
+        head_argv = agent_spec(spec).argv
+    except ValueError:
+        return []
+    head = head_argv[0].format(python=sys.executable, prompt="", prompt_file="", artifact="", workdir="", part="", name="")
+    return [] if (shutil.which(head) or Path(head).is_file()) else [head]

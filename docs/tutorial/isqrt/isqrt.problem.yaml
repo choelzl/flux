@@ -1,0 +1,24 @@
+id: isqrt
+statement: >-
+  A combinational integer square root in SystemVerilog: module `isqrt`, input `x` (16 bits,
+  unsigned), output `r` (8 bits), r = floor(sqrt(x)). As fast as possible on ASAP7, then as
+  small as possible.
+contract: >-
+  One module named exactly `isqrt`, purely combinational (no clock, no reset), ports
+  `input logic [15:0] x` and `output logic [7:0] r`. r must equal floor(sqrt(x)) for every x.
+
+language: systemverilog
+
+gate: flux rtl test {artifact} --golden {home}/golden.py
+
+stages:
+  - name: screen
+    command: flux rtl measure {artifact} --stage synth --clock-ps 1000
+  - name: confirm
+    command: flux rtl measure {artifact} --stage place --clock-ps 1000
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 1000}
+  - {metric: area_um2, direction: minimize}
+
+budget: {steps: 3, repair_attempts: 6, finalists: 2}

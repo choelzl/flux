@@ -1,0 +1,83 @@
+{
+  "$id": "https://flux.dev/schemas/mapping.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flux Mapping IR",
+  "description": "Per-operand loop nests (ZigZag's uneven mapping, generalised) plus spatial/fusion/placement. Must be a superset of what existing tools express, or Flux recreates the representation lock-in it exists to kill. See docs/ir.md.",
+  "type": "object",
+  "required": ["schema_version", "id", "for_op", "operands"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "for_op": { "type": "string", "minLength": 1, "description": "References a Workload IR op id." },
+    "operands": {
+      "type": "object",
+      "description": "Per-operand loop nests, deliberately allowed to differ per operand (ZigZag's uneven mapping).",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["level", "loops"],
+          "properties": {
+            "level": { "type": "string", "minLength": 1, "description": "References an Architecture IR hierarchy level." },
+            "loops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["dim", "size"],
+                "properties": {
+                  "dim": { "type": "string" },
+                  "size": { "type": "integer", "minimum": 1 },
+                  "order": { "type": "integer", "minimum": 0 }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "spatial": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dim", "array_dim", "size"],
+        "properties": {
+          "dim": { "type": "string" },
+          "array_dim": { "type": "string" },
+          "size": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "fusion": {
+      "type": "object",
+      "description": "Stream's contribution: layer-fusion grouping and tiling.",
+      "properties": {
+        "group": { "type": "array", "items": { "type": "string" } },
+        "tile": { "type": "object" },
+        "granularity": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "placement": {
+      "type": "object",
+      "description": "Multi-core / chiplet placement.",
+      "properties": {
+        "core": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "compatibility": {
+      "type": "object",
+      "description": "Makes representation lock-in visible and queryable instead of a footnote (docs/ir.md). Populated by adapters, not authored by hand.",
+      "properties": {
+        "expressible_in": { "type": "array", "items": { "type": "string" } },
+        "not_expressible_in": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

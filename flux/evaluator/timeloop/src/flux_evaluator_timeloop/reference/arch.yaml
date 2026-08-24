@@ -1,0 +1,61 @@
+# Vendored from timeloopaccelergy/accelergy-timeloop-infrastructure's own tutorial exercise
+# (02_interface_and_design_space_exploration_2024/inputs/arch.yaml). The original wraps the
+# `reg` component below in a Jinja if-block (reg_enabled, default true) that
+# evaluators/timeloop/adapter.py never varies, so it has been resolved away here to its default:
+# the reg component is always included, unconditionally. (Do not write literal Jinja delimiter
+# syntax in this comment block itself — the whole file is Jinja-rendered before YAML parsing,
+# comments included, so it would be parsed as a real, unclosed template tag.)
+# `DATAWIDTH` below is Timeloop's own native variable substitution (see variables.yaml), not
+# Jinja.
+architecture:
+  version: 0.4
+  nodes: # Top-level is hierarchical
+  - !Container # Top-level system
+    name: system
+
+  - !Component # DRAM main memory
+    name: DRAM
+    class: DRAM
+    attributes:
+      type: "LPDDR4"
+      width: 64
+      datawidth: DATAWIDTH
+
+  - !Component # Global buffer for inputs & outputs
+    name: buffer
+    class: SRAM
+    attributes:
+      depth: 512
+      width: 128
+      datawidth: DATAWIDTH
+    constraints:
+      dataspace: {keep: [Inputs, Outputs, Weights]}
+
+  - !Container # Each PE in the column receives a different filter row
+    name: PE
+    spatial: {meshX: 8}
+    constraints:
+      spatial:
+        permutation: [N, P, Q, R, S, C, M]
+        factors: [N=1, P=1, Q=1, R=1]
+        maximize_dims: [[M, C]]
+        split: len(spec.problem.instance)
+
+  - !Component # Register per PE
+    name: reg
+    class: SRAM
+    subclass: register
+    attributes:
+      datawidth: DATAWIDTH
+      depth: 1
+      width: datawidth * 3
+    constraints:
+      dataspace: {keep: [Inputs, Outputs, Weights]}
+      temporal: {factors_only: []}
+
+  - !Component # MAC unit
+    name: mac
+    class: intmac
+    attributes:
+      multiplier_width: DATAWIDTH
+      adder_width: DATAWIDTH * 2

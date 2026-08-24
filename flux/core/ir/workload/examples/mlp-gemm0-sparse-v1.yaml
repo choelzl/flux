@@ -1,0 +1,26 @@
+# mlp-gemm0.yaml's own exact shape, with a real, declared density on the input activation
+# tensor I (docs/decisions.md D78) — the same real Timeloop `sparse_optimizations`/`densities`
+# mechanism Sparseloop itself is built on (`op.sparsity`, a Workload IR schema field the schema
+# already declared but no code used until now). `distribution: hypergeometric` is the only
+# supported v0.1 distribution — see evaluators/timeloop/workload_translator.py's own module
+# docstring for why `fixed_structured` is deliberately excluded (verified non-monotonic with
+# density against this repo's own pinned Timeloop Docker image before being trusted).
+schema_version: "0.1.0"
+id: mlp/gemm0-sparse
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: I, rank: [B, C], dtype: int8}
+  - {name: W, rank: [C, K], dtype: int8}
+  - {name: O, rank: [B, K], dtype: int16}
+ops:
+  - id: mlp.gemm0-sparse
+    kind: einsum
+    expr: "B C, C K -> B K"
+    bounds: {B: 4, C: 32, K: 32}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}
+    sparsity:
+      I:
+        distribution: hypergeometric
+        density: 0.25

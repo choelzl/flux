@@ -1,0 +1,294 @@
+"""Flux CLI entry point: the one way in, for people, scripts and agents alike (docs/agent-surface.md).
+
+`flux task run|check` runs or validates a problem document (`--json FILE` writes the answer for a
+script), `flux ask` drives the loop from a prompt, `flux rtl test|measure` and `flux champsim run|build|check` are the tools a
+document names, `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
+detached run; `flux eval`, `flux import` and `flux replay` are the IR evaluator commands.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from .champsim import cmd_champsim_build, cmd_champsim_check, cmd_champsim_run
+from .rtl import cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
+from .selftest import cmd_selftest
+from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_new, cmd_log)
+from flux_evaluator_abi import available_evaluators
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="flux",
+        description="Flux: an AI-driven design-space exploration loop for hardware. A model or a coding agent "
+                    "proposes designs, real tools check and measure them, the loop decides and keeps a record.",
+        epilog="start with:\n  flux new myproblem --kind python|rtl|sweep|tune|rtl-sweep\n"
+               "  flux task check <doc.problem.yaml>\n  flux task run <doc.problem.yaml>\n"
+               "  flux ask \"what you want\" --file spec.pdf\ndocs: README.md and docs/usage-guide.md",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, title="commands",
+        # import, eval, replay and migrate still work but are hidden from the listing
+        metavar="{new,ask,task,rtl,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
+
+    import_p = subparsers.add_parser("import"
+    )
+    import_p.add_argument("file", help="Path to a YAML/JSON IR document.")
+    import_p.add_argument(
+        "--kind",
+        choices=["workload", "architecture", "mapping"],
+        default=None,
+        help="IR kind (auto-detected from document shape if omitted).",
+    )
+    import_p.add_argument("--store", default=None, help="SQLite ResultStore path to store into.")
+    import_p.set_defaults(func=cmd_import)
+
+    eval_p = subparsers.add_parser("eval"
+    )
+    eval_p.add_argument("--workload", required=True, help="Path to a Workload IR document.")
+    eval_p.add_argument("--arch", default=None, help="Path to an Architecture IR document.")
+    eval_p.add_argument("--backend", required=True, choices=available_evaluators())
+    eval_p.add_argument(
+        "--metrics", default=None, help="Comma-separated metric names (default: latency_cycles,energy_pj)."
+    )
+    eval_p.add_argument("--store", default=None, help="SQLite ResultStore path to store into.")
+    eval_p.set_defaults(func=cmd_eval)
+
+    replay_p = subparsers.add_parser("replay"
+    )
+    replay_p.add_argument("result_id", type=int)
+    replay_p.add_argument("--store", required=True, help="SQLite ResultStore path.")
+    replay_p.set_defaults(func=cmd_replay)
+
+    log_p = subparsers.add_parser(
+        "log", help="Every model and coding-agent turn of a campaign's runs: prompts, replies, tool calls, errors.")
+    log_p.add_argument("db", help="The campaign record.")
+    log_p.add_argument("--campaign", default=None, help="A campaign id prefix (default: the latest).")
+    log_p.add_argument("--last", type=int, default=10, metavar="N", help="The last N turns (default 10; 0 for all).")
+    log_p.add_argument("--turn", type=int, default=None, metavar="K", help="Turn K whole: the prompt, the reply, the tool calls.")
+    log_p.add_argument("--full", action="store_true", help="Every listed turn whole, not a line each.")
+    log_p.set_defaults(func=cmd_log)
+
+    st_p = subparsers.add_parser("selftest", help="Does Flux work on this machine: tools, a sweep, an RTL sweep, the model, a model-written problem.")
+    st_p.add_argument("--full", action="store_true", help="Also the README's first run (adder16, about three minutes).")
+    st_p.add_argument("--no-model", action="store_true", help="Only the checks that need no model.")
+    st_p.add_argument("--model", default=None, help="The model name to check (default: the one a run would use).")
+    st_p.add_argument("--model-timeout", type=float, default=1800.0, help="Seconds for the model-written problem.")
+    st_p.set_defaults(func=cmd_selftest)
+
+    new_p = subparsers.add_parser(
+        "new", help="Write a working problem to start from: a document and its checker, ready to run and change.")
+    new_p.add_argument("name", help="The problem's name (letters, digits, _): its id, and its folder unless --dir.")
+    new_p.add_argument("--kind", choices=("python", "rtl", "sweep", "tune", "rtl-sweep"), default="python",
+                       help="python: the model writes a function, a checker and a benchmark judge it (default); "
+                            "rtl: the model writes a module, Verilator and ASAP7 judge it; "
+                            "sweep: a script renders every point of a knob space, no model needed; "
+                            "tune: the knobs go straight to your own commands (build flags, block sizes, hyperparameters), no model; "
+                            "rtl-sweep: a script spells a module per knob point, Verilator and Yosys judge them, no model.")
+    new_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
+    new_p.set_defaults(func=cmd_new)
+
+    ask_p = subparsers.add_parser(
+        "ask", help="The loop from a prompt and files: an author writes the problem, the loop runs it, the author steers.")
+    ask_p.add_argument("prompt", nargs="?", default=None, help="What you want, in words (none: the setup screen opens).")
+    ask_p.add_argument("--tui", action="store_true", help="The setup screen, then the loop screen with a review of the problem before it runs.")
+    ask_p.add_argument("--file", "-f", action="append", default=[], help="An input: a spec, code, a reference, a PDF, tests (repeatable; a folder is copied whole).")
+    ask_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, for the author and the designers (repeatable).")
+    ask_p.add_argument("--author", default="model", help="Who writes the problem: model (default), a coding agent preset (opencode, claude, codex), or a JSON agent spec.")
+    ask_p.add_argument("--dir", default=None, help="The working directory (default: ./out/ask-<slug>).")
+    ask_p.add_argument("--passes", type=int, default=0, help="Stop after N passes (default: run until stopped -- `flux stop`, Ctrl-C, the TUI).")
+    ask_p.add_argument("--checks", type=int, default=3, help="Repairs of a refused document per pass (default 3).")
+    ask_p.add_argument("--no-run", action="store_true", help="Write and check the document; run nothing.")
+    ask_p.add_argument("--steps", type=int, default=None, help="The loop's steps per pass (default: the document's).")
+    ask_p.add_argument("--screen-only", action="store_true", help="Stop every pass at the first stage.")
+    ask_p.add_argument("--model", default=None, help="The model (the author when --author model, and the loop's).")
+    ask_p.add_argument("--num-predict", type=int, default=None)
+    ask_p.add_argument("--replies", default=None, help="Scripted replies (a JSON list) for the loop's model: no model.")
+    ask_p.add_argument("--author-replies", default=None, help="Scripted replies for a model author (tests, dry runs).")
+    ask_p.set_defaults(func=cmd_ask)
+
+    task_p = subparsers.add_parser(
+        "task", help="Check or run a problem document through the loop."
+    )
+    task_sub = task_p.add_subparsers(dest="task_command", required=True)
+    check_p = task_sub.add_parser("check", help="Validate a task document and its tools; run nothing.")
+    check_p.add_argument("file", help="Path to a .json/.yaml task document.")
+    check_p.set_defaults(func=cmd_task_check)
+    run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
+    run_p.add_argument("file", help="Path to a .json/.yaml task document.")
+    run_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, beside the document's own (repeatable).")
+    run_p.add_argument("--db", default=None, help="Campaign record (default: <document dir>/out/<task id>.db).")
+    run_p.add_argument("--steps", type=int, default=None, help="Planner steps (default: the document's).")
+    run_p.add_argument("--repair", type=int, default=None, help="Repair attempts per generation.")
+    run_p.add_argument("--model", default=None, help="The model name on the endpoint in use: the local Ollama by default, or the server FLUX_REMOTE_BASE_URL names.")
+    run_p.add_argument("--replies", default=None,
+                       help="A JSON list of scripted replies: runs without a model.")
+    run_p.add_argument("--out", default=None, help="Write the decided artifact here (default: <document dir>/out/<task id><extension>).")
+    run_p.add_argument("--no-structured", action="store_true", help="Plain decoding, no schema.")
+    run_p.add_argument("--role", action="append", metavar="ROLE=NAME", default=None,
+                       help="Switch who fills one of the four roles, repeatable: "
+                            "--role orchestrator=rules. `flux task check` lists the choices.")
+    run_p.add_argument("--agent", nargs="+", default=(), metavar="HALF",
+                       choices=["tools", "orchestrate", "plan", "all"],
+                       help="The AGENT takes these halves: tools (the model calls compute/"
+                            "check/history/knowledge inside its turns), orchestrate (it picks what "
+                            "next, which part, which step of the ladder, with its reasons on record), plan (it "
+                            "writes the loop plan the pass follows); all for the three.")
+    run_p.add_argument("--plan", default=None, metavar="FILE",
+                       help="A loop plan document to follow: parts, budget, stages, roles, "
+                            "tools; a field set to \"agent\" is the agent's to fill.")
+    # run-time options shared by every application (D519)
+    run_p.add_argument("--tui", action="store_true", help="The curses screen: tasks, results, log, the r loop toggle.")
+    run_p.add_argument("--think", action="store_true", help="Ask the model for its reasoning on every turn.")
+    run_p.add_argument("--num-predict", type=int, default=None, help="Output tokens per turn (default 6000).")
+    run_p.add_argument("--passes", type=int, default=None, metavar="N",
+                       help="Stop after N passes. Default: the document's `budget.passes`, else run until stopped "
+                            "(`flux stop`, Ctrl-C, q in the TUI); a pass at rest is followed by one that explores.")
+    run_p.add_argument("--tool-hops", type=int, default=None, help="Rounds of tool calls a turn may make.")
+    run_p.add_argument("--hop-share", type=float, default=None,
+                       help="Share of the model's context window a round that may call tools may write (0.5).")
+    run_p.add_argument("--patience", type=int, default=None, help="Prototype turns granted after each new best.")
+    run_p.add_argument("--regenerate", nargs="+", default=(), metavar="PART",
+                       help="Parts to draft again instead of resuming from the record; all for every part.")
+    run_p.add_argument("--screen-only", action="store_true", help="Stop the chain at the synthesis screen.")
+    run_p.add_argument("--json", default=None, metavar="FILE", help="Also write the answer as JSON: the decision, the frontier, what was refused, the application's own result.")
+    run_p.add_argument("--no-prototype", action="store_true", help="No prototype stage: the target directly.")
+    run_p.add_argument("--no-patching", action="store_true", help="Repair by rewrite, not by edits.")
+    run_p.set_defaults(func=cmd_task_run)
+
+    gc_p = subparsers.add_parser("gc", help="Remove trace directories no campaign record names.")
+    gc_p.add_argument("--db", action="append", metavar="DB", help="A campaign record whose rows name traces to keep (repeatable).")
+    gc_p.add_argument("--root", default=None, help="The trace root (default: FLUX_TRACE_ROOT or <tmp>/flux-traces).")
+    gc_p.add_argument("--keep-days", type=float, default=7.0, help="Keep everything younger than this (default 7).")
+    gc_p.add_argument("--apply", action="store_true", help="Remove; without it, only say what would go.")
+    gc_p.set_defaults(func=cmd_gc)
+
+    rep_p = subparsers.add_parser("report", help="How a campaign moved: frontier evolution, hypervolume, best-so-far, the parts.")
+    rep_p.add_argument("db", help="The campaign record.")
+    rep_p.add_argument("--campaign", default=None, help="A campaign id prefix (default: the latest in the record).")
+    rep_p.add_argument("--objective", action="append", metavar="SPEC",
+                       help="metric[:direction][:goal][:stage][:tie], repeatable, in order; stands in for a record without the vector.")
+    rep_p.add_argument("--out", default=None, help="Write the HTML report here (default: next to the record, <record>-report.html).")
+    rep_p.set_defaults(func=cmd_report)
+
+    run_cmd = subparsers.add_parser("run", help="Start a command detached, its log under the trace root.")
+    run_cmd.add_argument("--log", default=None, help="The log file (default: <trace root>/runs/<stamp>.log).")
+    run_cmd.add_argument("argv", nargs=argparse.REMAINDER, help="-- the command and its arguments")
+    run_cmd.set_defaults(func=cmd_run)
+    for name, fn, help_ in (("status", cmd_status, "Is the campaign running, since when, how many passes."),
+                            ("stop", cmd_stop, "Stop the campaign's run at the pass boundary (or --now).")):
+        sp = subparsers.add_parser(name, help=help_)
+        sp.add_argument("db", help="The campaign record.")
+        sp.add_argument("--campaign", default=None, help="A campaign id prefix (default: the latest).")
+        if name == "stop":
+            sp.add_argument("--now", action="store_true", help="SIGINT the run now instead of waiting for the pass boundary.")
+            sp.add_argument("--why", default=None, help="A word on why, kept with the request.")
+        sp.set_defaults(func=fn)
+    kn_p = subparsers.add_parser("knowledge", help="The library's digests in a campaign record.")
+    kn_sub = kn_p.add_subparsers(dest="knowledge_command", required=True)
+    dig_p = kn_sub.add_parser("digest", help="Digest every library document the record does not hold yet, one model call each.")
+    dig_p.add_argument("--db", required=True, help="The campaign record (the digests live in its store).")
+    dig_p.add_argument("--model", default=None, help="The model; default as `flux task run`.")
+    dig_p.add_argument("--num-predict", type=int, default=None, help="Output tokens per digest (default 2000).")
+    dig_p.add_argument("--replies", default=None, help="A JSON list of scripted replies: runs without a model.")
+    dig_p.set_defaults(func=cmd_knowledge_digest)
+    show_p = kn_sub.add_parser("show", help="Print the digests the record holds.")
+    show_p.add_argument("--db", required=True)
+    show_p.set_defaults(func=cmd_knowledge_show)
+
+    rtl_p = subparsers.add_parser("rtl", help="The tools an RTL document names: test against a golden model, check a prototype, measure on ASAP7.")
+    rtl_sub = rtl_p.add_subparsers(dest="rtl_command", required=True)
+    rt = rtl_sub.add_parser("test", help="Verilate the artifact against golden.py's vectors; prints the failing ones and `N failing of M`.")
+    rt.add_argument("artifact"); rt.add_argument("--golden", required=True, help="golden.py: PORTS and golden(**inputs).")
+    rt.add_argument("--module", default=None, help="The module under test (default: the first `module` in the artifact).")
+    rt.add_argument("--timeout", type=float, default=300.0); rt.add_argument("--show", type=int, default=8, help="Failing vectors to print.")
+    rt.add_argument("--extra", action="append", default=[], help="Another source file the module instantiates (repeatable).")
+    rt.set_defaults(func=cmd_rtl_test)
+    rp = rtl_sub.add_parser("proto", help="Check a Python prototype `design(**inputs)` against golden.py -- every input when "
+                                          "they total 20 bits or fewer -- as the prototype stage does; prints where it fails "
+                                          "and `N failing of M`.")
+    rp.add_argument("prototype"); rp.add_argument("--golden", required=True, help="golden.py: PORTS and golden(**inputs).")
+    rp.add_argument("--table-max", type=int, default=None, help="The largest module-level table allowed (default 64).")
+    rp.add_argument("--timeout", type=float, default=120.0)
+    rp.set_defaults(func=cmd_rtl_proto)
+    rm_ = rtl_sub.add_parser("measure", help="Synthesise (synth), place or route the artifact on ASAP7; prints metric=value lines.")
+    rm_.add_argument("artifact"); rm_.add_argument("--stage", choices=("synth", "place", "route"), default="synth")
+    rm_.add_argument("--clock-ps", type=float, default=1000.0); rm_.add_argument("--module", default=None)
+    rm_.add_argument("--clock-port", default="auto", help="auto: clk when the module has one; none: combinational.")
+    rm_.add_argument("--reset-port", default="auto", help="auto: rst_n when the module is clocked and has one.")
+    rm_.add_argument("--repair-design", action="store_true", help="Buffer long wires and high fanout after placement.")
+    rm_.add_argument("--timeout", type=float, default=900.0)
+    rm_.set_defaults(func=cmd_rtl_measure)
+
+    cs_p = subparsers.add_parser("champsim", help="ChampSim as tools a document names: run an .ini or a prefetcher header on traces, build, check.")
+    cs_sub = cs_p.add_subparsers(dest="champsim_command", required=True)
+    cr = cs_sub.add_parser("run", help="Measure ARTIFACT (an .ini, or a .h prefetcher built in) on every trace; prints name=value lines.")
+    cr.add_argument("artifact"); cr.add_argument("--traces", required=True, help="A directory of *.gz / *.xz traces.")
+    cr.add_argument("--warmup", type=int, required=True); cr.add_argument("--sim", type=int, required=True)
+    cr.add_argument("--with", dest="with_", default=None, help="More L2 prefetchers to run alongside, comma-separated.")
+    cr.add_argument("--jobs", type=int, default=None, help="Simulations at once (default: one per trace).")
+    cr.add_argument("--config", default=None, help="An .ini of knobs (and types) added to the artifact's: a header's partners need theirs.")
+    cr.set_defaults(func=cmd_champsim_run)
+    cb = cs_sub.add_parser("build", help="Build a prefetcher header into ChampSim; prints `0 failing` or the first error and `1 failing` (exit 3).")
+    cb.add_argument("header")
+    cb.set_defaults(func=cmd_champsim_build)
+    cc = cs_sub.add_parser("check", help="Build a prefetcher header and smoke-run it on one trace; fails when it issues no prefetches.")
+    cc.add_argument("header"); cc.add_argument("--traces", required=True)
+    cc.set_defaults(func=cmd_champsim_check)
+
+    att_p = subparsers.add_parser("attach", help="Tail the log of the campaign's run (started by `flux run`).")
+    att_p.add_argument("db", help="The campaign record.")
+    att_p.add_argument("--campaign", default=None)
+    att_p.add_argument("--lines", type=int, default=40)
+    att_p.set_defaults(func=cmd_attach)
+
+    return parser
+
+
+#: The commands that read an existing campaign record named by their `db` argument.
+_READS_A_RECORD = frozenset({"report", "status", "stop", "attach", "log"})
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The CLI. An unexpected failure prints one line naming the error (D590); `FLUX_DEBUG=1`
+    shows the traceback."""
+    import os
+    from pathlib import Path
+
+    import sys
+
+    for stream in (sys.stdout, sys.stderr):
+        # line-buffer when piped, or a live run looks frozen (D597)
+        if not stream.isatty() and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(line_buffering=True)
+            except (ValueError, OSError):
+                pass
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    db = getattr(args, "db", None)
+    if args.command in _READS_A_RECORD and db and not Path(db).is_file():
+        print(f"flux {args.command}: no campaign record at {db} (a run writes <document dir>/out/<id>.db)")
+        return 2
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("\ninterrupted")
+        return 130
+    except BrokenPipeError:
+        # `flux ... | head` closed the pipe: not an error; send further output to devnull (D600)
+        import sys
+
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 141
+    except Exception as exc:  # noqa: BLE001 -- the last line of defence, said plainly
+        if os.environ.get("FLUX_DEBUG"):
+            raise
+        print(f"flux {args.command}: {type(exc).__name__}: {exc}\n(set FLUX_DEBUG=1 for the traceback)")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

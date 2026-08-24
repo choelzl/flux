@@ -1,0 +1,46 @@
+# The FP16 non-linear unit: seven operators, 1 ULP, one mux. The world is `flux_nlu`.
+#     flux task run applications/nlu/nlu.problem.yaml --db demo-nlu.db --tui
+
+id: nlu
+statement: >-
+  An FP16 non-linear unit of seven operators (exp, log, sigmoid, tanh, gelu, recip, rsqrt):
+  each within 1 ULP of the correctly rounded reference on ALL 65536 inputs, composed under
+  one operator mux, at 800 MHz on ASAP7 with the least area and power.
+language: systemverilog
+
+parts: [recip, rsqrt, sigmoid, tanh, gelu, log, exp]   # shallowest arithmetic first
+
+world: flux_nlu.world:World
+params:
+  ulp_budget: 1
+  clock_period_ps: 1250.0
+  seed: 0
+  test_rounds: 1            # the model's test-author rounds per pass
+  evaluator: nlu@exhaustive-ulp
+
+knowledge:
+  sheet: knowledge/nlu-methods.md
+
+objectives:                 # 3% margin on shallower stages, 3% tie band
+  - {metric: fmax_mhz, direction: maximize, goal: 800, margin: 0.03, tie: 0.03}
+  - {metric: area_um2, direction: minimize}
+  - {metric: power_w, direction: minimize}
+
+ladder: {alone: confirm}    # a part alone is placed; only the whole is routed
+
+stages:
+  - {name: screen, metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
+  - {name: confirm, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 1800}
+  - {name: route, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 7200}
+
+budget:
+  steps: 24
+  repair_attempts: 20
+  explore_every: 4
+  cooldown_after: 3
+  finalists: 3
+  prototype_attempts: 30
+  prototype_patience: 8
+  prototype_attempts_max: 90
+  tool_hops: 6
+  hop_share: 0.5

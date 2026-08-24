@@ -1,0 +1,37 @@
+# Paired with ir/workload/examples/mlp-gemm0.yaml and
+# ir/architecture/examples/simple-npu-1d-v1.yaml, for evaluators/timeloop's
+# mapping_translator.py — no `spatial` field (Timeloop's spatial mapping isn't
+# Mapping-IR-controlled in this v0.1 scope, see that module's docstring). All three loops sit at
+# `gbuf`, matching the *temporal* portion of Timeloop's own real winning mapping for this exact
+# (workload, architecture) pair (`timeloop-mapper.map.yaml` from an actual run): K's temporal
+# factor is 4, not the full 32 — that gap is exactly what lets Timeloop's own spatial search
+# (architecture_translator.py's `maximize_dims`) pick K=8 spatially and multiply back out to the
+# real total (4 * 8 = 32). Verified empirically by round-tripping this exact structure back
+# through Timeloop as explicit mapspace_constraints and reproducing 512 cycles / 620000.0 pJ
+# exactly, not assumed — see tests/integration/test_timeloop_mapping_translation_live.py.
+schema_version: "0.1.0"
+id: mlp/gemm0/simple-npu-1d-v1/timeloop-map-matches-its-own-optimum
+for_op: mlp.gemm0
+operands:
+  I:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+  W:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+  O:
+    - level: gbuf
+      loops:
+        - {dim: K, size: 4, order: 0}
+        - {dim: B, size: 4, order: 1}
+        - {dim: C, size: 32, order: 2}
+compatibility:
+  expressible_in: [flux, timeloop, zigzag]
+  not_expressible_in: []
+  reason: "no spatial field, so both translators accept it; ZigZag would auto-pick its own spatial mapping in that case too (only Timeloop's translator treats spatial as categorically out of scope, see mapping_translator.py's module docstring) — this document is written to exercise evaluators/timeloop specifically"

@@ -1,0 +1,33 @@
+# A 16-bit adder swept over the architectures gen.py spells; no model, no world.
+#     flux task run applications/adder16/adder16.problem.yaml [--screen-only]
+
+id: adder16
+statement: >-
+  An unsigned 16-bit adder (module `adder16`, inputs `a` and `b`, 17-bit sum `s`): the
+  smallest that makes 3000 MHz placed on ASAP7, chosen from the architectures gen.py spells.
+language: verilog
+
+space:
+  arch: [behavioral, ripple, carry_select, kogge_stone]
+  block: [2, 4, 8]             # the carry-select block size; the others ignore it
+
+flow:
+  dse: sweep
+  generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
+
+gate: flux rtl test {artifact} --golden {home}/golden.py
+
+stages:
+  - name: screen
+    command: flux rtl measure {artifact} --stage synth --clock-ps 300
+  - name: confirm
+    command: flux rtl measure {artifact} --stage place --clock-ps 300
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 3000}
+  - {metric: area_um2, direction: minimize}
+
+budget:
+  steps: 1
+  finalists: 2
+  prototype: false

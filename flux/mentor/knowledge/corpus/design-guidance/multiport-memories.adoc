@@ -1,0 +1,31 @@
+= Multi-port memory techniques: composing many ports from few-ported RAMs
+
+== The problem and the ground rules
+
+When a design needs more read/write ports than the available RAM primitive offers (FPGA block RAMs are typically 1R1W or 2RW; ASIC macro libraries offer a similar short list), extra ports are composed from multiple few-ported RAMs. The techniques below are drawn from T. Verbeure, "Building Multiport Memories with Block RAMs" (2019, tomverbeure.github.io) and the paper it is based on, LaForest et al., "Composing Multi-Ported Memories on FPGAs" (ACM TRETS 2014) — described here in this corpus's own words. Their published evaluations are FPGA-based; the structural mechanisms and cost formulas carry to ASIC composition of macros, but every quantitative comparison they report is an FPGA result and must not be read as an ASIC number.
+
+A recurring correctness obligation across all of these techniques: coincident read and write to the same address in the same cycle needs a defined answer (commonly "read returns the newly written value"), and composed RAMs generally need explicit forwarding/bypass registers to deliver it — the composition does not inherit it for free. A design can alternatively forbid coincident access architecturally, but that is a contract pushed onto every user of the memory, and it must then be stated (and ideally asserted) at the interface.
+
+== Replication: extra read ports
+
+Multiple read ports with one write port compose trivially: one RAM copy per read port, all write ports tied together, every copy holding identical contents. Cost direction: storage area and write energy multiply by the number of read ports; read latency is unchanged (each port reads its own copy). This is the standard structure for the 2-read-1-write register file of a single-issue CPU, and its simplicity is why multi-READ composition is rarely the hard part — multiple WRITE ports are.
+
+== Banking: address-partitioned ports
+
+Banking splits the address space across independent smaller RAMs (e.g. even addresses to bank 0, odd to bank 1), so accesses to different banks proceed concurrently. Peak throughput reaches the bank count, but only when concurrent accesses land in different banks: two same-cycle accesses to one bank are a bank conflict and must serialize, stalling at least one port. More banks than ports lowers the conflict probability for spread-out address streams but never eliminates it, so banking requires either a stall/replay mechanism, a buffering scheme (with read-checking against pending buffered writes), or an access pattern guaranteed conflict-free at the architecture level. Banking suits streaming/strided workloads and is the normal structure inside GPUs' shared memories; it is a poor fit when worst-case latency must be conflict-independent.
+
+== Multipumping: time-multiplexed ports
+
+If the RAM primitive can be clocked at an integer multiple of the surrounding logic's clock, one physical port can serve that multiple of logical ports by time-multiplexing within the slow-clock period, with a small scheduler keeping port transactions ordered and coherent. Costs: a faster clock domain (possibly a PLL), scheduling logic, and — fundamentally — the technique consumes the RAM's frequency headroom, so it only applies when the design clock is comfortably below the RAM's maximum. Among the composition techniques it is often the smallest in storage (no replication at all), which makes it attractive for low-frequency designs; it does not apply when the RAM is already near its frequency limit.
+
+== Live Value Table (LVT): replication plus an ownership table
+
+For W write ports and R read ports, the LVT structure keeps one RAM per (write port, read port) pair — W x R RAMs — so every write port owns a full set of read copies. A read must then know WHICH write port last wrote its address: a small side table (the live value table), itself W-written and R-read but only log2(W) bits wide, records the last-writing port per address and drives each read port's output multiplexer. The narrow width is the point: the side table is small enough to build as a flip-flop array even when the main data is far too large for one, so the technique targets memories whose data width is large while the address count stays flip-flop-tractable. Storage cost direction: W x R copies of the data plus the table.
+
+== XOR-based composition: writes that pre-read
+
+The XOR technique exploits A xor B xor B = A: each write port stores not the raw value but the value XORed with the current contents of the other write ports' RAMs at that address, and a read XORs one RAM per write port to recover the last-written value. This removes the LVT's flip-flop side table entirely (everything is RAM), at two structural costs: RAM count W x ((W-1) + R), which grows quickly with write ports, and every write first performs a read of the other ports' RAMs — an internal read-before-write pipeline that needs its own bypass logic to preserve one-cycle read-after-write semantics.
+
+== Choosing among them
+
+The honest selection rule, stated by both sources: no technique dominates. LaForest et al.'s measured comparisons (FPGA) show flip-flop arrays, LVT, and XOR each winning regions of the (data width, depth, read ports, write ports, target frequency) space, sometimes by large margins — so the choice is a measurement question per design point, not a lookup. For work in this repository, that means: treat these entries as the candidate-structure menu, and rank candidates with the real evaluators (Verilator for cycles, Yosys/OpenROAD for placed area, CACTI for macro characteristics) rather than by any ranking remembered from the sources' FPGA plots.

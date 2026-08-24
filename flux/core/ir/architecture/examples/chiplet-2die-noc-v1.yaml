@@ -1,0 +1,33 @@
+# A real, two-chiplet NoC (docs/decisions.md D66): two dies, each a single crossbar router
+# serving 4 nodes, joined by exactly one bidirectional D2D link at a real, caller-declared
+# latency (20 cycles — meaningfully slower than Booksim2's own 1-cycle in-die default, the real,
+# deliberate contrast this whole architecture exists to express; this repo has no clock-frequency
+# concept anywhere to derive a defensible cycle count from a real UCIe-style nanosecond figure, so
+# it's declared directly rather than fabricated). This exact topology was run by hand through a
+# real Booksim2 `anynet` simulation before this file existed, confirming the physically correct
+# direction against a same-topology, no-D2D-penalty baseline: 19.155 cycles average packet latency
+# with the 20-cycle D2D link vs. 9.54 cycles with the link left at Booksim2's own default (1
+# cycle) — genuinely, not marginally, higher, since ~half of uniform traffic must cross it. See
+# tests/integration/test_booksim_chiplet_live.py.
+#
+# This is real *thermal-adjacent* D2D interconnect modeling only — not the same thing as real
+# multi-die thermal *stacking* (evaluators/thermal, docs/decisions.md D65). Two separate, real
+# concerns about a chiplet system; see evaluators/booksim/README.md.
+schema_version: "0.1.0"
+id: chiplet-2die-noc/v1
+tech: {node: n28, pdk_class: open}
+hierarchy:
+  - level: chiplet_fabric
+    class: interconnect
+interconnect:
+  chiplet_noc:
+    dies:
+      - {id: die0, nodes: 4}
+      - {id: die1, nodes: 4}
+    d2d_links:
+      - {from: die0, to: die1, latency_cycles: 20}
+    routing_function: min
+    traffic: uniform
+    injection_rate: 0.01
+    num_vcs: 8
+    vc_buf_size: 8

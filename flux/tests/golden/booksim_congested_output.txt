@@ -1,0 +1,48 @@
+# Real Booksim2 output, captured 2026-08-14 from a genuinely congested run (docs/decisions.md
+# D182): 8x8 mesh, transpose traffic, injection_rate 0.95, num_vcs 1, vc_buf_size 1, packet_size 8.
+# Booksim2 commit: depth-1 clone of github.com/booksim/booksim2 master.
+#
+# Stored because D181 fixed the statistics parser against scientific notation while noting that
+# no real captured output existed in this repo to test it on. This is that output. The run does
+# NOT contain scientific notation -- it reports 4928.11 cycles and then aborts convergence --
+# which is itself the finding D182 records.
+sample_period = 10000;
+max_samples = 2;
+
+END Configuration File: /tmp/claude-10017/-home-choelzl-AEDAF/7182b007-dbec-4f6a-8eb8-95323318ac08/scratchpad/cfg_congest
+Class 0:
+Packet latency average = 4928.11
+	minimum = 42
+	maximum = 9929
+Network latency average = 131.548
+	minimum = 42
+	maximum = 2999
+Slowest packet = 54
+Flit latency average = 31.6325
+	minimum = 6
+	maximum = 2964
+Slowest flit = 12104
+Fragmentation average = 28
+	minimum = 28
+	maximum = 28
+Injected packet rate average = 0.00792812
+	minimum = 0.0004 (at node 6)
+	maximum = 0.0244 (at node 0)
+Accepted packet rate average = 0.00782188
+	minimum = 0.0003 (at node 7)
+	maximum = 0.0243 (at node 0)
+Injected flit rate average = 0.0629344
+	minimum = 0.0026 (at node 7)
+	maximum = 0.1952 (at node 0)
+Accepted flit rate average= 0.062725
+	minimum = 0.0024 (at node 7)
+	maximum = 0.195 (at node 0)
+Injected packet length average = 7.93812
+Accepted packet length average = 8.01918
+Total in-flight flits = 448 (0 measured)
+latency change    = 1
+throughput change = 1
+Average latency for class 0 exceeded 500 cycles. Aborting simulation.
+Too many sample periods needed to converge
+Simulation unstable, ending ...
+Total run time 0.348683

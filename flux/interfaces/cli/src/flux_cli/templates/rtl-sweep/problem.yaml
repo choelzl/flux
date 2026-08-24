@@ -1,0 +1,29 @@
+# No model: gen.py spells one module per point of `space:`, proved against golden.py and
+# synthesised on ASAP7.
+#     flux task run __NAME__.problem.yaml --passes 1
+
+id: __NAME__
+statement: >-
+  A 16-bit population count (module `__NAME__`, input `a`, 5-bit output `y`): the smallest that
+  makes 3000 MHz on the synthesis screen, among the architectures gen.py spells.
+language: systemverilog
+
+space:
+  arch: [behavioral, tree, lut]
+  chunk: [2, 4]                         # the table size for `lut` (the others ignore it)
+
+flow:
+  dse: sweep
+  generate: {command: "{python} {home}/gen.py {artifact} {arch} {chunk}"}
+
+gate: flux rtl test {artifact} --golden {home}/golden.py
+
+stages:
+  - name: screen
+    command: flux rtl measure {artifact} --stage synth --clock-ps 333
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 3000}
+  - {metric: area_um2, direction: minimize}
+
+budget: {steps: 1}

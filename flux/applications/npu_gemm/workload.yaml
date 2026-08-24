@@ -1,0 +1,23 @@
+# A two-layer feed-forward block: (B,C)x(C,H) then (B,H)x(H,K), int8 in, int16 out.
+schema_version: "0.1.0"
+id: mlp/ffn0
+provenance:
+  source: handwritten
+  importer: flux-manual@0.1
+tensors:
+  - {name: I, rank: [B, C], dtype: int8}
+  - {name: W1, rank: [C, H], dtype: int8}
+  - {name: H_act, rank: [B, H], dtype: int8}
+  - {name: W2, rank: [H, K], dtype: int8}
+  - {name: O, rank: [B, K], dtype: int16}
+ops:
+  - id: ffn.down
+    kind: einsum
+    expr: "B C, C H -> B H"
+    bounds: {B: 4, C: 32, H: 16}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}
+  - id: ffn.up
+    kind: einsum
+    expr: "B H, H K -> B K"
+    bounds: {B: 4, H: 16, K: 32}
+    precision: {I: 8, W: 8, O: 16, O_final: 8}
