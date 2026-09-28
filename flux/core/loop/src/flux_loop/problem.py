@@ -513,7 +513,7 @@ class GeneratorRole(_Role):
         from .sources import Model, iterate
 
         source = self.generator(item.subgoal, state)
-        if source is None or isinstance(source, Model) or _agent_writes_prototypes(self):
+        if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
             key = item.subgoal or "*"
             keep = state.best.get(key)
             state.best[key] = (0.0, item.candidate, item.why)
@@ -539,7 +539,7 @@ class GeneratorRole(_Role):
         from .sources import Model, iterate
 
         source = self.generator(subgoal, state)
-        if source is None or isinstance(source, Model) or _agent_writes_prototypes(self):
+        if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
             return _generate_with_model(self, subgoal, method, state, human)
         return iterate(self, source, subgoal, state)
 
@@ -861,9 +861,12 @@ class Problem(MentorRole, OrchestratorRole, GeneratorRole, EvaluatorRole):
     name: str = "problem"
 
 
-def _agent_writes_prototypes(problem: Problem) -> bool:
+def _agent_writes_prototypes(problem: Problem, state: LoopState) -> bool:
     """A coding agent with a prototype stage writes the prototype (D618), inside the model's
-    generation loop (the stage, then the loop's spelling), not the target directly."""
+    generation loop (the stage, then the loop's spelling), not the target directly -- when this
+    run has the prototype on; with it off the agent writes the target (D643)."""
+    if not state.request.prototype:
+        return False
     pick = getattr(problem, "prototype_agent", None)
     try:
         return callable(pick) and pick() is not None

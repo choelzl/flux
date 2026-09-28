@@ -241,3 +241,23 @@ def test_the_brief_names_the_problem_s_files_and_nothing_else(tmp_path):
     box_turn("critique", _agent(tmp_path, "good"), "Q?", SCHEMA, st, home="/the/problem")
     brief = (tmp_path / "work" / "agents" / "critique" / "001" / "BRIEF.md").read_text()
     assert "THE PROBLEM'S FILES are in `/the/problem`" in brief and "nothing outside them" in brief
+
+
+def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):
+    """A golden model gives a document a prototype stage; `prototype: false` must still send the
+    drafts to the coding agent, not to the loop's model (D643)."""
+    from flux_loop import LoopRequest, LoopState
+    from flux_loop.problem import _agent_writes_prototypes
+
+    (tmp_path / "golden.py").write_text('PORTS = [{"name": "a", "dir": "in", "bits": 4, "unsigned": True}, '
+                                        '{"name": "y", "dir": "out", "bits": 4}]\n\ndef golden(a):\n    return {"y": a}\n')
+    doc = {"id": "t", "statement": "module `t`", "language": "systemverilog",
+           "gate": "flux rtl test {artifact} --golden {home}/golden.py",
+           "objectives": [{"metric": "area_um2", "direction": "minimize"}],
+           "flow": {"generate": {"agent": "claude"}}}
+    prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
+    assert prob.prototype() is not None and prob.prototype_agent() is not None
+
+    def st(on):
+        return LoopState(request=LoopRequest(prototype=on), say=lambda _m: None, proposer=None, feedback=None)
+    assert _agent_writes_prototypes(prob, st(True)) and not _agent_writes_prototypes(prob, st(False))

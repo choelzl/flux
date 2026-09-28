@@ -282,3 +282,10 @@ the topics above.
   (click a box: only its allowed halves), advanced budget/space/parts, a live `problem.yaml` with
   a checklist. `crafter.js` `buildYaml`/`check` are pure; `test_loop_crafter.py` loads every
   preset's YAML with `load_task` (11 cases). `mkdocs build --strict` passes.
+
+- **D643: with the prototype off, the coding agent writes the target.** A golden model gives a
+  document a prototype stage; `prototype: false` still routed drafts to the prototype path, where
+  the stage is skipped and the loop's MODEL wrote the RTL -- the coding agent was never called.
+  The route now requires `state.request.prototype`. Live (isqrt, hosted qwen3.6 loop, Claude Code
+  generating, OpenCode validate/critique/orchestrate): before, qwen drafts stuck at 1-203 failing
+  vectors and nothing was admitted; after, Claude's draft #2 passed the gate after one repair.
