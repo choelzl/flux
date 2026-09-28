@@ -1,93 +1,131 @@
 # Flux
 
-**Design and DSE loops that aim to beat an engineer's result with the engineer's own tools.**
-A Flux loop takes a stated problem -- an FP16 non-linear unit at 800 MHz, a prefetcher to
-tune, a bank mapping to prove, a processing element to shrink -- and searches it with real
-tools (Verilator, Yosys, OpenROAD, ChampSim, z3, ...) on a chain of rising cost. A model gets
-*named roles* inside the loop; every loop runs end to end with no model. The model makes it
-better, never possible.
+**Flux searches for the best hardware design for a problem you describe: a model or a script
+proposes designs, real tools check and measure them, and Flux picks the winner and tells you why.**
 
-The output is a decision-first report: the thing to build, with every number from the
-measurement stage the report names, then the trade-off front, then what the run established,
-what it did **not** establish, and what it refused -- with reasons.
+You describe the problem in one short file, the **document** (`*.problem.yaml`): what to build,
+how to tell a right design from a wrong one, what to measure and what "better" means. Flux does
+the rest and keeps a record of every design it tried.
 
-## Why
+## Get started
 
-The field does not lack cost models; it lacks a loop that is honest about what it measured. A
-Flux problem is a **document** (`*.problem.yaml`: the statement, the parts, the objectives with
-their goal and stage, the costed chain, the budget, who fills each role) plus, only for what a
-document cannot say, a **world** (a Python package that knows the domain: a simulator, a
-solver, a generator that invents across rounds). One loop runs every document;
-the record keeps every row with its provenance; the report separates measured from modelled.
+=== "Quick try (Python only)"
 
-## The loops
+    Needs Python 3.11 or newer. No hardware tools, no AI model.
 
-Eight problem documents, each a copy of which is another ask. Five are studies:
+    1. Get the code and install it:
 
-| loop | one line |
+        ```bash
+        git clone https://github.com/choelzl/flux.git flux-repo
+        cd flux-repo
+        python3 -m venv .venv && .venv/bin/pip install -e ./flux
+        ```
+
+    2. Write a ready-to-run problem:
+
+        ```bash
+        .venv/bin/flux new primes --kind sweep
+        ```
+
+    3. Run it:
+
+        ```bash
+        .venv/bin/flux task run primes/primes.problem.yaml --passes 1
+        ```
+
+    Flux times six ways of counting primes and prints the fastest (`odd_sieve`, about 6 ms here).
+
+=== "Full install (hardware tools)"
+
+    Needs [Nix](https://nixos.org/download) with flakes on
+    (`experimental-features = nix-command flakes` in `~/.config/nix/nix.conf`). Nix brings
+    Verilator, Yosys, OpenROAD and ChampSim.
+
+    1. Get the code and enter the tool shell (the first time downloads the tools):
+
+        ```bash
+        git clone https://github.com/choelzl/flux.git flux-repo
+        cd flux-repo/flux
+        nix develop --accept-flake-config
+        ```
+
+    2. Check that everything works (each line says PASS, FAIL or SKIP, with the reason):
+
+        ```bash
+        flux selftest --no-model
+        ```
+
+    3. Run a first hardware search, no AI model needed (about three minutes):
+
+        ```bash
+        flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 1
+        ```
+
+    Flux builds twelve 16-bit adders, proves each one correct, synthesises them and prints the
+    one to build.
+
+Next: [run the applications](demos/index.md), follow the [tutorial](guide/tutorial.md), or
+[build your own problem](guide/build-your-own.md).
+
+## What it can do
+
+- **RTL from a golden model.** You give a Python function that computes the right answer; a
+  model writes the Verilog; Flux tests every design against your function in Verilator.
+- **Prototypes first.** For numeric designs the model first writes the algorithm in Python or
+  SystemC, checked on every input in seconds; Flux then turns it into RTL itself (SystemC through
+  the ICSC translator).
+- **Design-space sweeps and searches.** List the knobs; pick a search: `sweep`, `montecarlo`,
+  `gradient`, `anneal`, `genetic`, `pareto`, `llm` (a model picks the points) or a coding agent.
+- **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer
+  any box of the loop that does not establish facts.
+- **Real measurements.** Yosys and OpenROAD on the ASAP7 process for speed, area and power;
+  ChampSim for cache prefetcher studies; ZigZag for accelerator sizing; any command of yours.
+- **Calibration.** Cheap stages are compared with costly ones, so a quick estimate is never
+  reported as a measured result.
+- **An honest report.** The design to build first, then the trade-offs, what was measured and
+  what was only modelled, and every design that was refused, with the reason.
+- **From a sentence.** `flux ask "what you want"` writes the document for you.
+
+## The loop
+
+Every problem runs through the same loop. Each **box** does one job and can be filled by
+*rules* (plain code), a *model* (an AI language model) or a *coding agent*. Boxes that establish
+facts are never handed to an AI.
+
+| box | what it does | who can fill it |
+|---|---|---|
+| validate | checks the document before anything runs | rules, model, coding agent |
+| orchestrate | picks the next piece of work | rules, model, coding agent |
+| plan | plans each pass: parts, order, method, budget | none, model, coding agent |
+| dse | searches the knobs | a search policy, model, coding agent |
+| generate | writes each design | model, script, fixed list, coding agent |
+| test | the **gate**: refuses any wrong design | rules only, never delegated |
+| critique | challenges the parts and the decision | none, model, coding agent |
+| analytical | cheap estimates: formulas, cost models | rules or a learned estimate, never delegated |
+| simulation | real tools: Verilator, Yosys, OpenROAD, ChampSim | tools only, never delegated |
+| calibrate | compares cheap stages with costly ones | on or off, never delegated |
+| select | picks the winner from the objectives | objectives; a coding agent may break ties |
+| feedback | your notes, typed during a run | you, or none |
+| knowledge | what the model reads: notes, papers | files, or a model's digest |
+| extract | lessons mined from past runs | none, mined, coding agent |
+| records | keeps every design, number and refusal | always on, never delegated |
+
+[More on the loop](guide/loop-shape.md).
+
+## Applications
+
+| application | what it finds |
 |---|---|
-| [NLU](demos/nlu.md) | an FP16 non-linear unit of seven operators, each within 1 ULP on all 65,536 inputs, at 800 MHz routed on ASAP7 with the least area and power |
-| [macarray](demos/macarray.md) | the MAC processing element's microarchitecture: fmax vs area on ASAP7, with invented multipliers |
-| [prefetcher](demos/prefetcher.md) | tune, compose and *invent* ChampSim L2 prefetchers for 5G traces |
-| [bankmap](demos/bankmap.md) | a conflict-free bank mapping through a described interconnect, or a proof none exists |
-| [interconnect mapping](demos/interconnect_mapping.md) | bank hashes vs tensor tiles: 12 storage modes into a 32-bank L1, a four-cost front with proofs |
+| [NLU](demos/nlu.md) | an FP16 unit for seven math functions, each within 1 ULP, at 800 MHz |
+| [MAC array](demos/macarray.md) | the smallest multiply-accumulate element that makes 1 GHz |
+| [Prefetcher](demos/prefetcher.md) | the best cache prefetcher configuration, or a new prefetcher, in ChampSim |
+| [Bank mapping](demos/bankmap.md) | a conflict-free memory-bank mapping, or a proof none exists |
+| [Interconnect mapping](demos/interconnect_mapping.md) | memory bank hash and interconnect, chosen together |
+| [GELU FP16](demos/gelu_fp16.md) | an FP16 GELU within 1 ULP, invented as a formula by a coding agent |
+| [NPU GEMM](demos/npu_gemm.md) | the smallest accelerator that runs a workload in 500 cycles |
+| [Starter examples](demos/starters.md) | `adder16`, `mul8`, `primes`: the smallest complete problems |
 
-Three are the smallest complete examples of a problem of your own: `adder16` (a sweep over
-generated adders, no model), `mul8` (a model writes a multiplier against a golden model) and
-`primes` (not hardware: a model writes a Python function and keeps making it faster).
-`flux new NAME --kind python|rtl|sweep` writes the start of another.
+## Loop crafter
 
-## Start
-
-From the `flux/` directory of a checkout, with [Nix](https://nixos.org/download) installed:
-
-```bash
-nix develop --accept-flake-config     # once: accept the binary cache for OpenROAD, Yosys, ...
-nix develop --command flux selftest   # does it work here: tools, a sweep, the model server
-nix develop --command flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 1
-```
-
-`flux selftest` prints PASS, FAIL or SKIP per check, with the reason. The last line needs no
-model: it sweeps twelve adders through Verilator and Yosys and prints a decision-first report
-in about three minutes. Then [run the others](demos/index.md), or describe
-what you want in words and let `flux ask` write the problem for you (that needs a model):
-
-```bash
-nix develop --command flux ask "a signed 8x8 multiplier, the smallest that makes 1 GHz placed"
-```
-
-To set up a problem of your own, step by step, follow the [tutorial](guide/tutorial.md).
-
-## The shape every loop shares
-
-Four roles, each with a model half and a pre-written half, swappable from the document:
-
-```mermaid
-flowchart LR
-    mentor["mentor<br/>what is known"] -- "guidance +<br/>measured facts" --> orch["orchestrator<br/>spend the budget"]
-    human["human feedback"] -.-> orch
-    orch --> gen["generator<br/>make candidates real"]
-    gen --> eval["evaluator<br/>measure, never trust"]
-    eval -- "front -> confirm" --> report["decision-first report"]
-    eval -. "every measurement" .-> mentor
-    report -. "mined conclusions" .-> mentor
-```
-
-The **mentor** holds the knowledge and the record; the **orchestrator** refuses for free
-before spending, picks the work and keeps the front; the **generator** turns candidates into
-artifacts real tools can run (a model with a prototype stage and repair turns, or a template, a
-catalog, a solver); the **evaluator** measures on a chain of rising cost, where the shallow
-stages order and the deepest decides. The model holds *job titles* inside those roles --
-proposer, inventor, repairer, orchestrator -- judged by the same gates as everything else, and
-the gate itself is never delegated. Every measurement, refusal, conclusion and typed human note
-flows back into the record, which is how the loop gets more expert with every run.
-[The full shape](guide/loop-shape.md), or [build your own loop](guide/build-your-own.md).
-
-## Scripts and agents
-
-There is one way in: the `flux` command. A script runs a document with
-`flux task run DOC --json answer.json` and reads the decision, the frontier, what was refused
-and the application's own result from that file. A coding agent (Claude Code, Codex, OpenCode,
-any command) can write the problem for `flux ask`, or be the generator of any document with
-`flow: {generate: {agent: opencode}}`; skills (`skills:` in the document, `--skill DIR`) feed
-both the model and the agents.
+Prefer a form to a text file? The [Loop crafter](guide/loop-crafter.md): fill in a form, get a
+`problem.yaml`.

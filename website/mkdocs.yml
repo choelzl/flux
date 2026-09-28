@@ -1,7 +1,7 @@
 site_name: Flux
 site_description: >-
-  Agent-native design-space exploration for SoC building blocks: runnable design
-  loops that search real problems with real tools.
+  Flux searches for the best hardware design for a problem you describe: a model or a script
+  proposes designs, real tools check and measure them.
 site_url: https://choelzl.github.io/flux/
 repo_url: https://github.com/choelzl/flux
 repo_name: choelzl/flux
@@ -52,15 +52,18 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - The loops:
-      - Overview: demos/index.md
-      - Interconnect mapping: demos/interconnect_mapping.md
-      - Bank mapping: demos/bankmap.md
+  - Applications:
+      - Run an application: demos/index.md
+      - NLU: demos/nlu.md
       - MAC array: demos/macarray.md
       - Prefetcher: demos/prefetcher.md
-      - NLU: demos/nlu.md
+      - Bank mapping: demos/bankmap.md
+      - Interconnect mapping: demos/interconnect_mapping.md
+      - GELU FP16: demos/gelu_fp16.md
+      - NPU GEMM: demos/npu_gemm.md
+      - Starter examples: demos/starters.md
   - Build a loop:
       - Tutorial: guide/tutorial.md
-      - The shape every loop shares: guide/loop-shape.md
-      - Build your own loop: guide/build-your-own.md
+      - The loop: guide/loop-shape.md
+      - Build your own: guide/build-your-own.md
       - Loop crafter: guide/loop-crafter.md

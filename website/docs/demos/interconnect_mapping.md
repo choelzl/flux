@@ -1,60 +1,46 @@
 # Interconnect mapping
 
-**Which (bank, line) hash, placement policy, schedule and switching fabric form the Pareto
-front over four costs -- area, storage padding, average access latency, throughput?**
+**The problem.** A 32-bank L1 memory serves 28 read and 24 write ports across three units (a
+matrix unit, a vector unit, DMA). Data are tensors stored in 12 layouts, written with one tile
+shape and read with another. Find the combinations of bank hash, placement, schedule and switching
+fabric that give the best trade-offs between four costs: area, storage padding, average access
+latency and throughput.
 
-A 32-bank single-ported L1 serves 28 read + 24 write ports across three units (a matrix unit,
-a vector unit, DMA). Data are tensors in 12 storage modes -- row/column/loop orders, blocked
-layouts, vectors -- with dimensions known only at runtime, written with one tile shape and
-read with another.
+## Run it
 
 ```bash
-cd flux
-nix develop --command flux task run applications/interconnect_mapping/interconnect_mapping.problem.yaml \
-    --screen-only                                            # no model, about two minutes
-# model-proposed hashes: copy the document, set `params.llm_rounds: 6`, run it with a model
+flux task run applications/interconnect_mapping/interconnect_mapping.problem.yaml --screen-only   # no model, about two minutes
 ```
 
-The record goes to `applications/interconnect_mapping/out/interconnect_mapping.db` unless
-`--db` says otherwise. The knobs are the document's `params:` -- `seed`, `ops`,
-`vu_probability`, `dma_probability` (the traffic), `climb_rounds` (the XOR-tap hill-climb),
-`llm_rounds` (0 = no model), `coordination_rounds`, `certify_tiles`, `bank_bits`. Another
-seed or regime is other traffic, so a copy that changes them needs its own `id:`.
+For model-proposed hashes, copy the document, set `params.llm_rounds: 6` and run it with a model.
 
-## Two little loops, one big loop
+## What the document says
 
-The mapping can reduce conflicts, which changes what the interconnect experiences -- so neither
-half is searched alone:
+| key | value |
+|---|---|
+| `params.seed`, `ops`, `vu_probability`, `dma_probability` | the traffic |
+| `params.climb_rounds` | `40`: rounds of the XOR-hash hill-climb |
+| `params.llm_rounds` | `0`: no model |
+| `params.coordination_rounds` | `2`: rounds of tuning hash and fabric together |
+| `objectives` | least `area_score`, `pad_fraction`, `holdout_latency`; most `holdout_throughput` (no goal: the balanced "knee" point wins) |
+| `stages` | `analytic` (formulas), `phys` (Yosys and OpenROAD) |
 
-- **The mapping loop**: for one fixed fabric, climb the injective XOR hash space against that
-  fabric's own capacity tree. A hash tuned on the ideal crossbar has never felt a subtree
-  capacity; one tuned here spreads traffic the way *this* topology needs.
-- **The interconnect loop**: for one fixed mapping, rightsize a fabric's per-level capacities
-  to the residual traffic that mapping leaves -- measured peaks, so zero blocking is added on
-  train traffic while removed links shrink the area.
-- **The big loop**: block-coordinate descent from the current Pareto front -- tune mappings for
-  the front's fabrics, fit fabrics for the front's mappings, re-score everything identically,
-  repeat until the front stops moving (`params.coordination_rounds`).
+## How it searches
 
-Measured effect: all three coordinated pairs reached the front, and the knee-point balanced
-pick *is* one of them -- the per-fabric hash beats the ideal-tuned hash on its own fabric.
+- **Mapping loop:** for one fabric, climb the space of XOR hashes against that fabric's limits.
+- **Interconnect loop:** for one mapping, shrink the fabric to the traffic that mapping leaves.
+- **Joint loop:** alternate the two from the current best set until it stops changing.
 
-## What keeps it honest
+Hashes are tuned on training traffic and judged only on separate holdout traffic. A hash that
+could lose data (not one-to-one) is refused by the gate. Conflict-freedom claims are proved by
+trying every tile position; failures come back as counterexamples.
 
-- **Injectivity is a gate, not a hope**: (bank, line) injectivity is decided exactly over
-  GF(2), and the hash may depend only on per-tensor metadata, never the tile -- so
-  write-with-one-tiling, read-with-another cannot corrupt data by construction.
-- **Anti-overfitting is structural**: hashes tune on train workloads and are judged only on a
-  disjoint holdout split; both numbers print, so a memorised hash exposes itself.
-- **Proofs, both directions**: conflict-freedom claims are certified by exhaustion over every
-  tile origin in the bounded runtime domain; failures come back as concrete counterexamples.
-  One such counterexample -- a 4x16 tile defeating both a metadata swizzle and a pitch-pad
-  skew -- answers the universality question: no universal static hash exists. Pigeonhole
-  floors print beside measured latencies: 64 rows through 16 ports is at least 4 cycles under
-  *any* design.
+## Results recorded
 
-The curated field of six solutions (modulo baseline, global XOR fold, metadata swizzle,
-bank-group partition, unit time-slots, pitch-pad skew) is each honest about which conflict
-category it targets and what metadata a real system must carry for it; search then extends the
-field with an XOR-tap hill-climb and optional model rounds, every proposal passing the
-injectivity gate or refused with the reason.
+- All three jointly tuned pairs reached the best set, and the balanced pick is one of them.
+- No single fixed hash works for every tiling: a 4x16 tile defeats both the swizzle and the skew.
+
+## What it needs
+
+No hardware tools for `--screen-only`; Yosys and OpenROAD for the `phys` stage; a model only
+if `llm_rounds` is above 0.

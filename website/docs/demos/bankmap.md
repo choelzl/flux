@@ -1,55 +1,51 @@
 # Bank mapping
 
-**Given a set of access strides and a concurrency N, find an address-to-bank mapping such that
-for every start address, N accesses at any of those strides land in N distinct banks -- and
-say precisely what is achievable when that is impossible.**
+**The problem.** A memory split into banks can serve several accesses at once only if they land
+in different banks. Given the access strides and how many accesses happen together (N), find the
+cheapest address-to-bank mapping that is conflict-free for **every** start address, or prove that
+none exists and say what is achievable instead.
+
+## Run it
 
 ```bash
-cd flux
-nix develop --command flux task run applications/bankmap/bankmap.problem.yaml --steps 2   # solver only, no model, seconds
-nix develop --command flux task run applications/bankmap/bankmap.problem.yaml --tui       # plus model rounds
+flux task run applications/bankmap/bankmap.problem.yaml --steps 2   # solver only, no model, seconds
+flux task run applications/bankmap/bankmap.problem.yaml --tui       # plus model rounds
 ```
 
-The request is the document's `params:` -- `strides`, `concurrent` (N), `banks`,
-`address_bits`, `z3_seconds`, `max_xor_inputs`, `llm_round` (0 = solver only) and the
-interconnect keys below. Another request is a copy of `bankmap.problem.yaml` with those changed
-and its own `id:`.
+The record and the chosen mapping's Verilog go to `applications/bankmap/out/`.
 
-## The chain
+## What the document says
 
-| stage | what | cost | what it can say |
-|---|---|---|---|
-| baseline | `bank = addr mod B` | µs | the strides that collapse it |
-| pigeonhole | a clique of B+1 addresses that must all differ in bank | µs | **impossible for any mapping** |
-| z3 | the XOR-fold family, searched exactly (CEGIS with the checker as oracle) | ms-s | the cheapest conflict-free fold, or **no fold exists** |
-| feasible | z3 again, descending N and growing the stride set | s | what the request's strides *do* admit |
-| model | non-linear expressions a local model proposes, told what failed | minutes | a family the solver cannot express |
+| key | value |
+|---|---|
+| `params.strides` | `[1, 8, 16]`: the access strides, in words |
+| `params.concurrent` | `4`: accesses issued together (N) |
+| `params.banks` | `8` (a power of two) |
+| `params.address_bits` | `20`: the address space the guarantee covers |
+| `params.topology` | `crossbar`; also `staged:GxH`, `omega`, `butterfly`, `clos:n,m,r`, `benes` |
+| `params.llm_round` | `6` model proposals per round; `0` = solver only |
+| `objectives` | least `hardware_cost` (XOR gates) |
+| `budget.steps` | `4`: baseline, solver, then two model rounds |
 
-Every stage is judged by one **exhaustive checker**: every start address in the space,
-vectorised in numpy, a few milliseconds per stride. A sample is not a guarantee, and the kernel
-does not get to choose where its arrays are placed.
+## The chain, cheapest first
 
-## The interconnect is part of the request
+| stage | what it can say |
+|---|---|
+| baseline (`addr mod B`) | which strides break it |
+| pigeonhole | **impossible for any mapping**, with the addresses that prove it |
+| z3 solver | the cheapest XOR mapping, or **no XOR mapping exists** |
+| feasible | what the strides do allow (smaller N, fewer strides) |
+| model | non-linear mappings the solver cannot express |
 
-A staged crossbar does not deliver a request straight to its bank: two accesses bound for
-different banks can still collide at an earlier stage. `params.topology` names the network --
-`crossbar`, `staged:GxH`, `omega`, `butterfly`, `clos:n,m,r`, `benes` -- with
-`stage_capacities` and `lanes` for a staged tree and `stages:` for sharing points no named
-topology describes (`{bits: [3, 4], capacity: 1, lanes: 4, lane_key: chunk|mod|free,
-blocks: 7}`), and each reduces to *stages* (which
-bank-index bits identify a resource, and a capacity) that the checker, z3 and the pigeonhole
-argument all understand. When the wiring is yours to choose, the solver chooses it jointly with
-the mapping and reports both.
+One exhaustive checker judges every stage: every start address, every stride.
 
-## What runs establish
+## Results recorded
 
-Proofs close doors fast: strides {1, 8, 16, 17} at N = B = 8 has no solution for *any* mapping
--- nine addresses that must occupy eight banks, proved in under two seconds, so the model is
-never asked. Feasible cases solve instantly: strides {1, 8, 16} at N = 4 admit a two-XOR-gate
-fold found in one solver round. And the gap between what the linear family reaches and what
-the pigeonhole bound allows is exactly where the model round is worth its cost -- proposals
-are refused by the exhaustive checker or kept, and a near miss is reported as "not found",
-never as impossible, because nothing proved it so.
+- Strides {1, 8, 16} at N = 4: a two-XOR-gate mapping, found in one solver round.
+- Strides {1, 8, 16, 17}, 8 accesses at once into 8 banks: **impossible for any mapping** (nine addresses must fit
+  in eight banks), proved in under two seconds; the model is never asked.
 
-The mapping comes back with its Verilog: a conflict-free fold is a few XOR gates on each
-port's address path.
+## What it needs
+
+z3 (in the tool shell, or `pip install -e "./flux[bankmap]"`). A model only for the model rounds;
+without one they report themselves skipped.

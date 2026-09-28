@@ -1,0 +1,122 @@
+/* The Flux problem builder (crafter.js): Material's colours, so light and dark both work. */
+.flux-crafter {
+  --fc-line: var(--md-default-fg-color--lightest);
+  --fc-muted: var(--md-default-fg-color--light);
+  --fc-rules: #2b7a86;  --fc-rules-bg: #e3f2f4;
+  --fc-model: #6a4bd8;  --fc-model-bg: #ece7fc;
+  --fc-agent: #c46a12;  --fc-agent-bg: #fbecdc;
+  --fc-fixed: #5f6670;  --fc-fixed-bg: #eceef1;
+  --fc-off:   #9aa0a8;  --fc-off-bg:   transparent;
+  --fc-error: #c62828;  --fc-warning: #b26a00;  --fc-ok: #2e7d32;
+  font-size: .75rem;
+}
+[data-md-color-scheme="slate"] .flux-crafter {
+  --fc-rules: #6cc4cf;  --fc-rules-bg: #173a3f;
+  --fc-model: #a996ff;  --fc-model-bg: #2c2552;
+  --fc-agent: #f0a254;  --fc-agent-bg: #43301c;
+  --fc-fixed: #aab1bb;  --fc-fixed-bg: #2c3037;
+  --fc-off:   #7d838c;
+  --fc-error: #ef6f6c;  --fc-warning: #f0b453;  --fc-ok: #7cc47f;
+}
+
+.flux-crafter h3 { margin: 1em 0 .5em; font-size: .9rem; }
+.flux-crafter h4 { margin: .8em 0 .3em; font-size: .8rem; }
+.flux-crafter .fc-hint, .flux-crafter small { color: var(--fc-muted); }
+.flux-crafter small { display: block; font-size: .65rem; margin-top: 2px; }
+
+/* presets */
+.fc-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.fc-card {
+  text-align: left; cursor: pointer; padding: 10px 12px; border-radius: 8px; font: inherit;
+  border: 1px solid var(--fc-line); background: var(--md-default-bg-color); color: var(--md-default-fg-color);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fc-card strong { font-size: .75rem; line-height: 1.3; }
+.fc-card span { color: var(--fc-muted); }
+.fc-card:hover, .fc-card:focus-visible { border-color: var(--md-accent-fg-color); }
+.fc-card.fc-on { border-color: var(--md-primary-fg-color); box-shadow: 0 0 0 1px var(--md-primary-fg-color) inset; }
+
+/* layout: one column (Material's text column is narrow); the file follows the form */
+.fc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 8px; }
+.fc-section { border-top: 1px solid var(--fc-line); padding-top: 2px; }
+.fc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; }
+.fc-field { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; min-width: 0; }
+.fc-field.fc-wide { grid-column: 1 / -1; }
+.fc-label { font-weight: 600; }
+.flux-crafter input[type="text"], .flux-crafter select, .flux-crafter textarea {
+  font: inherit; width: 100%; box-sizing: border-box; padding: 5px 7px; border-radius: 5px;
+  border: 1px solid var(--fc-line); background: var(--md-code-bg-color); color: var(--md-default-fg-color);
+}
+.flux-crafter textarea { resize: vertical; }
+.flux-crafter input:focus, .flux-crafter select:focus, .flux-crafter textarea:focus {
+  outline: 2px solid var(--md-accent-fg-color); outline-offset: 0;
+}
+.fc-rows { display: flex; flex-direction: column; gap: 8px; }
+.fc-row {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0 10px; align-items: end;
+  padding: 6px 10px; border: 1px solid var(--fc-line); border-radius: 6px;
+}
+.fc-inferred { align-self: center; }
+.fc-btn {
+  font: inherit; cursor: pointer; padding: 4px 12px; margin: 6px 6px 0 0; border-radius: 5px;
+  border: 1px solid var(--fc-line); background: transparent; color: var(--md-typeset-a-color);
+}
+.fc-btn:hover { border-color: var(--md-accent-fg-color); }
+.fc-btn.fc-primary { background: var(--md-primary-fg-color); color: var(--md-primary-bg-color); border-color: transparent; }
+.fc-btn.fc-small { padding: 2px 8px; margin-bottom: 6px; justify-self: start; }
+
+/* the drawing */
+.fc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 6px; }
+.fc-key { display: inline-flex; align-items: center; gap: 5px; }
+.fc-key i { width: 14px; height: 10px; border-radius: 3px; border: 2px solid var(--fc-c); background: var(--fc-b); }
+.fc-key.fc-off i { border-style: dashed; }
+.fc-rules { --fc-c: var(--fc-rules); --fc-b: var(--fc-rules-bg); }
+.fc-model { --fc-c: var(--fc-model); --fc-b: var(--fc-model-bg); }
+.fc-agent { --fc-c: var(--fc-agent); --fc-b: var(--fc-agent-bg); }
+.fc-fixed { --fc-c: var(--fc-fixed); --fc-b: var(--fc-fixed-bg); }
+.fc-off   { --fc-c: var(--fc-off);   --fc-b: var(--fc-off-bg); }
+.fc-drawing { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.fc-diagram { width: 100%; max-width: 640px; height: auto; display: block; }
+.fc-box { cursor: pointer; }
+.fc-box rect { fill: var(--fc-b); stroke: var(--fc-c); stroke-width: 2; }
+.fc-box.fc-off rect { stroke-dasharray: 5 4; fill: var(--md-default-bg-color); }
+.fc-box:hover rect, .fc-box:focus-visible rect { stroke-width: 3.5; }
+.fc-box:focus { outline: none; }
+.fc-box.fc-open rect { stroke-width: 4; }
+.fc-box-name { font-size: 14px; font-weight: 600; fill: var(--md-default-fg-color); }
+.fc-box-half { font-size: 11.5px; fill: var(--fc-c); }
+.fc-edge { fill: none; stroke: var(--md-default-fg-color--light); stroke-width: 1.6; }
+.fc-edge.fc-side { stroke-dasharray: 4 3; }
+.fc-edge.fc-back { stroke: var(--md-default-fg-color--lighter); }
+.fc-arrowhead { fill: var(--md-default-fg-color--light); }
+.fc-edge-label { font-size: 12px; fill: var(--fc-muted); }
+.fc-panel { border: 1px solid var(--fc-line); border-radius: 6px; padding: 4px 12px 8px; align-self: start; }
+.fc-panel h4 { margin-top: .5em; }
+.fc-choices { display: flex; flex-direction: column; gap: 4px; }
+.fc-choice {
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; cursor: pointer;
+  border-left: 4px solid var(--fc-c);
+}
+.fc-choice:hover { background: var(--md-code-bg-color); }
+.fc-choice.fc-off { border-left-style: dashed; }
+
+/* advanced */
+.fc-advanced { margin-top: 12px; border: 1px solid var(--fc-line); border-radius: 6px; padding: 4px 12px; }
+.fc-advanced summary { cursor: pointer; font-weight: 700; font-size: .9rem; padding: 4px 0; }
+
+/* output */
+.fc-output { border: 1px solid var(--fc-line); border-radius: 6px; padding: 8px 12px; }
+.fc-output-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.fc-file { font-family: var(--md-code-font-family); font-weight: 600; margin-right: auto; overflow-wrap: anywhere; }
+.flux-crafter pre { margin: .5em 0; }
+.flux-crafter pre code { display: block; overflow-x: auto; white-space: pre; font-size: .7rem; }
+.fc-yaml { max-height: 60vh; overflow: auto; }
+.fc-checks { list-style: none; margin: 0 !important; padding: 0; }
+.fc-checks li { margin: 3px 0 !important; padding-left: 1.4em; position: relative; }
+.fc-checks li::before { position: absolute; left: 0; font-weight: 700; }
+.fc-checks .fc-error { color: var(--fc-error); }
+.fc-checks .fc-error::before { content: "✗"; }
+.fc-checks .fc-warning::before { content: "!"; color: var(--fc-warning); }
+.fc-checks .fc-note::before { content: "→"; color: var(--fc-muted); }
+.fc-checks .fc-ok { color: var(--fc-ok); }
+.fc-checks .fc-ok::before { content: "✓"; }

@@ -1,46 +1,53 @@
-# NLU
+# NLU: an FP16 non-linear unit
 
-**An FP16 non-linear unit, designed by the loop.** Seven operators -- `exp`, `log`,
-`sigmoid`, `tanh`, `gelu`, `recip`, `rsqrt` -- one hard gate (every operator within
-**1 ULP** of the FP16 reference), and a measured **PPA** verdict from real
-synthesis and placement on ASAP7. The framework fixes only what a judge must own;
-the model chooses everything the study is about:
+**The problem.** One hardware unit that computes seven functions on 16-bit floating-point
+numbers (FP16): `exp`, `log`, `sigmoid`, `tanh`, `gelu`, `recip`, `rsqrt`. Every answer must be
+within 1 ULP (one step of the last digit) of the exact result, on all 65,536 inputs. Among the
+designs that pass, the goal is 800 MHz on ASAP7 with the least area and power.
 
-| decision | options | who makes it |
-|---|---|---|
-| method per operator | LUT, interpolation, piecewise / minimax polynomial, Newton-Raphson, CORDIC, bit products, parabolic synthesis, ... | the model |
-| hardware sharing | one shared datapath with an op mux, or per-op units (the framework's mux wrapper makes both pay for selection) | the model |
-| timing | combinational, or pipelined to any declared depth | the model |
-| the unit tests | adversarial FP16 vectors per operator, merged over a coverage floor no author can lower | the model |
-| the verdict | ULP by exhaustion, area/fmax by yosys + STA, PPA by OpenROAD | the tools |
-
-**Correctness is a proof, not a sample.** FP16 has 65536 inputs, so every operator
-is swept exhaustively in Verilator; the reported error rate and max ULP cover the
-whole domain, specials judged by class (NaN to NaN, the reference's infinities
-exactly -- saturating where the reference overflows is an error, not an ULP).
-A design over budget is refused with its worst failing inputs attached; they feed
-the repair prompt and the campaign record.
-
-**The flywheel.** Designs (with sources), refusals with counterexamples, the
-authored test suite and each run's decision land in the campaign record; a resumed
-run re-judges recorded designs (cached where tools and source are unchanged),
-reads back conclusions, style/method/latency duels and past refusals. The designer prompt also
-reads the operator's local paper library (`mentor/knowledge/library/`).
-
-The NLU needs a model: the operators are designed by it.
+## Run it
 
 ```bash
-cd flux
-nix develop --command flux task run applications/nlu/nlu.problem.yaml --tui
-nix develop --command flux task run applications/nlu/nlu.problem.yaml --screen-only   # stop at synthesis
+flux task check applications/nlu/nlu.problem.yaml
+flux task run applications/nlu/nlu.problem.yaml --tui
+flux task run applications/nlu/nlu.problem.yaml --screen-only    # stop at synthesis
 ```
 
-The record goes to `applications/nlu/out/nlu.db` (or `--db`); routing the composed unit takes
-over an hour, so a resumed run re-judges from the record and pays for nothing twice.
+It runs until you stop it. To continue the recorded demo campaign instead of starting a new one,
+add `--db applications/nlu/demo-nlu.db`.
 
-The NLU is a problem document: `applications/nlu/nlu.problem.yaml` says the parts, the
-objectives, the ladder, the stages, the knowledge sheet, the budget and the campaign
-identity, and names the FP16 world (`flux_nlu.world.World`) once. Another ask in that world
--- other operators (`parts:`), a 2-ULP budget (`params.ulp_budget`), a 1 GHz clock (the
-`fmax_mhz` objective's `goal` and `params.clock_period_ps`) -- is a copy of the document with
-its own `id:`, not a program.
+## What the document says
+
+| key | value |
+|---|---|
+| `parts` | the seven functions, each designed separately, then joined under one selector |
+| `params` | `ulp_budget: 1`, `clock_period_ps: 1250`, `test_rounds: 1` |
+| `objectives` | `fmax_mhz` at least 800, then least `area_um2`, then least `power_w` |
+| `stages` | `screen` (Yosys), `confirm` (OpenROAD placement), `route` (OpenROAD routing) |
+| `ladder` | each function alone is placed; only the whole unit is routed |
+| `knowledge` | `knowledge/nlu-methods.md`, a method sheet the model reads |
+| `world` | `flux_nlu.world:World`: the FP16 reference, the exhaustive gate, the RTL translator |
+
+## How a design is made
+
+1. The model writes each function as a Python prototype; it is checked on all 65,536 inputs.
+2. Flux translates the passing prototype into SystemVerilog.
+3. Verilator checks the RTL on every input (the gate). A failing design goes back with its worst
+   inputs.
+4. Yosys screens the survivors; OpenROAD places the best; the whole unit is routed.
+
+The model also chooses the method per function (table, polynomial, Newton-Raphson, CORDIC, ...),
+whether functions share hardware, and how deep to pipeline.
+
+## Result recorded
+
+Routed: **692 MHz at 5,592 um2** (788 MHz placed). Routing costs about 12% of the clock.
+
+## What it needs
+
+- An AI model (it designs the functions).
+- The tool shell: Verilator, Yosys, OpenROAD.
+- Time: hours. Routing the whole unit alone takes over an hour.
+
+To ask something else (other functions, a 2-ULP budget, a 1 GHz clock), copy the document,
+change `parts`, `params.ulp_budget` or the `fmax_mhz` goal, and give it a new `id`.

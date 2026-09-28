@@ -275,3 +275,10 @@ the topics above.
   `deepest` is the last stage, no parts is one design, `finalists: 0` stops at the first stage).
   The dse agent covered 11 of 12 points in 3 rounds and reached the sweep's decision,
   carry_select-4 at 3,287 MHz.
+
+- **D644: the site gives steps, and the crafter is a form.** README and site pages are numbered
+  steps with copy-paste commands, a capability list and the loop's 15 boxes with their halves. The
+  loop crafter is a problem builder: presets, then what/check/measure/goal, the fixed loop diagram
+  (click a box: only its allowed halves), advanced budget/space/parts, a live `problem.yaml` with
+  a checklist. `crafter.js` `buildYaml`/`check` are pure; `test_loop_crafter.py` loads every
+  preset's YAML with `load_task` (11 cases). `mkdocs build --strict` passes.
