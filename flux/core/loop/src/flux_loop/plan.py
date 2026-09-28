@@ -396,6 +396,11 @@ def plan_with_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any
         'Reply with ONLY JSON: {' + ", ".join(f'"{k}": ...' for k in opened) + ', "why": "<two lines: what the numbers say and what this plan does about it>"}',
     ]
     prompt = "\n".join(l for l in lines if l)
+    from .boxes import agent_of
+
+    coding = agent_of(getattr(getattr(problem, "task", None), "flow", None) or {}, "plan")
+    if coding is not None:
+        return _plan_by_agent(problem, state, clean, surface, opened, out, coding, lines)
     tools = orchestrator_tools(problem, state)
     errors: list[str] = []
     for round_ in range(3):
@@ -428,3 +433,36 @@ def plan_with_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any
     state.say("  plan: the agent's plan was refused three times (" + "; ".join(errors)[:200] + "); the defaults stand for the open fields")
     out["agent"] = "refused three times; the defaults stand"
     return None
+
+
+def _plan_by_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any], surface: dict[str, Any],
+                   opened: list[str], out: dict, coding: Any, lines: list[str]) -> dict[str, Any] | None:
+    """The plan as a coding agent's box turn (D640): the same question, the same validation as
+    its rule; a refused plan goes back once, then the defaults stand."""
+    from .boxes import box_turn
+    from .tools import orchestrator_tools
+
+    tools = {t.name: t for t in orchestrator_tools(problem, state)}
+    question = "\n".join([ln for ln in lines if ln and not ln.startswith(("You have tools:", "Reply with ONLY JSON"))]
+                         + [f"STANDINGS:\n{tools['standings'].run({})}", f"PICKS SO FAR:\n{tools['decisions'].run({})}"])
+    kept: dict[str, Any] = {}
+
+    def valid(doc: dict) -> str | None:
+        proposed = {k: v for k, v in doc.items() if k in opened or k == "why"}
+        got, errors = check_plan({**{k: v for k, v in clean.items() if k not in opened}, **proposed}, surface)
+        errors += [f"`{k}` is yours to fill; \"agent\" is not an answer" for k, v in got.items() if v == AGENT]
+        extra_check = getattr(problem, "plan_check", None)
+        if callable(extra_check) and not errors:
+            try:
+                errors += list(extra_check(got, state) or [])
+            except Exception as exc:  # noqa: BLE001
+                errors += [f"the problem refused the plan: {exc!s:.120}"]
+        kept["plan"] = got
+        return "; ".join(errors) if errors else None
+
+    schema = {"type": "object", "properties": {"why": {"type": "string"}}, "required": ["why"]}
+    if box_turn("plan", coding, question, schema, state, check=valid) is None:
+        out["agent"] = "the agent's plan was refused; the defaults stand"
+        return None
+    out["agent"] = f"planned by the agent: {str(kept['plan'].get('why') or '')[:300]}"
+    return kept["plan"]

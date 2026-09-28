@@ -119,7 +119,7 @@ next number and goes under [Since the fold](#since-the-fold).
 - **Optional agentic halves.** In-turn tools, an agent orchestrator, an agent-written plan. (D505)
 - **External coding agents.** `generate: {agent: claude|codex|opencode|{command}}`, headless, stdin closed; the brief names the gate command; questions follow `questions: decide|model|operator`, capped by `max_questions`. (D575, D585, D595)
 - **An agent writes the prototype.** With `prototype: true` it writes the prototype and runs `flux rtl proto`; the loop spells the RTL. A silent turn is nudged twice at most; an outgrown session continues fresh. (D618)
-- **An agent-driven loop is a proposal.** [design-agent-loop.md](design-agent-loop.md): `flow.<box>: {agent: ...}` per box with one brief/files/`out.json` contract; test, stages, calibrate and records are never delegated. Not built. (D630)
+- **A coding agent in any box.** `flow.<box>: {agent: opencode|claude|codex}` for validate, orchestrate, plan, dse, generate, critique, extract and select; test, the stages, calibrate and records are never delegated (D460). The loop writes `BRIEF.md`, checks the agent's `out.json` against the box's schema and rule, sends a refusal back once, then falls back to the rules half; each turn is a `decided:agent_turn` event that `flux report` lists. `select` only breaks ties the objectives leave open. (D630, D640)
 - **`flux ask`.** A model or coding agent writes and checks a document from a prompt, then the loop runs it; `golden.py` may declare `TOLERANCE_ULP`; a duplicate `*.problem.yaml` copy is dropped. (D586, D589, D627)
 - **Skills.** SKILL.md skills are copied into coding agents' folders or inlined for the loop's model; `skills/flux/SKILL.md` teaches outside agents to use Flux. (D588, D592)
 
@@ -256,3 +256,14 @@ The applications are the directories of `flux/applications/`. Worlds (bankmap, i
 New decisions go here, one short entry each: a bold lead naming the decision, then its key reason,
 number or rule and how it was verified -- no narrative. From time to time they are folded into
 the topics above.
+
+- **D640: every delegable box has its agent half.** One contract (`flux_loop.boxes.box_turn`): a
+  fresh turn in `agents/<box>/NNN/`, `out.json` checked, one retry with the reason, then the rules
+  half. Orchestrate picks must be on the menu; dse points inside the space and new; extract lessons
+  must cite existing record rows; plans pass `check_plan`. Verified: 14 tests with a fake agent
+  (answer, retry, three fallbacks, each box end to end, the report's table); unit core 1,223 passed.
+
+
+- **D641: concurrency tests count overlap, not time.** `test_parallel_parts` and `test_pool` failed
+  under the 64-worker core (a peak of 3 for 4; a parallel run slower than a serial one): they now
+  assert the drafts or builds overlapped (peak >= 2), which holds on a loaded machine.

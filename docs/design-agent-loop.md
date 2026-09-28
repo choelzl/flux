@@ -1,6 +1,6 @@
-# Design: a loop driven by agents
+# A loop driven by agents
 
-Status: proposed (D630). Nothing here is built yet, except where a section says it exists.
+Status: built (D640), on the design of D630. Every delegable box takes `{agent: ...}`.
 
 ## The idea
 
@@ -24,21 +24,18 @@ Every box keeps its rules half. An agent that is missing, times out, or returns 
 invalid falls back to that half, and the fallback is noted on the ledger. A run with no agent
 on PATH gives the same answer it gives today.
 
-## What exists
+## What each box does with an agent
 
-| box | today | agent half |
+| box | the agent | where |
 |---|---|---|
-| generate | model, command, catalog | `{agent: ...}` (D575, D585, D618) |
-| orchestrate | rules, given, llm | `agent`: a *tool-calling model*, not a coding agent (D505) |
-| plan | a plan file | `--agent plan`: a tool-calling model (D577) |
-| validate, critique | rules, llm | none |
-| dse | sweep, montecarlo, anneal, gradient, genetic, pareto, as phases | `llm` (the model proposes points) |
-| extract, knowledge | mined, digest | none |
-| select | the objective vector | none |
-
-`flux_loop.agent` already runs an agent turn. `AgentSpec` holds the presets, the command, the
-resume command and the output format. `converse` handles the brief, questions, resuming a
-session, and the fresh session on context overflow. This design reuses it for every box.
+| generate | writes the artifact (D575) | `flux_loop.agent` |
+| validate | objects to the document, advisory | `PromptProblem.objections` |
+| orchestrate | picks the next part, kind of work or improve step from the menu | `AgentOrchestrator(coding=...)` |
+| plan | writes the pass's plan, checked by `check_plan` | `plan._plan_by_agent` |
+| dse | proposes new points of the space | `ModelSearch(agent=...)`, or `agent:` on an `llm` phase |
+| critique | objects to a division, a part or the decision; never vetoes | `PromptProblem.critique` |
+| extract | writes lessons from the record's rows, each citing its rows | `boxes.AgentLessons` (a knowledge source) |
+| select | chooses among designs the objectives cannot separate | `loop._select` |
 
 ## One contract for every box
 
@@ -90,12 +87,11 @@ calibrate, records. Feedback stays human.
 and chooses along a Pareto front the document leaves open. Its reason goes on the decision
 row, so a reader sees why this design and not its neighbour.
 
-## The orchestrator as a session
+## The orchestrator
 
-Today's agent orchestrator is a tool-calling model with `standings()`, `history(part)`,
-`decisions()` and `knowledge()`. The coding-agent orchestrator gets the same four as files in
-`in/` and one session per pass. Each pick resumes the session with what changed since the last
-pick, so the agent keeps its reasoning across the pass without re-reading everything.
+Today's model orchestrator is a tool-calling model with `standings()`, `history(part)`,
+`decisions()` and `knowledge()`. The coding-agent orchestrator gets what `standings()` and
+`decisions()` return in its brief, and answers each pick in a fresh turn.
 
 A pass stays loop-driven: `run_loop` calls the orchestrator for the next item, as it calls any
 orchestrator. The agent decides; the loop executes, measures and records. That keeps these
@@ -128,36 +124,14 @@ Two boxes do the work:
 
 The gate keeps every rewrite equal to the reference.
 
-## How to build it
+## How it was built, and where it differs from the proposal
 
-1. **Loader.** `flow.<box>: {agent: <spec>}` is accepted for the delegable boxes and refused
-   for the others. `agent_spec` validates the spec. Unit tests.
-2. **The box turn.** Add `flux_loop.agent.box_turn(box, spec, brief, inputs, schema, check)`,
-   which returns the answer or a fallback with its reason. It does steps 1-5 of the contract.
-   Test it with the fake agent script `test_coding_agent` already uses: valid, invalid then
-   repaired, invalid twice, timeout, missing binary.
-3. **Critique and validate.** Both are advisory and small, so they are the first two boxes. An
-   `AgentCritic` sits behind `problem.critique`, and `problem.objections` has an agent half.
-4. **Orchestrate.** A coding-agent `AgentOrchestrator`: the session per pass, picks checked
-   against the menu.
-5. **DSE.** An `agent` phase in `flux_loop.dse`, beside `llm`, with the same point checks.
-6. **Extract and select.** Lessons with row citations; the tie-break with its reason on the
-   decision row.
-7. **Plan.** `--agent plan` accepts a coding agent; `check_plan` is unchanged.
-8. **Report and docs.** The `agent_turn` rows appear in `flux report`. Update the author
-   reference, agent-surface and the website guide. One D-entry per step.
-9. **Live check.** mul8 with `orchestrate`, `critique` and `select` on opencode against the
-   hosted model: the decision must stand on the numbers. Then a small C kernel with
-   `dse: {agent: ...}`.
-
-Steps 1-3 make a vertical slice: one advisory box end to end, with the record and the
-fallback. Each later step is one box.
-
-## Questions for Cedric
-
-- **Session lifetime.** One session per box per pass (proposed), or one per campaign? A campaign
-  session remembers more, but it grows until it overflows and gets harder to reproduce.
-- **`select`.** Should the agent only break ties (proposed), or may it overrule the vector with
-  a reason the report shows?
-- **Agent budget.** Should there be a cap on agent seconds per pass, beside `steps`? Agent turns
-  take minutes; a model turn takes seconds.
+- **A fresh turn each time.** Each box turn has its own directory (`agents/<box>/NNN/`) and a
+  brief that carries what the tools would return (standings, earlier picks); there is no session
+  kept across a pass. Simpler, and a turn can be replayed from its directory.
+- **`select` breaks ties only.** The vector's pick stands unless designs sit within every
+  objective's tie band of it (at the goal when it is), or, with no goal, on the non-dominated
+  front. The agent's reason joins `decided_by`.
+- **No separate agent time budget.** Each turn has the agent spec's `timeout_s` (default 1800 s).
+- **The record.** Every turn is a `decided:agent_turn` event: box, agent, answered or fell back,
+  seconds, why. `flux report` lists them.

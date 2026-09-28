@@ -8,6 +8,8 @@ what was checked. This file is the short version, newest first.
 The first version meant for people outside the project.
 
 ### Added
+- A coding agent in any box: `flow.<box>: {agent: opencode|claude|codex}` for validate, orchestrate,
+  plan, dse, critique, extract and select; checked answers, one retry, the rules half as fallback (D640).
 - SystemC prototypes: `budget.prototype: systemc` proves the algorithm as an `SC_MODULE` against
   libsystemc; ICSC translates it to SystemVerilog when it is on PATH (D635, D636).
 - `flux champsim run|build|check`: a generic ChampSim evaluator that measures its own baseline (D637).

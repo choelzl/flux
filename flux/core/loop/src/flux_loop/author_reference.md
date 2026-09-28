@@ -46,6 +46,8 @@ Say only what is yours; the rest is inferred.
   point, knobs as `{knob}`), `generate: {agent: opencode|claude|codex}`,
   `dse: sweep|montecarlo|anneal|gradient|genetic|pareto|llm` or a list of phases,
   `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
+  and on any box but test and the stages, `{agent: opencode|claude|codex}`: a coding agent answers
+  that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md),
   `analytical: [surrogate]`, `knowledge: [digest]` (the model's library digest),
   `extract: mined` (lessons mined from the record), `records: on`. `flow` is the only place
   a box is said: there is no `roles:`, `generator:`, `critique:` or `decompose:` key.

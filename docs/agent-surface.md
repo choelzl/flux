@@ -88,8 +88,10 @@ With a model that makes tool calls, the loop offers three agentic halves
 
 What none of the halves may decide: admission. The gate stays the exhaustive test's.
 
-[design-agent-loop.md](design-agent-loop.md) proposes the next step: a coding agent in every box
-the gate does not own, with the rules half as the fallback.
+A coding agent can also answer any box but the gate and the stages: `flow: {critique: {agent:
+claude}}`, `{orchestrate: {agent: opencode}}`, `{dse: {agent: codex}}`, and so on. The loop writes
+the question, checks the agent's `out.json`, sends a refused answer back once, then falls back to
+the rules half; every turn is on the record ([design-agent-loop.md](design-agent-loop.md), D640).
 
 ## Isolation and redaction
 

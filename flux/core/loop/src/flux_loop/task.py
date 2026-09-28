@@ -448,8 +448,12 @@ class PromptProblem(Problem):
 
     def objections(self, state: Any) -> list[str]:
         """The model's objections to the document before any step runs (`flow: {validate: llm}`,
-        D556). Advisory, never a gate; empty when not asked for or with no model."""
-        if self.task.flow.get("validate") != "llm" or state.proposer is None:
+        D556), or an agent's (`{validate: {agent: ...}}`, D640). Advisory, never a gate; empty when not
+        asked for, with no model, or when the agent fell back."""
+        from .boxes import agent_of, box_turn
+
+        agent = agent_of(self.task.flow, "validate")
+        if agent is None and (self.task.flow.get("validate") != "llm" or state.proposer is None):
             return []
         import json as _json_mod
 
@@ -459,12 +463,15 @@ class PromptProblem(Problem):
         prompt = ("Read this problem document before the run spends anything and OBJECT to what makes it "
                   "unanswerable or wasteful as written: an objective on a metric no stage measures, a goal no "
                   "stage could reach, a part with no gate, a cutoff that contradicts an objective, a budget that "
-                  "cannot finish, a statement the parts do not add up to. Say nothing about style. "
-                  "Reply as JSON: {\"ok\": true|false, \"objections\": [\"one line each\"]}.\n\nTHE DOCUMENT:\n"
+                  "cannot finish, a statement the parts do not add up to. Say nothing about style.\n\nTHE DOCUMENT:\n"
                   + doc + "\n\nTHE FLOW IN FORCE:\n" + "\n".join(describe_flow(self.task, self)))
         schema = {"type": "object", "properties": {"ok": {"type": "boolean"},
                                                    "objections": {"type": "array", "items": {"type": "string"}}},
                   "required": ["objections"]}
+        if agent is not None:
+            got = box_turn("validate", agent, prompt, schema, state)
+            return [str(o)[:300] for o in ((got or {}).get("objections") or []) if str(o).strip()]
+        prompt += '\n\nReply as JSON: {"ok": true|false, "objections": ["one line each"]}.'
         try:
             got = _json(_ask(state, prompt, schema).text)
         except Exception as exc:  # noqa: BLE001 -- advisory: a failed reading objects to nothing
@@ -630,9 +637,12 @@ class PromptProblem(Problem):
         """The model as critic (D433) of a division, a gate-passed candidate, or the decision.
 
         The verdict is remembered, and an accepted division is remembered as the division.
-        Without `"critique": "propose"` or a model, everything passes."""
+        Without `flow: {critique: llm}` and a model, or `{critique: {agent: ...}}`, everything passes."""
+        from .boxes import agent_of, box_turn
+
         t = self.task
-        if not t.critique or state.proposer is None:
+        agent = agent_of(t.flow, "critique")
+        if not t.critique or (state.proposer is None and agent is None):
             if kind == "decomposition" and t.decompose and not getattr(self, "_division_kept", False):
                 self._division_kept = True
                 self._remember_division(state)
@@ -662,26 +672,29 @@ class PromptProblem(Problem):
                     "Object only if the objectives or the statement point elsewhere.")
             label = pick.name
         gate = " ".join(t.gate.test or t.gate.build or ())
-        prompt = "\n\n".join(x for x in (
+        question = "\n\n".join(x for x in (
             f"TASK {t.id}: {t.statement}",
             f"CONTRACT:\n{t.contract}" if t.contract else "",
             f"HOW IT IS JUDGED: `{gate}`; zero failures admits." if gate else "",
             "You are the critic. Your job is to find what is WRONG, precisely and briefly; a "
             "verdict without a concrete issue is worthless, and so is an issue the gate already "
             "covers.",
-            what,
-            'Reply with ONLY JSON: {"ok": true|false, "issues": ["<one concrete issue each>"], '
-            '"why": "<one line>"}') if x)
+            what) if x)
+        prompt = question + ('\n\nReply with ONLY JSON: {"ok": true|false, "issues": ["<one concrete issue each>"], '
+                             '"why": "<one line>"}')
         schema = {"type": "object",
                   "properties": {"ok": {"type": "boolean"},
                                  "issues": {"type": "array", "items": {"type": "string"}},
                                  "why": {"type": "string"}},
                   "required": ["ok"]}
-        try:
-            doc = _json(_ask(state, prompt, schema).text)
-        except Exception as exc:  # noqa: BLE001 -- a critic that cannot speak does not veto
-            state.say(f"  critic did not answer ({exc!s:.80})")
-            doc = None
+        if agent is not None:
+            doc = box_turn("critique", agent, question, schema, state)     # None: fell back, no objection
+        else:
+            try:
+                doc = _json(_ask(state, prompt, schema).text)
+            except Exception as exc:  # noqa: BLE001 -- a critic that cannot speak does not veto
+                state.say(f"  critic did not answer ({exc!s:.80})")
+                doc = None
         issues = [str(i) for i in (doc.get("issues") or [])] if isinstance(doc, dict) else []
         ok = bool(doc.get("ok", True)) if isinstance(doc, dict) else True
         if ok or not issues:

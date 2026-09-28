@@ -371,7 +371,7 @@ class TaskSpec:
             subtasks=tuple(subtasks), split=split,
             max_subtasks=int(doc.get("max_subtasks") or 4),
             brief=doc.get("brief") in ("propose", True),
-            critique=flow.get("critique") == "llm",
+            critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge), joiner=str(doc.get("joiner") or "\n\n"),
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
@@ -913,8 +913,26 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     flow: dict[str, Any] = {}
     doc = dict(doc)
     roles: dict[str, Any] = {}
+    from .boxes import DELEGABLE, NEVER
+
+    for box, value in raw.items():
+        if not (isinstance(value, dict) and "agent" in value) or box == "generate":
+            continue
+        if box in NEVER:
+            raise TaskError(f"flow.{box} is never delegated to an agent: it establishes facts (D460)")
+        if box not in DELEGABLE:
+            raise TaskError(f"flow.{box} is not a box an agent answers; those are {', '.join(sorted(DELEGABLE))}")
+        if set(value) != {"agent"}:
+            raise TaskError(f"flow.{box} is {{agent: <preset or spec>}}, not {sorted(value)}")
+        from .agent import agent_spec
+
+        try:
+            agent_spec(value["agent"])
+        except ValueError as exc:
+            raise TaskError(f"flow.{box}.agent: {exc}") from exc
+        flow[box] = dict(value)
     for box, words in _FLOW_WORDS.items():
-        if box in raw:
+        if box in raw and box not in flow:
             value = raw[box]
             if isinstance(value, bool) and box == "calibrate":
                 value = "on" if value else "off"
@@ -922,7 +940,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                 raise TaskError(f"flow.{box} is one of {', '.join(words)}, not {value!r}"
                                 + (" (the gate is never delegated, D460)" if box == "test" else ""))
             flow[box] = value
-    if flow.get("plan") == "llm":
+    if flow.get("plan") == "llm" or isinstance(flow.get("plan"), dict):
         # the model writes the loop plan (parts, order, method, budgets) before a step is
         # spent (D577); `budget.agent` carries the half
         budget = dict(doc.get("budget") or {})
@@ -932,10 +950,14 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         budget["agent"] = halves
         doc["budget"] = budget
     if "orchestrate" in raw:
-        roles["orchestrator"] = raw["orchestrate"]
-        flow["orchestrate"] = raw["orchestrate"]
+        value = raw["orchestrate"]
+        # a coding agent picks through the agent orchestrator (D640)
+        roles["orchestrator"] = {"agent": {"coding": value["agent"]}} if isinstance(value, dict) and "agent" in value else value
+        flow["orchestrate"] = value
     if "dse" in raw:
         value = raw["dse"]
+        if isinstance(value, dict) and set(value) == {"agent"}:
+            value = {"llm": {"agent": value["agent"]}}      # a coding agent proposes the points (D640)
         if isinstance(value, list):                              # D583: phases, in order
             from .dse import validate_phase
 
@@ -1003,7 +1025,10 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     # the model-side knowledge: `digest` from the library, `mined` from the record (extract)
     wanted = [s for s in ("mined", "digest") if (s == "mined" and flow.get("extract") == "mined")
               or (s == "digest" and "digest" in (flow.get("knowledge") or ()))]
-    if wanted:
+    lessons = flow["extract"]["agent"] if isinstance(flow.get("extract"), dict) else None
+    if lessons is not None:                                    # the agent's lessons, beside the rest (D640)
+        roles["knowledge"] = {"sources": {"names": [*wanted, "agent"], "agent": lessons}}
+    elif wanted:
         roles["knowledge"] = wanted[0] if len(wanted) == 1 else {"sources": {"names": wanted}}
     doc["roles"] = roles
     return flow, doc
@@ -1053,6 +1078,11 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
     return f"{n} point(s): " + " x ".join(f"{k}[{len(v)}]" for k, v in space.items())
 
 
+def _agent_name(value: dict[str, Any]) -> str:
+    spec = value.get("agent")
+    return spec if isinstance(spec, str) else str((spec or {}).get("preset") or (spec or {}).get("name") or "command")
+
+
 def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     """The drawing, one line per box, with the half in force for this document: from `flow:`,
     the other keys, the world (`problem`, when given) and the defaults (D542)."""
@@ -1078,25 +1108,32 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     simulation = list(flow.get("simulation") or [s for s in stage_names if s not in analytical])
     knowledge = list(flow.get("knowledge") or (["sheet"] if task.knowledge else []))
     lines = [
-        f"validate: {flow.get('validate', 'rules')}" + (" (the loader's checks, then the model reads the document and objects, D556)"
-                                                       if flow.get("validate") == "llm" else " (the loader's checks)"),
+        ("validate: " + (f"agent {_agent_name(flow['validate'])} (the loader's checks, then the agent reads the document and objects, D640)"
+                         if isinstance(flow.get("validate"), dict) else
+                         "llm (the loader's checks, then the model reads the document and objects, D556)" if flow.get("validate") == "llm"
+                         else "rules (the loader's checks)")),
         "orchestrate: " + (f"{orch_name} (a DSE policy)" if orch_name in policies else
                            f"{orch_name}" if orch_name else "the problem default (a model plans the part; rules pick the work)")
         + " -- or: " + ", ".join(n for n in ("rules", "given", "llm", "agent") if n != orch_name),
-        "plan: " + ("llm (the pass is planned first: parts, order, the method per part, budgets; the plan on the record, D577)"
+        "plan: " + (f"agent {_agent_name(flow['plan'])} (the pass is planned first, checked by check_plan, D640)"
+                    if isinstance(flow.get("plan"), dict) else
+                    "llm (the pass is planned first: parts, order, the method per part, budgets; the plan on the record, D577)"
                     if "plan" in (task.budget.get("agent") or ()) else "none (the orchestrator picks step by step)"),
         "dse: " + (f"{_dse_name(flow.get('dse'))} over {_space_size(task, problem)}" if flow.get("dse") not in (None, "none")
                    else "none (the world's own search, if it has one)")
         + f" -- registered: {', '.join(policies)}",
         f"generate: {generate}",
         "test: gate (never delegated)" + (" -- the world's judge" if task.world else " -- the document's commands"),
-        "critique: " + ("llm (a model adversary on the division, each admitted part and the decision)" if task.critique else "none"),
+        "critique: " + (f"agent {_agent_name(flow['critique'])} (on the division, each admitted part and the decision, D640)"
+                        if isinstance(flow.get("critique"), dict) else
+                        "llm (a model adversary on the division, each admitted part and the decision)" if task.critique else "none"),
         "analytical: " + (", ".join(analytical) if analytical else "none")
         + (f" -- surrogate ({_surrogate_kind(roles)}) predicts the costly stage from the record and orders the finalists (D560)"
            if _surrogate_kind(roles) else ""),
         "simulation: " + (", ".join(simulation) if simulation else "none declared"),
         "calibrate: " + ("off" if task.budget.get("calibrate") is False else "on (between every pair of stages, on the record)"),
-        "select: objectives (" + (", ".join(f"{o.direction} {o.metric}" for o in task.objectives) or "none") + ")",
+        "select: objectives (" + (", ".join(f"{o.direction} {o.metric}" for o in task.objectives) or "none") + ")"
+        + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
         f"feedback: {flow.get('feedback', 'human')}" + ("" if flow.get("feedback") == "none" else " (the operator's notes, when a terminal is attached)"),
         "knowledge: " + (", ".join(knowledge) if knowledge else "none declared (the world's mentor, if any)"),
         f"extract: {flow.get('extract', 'none')}" + (" (facts mined from the record reach the prompts)" if flow.get("extract") == "mined"

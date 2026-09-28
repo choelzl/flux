@@ -197,13 +197,14 @@ class AgentOrchestrator:
 
     name: str = "agent"
     fallback: Any = field(default_factory=lambda: Rules())
+    coding: Any = None           # a coding agent's spec: each pick is its box turn, not a model's (D640)
 
     def divide(self, problem: Any, state: Any, critique: str | None = None) -> Any | None:
         return None                      # the division is the plan's (D505 planning) or the problem's
 
     def plan_next(self, problem: Any, menu: list[str], state: Any,
                   human: str | None) -> tuple[str, str] | None:
-        if state.proposer is None or len(menu) <= 1:
+        if (self.coding is None and state.proposer is None) or len(menu) <= 1:
             return None
         lines = [f"Parts still to make: {', '.join(menu)}.",
                  f"Made so far: {', '.join(sorted(state.admitted)) or 'none'}.",
@@ -216,7 +217,7 @@ class AgentOrchestrator:
 
     def next_work(self, problem: Any, state: Any, waiting: list[str]) -> str | None:
         kinds = (["improve"] if state.improve else []) + (["part"] if waiting else []) + ["batch"]
-        if state.proposer is None or len(kinds) <= 1:
+        if (self.coding is None and state.proposer is None) or len(kinds) <= 1:
             return None
         lines = ["What should the next step do?"]
         if state.improve:
@@ -229,7 +230,7 @@ class AgentOrchestrator:
         return got["pick"] if got else None
 
     def choose_improve(self, problem: Any, item: Any, options: list, state: Any) -> Any | None:
-        if state.proposer is None or len(options) <= 1:
+        if (self.coding is None and state.proposer is None) or len(options) <= 1:
             return None
         names = [o.name for o in options]
         lines = [f"The design {item.candidate.name}" + (f" (part {item.subgoal})" if item.subgoal else "")
@@ -272,6 +273,8 @@ class AgentOrchestrator:
         props: dict = {"pick": {"type": "string", "enum": list(choices)}, "why": {"type": "string"}}
         props.update(extra or {})
         schema = {"type": "object", "properties": props, "required": ["pick", "why"]}
+        if self.coding is not None:
+            return self._decide_by_agent(problem, state, what, head, choices, schema)
         prompt = "\n".join(l for l in head if l)
         with _phase(f"orchestrate: {what}", why=", ".join(choices)) as out:
             try:
@@ -288,6 +291,26 @@ class AgentOrchestrator:
                 return None
             out["pick"] = str(doc["pick"])
             out["why"] = str(doc.get("why") or "")
+        why = str(doc.get("why") or "").strip()
+        state.say(f"  orchestrate [{what}]: {doc['pick']} -- {why[:200]}")
+        _record_decision(state, what, str(doc["pick"]), why, choices)
+        return doc
+
+
+    def _decide_by_agent(self, problem: Any, state: Any, what: str, head: list[str], choices: list[str],
+                         schema: dict) -> dict | None:
+        """The pick as a coding agent's box turn (D640): the brief carries what the tools would
+        return, since a turn is fresh; an off-menu answer is refused and retried once."""
+        from .boxes import box_turn
+        from .tools import orchestrator_tools
+
+        tools = {t.name: t for t in orchestrator_tools(problem, state)}
+        read = [f"STANDINGS:\n{tools['standings'].run({})}", f"PICKS SO FAR:\n{tools['decisions'].run({})}"]
+        lines = [ln for ln in head if ln and not ln.startswith(("You have tools:", "Reply with ONLY JSON"))]
+        doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state,
+                       check=lambda d: None if d.get("pick") in choices else f"pick must be one of {', '.join(choices)}")
+        if doc is None:
+            return None
         why = str(doc.get("why") or "").strip()
         state.say(f"  orchestrate [{what}]: {doc['pick']} -- {why[:200]}")
         _record_decision(state, what, str(doc["pick"]), why, choices)
@@ -392,7 +415,7 @@ def rig(**specs: Any) -> Roles:
 register("orchestrator", "rules", lambda _c: Rules())
 register("orchestrator", "given", lambda c: Given(c.get("parts") or c.get("value") or ()))
 register("orchestrator", "llm", lambda _c: ModelOrchestrator())
-register("orchestrator", "agent", lambda _c: AgentOrchestrator())
+register("orchestrator", "agent", lambda c: AgentOrchestrator(coding=(c or {}).get("coding")))
 register("knowledge", "mined", lambda c: _mined(c))
 register("knowledge", "digest", lambda c: _digest_mentor(c))
 register("knowledge", "sources", lambda c: _sources_mentor(c))
@@ -444,6 +467,10 @@ def _sources_mentor(config: dict[str, Any]):
             made.append(Mined())
         elif n == "digest":
             made.append(Digest())
+        elif n == "agent" and config.get("agent") is not None:
+            from .boxes import AgentLessons
+
+            made.append(AgentLessons(config["agent"]))       # flow.extract's agent half (D640)
         else:
             raise ValueError(f"knowledge source {n!r} is not one a role can add (mined, digest)")
     return Mentor(made)

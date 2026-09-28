@@ -57,6 +57,7 @@ class Report:
     passes: list[tuple[float, dict[str, Any]]]     # (when, the conclusion)
     ledger: list[tuple[float, str, str, str]]      # (when, kind, part, digest)
     notes: list[str] = field(default_factory=list)
+    agent_turns: list[dict[str, Any]] = field(default_factory=list)   # a box answered by an agent (D640)
 
     @property
     def stage(self) -> str | None:
@@ -156,7 +157,8 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
             d = e.get("detail") or {}
             ledger.append((_when(e.get("created_at") or ""), kind.value, str(d.get("op") or ""), str(d.get("digest") or "")))
         ledger.sort(key=lambda x: x[0])
-        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes)
+        turns = [dict(e.get("detail") or {}) for e in events if e.get("kind") == "decided:agent_turn"]
+        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns)
     finally:
         store.close()
 
@@ -387,6 +389,12 @@ def render(rep: Report) -> str:
     for n in rep.notes:
         head.append(f"<p class=note>{html.escape(n)}</p>")
     sections = ["<h2>Frontier evolution</h2>", _svg_fronts(rep)]
+    if rep.agent_turns:
+        cells = "".join(f"<tr><td>{html.escape(str(t.get('box')))}</td><td>{html.escape(str(t.get('agent')))}</td>"
+                        f"<td>{'answered' if t.get('ok') else 'fell back'}</td><td>{float(t.get('seconds') or 0):g}s</td>"
+                        f"<td>{html.escape(str(t.get('why') or ''))[:200]}</td></tr>" for t in rep.agent_turns)
+        sections.append("<h2>Agent turns</h2><table><tr><th>box</th><th>agent</th><th>outcome</th><th>time</th>"
+                        f"<th>why it fell back</th></tr>{cells}</table>")
     for k in range(2, len(objs)):                       # the other pairs beside the first
         sections.append(f"<h3>{html.escape(objs[0].metric)} against {html.escape(objs[k].metric)}</h3>")
         sections.append(_svg_fronts(rep, k))

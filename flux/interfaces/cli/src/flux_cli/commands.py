@@ -755,6 +755,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     rep = write(args.db, out, campaign=args.campaign, objectives=objectives)
     print(f"campaign {rep.campaign[:12]}: {len(rep.rows)} measured rows, {len(rep.passes)} pass(es), "
           f"objective {rep.objectives.describe() or '(none)'}")
+    if rep.agent_turns:
+        fell = sum(1 for t in rep.agent_turns if not t.get("ok"))
+        print(f"  agent turns: {len(rep.agent_turns)} (" + ", ".join(sorted({str(t.get('box')) for t in rep.agent_turns}))
+              + f"), {fell} fell back to the rules half")
     for n in rep.notes:
         print(f"  {n}")
     print(f"wrote {out}")

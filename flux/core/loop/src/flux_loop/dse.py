@@ -674,11 +674,13 @@ class ModelSearch(Policy):
     batch_size: int = 4
     rounds: int = 8
     shown: int = 40
+    agent: Any = None            # a coding agent proposes the points instead of the model (D640)
 
     def walk(self, problem, state, space, seen):
+        from .boxes import box_turn
         from .model import _ask, _json
 
-        if state.proposer is None:
+        if state.proposer is None and self.agent is None:
             state.say("  dse: llm asks a model for the next points and this run has none")
             return
         obj = self.objective(problem, state)
@@ -717,16 +719,25 @@ class ModelSearch(Policy):
                 (f"MEASURED SO FAR ({len(measured)} point(s), best first):\n" + "\n".join(rows)) if rows else "MEASURED SO FAR: nothing",
                 f"{size(space)} point(s) in this space.",
                 f"Propose the {int(self.batch_size)} NEW points most worth measuring next -- near the best when the trend is clear, "
-                "away from it when the measured points do not tell. Every point names EVERY knob with one of its choices, exactly as written. "
-                "Reply as JSON: {\"points\": [{knob: choice, ...}, ...], \"why\": \"one line\"}.",
+                "away from it when the measured points do not tell. Every point names EVERY knob with one of its choices, exactly as written.",
             ]
             if complaint:
                 lines.append("LAST ROUND: " + complaint)
-            try:
-                doc = _json(_ask(state, "\n".join(lines), schema).text)
-            except Exception as exc:  # noqa: BLE001 -- the model's turn failed; the walk ends
-                state.say(f"  dse: the model's round did not run ({exc!s:.100})")
-                return
+            if self.agent is not None:
+                def usable(d: dict) -> str | None:
+                    ok = [q for p in d.get("points") or [] if (q := _coerce(space, p)) is not None
+                          and _key({**base, **q} if base else q) not in seen]
+                    return None if ok else "no point is new and inside the space (every knob, one of its choices)"
+                doc = box_turn("dse", self.agent, "\n".join(lines), schema, state, check=usable)
+                if doc is None:
+                    return                          # the agent fell back: the phase ends, the next one runs
+            else:
+                lines.append("Reply as JSON: {\"points\": [{knob: choice, ...}, ...], \"why\": \"one line\"}.")
+                try:
+                    doc = _json(_ask(state, "\n".join(lines), schema).text)
+                except Exception as exc:  # noqa: BLE001 -- the model's turn failed; the walk ends
+                    state.say(f"  dse: the model's round did not run ({exc!s:.100})")
+                    return
             raw = (doc or {}).get("points") if isinstance(doc, dict) else None
             good, bad = [], []
             for p in raw or []:
@@ -740,7 +751,7 @@ class ModelSearch(Policy):
                 else:
                     good.append(q)
             why = str((doc or {}).get("why") or "")[:160] if isinstance(doc, dict) else ""
-            state.say(f"  dse: the model proposes {len(good)} point(s)" + (f" -- {why}" if why else "")
+            state.say(f"  dse: the {'agent' if self.agent is not None else 'model'} proposes {len(good)} point(s)" + (f" -- {why}" if why else "")
                       + (f"; {len(bad)} dropped ({bad[0]})" if bad else ""))
             if not good:
                 if complaint:

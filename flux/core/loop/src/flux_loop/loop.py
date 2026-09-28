@@ -64,7 +64,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         out["request"] = _describe_request(request)
     if wrong:
         raise RuntimeError("this problem cannot be answered as posed: " + "; ".join(wrong))
-    if getattr(getattr(problem, "task", None), "flow", {}).get("validate") == "llm":
+    if getattr(getattr(problem, "task", None), "flow", {}).get("validate") not in (None, "rules"):
         # D556: the box's model half -- advisory, said and kept, never a gate
         with _phase("validate: the model reads the document", why="objections before a step is spent") as out:
             objections = list(problem.objections(state) or [])
@@ -900,6 +900,46 @@ def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> N
             state.say(f"  the problem could not use the calibration ({exc!s:.80})")
 
 
+def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_by: str) -> tuple[Any, str]:
+    """`flow: {select: {agent: ...}}` (D640): the agent chooses among the designs the objective
+    vector cannot separate from its pick -- within every objective's tie band (and at the goal
+    when the pick is), or, with no goal, the non-dominated front. The vector's pick stands when
+    there is no choice or the agent falls back."""
+    from .boxes import agent_of, box_turn
+
+    agent = agent_of(getattr(getattr(problem, "task", None), "flow", None) or {}, "select")
+    objs = list(problem.objectives() or [])
+    if agent is None or not objs:
+        return pick, decided_by
+    if objs[0].goal is None and objs[0].keep is None and len(objs) >= 2:
+        costs = {id(p): [o.signed(p.metrics) for o in objs] for p in pool}
+        options = [p for p in pool if not any(all(a <= b for a, b in zip(costs[id(q)], costs[id(p)]))
+                                              and costs[id(q)] != costs[id(p)] for q in pool)]
+    else:
+        at_goal = objs[0].goal is None or objs[0].meets(pick.metrics)
+        options = [p for p in pool if all(o.compare(p.metrics, pick.metrics) == 0 for o in objs)
+                   and (not at_goal or objs[0].goal is None or objs[0].meets(p.metrics))]
+    names = list(dict.fromkeys(p.name for p in [pick, *options]))
+    if len(names) <= 1:
+        return pick, decided_by
+    rows = "\n".join(f"  - {p.name}: " + ", ".join(f"{k}={v:g}" for k, v in p.metrics.items())
+                     for p in pool if p.name in names)
+    question = (f"TASK {problem.name}. The objectives ({', '.join(o.describe() for o in objs)}) chose {pick.name} "
+                f"({decided_by}), but they cannot separate it from the others below. Choose the one to decide on, "
+                f"and say in one or two lines what the numbers do not: robustness, margin, what the next step would build on.\n"
+                f"THE CHOICES:\n{rows}")
+    schema = {"type": "object", "properties": {"pick": {"type": "string", "enum": names}, "why": {"type": "string"}},
+              "required": ["pick", "why"]}
+    doc = box_turn("select", agent, question, schema, state,
+                   check=lambda d: None if d.get("pick") in names else f"pick must be one of {', '.join(names)}")
+    if doc is None:
+        return pick, decided_by
+    chosen = next(p for p in pool if p.name == doc["pick"])
+    why = str(doc.get("why") or "").strip()[:300]
+    state.say(f"  select: the agent chose {chosen.name} among {len(names)} the objectives cannot separate -- {why}")
+    return chosen, f"{decided_by}; the agent chose {chosen.name} among {len(names)} ties: {why}"
+
+
 def _note_once(state: LoopState, line: str) -> None:
     """A limit the report states once per pass, however many times the chain was climbed
     (D463)."""
@@ -930,6 +970,8 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         front = list(problem.frontier(pool, state))
     with _phase("decide", why=f"{len(pool)} in the pool"):
         pick, decided_by = problem.decide(pool, state)
+        if pick is not None:
+            pick, decided_by = _select(problem, state, pool, pick, decided_by)
     if pick is not None:
         state.lessons.append(f"[{pick.stage}] decision {pick.name}: "
                              + ", ".join(f"{k}={v:g}" for k, v in pick.metrics.items())
