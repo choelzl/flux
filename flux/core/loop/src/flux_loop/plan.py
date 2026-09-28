@@ -461,7 +461,7 @@ def _plan_by_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any]
         return "; ".join(errors) if errors else None
 
     schema = {"type": "object", "properties": {"why": {"type": "string"}}, "required": ["why"]}
-    if box_turn("plan", coding, question, schema, state, check=valid) is None:
+    if box_turn("plan", coding, question, schema, state, check=valid, home=str(getattr(getattr(problem, "task", None), "home", "") or "")) is None:
         out["agent"] = "the agent's plan was refused; the defaults stand"
         return None
     out["agent"] = f"planned by the agent: {str(kept['plan'].get('why') or '')[:300]}"

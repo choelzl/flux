@@ -234,3 +234,10 @@ def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_p
                          screen_only=True, agent=("plan",)), proposer=model, log=said.append)
     assert any("plan: agent" in m and "answered" in m for m in said), said
     assert any("a lookup table first" in p for p in model.prompts), "the method is the part's brief"
+
+
+def test_the_brief_names_the_problem_s_files_and_nothing_else(tmp_path):
+    st = _state(tmp_path)
+    box_turn("critique", _agent(tmp_path, "good"), "Q?", SCHEMA, st, home="/the/problem")
+    brief = (tmp_path / "work" / "agents" / "critique" / "001" / "BRIEF.md").read_text()
+    assert "THE PROBLEM'S FILES are in `/the/problem`" in brief and "nothing outside them" in brief

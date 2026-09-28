@@ -55,7 +55,7 @@ def _read(out: Path) -> Any:
 
 
 def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: Any,
-             check: Callable[[dict], str | None] | None = None) -> dict[str, Any] | None:
+             check: Callable[[dict], str | None] | None = None, home: str = "") -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
     on the record)."""
     from .agent import DECIDE, agent_spec, converse, run_turn
@@ -69,7 +69,11 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
     workdir.mkdir()
     out = workdir / "out.json"
     brief = (f"{question.strip()}\n\nHOW TO ANSWER. You are a coding agent answering the `{box}` box of a "
-             f"design-space exploration loop. Read anything in this directory or the repository you need. Do not run "
+             f"design-space exploration loop. "
+             + (f"THE PROBLEM'S FILES are in `{home}` (its document, scripts and golden model): read those and "
+                f"nothing outside them; what is being judged is quoted above. " if home else
+                "Everything you need is quoted above. ")
+             + f"Do not run "
              f"the gate or the measurement stages: the loop runs them. Write your answer to `{out}` as ONE JSON "
              f"object matching this schema, then reply with one line saying so:\n"
              f"{json.dumps(schema, indent=1)}\n")

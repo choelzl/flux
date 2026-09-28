@@ -463,13 +463,17 @@ class PromptProblem(Problem):
         prompt = ("Read this problem document before the run spends anything and OBJECT to what makes it "
                   "unanswerable or wasteful as written: an objective on a metric no stage measures, a goal no "
                   "stage could reach, a part with no gate, a cutoff that contradicts an objective, a budget that "
-                  "cannot finish, a statement the parts do not add up to. Say nothing about style.\n\nTHE DOCUMENT:\n"
+                  "cannot finish, a statement the parts do not add up to. Say nothing about style. (`stage: deepest` on "
+                  "an objective means the last of `stages`; a goal is judged there. `{artifact}`, `{home}`, `{python}` "
+                  "and each knob's `{name}` are filled by the loop. No `parts` means one design for the whole "
+                  "problem. `finalists: 0` stops at the first stage. A run's `steps` bound one pass; runs go "
+                  "on pass after pass until stopped.)\n\nTHE DOCUMENT:\n"
                   + doc + "\n\nTHE FLOW IN FORCE:\n" + "\n".join(describe_flow(self.task, self)))
         schema = {"type": "object", "properties": {"ok": {"type": "boolean"},
                                                    "objections": {"type": "array", "items": {"type": "string"}}},
                   "required": ["objections"]}
         if agent is not None:
-            got = box_turn("validate", agent, prompt, schema, state)
+            got = box_turn("validate", agent, prompt, schema, state, home=self.task.home)
             return [str(o)[:300] for o in ((got or {}).get("objections") or []) if str(o).strip()]
         prompt += '\n\nReply as JSON: {"ok": true|false, "objections": ["one line each"]}.'
         try:
@@ -688,7 +692,7 @@ class PromptProblem(Problem):
                                  "why": {"type": "string"}},
                   "required": ["ok"]}
         if agent is not None:
-            doc = box_turn("critique", agent, question, schema, state)     # None: fell back, no objection
+            doc = box_turn("critique", agent, question, schema, state, home=t.home)   # None: fell back, no objection
         else:
             try:
                 doc = _json(_ask(state, prompt, schema).text)

@@ -267,3 +267,11 @@ the topics above.
 - **D641: concurrency tests count overlap, not time.** `test_parallel_parts` and `test_pool` failed
   under the 64-worker core (a peak of 3 for 4; a parallel run slower than a serial one): they now
   assert the drafts or builds overlapped (peak >= 2), which holds on a loaded machine.
+
+- **D642: an agent's brief names the problem's files.** Live on adder16 (OpenCode, hosted qwen3.6):
+  the critic read another problem's `gen.py` and objected about a popcount (225 s); with
+  `THE PROBLEM'S FILES are in <home> ... nothing outside them` it answered in 36 s with no false
+  objection. The validate question now states the loop's conventions (`{home}` is filled,
+  `deepest` is the last stage, no parts is one design, `finalists: 0` stops at the first stage).
+  The dse agent covered 11 of 12 points in 3 rounds and reached the sweep's decision,
+  carry_select-4 at 3,287 MHz.
