@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -180,6 +181,12 @@ def test_every_catalog_command_loads_as_a_document(tmp_path):
 
     for t in TOOLS:
         if t["id"].startswith("custom"):
+            continue
+        if "stage" in t:                  # an evaluator stage (D663): its keys, and the document's
+            defaults = {k: str(p["default"]) for k, p in t["params"].items()}
+            top = {k: re.sub(r"\{(\w+)\}", lambda m: defaults.get(m.group(1), m.group(0)), v) for k, v in t["document"].items()}
+            TaskSpec.from_dict({"id": "t", "statement": "x", "gate": "true", **top,
+                                "stages": [{"name": "s", **t["stage"], "metrics": list(t["metrics"])}]})
             continue
         run = fill(t["id"])
         if t["role"] == "check":

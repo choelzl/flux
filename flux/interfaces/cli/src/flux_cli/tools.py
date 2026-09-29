@@ -20,7 +20,11 @@ def cmd_tools(args: argparse.Namespace) -> int:
         print(head)
         for t in (t for t in tools if t["role"] == role):
             print(f"  {t['id']}: {t['title']} -- {t['what']}")
-            print(f"    run: {t['run']}")
+            if "run" in t:
+                print(f"    run: {t['run']}")
+            else:                     # an evaluator stage (D663): its keys, and the document's
+                print("    stage: " + ", ".join(f"{k}: {v}" for k, v in t["stage"].items())
+                      + "; document: " + ", ".join(f"{k}: {v}" for k, v in t.get("document", {}).items()))
             for name, p in t["params"].items():
                 print(f"      {{{name}}}: {p['label']}" + (f", default {p['default']}" if p["default"] != "" else "")
                       + (f" {p['unit']}" if p["unit"] else ""))

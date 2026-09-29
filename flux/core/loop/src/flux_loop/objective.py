@@ -29,7 +29,11 @@ _DIRECTIONS = ("maximize", "minimize")
 
 #: the unit a known metric is said in (D628); another metric is said by its name
 UNITS = {"fmax_mhz": "MHz", "area_um2": "um2", "area_mm2": "mm2", "power_w": "W", "power_mw": "mW",
-         "time_ms": "ms", "latency_cycles": "cycles", "energy_pj": "pJ", "cell_count": "cells"}
+         "time_ms": "ms", "latency_cycles": "cycles", "energy_pj": "pJ", "cell_count": "cells",
+         # `flux prog` (D661)
+         "time_ms_stddev": "ms", "time_ms_min": "ms", "instructions": "instr", "d1_misses": "misses",
+         "ll_misses": "misses", "branch_mispredicts": "mispredicts",
+         "text_bytes": "B", "data_bytes": "B", "bss_bytes": "B"}
 
 
 @dataclass(frozen=True)

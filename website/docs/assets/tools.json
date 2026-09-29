@@ -137,6 +137,34 @@
   ]
  },
  {
+  "id": "rtl-stat",
+  "role": "stage",
+  "title": "Area and cells, Yosys alone (ASAP7)",
+  "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
+  "run": "flux rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period (the mapper's target)",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "area_um2": "um2",
+   "cell_count": "cells"
+  },
+  "needs": [
+   "yosys"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ]
+ },
+ {
   "id": "rtl-synth",
   "role": "stage",
   "title": "Synthesise and time (ASAP7)",
@@ -321,6 +349,181 @@
    "area_mm2": "mm2"
   },
   "needs": [],
+  "languages": [
+   "yaml"
+  ],
+  "kinds": [
+   "zigzag"
+  ]
+ },
+ {
+  "id": "prog-size",
+  "role": "stage",
+  "title": "Size of the built program",
+  "what": "Builds the program and reads its sections with `size`: code (text), initialised data, zeroed data (bss).",
+  "run": "flux prog size --build \"{build}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "text_bytes": "B",
+   "data_bytes": "B",
+   "bss_bytes": "B"
+  },
+  "needs": [
+   "size"
+  ],
+  "languages": [
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program"
+  ]
+ },
+ {
+  "id": "prog-time",
+  "role": "stage",
+  "title": "Time the program (hyperfine)",
+  "what": "Builds the program and times its runs after a warm-up (hyperfine, else a Python loop): the mean, the spread and the fastest. {out} is the built program; for Python leave the build empty and run `{python} {artifact}`.",
+  "run": "flux prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   },
+   "runs": {
+    "label": "Runs",
+    "default": 10,
+    "unit": "runs"
+   },
+   "warmup": {
+    "label": "Warm-up runs",
+    "default": 1,
+    "unit": "runs"
+   }
+  },
+  "metrics": {
+   "time_ms": "ms",
+   "time_ms_stddev": "ms",
+   "time_ms_min": "ms"
+  },
+  "needs": [],
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ]
+ },
+ {
+  "id": "prog-count",
+  "role": "stage",
+  "title": "Count instructions and cache misses (Valgrind)",
+  "what": "Builds the program and runs it under cachegrind: instructions, cache misses and branch mispredicts, the same every run. {out} is the built program; for Python leave the build empty and run `{python} {artifact}`.",
+  "run": "flux prog count --build \"{build}\" --run \"{run}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "instructions": "instr",
+   "d1_misses": "misses",
+   "ll_misses": "misses",
+   "branch_mispredicts": "mispredicts"
+  },
+  "needs": [
+   "valgrind"
+  ],
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ]
+ },
+ {
+  "id": "zigzag-eval",
+  "role": "stage",
+  "title": "Cycles and energy (ZigZag)",
+  "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. No area: add a stage of yours for it (as applications/npu_gemm).",
+  "stage": {
+   "evaluator": "zigzag"
+  },
+  "document": {
+   "workload": "{workload}"
+  },
+  "params": {
+   "workload": {
+    "label": "Workload (Workload IR)",
+    "default": "{home}/workload.yaml",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "latency_cycles": "cycles",
+   "energy_pj": "pJ"
+  },
+  "needs": [],
+  "languages": [
+   "yaml"
+  ],
+  "kinds": [
+   "zigzag"
+  ]
+ },
+ {
+  "id": "timeloop-eval",
+  "role": "stage",
+  "title": "Cycles, energy and area (Timeloop)",
+  "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. Run in the .#timeloop shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper on PATH the stage is skipped.",
+  "stage": {
+   "evaluator": "timeloop",
+   "needs": [
+    "timeloop-mapper"
+   ]
+  },
+  "document": {
+   "workload": "{workload}"
+  },
+  "params": {
+   "workload": {
+    "label": "Workload (Workload IR)",
+    "default": "{home}/workload.yaml",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "latency_cycles": "cycles",
+   "energy_pj": "pJ"
+  },
+  "needs": [
+   "timeloop-mapper"
+  ],
   "languages": [
    "yaml"
   ],

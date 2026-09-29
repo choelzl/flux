@@ -57,6 +57,7 @@ class Part:
 
 #: what `flux rtl measure` prints (D628): a stage running it need not list them
 RTL_METRICS = ("fmax_mhz", "area_um2", "power_w", "cell_count")
+RTL_STAT_METRICS = ("area_um2", "cell_count")      # `--stage stat`: nothing timed (D662)
 
 
 def rtl_tools_kind(cmd: Iterable[str] | None) -> str:
@@ -72,21 +73,33 @@ def rtl_tools_kind(cmd: Iterable[str] | None) -> str:
 
 
 def _flux_rtl_tools(cmd: Iterable[str]) -> list[str]:
-    """The tools a `flux rtl lint|test|measure` command runs (D600): they may be missing outside the
-    Nix dev shell, and the command itself is Python, so `task check` must name them."""
+    """The tools a `flux rtl lint|test|measure` or `flux prog count|size` command runs (D600): they
+    may be missing outside the Nix dev shell, and the command itself is Python, so `task check`
+    must name them."""
     toks = list(cmd)
-    try:
-        at = toks.index("rtl")
-    except ValueError:
-        return []
-    if at == 0 or "flux" not in " ".join(toks[:at]):
+    at = next((i for i, t in enumerate(toks) if t in ("rtl", "prog")), None)
+    if not at or "flux" not in " ".join(toks[:at]):
         return []
     sub = toks[at + 1] if at + 1 < len(toks) else ""
+    if toks[at] == "prog":                # D661: `time` falls back to a Python loop without hyperfine
+        return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
     if sub in ("test", "lint"):
         return ["verilator"]
     if sub == "measure":
+        if _stage_of(toks) == "stat":
+            return ["yosys"]              # D662: Yosys alone, nothing timed
         return ["yosys", "openroad"]      # synthesis too: its timing is OpenROAD's OpenSTA
     return []
+
+
+def _stage_of(toks: list[str]) -> str:
+    """A `flux rtl measure` command's `--stage` (synth when it says none)."""
+    for i, t in enumerate(toks):
+        if t == "--stage" and i + 1 < len(toks):
+            return toks[i + 1]
+        if t.startswith("--stage="):
+            return t.split("=", 1)[1]
+    return "synth"
 
 #: D594: a gate test's exit code for "the candidate did not build" (nothing was tested).
 BUILD_FAILED = 3
@@ -791,7 +804,8 @@ def _stage(i: int, doc: Any, world: bool = False) -> Stage:
     rtl_tools = _flux_rtl_tools(cmd) if cmd else []
     for tool in rtl_tools if "needs" not in doc else ():    # D628: `flux rtl measure` says what it runs
         needs.append(tool)
-    metrics = tuple(doc.get("metrics") or (RTL_METRICS if "measure" in rtl_tools_kind(cmd) else ()))
+    metrics = tuple(doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
+                                           else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS))
     if not all(isinstance(m, str) for m in metrics):
         raise TaskError(f"stages[{i}].metrics is a list of metric names")
     metrics_re = dict(doc.get("metrics_re") or {})

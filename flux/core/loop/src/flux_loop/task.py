@@ -1315,8 +1315,11 @@ class PromptProblem(Problem):
             ev = make_evaluator(spec.evaluator or "")
             arch = _document(cand.artifact)
             workload = self.task.workload
-            if isinstance(workload, str) and Path(workload).exists():
-                workload = _document(Path(workload).read_text())
+            if isinstance(workload, str):     # a file: `{home}/w.yaml`, or a path beside the document (D663)
+                path = Path(workload.replace("{home}", self.task.home or "."))
+                path = path if path.is_absolute() or path.exists() else Path(self.task.home or ".") / path
+                if path.exists():
+                    workload = _document(path.read_text())
             result = ev.evaluate(AbiCandidate(workload=workload, arch=arch), Budget(),
                                  frozenset(spec.metrics) if spec.metrics else frozenset())
             return {k: float(v.value) for k, v in result.metrics.items()

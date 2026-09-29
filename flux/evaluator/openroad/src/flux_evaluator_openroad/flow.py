@@ -582,7 +582,23 @@ def run_ppa_flow(
 
 
 #: The stages an RTL measurement stops at (D582): the loop's words for the flow's depths.
-RTL_STAGES = ("synth", "place", "route")
+#: `stat` (D662) is Yosys alone: the mapped cells and their liberty area, no timing.
+RTL_STAGES = ("stat", "synth", "place", "route")
+
+
+def run_stat_flow(verilog_source: str, module_name: str, *, yosys_bin: str = "yosys",
+                  timeout_s: float = 300.0, abc_delay_target_ps: float | None = None) -> dict[str, Any]:
+    """The synthesis stage's Yosys mapping and `stat -liberty`, nothing timed (D662):
+    `area_um2` (liberty-summed cell area) and `cell_count`, in about the time Yosys takes."""
+    if shutil.which(yosys_bin) is None:
+        raise OpenRoadError(f"yosys binary {yosys_bin!r} not on PATH")
+    with tempfile.TemporaryDirectory(prefix="flux-stat-") as td:
+        scratch = Path(td)
+        _, cell_count = _yosys_synth(verilog_source, module_name, _merged_liberty_path(scratch), scratch,
+                                     chparams={}, yosys_bin=yosys_bin, timeout_s=timeout_s,
+                                     abc_delay_target_ps=abc_delay_target_ps)
+        area = float((scratch / "synth_area_um2").read_text())
+    return {"area_um2": area, "cell_count": cell_count, "flow_depth": "stat"}
 
 
 def _port_of(sources: str, module: str, name: str) -> str | None:
@@ -596,7 +612,8 @@ def measure_rtl(sources: str, module: str, *, stage: str, clock_period_ps: float
                 repair_design: bool = False, map_for: str = "delay",
                 timeout_s: float | None = None) -> dict[str, Any]:
     """One RTL design through one stage (D582): what `flux rtl measure` prints and what a
-    world measures its designs with -- one implementation. `stage` is `synth` (Yosys +
+    world measures its designs with -- one implementation. `stage` is `stat` (Yosys alone:
+    area and cells, D662), `synth` (Yosys +
     OpenSTA, nothing placed), `place` or `route` (OpenROAD). `clock_port`/`reset_port`
     "auto" take `clk`/`rst_n` when the module has them (a combinational module is timed
     input to output). Returns the report's metrics plus `flow_depth`, `path_ps` (the worst
@@ -609,6 +626,9 @@ def measure_rtl(sources: str, module: str, *, stage: str, clock_period_ps: float
         reset_port = _port_of(sources, module, "rst_n") if clock_port else None
     kw: dict[str, Any] = dict(clock_port=clock_port, reset_port=reset_port, clock_period_ps=clock_period_ps,
                               map_for=map_for, **({"timeout_s": timeout_s} if timeout_s else {}))
+    if stage == "stat":             # the same mapping as synth (ABC given the period), untimed
+        return run_stat_flow(sources, module, abc_delay_target_ps=clock_period_ps if map_for == "delay" else None,
+                             **({"timeout_s": timeout_s} if timeout_s else {}))
     if stage == "synth":
         r = run_synthesis_flow(sources, module, **kw)
     else:

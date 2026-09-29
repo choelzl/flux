@@ -1,7 +1,7 @@
 """Flux CLI entry point: the one way in, for people, scripts and agents alike (docs/agent-surface.md).
 
 `flux task run|check` runs or validates a problem document (`--json FILE` writes the answer for a
-script), `flux ask` drives the loop from a prompt, `flux rtl lint|test|measure` and `flux champsim run|build|check` are the tools a
+script), `flux ask` drives the loop from a prompt, `flux rtl lint|test|measure`, `flux prog time|count|size` and `flux champsim run|build|check` are the tools a
 document names, `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
 detached run; `flux eval`, `flux import` and `flux replay` are the IR evaluator commands.
 """
@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",
         # import, eval, replay and migrate still work but are hidden from the listing
-        metavar="{new,ask,task,tools,rtl,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
+        metavar="{new,ask,task,tools,rtl,prog,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
 
     import_p = subparsers.add_parser("import"
     )
@@ -226,13 +226,18 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--timeout", type=float, default=120.0)
     rp.set_defaults(func=cmd_rtl_proto)
     rm_ = rtl_sub.add_parser("measure", help="Synthesise (synth), place or route the artifact on ASAP7; prints metric=value lines.")
-    rm_.add_argument("artifact"); rm_.add_argument("--stage", choices=("synth", "place", "route"), default="synth")
+    rm_.add_argument("artifact"); rm_.add_argument("--stage", choices=("stat", "synth", "place", "route"), default="synth",
+                     help="stat: Yosys alone, area_um2 and cell_count (no timing); synth: + OpenSTA; place, route: OpenROAD.")
     rm_.add_argument("--clock-ps", type=float, default=1000.0); rm_.add_argument("--module", default=None)
     rm_.add_argument("--clock-port", default="auto", help="auto: clk when the module has one; none: combinational.")
     rm_.add_argument("--reset-port", default="auto", help="auto: rst_n when the module is clocked and has one.")
     rm_.add_argument("--repair-design", action="store_true", help="Buffer long wires and high fanout after placement.")
     rm_.add_argument("--timeout", type=float, default=900.0)
     rm_.set_defaults(func=cmd_rtl_measure)
+
+    from .prog import add_parsers as add_prog
+
+    add_prog(subparsers)
 
     cs_p = subparsers.add_parser("champsim", help="ChampSim as tools a document names: run an .ini or a prefetcher header on traces, build, check.")
     cs_sub = cs_p.add_subparsers(dest="champsim_command", required=True)

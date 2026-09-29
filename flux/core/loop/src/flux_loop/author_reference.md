@@ -108,6 +108,8 @@ starting with `flux` runs this Flux.
   on ASAP7 (`synth` times the netlist with OpenROAD's OpenSTA; `place`, `route` lay it out); prints `fmax_mhz= area_um2= power_w=
   cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its
   reset); `--repair-design` buffers long wires after placement.
+- `flux rtl measure {artifact} --stage stat` -- Yosys alone: `area_um2= cell_count=`, nothing
+  timed; the cheapest screen before `synth`.
 - `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
   `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),
   `SEED`, `VECTORS` (explicit rows), `CLOCK = "clk"` and `LATENCY` (cycles, checked) for a
@@ -136,6 +138,18 @@ The gate and the stages are any commands: a Python script you write beside the d
 (`{python} {home}/check.py {artifact}` printing `N failing`), a test suite
 (`{python} -m pytest -q {home}/tests --rootdir {home}` with a `fail_re`), a simulator, a
 benchmark printing `name=value`. Write every script the document names.
+
+A program (C, C++, Python) is measured by `flux prog`; `--build` is one quoted command writing
+`{out}`, `--run` the command measured (empty: the built program; Python: `--run "{python} {artifact}"`):
+
+- `flux prog time --build "c++ -O2 -o {out} {artifact}" --runs 10 --warmup 1` -- hyperfine:
+  `time_ms=` (mean) `time_ms_stddev= time_ms_min=`.
+- `flux prog count --build "c++ -O2 -o {out} {artifact}"` -- Valgrind cachegrind, the same every run:
+  `instructions= d1_misses= ll_misses= branch_mispredicts=`.
+- `flux prog size --build "c++ -O2 -o {out} {artifact}"` -- `text_bytes= data_bytes= bss_bytes=`.
+- An architecture (`language: yaml`, Architecture IR) is costed by an evaluator stage:
+  `{name: model, evaluator: zigzag, metrics: [latency_cycles, energy_pj]}` with a top-level
+  `workload: "{home}/workload.yaml"` (Workload IR); `evaluator: timeloop` adds `area_mm2`.
 
 ## Rules
 

@@ -183,10 +183,12 @@
               # $out/share/pythia so `flux champsim build` can rebuild it.
               chipPkgs.pythia
               pkgs.systemc     # a SystemC prototype's testbench links it (D635)
+              pkgs.hyperfine   # `flux prog time` (D661)
             ]
             # Physical design (OpenROAD, yosys-slang), linux-only.
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
               chipPkgs.openroad chipPkgs.yosys-slang
+              pkgs.valgrind    # `flux prog count`: cachegrind (D661)
             ];
             LD_LIBRARY_PATH = nativeLibPath;
             SYSTEMC_HOME = "${pkgs.systemc}";

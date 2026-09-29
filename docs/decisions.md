@@ -401,3 +401,20 @@ the topics above.
   at least 1000, area_um2 at most 60, then ..."); the report's frontier plot draws each axis's
   limit, labelled with its rule. Part budgets (ladder) follow the first limit, else the first
   objective. Tested: the three texts name the second limit; NLU/macarray/golden heavy tests pass.
+- **D661: `flux prog time|count|size` measure a program.** Each takes `--build` (one quoted
+  command writing `{out}` in a fresh directory, so parallel candidates never share a binary) and
+  `--run` (default: the built program), and prints `name=value`: hyperfine's mean, spread and
+  fastest (a Python loop without it); cachegrind's instructions, D1/LL misses and branch
+  mispredicts (deterministic: the cheap, noise-free proxy for time); `size`'s text/data/bss. A
+  failed build exits 3, as `flux rtl test`. hyperfine and valgrind join the default shell (cached,
+  small). Catalog: prog-size, prog-time, prog-count; `task check` infers `needs` (valgrind, size).
+  Live: a 4M-int sum x8 at -O2: 20.1 ms +- 1.3; 108,181,679 instructions, 788k D1 misses, every run.
+- **D662: `flux rtl measure --stage stat` is Yosys alone.** The synth stage's mapping and
+  `stat -liberty`, no OpenSTA: `area_um2`, `cell_count` (the same numbers synth gives) in under a
+  second, needing only yosys. Catalog `rtl-stat`, the cheapest RTL screen; its default metrics
+  are the two it prints.
+- **D663: evaluator stages in the catalog.** A catalog entry may carry `stage` (the stage's keys:
+  `{"evaluator": "zigzag"}`) and `document` (top-level keys: `{"workload": "{workload}"}`)
+  instead of `run`; `flux tools` prints both. `zigzag-eval` (latency_cycles, energy_pj) and
+  `timeloop-eval` (+ area_mm2; needs timeloop-mapper, the .#timeloop shell). A string `workload:`
+  is now read beside the document (`{home}/w.yaml` or `w.yaml`), not from the cwd.

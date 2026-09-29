@@ -7,6 +7,10 @@ command template: the loop's placeholders `{artifact}`, `{home}`, `{python}`, an
 own `params` by name, which the author fills), `params` (name -> label, default, unit),
 `metrics` (a stage's, name -> unit), `needs` (tools on PATH), `pass` (a check's pass rule),
 `languages` (the artifacts it fits) and `kinds` (the crafter's kinds of problem it belongs to).
+
+An evaluator stage (D663) has `stage` instead of `run`: the stage's keys besides `name` and
+`metrics` (`{"evaluator": "zigzag"}`), and `document`: the top-level keys the document then
+carries (`{"workload": "{workload}"}`), their `{param}`s filled as `run`'s are.
 """
 
 from __future__ import annotations
@@ -28,6 +32,13 @@ def _p(label: str, default: Any, unit: str = "") -> dict[str, Any]:
 
 def _m(*names: str) -> dict[str, str]:
     return {n: UNITS.get(n, "ps" if n.endswith("_ps") else "") for n in names}
+
+
+#: `flux prog` (D661): a build writing {out} (kept apart from other candidates), then the run
+_PROG = 'flux prog {sub} --build "{{build}}" --run "{{run}}"{more}'
+_PROG_PARAMS = {"build": _p("Build command ({out}: the program)", "c++ -O2 -o {out} {artifact}"),
+                "run": _p("Run command (empty: the built program)", "")}
+_PROGS = ["c", "cpp", "python"]
 
 
 def _rtl_stage(depth: str, title: str, what: str) -> dict[str, Any]:
@@ -67,6 +78,11 @@ TOOLS: list[dict[str, Any]] = [
      "needs": [], "pass": "passes when it prints `0 failing`, or else exits 0; exit 3 = did not build",
      "languages": [], "kinds": ["own"]},
     # ---- stages: measurements, cheapest first; a `cutoff` is a stage's gate
+    {"id": "rtl-stat", "role": "stage", "title": "Area and cells, Yosys alone (ASAP7)",
+     "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
+     "run": "flux rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+     "params": {"clock_ps": _p("Clock period (the mapper's target)", 1000, "ps")},
+     "metrics": _m("area_um2", "cell_count"), "needs": ["yosys"], "languages": _HDL, "kinds": ["rtl"]},
     _rtl_stage("synth", "Synthesise and time (ASAP7)", "Yosys synthesis, timed by OpenROAD's OpenSTA: seconds per design."),
     _rtl_stage("place", "Place and time (ASAP7)", "OpenROAD placement, timed with wire estimates: tens of seconds."),
     _rtl_stage("route", "Route and time (ASAP7)", "OpenROAD placement and routing, the signoff numbers: minutes."),
@@ -85,6 +101,38 @@ TOOLS: list[dict[str, Any]] = [
      "run": "{python} {script} {artifact} {workload}",
      "params": {"script": _p("Script", "{home}/measure.py"), "workload": _p("Workload", "{home}/workload.yaml")},
      "metrics": _m("latency_cycles", "energy_pj", "area_mm2"), "needs": [], "languages": ["yaml"], "kinds": ["zigzag"]},
+    {"id": "prog-size", "role": "stage", "title": "Size of the built program",
+     "what": "Builds the program and reads its sections with `size`: code (text), initialised data, zeroed data (bss).",
+     "run": 'flux prog size --build "{build}"', "params": {"build": _PROG_PARAMS["build"]},
+     "metrics": _m("text_bytes", "data_bytes", "bss_bytes"), "needs": ["size"],
+     "languages": ["c", "cpp"], "kinds": ["program"]},
+    {"id": "prog-time", "role": "stage", "title": "Time the program (hyperfine)",
+     "what": "Builds the program and times its runs after a warm-up (hyperfine, else a Python loop): the mean, "
+             "the spread and the fastest. {out} is the built program; for Python leave the build empty and run `{python} {artifact}`.",
+     "run": _PROG.format(sub="time", more=" --runs {runs} --warmup {warmup}"),
+     "params": _PROG_PARAMS | {"runs": _p("Runs", 10, "runs"), "warmup": _p("Warm-up runs", 1, "runs")},
+     "metrics": _m("time_ms", "time_ms_stddev", "time_ms_min"), "needs": [],
+     "languages": _PROGS, "kinds": ["program", "python"]},
+    {"id": "prog-count", "role": "stage", "title": "Count instructions and cache misses (Valgrind)",
+     "what": "Builds the program and runs it under cachegrind: instructions, cache misses and branch mispredicts, "
+             "the same every run. {out} is the built program; for Python leave the build empty and run `{python} {artifact}`.",
+     "run": _PROG.format(sub="count", more=""), "params": _PROG_PARAMS,
+     "metrics": _m("instructions", "d1_misses", "ll_misses", "branch_mispredicts"), "needs": ["valgrind"],
+     "languages": _PROGS, "kinds": ["program", "python"]},
+    {"id": "zigzag-eval", "role": "stage", "title": "Cycles and energy (ZigZag)",
+     "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. "
+             "No area: add a stage of yours for it (as applications/npu_gemm).",
+     "stage": {"evaluator": "zigzag"}, "document": {"workload": "{workload}"},
+     "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
+     "metrics": _m("latency_cycles", "energy_pj"), "needs": [], "languages": ["yaml"], "kinds": ["zigzag"]},
+    {"id": "timeloop-eval", "role": "stage", "title": "Cycles, energy and area (Timeloop)",
+     "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. "
+             "Run in the .#timeloop shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper "
+             "on PATH the stage is skipped.",
+     "stage": {"evaluator": "timeloop", "needs": ["timeloop-mapper"]}, "document": {"workload": "{workload}"},
+     "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
+     "metrics": _m("latency_cycles", "energy_pj"), "needs": ["timeloop-mapper"],
+     "languages": ["yaml"], "kinds": ["zigzag"]},
     {"id": "custom-stage", "role": "stage", "title": "Any command",
      "what": "Your own command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
      "run": "{command}", "params": {"command": _p("Command", "")},
@@ -108,5 +156,7 @@ def fill(tool_id: str, **params: Any) -> str:
     """A tool's command with its params filled (defaults for those not given); the loop's own
     placeholders stay for the loop."""
     t = tool(tool_id)
+    if "run" not in t:
+        raise ValueError(f"{tool_id} is an evaluator stage: its `stage` and `document` keys, not a command")
     values = {k: v["default"] for k, v in t["params"].items()} | params
     return re.sub(r"\{(\w+)\}", lambda m: str(values[m.group(1)]) if m.group(1) in values else m.group(0), t["run"])
