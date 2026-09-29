@@ -1353,32 +1353,69 @@
     }
 
     // -- level 3
+    /** A label | input | unit row: every Advanced row shares the same three columns. */
+    function kv(label, get, set, opts) {
+      opts = opts || {};
+      var input;
+      if (opts.options) {
+        input = h("select", { "aria-label": label, class: "fc-v" });
+        opts.options.forEach(function (o) {
+          var op = h("option", { value: o[0], text: o[1] });
+          if (String(get()) === o[0]) op.selected = true;
+          input.appendChild(op);
+        });
+        input.addEventListener("change", function () { set(input.value); changed(!!opts.structural); });
+      } else {
+        input = h("input", { type: "text", "aria-label": label, class: "fc-v", placeholder: opts.placeholder || "",
+                             inputmode: opts.numeric ? "numeric" : null });
+        input.value = get() || "";
+        input.addEventListener("input", function () { set(input.value); changed(false); });
+      }
+      if (opts.title) input.setAttribute("title", opts.title);
+      return h("label", { class: "fc-kv" + (opts.wide ? " fc-kv-wide" : ""), title: opts.title || null },
+               [h("span", { class: "fc-k", text: label }), input, h("span", { class: "fc-u", text: opts.unit || "" })]);
+    }
+
+    function group(title, rows) { return h("div", { class: "fc-group" }, [h("h4", { text: title })].concat(rows)); }
+
     function renderLevel3() {
       var b = state.budget;
-      var budget = h("div", { class: "fc-grid" }, [
-        field("Designs per round", function () { return b.steps; }, function (v) { b.steps = v; }, { hint: "steps" }),
-        field("Rounds (empty: until stopped)", function () { return b.passes; }, function (v) { b.passes = v; }, { hint: "passes" }),
-        field("Fix attempts per design", function () { return b.repair_attempts; }, function (v) { b.repair_attempts = v; }, { hint: "repair_attempts" }),
-        field("Designs that reach the last measurement", function () { return b.finalists; }, function (v) { b.finalists = v; }, { hint: "finalists" }),
-        field("Measurements at once", function () { return b.workers; }, function (v) { b.workers = v; }, { hint: "workers; 1 for anything timed" }),
-        field("Prove the idea in Python first", function () { return b.prototype; }, function (v) { b.prototype = v; },
-              { options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]],
-                hint: "prototype: yes for maths, no for plain logic" }),
-      ]);
-      var space = h("div", {}, [h("div", { class: "fc-rows" }, state.space.map(function (r, i) {
-        return h("div", { class: "fc-row" }, [
-          field("Setting", function () { return r.knob; }, function (v) { r.knob = v; }),
-          field("Its choices, in order", function () { return r.choices; }, function (v) { r.choices = v; }, { wide: true, placeholder: "16, 32, 64" }),
-          button("Remove", function () { state.space.splice(i, 1); changed(true); }, "fc-small")]);
-      })), button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); })]);
-      var partsBox = h("div", { class: "fc-grid" }, [
-        field("Split the design into parts", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
-              { structural: true, options: [["none", "no"], ["list", "these parts"], ["decompose", "let it decide"]] }),
-        state.partsMode === "list" ? field("Parts", function () { return state.parts; }, function (v) { state.parts = v; }, { placeholder: "decoder, datapath" }) : null]);
+      function num(label, key, dflt, unit, title) {
+        return kv(label, function () { return b[key]; }, function (v) { b[key] = v; },
+                  { numeric: true, placeholder: dflt, unit: unit, title: title + " (" + key + "; empty: " + dflt + ")" });
+      }
+      var budget = h("div", { class: "fc-budget" }, [
+        group("Run", [
+          num("Designs per round", "steps", "24", "steps", "Work items in one round"),
+          num("Rounds", "passes", "until stopped", "passes", "How many rounds before the run stops"),
+          num("Measurements at once", "workers", "auto", "workers", "Tool runs in parallel; 1 for anything timed")]),
+        h("div", {}, [
+          group("Repair", [num("Fix attempts per design", "repair_attempts", "12", "attempts", "Repairs a draft gets after a check fails")]),
+          group("Measure", [num("Designs to the last measurement", "finalists", "3", "finalists", "How many designs reach the costliest measurement")]),
+          group("Prototype", [kv("Prove the idea first", function () { return b.prototype; }, function (v) { b.prototype = v; },
+            { title: "prototype: yes for maths, no for plain logic (empty: on with a golden model)", unit: "prototype",
+              options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]] })])])]);
+
+      var table = h("div", { class: "fc-table" }, [h("div", { class: "fc-table-head" }, [h("span", { text: "Setting" }), h("span", { text: "Its choices, in order" }), h("span")])]
+        .concat(state.space.map(function (r, i) {
+          return h("div", { class: "fc-table-row" }, [
+            h("input", { type: "text", "aria-label": "Setting", placeholder: "block", value: r.knob, on: { input: function (e) { r.knob = e.target.value; changed(false); } } }),
+            h("input", { type: "text", "aria-label": "Its choices, in order", placeholder: "16, 32, 64", value: r.choices, on: { input: function (e) { r.choices = e.target.value; changed(false); } } }),
+            button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")]);
+        }))
+        .concat([h("div", { class: "fc-table-foot" }, [button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-small")])]));
+
+      var partsBox = h("div", { class: "fc-group fc-parts" }, [
+        kv("Split the design", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
+           { structural: true, title: "Divide one design into parts, each made and checked on its own, then composed",
+             options: [["none", "no"], ["list", "into these parts"], ["decompose", "let it decide"]] }),
+        state.partsMode === "list" ? kv("Parts", function () { return state.parts; }, function (v) { state.parts = v; },
+                                         { placeholder: "decoder, datapath", wide: true, title: "Part names, separated by commas" }) : null]);
+
       var details = h("details", { class: "fc-advanced" }, [h("summary", { text: "3. Advanced" }),
-        section("Budget", [budget]),
-        section("Settings to search" + (state.flow.dse === "none" ? " (turn on \"Search the settings\" above)" : ""), [space]),
-        section("Parts", [partsBox])]);
+        titled("Budget", [h("span", { class: "fc-hint fc-inline", text: " empty = the loop's default (shown greyed)" })], [budget]),
+        titled("Settings to search", [h("span", { class: "fc-hint fc-inline", text: state.flow.dse === "none" ? " turn on \"Search the settings\" above to use them" : " each is {its name} in the commands" })], [table]),
+        titled("Parts", [], [partsBox])]);
       if (parts.advancedOpen) details.open = true;
       details.addEventListener("toggle", function () { parts.advancedOpen = details.open; });
       return details;
