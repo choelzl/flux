@@ -73,7 +73,7 @@ Next: [run the applications](demos/index.md), follow the [tutorial](guide/tutori
   model writes the Verilog; Flux tests every design against your function in Verilator.
 - **Prototypes first.** For numeric designs the model first writes the algorithm in Python or
   SystemC, checked on every input in seconds; Flux then turns it into RTL itself (SystemC through
-  the ICSC translator).
+  the ICSC translator, in `nix develop .#systemc`).
 - **Design-space sweeps and searches.** List the knobs; pick a search: `sweep`, `montecarlo`,
   `gradient`, `anneal`, `genetic`, `pareto`, `llm` (a model picks the points) or a coding agent.
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer

@@ -33,7 +33,7 @@ Each box has one job and a set of *halves*: who can fill it. Choose a half in th
 | calibrate | compares each cheap stage with the costly one | on (default), off; **never delegated** | `calibrate: off` |
 | select | chooses from the objectives | objectives; a coding agent may break ties | |
 | feedback | notes you type during a run (`--tui`, `f`) | human (default), none | `feedback: none` |
-| knowledge | what the model reads | `sheet`, `library`, `digest` (a model's summary of the library) | `knowledge: [digest]` |
+| knowledge | what the model reads | `sheet`, `library` (on by default), `digest` (a model's summary of the library), `none` | `knowledge: [digest]` |
 | extract | lessons mined from the record | none (default), mined, coding agent | `extract: mined` |
 | records | keeps everything; a rerun resumes from it | always on; **never delegated** | |
 

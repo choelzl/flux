@@ -120,3 +120,25 @@
 .fc-checks .fc-note::before { content: "→"; color: var(--fc-muted); }
 .fc-checks .fc-ok { color: var(--fc-ok); }
 .fc-checks .fc-ok::before { content: "✓"; }
+
+/* kits and goal sentences */
+.fc-kits { margin-bottom: 6px; }
+.fc-kits .fc-card { padding: 8px 10px; }
+.fc-derived { margin: 6px 0 !important; }
+.fc-derived code { font-size: .65rem !important; color: var(--fc-muted); white-space: pre-wrap !important; overflow-wrap: anywhere; }
+.fc-goals .fc-choice { flex-wrap: wrap; border-left-color: var(--md-primary-fg-color); }
+.flux-crafter input.fc-num { width: 5.5em; display: inline-block; padding: 2px 6px; }
+.fc-goal-words { margin-top: 0 !important; }
+.fc-goal-words li { margin: 2px 0 !important; }
+
+/* checks and measurements: ordered rows */
+.fc-row-head { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.fc-row-head strong { margin-right: auto; }
+.fc-row-buttons { display: flex; gap: 2px; }
+.fc-row-buttons .fc-btn { margin: 0; }
+.fc-btn.fc-hidden { visibility: hidden; }
+.fc-cutoff { display: flex; flex-wrap: wrap; align-items: end; gap: 0 10px; border-top: 1px dashed var(--fc-line); margin-top: 4px; padding-top: 2px; }
+.fc-cutoff > .fc-label { align-self: center; margin-right: 4px; }
+.fc-cutoff .fc-field { min-width: 120px; flex: 1 1 120px; }
+.flux-crafter select.fc-add { margin-top: 8px; width: auto; max-width: 100%; }
+.fc-row > .fc-wide { grid-column: 1 / -1; }

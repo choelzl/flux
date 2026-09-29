@@ -71,6 +71,10 @@ export FLUX_REMOTE_API_KEY=<key>                   # only if the server wants on
 flux task run applications/primes/primes.problem.yaml --passes 3
 ```
 
+To set them once for this machine, put the same lines (without `export`) in
+`~/.config/flux/flux.env`; keep the key in a file of its own and name it with
+`FLUX_REMOTE_API_KEY_FILE=~/.config/flux/my.key`. A variable set in the shell still wins.
+
 [docs/models.md](docs/models.md) has recipes and coding-agent setup.
 
 ## What it can do
@@ -78,7 +82,8 @@ flux task run applications/primes/primes.problem.yaml --passes 3
 - **RTL from a golden model.** You give a Python function that computes the right answer; a
   model writes the Verilog; Verilator tests every design against your function.
 - **Prototypes first.** For numeric designs the model writes the algorithm in Python or SystemC,
-  checked on every input in seconds; Flux then writes the RTL (SystemC through ICSC).
+  checked on every input in seconds; Flux then writes the RTL (SystemC through ICSC, in
+  `nix develop .#systemc`).
 - **Design-space sweeps and searches.** List the knobs; pick `sweep`, `montecarlo`, `gradient`,
   `anneal`, `genetic`, `pareto`, `llm` (a model picks the points) or a coding agent.
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer

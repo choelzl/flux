@@ -36,13 +36,19 @@ Edit `myproblem/myproblem.problem.yaml`:
 - `python`, `sweep`, `tune`: edit `check.py` so it prints `N failing` (0 when correct).
 - For a knob search: list the knobs under `space:` and write each design in the generator script.
 
+Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
+problem on the machine) or in a folder beside the document named by `knowledge: {library: papers}`.
+Excerpts that match the statement, contract and parts reach the model's prompts, and the coding
+agents get the file paths to open. `flow: {knowledge: none}` turns it off.
+
 ## 4. Check it
 
 ```bash
 flux task check myproblem/myproblem.problem.yaml
 ```
 
-It runs nothing. It lists the loop's boxes, the stages and their tools, and says what is missing.
+It runs nothing. It lists the loop's boxes, the stages and their tools, the library, and says
+what is missing.
 
 ## 5. Run it
 
@@ -65,21 +71,34 @@ writes an HTML page of the whole search.
 | `id` | a short name (letters, digits, `_`); names the record, so an edited document resumes it |
 | `statement`, `contract` | the request and its rules, in words |
 | `language` | `systemverilog`, `verilog`, `python`, `c`, `cpp`, `text`, ...: the file type |
-| `gate` | a command that prints `N failing` or exits non-zero; `{build, test}` when a build comes first |
+| `gate` | a command that prints `N failing` or exits non-zero; or a list of named checks, run in order |
 | `stages` | measurements, cheapest first: `{name, command}`; a command of yours prints `name=value` and lists `metrics:` |
 | `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; or `{keep: 0.9, above: 1.0}` instead of a goal |
 | `space` | knob -> its choices, for a search |
 | `seeds` | settings measured before the search starts |
-| `knowledge` | `{files: [...]}` the model reads with every prompt |
+| `knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers |
 | `flow` | who fills each box ([the loop](loop-shape.md)) |
 | `budget` | `steps`, `passes`, `repair_attempts`, `finalists`, `workers`, `prototype` |
 
 In commands: `{artifact}` is the design file, `{home}` the document's folder, `{python}` the
 Python in use, and `{knob}` each knob of `space:`. A command starting with `flux` runs this Flux.
 
+A gate can be several checks, cheapest first. Each has a name and a command; the first that
+fails refuses the design, and the repair is told where it failed:
+
+```yaml
+gate:
+  - {name: lint, run: "flux rtl lint {artifact}"}
+  - {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py"}
+```
+
+A stage's `cutoff` is its gate: `cutoff: {metric: fmax_mhz, at: 1000}` sends on only the designs
+that meet timing at 1 GHz. `flux tools` lists every check and stage Flux has, with its command.
+
 `budget.prototype: true` (the default with a golden model) has the model write the algorithm in
 Python first, checked on every input; Flux then writes the RTL. `prototype: systemc` does the same
-with a SystemC module, translated by ICSC. Use `false` for plain logic such as adders.
+with a SystemC module, translated by ICSC in `nix develop .#systemc` (elsewhere the model writes
+the RTL from it). Use `false` for plain logic such as adders.
 
 Every key is in the
 [author reference](https://github.com/choelzl/flux/blob/main/flux/core/loop/src/flux_loop/author_reference.md).
