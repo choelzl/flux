@@ -10,6 +10,7 @@ minimise, balance). Each document is written beside the files it names and loade
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -125,6 +126,40 @@ s.stages.push(c.newStage(s, "rtl-stat")); s.stages.push(c.newStage(s, "rtl-synth
 s.objectives = [obj("area_um2", "min")];
 add("stat_then_synth", "rtl", s);
 
+// each measurement may estimate first: off (unsaid), a surrogate, a command, the model
+for (const kind of ["surrogate", "command", "model"]) {
+  s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "estimate_" + kind;
+  s.stages[1].estimate = {kind, margin: "5", command: kind === "command" ? "{python} {home}/golden.py {artifact}" : ""};
+  add("estimate_" + kind, "rtl", s, {pendingEstimate: true});
+}
+
+// every box that can be a coding agent, and the library off
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "agents_everywhere";
+for (const b of c.DELEGABLE) if (b !== "dse") s.flow[b] = "agent:claude";
+s.flow.knowledge = "none"; s.flow.critique = "llm";
+add("agents_everywhere", "rtl", s);
+out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
+out.defaults = {orchestrate: c.BOXES.orchestrate.choices[0].label, knowledge: c.BOXES.knowledge.choices[0].label,
+                extract: c.BOXES.extract.choices[0].value, flowBoxes: c.FLOW_BOXES};
+
+// the defaults, as `flux task check` says them: an otherwise empty problem with one check
+const BOXES_EXPLAINED = ["validate", "orchestrate", "plan", "generate", "critique", "calibrate", "feedback", "knowledge", "extract", "records"];
+const explained = st => Object.fromEntries(BOXES_EXPLAINED.map(b => [b, c.explain(b, st)]));
+s = c.base(); s.id = "defaults"; s.statement = "Anything."; s.checks.push(c.newCheck(s, "custom"));
+s.checks[0].params.command = "{python} {home}/golden.py";
+out.explained = {};
+add("empty_problem", "rtl", s, {partial: true}); out.explained.empty_problem = explained(s);
+s = JSON.parse(JSON.stringify(s)); s.id = "empty_parts"; s.partsMode = "decompose";
+add("empty_parts", "rtl", s, {partial: true}); out.explained.empty_parts = explained(s);
+s = JSON.parse(JSON.stringify(out.empty_problem.state)); s.id = "empty_off"; s.flow.feedback = "none"; s.flow.knowledge = "none";
+add("empty_off", "rtl", s, {partial: true}); out.explained.empty_off = explained(s);
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "estimates_said";
+s.stages[0].estimate = {kind: "surrogate", margin: "5", command: ""};
+s.stages.push(c.newStage(s, "rtl-route")); s.stages[2].estimate = {kind: "model", margin: "12", command: ""};
+s.stages.push(c.newStage(s, "custom-stage")); s.stages[3].params.command = "{python} {home}/golden.py {artifact}";
+s.stages[3].metrics = "fmax_mhz, area_um2, power_w"; s.stages[3].estimate = {kind: "command", margin: "5", command: "{python} {home}/golden.py {artifact}"};
+add("estimates_said", "rtl", s); out.explained.estimates = s.stages.map(st => c.explainEstimate(st.estimate));
+
 // what can still go wrong
 const bad = (name, s) => add(name, "none", s, {bad: true});
 bad("bad_empty", c.base());
@@ -141,6 +176,11 @@ s = JSON.parse(JSON.stringify(out.stat_then_synth.state)); s.objectives.unshift(
 bad("bad_partly_reported", s);
 s = JSON.parse(JSON.stringify(out.zigzag_eval.state)); s.stages.push(c.newStage(s, "timeloop-eval"));
 s.stages[1].params.workload = "other.yaml"; bad("bad_two_workloads", s);
+
+s = JSON.parse(JSON.stringify(out.python.state)); s.flow.dse = "pareto"; s.space = [{knob: "n", choices: "1, 2"}];
+bad("bad_pareto_one_objective", s);
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.stages[0].estimate = {kind: "command", margin: "150", command: ""};
+bad("bad_estimate", s);
 
 for (const k in out) {
   if (!out[k].state) continue;
@@ -160,7 +200,7 @@ def _run():
 
 
 BUILT = _run() if shutil.which("node") else {}
-GOOD = sorted(k for k, v in BUILT.items() if "state" in v and not v.get("bad"))
+GOOD = sorted(k for k, v in BUILT.items() if "state" in v and not v.get("bad") and not v.get("partial"))
 
 
 def _load(tmp_path: Path, case: dict, pending: bool = False):
@@ -177,6 +217,8 @@ def _load(tmp_path: Path, case: dict, pending: bool = False):
     except (TaskError, TypeError, ValueError) as exc:
         if pending and ("cutoff" in str(exc) or "goal" in str(exc) or "balance" in str(exc)):
             pytest.skip(f"{LOOP_PENDING}: {exc}")
+        if case.get("pendingEstimate") and "estimate" in str(exc):
+            pytest.skip(f"needs the loop's per-stage `estimate`: {exc}")
         raise
 
 
@@ -299,3 +341,64 @@ def test_an_objective_every_measurement_does_not_report_is_an_error():
     e = _errors(BUILT["bad_partly_reported"])
     assert "fmax_mhz, which stat does not report" in e and "every measurement must report every objective" in e
     assert "one workload per document" in _errors(BUILT["bad_two_workloads"])
+
+
+@pytest.mark.parametrize("kind", ["surrogate", "command", "model"])
+def test_a_measurement_may_estimate_first(tmp_path, kind):
+    case = BUILT[f"estimate_{kind}"]
+    want = {"surrogate": "estimate: {kind: surrogate, margin: 0.05}",
+            "command": 'estimate: {kind: command, margin: 0.05, command: "{python} {home}/golden.py {artifact}"}',
+            "model": "estimate: {kind: model, margin: 0.05}"}[kind]
+    assert want in case["yaml"] and case["yaml"].count("estimate:") == 1
+    assert "estimate:" not in BUILT["rtl_one_gate"]["yaml"]                  # off: unsaid
+    t = _load(tmp_path, case)
+    est = getattr(t.stages[1], "estimate", None)
+    if est is None:
+        pytest.skip("needs the loop's per-stage `estimate` (the key loads but is not kept yet)")
+    assert est.get("kind") == kind if isinstance(est, dict) else est.kind == kind
+
+
+def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_path):
+    for k, v in BUILT.items():
+        if "yaml" in v:
+            assert "analytical:" not in v["yaml"] and "simulation:" not in v["yaml"] and "records:" not in v["yaml"], k
+    assert BUILT["fixed"] == {"test": True, "measure": True, "records": True, "select": False, "critique": False, "calibrate": False}
+    assert "analytical" not in BUILT["defaults"]["flowBoxes"] and "simulation" not in BUILT["defaults"]["flowBoxes"]
+    assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
+    assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["extract"] == "none"
+    y = BUILT["agents_everywhere"]["yaml"]
+    assert "knowledge: none" in y and "critique: llm" in y and "test:" not in y.split("flow:")[1].split("gate:")[0]
+    t = _load(tmp_path, BUILT["agents_everywhere"])
+    assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
+
+
+def test_pareto_needs_two_objectives_and_an_estimate_its_margin_and_command():
+    assert "pareto) needs two objectives" in _errors(BUILT["bad_pareto_one_objective"])
+    e = _errors(BUILT["bad_estimate"])
+    assert "margin is a percentage" in e and "command that estimates it" in e
+
+
+def _paren(line: str) -> str | None:
+    """The parenthesis of a describe_flow line, before any ` -- or: ...` tail; None when it has none."""
+    head = line.split(" -- ")[0]
+    m = re.match(r"^\w+: [^(]*?\((.*)\)$", head)
+    return m.group(1) if m else None
+
+
+@pytest.mark.parametrize("case", ["empty_problem", "empty_parts", "empty_off"])
+def test_the_popovers_say_what_task_check_says(tmp_path, case):
+    from flux_loop.document import describe_flow
+
+    t = _load(tmp_path, BUILT[case])
+    lines = {ln.split(":", 1)[0]: ln for ln in describe_flow(t)}
+    assert _paren(lines["orchestrate"]).startswith("the model picks" if case == "empty_parts" else "one design")
+    for box, text in BUILT["explained"][case].items():
+        assert text == _paren(lines[box]), (box, text, lines[box])
+
+
+def test_the_estimates_say_what_task_check_says(tmp_path):
+    from flux_loop.document import describe_stage
+
+    t = _load(tmp_path, BUILT["estimates_said"])
+    said = [describe_stage(st).split(" -- estimate: ", 1)[1] for st in t.stages]
+    assert said == BUILT["explained"]["estimates"]

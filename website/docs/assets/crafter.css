@@ -155,3 +155,18 @@
 .fc-pop.fc-right, .fc-pop.fc-left, .fc-pop.fc-below { overflow: visible; }
 .fc-pop.fc-sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto; max-width: none;
   max-height: 60vh; border-radius: 12px 12px 0 0; }
+
+/* the drawing's refusals and fixed boxes */
+.fc-edge.fc-red { stroke: var(--fc-error); stroke-dasharray: 2 3; stroke-width: 1.6; }
+.fc-arrowhead-red { fill: var(--fc-error); }
+.fc-red-label { fill: var(--fc-error); font-size: 11px; }
+.fc-drop { fill: var(--fc-error); font-size: 15px; font-weight: 700; }
+.fc-box.fc-static { cursor: default; }
+.fc-box.fc-static rect { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1.2; stroke-dasharray: none; }
+.fc-box.fc-static:hover rect { stroke-width: 1.2; }
+.fc-box.fc-static .fc-box-name, .fc-box.fc-static .fc-box-half, .fc-box.fc-static .fc-box-small { fill: var(--fc-muted); }
+.fc-box rect.fc-stack { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1; }
+.fc-lock { fill: var(--fc-muted); }
+.fc-lock-shackle { fill: none; stroke: var(--fc-muted); stroke-width: 1.3; }
+.fc-box-small { font-size: 12px; font-weight: 600; fill: var(--md-default-fg-color); }
+.fc-box-small.fc-tiny { font-size: 10.5px; font-weight: 500; }

@@ -18,10 +18,11 @@
   var DSE_POLICIES = ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"];
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
   var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select"];
-  var NEVER = ["test", "analytical", "simulation", "calibrate", "records"];
-  /** document.py FLOW_BOXES, in flow order. */
-  var FLOW_BOXES = ["validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "analytical",
-                    "simulation", "calibrate", "select", "feedback", "knowledge", "extract", "records"];
+  var NEVER = ["test", "calibrate"];
+  /** The boxes a document may say a half for, in flow order (document.py FLOW_BOXES, less the
+      ones the loop no longer takes as settings: analytical, simulation, records). */
+  var FLOW_BOXES = ["validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "calibrate",
+                    "select", "feedback", "knowledge", "extract"];
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
                       "prompt", "prompt_file", "point"];
 
@@ -39,7 +40,7 @@
                 { value: "llm", half: "model", label: "Built-in checks, then a model reads it and objects" }]
         .concat(agentChoices("A coding agent reads the document and objects")) },
     orchestrate: { title: "Pick the next job", says: "Decides what to work on next.",
-      choices: [{ value: "default", half: "rules", label: "Standard (rules pick the work)" },
+      choices: [{ value: "default", half: "model", label: "Standard: the model picks the next part, rules pick the kind of work" },
                 { value: "rules", half: "rules", label: "Rules only" },
                 { value: "llm", half: "model", label: "A model picks" },
                 { value: "agent", half: "model", label: "A model with tools picks" }]
@@ -61,32 +62,32 @@
       choices: [{ value: "model", half: "model", label: "A model writes it" },
                 { value: "command", half: "rules", label: "My script writes it" }]
         .concat(agentChoices("A coding agent writes it")) },
-    test: { title: "Check it works", says: "Runs your check; a design that fails never goes further. Always yours, never a model's.",
-      choices: [{ value: "gate", half: "fixed", label: "Your check (fixed)" }] },
-    critique: { title: "Second opinion", says: "Optionally, a critic questions the work and the final choice.",
+    test: { title: "Check it works", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
+      fixed: "Configured in the Checks list above.",
+      choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
+    critique: { title: "Second opinion", says: "Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice.",
       choices: [{ value: "none", half: "off", label: "No critic" },
                 { value: "llm", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
-    analytical: { title: "Quick estimate", says: "Optionally predicts the costly measurement from past ones, to try fewer.",
-      choices: [{ value: "none", half: "off", label: "No estimate" },
-                { value: "surrogate", half: "model", label: "A learned estimate (surrogate)" }] },
-    simulation: { title: "Measure", says: "Runs your measurements, cheapest first. Always the real tools.",
+    measure: { title: "Measure", says: "Runs your measurements, cheapest first; a design that fails a gate is dropped.",
+      fixed: "Configured in the Measurements list above (each may estimate first).",
       choices: [{ value: "stages", half: "fixed", label: "Your measurements (fixed)" }] },
     calibrate: { title: "Compare measures", says: "Checks how well the cheap measurement predicts the costly one.",
-      choices: [{ value: "on", half: "fixed", label: "On" }, { value: "off", half: "off", label: "Off" }] },
+      choices: [{ value: "on", half: "rules", label: "On" }, { value: "off", half: "off", label: "Off" }] },
     select: { title: "Choose the best", says: "Picks the winner by your goals.",
       choices: [{ value: "objectives", half: "rules", label: "By the goals" }]
         .concat(agentChoices("By the goals; a coding agent breaks ties")) },
     feedback: { title: "Your notes", says: "Notes you type while it runs steer the next round.",
       choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "none", half: "off", label: "No notes" }] },
     knowledge: { title: "Background reading", says: "What the model reads with every request.",
-      choices: [{ value: "default", half: "rules", label: "The files I list" },
-                { value: "digest", half: "model", label: "Plus Flux's library digest" }] },
+      choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
+                { value: "none", half: "off", label: "None: no library" }] },
     extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
       choices: [{ value: "none", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
         .concat(agentChoices("A coding agent writes lessons from the results")) },
     records: { title: "Keep a record", says: "Every design, measurement and refusal is kept, and read back when you resume.",
+      fixed: "Always on: every design, measurement and refusal is kept.",
       choices: [{ value: "on", half: "fixed", label: "On (fixed)" }] },
   };
 
@@ -98,6 +99,48 @@
     return out;
   }
 
+  /** What the loop does for a box as this state leaves it, in `flux task check`'s own words
+      (document.py describe_flow: the parenthesis of the box's line); null where the line has
+      none. The test compares these with describe_flow for the same document. */
+  var KIND_OF_WORK = "rules pick the kind of work: a design sent back is improved first, then the parts, then the search";
+  function explain(box, state) {
+    var v = ((state || {}).flow || {})[box];
+    var parts = state && (state.partsMode === "decompose" || (state.partsMode === "list" && list(state.parts).length > 0));
+    var words = {
+      validate: { rules: "the loader's checks", llm: "the loader's checks, then the model reads the document and objects, D556" },
+      orchestrate: { "default": parts ? "the model picks the next part, the first one waiting without a model; " + KIND_OF_WORK
+                                      : "one design, no part to pick; " + KIND_OF_WORK,
+                     rules: "the first part waiting, no model; " + KIND_OF_WORK,
+                     llm: "the model picks the next part; " + KIND_OF_WORK,
+                     agent: "the model with tools picks the next part and the kind of work, its reasons on the record, D505" },
+      plan: { none: "the orchestrator picks step by step" },
+      dse: { none: "the world's own search, if it has one" },
+      generate: { model: "the prototype stage, transpile, repair" },
+      critique: { llm: "a model adversary on the division, each admitted part and the decision" },
+      calibrate: { on: "between every pair of stages, on the record" },
+      feedback: { human: "the operator's notes, when a terminal is attached", none: "no notes are read, reloaded or waited for" },
+      knowledge: { "default": "on by default; `knowledge: none` turns it off", none: "the library is off" },
+      extract: { none: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
+      records: { on: "every candidate, measurement and refusal, read back on resume" },
+    }[box] || {};
+    if (box === "records") v = "on";
+    if (v === undefined && BOXES[box]) v = BOXES[box].choices[0].value;
+    return words[v] || null;
+  }
+
+  /** A measurement's estimator in `flux task check`'s words (estimate.py describe). */
+  var ESTIMATE_MIN_ROWS = 3;
+  function explainEstimate(est) {
+    if (!est || !est.kind || est.kind === "off") return "none (the tool runs on every design)";
+    var how = { surrogate: "a fit over the record's rows on this stage, from " + ESTIMATE_MIN_ROWS + " rows",
+                command: "the estimate command", model: "the model, from the design and the stage's rows" }[est.kind];
+    var m = num(est.margin);
+    return est.kind + " (" + how + "); skipped when it fails a cutoff or limit by more than " + (m === null ? "?" : Math.round(m)) + "%";
+  }
+
+  /** A box with one choice is fixed: drawn grey, not clickable. */
+  function isFixed(box) { return !BOXES[box] || BOXES[box].choices.length === 1; }
+
   function choiceOf(box, value) {
     var cs = BOXES[box].choices;
     for (var i = 0; i < cs.length; i++) if (cs[i].value === value) return cs[i];
@@ -108,6 +151,7 @@
   function halfOf(state, box) {
     var v = (state.flow || {})[box];
     if (box === "orchestrate" && state.flow && state.flow.dse && state.flow.dse !== "none") return "off";
+    if (!BOXES[box] || isFixed(box)) return "fixed";
     var c = choiceOf(box, v);
     return c ? c.half : "rules";
   }
@@ -231,7 +275,8 @@
                  "timeloop-eval": "timeloop" }[id] || "measure";
     var params = paramsOf(toolOf(id, cat));
     if ("clock_ps" in params) params.clock_ps = "";           // empty: from an fmax limit, else the tool's default
-    return { tool: id, name: uniqueName(base, taken), params: params, metrics: "", needs: "", gates: [] };
+    return { tool: id, name: uniqueName(base, taken), params: params, metrics: "", needs: "", gates: [],
+             estimate: { kind: "off", margin: "5", command: "" } };
   }
 
   /** The value a param takes in the command: `{home}/` put back on a bare file name. */
@@ -455,7 +500,7 @@
         for (var key in d) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
       }
       return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
-               metrics: write ? rep : [], needs: needs, gates: gates,
+               metrics: write ? rep : [], needs: needs, gates: gates, estimate: estimateOf(st),
                clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null };
     });
     return { checks: checks, stages: stages, objectives: objectives, document: docKeys };
@@ -465,7 +510,7 @@
     var v = state.flow[box];
     if (typeof v === "string" && v.indexOf("agent:") === 0) return "{agent: " + v.slice(6) + "}";
     if (box === "generate" && v === "command") return "{command: " + JSON.stringify(String(state.generateCommand || "").trim()) + "}";
-    if (box === "analytical" || box === "knowledge") return "[" + v + "]";
+
     return v;
   }
 
@@ -480,6 +525,16 @@
       if (NEVER.indexOf(b) >= 0 && String(v).indexOf("agent:") === 0) return false;
       return !!choiceOf(b, v);
     });
+  }
+
+  /** A measurement's estimator, as the document writes it; null when off. */
+  function estimateOf(st) {
+    var e = st.estimate || {};
+    if (!e.kind || e.kind === "off") return null;
+    var out = { kind: e.kind }, m = num(e.margin);
+    out.margin = m === null ? null : Math.round(m * 1000) / 100000;
+    if (e.kind === "command") out.command = String(e.command || "").trim();
+    return out;
   }
 
   function gateMap(g) {
@@ -539,6 +594,11 @@
         else out += "    command: " + q(st.command || "(the command)") + "\n";
         if (st.metrics.length) out += "    metrics: " + flowSeq(st.metrics) + "\n";
         if (st.needs.length) out += "    needs: " + flowSeq(st.needs) + "\n";
+        if (st.estimate) {
+          var ep = [["kind", st.estimate.kind], ["margin", st.estimate.margin === null ? "?" : st.estimate.margin]];
+          if (st.estimate.kind === "command") ep.push(["command", st.estimate.command || "(the command)"]);
+          out += "    estimate: " + flowMap(ep) + "\n";                 // estimated first; a likely failure is skipped
+        }
         if (st.gates.length === 1) out += "    cutoff: " + gateMap(st.gates[0]) + "\n";   // go on only if
         else if (st.gates.length > 1) out += "    cutoff: [" + st.gates.map(gateMap).join(", ") + "]\n";
       });
@@ -644,6 +704,11 @@
         if (v === null) error("Measurement \"" + nm + "\": the gate on " + m + " needs a number.");
         else if (g.rule === "within" && !(v > 0 && v <= 100)) error("Measurement \"" + nm + "\": \"within\" is a percentage between 1 and 100.");
       });
+      if (rs.estimate) {
+        var em = num((st.estimate || {}).margin);
+        if (em === null || em < 0 || em > 100) error("Measurement \"" + nm + "\": the estimate's margin is a percentage from 0 to 100.");
+        if (rs.estimate.kind === "command" && !rs.estimate.command) error("Measurement \"" + nm + "\": say the command that estimates it.");
+      }
       if (last && (st.gates || []).length) warn("The last measurement's gate has nothing after it to hold back.");
     });
 
@@ -696,6 +761,7 @@
       if (String(x.knob || "").trim() && !list(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
     var searching = flow.dse && flow.dse !== "none";
+    if (flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
     if (searching && !knobs.length) error("A search needs settings to walk: add some under Advanced > Settings to search.");
     if (!searching && knobs.length) warn("The settings are only searched when \"Search the settings\" is on.");
     if (searching && flow.orchestrate && flow.orchestrate !== "default") warn("With a search, the search picks the next job; \"Pick the next job\" is left out.");
@@ -704,6 +770,7 @@
     var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run]; });
     r.stages.forEach(function (st) {
       cmds.push(["measurement \"" + st.name + "\"", st.shape ? JSON.stringify(st.shape).replace(/[",:{}\[\]]/g, " ") : st.command]);
+      if (st.estimate && st.estimate.command) cmds.push(["the estimate of \"" + st.name + "\"", st.estimate.command]);
     });
     if (flow.generate === "command") cmds.push(["the design script", state.generateCommand]);
     cmds.forEach(function (c) {
@@ -740,7 +807,8 @@
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
               CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
-              AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base };
+              AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
+              explain: explain, explainEstimate: explainEstimate };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof document === "undefined") return;
@@ -767,7 +835,7 @@
 
   function mount(host) {
     var state = base();
-    var openBox = null;
+    var openBox = null, openNode = null;
     var parts = {};
 
     function changed(structural) {
@@ -910,7 +978,8 @@
       var tools = stageTools();
       var rows = state.stages.map(function (st, i) {
         var t = toolOf(st.tool), custom = isCustom(st.tool) || !t, keys = Object.keys((t && t.params) || {});
-        var line = [h("span", { class: "fc-idx", text: String(i + 1) }),
+        var estimated = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
+        var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? "estimated first" : null }),
           field("Tool", function () { return st.tool; }, function (v) {
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
           }, { compact: true, structural: true, options: tools }),
@@ -940,6 +1009,18 @@
             return m + (t.metrics[m] ? " (" + t.metrics[m] + ")" : ""); }).join(", ") + ".") }));
           keys.slice(1).forEach(function (k) { more.push(paramField(t, st, k)); });
           if (custom) more.push(field("Tools it needs", function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true }));
+          var est = st.estimate = st.estimate || { kind: "off", margin: "5", command: "" };
+          more.push(field("Estimate first", function () { return est.kind; }, function (v) { est.kind = v; },
+                          { compact: true, structural: true, hint: "Predict this measurement before running it; a design estimated to fail a gate or a limit by more than the margin is skipped here",
+                            options: [["off", "off"], ["surrogate", "fitted from past runs"], ["command", "my model script"], ["model", "the AI model"]] }));
+          more.push(h("small", { class: "fc-wide fc-now", text: "Estimate: " + explainEstimate(est) }));
+          if (est.kind !== "off") {
+            more.push(field("Margin %", function () { return est.margin; }, function (v) { est.margin = v; }, { compact: true, narrow: true }));
+            if (est.kind === "command") {
+              more.push(field("Estimate command", function () { return est.command; }, function (v) { est.command = v; },
+                              { compact: true, grow: true, placeholder: "{python} {home}/estimate.py {artifact}", hint: "Prints the same name=value numbers" }));
+            }
+          }
           kids.push(h("div", { class: "fc-line fc-more" }, more));
         }
         return h("div", { class: "fc-row" }, kids);
@@ -1014,20 +1095,35 @@
     }
 
     // -- level 2: the drawing
-    var LAYOUT = (function () {
-      var W = 150, H = 44, L = 78, R = 248, C = 163, S = 448, rows = [16, 86, 156, 226, 296, 366, 436, 506];
-      function at(x, r) { return { x: x, y: rows[r], w: W, h: H }; }
-      return {
-        width: 624, height: 566,
-        box: { validate: at(C, 0), plan: at(L, 1), orchestrate: at(R, 1), feedback: at(S, 1),
-               dse: at(L, 2), generate: at(R, 2), knowledge: at(S, 2), test: at(C, 3),
-               analytical: at(L, 4), simulation: at(R, 4), calibrate: at(C, 5), critique: at(S, 5),
-               select: at(C, 6), records: at(C, 7), extract: at(S, 7) },
-      };
-    })();
+    /* The loop as it runs, top to bottom. Grey boxes are fixed (set elsewhere, or always on);
+       red dotted arrows are the ways a design is refused: a check fails (repair), the part critic
+       objects (sent back), a measurement asks for better (improve), an estimate or a gate fails
+       (dropped). The critic, when on, sits at its three points. */
+    var W = 150, H = 44, SW = 132, SH = 30, L = 70, R = 248, C = 159, S = 452;
+    var ROWS = [16, 86, 156, 226, 290, 350, 420, 484, 548];
+
+    function nodes() {
+      function at(id, box, x, r, small) {
+        return { id: id, box: box, x: x, y: ROWS[r] + (small ? (H - SH) / 2 : 0), w: small ? SW : W, h: small ? SH : H, small: !!small };
+      }
+      var out = [at("validate", "validate", C, 0), at("crit-division", "critique", S + (W - SW) / 2, 0, true),
+        at("plan", "plan", L, 1), at("orchestrate", "orchestrate", R, 1), at("feedback", "feedback", S, 1),
+        at("dse", "dse", L, 2), at("generate", "generate", R, 2), at("knowledge", "knowledge", S, 2),
+        at("test", "test", C, 3), at("crit-part", "critique", C + (W - SW) / 2, 4, true),
+        at("measure", "measure", C, 5), at("calibrate", "calibrate", C, 6),
+        at("select", "select", C, 7), at("crit-decision", "critique", S + (W - SW) / 2, 7, true),
+        at("records", "records", C, 8), at("extract", "extract", S, 8)];
+      if (hasParts()) out.push(at("parts", "parts", L - 44, 4, true));
+      return out;
+    }
+
+    function hasParts() { return state.partsMode === "decompose" || (state.partsMode === "list" && list(state.parts).length > 0); }
+
+    var LAYOUT = { width: 640, height: 606 };
 
     function edges() {
-      var b = LAYOUT.box;
+      var b = {};
+      nodes().forEach(function (n) { b[n.id] = n; });
       function cx(n) { return b[n].x + b[n].w / 2; }
       function top(n) { return b[n].y; }
       function bot(n) { return b[n].y + b[n].h; }
@@ -1035,25 +1131,37 @@
       function left(n) { return b[n].x; }
       function right(n) { return b[n].x + b[n].w; }
       function elbow(a, z) { var m = (bot(a) + top(z)) / 2; return "M" + cx(a) + " " + bot(a) + " V" + m + " H" + cx(z) + " V" + top(z); }
-      return [
+      function down(a, z) { return "M" + cx(a) + " " + bot(a) + " V" + top(z); }
+      var bus = 428, genIn = cy("generate") + 8;           // the red bus back into "Make a design"
+      var out = [
         { d: elbow("validate", "plan") }, { d: elbow("validate", "orchestrate") },
         { d: "M" + right("plan") + " " + cy("plan") + " H" + left("orchestrate") },
+        { d: "M" + cx("crit-division") + " " + bot("crit-division") + " V" + (top("orchestrate") - 12) + " H" + (right("orchestrate") - 20) + " V" + top("orchestrate"), side: true },
         { d: "M" + left("feedback") + " " + cy("feedback") + " H" + right("orchestrate"), side: true },
-        { d: "M" + cx("orchestrate") + " " + bot("orchestrate") + " V" + top("generate") },
+        { d: down("orchestrate", "generate") },
         { d: "M" + right("dse") + " " + cy("dse") + " H" + left("generate") },
-        { d: "M" + left("knowledge") + " " + cy("knowledge") + " H" + right("generate"), side: true },
+        { d: "M" + left("knowledge") + " " + (cy("knowledge") - 8) + " H" + right("generate"), side: true },
         { d: elbow("generate", "test") },
-        { d: elbow("test", "analytical") },
-        { d: "M" + right("analytical") + " " + cy("analytical") + " H" + left("simulation") },
-        { d: elbow("simulation", "calibrate") },
-        { d: "M" + cx("calibrate") + " " + bot("calibrate") + " V" + top("select") },
-        { d: "M" + left("critique") + " " + cy("critique") + " H424 V" + cy("select") + " H" + right("select"), side: true },
-        { d: "M" + cx("select") + " " + bot("select") + " V" + top("records") },
+        { d: down("test", "crit-part") },
+        { d: down("crit-part", "measure") },
+        { d: down("measure", "calibrate") },
+        { d: down("calibrate", "select") },
+        { d: "M" + right("select") + " " + cy("select") + " H" + left("crit-decision") },
+        { d: down("select", "records") },
         { d: "M" + right("records") + " " + cy("records") + " H" + left("extract"), side: true },
-        { d: "M" + right("extract") + " " + cy("extract") + " H612 V" + cy("knowledge") + " H" + right("knowledge"), side: true },
-        { d: "M" + left("records") + " " + cy("records") + " H34 V" + cy("plan") + " H" + left("plan"), back: true,
-          label: { x: 26, y: cy("test"), text: "next round" } },
+        { d: "M" + right("extract") + " " + cy("extract") + " H" + (LAYOUT.width - 12) + " V" + (cy("knowledge") + 6) + " H" + right("knowledge"), side: true },
+        { d: "M" + left("records") + " " + cy("records") + " H22 V" + cy("plan") + " H" + left("plan"), back: true,
+          label: { x: 14, y: (cy("plan") + cy("records")) / 2, text: "at rest → explore", rotate: true } },
+        // the refusals, red and dotted
+        { d: "M" + right("test") + " " + cy("test") + " H" + bus, red: true, label: { x: right("test") + 6, y: cy("test") - 4, text: "repair" } },
+        { d: "M" + right("crit-part") + " " + cy("crit-part") + " H" + bus, red: true, label: { x: right("crit-part") + 6, y: cy("crit-part") - 4, text: "sent back" } },
+        { d: "M" + right("measure") + " " + cy("measure") + " H" + bus, red: true, label: { x: right("measure") + 6, y: cy("measure") - 4, text: "improve" } },
+        { d: "M" + bus + " " + cy("measure") + " V" + genIn + " H" + right("generate"), red: true, arrow: true },
+        { d: "M" + left("measure") + " " + (cy("measure") + 6) + " H" + (left("measure") - 44), red: true, drop: { x: left("measure") - 50, y: cy("measure") + 6 },
+          label: { x: left("measure") - 60, y: cy("measure") - 4, text: "dropped", anchor: "end" } },
       ];
+      if (b.parts) out.push({ d: "M" + cx("parts") + " " + bot("parts") + " V" + (top("measure") - 8) + " H" + (left("measure") + 20) + " V" + top("measure") });
+      return out;
     }
 
     function renderDiagram() {
@@ -1061,63 +1169,103 @@
       if (!svg) return;
       while (svg.firstChild) svg.removeChild(svg.firstChild);
       var defs = s("defs", {});
-      var marker = s("marker", { id: "fc-arrow", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
-      marker.appendChild(s("path", { d: "M0 0 L10 5 L0 10 z", class: "fc-arrowhead" }));
-      defs.appendChild(marker);
+      [["fc-arrow", "fc-arrowhead"], ["fc-arrow-red", "fc-arrowhead-red"]].forEach(function (m) {
+        var marker = s("marker", { id: m[0], viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
+        marker.appendChild(s("path", { d: "M0 0 L10 5 L0 10 z", class: m[1] }));
+        defs.appendChild(marker);
+      });
       svg.appendChild(defs);
       edges().forEach(function (e) {
-        svg.appendChild(s("path", { d: e.d, class: "fc-edge" + (e.side ? " fc-side" : "") + (e.back ? " fc-back" : ""), "marker-end": "url(#fc-arrow)" }));
-        if (e.label) svg.appendChild(s("text", { x: e.label.x, y: e.label.y, class: "fc-edge-label", transform: "rotate(-90 " + e.label.x + " " + e.label.y + ")", "text-anchor": "middle" }, e.label.text));
+        var cls = "fc-edge" + (e.side ? " fc-side" : "") + (e.back ? " fc-back" : "") + (e.red ? " fc-red" : "");
+        var attrs = { d: e.d, class: cls };
+        if (!e.red || e.arrow) attrs["marker-end"] = e.red ? "url(#fc-arrow-red)" : "url(#fc-arrow)";
+        svg.appendChild(s("path", attrs));
+        if (e.drop) svg.appendChild(s("text", { x: e.drop.x, y: e.drop.y + 4, class: "fc-drop", "text-anchor": "middle" }, "×"));
+        if (e.label) {
+          var la = { x: e.label.x, y: e.label.y, class: "fc-edge-label" + (e.red ? " fc-red-label" : ""), "text-anchor": e.label.anchor || (e.label.rotate ? "middle" : "start") };
+          if (e.label.rotate) la.transform = "rotate(-90 " + e.label.x + " " + e.label.y + ")";
+          svg.appendChild(s("text", la, e.label.text));
+        }
       });
-      FLOW_BOXES.forEach(function (name) {
-        var r = LAYOUT.box[name], half = halfOf(state, name);
-        var g = s("g", { class: "fc-box fc-" + half + (openBox === name ? " fc-open" : ""), tabindex: "0", role: "button",
-                         "data-box": name, "aria-haspopup": "dialog", "aria-expanded": openBox === name ? "true" : "false",
-                         "aria-label": BOXES[name].title + ": " + (choiceOf(name, state.flow[name]) || {}).label });
-        var full = stepNames(name);
-        if (full && full.length) g.appendChild(s("title", {}, BOXES[name].title + ": " + full.join(" \u2192 ")));
-        g.appendChild(s("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 7 }));
-        g.appendChild(s("text", { x: r.x + r.w / 2, y: r.y + 19, "text-anchor": "middle", class: "fc-box-name" }, BOXES[name].title));
-        var sub = subtitle(name, half);
-        g.appendChild(s("text", { x: r.x + r.w / 2, y: r.y + 35, "text-anchor": "middle", class: "fc-box-half" }, sub));
-        g.addEventListener("click", function () { openPopover(openBox === name ? null : name, false); });
-        g.addEventListener("keydown", function (ev) {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPopover(openBox === name ? null : name, true); }
-        });
+      nodes().forEach(function (n) {
+        var fixed = n.box === "parts" || isFixed(n.box), half = fixed ? "fixed" : halfOf(state, n.box);
+        var box = BOXES[n.box] || { title: "Parts", fixed: "Set under Advanced > Parts." };
+        var title = n.id === "crit-division" ? "Critic: division" : n.id === "crit-part" ? "Critic: each part"
+                  : n.id === "crit-decision" ? "Critic: decision" : n.id === "parts" ? "parts: sub-loops, composed" : box.title;
+        var attrs = { class: "fc-box fc-" + half + (fixed ? " fc-static" : "") + (openNode === n.id ? " fc-open" : "") + (n.small ? " fc-smallbox" : ""),
+                      "data-box": n.box, "data-node": n.id };
+        if (!fixed) {
+          attrs.tabindex = "0"; attrs.role = "button"; attrs["aria-haspopup"] = "dialog";
+          attrs["aria-expanded"] = openNode === n.id ? "true" : "false";
+          attrs["aria-label"] = title + ": " + (choiceOf(n.box, state.flow[n.box]) || {}).label;
+        } else {
+          attrs.tabindex = "-1";
+        }
+        var g = s("g", attrs);
+        var full = stepNames(n.box);
+        g.appendChild(s("title", {}, title + (full && full.length ? ": " + full.join(" → ") : "") + (fixed ? " — " + (box.fixed || "fixed") : "")));
+        if (n.id === "parts") {                       // a stack: two shadows behind
+          [6, 3].forEach(function (d) { g.appendChild(s("rect", { x: n.x + d, y: n.y - d, width: n.w, height: n.h, rx: 6, class: "fc-stack" })); });
+        }
+        g.appendChild(s("rect", { x: n.x, y: n.y, width: n.w, height: n.h, rx: n.small ? 6 : 7 }));
+        if (n.small) {
+          g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 19, "text-anchor": "middle", class: "fc-box-small" + (n.id === "parts" ? " fc-tiny" : "") }, title));
+        } else {
+          g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 19, "text-anchor": "middle", class: "fc-box-name" }, title));
+          g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 35, "text-anchor": "middle", class: "fc-box-half" }, subtitle(n.box, half)));
+        }
+        if (fixed && !n.small) lock(g, n.x + n.w - 11, n.y + 5);
+        if (!fixed) {
+          g.addEventListener("click", function () { openPopover(openNode === n.id ? null : n.box, false, n.id); });
+          g.addEventListener("keydown", function (ev) {
+            if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPopover(openNode === n.id ? null : n.box, true, n.id); }
+          });
+        }
         svg.appendChild(g);
       });
       placePopover();
       if (parts.lists) {
-        var c = stepNames("test"), m = stepNames("simulation"), cut = [];
-        if (c.length && abbreviate(c, 24) !== c.join(" \u2192 ")) cut.push("Checks: " + c.join(" \u2192 "));
-        if (m.length && abbreviate(m, 24) !== m.join(" \u2192 ")) cut.push("Measurements: " + m.join(" \u2192 "));
-        parts.lists.textContent = cut.join(" \u00b7 ");
+        var c = stepNames("test"), m = stepNames("measure"), cut = [];
+        if (c.length && abbreviate(c, 24) !== c.join(" → ")) cut.push("Checks: " + c.join(" → "));
+        if (m.length && abbreviate(m, 24) !== m.join(" → ")) cut.push("Measurements: " + m.join(" → "));
+        parts.lists.textContent = cut.join(" · ");
       }
     }
 
-    /** What a box says under its name: who does it, or for the check and the measurements,
-        the chosen ones in order. */
-    /** The checks' or the measurements' names, for the test and simulation boxes. */
+    /** A small padlock: this box is not a setting. */
+    function lock(g, x, y) {
+      g.appendChild(s("path", { d: "M" + (x + 1.5) + " " + (y + 4) + " v-1.5 a2.5 2.5 0 0 1 5 0 v1.5", class: "fc-lock-shackle" }));
+      g.appendChild(s("rect", { x: x, y: y + 4, width: 8, height: 6, rx: 1, class: "fc-lock" }));
+    }
+
+    /** The checks' or the measurements' names ("~" before one estimated first). */
     function stepNames(name) {
-      var rows = name === "test" ? state.checks : name === "simulation" ? state.stages : null;
-      return rows ? rows.map(function (x) { return String(x.name || "?").trim() || "?"; }) : null;
+      if (name === "test") return state.checks.map(function (x) { return String(x.name || "?").trim() || "?"; });
+      if (name === "measure") return state.stages.map(function (x) {
+        return (x.estimate && x.estimate.kind && x.estimate.kind !== "off" ? "~" : "") + (String(x.name || "?").trim() || "?");
+      });
+      return null;
     }
 
     function subtitle(name, half, max) {
       var text = half === "off" && name === "orchestrate" && state.flow.dse !== "none" ? "the search" : HALVES[half];
+      if (name === "orchestrate" && state.flow.orchestrate === "default" && !(state.flow.dse && state.flow.dse !== "none")) {
+        text = hasParts() ? "model picks the part" : "default: one design";
+      }
       var names = stepNames(name);
       max = max || 24;
       if (names) return names.length ? abbreviate(names, max) : "none yet";
-      return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
+      return text.length > max ? text.slice(0, max - 1) + "…" : text;
     }
 
     // -- the popover: a chosen box's choices, anchored to it (a bottom sheet on a narrow screen)
-    function boxEl(name) { return parts.svg && parts.svg.querySelector('[data-box="' + name + '"]'); }
+    function boxEl() { return parts.svg && openNode && parts.svg.querySelector('[data-node="' + openNode + '"]'); }
 
     /** Open `name`'s popover (null closes it); `focus`: move the keyboard into it. */
-    function openPopover(name, focus) {
-      var was = openBox;
+    function openPopover(name, focus, node) {
+      var was = openNode;
       openBox = name;
+      openNode = name ? node || name : null;
       renderDiagram();
       fillPopover();
       placePopover();
@@ -1125,7 +1273,7 @@
         var first = parts.pop.querySelector("input:checked") || parts.pop.querySelector("input, button");
         if (first) first.focus();
       }
-      if (!name && was && focus !== false) { var g = boxEl(was); if (g) g.focus(); }
+      if (!name && was && focus !== false) { var g = parts.svg.querySelector('[data-node="' + was + '"]'); if (g) g.focus(); }
     }
 
     function fillPopover() {
@@ -1138,6 +1286,8 @@
       p.appendChild(h("div", { class: "fc-pop-head" }, [h("strong", { text: box.title }), h("code", { text: openBox }),
         button("\u00d7", function () { openPopover(null, true); }, "fc-small fc-icon fc-pop-close")]));
       p.appendChild(h("p", { text: box.says }));
+      var now = explain(openBox, state);
+      if (now) p.appendChild(h("p", { class: "fc-hint fc-now", text: "As set: " + now + "." }));
       if (openBox === "orchestrate" && state.flow.dse !== "none") {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
       } else if (box.choices.length === 1) {
@@ -1170,7 +1320,7 @@
     function placePopover() {
       var p = parts.pop;
       if (!p || !openBox) return;
-      var g = boxEl(openBox);
+      var g = boxEl();
       p.classList.remove("fc-sheet", "fc-right", "fc-left", "fc-below");
       if (!g || window.innerWidth < 700) { p.classList.add("fc-sheet"); p.style.left = p.style.top = ""; return; }
       var r = g.getBoundingClientRect(), w = p.offsetWidth, hgt = p.offsetHeight, gap = 12, vw = window.innerWidth, vh = window.innerHeight;
@@ -1295,7 +1445,7 @@
     });
     document.addEventListener("mousedown", function (ev) {       // a click outside closes it; on a box, the box decides
       if (!openBox || parts.pop.contains(ev.target)) return;
-      var box = ev.target.closest && ev.target.closest(".fc-box");
+      var box = ev.target.closest && ev.target.closest(".fc-box:not(.fc-static)");
       if (!box) openPopover(null, false);
     });
     window.addEventListener("resize", placePopover);
