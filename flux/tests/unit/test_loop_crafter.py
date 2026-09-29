@@ -31,11 +31,16 @@ FILES = {
     "rtl": (TEMPLATES / "rtl", ["golden.py"]),
     "python": (TEMPLATES / "python", ["check.py", "bench.py"]),
     "none": (TEMPLATES, []),
+    "zigzag": (REPO / "flux/applications/npu_gemm", ["check.py", "workload.yaml"]),
 }
 
 SCRIPT = r"""
 const c = require(process.argv[1]);
-c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const catalog = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
+// a stage the catalog may list without `run`: its stage shape is written instead of a command
+catalog.push({id: "test-evaluator", role: "stage", title: "An evaluator stage", what: "", stage: {evaluator: "zigzag"},
+              params: {}, metrics: {latency_cycles: "cycles", energy_pj: "pJ"}, needs: [], languages: []});
+c.setCatalog(catalog);
 const out = {};
 const add = (name, files, s, extra) => { out[name] = Object.assign({files, state: s}, extra || {}); };
 const fresh = (id, lang) => { const s = c.base(); s.id = id; s.statement = "Whatever " + id + " makes."; s.language = lang; return s; };
@@ -77,6 +82,49 @@ s.stages.push(c.newStage(s, "rtl-synth"));
 s.objectives = [obj("fmax_mhz", "balance"), obj("area_um2", "balance")];
 add("balance", "rtl", s);
 
+// five checks and five measurements with long names (the diagram abbreviates them)
+s = fresh("many", "systemverilog");
+["lint", "golden", "test", "custom", "custom"].forEach(t => s.checks.push(c.newCheck(s, t)));
+s.checks[3].name = "a_rather_long_custom_check"; s.checks[3].params.command = "{python} {home}/golden.py";
+s.checks[4].name = "another_long_custom_check"; s.checks[4].params.command = "{python} {home}/golden.py";
+["rtl-synth", "rtl-place", "rtl-route", "custom-stage", "custom-stage"].forEach(t => s.stages.push(c.newStage(s, t)));
+s.stages[3].name = "post_route_power_estimate"; s.stages[3].params.command = "{python} {home}/golden.py {artifact}";
+s.stages[3].metrics = "fmax_mhz, area_um2";
+s.stages[4].name = "gate_level_simulation_run"; s.stages[4].params.command = "{python} {home}/golden.py {artifact}";
+s.stages[4].metrics = "fmax_mhz, area_um2";
+s.objectives = [obj("fmax_mhz", "atleast", "1250"), obj("area_um2", "min")];
+add("many", "rtl", s);
+out.abbrev = {checks: c.abbreviate(s.checks.map(x => x.name), 24), stages: c.abbreviate(s.stages.map(x => x.name), 24)};
+
+// the clock: untyped, it follows an "at least" on fmax; typed, it is kept
+s = JSON.parse(JSON.stringify(out.rtl.state)); s.id = "typed_clock"; s.stages[0].params.clock_ps = "400";
+add("typed_clock", "rtl", s);
+
+// maximise fmax with a fixed clock: a warning; searching the clock: none
+s = fresh("fastest", "systemverilog"); s.checks.push(c.newCheck(s, "golden")); s.stages.push(c.newStage(s, "rtl-synth"));
+s.objectives = [obj("fmax_mhz", "max")];
+add("fastest", "rtl", s);
+s = JSON.parse(JSON.stringify(s)); s.id = "fastest_searched"; s.stages[0].params.clock_ps = "{clock_ps}";
+s.space = [{knob: "clock_ps", choices: "250, 333, 500"}]; s.flow.dse = "sweep";
+add("fastest_searched", "rtl", s);
+
+// an evaluator stage from the catalog
+s = fresh("evaluated", "yaml"); s.checks.push(c.newCheck(s, "custom")); s.checks[0].params.command = "{python} {home}/check.py {artifact}";
+s.stages.push(c.newStage(s, "test-evaluator")); s.objectives = [obj("latency_cycles", "min")];
+add("evaluated", "python", s);
+
+// the real catalog's newer tools: an evaluator stage, a program timer, a Yosys-only area step
+s = fresh("zigzag_eval", "yaml"); s.checks.push(c.newCheck(s, "test"));
+s.stages.push(c.newStage(s, "zigzag-eval")); s.objectives = [obj("latency_cycles", "min"), obj("energy_pj", "min")];
+add("zigzag_eval", "zigzag", s);
+s = fresh("prog_timed", "cpp"); s.checks.push(c.newCheck(s, "test"));
+s.stages.push(c.newStage(s, "prog-time")); s.objectives = [obj("time_ms", "min")];
+add("prog_timed", "python", s);
+s = fresh("stat_then_synth", "systemverilog"); s.checks.push(c.newCheck(s, "golden"));
+s.stages.push(c.newStage(s, "rtl-stat")); s.stages.push(c.newStage(s, "rtl-synth"));
+s.objectives = [obj("area_um2", "min")];
+add("stat_then_synth", "rtl", s);
+
 // what can still go wrong
 const bad = (name, s) => add(name, "none", s, {bad: true});
 bad("bad_empty", c.base());
@@ -89,7 +137,13 @@ s = JSON.parse(JSON.stringify(out.rtl.state)); s.checks.push(c.newCheck(s, "cust
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.checks.push(Object.assign(c.newCheck(s, "custom"), {tool: "champsim-build", name: "build", params: {}})); bad("bad_language", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives[0].value = ""; s.stages[0].gates[0].value = "150"; s.stages[0].gates[0].rule = "within"; bad("bad_values", s);
 
+s = JSON.parse(JSON.stringify(out.stat_then_synth.state)); s.objectives.unshift(obj("fmax_mhz", "atleast", "1000"));
+bad("bad_partly_reported", s);
+s = JSON.parse(JSON.stringify(out.zigzag_eval.state)); s.stages.push(c.newStage(s, "timeloop-eval"));
+s.stages[1].params.workload = "other.yaml"; bad("bad_two_workloads", s);
+
 for (const k in out) {
+  if (!out[k].state) continue;
   out[k].yaml = c.buildYaml(out[k].state);
   out[k].check = c.check(out[k].state);
   out[k].words = c.describeObjectives(c.resolve(out[k].state).objectives);
@@ -106,7 +160,7 @@ def _run():
 
 
 BUILT = _run() if shutil.which("node") else {}
-GOOD = sorted(k for k, v in BUILT.items() if not v.get("bad"))
+GOOD = sorted(k for k, v in BUILT.items() if "state" in v and not v.get("bad"))
 
 
 def _load(tmp_path: Path, case: dict, pending: bool = False):
@@ -197,3 +251,51 @@ def test_check_flags_what_can_still_go_wrong():
     e = _errors(BUILT["bad_values"])
     assert "must be at least" in e and "percentage between 1 and 100" in e
     assert "last measurement's gate" in _warnings(BUILT["rtl"])
+
+
+def test_five_checks_and_five_measurements_load_in_order_and_abbreviate(tmp_path):
+    t = _load(tmp_path, BUILT["many"])
+    assert [c.name for c in t.gate] == ["lint", "golden", "test", "a_rather_long_custom_check", "another_long_custom_check"]
+    assert [s.name for s in t.stages] == ["synth", "place", "route", "post_route_power_estimate", "gate_level_simulation_run"]
+    for text in BUILT["abbrev"].values():         # the diagram's second line never overflows its box
+        assert len(text) <= 24 and "+" in text, text
+    assert BUILT["abbrev"]["checks"].startswith("lint \u2192 golden")
+
+
+def test_the_clock_follows_an_fmax_limit_unless_typed(tmp_path):
+    t = _load(tmp_path, BUILT["many"])                       # at least 1250 MHz, no clock typed
+    assert all(s.command[-1] == "800" for s in t.stages[:3]), [s.command for s in t.stages]
+    t = _load(tmp_path, BUILT["typed_clock"])                # the rtl state asks 1000 MHz; one clock typed
+    assert t.stages[0].command[-1] == "400" and t.stages[1].command[-1] == "1000"
+
+
+def test_maximising_fmax_at_a_fixed_clock_warns_unless_the_clock_is_searched(tmp_path):
+    assert "A fixed clock biases" in _warnings(BUILT["fastest"])
+    assert "fixed clock" not in _warnings(BUILT["fastest_searched"]) and not _errors(BUILT["fastest_searched"])
+    t = _load(tmp_path, BUILT["fastest_searched"])
+    assert t.stages[0].command[-1] == "{clock_ps}" and t.space["clock_ps"] == [250, 333, 500]
+
+
+def test_a_catalog_stage_without_run_writes_its_stage_shape(tmp_path):
+    y = BUILT["evaluated"]["yaml"]
+    assert "evaluator: zigzag" in y and "command:" not in y.split("stages:")[1]
+    t = _load(tmp_path, BUILT["evaluated"])
+    assert t.stages[0].evaluator == "zigzag" and t.stages[0].command is None
+    assert set(t.stages[0].metrics) == {"latency_cycles", "energy_pj"}
+
+
+def test_the_real_catalogs_newer_tools_load(tmp_path):
+    case = BUILT["zigzag_eval"]
+    assert 'workload: "{home}/workload.yaml"' in case["yaml"] and "evaluator: zigzag" in case["yaml"]
+    t = _load(tmp_path, case)
+    assert t.stages[0].evaluator == "zigzag" and t.workload == "{home}/workload.yaml"
+    t = _load(tmp_path, BUILT["prog_timed"])
+    assert t.stages[0].command[-9:-6] == ("time", "--build", "c++ -O2 -o {out} {artifact}")
+    t = _load(tmp_path, BUILT["stat_then_synth"])
+    assert [s.command[-3] for s in t.stages] == ["stat", "synth"] and t.stages[0].needs == ("yosys",)
+
+
+def test_an_objective_every_measurement_does_not_report_is_an_error():
+    e = _errors(BUILT["bad_partly_reported"])
+    assert "fmax_mhz, which stat does not report" in e and "every measurement must report every objective" in e
+    assert "one workload per document" in _errors(BUILT["bad_two_workloads"])

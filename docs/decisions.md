@@ -418,3 +418,11 @@ the topics above.
   instead of `run`; `flux tools` prints both. `zigzag-eval` (latency_cycles, energy_pj) and
   `timeloop-eval` (+ area_mm2; needs timeloop-mapper, the .#timeloop shell). A string `workload:`
   is now read beside the document (`{home}/w.yaml` or `w.yaml`), not from the cwd.
+
+- **D664: the builder is dense and shows every catalog tool.** Two columns on wide screens (form,
+  sticky YAML and checklist); one line per check, measurement and objective row, secondary
+  settings behind "more"; the diagram abbreviates long lists ("screen → +4") with the full list in
+  a tooltip. Scroll length at 1400 px: 4,666 → 2,368 px. The RTL clock is "the clock the tools aim
+  for", defaulting to an fmax "at least" limit. Evaluator tools write their stage object and the
+  top-level `workload`; an objective metric some measurement does not report is an error, as the
+  loader refuses it.

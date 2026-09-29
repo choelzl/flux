@@ -1,7 +1,12 @@
+---
+hide:
+  - toc
+---
+
 # Loop crafter
 
-Answer a few questions and get a `problem.yaml` that Flux can run. Start from the example
-closest to yours, change what differs, then copy or download the file.
+Say what you want, add the checks, the measurements and the objective, and get a
+`problem.yaml` that Flux can run. The file beside the form follows every change.
 
 <div id="flux-crafter" class="flux-crafter">
   <noscript>The problem builder needs JavaScript. Without it, <a href="../build-your-own/">build your own loop</a> walks through the same file by hand.</noscript>

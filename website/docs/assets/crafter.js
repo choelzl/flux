@@ -147,11 +147,33 @@
     { key: "custom", title: "Custom", tools: ["custom-check"], any: ["custom-check"] },
   ];
 
-  /** The measuring tools, labelled by the tool. */
-  var STAGE_TOOLS = [
-    ["rtl-synth", "Yosys synthesis (timed by OpenSTA)"], ["rtl-place", "OpenROAD placement"], ["rtl-route", "OpenROAD routing"],
-    ["champsim-run", "ChampSim simulation"], ["zigzag-model", "ZigZag model"], ["bench-script", "Benchmark script"],
-    ["custom-stage", "Custom command"]];
+  /** Labels by tool for the measuring tools the page knows; any other catalog stage shows its title. */
+  var STAGE_LABELS = { "rtl-synth": "Yosys synthesis (timed by OpenSTA)", "rtl-place": "OpenROAD placement",
+                       "rtl-route": "OpenROAD routing", "champsim-run": "ChampSim simulation", "zigzag-model": "ZigZag model",
+                       "bench-script": "Benchmark script", "custom-stage": "Custom command",
+                       "rtl-stat": "Yosys area (no timing)", "prog-size": "Program size (size)",
+                       "prog-time": "Program run time", "prog-count": "Instruction count (Valgrind)",
+                       "zigzag-eval": "ZigZag evaluator", "timeloop-eval": "Timeloop evaluator" };
+
+  /** The measuring tools: every stage the catalog lists, custom last, as [id, label]. */
+  function stageTools(cat) {
+    var out = (cat || CATALOG).filter(function (t) { return t.role === "stage"; })
+      .map(function (t) { return [t.id, STAGE_LABELS[t.id] || t.title]; });
+    out.sort(function (a, b) { return (a[0] === "custom-stage") - (b[0] === "custom-stage"); });
+    return out;
+  }
+
+  /** `names` joined by arrows within `max` characters: as many as fit, then "+N". */
+  function abbreviate(names, max) {
+    var full = names.join(" \u2192 ");
+    if (full.length <= max) return full;
+    for (var k = names.length - 1; k >= 1; k--) {
+      var t = names.slice(0, k).join(" \u2192 ") + " \u2192 +" + (names.length - k);
+      if (t.length <= max) return t;
+    }
+    var first = names[0].length > max - 5 ? names[0].slice(0, max - 6) + "\u2026" : names[0];
+    return names.length > 1 ? first + " +" + (names.length - 1) : first;
+  }
 
   function checkType(key) { for (var i = 0; i < CHECK_TYPES.length; i++) if (CHECK_TYPES[i].key === key) return CHECK_TYPES[i]; return null; }
 
@@ -204,25 +226,55 @@
   function newStage(state, id, cat) {
     var taken = (state.stages || []).map(function (s) { return s.name; });
     var base = { "rtl-synth": "synth", "rtl-place": "place", "rtl-route": "route", "champsim-run": "sim",
-                 "zigzag-model": "model", "bench-script": "bench", "custom-stage": "measure" }[id] || "measure";
-    return { tool: id, name: uniqueName(base, taken), params: paramsOf(toolOf(id, cat)), metrics: "", needs: "", gates: [] };
+                 "zigzag-model": "model", "bench-script": "bench", "custom-stage": "measure", "rtl-stat": "stat",
+                 "prog-size": "size", "prog-time": "time", "prog-count": "count", "zigzag-eval": "zigzag",
+                 "timeloop-eval": "timeloop" }[id] || "measure";
+    var params = paramsOf(toolOf(id, cat));
+    if ("clock_ps" in params) params.clock_ps = "";           // empty: from an fmax limit, else the tool's default
+    return { tool: id, name: uniqueName(base, taken), params: params, metrics: "", needs: "", gates: [] };
   }
 
   /** The value a param takes in the command: `{home}/` put back on a bare file name. */
-  function paramValue(t, name, v) {
+  function paramValue(t, name, v, auto) {
     var def = t && t.params && t.params[name] ? t.params[name].default : "";
     v = String(v === undefined || v === null ? "" : v).trim();
-    if (v === "") v = def === undefined || def === null ? "" : String(def);
+    if (v === "" && auto && auto[name] !== undefined && auto[name] !== null) v = String(auto[name]);
+    else if (v === "") v = def === undefined || def === null ? "" : String(def);
     else if (homeRelative(def) && !/^[\/{]/.test(v)) v = "{home}/" + v;
     return v;
   }
 
-  function fillRun(row, cat) {
+  function fillText(text, t, row, auto) {
+    return String(text).replace(/\{([A-Za-z_]\w*)\}/g, function (m, name) {
+      return t.params && Object.prototype.hasOwnProperty.call(t.params, name) ? paramValue(t, name, (row.params || {})[name], auto) : m;
+    }).trim();
+  }
+
+  /** A row's command, its params filled (`auto`: values that stand in for an empty param). */
+  function fillRun(row, cat, auto) {
     var t = toolOf(row.tool, cat);
     if (!t) return String((row.params || {}).command || "").trim();
-    return String(t.run).replace(/\{([A-Za-z_]\w*)\}/g, function (m, name) {
-      return t.params && Object.prototype.hasOwnProperty.call(t.params, name) ? paramValue(t, name, (row.params || {})[name]) : m;
-    }).trim();
+    if (t.run === undefined || t.run === null) return "";
+    return fillText(t.run, t, row, auto);
+  }
+
+  /** A catalog stage without `run` says its stage shape instead (e.g. `{evaluator: zigzag}`):
+      that shape, its strings filled like a command's. */
+  function fillShape(value, t, row, auto) {
+    if (typeof value === "string") return fillText(value, t, row, auto);
+    if (Array.isArray(value)) return value.map(function (v) { return fillShape(v, t, row, auto); });
+    if (value && typeof value === "object") {
+      var o = {};
+      for (var k in value) o[k] = fillShape(value[k], t, row, auto);
+      return o;
+    }
+    return value;
+  }
+
+  /** The clock an RTL stage aims for when none is typed: an "at least N" on fmax_mhz, as ps. */
+  function autoClock(state) {
+    var lim = (state.objectives || []).filter(function (o) { return o.metric === "fmax_mhz" && o.label === "atleast"; })[0];
+    return lim ? clockPs(lim.value) : null;
   }
 
   /** The numbers a measurement reports. */
@@ -334,6 +386,14 @@
 
   function flowSeq(items) { return "[" + items.map(function (v) { return scalar(v, true); }).join(", ") + "]"; }
 
+  /** Any value in YAML's flow style (a stage shape's nested values). */
+  function inline(v, flow) {
+    if (Array.isArray(v)) return "[" + v.map(function (x) { return inline(x, true); }).join(", ") + "]";
+    if (v && typeof v === "object") return "{" + Object.keys(v).map(function (k) { return q(k, true) + ": " + inline(v[k], true); }).join(", ") + "}";
+    if (v === null || v === undefined) return "null";
+    return scalar(v, flow);
+  }
+
   function flowMap(pairs) {
     return "{" + pairs.map(function (p) { return q(p[0], true) + ": " + scalar(p[1], true); }).join(", ") + "}";
   }
@@ -380,17 +440,25 @@
       return { name: String(c.name || "").trim() || "check" + (i + 1), run: fillRun(c, cat), tool: c.tool,
                count_re: isCustom(c.tool) ? String(c.count_re || "").trim() : "", timeout: String(c.timeout || "").trim() };
     });
+    var auto = { clock_ps: autoClock(state) }, docKeys = {};
     var stages = (state.stages || []).map(function (st, i) {
-      var t = toolOf(st.tool, cat), custom = !t || isCustom(st.tool), cmd = fillRun(st, cat), rep = reports(st, cat);
+      var t = toolOf(st.tool, cat), custom = !t || isCustom(st.tool), cmd = fillRun(st, cat, auto), rep = reports(st, cat);
+      var shape = t && !custom && (t.run === undefined || t.run === null) && t.stage ? fillShape(t.stage, t, st, auto) : null;
       var gates = (st.gates || []).map(gateOf).filter(Boolean);
       var used = objectives.map(function (o) { return o.metric; }).concat(gates.map(function (g) { return g.metric; }));
       var rtlMeasure = /^flux rtl measure\s/.test(cmd);
       var write = custom || !rtlMeasure || used.some(function (m) { return LOADER_RTL.indexOf(m) < 0 && rep.indexOf(m) >= 0; });
       var needs = custom ? list(st.needs) : /^flux rtl\s/.test(cmd) ? [] : (t.needs || []).slice();
-      return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, tool: st.tool, reports: rep,
-               metrics: write ? rep : [], needs: needs, gates: gates };
+      if (shape) { write = true; if ("needs" in shape) needs = []; }       // the shape says its own needs
+      if (t && !custom && t.document) {
+        var d = fillShape(t.document, t, st, auto);
+        for (var key in d) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
+      }
+      return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
+               metrics: write ? rep : [], needs: needs, gates: gates,
+               clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null };
     });
-    return { checks: checks, stages: stages, objectives: objectives };
+    return { checks: checks, stages: stages, objectives: objectives, document: docKeys };
   }
 
   function flowValue(state, box) {
@@ -444,6 +512,8 @@
       space.forEach(function (x) { out += "  " + q(x.knob.trim()) + ": " + flowSeq(list(x.choices).map(typed)) + "\n"; });
     }
 
+    for (var dk in r.document) out += "\n" + q(dk) + ": " + inline(r.document[dk][0].value, false) + "\n";   // an evaluator's own keys
+
     var said = flowSaid(state);
     if (said.length) {
       out += "\nflow:\n";
@@ -465,7 +535,8 @@
       out += "\nstages:                     # cheapest first\n";
       r.stages.forEach(function (st) {
         out += "  - name: " + q(st.name) + "\n";
-        out += "    command: " + q(st.command || "(the command)") + "\n";
+        if (st.shape) for (var key in st.shape) out += "    " + q(key) + ": " + inline(st.shape[key], false) + "\n";
+        else out += "    command: " + q(st.command || "(the command)") + "\n";
         if (st.metrics.length) out += "    metrics: " + flowSeq(st.metrics) + "\n";
         if (st.needs.length) out += "    needs: " + flowSeq(st.needs) + "\n";
         if (st.gates.length === 1) out += "    cutoff: " + gateMap(st.gates[0]) + "\n";   // go on only if
@@ -497,7 +568,7 @@
   // ------------------------------------------------------------------ the checklist
   function placeholders(cmd) {
     var out = [], re = /\{([A-Za-z_]\w*)\}/g, m;
-    String(cmd || "").split(/\s+/).forEach(function (tok) {
+    String(cmd || "").replace(/"[^"]*"|'[^']*'/g, " ").split(/\s+/).forEach(function (tok) {
       while ((m = re.exec(tok))) out.push(m[1]);
     });
     return out;
@@ -522,8 +593,9 @@
       if (t && lang && !fits(t, lang)) warn(what + " \"" + nm + "\" (" + t.title + ") is made for " + t.languages.join(", ") + "; the design is " + lang + ".");
       for (var k in (t && t.params) || {}) {
         var v = String((row.params || {})[k] === undefined ? "" : row.params[k]).trim(), def = t.params[k].default;
-        if (!v && (def === "" || def === undefined || def === null)) error(what + " \"" + nm + "\" needs its " + t.params[k].label.toLowerCase() + ".");
-        else if (v && typeof def === "number" && !(num(v) > 0)) error(what + " \"" + nm + "\": " + t.params[k].label.toLowerCase() + " should be a number above 0.");
+        var optional = /\(empty/i.test(t.params[k].label || "");
+        if (!v && !optional && (def === "" || def === undefined || def === null)) error(what + " \"" + nm + "\" needs its " + t.params[k].label.toLowerCase() + ".");
+        else if (v && typeof def === "number" && !(num(v) > 0) && !/^\{\w+\}$/.test(v)) error(what + " \"" + nm + "\": " + t.params[k].label.toLowerCase() + " should be a number above 0.");
       }
     }
 
@@ -575,6 +647,22 @@
       if (last && (st.gates || []).length) warn("The last measurement's gate has nothing after it to hold back.");
     });
 
+    // an evaluator's document keys (its workload): one value per document
+    for (var key in r.document) {
+      var vals = r.document[key];
+      var differ = vals.filter(function (x) { return JSON.stringify(x.value) !== JSON.stringify(vals[0].value); });
+      if (differ.length) error("Measurements " + vals.map(function (x) { return "\"" + x.stage + "\""; }).join(", ") + " name different " + key + " files: one " + key + " per document.");
+    }
+
+    // the clock an RTL measurement aims for
+    var clocked = r.stages.filter(function (st) { return st.clock_ps !== null; });
+    var fmax = (state.objectives || []).filter(function (o) { return o.metric === "fmax_mhz"; });
+    var searched = clocked.some(function (st) { return /^\{\w+\}$/.test(String(st.clock_ps)); });
+    if (clocked.length && !searched && fmax.some(function (o) { return o.label === "max"; }) &&
+        !fmax.some(function (o) { return o.label === "atleast"; })) {
+      warn("A fixed clock biases 'as fast as possible': set it tight, or search it (add clock_ps to the settings to search and use {clock_ps}).");
+    }
+
     // the objective
     if (!r.objectives.length) error("Add an objective: which reported numbers matter, and how.");
     var metricsSeen = {}, balanced = 0;
@@ -585,7 +673,10 @@
       metricsSeen[m] = 1;
       var by = r.stages.filter(function (st) { return st.reports.indexOf(m) >= 0; }).length;
       if (!by) error("The objective uses " + m + ", which no measurement reports.");
-      else if (by < r.stages.length) warn("Every measurement should report " + m + " (the objective uses it); some do not.");
+      else if (by < r.stages.length) {
+        var missing = r.stages.filter(function (st) { return st.reports.indexOf(m) < 0; }).map(function (st) { return st.name; });
+        error("The objective uses " + m + ", which " + missing.join(", ") + " does not report: every measurement must report every objective's number; put different tools in separate problems or pick metrics they all report.");
+      }
       if ((o.label === "atleast" || o.label === "atmost") && num(o.value) === null) error("Say the number " + m + " must be " + (o.label === "atleast" ? "at least." : "at most."));
       if (ro && ro.balance) balanced++;
     });
@@ -611,7 +702,9 @@
     if (flow.generate === "command" && !String(state.generateCommand || "").trim()) error("Say the command that writes each design.");
 
     var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run]; });
-    r.stages.forEach(function (st) { cmds.push(["measurement \"" + st.name + "\"", st.command]); });
+    r.stages.forEach(function (st) {
+      cmds.push(["measurement \"" + st.name + "\"", st.shape ? JSON.stringify(st.shape).replace(/[",:{}\[\]]/g, " ") : st.command]);
+    });
     if (flow.generate === "command") cmds.push(["the design script", state.generateCommand]);
     cmds.forEach(function (c) {
       placeholders(c[1]).forEach(function (p) {
@@ -632,6 +725,9 @@
       var re = /\{home\}\/([\w.\-\/]+)/g, m;
       while ((m = re.exec(String(c[1] || "")))) files[m[1]] = 1;
     });
+    for (var dkey in r.document) r.document[dkey].forEach(function (x) {
+      var m2 = /^\{home\}\/([\w.\-\/]+)$/.exec(String(x.value)); if (m2) files[m2[1]] = 1;
+    });
     list(state.knowledgeFiles).forEach(function (f) { files[f] = 1; });
     var fl = Object.keys(files);
     if (fl.length) note("Put these beside the document: " + fl.join(", ") + ".");
@@ -642,7 +738,7 @@
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
-              CHECK_TYPES: CHECK_TYPES, STAGE_TOOLS: STAGE_TOOLS, LABELS: LABELS,
+              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base };
 
@@ -699,19 +795,28 @@
         input.value = get() || "";
         input.addEventListener("input", function () { set(input.value); changed(false); });
       }
-      return h("label", { class: "fc-field" + (opts.wide ? " fc-wide" : "") },
-               [h("span", { class: "fc-label", text: label }), input, opts.hint ? h("small", { text: opts.hint }) : null]);
+      // compact: the hint is the input's tooltip, not a line of its own
+      if (opts.compact && opts.hint) input.setAttribute("title", opts.hint);
+      return h("label", { class: "fc-field" + (opts.wide ? " fc-wide" : "") + (opts.narrow ? " fc-narrow" : "") + (opts.grow ? " fc-grow" : "") },
+               [h("span", { class: "fc-label", text: label }), input, opts.hint && !opts.compact ? h("small", { text: opts.hint }) : null]);
     }
 
     function section(title, kids, cls) {
       return h("section", { class: "fc-section " + (cls || "") }, [h("h3", { text: title })].concat(kids));
     }
 
+    /** A section whose title carries a short note on the same line. */
+    function titled(title, note, kids) {
+      return h("section", { class: "fc-section" }, [h("h3", {}, [title].concat(note))].concat(kids));
+    }
+
     function button(text, fn, cls) {
       return h("button", { type: "button", class: "fc-btn " + (cls || ""), text: text, on: { click: fn } });
     }
 
-    // -- ordered boxes: up, down, remove
+    // -- ordered boxes: up, down, remove, and a "more" drawer
+    var moreOpen = typeof WeakSet === "function" ? new WeakSet() : { has: function () { return false; }, add: function () {}, delete: function () {} };
+
     function move(listOf, i, d) {
       var j = i + d;
       if (j < 0 || j >= listOf.length) return;
@@ -719,133 +824,154 @@
       changed(true);
     }
 
-    function rowButtons(listOf, i) {
-      return h("div", { class: "fc-row-buttons" }, [
-        button("↑", function () { move(listOf, i, -1); }, "fc-small" + (i === 0 ? " fc-hidden" : "")),
-        button("↓", function () { move(listOf, i, 1); }, "fc-small" + (i === listOf.length - 1 ? " fc-hidden" : "")),
-        button("Remove", function () { listOf.splice(i, 1); changed(true); }, "fc-small")]);
+    function rowButtons(listOf, i, extra) {
+      return h("div", { class: "fc-row-buttons" }, (extra || []).concat([
+        button("↑", function () { move(listOf, i, -1); }, "fc-small fc-icon" + (i === 0 ? " fc-hidden" : "")),
+        button("↓", function () { move(listOf, i, 1); }, "fc-small fc-icon" + (i === listOf.length - 1 ? " fc-hidden" : "")),
+        button("×", function () { listOf.splice(i, 1); changed(true); }, "fc-small fc-icon")]));
     }
 
-    /** A catalog param's field; a clock period is typed as a target speed in MHz. */
+    function moreButton(row) {
+      var open = moreOpen.has(row);
+      var b = button(open ? "less" : "more", function () {
+        if (moreOpen.has(row)) moreOpen.delete(row); else moreOpen.add(row);
+        changed(true);
+      }, "fc-small fc-more-btn");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      return b;
+    }
+
+    /** A catalog param's field; a clock is typed as the MHz the tools aim for. */
     function paramField(t, row, k) {
       var p = t.params[k];
       if (k === "clock_ps") {
-        return field("Target speed, MHz", function () { var ps = num(row.params.clock_ps); return ps ? String(Math.round(1e6 / ps)) : ""; },
-                     function (v) { var ps = clockPs(v); row.params.clock_ps = ps ? String(ps) : v; },
-                     { hint: "Sets the clock it is timed at" });
+        var auto = autoClock(state), dflt = auto || num(p.default) || 1000;
+        return field("Clock the tools aim for (MHz)", function () {
+          var v = String(row.params.clock_ps || ""), ps = num(v);
+          return ps ? String(Math.round(1e6 / ps)) : v;
+        }, function (v) { var ps = clockPs(v); row.params.clock_ps = ps ? String(ps) : v; },
+        { compact: true, placeholder: String(Math.round(1e6 / dflt)) + (auto ? " (from the objective)" : ""),
+          hint: "fmax is measured; this steers synthesis: tighter = faster and bigger" });
       }
       return field(p.label + (p.unit ? " (" + p.unit + ")" : ""), function () { return row.params[k]; }, function (v) { row.params[k] = v; },
-                   { placeholder: shown(p.default), wide: k === "command" });
+                   { compact: true, placeholder: shown(p.default), grow: k === "command" });
     }
 
     // -- checks
     function renderChecks() {
       var lang = language(state, true);
       var rows = state.checks.map(function (c, i) {
-        var ty = checkType(c.type) || CHECK_TYPES[CHECK_TYPES.length - 1], t = toolOf(c.tool);
-        var kids = [h("div", { class: "fc-row-head fc-wide" }, [h("strong", { text: "Check " + (i + 1) }), rowButtons(state.checks, i)]),
+        var ty = checkType(c.type) || CHECK_TYPES[CHECK_TYPES.length - 1], t = toolOf(c.tool), ids = toolsFor(c.type, lang);
+        var keys = Object.keys((t && t.params) || {});
+        var line = [h("span", { class: "fc-idx", text: String(i + 1) }),
           field("Type", function () { return c.type; }, function (v) {
             // a name that was only the old type follows the new one
             if (new RegExp("^" + c.type + "\\d*$").test(c.name)) {
               c.name = uniqueName(v, state.checks.filter(function (x) { return x !== c; }).map(function (x) { return x.name; }));
             }
             setCheckTool(state, c, v);
-          },
-                { structural: true, options: CHECK_TYPES.map(function (x) { return [x.key, x.title]; }) }),
-          field("Name", function () { return c.name; }, function (v) { c.name = v; })];
-        var ids = toolsFor(c.type, lang);
-        if (!t) {
-          kids.push(h("p", { class: "fc-wide fc-warn", text: "No " + ty.title.toLowerCase() + " tool for " + (lang || "this language") + "; choose Custom." }));
-        } else {
+          }, { compact: true, structural: true, options: CHECK_TYPES.map(function (x) { return [x.key, x.title]; }) }),
+          field("Name", function () { return c.name; }, function (v) { c.name = v; }, { compact: true, narrow: true })];
+        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + ty.title.toLowerCase() + " tool for " + (lang || "this language") + "; choose Custom." }));
+        else {
           if (ids.length > 1) {
-            kids.push(field("Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
-                            { structural: true, options: ids.map(function (id) { return [id, toolOf(id).title]; }) }));
+            line.push(field("Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
+                            { compact: true, structural: true, options: ids.map(function (id) { return [id, toolOf(id).title]; }) }));
           }
-          kids.push(h("small", { class: "fc-wide", text: t.what + " Passes " + String(t.pass || "").replace(/^passes /, "") +
-                                   ((ty.note || {})[c.tool] ? " " + ty.note[c.tool] : "") }));
-          Object.keys(t.params || {}).forEach(function (k) { kids.push(paramField(t, c, k)); });
+          if (keys.length) line.push(paramField(t, c, keys[0]));
+        }
+        line.push(rowButtons(state.checks, i, t ? [moreButton(c)] : []));
+        var kids = [h("div", { class: "fc-line" }, line)];
+        if (t && moreOpen.has(c)) {
+          var more = [h("small", { class: "fc-wide", text: t.what + " Passes " + String(t.pass || "").replace(/^passes /, "") +
+                                     ((ty.note || {})[c.tool] ? " " + ty.note[c.tool] : "") })];
+          keys.slice(1).forEach(function (k) { more.push(paramField(t, c, k)); });
           if (isCustom(c.tool)) {
-            kids.push(field("Count pattern (optional)", function () { return c.count_re; }, function (v) { c.count_re = v; },
-                            { placeholder: "(\\d+) failing", hint: "When it prints failures another way" }));
+            more.push(field("Count pattern (optional)", function () { return c.count_re; }, function (v) { c.count_re = v; },
+                            { compact: true, placeholder: "(\\d+) failing", hint: "When it prints failures another way" }));
           }
-          kids.push(field("Time limit, s (optional)", function () { return c.timeout; }, function (v) { c.timeout = v; }));
+          more.push(field("Time limit, s", function () { return c.timeout; }, function (v) { c.timeout = v; }, { compact: true, narrow: true, placeholder: "120" }));
+          kids.push(h("div", { class: "fc-line fc-more" }, more));
         }
         return h("div", { class: "fc-row" }, kids);
       });
-      return section("Checks (each must pass, in order)", [h("div", { class: "fc-rows" }, rows),
+      return titled("Checks", [h("span", { class: "fc-hint fc-inline", text: " each must pass, in order" })], [h("div", { class: "fc-rows" }, rows),
         button("+ Add a check", function () {
           var used = state.checks.map(function (c) { return c.type; });
           var type = ["lint", "golden", "test", "custom"].filter(function (x) {
             return used.indexOf(x) < 0 && toolsFor(x, lang).length; })[0] || "custom";
           state.checks.push(newCheck(state, type));
           changed(true);
-        })]);
+        }, "fc-add-btn")]);
     }
 
     // -- measurements
     function renderStages() {
+      var tools = stageTools();
       var rows = state.stages.map(function (st, i) {
-        var t = toolOf(st.tool), custom = isCustom(st.tool) || !t;
-        var kids = [h("div", { class: "fc-row-head fc-wide" }, [h("strong", { text: "Measurement " + (i + 1) }), rowButtons(state.stages, i)]),
+        var t = toolOf(st.tool), custom = isCustom(st.tool) || !t, keys = Object.keys((t && t.params) || {});
+        var line = [h("span", { class: "fc-idx", text: String(i + 1) }),
           field("Tool", function () { return st.tool; }, function (v) {
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
-          }, { structural: true, options: STAGE_TOOLS.filter(function (x) { return toolOf(x[0]); }) }),
-          field("Name", function () { return st.name; }, function (v) { st.name = v; })];
-        if (t) kids.push(h("small", { class: "fc-wide", text: t.what }));
-        Object.keys((t && t.params) || {}).forEach(function (k) { kids.push(paramField(t, st, k)); });
+          }, { compact: true, structural: true, options: tools }),
+          field("Name", function () { return st.name; }, function (v) { st.name = v; }, { compact: true, narrow: true })];
+        if (keys.length) line.push(paramField(t, st, keys[0]));
         if (custom) {
-          kids.push(field("Numbers it prints", function () { return st.metrics; }, function (v) { st.metrics = v; },
-                          { placeholder: "time_ms, score", hint: "Printed as name=value" }));
-          kids.push(field("Tools it needs (optional)", function () { return st.needs; }, function (v) { st.needs = v; }));
-        } else {
-          kids.push(h("small", { class: "fc-wide", text: "Reports " + Object.keys(t.metrics || {}).map(function (m) {
-            return m + (t.metrics[m] ? " (" + t.metrics[m] + ")" : ""); }).join(", ") }));
+          line.push(field("Numbers it prints", function () { return st.metrics; }, function (v) { st.metrics = v; },
+                          { compact: true, placeholder: "time_ms, score", hint: "Printed as name=value" }));
         }
         var rep = reports(st);
-        var gates = st.gates.map(function (g, j) {
-          var bits = [h("span", { class: "fc-label", text: j ? "and" : "Go on only if" }),
-            field("Number", function () { return g.metric; }, function (v) { g.metric = v; },
-                  { options: (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep) }),
-            field("Rule", function () { return g.rule; }, function (v) { g.rule = v; },
-                  { structural: true, options: [["at", "at least"], ["below", "at most"], ["within", "within % of the best"]] }),
-            field(g.rule === "within" ? "Percent" : "Value", function () { return g.value; }, function (v) { g.value = v; }),
-            button("×", function () { st.gates.splice(j, 1); changed(true); }, "fc-small")];
-          return h("div", { class: "fc-cutoff fc-wide" }, bits);
-        });
-        kids = kids.concat(gates);
-        kids.push(h("div", { class: "fc-wide" }, [button("+ gate", function () {
+        line.push(rowButtons(state.stages, i, [button("+ gate", function () {
           st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); changed(true);
-        }, "fc-small")]));
+        }, "fc-small"), moreButton(st)]));
+        var kids = [h("div", { class: "fc-line" }, line)];
+        st.gates.forEach(function (g, j) {
+          kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : "go on only if" }),
+            field("Number", function () { return g.metric; }, function (v) { g.metric = v; },
+                  { compact: true, options: (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep) }),
+            field("Rule", function () { return g.rule; }, function (v) { g.rule = v; },
+                  { compact: true, structural: true, options: [["at", "at least"], ["below", "at most"], ["within", "within % of the best"]] }),
+            field(g.rule === "within" ? "Percent" : "Value", function () { return g.value; }, function (v) { g.value = v; }, { compact: true, narrow: true }),
+            button("×", function () { st.gates.splice(j, 1); changed(true); }, "fc-small fc-icon")]));
+        });
+        if (moreOpen.has(st)) {
+          var more = [];
+          if (t) more.push(h("small", { class: "fc-wide", text: t.what + (custom ? "" : " Reports " + Object.keys(t.metrics || {}).map(function (m) {
+            return m + (t.metrics[m] ? " (" + t.metrics[m] + ")" : ""); }).join(", ") + ".") }));
+          keys.slice(1).forEach(function (k) { more.push(paramField(t, st, k)); });
+          if (custom) more.push(field("Tools it needs", function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true }));
+          kids.push(h("div", { class: "fc-line fc-more" }, more));
+        }
         return h("div", { class: "fc-row" }, kids);
       });
       var add = button("+ Add a measurement", function () {
         // the first tool made for this language that is not used yet, else a custom command
         var lang = language(state, true), used = state.stages.map(function (x) { return x.tool; });
-        var pick = STAGE_TOOLS.map(function (x) { return x[0]; }).filter(function (id) {
+        var pick = tools.map(function (x) { return x[0]; }).filter(function (id) {
           var t = toolOf(id); return t && !isCustom(id) && lang && (t.languages || []).indexOf(lang) >= 0 && used.indexOf(id) < 0;
         })[0] || "custom-stage";
         state.stages.push(newStage(state, pick));
         changed(true);
-      });
-      return section("Measurements (cheapest first)", [h("div", { class: "fc-rows" }, rows), add]);
+      }, "fc-add-btn");
+      return titled("Measurements", [h("span", { class: "fc-hint fc-inline", text: " cheapest first" })], [h("div", { class: "fc-rows" }, rows), add]);
     }
 
     // -- the objective
     function renderObjective() {
       var rep = reported(state);
       var rows = state.objectives.map(function (o, i) {
-        var kids = [h("strong", { class: "fc-obj-metric", text: (i + 1) + ". " + o.metric }),
-          field("How", function () { return o.label; }, function (v) { o.label = v; }, { structural: true, options: LABELS })];
+        var line = [h("span", { class: "fc-idx", text: String(i + 1) }), h("code", { class: "fc-obj-metric", text: o.metric }),
+          field("How", function () { return o.label; }, function (v) { o.label = v; }, { compact: true, structural: true, options: LABELS })];
         if (o.label === "atleast" || o.label === "atmost") {
           var u = unitFor(o.metric);
-          kids.push(field("Value" + (u ? " (" + u + ")" : ""), function () { return o.value; }, function (v) { o.value = v; }));
+          line.push(field("Value" + (u ? " (" + u + ")" : ""), function () { return o.value; }, function (v) { o.value = v; }, { compact: true, narrow: true }));
         }
-        kids.push(rowButtons(state.objectives, i));
-        return h("div", { class: "fc-row fc-obj" }, kids);
+        line.push(rowButtons(state.objectives, i));
+        return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, line)]);
       });
       var used = state.objectives.map(function (o) { return o.metric; });
       var sel = h("select", { "aria-label": "Add to the objective", class: "fc-add" });
-      sel.appendChild(h("option", { value: "", text: rep.length ? "+ Add a number to the objective..." : "(add a measurement first)" }));
+      sel.appendChild(h("option", { value: "", text: rep.length ? "+ Add a number..." : "(add a measurement first)" }));
       rep.forEach(function (m) {
         if (used.indexOf(m) < 0) sel.appendChild(h("option", { value: m, text: m + (unitFor(m) ? " (" + unitFor(m) + ")" : "") }));
       });
@@ -854,8 +980,8 @@
       });
       parts.goalWords = h("p", { class: "fc-goal-words" });
       renderGoalWords();
-      return section("Objective", [h("p", { class: "fc-hint", text: "Limits (at least, at most) must hold; the others decide among the designs that meet them, top first. Balance finds the best trade-off between the numbers marked so." }),
-        h("div", { class: "fc-rows" }, rows), sel, parts.goalWords]);
+      return titled("Objective", [h("span", { class: "fc-hint fc-inline", text: " limits must hold; the rest decide, top first; balance = best trade-off" })],
+                     [h("div", { class: "fc-rows" }, rows), sel, parts.goalWords]);
     }
 
     function renderGoalWords() {
@@ -867,19 +993,20 @@
     // -- level 1
     function renderLevel1() {
       var langs = [["", "Choose..."]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
-      var what = section("1. What do you want?", [
-        h("div", { class: "fc-grid" }, [
-          field("Name", function () { return state.id; }, function (v) { state.id = v; }, { placeholder: "my_design", hint: "Letters, digits and _" }),
+      var what = titled("1. What do you want?", [], [
+        h("div", { class: "fc-line" }, [
+          field("Name", function () { return state.id; }, function (v) { state.id = v; }, { compact: true, placeholder: "my_design", hint: "Letters, digits and _" }),
           field("Language of the design", function () { return state.language; }, function (v) { state.language = v; },
-                { options: langs, structural: true, hint: "One design language per problem; a Python or SystemC prototype can be set in Advanced." }),
-          state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { placeholder: "ini" }) : null,
-        ]),
+                { compact: true, options: langs, structural: true }),
+          state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
+          h("small", { class: "fc-grow fc-note", text: "One design language per problem; a Python or SystemC prototype can be set in Advanced." })]),
         field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
-              function (v) { state.statement = v; }, { area: true, rows: 4, wide: true }),
-        field("Rules every design must follow (optional)", function () { return state.contract; },
-              function (v) { state.contract = v; }, { area: true, rows: 2, wide: true, placeholder: "Names, ports, what is not allowed" }),
-        field("Files the model should read (optional)", function () { return state.knowledgeFiles; },
-              function (v) { state.knowledgeFiles = v; }, { wide: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" }),
+              function (v) { state.statement = v; }, { area: true, rows: 3, wide: true }),
+        h("div", { class: "fc-line" }, [
+          field("Rules every design must follow (optional)", function () { return state.contract; },
+                function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
+          field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
+                function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
       ]);
       var kids = [what];
       if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));
@@ -946,6 +1073,8 @@
         var r = LAYOUT.box[name], half = halfOf(state, name);
         var g = s("g", { class: "fc-box fc-" + half + (openBox === name ? " fc-open" : ""), tabindex: "0", role: "button",
                          "aria-label": BOXES[name].title + ": " + (choiceOf(name, state.flow[name]) || {}).label });
+        var full = stepNames(name);
+        if (full && full.length) g.appendChild(s("title", {}, BOXES[name].title + ": " + full.join(" \u2192 ")));
         g.appendChild(s("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 7 }));
         g.appendChild(s("text", { x: r.x + r.w / 2, y: r.y + 19, "text-anchor": "middle", class: "fc-box-name" }, BOXES[name].title));
         var sub = subtitle(name, half);
@@ -957,15 +1086,27 @@
       });
       renderPanel();
       renderPicker();
+      if (parts.lists) {
+        var c = stepNames("test"), m = stepNames("simulation"), cut = [];
+        if (c.length && abbreviate(c, 24) !== c.join(" \u2192 ")) cut.push("Checks: " + c.join(" \u2192 "));
+        if (m.length && abbreviate(m, 24) !== m.join(" \u2192 ")) cut.push("Measurements: " + m.join(" \u2192 "));
+        parts.lists.textContent = cut.join(" \u00b7 ");
+      }
     }
 
     /** What a box says under its name: who does it, or for the check and the measurements,
         the chosen ones in order. */
+    /** The checks' or the measurements' names, for the test and simulation boxes. */
+    function stepNames(name) {
+      var rows = name === "test" ? state.checks : name === "simulation" ? state.stages : null;
+      return rows ? rows.map(function (x) { return String(x.name || "?").trim() || "?"; }) : null;
+    }
+
     function subtitle(name, half, max) {
       var text = half === "off" && name === "orchestrate" && state.flow.dse !== "none" ? "the search" : HALVES[half];
-      var names = name === "test" ? state.checks : name === "simulation" ? state.stages : null;
-      if (names) text = names.length ? names.map(function (x) { return String(x.name || "?").trim(); }).join(" \u2192 ") : "none yet";
+      var names = stepNames(name);
       max = max || 24;
+      if (names) return names.length ? abbreviate(names, max) : "none yet";
       return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
     }
 
@@ -986,10 +1127,8 @@
     function renderPanel() {
       var p = parts.panel;
       p.innerHTML = "";
-      if (!openBox) {
-        p.appendChild(h("p", { class: "fc-hint", text: "Click a box to choose who does that step." }));
-        return;
-      }
+      p.hidden = !openBox;                       // the detail panel stays folded until a box is chosen
+      if (!openBox) return;
       var box = BOXES[openBox];
       p.appendChild(h("h4", { text: box.title + " (" + openBox + ")" }));
       p.appendChild(h("p", { text: box.says }));
@@ -1029,10 +1168,10 @@
       var legend = h("div", { class: "fc-legend" }, ["rules", "model", "agent", "fixed", "off"].map(function (k) {
         return h("span", { class: "fc-key fc-" + k }, [h("i"), HALVES[k]]);
       }));
-      return h("div", { class: "fc-level" }, [section("2. Who does each step?", [
-        h("p", { class: "fc-hint", text: "The loop runs top to bottom, round after round. Colours say who does each step; the defaults are usually right." }),
-        legend, h("div", { class: "fc-drawing" }, [parts.svg,
-          h("label", { class: "fc-field fc-picker" }, [h("span", { class: "fc-label", text: "Step" }), parts.picker]), parts.panel])])]);
+      parts.lists = h("p", { class: "fc-hint fc-lists" });
+      return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [
+        legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists,
+          h("label", { class: "fc-field fc-picker fc-narrow" }, [h("span", { class: "fc-label", text: "Step" }), parts.picker]), parts.panel])])]);
     }
 
     // -- level 3
