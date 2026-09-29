@@ -999,7 +999,7 @@
           field("Language of the design", function () { return state.language; }, function (v) { state.language = v; },
                 { compact: true, options: langs, structural: true }),
           state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
-          h("small", { class: "fc-grow fc-note", text: "One design language per problem; a Python or SystemC prototype can be set in Advanced." })]),
+          ]),
         field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
               function (v) { state.statement = v; }, { area: true, rows: 3, wide: true }),
         h("div", { class: "fc-line" }, [
@@ -1072,6 +1072,7 @@
       FLOW_BOXES.forEach(function (name) {
         var r = LAYOUT.box[name], half = halfOf(state, name);
         var g = s("g", { class: "fc-box fc-" + half + (openBox === name ? " fc-open" : ""), tabindex: "0", role: "button",
+                         "data-box": name, "aria-haspopup": "dialog", "aria-expanded": openBox === name ? "true" : "false",
                          "aria-label": BOXES[name].title + ": " + (choiceOf(name, state.flow[name]) || {}).label });
         var full = stepNames(name);
         if (full && full.length) g.appendChild(s("title", {}, BOXES[name].title + ": " + full.join(" \u2192 ")));
@@ -1079,13 +1080,13 @@
         g.appendChild(s("text", { x: r.x + r.w / 2, y: r.y + 19, "text-anchor": "middle", class: "fc-box-name" }, BOXES[name].title));
         var sub = subtitle(name, half);
         g.appendChild(s("text", { x: r.x + r.w / 2, y: r.y + 35, "text-anchor": "middle", class: "fc-box-half" }, sub));
-        function open() { openBox = openBox === name ? null : name; renderDiagram(); }
-        g.addEventListener("click", open);
-        g.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
+        g.addEventListener("click", function () { openPopover(openBox === name ? null : name, false); });
+        g.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPopover(openBox === name ? null : name, true); }
+        });
         svg.appendChild(g);
       });
-      renderPanel();
-      renderPicker();
+      placePopover();
       if (parts.lists) {
         var c = stepNames("test"), m = stepNames("simulation"), cut = [];
         if (c.length && abbreviate(c, 24) !== c.join(" \u2192 ")) cut.push("Checks: " + c.join(" \u2192 "));
@@ -1110,50 +1111,81 @@
       return text.length > max ? text.slice(0, max - 1) + "\u2026" : text;
     }
 
-    /** The steps as a list too: on a phone the drawing's words are small. */
-    function renderPicker() {
-      var sel = parts.picker;
-      if (!sel) return;
-      sel.innerHTML = "";
-      sel.appendChild(h("option", { value: "", text: "Choose a step..." }));
-      FLOW_BOXES.forEach(function (name) {
-        var half = halfOf(state, name);
-        var op = h("option", { value: name, text: BOXES[name].title + " \u2014 " + subtitle(name, half, 60) });
-        if (openBox === name) op.selected = true;
-        sel.appendChild(op);
-      });
+    // -- the popover: a chosen box's choices, anchored to it (a bottom sheet on a narrow screen)
+    function boxEl(name) { return parts.svg && parts.svg.querySelector('[data-box="' + name + '"]'); }
+
+    /** Open `name`'s popover (null closes it); `focus`: move the keyboard into it. */
+    function openPopover(name, focus) {
+      var was = openBox;
+      openBox = name;
+      renderDiagram();
+      fillPopover();
+      placePopover();
+      if (name && focus) {
+        var first = parts.pop.querySelector("input:checked") || parts.pop.querySelector("input, button");
+        if (first) first.focus();
+      }
+      if (!name && was && focus !== false) { var g = boxEl(was); if (g) g.focus(); }
     }
 
-    function renderPanel() {
-      var p = parts.panel;
+    function fillPopover() {
+      var p = parts.pop;
       p.innerHTML = "";
-      p.hidden = !openBox;                       // the detail panel stays folded until a box is chosen
+      p.hidden = !openBox;
       if (!openBox) return;
       var box = BOXES[openBox];
-      p.appendChild(h("h4", { text: box.title + " (" + openBox + ")" }));
+      p.setAttribute("aria-label", box.title);
+      p.appendChild(h("div", { class: "fc-pop-head" }, [h("strong", { text: box.title }), h("code", { text: openBox }),
+        button("\u00d7", function () { openPopover(null, true); }, "fc-small fc-icon fc-pop-close")]));
       p.appendChild(h("p", { text: box.says }));
       if (openBox === "orchestrate" && state.flow.dse !== "none") {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
-        return;
-      }
-      if (box.choices.length === 1) {
+      } else if (box.choices.length === 1) {
         p.appendChild(h("p", { class: "fc-hint", text: "This step is fixed: " + box.choices[0].label + "." }));
-        return;
+      } else {
+        var group = h("div", { class: "fc-choices", role: "radiogroup", "aria-label": box.title });
+        box.choices.forEach(function (c) {
+          var id = "fc-" + openBox + "-" + c.value.replace(":", "-");
+          var input = h("input", { type: "radio", name: "fc-choice", id: id, value: c.value });
+          input.checked = state.flow[openBox] === c.value;
+          input.addEventListener("change", function () {
+            var name = openBox;
+            state.flow[name] = c.value;
+            changed(name === "dse" || name === "generate");
+            fillPopover(); placePopover();
+            var again = document.getElementById(id); if (again) again.focus();
+          });
+          group.appendChild(h("label", { for: id, class: "fc-choice fc-" + c.half }, [input, " " + c.label]));
+        });
+        p.appendChild(group);
+        if (openBox === "generate" && state.flow.generate === "command") {
+          p.appendChild(field("Command that writes each design", function () { return state.generateCommand; },
+                              function (v) { state.generateCommand = v; },
+                              { wide: true, placeholder: "{python} {home}/gen.py {artifact} {knob}", hint: "Each setting to search is {its name}" }));
+        }
       }
-      var group = h("div", { class: "fc-choices", role: "radiogroup" });
-      box.choices.forEach(function (c) {
-        var id = "fc-" + openBox + "-" + c.value.replace(":", "-");
-        var input = h("input", { type: "radio", name: "fc-choice", id: id, value: c.value });
-        input.checked = state.flow[openBox] === c.value;
-        input.addEventListener("change", function () { state.flow[openBox] = c.value; changed(openBox === "dse" || openBox === "generate"); });
-        group.appendChild(h("label", { for: id, class: "fc-choice fc-" + c.half }, [input, " " + c.label]));
-      });
-      p.appendChild(group);
-      if (openBox === "generate" && state.flow.generate === "command") {
-        p.appendChild(field("Command that writes each design", function () { return state.generateCommand; },
-                            function (v) { state.generateCommand = v; },
-                            { wide: true, placeholder: "{python} {home}/gen.py {artifact} {knob}", hint: "Each setting to search is {its name}" }));
-      }
+    }
+
+    /** Beside the box (right, else left, else below), inside the viewport; a sheet when narrow. */
+    function placePopover() {
+      var p = parts.pop;
+      if (!p || !openBox) return;
+      var g = boxEl(openBox);
+      p.classList.remove("fc-sheet", "fc-right", "fc-left", "fc-below");
+      if (!g || window.innerWidth < 700) { p.classList.add("fc-sheet"); p.style.left = p.style.top = ""; return; }
+      var r = g.getBoundingClientRect(), w = p.offsetWidth, hgt = p.offsetHeight, gap = 12, vw = window.innerWidth, vh = window.innerHeight;
+      var left, top, side;
+      if (r.right + gap + w <= vw - 8) { side = "fc-right"; left = r.right + gap; }
+      else if (r.left - gap - w >= 8) { side = "fc-left"; left = r.left - gap - w; }
+      else { side = "fc-below"; left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), vw - w - 8); }
+      if (side === "fc-below") top = Math.min(r.bottom + gap, vh - hgt - 8);
+      else top = Math.min(Math.max(8, r.top + r.height / 2 - hgt / 2), Math.max(8, vh - hgt - 8));
+      p.classList.add(side);
+      p.style.left = Math.round(left) + "px";
+      p.style.top = Math.round(top) + "px";
+      // the arrow points at the box's middle
+      p.style.setProperty("--fc-arrow-y", Math.round(Math.min(Math.max(14, r.top + r.height / 2 - top), hgt - 14)) + "px");
+      p.style.setProperty("--fc-arrow-x", Math.round(Math.min(Math.max(14, r.left + r.width / 2 - left), w - 14)) + "px");
     }
 
     function renderLevel2() {
@@ -1162,16 +1194,12 @@
       parts.svg.setAttribute("class", "fc-diagram");
       parts.svg.setAttribute("role", "group");
       parts.svg.setAttribute("aria-label", "The loop: each box is one step");
-      parts.panel = h("div", { class: "fc-panel", "aria-live": "polite" });
-      parts.picker = h("select", { "aria-label": "Step" });
-      parts.picker.addEventListener("change", function () { openBox = parts.picker.value || null; renderDiagram(); });
       var legend = h("div", { class: "fc-legend" }, ["rules", "model", "agent", "fixed", "off"].map(function (k) {
         return h("span", { class: "fc-key fc-" + k }, [h("i"), HALVES[k]]);
       }));
       parts.lists = h("p", { class: "fc-hint fc-lists" });
       return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [
-        legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists,
-          h("label", { class: "fc-field fc-picker fc-narrow" }, [h("span", { class: "fc-label", text: "Step" }), parts.picker]), parts.panel])])]);
+        legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists])])]);
     }
 
     // -- level 3
@@ -1260,6 +1288,18 @@
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]);
     host.appendChild(h("div", { class: "fc-body" }, [parts.form, out]));
+    parts.pop = h("div", { class: "fc-pop", role: "dialog", hidden: "hidden" });
+    host.appendChild(parts.pop);
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && openBox) { ev.preventDefault(); openPopover(null, true); }
+    });
+    document.addEventListener("mousedown", function (ev) {       // a click outside closes it; on a box, the box decides
+      if (!openBox || parts.pop.contains(ev.target)) return;
+      var box = ev.target.closest && ev.target.closest(".fc-box");
+      if (!box) openPopover(null, false);
+    });
+    window.addEventListener("resize", placePopover);
+    window.addEventListener("scroll", placePopover, true);
     renderForm();
     renderDiagram();
     renderOutput();
