@@ -47,9 +47,14 @@ PYTHON_RULES = (
     "rounding.")
 
 
+def golden_check(task: Any) -> list[str]:
+    """The command of the gate's check that names `--golden` (D652), or []."""
+    return next(([str(t) for t in c.run] for c in (task.gate or ()) if "--golden" in c.run), [])
+
+
 def golden_path(task: Any) -> Path | None:
     """The golden model a document's gate names (`--golden <file>`, `{home}` resolved)."""
-    cmd = [str(t) for t in (task.gate.test or ())] if task.gate is not None else []
+    cmd = golden_check(task)
     if "--golden" not in cmd or cmd.index("--golden") + 1 >= len(cmd):
         return None
     raw = cmd[cmd.index("--golden") + 1].replace("{home}", str(task.home or "."))

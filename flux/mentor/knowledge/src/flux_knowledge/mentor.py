@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Protocol, Sequence, runtime_checkable
 
-__all__ = ["Corpus", "KnowledgeSource", "Library", "Mentor", "Mined", "Notes",
+__all__ = ["Corpus", "KnowledgeSource", "Library", "Mentor", "Mined", "Notes", "Papers",
            "RecordReadback"]
 
 #: What a section is cut to when the window runs out (D548), said out loud rather than silently.
@@ -64,12 +64,44 @@ class Library:
     static: bool = True
     standard_id: str | None = "library"
     k_per_query: int = 2
+    folders: tuple[str, ...] = ()      # a document's own folders, indexed with the shared one (D648)
+
+    def index(self) -> Any:
+        from .library import index_for
+
+        return index_for(self.folders)
 
     def render(self, state: Any) -> str:
         from .context import library_context
 
         queries = self.queries(state) if callable(self.queries) else self.queries
-        return library_context(queries, standard_id=self.standard_id, k_per_query=self.k_per_query)
+        return library_context(queries, standard_id=self.standard_id, k_per_query=self.k_per_query,
+                               index=self.index())
+
+    def lookup(self, query: str, k: int = 4) -> list[str]:
+        """The `knowledge` tool's library half: the top excerpts for `query`, each cited."""
+        from .context import library_context
+
+        got = library_context([query], standard_id=self.standard_id, k_per_query=k, header=None,
+                              prefix="", index=self.index())
+        return [ln for ln in got.splitlines() if ln.strip()]
+
+
+@dataclass(frozen=True)
+class Papers:
+    """The library's one-line index (D648): a line per paper, its digest's first line when the
+    run's store holds one, so a prompt knows what exists beyond the excerpts."""
+
+    folders: tuple[str, ...] = ()
+    title: str = "knowledge: the library's papers (one line each)"
+    key: str = "papers"
+    static: bool = True
+
+    def render(self, state: Any) -> str:
+        from .library import index_for, paper_lines
+
+        db = str(getattr(getattr(state, "request", None), "db", "") or "")
+        return "\n".join(paper_lines(index_for(self.folders), db))
 
 
 @dataclass(frozen=True)

@@ -57,15 +57,18 @@ def test_library_context_is_one_budgeted_cited_renderer():
     from flux_knowledge import BM25Index, Chunk, library_context
 
     idx = BM25Index([Chunk(id="lib/a#0", standard_id="library", source_path="mentor/knowledge/library/a.md",
-                           heading=None, text="xor swizzle beats modulo bank mapping " * 20),
+                           heading=None, text="an xor swizzle beats modulo bank mapping for strided access patterns " * 20),
                      Chunk(id="lib/b#0", standard_id="library", source_path="x/b.md", heading=None,
-                           text="cordic hardware for transcendental functions")])
+                           text="cordic hardware computes transcendental functions with shifts and adds only")])
     out = library_context(["xor swizzle", "cordic hardware", "xor swizzle"], index=idx)
     assert out.startswith("FROM THE OPERATOR'S LIBRARY") and out.count("[a.md]") == 1 and "[b.md]" in out
-    assert "..." not in out and ("xor swizzle beats modulo bank mapping " * 20).strip() in out   # whole (D548)
+    assert "..." not in out and ("an xor swizzle beats modulo bank mapping for strided access patterns " * 20).strip() in out   # whole (D548)
     assert library_context(["nothing here zzz"], index=idx) == ""
     plain = library_context(["cordic"], index=idx, header=None, prefix="- ", cite=False)
-    assert plain == "- cordic hardware for transcendental functions"
+    assert plain == "- cordic hardware computes transcendental functions with shifts and adds only"
+    short = BM25Index([Chunk(id="lib/c#0", standard_id="library", source_path="c.md", heading=None,
+                             text="Root Mean Square error")])
+    assert library_context(["root mean square"], index=short) == "", "a heading is not an excerpt (D650)"
 
 
 def test_the_connectors_share_one_paragraph_splitter():

@@ -27,6 +27,10 @@ def _ask(state: LoopState, prompt: str, schema: dict | None = None,
     import threading
 
     state.prompt_sha_by_thread[threading.get_ident()] = state.last_prompt_sha     # per drafting thread
+    if state.last_prompt_sha not in state.cited:          # which papers this prompt carried (D648)
+        from flux_knowledge import cited_files
+
+        state.cited[state.last_prompt_sha] = cited_files(prompt or "")
     if state.proposer is None:
         # said once in not_established; every model turn refuses with the same line
         if NO_MODEL not in state.not_established:

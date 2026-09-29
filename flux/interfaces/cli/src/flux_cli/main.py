@@ -1,7 +1,7 @@
 """Flux CLI entry point: the one way in, for people, scripts and agents alike (docs/agent-surface.md).
 
 `flux task run|check` runs or validates a problem document (`--json FILE` writes the answer for a
-script), `flux ask` drives the loop from a prompt, `flux rtl test|measure` and `flux champsim run|build|check` are the tools a
+script), `flux ask` drives the loop from a prompt, `flux rtl lint|test|measure` and `flux champsim run|build|check` are the tools a
 document names, `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
 detached run; `flux eval`, `flux import` and `flux replay` are the IR evaluator commands.
 """
@@ -12,8 +12,9 @@ import argparse
 import sys
 
 from .champsim import cmd_champsim_build, cmd_champsim_check, cmd_champsim_run
-from .rtl import cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
+from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
+from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
                        cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_new, cmd_log)
 from flux_evaluator_abi import available_evaluators
@@ -31,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",
         # import, eval, replay and migrate still work but are hidden from the listing
-        metavar="{new,ask,task,rtl,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
+        metavar="{new,ask,task,tools,rtl,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
 
     import_p = subparsers.add_parser("import"
     )
@@ -198,8 +199,19 @@ def build_parser() -> argparse.ArgumentParser:
     show_p.add_argument("--db", required=True)
     show_p.set_defaults(func=cmd_knowledge_show)
 
-    rtl_p = subparsers.add_parser("rtl", help="The tools an RTL document names: test against a golden model, check a prototype, measure on ASAP7.")
+    tools_p = subparsers.add_parser("tools", help="The checks a gate may run and the stages a document may measure with.")
+    tools_p.add_argument("--json", action="store_true", help="The catalog as JSON (what the loop crafter reads).")
+    tools_p.set_defaults(func=cmd_tools)
+
+    rtl_p = subparsers.add_parser("rtl", help="The tools an RTL document names: lint, test against a golden model, check a prototype, measure on ASAP7.")
     rtl_sub = rtl_p.add_subparsers(dest="rtl_command", required=True)
+    rl = rtl_sub.add_parser("lint", help="Verilator lint for hardware defects (latches, multiple drivers, combinational "
+                                         "loops, `<=` in combinational logic, mixed `=`/`<=`, implicit nets); prints each and "
+                                         "`N failing`; exit 3 when it does not parse.")
+    rl.add_argument("artifact"); rl.add_argument("--module", default=None, help="The top module (default: the first in the artifact).")
+    rl.add_argument("--extra", action="append", default=[], help="Another source file the module instantiates (repeatable).")
+    rl.add_argument("--timeout", type=float, default=120.0)
+    rl.set_defaults(func=cmd_rtl_lint)
     rt = rtl_sub.add_parser("test", help="Verilate the artifact against golden.py's vectors; prints the failing ones and `N failing of M`.")
     rt.add_argument("artifact"); rt.add_argument("--golden", required=True, help="golden.py: PORTS and golden(**inputs).")
     rt.add_argument("--module", default=None, help="The module under test (default: the first `module` in the artifact).")
@@ -259,6 +271,9 @@ def main(argv: list[str] | None = None) -> int:
 
     import sys
 
+    from flux_llm.openai_compat import load_user_config
+
+    load_user_config()                       # ~/.config/flux/flux.env: the model settings (D651)
     for stream in (sys.stdout, sys.stderr):
         # line-buffer when piped, or a live run looks frozen (D597)
         if not stream.isatty() and hasattr(stream, "reconfigure"):

@@ -312,12 +312,16 @@ class OrchestratorRole(_Role):
         return {}
 
     def library_index(self, state: LoopState) -> list[str]:
-        """One line per digested library document (D576), for a planning prompt; [] when the
-        mentor has no `digest` source or the store holds none."""
+        """One line per library paper (D576, D648), for a planning prompt: the mentor's `papers`
+        source, else the digested documents when it has a `digest` source; [] otherwise."""
         mentor = self.knowledge()
-        if mentor is None or getattr(mentor, "source", None) is None or mentor.source("digest") is None:
+        if mentor is None or getattr(mentor, "source", None) is None:
             return []
         try:
+            if mentor.source("papers") is not None:
+                return [ln for ln in mentor.text("papers", state).splitlines() if ln.strip()]
+            if mentor.source("digest") is None:
+                return []
             from flux_knowledge import index_lines
 
             return index_lines(str(getattr(state.request, "db", "") or ""))
@@ -333,7 +337,7 @@ class OrchestratorRole(_Role):
                  f"Still to prove: {', '.join(menu)}."]
         index = self.library_index(state)                                    # D576
         if index:
-            lines.append("THE LIBRARY, digested (name a method from it when it fits):\n" + "\n".join(index[:40]))
+            lines.append("THE LIBRARY, one line per paper (name a method from it when it fits):\n" + "\n".join(index[:40]))
         if partial:
             lines.append("Best refused attempt per part: "
                          + "; ".join(f"{k}: {v}" for k, v in partial.items()))
@@ -546,7 +550,7 @@ class GeneratorRole(_Role):
     #: Which declared sources belong in the static prompt prefix (D449): the ones that cannot
     #: change during a run. The record's read-back grows as the run measures, and would break
     #: the server's prefix cache every turn.
-    static_knowledge: tuple[str, ...] = ("sheet", "library", "mined", "digest")
+    static_knowledge: tuple[str, ...] = ("sheet", "library", "papers", "mined", "digest")
 
     def tools(self, subgoal: str | None, state: LoopState, stage: str = "prototype",
               checked: Any = None) -> list:

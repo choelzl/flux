@@ -279,6 +279,7 @@ class LoopState:
     ahead: Any = None          # `flux_loop.measure.Ahead`: the tools working while the model thinks
     tool_runs: int = 0         # measurements the tools ran this pass, and what the cache served
     prompt_sha_by_thread: dict = field(default_factory=dict)   # the last prompt's digest, per drafting thread
+    cited: dict = field(default_factory=dict)   # prompt digest -> the library files its excerpts cite (D648)
     cache_hits: int = 0
 
     def part(self, name: str | None) -> PartState:

@@ -18,11 +18,12 @@ field; `reply.usage["input_tokens"]` shows what a prompt cost against it.
 from __future__ import annotations
 
 import io
-import os
 import json
+import os
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from .proposer import Reply
 from .text import default_local_model, local_llm_timeout_s
@@ -84,7 +85,42 @@ def remote_base_url() -> str:
 
 
 def remote_api_key() -> str | None:
-    return os.environ.get("OPENROUTER_API_KEY") or os.environ.get("FLUX_REMOTE_API_KEY") or None
+    """The key: `OPENROUTER_API_KEY`, `FLUX_REMOTE_API_KEY`, or the first line of the file
+    `FLUX_REMOTE_API_KEY_FILE` names (so the key never sits in an env file or a shell) (D651)."""
+    key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("FLUX_REMOTE_API_KEY")
+    path = os.environ.get("FLUX_REMOTE_API_KEY_FILE")
+    if not key and path:
+        try:
+            key = Path(path).expanduser().read_text().strip().splitlines()[0].strip()
+        except (OSError, IndexError):
+            key = None
+    return key or None
+
+
+def user_config_path() -> Path:
+    """`FLUX_CONFIG`, else `$XDG_CONFIG_HOME/flux/flux.env` (`~/.config/flux/flux.env`)."""
+    if os.environ.get("FLUX_CONFIG"):
+        return Path(os.environ["FLUX_CONFIG"]).expanduser()
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "flux" / "flux.env"
+
+
+def load_user_config(path: Path | None = None) -> list[str]:
+    """The user's `FLUX_*=value` lines into the environment, where the shell did not set them
+    already (the shell wins). Returns the names it set. Blank lines and `#` comments are skipped;
+    anything that is not a `FLUX_` or `OLLAMA_` variable is ignored (D651)."""
+    path = path or user_config_path()
+    if not path.is_file():
+        return []
+    set_now = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = (t.strip() for t in line.split("=", 1))
+        if name.startswith(("FLUX_", "OLLAMA_")) and name not in os.environ:
+            os.environ[name] = value.strip("'\"")
+            set_now.append(name)
+    return set_now
 
 
 def remote_model() -> str:
@@ -142,7 +178,7 @@ class OpenAIChatProposer:
         if self.hosted and not key and not named_server:
             # the default hosted endpoint (OpenRouter) needs a key; a server you name yourself
             # may have none
-            raise RuntimeError("no OPENROUTER_API_KEY / FLUX_REMOTE_API_KEY in the environment: the default "
+            raise RuntimeError("no OPENROUTER_API_KEY / FLUX_REMOTE_API_KEY(_FILE) in the environment: the default "
                                "hosted server needs one (or name your own with FLUX_REMOTE_BASE_URL)")
         self._key = key
         self._announce = announce

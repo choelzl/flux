@@ -930,7 +930,7 @@ def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_b
                 f"THE CHOICES:\n{rows}")
     schema = {"type": "object", "properties": {"pick": {"type": "string", "enum": names}, "why": {"type": "string"}},
               "required": ["pick", "why"]}
-    doc = box_turn("select", agent, question, schema, state, home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
+    doc = box_turn("select", agent, question, schema, state, problem=problem, home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
                    check=lambda d: None if d.get("pick") in names else f"pick must be one of {', '.join(names)}")
     if doc is None:
         return pick, decided_by
@@ -1031,4 +1031,5 @@ def _result(problem: Problem, state: LoopState, pick: Scored | None, decided_by:
             "admitted": sorted(state.admitted),
             "best": {k: v[0] for k, v in state.best.items()},
             "pool": len(state.pool), "measured": len(state.scored),
+            "library": sorted({f for files in state.cited.values() for f in files}),
             "workdir": state.workdir})

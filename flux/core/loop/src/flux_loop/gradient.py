@@ -12,14 +12,26 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-__all__ = ["Gradient"]
+__all__ = ["CHECK_WEIGHT", "Gradient", "gate_score"]
+
+#: D652: a design refused at one check of the gate scores this much per later check that did
+#: not run, so one stopped earlier ranks worse whatever its failure count
+CHECK_WEIGHT = 1_000_000
+
+
+def gate_score(score: float) -> str:
+    """A score in words: the failures, and the gate's checks not reached (D652)."""
+    if not math.isfinite(score) or score < CHECK_WEIGHT:
+        return f"{score:g}"
+    left, fails = divmod(int(score), CHECK_WEIGHT)
+    return f"{fails} (with {left} later check{'s' if left > 1 else ''} not reached)"
 
 
 @dataclass
 class Gradient:
     regress_after: int
     unit: str = " failing"                      # follows every number in the trend text
-    fmt: Callable[[float], str] = str           # how a number prints (int, or `:g`)
+    fmt: Callable[[float], str] = gate_score    # how a number prints
     noun: str = "attempt"                       # "first measured <noun>"
     best: tuple[float, Any] | None = None       # (score, payload)
     best_key: Any = None                        # what identifies the best (text, code)

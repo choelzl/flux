@@ -16,14 +16,22 @@ Say only what is yours; the rest is inferred.
 - `language`: the artifact's language (`systemverilog`, `verilog`, `python`, `c`, `cpp`,
   `cuda`, `text`, ...); the file extension follows from it.
 - `gate`: how a candidate is refused -- a command (one string, or a list of tokens) that prints
-  `N failing` or exits non-zero. `{build, test}` when a build step comes first (its non-zero
-  exit refuses); `count_re` (one integer group) or `fail_re` (one match per failure) only for a
-  checker that prints something else; `timeout_s` optional.
+  `N failing` or exits non-zero. Several checks, cheapest first, as a list:
+  `gate: [{name: lint, run: "flux rtl lint {artifact}"}, {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 120}]`.
+  They run in order; the first that reports failures refuses the design ("failed at lint: ...")
+  and the rest do not run. Exit 3 from any check means the design did not build. Each check may
+  say `count_re` (one integer group) or `fail_re` (one match per failure) for a checker that
+  prints something else, and `timeout_s`. `{build, test}` is the two checks `build` (any
+  non-zero exit: did not build) and `test`.
 - `stages`: the costed measurements, cheapest first, each `{name, command}`. A
   `flux rtl measure` stage needs nothing more: its metrics and tools are known, and it is
   skipped where a tool is missing. A command of your own prints `name=value` tokens and says
   `metrics:` (the names to read) and `needs:` (tools on PATH it requires). Every stage must
   measure every objective. `timeout_s` optional.
+  A stage's gate is its `cutoff`: go on to the next stage only if `{metric, at: N}` (at least N),
+  `{metric, below: N}` (at most N) or `{metric, within: 0.9}` (within 10% of this run's best).
+  "Timing met" at 1 GHz is `cutoff: {metric: fmax_mhz, at: 1000}`.
+- `flux tools` lists every check and stage Flux has, with its command and pass rule.
 - `objectives`: a list, the first the goal: `{metric, direction: minimize|maximize, goal: N}`.
   A goal is judged on the deepest stage (`stage:` names another); a known metric has its unit
   (`unit:` for one Flux does not know). With a goal on the first, the decision is the best on
@@ -31,6 +39,9 @@ Say only what is yours; the rest is inferred.
   of the best measured design's gain over 1.0 (the smallest design that stays near the fastest).
 - `knowledge: {files: [...]}`: files the model reads with every prompt (specs, reference code,
   papers as PDF, notes), paths beside the document. `knowledge: {text: "..."}` for inline notes.
+  The operator's library (`mentor/knowledge/library/`) reaches every document: excerpts for
+  the statement, contract and parts, one line per paper, and the coding agents' briefs.
+  `knowledge: {library: papers}` adds a folder beside the document to it.
 - `space`: knob -> its choices, in a meaningful order, for a design-space exploration. A knob
   that only matters for some choices of another: `{values: [...], when: {stack: [b, c]}}`;
   elsewhere it stays at its first choice and is not measured twice.
@@ -48,7 +59,7 @@ Say only what is yours; the rest is inferred.
   `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
   and on any box but test and the stages, `{agent: opencode|claude|codex}`: a coding agent answers
   that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md),
-  `analytical: [surrogate]`, `knowledge: [digest]` (the model's library digest),
+  `analytical: [surrogate]`, `knowledge: [digest]` (the model's library digest; `none` turns the library off),
   `extract: mined` (lessons mined from the record), `records: on`. `flow` is the only place
   a box is said: there is no `roles:`, `generator:`, `critique:` or `decompose:` key.
   `parts: decompose` asks the orchestrator to divide the statement.
@@ -82,6 +93,9 @@ starting with `flux` runs this Flux.
 
 ## The RTL tools
 
+- `flux rtl lint {artifact}` -- Verilator lint for hardware defects (latches, multiple drivers,
+  combinational loops, `<=` in combinational logic, mixed `=`/`<=`, implicit nets); prints each and
+  `N failing`; exits 3 when it does not parse. Put it before the golden test.
 - `flux rtl test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
   prints `N failing of M`; exits 3 when the module does not compile (the loop then treats it as
   a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.

@@ -208,6 +208,12 @@ def _knowledge_tool(problem: "Problem", state: "LoopState") -> Tool:
                         break
             if len(hits) >= 12:
                 break
+        lib = mentor.source("library") if hasattr(mentor, "source") else None
+        if lib is not None and hasattr(lib, "lookup"):        # the whole library, not only the excerpts carried (D648)
+            try:
+                hits += [f"[library] {h}" for h in lib.lookup(query) if h not in "\n".join(hits)]
+            except Exception:  # noqa: BLE001 -- an unreadable library is no hit
+                pass
         return "\n\n".join(hits) if hits else f"nothing in the knowledge matches {query!r}"
 
     return Tool(

@@ -152,7 +152,7 @@ def test_the_prefetcher_document_runs_when_its_simulator_and_traces_are_there(tm
     (tmp_path / "traces").symlink_to(APPS / "prefetcher" / "traces")
     if not any((tmp_path / "traces").glob("*.gz")) or not _tools_ok(doc):
         pytest.skip("ChampSim or the traces are not on this machine")
-    r = flux("task", "run", str(doc), "--db", str(tmp_path / "p.db"), "--screen-only", timeout=3600)
+    r = flux("task", "run", str(doc), "--db", str(tmp_path / "p.db"), "--screen-only", "--passes", "1", timeout=3600)
     assert r.returncode in (0, 1), r.stdout[-3000:] + r.stderr[-3000:]
     assert "DECISION" in r.stdout and "geomean_speedup" in r.stdout, r.stdout[-3000:]
 

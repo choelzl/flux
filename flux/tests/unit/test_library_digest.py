@@ -83,7 +83,7 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     prefix = prob.prompt_prefix("a", state)
     assert "KEY POINTS FROM THE LIBRARY" in prefix and "PACE.pdf: a method" in prefix
     prompt, _schema = prob.plan_prompt(["a", "b"], state, None)
-    assert "THE LIBRARY, digested" in prompt and "[PACE.pdf] PACE.pdf: a method" in prompt
+    assert "THE LIBRARY, one line per paper" in prompt and "[PACE.pdf] PACE.pdf: a method" in prompt
     plain = PromptProblem(TaskSpec.from_dict({**doc, "flow": {}}))
     assert plain.library_index(state) == []
 

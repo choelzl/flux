@@ -43,8 +43,8 @@ def parse_text(text: str) -> list[tuple[str | None, str]]:
 def _source_path(path: Path, repo_root: Path) -> str:
     try:
         return str(path.resolve().relative_to(Path(repo_root).resolve()))
-    except ValueError:  # outside the repo (a test tmpdir): the name still identifies it
-        return path.name
+    except ValueError:  # outside the repo (a document's own folder): the absolute path
+        return str(path.resolve())
 
 
 def ingest_text_file(path: str | Path, *, standard_id: str, repo_root: Path,
@@ -76,20 +76,26 @@ def ingest_pdf_file(path: str | Path, *, standard_id: str, repo_root: Path,
     return chunks_from(parse_text(text), standard_id=standard_id, stem=stem, source_path=source_path)
 
 
+def library_files(directory: str | Path) -> list[Path]:
+    """The files `ingest_library` reads under `directory`, sorted: the library's suffixes, not
+    the folder's README, not an implementation's git metadata or test benches."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        return []
+    return [p for p in sorted(directory.rglob("*"))
+            if p.is_file() and p.suffix.lower() in LIBRARY_SUFFIXES and p.name != "README.md"
+            and not (p.suffix.lower() in SOURCE_SUFFIXES
+                     and {".git", "test", "tests"} & set(p.relative_to(directory).parts))]
+
+
 def ingest_library(directory: str | Path, *, standard_id: str = "library",
                    repo_root: Path, log=lambda _m: None) -> list[Chunk]:
     """Every readable document under `directory`, recursively, sorted for deterministic
     chunk ordering. A missing directory is an empty library, not an error."""
     directory = Path(directory)
-    if not directory.is_dir():
-        return []
     chunks: list[Chunk] = []
     pdf_note_sent = False
-    for path in sorted(directory.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in LIBRARY_SUFFIXES:
-            continue
-        if path.name == "README.md":          # the folder's own manual is not a paper
-            continue
+    for path in library_files(directory):
         rel_stem = str(path.relative_to(directory).with_suffix(""))
         if path.suffix.lower() == ".adoc":
             from flux_knowledge.connectors.adoc import ingest_adoc_file
@@ -106,8 +112,6 @@ def ingest_library(directory: str | Path, *, standard_id: str = "library",
                         "PATH; they are not indexed on this machine")
                     pdf_note_sent = True
         elif path.suffix.lower() in SOURCE_SUFFIXES:
-            if ".git" in path.parts or "test" in path.parts or "tests" in path.parts:
-                continue                       # implementations, not their test benches
             chunks.extend(ingest_source_file(path, standard_id=standard_id,
                                              repo_root=repo_root, id_stem=rel_stem))
         else:

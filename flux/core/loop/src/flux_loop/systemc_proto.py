@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -115,31 +114,54 @@ def check(code: str, g: Any, rows: list[dict[str, Any]], module: str, timeout_s:
 TRANSLATE_TIMEOUT_S = 300.0
 
 
-def icsc() -> str | None:
-    """`icsc-sv` (nix/icsc.nix): Intel's SystemC compiler, `svc_target` without cmake."""
-    return shutil.which("icsc-sv")
+def icsc() -> Path | None:
+    """Intel's SystemC compiler: `ICSC_HOME` (nixchip's `icsc`, set by `nix develop .#systemc`)."""
+    home = os.environ.get("ICSC_HOME")
+    return Path(home) if home and Path(home, "include", "sc_tool", "SCTool.h").is_file() else None
+
+
+def _system_includes(env: dict[str, str]) -> list[str]:
+    """The compiler's own include directories (gcc's internal ones aside), for ICSC's Clang pass."""
+    run = subprocess.run(["c++", "-xc++", "-E", "-v", "/dev/null"], capture_output=True, text=True, env=env)
+    text = run.stderr.split("#include <...> search starts here:")[-1].split("End of search list.")[0]
+    return [f"-isystem{d.strip()}" for d in text.splitlines() if d.strip() and "/lib/gcc/" not in d]
 
 
 def translate(code: str, module: str, g: Any, timeout_s: float = TRANSLATE_TIMEOUT_S) -> tuple[str, str]:
     """The prototype `SC_MODULE(module)` as SystemVerilog, by ICSC: an `sc_main` binds one
-    signal per golden port and calls `sc_start()`, which ICSC turns into elaboration and
-    translation. Returns `(sv, "")`, or `("", why)` when ICSC is absent or refuses the module,
-    or when its ports are not the golden PORTS (names, directions, widths)."""
-    tool = icsc()
-    if tool is None:
-        return "", "ICSC is not installed here (no `icsc-sv` on PATH)"
+    signal per golden port and calls `sc_start()`; compiled as ICSC's "unity" file against
+    libSCTool (its cmake `svc_target` without cmake), running it elaborates and translates.
+    Returns `(sv, "")`, or `("", why)` when ICSC is absent or refuses the module, or when its
+    ports are not the golden PORTS (names, directions, widths)."""
+    home = icsc()
+    if home is None:
+        return "", "ICSC is not here (no ICSC_HOME): run in `nix develop .#systemc`"
     ports = [p for p in g.ports if p["dir"] == "in"] + [p for p in g.ports if p["dir"] == "out"]
     sig = "\n".join(f"  sc_signal<sc_uint<{p['bits']}>> {p['name']};" for p in ports)
     bind = " ".join(f"dut.{p['name']}({p['name']});" for p in ports)
     top = f'#include "design.h"\nint sc_main(int, char*[]) {{\n{sig}\n  {module} dut("dut");\n  {bind}\n  sc_start();\n  return 0;\n}}\n'
+    # the dev shell's NIX_CFLAGS_COMPILE names pkgs.systemc's headers: ICSC's patched ones only
+    env = {k: v for k, v in os.environ.items() if k not in ("NIX_CFLAGS_COMPILE", "NIX_LDFLAGS")}
+    clang = next(iter(sorted((home / "lib" / "clang").glob("*/include"))), None)
     with tempfile.TemporaryDirectory(prefix="flux-icsc-") as d:
         (Path(d) / "design.h").write_text(code)
         (Path(d) / "top.cpp").write_text(top)
+        out = Path(d) / "out.sv"
+        inc = [f"-I{home}/include", f"-I{home}/include/sctcommon", f"-I{d}"]
+        args = " ".join([f"{d}/unity.cpp", "-sv_out", str(out), "--", "-D__SC_TOOL__", "-D__SC_TOOL_ANALYZE__",
+                         "-DNDEBUG", "-DSC_ALLOW_DEPRECATED_IEEE_API", "-Wno-logical-op-parentheses", "-std=c++20",
+                         "-nostdinc", *inc, *_system_includes(env), *([f"-isystem{clang}"] if clang else [])])
+        (Path(d) / "unity.cpp").write_text(f'#include <sc_tool/SCTool.h>\nconst char* __sctool_args_str = R"({args})";\n'
+                                           f'#include "{d}/top.cpp"\n')
         try:
-            run = subprocess.run([tool, "top.cpp", "out.sv"], cwd=d, capture_output=True, text=True, timeout=timeout_s)
+            run = subprocess.run(["c++", "-std=c++20", "-O1", "-D__SC_TOOL__", "-DSC_ALLOW_DEPRECATED_IEEE_API", *inc,
+                                  "unity.cpp", "-o", "sctool", f"-L{home}/lib", f"-Wl,-rpath,{home}/lib", "-lSCTool",
+                                  "-lSysCRTTI", "-lsc_elab_proto", "-lsystemc", "-lpthread"],
+                                 cwd=d, capture_output=True, text=True, timeout=timeout_s, env=env)
+            if run.returncode == 0:
+                run = subprocess.run(["./sctool"], cwd=d, capture_output=True, text=True, timeout=timeout_s, env=env)
         except subprocess.TimeoutExpired:
             return "", f"ICSC took longer than {timeout_s:g}s"
-        out = Path(d) / "out.sv"
         sv = out.read_text() if out.is_file() else ""
     if run.returncode != 0 or not sv.strip():
         text = (run.stdout + run.stderr).splitlines()

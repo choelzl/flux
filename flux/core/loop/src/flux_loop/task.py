@@ -38,11 +38,29 @@ from .types import (BuildError, Candidate, LoopRequest, LoopState, StageNames, S
 
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
+from .gradient import CHECK_WEIGHT
 from .document import (BUILD_FAILED, Part, TaskError, TaskSpec, _digest_of, _flux_rtl_tools,
                         _knob_subs, _leaf, _point_name, _rig_for, _write_point, _substitute, contract_lines, describe_flow, loop_owned,
                         resolve, world_hooks)
 
 __all__ = ["PromptProblem", "model_use", "task_report_lines"]
+
+
+def _count_failures(check: Any, run: Any) -> tuple[int, str]:
+    """One check's failures and report: `count_re`, else `fail_re`, else its exit code."""
+    out = (run.stdout or "") + ("\n" + run.stderr if run.stderr else "")
+    fails: int | None = None
+    if check.count_re:
+        m = re.search(check.count_re, out)
+        fails = int(m.group(1)) if m else None
+    elif check.fail_re:
+        fails = len(re.findall(check.fail_re, out))
+        if fails == 0 and not run.ok:
+            fails = None
+    if fails is None:
+        fails = 0 if run.ok else 1
+    text = out.strip()[-4000:] or (f"exit {run.returncode}" if not run.ok else "")
+    return fails, text
 
 
 # ------------------------------------------------------------------ the problem
@@ -466,14 +484,18 @@ class PromptProblem(Problem):
                   "cannot finish, a statement the parts do not add up to. Say nothing about style. (`stage: deepest` on "
                   "an objective means the last of `stages`; a goal is judged there. `{artifact}`, `{home}`, `{python}` "
                   "and each knob's `{name}` are filled by the loop. No `parts` means one design for the whole "
-                  "problem. `finalists: 0` stops at the first stage. A run's `steps` bound one pass; runs go "
-                  "on pass after pass until stopped.)\n\nTHE DOCUMENT:\n"
+                  "problem. `finalists: 0` stops at the first stage. `steps` counts the work items of one pass (a "
+                  "part to draft, a batch to measure), not the operations inside one; runs go on pass after pass "
+                  "until stopped. `--clock-ps` is the clock the tools time against; `fmax_mhz` comes from the "
+                  "slack, so a design may beat it. An objective without a goal orders the designs that meet the "
+                  "ones before it. Object only to what would make the run fail or waste its budget; if nothing "
+                  "does, return no objection.)\n\nTHE DOCUMENT:\n"
                   + doc + "\n\nTHE FLOW IN FORCE:\n" + "\n".join(describe_flow(self.task, self)))
         schema = {"type": "object", "properties": {"ok": {"type": "boolean"},
                                                    "objections": {"type": "array", "items": {"type": "string"}}},
                   "required": ["objections"]}
         if agent is not None:
-            got = box_turn("validate", agent, prompt, schema, state, home=self.task.home)
+            got = box_turn("validate", agent, prompt, schema, state, home=self.task.home, problem=self)
             return [str(o)[:300] for o in ((got or {}).get("objections") or []) if str(o).strip()]
         prompt += '\n\nReply as JSON: {"ok": true|false, "objections": ["one line each"]}.'
         try:
@@ -543,6 +565,27 @@ class PromptProblem(Problem):
                     missing.append(tool)
         return missing
 
+    def knowledge(self) -> Any | None:
+        """The knowledge role's mentor with the library in front (D648): excerpts retrieved for
+        the statement, contract and parts, and one line per paper -- for every document, unless
+        `flow.knowledge` is `none` or the library is empty. Made once, so each source is read once."""
+        if "_mentor" not in self.__dict__:
+            from .document import library_on
+
+            role = self.roles().knowledge
+            self._mentor = role
+            folders = (self.task.library,) if self.task.library else ()
+            if library_on(self.task) and (role is None or hasattr(role, "sources")):
+                from flux_knowledge import Library, Mentor, Papers
+                from flux_knowledge.library import library_files
+
+                if library_files(folders):
+                    lib = [Library(lambda _s: library_queries(self.task, self.parts), folders=folders),
+                           Papers(folders=folders)]
+                    self._mentor = (Mentor(lib) if role is None else
+                                    Mentor([*lib, *role.sources], budget=role.budget, share=role.share))
+        return self._mentor
+
     def mentor_sections(self, state: LoopState) -> list[tuple[str, str]]:
         out = [("task", self.task.statement + ("\n\n" + self.task.contract if self.task.contract else ""))]
         if self.task.knowledge:
@@ -552,14 +595,15 @@ class PromptProblem(Problem):
             out.extend(mentor.sections(state))
         return out
 
-    def _role_knowledge(self, state: LoopState) -> str:
-        """The knowledge role's text for a prompt (D462), beside the document's `knowledge`.
+    def _role_knowledge(self, state: LoopState, focus: str | None = None) -> str:
+        """The knowledge role's text for a prompt (D462), beside the document's `knowledge`;
+        `focus` (the part in hand) decides what is kept when the window is short (D550).
         Help, never a gate: an unreadable source contributes nothing."""
         mentor = self.knowledge()
         if mentor is None:
             return ""
         try:
-            return mentor.prefix(state).strip()
+            return mentor.prefix(state, focus=focus).strip()
         except Exception:  # noqa: BLE001
             return ""
 
@@ -665,9 +709,11 @@ class PromptProblem(Problem):
             part = self._part(cand.subgoal)
             what = ((f"PART {part.name}: {part.statement}\n\n" if part else "")
                     + f"THE CANDIDATE, which the gate has ALREADY PASSED:\n\n{numbered}\n\n"
-                    "Object only to something the gate cannot see and the contract requires: a "
-                    "violated constraint, a fragile construction, a mismatch with the statement. "
-                    "Passing the gate is not an issue.")
+                    "Object only to a DEFECT the gate cannot see: a violated constraint of the contract "
+                    "or statement (a forbidden construct, a required port or behaviour missing), or a "
+                    "result the gate's vectors could miss. Comments, naming, style and claims about "
+                    "speed or depth are not defects -- the stages measure those. Passing the gate is "
+                    "not an issue.")
             label = cand.name
         else:
             pick: Scored = subject
@@ -675,7 +721,7 @@ class PromptProblem(Problem):
             what = (f"THE DECISION: {pick.name} on stage {pick.stage} with {metrics}. "
                     "Object only if the objectives or the statement point elsewhere.")
             label = pick.name
-        gate = " ".join(t.gate.test or t.gate.build or ())
+        gate = t.gate.line()
         question = "\n\n".join(x for x in (
             f"TASK {t.id}: {t.statement}",
             f"CONTRACT:\n{t.contract}" if t.contract else "",
@@ -692,7 +738,7 @@ class PromptProblem(Problem):
                                  "why": {"type": "string"}},
                   "required": ["ok"]}
         if agent is not None:
-            doc = box_turn("critique", agent, question, schema, state, home=t.home)   # None: fell back, no objection
+            doc = box_turn("critique", agent, question, schema, state, home=t.home, problem=self)   # None: fell back, no objection
         else:
             try:
                 doc = _json(_ask(state, prompt, schema).text)
@@ -731,7 +777,7 @@ class PromptProblem(Problem):
         from .model import _ask, _json
 
         part = self._part(subgoal)
-        gate = " ".join(t.gate.test or t.gate.build or ())
+        gate = t.gate.line()
         prompt = "\n\n".join(x for x in (
             f"TASK {t.id}: {t.statement}",
             f"PART {part.name}: {part.statement}" if part is not None else "",
@@ -795,7 +841,7 @@ class PromptProblem(Problem):
             lines.append(f"CONTRACT:\n{t.contract}")
         if t.knowledge:
             lines.append(f"KNOWLEDGE:\n{t.knowledge}")
-        role = self._role_knowledge(state)      # the knowledge role's text, if on (D462)
+        role = self._role_knowledge(state, subgoal)      # the knowledge role's text: the library, ... (D462, D648)
         if role:
             lines.append(role)
         lines.append(
@@ -855,47 +901,37 @@ class PromptProblem(Problem):
 
         return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s, what=what)
 
-    def _count_failures(self, run: Any) -> tuple[int, str]:
-        out = (run.stdout or "") + ("\n" + run.stderr if run.stderr else "")
-        g = self.task.gate
-        fails: int | None = None
-        if g.count_re:
-            m = re.search(g.count_re, out)
-            fails = int(m.group(1)) if m else None
-        elif g.fail_re:
-            fails = len(re.findall(g.fail_re, out))
-            if fails == 0 and not run.ok:
-                fails = None
-        if fails is None:
-            fails = 0 if run.ok else 1
-        text = out.strip()[-4000:] or (f"exit {run.returncode}" if not run.ok else "")
-        return fails, text
+    def _gate_run(self, subs: dict[str, str]) -> tuple[int, str]:
+        """The gate's checks in order (D652): (score, report) of the first that fails, the checks
+        after it not run; a check exiting 3 (any non-zero for a `build` check) raises BuildError.
+        The score is the failures plus CHECK_WEIGHT per check not reached, so a design stopped
+        earlier ranks worse whatever its count."""
+        gate = self.task.gate
+        for i, check in enumerate(gate):
+            run = self._run(check.run, subs, check.timeout_s, check.name)
+            at = f"failed at {check.name}: " if len(gate) > 1 else ""
+            if run.returncode == BUILD_FAILED or (check.builds and not run.ok):
+                text = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:]
+                raise BuildError((f"did not build at {check.name}: " if len(gate) > 1 else "")
+                                 + (text or f"{check.name} exited {run.returncode}"))
+            fails, text = _count_failures(check, run)
+            if fails:
+                return fails + CHECK_WEIGHT * (len(gate) - 1 - i), at + text
+        return 0, ""
 
     def build(self, cand: Candidate, subgoal: str | None, state: LoopState) -> Any:
+        # the gate runs here, once: exit 3 is "did not build" (D594); fast_check reuses the result
         subs = self._subs(cand, subgoal, state)
-        if self.task.gate.build:
-            run = self._run(self.task.gate.build, subs, self.task.gate.timeout_s, "build")
-            if not run.ok:
-                raise BuildError(((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:]
-                                 or f"build exited {run.returncode}")
-        elif self.task.gate.test:
-            # No build command: run the test once here; exit 3 means it did not build (D594).
-            # fast_check reuses this run.
-            run = self._run(self.task.gate.test, subs, self.task.gate.timeout_s, "test")
-            if run.returncode == BUILD_FAILED:
-                raise BuildError(((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:])
-            self.__dict__.setdefault("_tested", {})[_digest_of(cand.artifact)] = run
+        if self.task.gate:
+            self.__dict__.setdefault("_tested", {})[_digest_of(cand.artifact)] = self._gate_run(subs)
         return subs["artifact"]
 
     def fast_check(self, built: Any, cand: Candidate, subgoal: str | None,
                    state: LoopState) -> tuple[int, str]:
-        if not self.task.gate.test:
+        if not self.task.gate:
             return 0, ""
-        run = self.__dict__.get("_tested", {}).pop(_digest_of(cand.artifact), None)   # build ran it (D594)
-        if run is None:
-            subs = self._subs(cand, subgoal, state)
-            run = self._run(self.task.gate.test, subs, self.task.gate.timeout_s, "test")
-        return self._count_failures(run)
+        got = self.__dict__.get("_tested", {}).pop(_digest_of(cand.artifact), None)   # build ran it (D594)
+        return got if got is not None else self._gate_run(self._subs(cand, subgoal, state))
 
     def judge(self, built: Any, cand: Candidate, subgoal: str | None, state: LoopState) -> Verdict:
         fails, text = self.fast_check(built, cand, subgoal, state)
@@ -929,7 +965,7 @@ class PromptProblem(Problem):
         or its printed reply parsed like a model's."""
         from dataclasses import asdict
 
-        from .agent import agent_brief, converse
+        from .agent import agent_brief, converse, library_section
 
         state = attempt.state
         workdir = Path(state.workdir or ".")
@@ -946,11 +982,12 @@ class PromptProblem(Problem):
         gate = self.task.gate                          # the agent can run the gate it is judged by (D595)
         check_subs = {"artifact": str(path), "workdir": str(workdir), "name": name, "part": sg or "",
                       "python": sys.executable, "home": str(Path(self.task.home or ".").resolve())}
-        check = " && ".join(shlex.join(_substitute(c, check_subs)) for c in (gate.build, gate.test) if c)
+        check = " && ".join(shlex.join(_substitute(c.run, check_subs)) for c in gate)
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=attempt.prior.artifact if attempt.prior is not None else None, failure=attempt.failure,
-                            questions=agent.questions, check=check)
+                            questions=agent.questions, check=check,
+                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state))
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
@@ -994,7 +1031,7 @@ class PromptProblem(Problem):
         """One agent turn on the prototype (D618): it edits a file and runs `flux rtl proto` (the
         stage's own check) until it passes. Returns the file as a `{"prototype": ...}` reply,
         or "" when nothing new was written."""
-        from .agent import agent_brief, converse
+        from .agent import agent_brief, converse, library_section
         from .golden_proto import TABLE_MAX, golden_path
 
         workdir = Path(state.workdir or ".")
@@ -1012,7 +1049,8 @@ class PromptProblem(Problem):
             {"python": sys.executable}))
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",
                             part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
-                            failure=failure, questions=agent.questions, check=check)
+                            failure=failure, questions=agent.questions, check=check,
+                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state))
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
@@ -1290,6 +1328,34 @@ def _document(text: str) -> Any:
 
 
 # ------------------------------------------------------------------ the report
+#: Words a lookup does without: grammar, and the interface boilerplate every module shares
+#: (a query of port names finds port lists, not methods).
+_STOP = frozenset("a an and are as at be by each every for from in into is it its of on one or that the "
+                  "this to with which when must should may not no only then than possible exactly named "
+                  "module input output logic wire reg port ports bit bits clock reset signed unsigned "
+                  "systemverilog verilog".split())
+
+
+def library_queries(task: TaskSpec, parts: Any = (), n: int = 8, words: int = 12) -> list[str]:
+    """A few short lookups for the library (D648): the statement's first two sentences, the
+    contract's first, each part's statement -- their content words, `words` at most each."""
+    def sentences(text: str, k: int) -> list[str]:
+        out = []
+        for sent in re.split(r"(?<=[.!?])\s+|\n\s*\n", text or ""):
+            w = list(dict.fromkeys(x for x in re.findall(r"[A-Za-z][A-Za-z0-9_+\-]*[A-Za-z0-9]", sent)
+                                   if x.lower() not in _STOP))
+            if len(w) >= 3:
+                out.append(" ".join(w[:words]))
+            if len(out) >= k:
+                break
+        return out
+
+    got = sentences(task.statement, 2) + sentences(task.contract, 1)
+    for p in parts or ():
+        got += sentences(f"{p.name.replace('_', ' ')}: {p.statement}", 1)
+    return list(dict.fromkeys(got))[:n]
+
+
 def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str]:
     """The standard report for a task run: the decision and its metrics, the world's
     `report(out)` lines if any, the frontier, then the shared closing sections (D558)."""
@@ -1313,6 +1379,9 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
             lines.append("    " + p.name + ": " + ", ".join(f"{k}={v:g}" for k, v in p.metrics.items()))
     if out.admitted:
         lines.append("  proven: " + ", ".join(f"{k}={c.name}" for k, c in sorted(out.admitted.items())))
+    cited = (getattr(out, "provenance", None) or {}).get("library") or []
+    if cited:                                                  # D648
+        lines.append(f"  library: the prompts cited {len(cited)} file(s): " + ", ".join(cited))
     skipped = problem.skipped_stages() if callable(getattr(problem, "skipped_stages", None)) else []
     for name, tools in skipped:
         lines.append(f"  NOT RUN: stage {name} -- needs {', '.join(tools)}, not on PATH; every number above "

@@ -47,10 +47,10 @@ def library_context(queries: Iterable[str], *, standard_id: str | None = "librar
 
 
 def _degenerate(text: str) -> bool:
-    """Fewer than four distinct words, or one word making up most of it: a table row or a
-    caption, not a paragraph worth a line of the model's prompt (a five-word sentence is)."""
+    """Fewer than eight distinct words, or one word making up most of it: a heading, a table
+    row or a caption, not a passage worth a line of the model's prompt (D650)."""
     words = [w for w in text.replace("\n", " ").split() if w.strip("|,.:;()")]
-    if len(set(w.lower() for w in words)) < 4:
+    if len(set(w.lower() for w in words)) < 8:
         return True
     top = max((words.count(w) for w in set(words)), default=0)
     return len(words) >= 4 and top / len(words) > 0.5

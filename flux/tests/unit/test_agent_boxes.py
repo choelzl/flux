@@ -240,7 +240,7 @@ def test_the_brief_names_the_problem_s_files_and_nothing_else(tmp_path):
     st = _state(tmp_path)
     box_turn("critique", _agent(tmp_path, "good"), "Q?", SCHEMA, st, home="/the/problem")
     brief = (tmp_path / "work" / "agents" / "critique" / "001" / "BRIEF.md").read_text()
-    assert "THE PROBLEM'S FILES are in `/the/problem`" in brief and "nothing outside them" in brief
+    assert "THE PROBLEM'S FILES are in `/the/problem`" in brief and "nothing else" in brief
 
 
 def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):

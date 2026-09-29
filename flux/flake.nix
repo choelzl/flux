@@ -53,7 +53,7 @@
     # binary cache — nixchip0.cachix.org and cache.nixos.org both 404 on its output path — so
     # moving either pin means compiling OpenROAD from source. See `nixConfig` above: nixchip's
     # cachix does cover other packages, and is only consulted because it is repeated there.
-    nixchip.url = "github:helcel-net/nixchip/243ae7e3e598e17345e846cf4493c7477f691550";
+    nixchip.url = "github:helcel-net/nixchip/f4fddde1616926a11cec12d325cf321536b4fc60";
     nixpkgs.follows = "nixchip/nixpkgs";
   };
 
@@ -65,11 +65,6 @@
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
     {
-      # ICSC (SystemC -> SystemVerilog, D636): `nix build .#icsc`, and in the default shell
-      packages = forAllSystems (system: nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "linux" system) {
-        icsc = (import nixpkgs { inherit system; }).callPackage ./nix/icsc.nix { };
-      });
-
       devShells = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
@@ -177,7 +172,7 @@
             '' + shellHook;
           };
         }
-        // {
+        // (let
           default = pkgs.mkShell {
             name = "flux-dev-full";
             packages = [
@@ -192,7 +187,6 @@
             # Physical design (OpenROAD, yosys-slang), linux-only.
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
               chipPkgs.openroad chipPkgs.yosys-slang
-              self.packages.${system}.icsc  # `icsc-sv`: a SystemC prototype -> SV (D636)
             ];
             LD_LIBRARY_PATH = nativeLibPath;
             SYSTEMC_HOME = "${pkgs.systemc}";
@@ -202,9 +196,18 @@
               "${chipPkgs.yosys-slang}/share/yosys/plugins/slang.so";
             shellHook = ''
               echo "flux dev shell: python + Verilator/Yosys/OpenROAD, Pythia/ChampSim, SystemC"
-              echo "  .#timeloop is a separate shell"
+              echo "  .#systemc adds ICSC (SystemC -> SV); .#timeloop is separate"
             '' + shellHook;
           };
-        });
+        in
+        { inherit default; }
+        # the default shell plus nixchip's ICSC (SystemC -> SystemVerilog, D645, D656)
+        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          systemc = default.overrideAttrs (old: {
+            name = "flux-dev-systemc";
+            nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ chipPkgs.icsc ];
+            ICSC_HOME = "${chipPkgs.icsc}";
+          });
+        }));
     };
 }

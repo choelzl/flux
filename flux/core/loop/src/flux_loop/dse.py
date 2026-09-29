@@ -729,7 +729,7 @@ class ModelSearch(Policy):
                           and _key({**base, **q} if base else q) not in seen]
                     return None if ok else "no point is new and inside the space (every knob, one of its choices)"
                 doc = box_turn("dse", self.agent, "\n".join(lines), schema, state, check=usable,
-                               home=str(getattr(getattr(problem, "task", None), "home", "") or ""))
+                               home=str(getattr(getattr(problem, "task", None), "home", "") or ""), problem=problem)
                 if doc is None:
                     return                          # the agent fell back: the phase ends, the next one runs
             else:

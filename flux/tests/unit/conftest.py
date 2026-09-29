@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,10 @@ for _d in re.findall(r'"([^"]+/src)"', _block.group(1)) if _block else []:
     _p = str(FLUX_ROOT / _d)
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+# The shared library is this machine's papers (D648): a unit test reads an empty one unless it
+# makes its own, so prompts are the same on every machine.
+os.environ["FLUX_LIBRARY"] = tempfile.mkdtemp(prefix="flux-library-")
 
 # (kind, example_path) pairs covering the DNN-accelerator and general-SoC cases (D1), per IR category.
 IR_EXAMPLES = [

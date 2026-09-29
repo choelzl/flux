@@ -5,9 +5,10 @@ budget, a `space:` of knobs, a `world:` for what prose and numbers cannot say.
 
 Commands carry placeholders: `{artifact}` (the candidate written to a file), `{home}` (the
 document's folder), `{workdir}`, `{name}`, `{part}`, `{python}` (this interpreter), and `{knob}`
-for each knob of `space:`. A gate's `test` prints its failures; `count_re` (one integer group)
-or `fail_re` (one match per failure) says how the loop counts them, and a non-zero exit with
-nothing counted is one failure. A test that exits 3 says the candidate did not build (D594).
+for each knob of `space:`. A gate is named checks run in order (D652); each prints its failures,
+`count_re` (one integer group) or `fail_re` (one match per failure) says how the loop counts them,
+and a non-zero exit with nothing counted is one failure. A check that exits 3 says the candidate
+did not build (D594).
 
 A world holds what a document cannot say (blocks, a transpiler, an exhaustive judge, how parts
 compose or are measured): `world: module:World`, a callable taking the problem and returning an
@@ -33,7 +34,7 @@ from .types import (LoopRequest)
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 
-__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "world_hooks"]
+__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "world_hooks"]
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -71,7 +72,7 @@ def rtl_tools_kind(cmd: Iterable[str] | None) -> str:
 
 
 def _flux_rtl_tools(cmd: Iterable[str]) -> list[str]:
-    """The tools a `flux rtl test|measure` command runs (D600): they may be missing outside the
+    """The tools a `flux rtl lint|test|measure` command runs (D600): they may be missing outside the
     Nix dev shell, and the command itself is Python, so `task check` must name them."""
     toks = list(cmd)
     try:
@@ -81,7 +82,7 @@ def _flux_rtl_tools(cmd: Iterable[str]) -> list[str]:
     if at == 0 or "flux" not in " ".join(toks[:at]):
         return []
     sub = toks[at + 1] if at + 1 < len(toks) else ""
-    if sub == "test":
+    if sub in ("test", "lint"):
         return ["verilator"]
     if sub == "measure":
         return ["yosys", "openroad"]      # synthesis too: its timing is OpenROAD's OpenSTA
@@ -97,15 +98,43 @@ def _digest_of(text: str | None) -> str:
     return hashlib.sha256((text or "").encode()).hexdigest()
 
 @dataclass(frozen=True)
-class Gate:
-    """How a candidate is checked. `build` refuses (non-zero exit) what cannot be built;
-    `test` counts failures; both optional, at least one required."""
+class Check:
+    """One named check of a gate (D652): a command whose failures are counted by `count_re`
+    (one integer group), `fail_re` (one match per failure) or, with neither matching, its exit
+    code. Exit 3 means the candidate did not build; `builds` (the old `build:` key) makes any
+    non-zero exit mean that."""
 
-    build: tuple[str, ...] | None = None
-    test: tuple[str, ...] | None = None
-    count_re: str | None = None          # one integer group: the failure count the test prints
-    fail_re: str | None = None           # one match per failure
+    name: str
+    run: tuple[str, ...]
+    count_re: str | None = None
+    fail_re: str | None = None
     timeout_s: float = 120.0
+    builds: bool = False
+
+    @property
+    def rule(self) -> str:
+        """The pass rule in words, for `flux task check`."""
+        if self.builds:
+            return "passes when it exits 0; otherwise the candidate did not build"
+        how = (f"`{self.count_re}` reads 0" if self.count_re
+               else f"no line matches `{self.fail_re}`" if self.fail_re else "it exits 0")
+        return f"passes when {how}; exit 3 = did not build"
+
+
+class Gate(tuple):
+    """How a candidate is checked (D652): its checks, run in order, cheapest first. The first
+    that reports failures refuses the design; the checks after it do not run."""
+
+    def named(self, name: str) -> Check | None:
+        return next((c for c in self if c.name == name), None)
+
+    @property
+    def timeout_s(self) -> float:
+        return max((c.timeout_s for c in self), default=120.0)
+
+    def line(self) -> str:
+        """The checks as one shell line, for a prompt or an agent's brief."""
+        return " && ".join(" ".join(c.run) for c in self)
 
 
 @dataclass(frozen=True)
@@ -180,6 +209,7 @@ class TaskSpec:
     record: str = ""                     # the record's name: the id, `<parent>/<child>` for a sub-document
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
     knowledge_sheet: str = ""            # where `knowledge` was read from, for the report
+    library: str = ""                    # `knowledge: {library: dir}`, absolute: indexed with the shared one (D648)
     #: The directory the document was loaded from ("" inline); every artifact of a run lives
     #: under `<home>/out/`, never beside the source (D578).
     home: str = field(default="", compare=False)      # not the document's: two loads of one text are equal
@@ -299,8 +329,18 @@ class TaskSpec:
                 raise TaskError(f"ladder keys {bad_ladder} are not the ladder's; known: {sorted(known_ladder)}")
         elif ladder not in (None, True, False):
             raise TaskError("`ladder` is true (the default ladder) or an object of its fields")
-        knowledge, sheet = doc.get("knowledge") or "", ""
+        knowledge, sheet, library = doc.get("knowledge") or "", "", ""
         if isinstance(knowledge, dict):
+            bad_keys = sorted(set(knowledge) - {"sheet", "text", "files", "library"})
+            if bad_keys:
+                raise TaskError(f"knowledge keys {bad_keys} are not known; known: files, library, sheet, text")
+            if knowledge.get("library"):            # D648: the document's own papers
+                lib = Path(str(knowledge["library"]))
+                lib = lib if lib.is_absolute() or base is None else Path(base) / lib
+                if not lib.is_dir():
+                    raise TaskError(f"knowledge.library {knowledge['library']!r} is not a folder"
+                                    + (f" beside {base}" if base is not None else ""))
+                library = str(lib.resolve())
             sheet = str(knowledge.get("sheet") or "")
             text = str(knowledge.get("text") or "")
             if sheet:
@@ -377,13 +417,12 @@ class TaskSpec:
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, cache=cache, hooks=hooks, record=record, ladder=ladder if ladder else None,
-            knowledge_sheet=sheet,
+            knowledge_sheet=sheet, library=library,
             skills=skills,
         )
 
     def _to_dict(self) -> dict[str, Any]:
-        gate = {k: (list(v) if isinstance(v, tuple) else v)
-                for k, v in self.gate.__dict__.items() if v is not None}
+        gate = _gate_doc(self.gate)
         return {
             "id": self.id, "statement": self.statement, "contract": self.contract,
             "language": self.language,
@@ -404,7 +443,8 @@ class TaskSpec:
                        **({"needs": list(r.needs)} if r.needs else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
-            "knowledge": self.knowledge, "joiner": self.joiner,
+            "knowledge": {"text": self.knowledge, "library": self.library} if self.library else self.knowledge,
+            "joiner": self.joiner,
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: ({"values": list(v), "when": dict(self.when[k])} if k in self.when else list(v))
                                                                         for k, v in self.space.items()},
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
@@ -431,10 +471,7 @@ class TaskSpec:
 
     def commands(self) -> list[tuple[str, tuple[str, ...]]]:
         out: list[tuple[str, tuple[str, ...]]] = []
-        if self.gate.build:
-            out.append(("gate.build", self.gate.build))
-        if self.gate.test:
-            out.append(("gate.test", self.gate.test))
+        out += [(f"gate {c.name}", c.run) for c in self.gate]
         if self.generator.get("command"):
             out.append(("generator", tuple(self.generator["command"])))
         for r in self.stages:
@@ -490,7 +527,7 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
     known = set(BUILTIN_SUBS) | set(space)
     cmds: list[tuple[str, Iterable[str]]] = []
     if gate is not None:
-        cmds += [("gate.build", gate.build or ()), ("gate.test", gate.test or ())]
+        cmds += [(f"gate {c.name}", c.run) for c in gate]
     cmds += [(f"stage {r.name}", r.command or ()) for r in stages]
     if generator.get("command"):
         cmds.append(("generator", generator["command"]))
@@ -514,24 +551,67 @@ def _knob_subs(knobs: dict[str, Any]) -> dict[str, str]:
 DEFAULT_COUNT_RE = r"(\d+) failing"
 
 
-def _gate(doc: Any) -> Gate:
-    if isinstance(doc, (str, list)):
-        doc = {"test": doc}                             # `gate: <command>` is its test (D628)
-    if not isinstance(doc, dict) or not (doc.get("build") or doc.get("test")):
-        raise TaskError("`gate` needs a `build` and/or a `test` command (a string or a list of "
-                        "argv tokens; `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}`, "
-                        "`{home}` are substituted; a `flux ...` head runs this flux)")
-    build, test = _command(doc.get("build"), "gate.build"), _command(doc.get("test"), "gate.test")
+_GATE_HELP = ("`gate` needs a command (a string or a list of argv tokens), `{build, test}`, or a list of "
+              "named checks `[{name, run, count_re?, fail_re?, timeout_s?}, ...]`; `{artifact}`, "
+              "`{workdir}`, `{name}`, `{part}`, `{python}`, `{home}` are substituted; a `flux ...` "
+              "head runs this flux")
+
+
+def _patterns(doc: dict[str, Any], what: str) -> tuple[str | None, str | None]:
     for key in ("count_re", "fail_re"):
         pat = doc.get(key)
         if pat is not None:
             try:
                 re.compile(pat)
             except re.error as exc:
-                raise TaskError(f"gate.{key} is not a regex: {exc}") from exc
-    count_re = doc.get("count_re") or (None if doc.get("fail_re") else DEFAULT_COUNT_RE)
-    return Gate(build=build, test=test, count_re=count_re, fail_re=doc.get("fail_re"),
-                timeout_s=float(doc.get("timeout_s") or 120.0))
+                raise TaskError(f"{what}.{key} is not a regex: {exc}") from exc
+    return doc.get("count_re") or (None if doc.get("fail_re") else DEFAULT_COUNT_RE), doc.get("fail_re")
+
+
+def _gate(doc: Any) -> Gate:
+    """A gate's checks (D652). The list is the general form; `gate: <command>` is one check
+    named `test`, `{build, test}` the checks `build` (any non-zero exit: did not build) and `test`."""
+    if isinstance(doc, list) and doc and all(isinstance(c, dict) for c in doc):
+        checks = []
+        for i, c in enumerate(doc):
+            name = c.get("name")
+            if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+                raise TaskError(f"gate[{i}] needs a `name` (letters, digits, _ and -)")
+            bad = sorted(set(c) - {"name", "run", "count_re", "fail_re", "timeout_s"})
+            if bad:
+                raise TaskError(f"gate[{i}] ({name}): keys {bad} are not a check's; known: count_re, fail_re, name, run, timeout_s")
+            if not c.get("run"):
+                raise TaskError(f"gate[{i}] ({name}) needs `run`: its command")
+            count_re, fail_re = _patterns(c, f"gate[{i}]")
+            checks.append(Check(name, _command(c["run"], f"gate[{i}].run"), count_re, fail_re,
+                                float(c.get("timeout_s") or 120.0)))
+        if len({c.name for c in checks}) != len(checks):
+            raise TaskError("gate check names must be unique")
+        return Gate(checks)
+    if isinstance(doc, (str, list)):
+        doc = {"test": doc}                             # `gate: <command>` is its test (D628)
+    if not isinstance(doc, dict) or not (doc.get("build") or doc.get("test")):
+        raise TaskError(_GATE_HELP)
+    build, test = _command(doc.get("build"), "gate.build"), _command(doc.get("test"), "gate.test")
+    count_re, fail_re = _patterns(doc, "gate")
+    timeout = float(doc.get("timeout_s") or 120.0)
+    return Gate(([Check("build", build, timeout_s=timeout, builds=True)] if build else [])
+                + ([Check("test", test, count_re, fail_re, timeout)] if test else []))
+
+
+def _gate_doc(gate: Gate) -> Any:
+    """The gate as a document says it: the old `{build, test}` form when it is that, else the list."""
+    names = [c.name for c in gate]
+    if names in (["build"], ["test"], ["build", "test"]) and all(c.builds == (c.name == "build") for c in gate):
+        out: dict[str, Any] = {c.name: list(c.run) for c in gate}
+        test = gate.named("test")
+        if test is not None:
+            out.update({k: v for k, v in (("count_re", test.count_re), ("fail_re", test.fail_re)) if v is not None})
+        out["timeout_s"] = gate.timeout_s
+        return out
+    return [{"name": c.name, "run": list(c.run),
+             **({"count_re": c.count_re} if c.count_re and c.count_re != DEFAULT_COUNT_RE else {}),
+             **({"fail_re": c.fail_re} if c.fail_re else {}), "timeout_s": c.timeout_s} for c in gate]
 
 
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
@@ -893,7 +973,8 @@ FLOW_BOXES = ("validate", "orchestrate", "plan", "dse", "generate", "test", "cri
 _FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("none", "llm"), "plan": ("none", "llm"),
                "calibrate": ("on", "off"), "select": ("objectives",), "feedback": ("human", "none"),
                "extract": ("none", "mined"), "records": ("on",)}
-_KNOWLEDGE_SOURCES = ("sheet", "library", "digest")
+#: What `flow.knowledge` may name (D648): the library is on by default; `none` turns it off.
+_KNOWLEDGE_SOURCES = ("sheet", "library", "digest", "none")
 
 
 def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1021,6 +1102,8 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             sources = [sources]
         if not isinstance(sources, list) or not all(s in _KNOWLEDGE_SOURCES for s in sources):
             raise TaskError(f"flow.knowledge is a list from {', '.join(_KNOWLEDGE_SOURCES)}, not {sources!r}")
+        if "none" in sources and len(sources) > 1:
+            raise TaskError("flow.knowledge `none` stands alone: it turns the library off")
         flow["knowledge"] = list(sources)
     # the model-side knowledge: `digest` from the library, `mined` from the record (extract)
     wanted = [s for s in ("mined", "digest") if (s == "mined" and flow.get("extract") == "mined")
@@ -1032,6 +1115,12 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         roles["knowledge"] = wanted[0] if len(wanted) == 1 else {"sources": {"names": wanted}}
     doc["roles"] = roles
     return flow, doc
+
+
+def library_on(task: "TaskSpec") -> bool:
+    """Whether the library reaches this document's prompts and agents: always, unless
+    `flow.knowledge` says `none` (D648)."""
+    return "none" not in (task.flow.get("knowledge") or ())
 
 
 def _surrogate_kind(roles: dict[str, Any]) -> str:
@@ -1106,7 +1195,10 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         except Exception:  # noqa: BLE001 -- a world that cannot say is a world with none
             pass
     simulation = list(flow.get("simulation") or [s for s in stage_names if s not in analytical])
-    knowledge = list(flow.get("knowledge") or (["sheet"] if task.knowledge else []))
+    said = list(flow.get("knowledge") or [])
+    knowledge = (["sheet"] if task.knowledge else []) + (
+        [] if not library_on(task) else ["library" + (f" + {task.library}" if task.library else "")])
+    knowledge += ["digest"] if "digest" in said else []
     lines = [
         ("validate: " + (f"agent {_agent_name(flow['validate'])} (the loader's checks, then the agent reads the document and objects, D640)"
                          if isinstance(flow.get("validate"), dict) else
@@ -1135,7 +1227,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         "select: objectives (" + (", ".join(f"{o.direction} {o.metric}" for o in task.objectives) or "none") + ")"
         + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
         f"feedback: {flow.get('feedback', 'human')}" + ("" if flow.get("feedback") == "none" else " (the operator's notes, when a terminal is attached)"),
-        "knowledge: " + (", ".join(knowledge) if knowledge else "none declared (the world's mentor, if any)"),
+        "knowledge: " + (", ".join(knowledge) if knowledge else "none (the world's mentor, if any)"),
         f"extract: {flow.get('extract', 'none')}" + (" (facts mined from the record reach the prompts)" if flow.get("extract") == "mined"
                                                     else " (mined: facts from the record reach the prompts)"),
         "records: on (every candidate, measurement and refusal, read back on resume)",

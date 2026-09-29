@@ -217,7 +217,7 @@ def test_the_plan_names_the_method_per_part_and_the_generator_reads_it_as_its_br
 
     run_loop(Read(), _request(tmp_path / "three", agent=("plan",), patching=False), proposer=Planner(), log=lambda _m: None)
     planning = [p for p in asked if "PLANNING" in p]
-    assert planning and "THE LIBRARY, digested" in planning[0] and "[PACE.pdf] PACE" in planning[0]
+    assert planning and "THE LIBRARY, one line per paper" in planning[0] and "[PACE.pdf] PACE" in planning[0]
     assert "In `methods`, say for each part the approach to try FIRST" in planning[0]
     assert any("BRIEF (from the orchestrator):\nfrom the library: PACE's 16 segments" in p for p in asked if "write front" in p)
     assert any("BRIEF (from the orchestrator):\nthe stack from the record" in p for p in asked if "write back" in p)

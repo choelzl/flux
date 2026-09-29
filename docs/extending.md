@@ -17,12 +17,13 @@ or `flow`. A changed ask opens its own record.
 
 ## 2. The gate and the stages: any command (stable)
 
-A gate and a stage are commands, so any language and any tool will do.
+A gate and a stage are commands, so any language and any tool will do. A gate may be a list of
+named checks run in order (`[{name, run}, ...]`, D652); the first that fails refuses the design.
 
 | command | prints | exit |
 |---|---|---|
-| `gate.test` | its failures as `N failing` (the default count), or counted by `count_re` (one integer group) or one `fail_re` match each | 0 passed, 1 failed, **3 did not build** (a build failure, not a score, D594) |
-| `gate.build` (optional) | why it failed | non-zero refuses the candidate |
+| a gate check's `run` | its failures as `N failing` (the default count), or counted by `count_re` (one integer group) or one `fail_re` match each | 0 passed, 1 failed, **3 did not build** (a build failure, not a score, D594) |
+| the old `gate.build` | why it failed | non-zero: did not build |
 | a stage's `command` | `name=value` tokens; the stage reads the `metrics` it lists | non-zero: the stage failed for that candidate |
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's

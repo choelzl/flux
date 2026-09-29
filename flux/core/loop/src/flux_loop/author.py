@@ -272,7 +272,9 @@ def _golden_fault(task: Any, workdir: Path) -> str:
     import importlib.util
     import traceback
 
-    cmd = list(task.gate.test or ())
+    from .golden_proto import golden_check
+
+    cmd = golden_check(task)
     if "--golden" not in cmd or cmd.index("--golden") + 1 >= len(cmd):
         return ""
     raw = cmd[cmd.index("--golden") + 1].replace("{home}", str(workdir))

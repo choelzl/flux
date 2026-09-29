@@ -43,6 +43,18 @@ export FLUX_REMOTE_API_KEY=...        # only if the server checks keys
 export FLUX_LLM_TIMEOUT_S=1800        # long turns with tools
 ```
 
+**Once per machine.** Every `flux` command reads `~/.config/flux/flux.env` (or `FLUX_CONFIG`):
+`FLUX_*` and `OLLAMA_*` lines, `NAME=value`, set only where the shell did not set them. Keep the
+key out of it: `FLUX_REMOTE_API_KEY_FILE=~/.config/flux/server.key` names a file (mode 600) whose
+first line is the key.
+
+```
+FLUX_LLM_REMOTE=1
+FLUX_REMOTE_BASE_URL=https://my-server.example
+FLUX_REMOTE_MODEL=<name on the server>
+FLUX_REMOTE_API_KEY_FILE=~/.config/flux/server.key
+```
+
 **OpenRouter.** This is the default hosted server when remote is forced without a URL. Not
 verified in this project's recent runs.
 

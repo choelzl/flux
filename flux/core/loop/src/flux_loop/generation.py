@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .gradient import Gradient
+from .gradient import Gradient, gate_score
 from .model import _ask, _compose
 from .observe import _phase
 from .patch import apply_patch, parse_patch
@@ -226,11 +226,11 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             # the trend: did the last edit help, by how much, and where it stands against the best
             trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
             if is_best:
-                state.say(f"  {tag}: {fails} fast-check failure(s) (best so far)")
+                state.say(f"  {tag}: {gate_score(fails)} fast-check failure(s) (best so far)")
             if grad.revert_due(cand.artifact):
                 # too many regressions in a row: back to the best attempt, and say so
                 state.say(f"  {tag}: the tolerance for worsening edits is spent; backtracking "
-                          f"(best {grad.best_score:g} failing)")
+                          f"(best {gate_score(grad.best_score)} failing)")
                 (cand, _built), note = grad.revert()
                 last_good = cand.artifact
                 trend += note
@@ -240,7 +240,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
         if mode == "design":
             prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
     if grad.best is not None:
-        state.say(f"  {tag}: budget spent; sending the best attempt ({grad.best_score:g} "
+        state.say(f"  {tag}: budget spent; sending the best attempt ({gate_score(grad.best_score)} "
                   "failing) to the gate")
         best_cand, best_built = grad.best[1]
         return best_cand, best_built, ""

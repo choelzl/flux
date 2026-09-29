@@ -1012,3 +1012,27 @@ def test_the_preflight_says_why_a_run_cannot_start(monkeypatch):
         assert "no model server answers" in OpenAIChatProposer("qwen3:4b").preflight()
     finally:
         srv.shutdown()
+
+
+def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp_path, monkeypatch):
+    """`~/.config/flux/flux.env` sets FLUX_* where the shell did not; the key is read from the
+    file FLUX_REMOTE_API_KEY_FILE names (D651)."""
+    from flux_llm.openai_compat import load_user_config, remote_api_key
+
+    for name in ("FLUX_LLM_REMOTE", "FLUX_REMOTE_MODEL", "FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY",
+                 "FLUX_REMOTE_API_KEY_FILE", "FLUX_LLM_TIMEOUT_S"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "key").write_text("sk-test-123\n")
+    cfg = tmp_path / "flux.env"
+    cfg.write_text(f"# the hosted model\nFLUX_LLM_REMOTE=1\nFLUX_REMOTE_MODEL=qwen-apex\n"
+                   f"FLUX_REMOTE_API_KEY_FILE={tmp_path / 'key'}\nFLUX_LLM_TIMEOUT_S=60\nPATH=/nope\n")
+    monkeypatch.setenv("FLUX_LLM_TIMEOUT_S", "86400")              # the shell wins
+    got = load_user_config(cfg)
+    import os
+
+    assert set(got) == {"FLUX_LLM_REMOTE", "FLUX_REMOTE_MODEL", "FLUX_REMOTE_API_KEY_FILE"}
+    assert os.environ["FLUX_REMOTE_MODEL"] == "qwen-apex" and os.environ["FLUX_LLM_TIMEOUT_S"] == "86400"
+    assert os.environ.get("PATH") != "/nope", "only FLUX_/OLLAMA_ variables"
+    assert remote_api_key() == "sk-test-123"
+    for name in got:
+        monkeypatch.delenv(name, raising=False)

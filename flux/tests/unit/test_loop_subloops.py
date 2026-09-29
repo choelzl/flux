@@ -184,8 +184,8 @@ def test_a_task_document_can_carry_the_division(tmp_path):
                      {"id": "arch", "statement": "build it", "gate": {"test": ["false"]}}],
     })
     assert [c.id for c in spec.subtasks] == ["sim", "arch"]
-    assert spec.subtasks[0].contract == "be careful" and spec.subtasks[0].gate.test == ("true",)
-    assert spec.subtasks[1].gate.test == ("false",), "a child may say its own gate"
+    assert spec.subtasks[0].contract == "be careful" and spec.subtasks[0].gate.named("test").run == ("true",)
+    assert spec.subtasks[1].gate.named("test").run == ("false",), "a child may say its own gate"
     assert [r.name for r in spec.subtasks[0].stages] == ["screen"]
     assert spec.subtasks[0].subtasks == ()
     problem = PromptProblem(spec)
@@ -215,7 +215,7 @@ def test_a_document_can_ask_the_orchestrator_to_split_it():
     assert [w.name for w in work] == ["front", "back"]
     assert work[0].statement == "the front"
     child = work[0].problem.task
-    assert child.id == "top/front" and child.gate.test == ("true",) and not child.split
+    assert child.id == "top/front" and child.gate.named("test").run == ("true",) and not child.split
     assert "1 to 3 SUB-TASKS" in proposer.prompts[0]
     again = problem.decompose(state)
     assert [w.name for w in again] == ["front", "back"] and len(proposer.prompts) == 1, (

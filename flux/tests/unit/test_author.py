@@ -206,6 +206,7 @@ def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
     from types import SimpleNamespace
 
     from flux_loop.author import _golden_fault
+    from flux_loop.document import _gate
 
     def check(ret: str) -> str:
         (tmp_path / "golden.py").write_text(
@@ -213,7 +214,7 @@ def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
             "         {'name': 'b', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"
             "         {'name': 's', 'dir': 'out', 'bits': 9, 'unsigned': True}]\n"
             f"COUNT = 16\n\ndef golden(a, b):\n    return {{'s': {ret}}}\n")
-        task = SimpleNamespace(gate=SimpleNamespace(test=("flux", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py")))
+        task = SimpleNamespace(gate=_gate("flux rtl test {artifact} --golden {home}/golden.py"))
         return _golden_fault(task, tmp_path)
 
     assert "never sets the top bit of output `s` (9 bits)" in check("(a + b) & 0xFF")

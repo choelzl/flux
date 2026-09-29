@@ -41,8 +41,9 @@ def _record_trial(state: LoopState, cand: Candidate | None, subgoal: str | None,
     # what made the row -- and, on an admitted design, the transpiler and judge versions, so a
     # reload knows whether to trust it (D510)
     meta = dict(doc.get("meta") or {})
+    sha = _prompt_sha(state)
     meta["provenance"] = stamp(seconds=(verdict.seconds if verdict is not None and verdict.seconds else None),
-                               prompt=_prompt_sha(state))
+                               prompt=sha, library=state.cited.get(sha) or None)
     if admitted and state.versions:
         meta["versions"] = dict(state.versions)
     doc["meta"] = meta

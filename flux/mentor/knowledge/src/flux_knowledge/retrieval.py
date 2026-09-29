@@ -8,6 +8,7 @@ embedding backend, if needed, would be a second `Index` behind the same `search(
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -89,9 +90,11 @@ class BM25Index:
         return [RetrievedChunk(chunk=self._chunks[i], score=scores[i]) for i in ranked[:k]]
 
 
-def build_default_index(knowledge_root: str | Path, *, repo_root: str | Path) -> BM25Index:
+def build_default_index(knowledge_root: str | Path, *, repo_root: str | Path,
+                        library: str | Path | None = None) -> BM25Index:
     """Build the index from every standard directory under `knowledge_root/corpus/` (one
-    subdirectory per `standard_id`, e.g. `corpus/riscv-unpriv/`), using the AsciiDoc connector.
+    subdirectory per `standard_id`, e.g. `corpus/riscv-unpriv/`), using the AsciiDoc connector,
+    and the library (`library`, default `knowledge_root/library`).
     A new standard is a new subdirectory, not a code change.
     """
     from flux_knowledge.connectors.adoc import ingest_adoc_directory
@@ -112,22 +115,27 @@ def build_default_index(knowledge_root: str | Path, *, repo_root: str | Path) ->
     # under standard_id "library". An absent or empty library adds nothing.
     from flux_knowledge.connectors.text import ingest_library
 
-    chunks.extend(ingest_library(knowledge_root / "library", repo_root=repo_root))
+    chunks.extend(ingest_library(Path(library) if library else knowledge_root / "library", repo_root=repo_root))
     return BM25Index(chunks)
 
 
-_default_index_cache: BM25Index | None = None
+_default_index_cache: dict[str, BM25Index] = {}
+
+
+def shared_library() -> Path:
+    """The shared library folder: `FLUX_LIBRARY` when set, else `mentor/knowledge/library`."""
+    return Path(os.environ.get("FLUX_LIBRARY") or Path(__file__).resolve().parents[2] / "library")
 
 
 def _cached_default_index() -> BM25Index:
-    global _default_index_cache
-    if _default_index_cache is None:
+    lib = str(shared_library())
+    if lib not in _default_index_cache:
         # Provenance paths are relative to the repo root `flux/`, two levels up, so a chunk
         # cites `mentor/knowledge/corpus/...`.
         knowledge_root = Path(__file__).resolve().parents[2]
         repo_root = knowledge_root.parents[1]  # flux/
-        _default_index_cache = build_default_index(knowledge_root, repo_root=repo_root)
-    return _default_index_cache
+        _default_index_cache[lib] = build_default_index(knowledge_root, repo_root=repo_root, library=lib)
+    return _default_index_cache[lib]
 
 
 def knowledge_lookup(

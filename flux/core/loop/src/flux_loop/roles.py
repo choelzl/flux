@@ -307,7 +307,8 @@ class AgentOrchestrator:
         tools = {t.name: t for t in orchestrator_tools(problem, state)}
         read = [f"STANDINGS:\n{tools['standings'].run({})}", f"PICKS SO FAR:\n{tools['decisions'].run({})}"]
         lines = [ln for ln in head if ln and not ln.startswith(("You have tools:", "Reply with ONLY JSON"))]
-        doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
+        doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, problem=problem,
+                       home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
                        check=lambda d: None if d.get("pick") in choices else f"pick must be one of {', '.join(choices)}")
         if doc is None:
             return None

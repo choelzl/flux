@@ -33,7 +33,7 @@ def _patch(find: str, replace: str) -> str:
 # ---- the document
 def test_the_example_task_loads_and_round_trips():
     task = load_task(DIGITS)
-    assert task.id == "digits" and task.gate.test and task.gate.count_re == r"(\d+) failing"
+    assert task.id == "digits" and task.gate.named("test").count_re == r"(\d+) failing"
     assert task.parts == () and task.stages == () and task.budget["steps"] == 2
     again = TaskSpec.from_dict(task.to_dict())
     assert again == task and again.digest == task.digest
@@ -62,7 +62,7 @@ def test_load_task_reads_yaml_too(tmp_path):
     p = tmp_path / "t.yaml"
     p.write_text("id: y\nstatement: make it\ngate:\n  build: ['{python}', '-c', 'pass', '{artifact}']\n")
     task = load_task(p)
-    assert task.id == "y" and task.gate.build[0] == "{python}"
+    assert task.id == "y" and task.gate.named("build").run[0] == "{python}"
     with pytest.raises(TaskError, match="a .yaml, .yml or .json file"):
         load_task(tmp_path / "t.toml")
 
@@ -170,7 +170,7 @@ def test_flux_task_check_lists_the_document(capsys):
 
     assert main(["task", "check", str(DIGITS)]) == 0
     out = capsys.readouterr().out
-    assert "task digits:" in out and "gate.test:" in out and "tools: present for every stage" in out
+    assert "task digits:" in out and "1. test: " in out and "tools: present for every stage" in out
     assert "stages: gate" in out and "objectives: none" in out
 
 
@@ -611,7 +611,7 @@ def test_a_command_is_a_string_or_a_list_and_a_flux_head_runs_this_flux():
                     "metrics": ["fmax_mhz", "area_um2"]},
                    {"name": "r", "command": ["{python}", "-c", "print('k=1')"], "metrics_re": {"k": "k=(\\d+)"}}],
     })
-    assert task.gate.test == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py")
+    assert task.gate.named("test").run == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py")
     s, r = task.stages
     assert s.command[:5] == ("{python}", "-W", "ignore", "-m", "flux_cli.main") and s.metrics == ("fmax_mhz", "area_um2")
     import re

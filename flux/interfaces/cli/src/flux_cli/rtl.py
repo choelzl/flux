@@ -1,7 +1,9 @@
-"""`flux rtl test|proto|measure` (D579, D582): the RTL tools as commands a document can name,
+"""`flux rtl lint|test|proto|measure` (D579, D582, D653): the RTL tools as commands a document can name,
 so an RTL problem needs only a document and a Python golden model, no world package.
 
-    gate: flux rtl test {artifact} --golden {home}/golden.py
+    gate:
+      - {name: lint,   run: flux rtl lint {artifact}}
+      - {name: golden, run: flux rtl test {artifact} --golden {home}/golden.py}
     stages:
       - {name: screen,  command: flux rtl measure {artifact} --stage synth --clock-ps 1000}
       - {name: confirm, command: flux rtl measure {artifact} --stage place --clock-ps 1000}
@@ -21,7 +23,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-__all__ = ["cmd_rtl_measure", "cmd_rtl_proto", "cmd_rtl_test", "load_golden"]
+__all__ = ["cmd_rtl_lint", "cmd_rtl_measure", "cmd_rtl_proto", "cmd_rtl_test", "load_golden"]
 
 
 def load_golden(path: str | Path) -> Any:
@@ -66,6 +68,28 @@ def cmd_rtl_test(args: argparse.Namespace) -> int:
     print(f"{got.failing if not got.error else got.total} failing of {got.total}")
     # exit 3: did not compile (a build failure to the gate); 1: compiled and failed (D594)
     return 0 if got.ok else 3 if got.error and got.error.startswith(("did not compile", "the module has", "no `module")) else 1
+
+
+def cmd_rtl_lint(args: argparse.Namespace) -> int:
+    """Verilator lint, the hardware defects only (D653): each printed, then `N failing`; exit 3
+    when the source does not parse."""
+    from flux_codegen_rtl_harness import lint_rtl
+
+    source = Path(args.artifact).read_text()
+    extra = {Path(f).stem: Path(f).read_text() for f in (args.extra or [])}
+    try:
+        module = _module_name(source, args.module)
+    except SystemExit as exc:
+        print(f"did not parse: {exc}\n1 failing")
+        return 3
+    got = lint_rtl(source, module, extra_sources=extra or None, timeout_s=float(args.timeout))
+    if got.error:
+        print(f"did not parse: {got.error}\n1 failing")
+        return 3
+    for ln in got.defects:
+        print(ln)
+    print(f"{len(got.defects)} failing")
+    return 0 if got.ok else 1
 
 
 def cmd_rtl_proto(args: argparse.Namespace) -> int:

@@ -233,6 +233,8 @@ def prefix_for(problem: Problem, cap: Any, subgoal: str | None, state: LoopState
     mentor = problem.knowledge()
     sheet = mentor.text("sheet", state) if mentor is not None else ""
     library = paper_excerpts(mentor.text("library", state)) if mentor is not None else ""
+    papers = mentor.text("papers", state) if mentor is not None else ""       # one line per paper (D648)
+    library = "\n\n".join(p for p in (library, f"THE LIBRARY'S PAPERS (one line each):\n{papers}" if papers else "") if p)
     contract = cap.contract.format(part=subgoal or problem.name) if cap.contract else ""
     # The document's `knowledge:` block reaches this stage too (D618).
     doc = str(getattr(getattr(problem, "task", None), "knowledge", "") or "")
@@ -245,7 +247,8 @@ def paper_excerpts(library: str) -> str:
     if not library:
         return ""
     lines = library.splitlines()
-    head = [ln for ln in lines if not ln.startswith("  * [")][:2]
+    first = next((i for i, ln in enumerate(lines) if ln.startswith("  * [")), len(lines))
+    head = lines[:first]                      # the header; a source chunk's own lines are not
     keep: list[str] = []
     for ln in lines:
         if not ln.startswith("  * ["):
@@ -677,7 +680,8 @@ def _record_prototype(state: LoopState, subgoal: str | None, code: str, v: Verdi
         state.records.trial(
             {"name": f"prototype:{subgoal or 'goal'}", "artifact": code, "knobs": {},
              "meta": {"kind": "prototype",
-                      "provenance": stamp(seconds=seconds or None, trace=trace, prompt=state.last_prompt_sha, **turn_cost(reply))},
+                      "provenance": stamp(seconds=seconds or None, trace=trace, prompt=state.last_prompt_sha,
+                                          library=state.cited.get(state.last_prompt_sha) or None, **turn_cost(reply))},
              "subgoal": subgoal, "score": float(v.score), "why": _gist(v.why or "")},
             f"{subgoal or 'goal'}:prototype", stage=StageNames.PROTOTYPE, strategy="loop",
             metrics={"score": float(v.score)}, error=(None if ok else (v.why or "refused")[:300]),

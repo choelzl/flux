@@ -156,6 +156,26 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 1
 
 
+def _library_line(task: Any, problem: Any) -> str:
+    """What the library holds and who reads it (D648), one line."""
+    from flux_knowledge import status
+    from flux_loop.document import library_on
+
+    st = status((task.library,) if task.library else ())
+    if not st["documents"]:
+        return f"library: empty -- drop papers in {st['path']}" + (f" or {task.library}" if task.library else "")
+    head = (f"library: {st['documents']} documents ({st['pdfs']} PDFs, pdftotext "
+            f"{'present' if st['pdftotext'] else 'missing'})" + (f", with {task.library}" if task.library else ""))
+    if not library_on(task):
+        return head + ", off (flow.knowledge: none)"
+    try:
+        mentor = problem.knowledge()
+        used = mentor is not None and hasattr(mentor, "source") and mentor.source("library") is not None
+    except Exception:  # noqa: BLE001
+        used = False
+    return head + (", used by: prompts, plan, agents" if used else ", not read by this world's knowledge")
+
+
 def cmd_task_check(args: argparse.Namespace) -> int:
     """Validate a task document, list what it declares, and name any tool it needs that
     is not on PATH; runs nothing."""
@@ -182,8 +202,13 @@ def cmd_task_check(args: argparse.Namespace) -> int:
     print("  flow (D542): one line per box of the drawing, the half in force")
     for line in describe_flow(task, problem):
         print(f"    {line}")
+    if task.gate:                                      # the checks in order, each with its pass rule (D652)
+        print(f"  gate: {len(task.gate)} check(s) in order; the first that fails refuses the design")
+        for i, c in enumerate(task.gate, 1):
+            print(f"    {i}. {c.name}: {' '.join(c.run)}\n       {c.rule}")
     for label, cmd in task.commands():
-        print(f"  {label}: {' '.join(cmd)}")
+        if not label.startswith("gate "):
+            print(f"  {label}: {' '.join(cmd)}")
     print("  stages: " + ", ".join(_stage_label(r) for r in task.stages) if task.stages
           else "  stages: " + ", ".join(problem.stages()))
     print("  objectives: " + (", ".join(f"{o.direction} {o.metric}" + (f" (goal {o.goal:g}{(' ' + o.unit) if o.unit else ''})" if o.goal is not None else "")
@@ -202,6 +227,7 @@ def cmd_task_check(args: argparse.Namespace) -> int:
         print("  ladder: " + ("the default" if task.ladder is True else ", ".join(f"{k}={v}" for k, v in task.ladder.items())))
     if task.knowledge_sheet:
         print(f"  knowledge: {task.knowledge_sheet} ({len(task.knowledge)} chars)")
+    print("  " + _library_line(task, problem))
     from flux_loop.golden_proto import golden_path
 
     gp = golden_path(task)
@@ -759,6 +785,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         fell = sum(1 for t in rep.agent_turns if not t.get("ok"))
         print(f"  agent turns: {len(rep.agent_turns)} (" + ", ".join(sorted({str(t.get('box')) for t in rep.agent_turns}))
               + f"), {fell} fell back to the rules half")
+    if rep.library:
+        print(f"  library: {len(rep.library)} file(s) cited by the drafts' prompts: "
+              + ", ".join(f"{k} ({v})" for k, v in sorted(rep.library.items(), key=lambda t: -t[1])[:8]))
     for n in rep.notes:
         print(f"  {n}")
     print(f"wrote {out}")

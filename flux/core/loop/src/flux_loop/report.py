@@ -58,6 +58,7 @@ class Report:
     ledger: list[tuple[float, str, str, str]]      # (when, kind, part, digest)
     notes: list[str] = field(default_factory=list)
     agent_turns: list[dict[str, Any]] = field(default_factory=list)   # a box answered by an agent (D640)
+    library: dict[str, int] = field(default_factory=dict)   # library file -> drafts whose prompt cited it (D648)
 
     @property
     def stage(self) -> str | None:
@@ -158,7 +159,11 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
             ledger.append((_when(e.get("created_at") or ""), kind.value, str(d.get("op") or ""), str(d.get("digest") or "")))
         ledger.sort(key=lambda x: x[0])
         turns = [dict(e.get("detail") or {}) for e in events if e.get("kind") == "decided:agent_turn"]
-        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns)
+        library: dict[str, int] = {}
+        for t in store.trials(cid):
+            for name in (((t.candidate or {}).get("meta") or {}).get("provenance") or {}).get("library") or ():
+                library[name] = library.get(name, 0) + 1
+        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns, library)
     finally:
         store.close()
 
@@ -389,6 +394,9 @@ def render(rep: Report) -> str:
     for n in rep.notes:
         head.append(f"<p class=note>{html.escape(n)}</p>")
     sections = ["<h2>Frontier evolution</h2>", _svg_fronts(rep)]
+    if rep.library:
+        sections.append("<p class=note>library papers the drafts' prompts cited: " + html.escape(
+            ", ".join(f"{k} ({v})" for k, v in sorted(rep.library.items(), key=lambda t: -t[1]))) + "</p>")
     if rep.agent_turns:
         cells = "".join(f"<tr><td>{html.escape(str(t.get('box')))}</td><td>{html.escape(str(t.get('agent')))}</td>"
                         f"<td>{'answered' if t.get('ok') else 'fell back'}</td><td>{float(t.get('seconds') or 0):g}s</td>"

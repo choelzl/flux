@@ -110,14 +110,31 @@ DECIDE = ("Nobody is available to answer questions during this run. Choose the o
           "say in one line what you chose, and write the file now.")
 
 
+def library_section(problem: Any, question: str | list[str], state: Any = None) -> str:
+    """The LIBRARY section of an agent's brief (D648): one line per paper and the absolute
+    paths of the files nearest `question`, from the problem's `library` source; "" without one."""
+    try:
+        mentor = problem.knowledge()
+        lib = mentor.source("library") if mentor is not None and hasattr(mentor, "source") else None
+    except Exception:  # noqa: BLE001 -- no knowledge, no section
+        return ""
+    if lib is None:
+        return ""
+    from flux_knowledge import agent_section
+
+    db = str(getattr(getattr(state, "request", None), "db", "") or "")
+    return agent_section(question, getattr(lib, "folders", ()), db)
+
+
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
-                prior: str | None, failure: str, questions: str = "decide", check: str = "") -> str:
+                prior: str | None, failure: str, questions: str = "decide", check: str = "",
+                library: str = "") -> str:
     """The brief an agent reads: the static prefix (contract, knowledge), the design or the
-    repair prompt, then what the loop expects of a terminal tool -- including whether its
-    questions will be answered."""
+    repair prompt, the LIBRARY section, then what the loop expects of a terminal tool --
+    including whether its questions will be answered."""
     # the model half's reply shape (JSON with the artifact) is not how an agent answers: it writes the file
     prefix = "\n\n".join(p for p in prefix.split("\n\n") if not p.lstrip().startswith("REPLY SHAPE"))
-    parts = [p for p in (prefix.strip(), body.strip()) if p]
+    parts = [p for p in (prefix.strip(), body.strip(), library.strip()) if p]
     if prior:
         parts.append(f"THE LAST DRAFT (refused: {failure.strip()[:2000] or 'see above'}):\n```\n{prior}\n```")
     parts.append(

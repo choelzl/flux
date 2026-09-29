@@ -40,7 +40,7 @@ def test_the_document_loads_and_names_its_campaign_and_gate(app):
         bound = [n for n in problem.__dict__ if callable(problem.__dict__[n]) and not n.startswith("_")]
         assert "judge" in bound or "build" in bound, f"{app}: the world binds no gate"
     else:
-        assert task.gate.test, f"{app}: no world and no gate command (D579)"
+        assert task.gate, f"{app}: no world and no gate command (D579)"
         assert not (FLUX_ROOT / "applications" / app / "lib").exists(), f"{app}: a world-less document with a package beside it"
     assert problem.objective(__import__("flux_loop").request_for(task, db=""))["study"] == app
 

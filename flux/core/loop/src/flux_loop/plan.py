@@ -386,7 +386,7 @@ def plan_with_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any
         "You have tools: standings() -- every part's numbers; history(part) -- what was tried for a part; "
         "decisions() -- the picks already taken and why; knowledge(query) -- the method sheet and papers.",
         "FIXED BY HAND (not yours to change): " + (json.dumps(fixed) if fixed else "nothing"),
-        ("THE LIBRARY, digested (name a method from it in `methods` when it fits):\n" + "\n".join(library[:40])) if library else "",
+        ("THE LIBRARY, one line per paper (name a method from it in `methods` when it fits):\n" + "\n".join(library[:40])) if library else "",
         (f"THE PREVIOUS PLAN on record: {json.dumps({k: v for k, v in prior.items() if k != 'plan'})}" if prior else ""),
         f"YOU FILL these fields: {', '.join(opened)}. Their vocabulary, choices and defaults:\n{json.dumps(vocab, indent=1, default=str)}",
         "Rules: name only what the vocabulary lists; a part not listed is not made; keep the stages' order; "
@@ -461,7 +461,7 @@ def _plan_by_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any]
         return "; ".join(errors) if errors else None
 
     schema = {"type": "object", "properties": {"why": {"type": "string"}}, "required": ["why"]}
-    if box_turn("plan", coding, question, schema, state, check=valid, home=str(getattr(getattr(problem, "task", None), "home", "") or "")) is None:
+    if box_turn("plan", coding, question, schema, state, check=valid, problem=problem, home=str(getattr(getattr(problem, "task", None), "home", "") or "")) is None:
         out["agent"] = "the agent's plan was refused; the defaults stand"
         return None
     out["agent"] = f"planned by the agent: {str(kept['plan'].get('why') or '')[:300]}"

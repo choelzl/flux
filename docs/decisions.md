@@ -289,3 +289,86 @@ the topics above.
   The route now requires `state.request.prototype`. Live (isqrt, hosted qwen3.6 loop, Claude Code
   generating, OpenCode validate/critique/orchestrate): before, qwen drafts stuck at 1-203 failing
   vectors and nothing was admitted; after, Claude's draft #2 passed the gate after one repair.
+
+- **D645: ICSC is its own shell.** ICSC builds from source (~10 min) on the first `nix develop`,
+  a cost every newcomer paid for one optional translator; it moves to `nix develop .#systemc` (the
+  default shell plus `icsc-sv`). In the default shell a SystemC prototype's RTL is written by the
+  model (D635). Checked: the default shell has no `icsc-sv`, `.#systemc` has it.
+- **D646: the critic and the validator object only to defects.** Live (D643's run): the critic
+  objected to a code comment (229 s), the validator to `finalists: 0`, `--clock-ps` and a
+  goal-less objective. The questions now state what is not a defect (comments, style, depth
+  claims) and the loop's conventions (`steps`, `--clock-ps` vs `fmax_mhz`, goal-less objectives).
+  Rerun: the critic made no cosmetic objection (one turn fell back on a malformed out.json, as
+  designed); the validator, on hosted qwen3.6 via OpenCode, still objects to `finalists: 0` and
+  `steps` although the brief states them -- validate stays advisory. Claude's isqrt: 1,099.8 MHz /
+  35.5 um2 (2 passes, #4) and 1,207 MHz / 36.6 um2 (first draft admitted).
+- **D647: the prefetcher document on a real model.** Hosted qwen3.6 wrote the knob file itself
+  (bingo + sms + ampm at shipped settings), the gate admitted it, ChampSim measured geomean
+  1.0914 at 35,096 B on short stages (100k + 1M instructions, 3 traces).
+- **D648: the library reaches every document.** Only the NLU world read the papers; a plain
+  document reached them only through the `knowledge` tool. Now every document's mentor leads with
+  `Library` (a few short BM25 lookups from the statement, contract and parts, interface words
+  dropped) and `Papers` (one line per paper, the digest's first line when stored), unless
+  `flow: {knowledge: none}` or the library is empty. The window share bounds them (D548).
+  `knowledge: {library: dir}` adds a document's own folder; `FLUX_LIBRARY` moves the shared one
+  (unit tests point it at an empty folder). Coding-agent briefs (generate, prototype, the boxes)
+  carry a LIBRARY section: the index and the absolute paths nearest the question. Each draft's
+  row names the files its prompt cited (`provenance.library`); `flux report` and `task check`
+  say it.
+
+- **D649: the crafter asks for a kind of problem and a goal sentence.** Kits fix the check, the
+  stages and the metric vocabulary: RTL on ASAP7 (golden model; synth/place/route at a target
+  MHz, clock-ps derived), program speed, Python function, ChampSim (.ini or C++ header), ZigZag
+  accelerator, or "my own tool". Goals are sentences over the kit's metrics ("reach N, then the
+  smallest", "fastest, then the smallest within 90%", "the knee"); the user types at most one
+  number. `keep` is offered only where bigger is better. 48 crafter tests load every kit x
+  sentence through `load_task`.
+
+- **D650: an excerpt is a passage, not a heading.** Library chunks with fewer than eight distinct
+  words (headings, captions, table rows) are no longer excerpts: the isqrt run's prompt carried
+  "Root Mean Square error" as one. Tested with a heading-only chunk.
+
+- **D651: model settings once per machine.** Every `flux` command reads `~/.config/flux/flux.env`
+  (`FLUX_CONFIG` moves it): `FLUX_*`/`OLLAMA_*` lines, the shell winning. `FLUX_REMOTE_API_KEY_FILE`
+  names a file holding the key, so the key is in neither the env file nor the shell. The repo
+  documents it with placeholders only; a machine's own server lives in its own file.
+
+- **D652: a gate is a sequence of named checks.** `gate: [{name, run, count_re?, fail_re?,
+  timeout_s?}, ...]` runs the checks in order; the first reporting failures refuses the design
+  ("failed at <name>: <its report>", which the repair prompt carries) and the rest do not run.
+  Exit 3 from any check is "did not build". The score is the failures plus 1,000,000 per check
+  not reached, so a design stopped at lint ranks worse than one stopped at golden and the
+  gradient and revert keep meaning something; progress text says "N (with k later checks not
+  reached)". `gate: <command>` is one check `test`, `{build, test}` the checks `build` (any
+  non-zero exit: did not build) and `test`: one structure, the old spellings kept as the simple
+  case. build() runs the whole sequence once; fast_check reads it. A stage's gate is its
+  `cutoff` ("go on only if"): no new syntax; "timing met" is `{metric: fmax_mhz, at: <MHz>}`.
+
+- **D653: `flux rtl lint`.** Verilator `--lint-only -Wall`, counting only the warnings that are
+  hardware defects the golden vectors can miss: LATCH, MULTIDRIVEN, UNOPTFLAT (combinational
+  loop; a false one across a vector's bits is split bit by bit), COMBDLY (`<=` in combinational
+  logic), BLKANDNBLK (a race), IMPLICIT (a typo made into a 1-bit net). Width, unused and naming
+  are style. Prints each as `CODE: line N: ...`, then `N failing`; exit 3 when it does not parse.
+  Milliseconds, so it goes before the golden test.
+
+- **D654: one tool catalog.** `flux_loop.toolbox.TOOLS` lists every check and stage a document
+  can name (id, role, title, what, run template with named params, params with label/default/unit,
+  metrics with units from `objective.UNITS`, needs, pass rule, languages, crafter kinds).
+  `flux tools` prints it, `flux tools --json` is `website/docs/assets/tools.json`, and a unit test
+  keeps the two equal so the crafter never drifts from Flux.
+
+- **D655: the crafter builds checks and measurements from the tool catalog.** Two ordered lists
+  picked from `tools.json` (= `flux tools --json`): checks, each with its pass rule, and
+  measurements, each with an optional "go on only if" gate written as its `cutoff`. Kits pre-fill
+  both; goal sentences come from the metrics every chosen measurement reports. A 3-check,
+  3-stage hand-made case loads with its order and cutoffs; `check()` flags a cutoff on a metric
+  its stage does not report. The page's update loop called a deleted helper -- found by driving
+  it in headless Chromium, fixed.
+
+- **D656: ICSC comes from nixchip.** nixchip `f4fddde` (Sep 28) exports `icsc` (LLVM 18.1.8,
+  cached on nixchip0.cachix.org); this repo builds nothing for it. `nix develop .#systemc` adds it
+  and sets `ICSC_HOME`; `systemc_proto.translate` compiles ICSC's "unity" file against its
+  libSCTool itself (the cmake `svc_target` recipe), so no wrapper script. The pin moves Verilator,
+  Yosys and OpenROAD to their 2026-09-15 builds, all cached. Checked: both shells build from the
+  cache, the ICSC translation passes `flux rtl test`, the unit core and the heavy suite pass
+  (268 passed).

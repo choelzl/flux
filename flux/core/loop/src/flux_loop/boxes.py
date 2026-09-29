@@ -55,10 +55,11 @@ def _read(out: Path) -> Any:
 
 
 def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: Any,
-             check: Callable[[dict], str | None] | None = None, home: str = "") -> dict[str, Any] | None:
+             check: Callable[[dict], str | None] | None = None, home: str = "",
+             problem: Any = None) -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
-    on the record)."""
-    from .agent import DECIDE, agent_spec, converse, run_turn
+    on the record). Given the `problem`, the brief carries its LIBRARY section (D648)."""
+    from .agent import DECIDE, agent_spec, converse, library_section, run_turn
 
     a = agent_spec(spec)
     # before the pass has its trace directory (validate runs first), the scratch directory
@@ -68,10 +69,11 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
     workdir = root / f"{n:03d}"
     workdir.mkdir()
     out = workdir / "out.json"
-    brief = (f"{question.strip()}\n\nHOW TO ANSWER. You are a coding agent answering the `{box}` box of a "
+    library = library_section(problem, question, state) if problem is not None else ""
+    brief = (f"{question.strip()}\n\n" + (f"{library}\n\n" if library else "") + f"HOW TO ANSWER. You are a coding agent answering the `{box}` box of a "
              f"design-space exploration loop. "
-             + (f"THE PROBLEM'S FILES are in `{home}` (its document, scripts and golden model): read those and "
-                f"nothing outside them; what is being judged is quoted above. " if home else
+             + (f"THE PROBLEM'S FILES are in `{home}` (its document, scripts and golden model): read those"
+                + (" and the LIBRARY files above" if library else "") + " and nothing else; what is being judged is quoted above. " if home else
                 "Everything you need is quoted above. ")
              + f"Do not run "
              f"the gate or the measurement stages: the loop runs them. Write your answer to `{out}` as ONE JSON "
