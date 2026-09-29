@@ -532,11 +532,12 @@ class PromptProblem(Problem):
                                  "measure every objective, since each ranks its own results (measure them in "
                                  "one stage, or print them from each stage's command)")
         for stage in self.task.stages:
-            metric = stage.cutoff.get("metric")
             mine = {*stage.metrics_re, *stage.metrics}
-            if metric and mine and metric not in mine:
-                wrong.append(f"the {stage.name} stage cuts on {metric!r}, which it does "
-                             f"not measure (it measures: {', '.join(sorted(mine))})")
+            for rule in stage.cutoffs:
+                metric = rule.get("metric")
+                if metric and mine and metric not in mine:
+                    wrong.append(f"the {stage.name} stage cuts on {metric!r}, which it does "
+                                 f"not measure (it measures: {', '.join(sorted(mine))})")
         return wrong
 
     def tools_missing(self) -> list[str]:
@@ -1233,18 +1234,32 @@ class PromptProblem(Problem):
                          knobs={"task": self.task.id, "parts": [c.name for c in ordered]})
 
     def cutoff(self, stage: str, scored, state):
-        """The stage's declared cutoff (D454): a floor, a budget or a band around this run's best.
-        Without one, every measured candidate goes on."""
-        from .cutoff import above, below, within_best
-
+        """The stage's declared cutoff (D454): a floor, a budget or a band around this run's best,
+        or several of them applied in order, the words naming which cut whom (D657). Without
+        one, every measured candidate goes on."""
         mine = self.role_cutoff(stage, scored, state)
         if mine is not None:
             return mine                       # the evaluation component's own stage (D461)
         spec = next((r for r in self.task.stages if r.name == stage), None)
-        rule = dict(spec.cutoff) if spec is not None else {}
-        metric = rule.get("metric")
-        if not metric:
+        if spec is None or not spec.cutoff:
             return list(scored)
+        if isinstance(spec.cutoff, dict):
+            return self._gate(spec.cutoff, list(scored))
+        kept, said = list(scored), []
+        for rule in spec.cutoffs:
+            passed, why = self._gate(rule, kept)
+            ids = {id(s) for s in passed}
+            gone = [s.candidate.name for s in kept if id(s) not in ids]
+            if gone:
+                said.append(f"{why} ({', '.join(gone[:6])}{', ...' if len(gone) > 6 else ''})")
+            kept = passed
+        return kept, "; ".join(said)
+
+    def _gate(self, rule: dict, scored: list) -> tuple[list, str]:
+        """One cutoff condition over these results: the survivors and the rule in words."""
+        from .cutoff import above, below, within_best
+
+        metric = rule["metric"]
         if "at" in rule:
             return above(scored, metric, float(rule["at"]))
         if "below" in rule:

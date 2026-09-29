@@ -24,18 +24,6 @@
 .flux-crafter .fc-hint, .flux-crafter small { color: var(--fc-muted); }
 .flux-crafter small { display: block; font-size: .65rem; margin-top: 2px; }
 
-/* presets */
-.fc-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
-.fc-card {
-  text-align: left; cursor: pointer; padding: 10px 12px; border-radius: 8px; font: inherit;
-  border: 1px solid var(--fc-line); background: var(--md-default-bg-color); color: var(--md-default-fg-color);
-  display: flex; flex-direction: column; gap: 4px;
-}
-.fc-card strong { font-size: .75rem; line-height: 1.3; }
-.fc-card span { color: var(--fc-muted); }
-.fc-card:hover, .fc-card:focus-visible { border-color: var(--md-accent-fg-color); }
-.fc-card.fc-on { border-color: var(--md-primary-fg-color); box-shadow: 0 0 0 1px var(--md-primary-fg-color) inset; }
-
 /* layout: one column (Material's text column is narrow); the file follows the form */
 .fc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 8px; }
 .fc-section { border-top: 1px solid var(--fc-line); padding-top: 2px; }
@@ -121,15 +109,6 @@
 .fc-checks .fc-ok { color: var(--fc-ok); }
 .fc-checks .fc-ok::before { content: "✓"; }
 
-/* kits and goal sentences */
-.fc-kits { margin-bottom: 6px; }
-.fc-kits .fc-card { padding: 8px 10px; }
-.fc-derived { margin: 6px 0 !important; }
-.fc-derived code { font-size: .65rem !important; color: var(--fc-muted); white-space: pre-wrap !important; overflow-wrap: anywhere; }
-.fc-goals .fc-choice { flex-wrap: wrap; border-left-color: var(--md-primary-fg-color); }
-.flux-crafter input.fc-num { width: 5.5em; display: inline-block; padding: 2px 6px; }
-.fc-goal-words { margin-top: 0 !important; }
-.fc-goal-words li { margin: 2px 0 !important; }
 
 /* checks and measurements: ordered rows */
 .fc-row-head { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
@@ -142,3 +121,10 @@
 .fc-cutoff .fc-field { min-width: 120px; flex: 1 1 120px; }
 .flux-crafter select.fc-add { margin-top: 8px; width: auto; max-width: 100%; }
 .fc-row > .fc-wide { grid-column: 1 / -1; }
+
+/* the objective */
+.fc-obj { align-items: center; }
+.fc-obj-metric { align-self: center; font-family: var(--md-code-font-family); }
+.fc-obj .fc-row-buttons { align-self: center; justify-self: end; }
+.fc-warn { color: var(--fc-warning); margin: 4px 0 !important; }
+.fc-goal-words { font-weight: 600; }

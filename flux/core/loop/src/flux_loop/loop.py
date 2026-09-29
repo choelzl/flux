@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterator
 from .measure import measure_many
 from . import ops
 from .provenance import trace_dir
+from .objective import Objectives
 from .observe import _phase, _publish, _publish_mentor
 from .problem import Problem
 from .records import _record_trial, _reload
@@ -422,8 +423,9 @@ def _can_draft(problem: Problem, subgoal: str | None, state: LoopState) -> bool:
 
 def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
     """The campaign at rest, kept going (D593): every admitted design goes back to its
-    generator with its numbers and what better means from here -- goal reached: the next
-    objective with the goal held; missed: the goal. The gate and the decision are unchanged."""
+    generator with its numbers and what better means from here -- every limit met: the
+    goal-less objectives with the limits held; one missed: the limits. The gate and the
+    decision are unchanged."""
     objs = problem.objectives()
     stages = list(problem.stages() or [])
     rank = {st: i for i, st in enumerate(stages)}
@@ -437,16 +439,21 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
         row = max(rows, key=lambda s: rank.get(s.stage, -1), default=None)
         m = dict(row.metrics) if row is not None else {}
         shown = ", ".join(f"{k} {v:.4g}" for k, v in m.items() if isinstance(v, (int, float)))
-        o1 = objs[0] if objs else None
+        limits = objs.limits
+        missed = objs.missed(m, row.stage if row is not None else None, stages)
         head = (f"The campaign is at rest: this design stands and nothing the loop tried improved it "
                 f"(exploring, pass {state.request.explore} in a row). Its numbers"
                 + (f" on the {row.stage} stage" if row is not None else "") + f": {shown or 'not measured'}. ")
-        if o1 is not None and o1.goal is not None and row is not None and o1.meets(m, row.stage, stages):
-            rest = [o.describe() for o in objs[1:]]
-            ask = (f"It meets the goal ({o1.describe()}). Keep meeting it and make the design better on "
-                   + (", then ".join(rest) if rest else f"{o1.label}, beyond the goal") + ".")
-        elif o1 is not None and o1.goal is not None:
-            ask = f"It misses the goal ({o1.describe()}): make it reach the goal."
+        said = ", ".join(o.describe() for o in limits)
+        one = len(limits) == 1
+        if limits and row is not None and not missed:
+            rest = Objectives(o for o in objs if o.goal is None).describe()
+            ask = (f"It meets {'the goal' if one else 'every limit'} ({said}). Keep meeting "
+                   f"{'it' if one else 'them'} and make the design better on "
+                   + (rest or f"{limits[0].label}, beyond the goal") + ".")
+        elif limits:
+            ask = (f"It misses the goal ({said}): make it reach the goal." if one else
+                   f"It misses {', '.join(o.describe() for o in missed)} (the limits: {said}): make it meet every limit.")
         else:
             ask = f"Make it better on {objs.describe() or 'the objectives'}."
         items.append(Improve(cand, head + ask + " A different structure or algorithm is welcome when reworking "
@@ -902,8 +909,8 @@ def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> N
 
 def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_by: str) -> tuple[Any, str]:
     """`flow: {select: {agent: ...}}` (D640): the agent chooses among the designs the objective
-    vector cannot separate from its pick -- within every objective's tie band (and at the goal
-    when the pick is), or, with no goal, the non-dominated front. The vector's pick stands when
+    vector cannot separate from its pick -- within every objective's tie band (and meeting every
+    limit when the pick does), or, with no limit, the non-dominated front. The vector's pick stands when
     there is no choice or the agent falls back."""
     from .boxes import agent_of, box_turn
 
@@ -911,14 +918,16 @@ def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_b
     objs = list(problem.objectives() or [])
     if agent is None or not objs:
         return pick, decided_by
-    if objs[0].goal is None and objs[0].keep is None and len(objs) >= 2:
+    vector = problem.objectives()
+    if not vector.limits and objs[0].keep is None and len(objs) >= 2:
         costs = {id(p): [o.signed(p.metrics) for o in objs] for p in pool}
         options = [p for p in pool if not any(all(a <= b for a, b in zip(costs[id(q)], costs[id(p)]))
                                               and costs[id(q)] != costs[id(p)] for q in pool)]
     else:
-        at_goal = objs[0].goal is None or objs[0].meets(pick.metrics)
+        chain = list(problem.stages() or [])
+        met = not vector.missed(pick.metrics, pick.stage, chain)
         options = [p for p in pool if all(o.compare(p.metrics, pick.metrics) == 0 for o in objs)
-                   and (not at_goal or objs[0].goal is None or objs[0].meets(p.metrics))]
+                   and (not met or not vector.missed(p.metrics, p.stage, chain))]
     names = list(dict.fromkeys(p.name for p in [pick, *options]))
     if len(names) <= 1:
         return pick, decided_by

@@ -30,13 +30,18 @@ Say only what is yours; the rest is inferred.
   measure every objective. `timeout_s` optional.
   A stage's gate is its `cutoff`: go on to the next stage only if `{metric, at: N}` (at least N),
   `{metric, below: N}` (at most N) or `{metric, within: 0.9}` (within 10% of this run's best).
-  "Timing met" at 1 GHz is `cutoff: {metric: fmax_mhz, at: 1000}`.
+  "Timing met" at 1 GHz is `cutoff: {metric: fmax_mhz, at: 1000}`. Several gates are a list,
+  all must pass, in order: `cutoff: [{metric: fmax_mhz, at: 1000}, {metric: area_um2, below: 80}]`.
 - `flux tools` lists every check and stage Flux has, with its command and pass rule.
-- `objectives`: a list, the first the goal: `{metric, direction: minimize|maximize, goal: N}`.
-  A goal is judged on the deepest stage (`stage:` names another); a known metric has its unit
-  (`unit:` for one Flux does not know). With a goal on the first, the decision is the best on
-  the second among those that meet it. `{keep: 0.9, above: 1.0}` instead of a goal: keep 90%
-  of the best measured design's gain over 1.0 (the smallest design that stays near the fastest).
+- `objectives`: a list of `{metric, direction: minimize|maximize, goal: N}`. Every one with a
+  `goal` is a limit that must hold (at least N when maximizing, at most N when minimizing);
+  among the designs meeting every limit, the ones without a goal decide in the order written
+  ("fmax_mhz at least 1000, area_um2 at most 80, then least power_w"). `balance: true` on
+  goal-less ones: the decision is their knee (the balance of fmax_mhz and area_um2). Nothing
+  meets every limit: the closest wins, and the report says what it misses. A goal is judged on
+  the deepest stage (`stage:` names another); a known metric has its unit (`unit:` for one
+  Flux does not know). `{keep: 0.9, above: 1.0}` instead of a goal: a limit at 90% of the best
+  measured design's gain over 1.0 (the smallest design that stays near the fastest).
 - `knowledge: {files: [...]}`: files the model reads with every prompt (specs, reference code,
   papers as PDF, notes), paths beside the document. `knowledge: {text: "..."}` for inline notes.
   The operator's library (`mentor/knowledge/library/`) reaches every document: excerpts for

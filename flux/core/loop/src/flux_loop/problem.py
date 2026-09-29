@@ -437,19 +437,19 @@ class OrchestratorRole(_Role):
         and why the default never stops: "good enough" for one study is a constraint met, for
         another a frontier that has not moved in three steps, and for a sweep that wants every
         point it is nothing at all. Same for `LoopRequest.budget_s`: no clock unless a caller
-        sets one. The default (D511): the first objective's goal, met by the whole design (the
-        last composed candidate measured)."""
+        sets one. The default (D511, D658): every limit met by the whole design (the last
+        composed candidate measured), with no goal-less objective left to improve."""
         objs = self.objectives()
-        if objs.goal is None:
+        if not objs.limits:
             return None
         stages = self.stages()
         whole = next((sc for sc in reversed(state.scored or []) if (sc.candidate.meta or {}).get("composed")), None)   # a list of parts, or True
         return objs.good_enough(whole.metrics, whole.stage, stages) if whole is not None else None
 
     def decide(self, pool: list[Scored], state: LoopState) -> tuple[Scored | None, str]:
-        """(pick, decided_by), by the objectives (D511): with a goal, the least on the next
-        objective among those at the goal (the best on the first when nothing reaches it);
-        without one, the knee over every objective; with none, the first thing measured."""
+        """(pick, decided_by), by the objectives (D511, D658): among the designs meeting every
+        limit, the goal-less objectives in order (the balance ones as their knee); nothing
+        meets them all, the closest; with no objectives, the first thing measured."""
         return self.objectives().decide(pool, self.stages())
 
     def conclusion(self, pick: Scored, decided_by: str) -> dict[str, Any]:

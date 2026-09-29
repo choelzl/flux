@@ -72,8 +72,8 @@ writes an HTML page of the whole search.
 | `statement`, `contract` | the request and its rules, in words |
 | `language` | `systemverilog`, `verilog`, `python`, `c`, `cpp`, `text`, ...: the file type |
 | `gate` | a command that prints `N failing` or exits non-zero; or a list of named checks, run in order |
-| `stages` | measurements, cheapest first: `{name, command}`; a command of yours prints `name=value` and lists `metrics:` |
-| `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; or `{keep: 0.9, above: 1.0}` instead of a goal |
+| `stages` | measurements, cheapest first: `{name, command}`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
+| `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; each `goal` is a limit (at least / at most), the goal-less ones decide in order, `balance: true` ones as their knee; `{keep: 0.9, above: 1.0}` is a limit relative to the best |
 | `space` | knob -> its choices, for a search |
 | `seeds` | settings measured before the search starts |
 | `knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers |

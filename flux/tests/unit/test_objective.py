@@ -24,7 +24,7 @@ def test_a_document_names_the_goal_the_direction_and_the_band():
     assert objs[1].direction == "minimize" and objs[2] == Objective("power_w", unit="W")
     assert Objectives.from_doc([{"metric": "fmax_mhz", "goal": 500}])[0].stage == "deepest"   # a goal: the deepest stage
     assert Objectives.from_doc([{"metric": "latency", "goal": "<= 12"}])[0].direction == "minimize"
-    assert objs.goal is objs[0] and objs.describe() == "fmax_mhz >= 800 (confirm), then least area_um2, then most power_w"
+    assert objs.goal is objs[0] and objs.describe() == "fmax_mhz at least 800 (confirm), then least area_um2, then most power_w"
     with pytest.raises(ValueError, match="needs a `metric`"):
         Objectives.from_doc([{"direction": "maximize"}])
     with pytest.raises(ValueError, match="direction must be one of"):
@@ -78,7 +78,7 @@ def test_the_decision_follows_the_vector():
     one = Objectives([Objective("bytes", "minimize")])
     pick, why = one.decide([_sc("x", bytes=3), _sc("y", bytes=2)])
     assert pick.candidate.name == "y" and why == "the smallest bytes"
-    knee = Objectives([Objective("value"), Objective("cost", "minimize")])
+    knee = Objectives([Objective("value", balance=True), Objective("cost", "minimize", balance=True)])   # D658
     pick, why = knee.decide([_sc("p", value=1, cost=1), _sc("q", value=10, cost=2), _sc("r", value=11, cost=9)])
     assert pick.candidate.name == "q" and why == "the knee of value / cost"
     assert Objectives().decide([_sc("only")])[1] == "the only kind of answer this problem has"

@@ -372,3 +372,26 @@ the topics above.
   Yosys and OpenROAD to their 2026-09-15 builds, all cached. Checked: both shells build from the
   cache, the ICSC translation passes `flux rtl test`, the unit core and the heavy suite pass
   (268 passed).
+
+- **D657: a stage may have several gates.** `cutoff:` is one condition or a list of them
+  (`[{metric: fmax_mhz, at: 1000}, {metric: area_um2, below: 80}]`), applied in order, all must
+  pass; the cut says which condition cut which designs ("fmax_mhz below 1000 (a); area_um2 above
+  80 (b)"). The single dict stays the simple case and round-trips as a dict. Each condition's
+  metric must be one its stage measures; `flux task check` prints every gate.
+
+- **D658: every goal is a limit; the goal-less objectives decide, or balance.** Before, only
+  the first objective's goal counted. Now each objective with a `goal` (or `keep`, resolved over
+  the pool) must hold; among designs meeting every limit the goal-less ones decide in written
+  order, each next one breaking the ties of those before; `balance: true` ones decide as their
+  knee. Nothing meets every limit: fewest missed, then the smallest relative shortfall, said in
+  `decided_by`. A goal-less vector without `balance` is now an order, not a knee, so
+  interconnect_mapping says `balance: true` on its four. Checked: every shipped document's
+  objectives, old rule vs new, over 3000 random pools each: the same picks, except the NLU's
+  when two designs tie exactly on area (power now breaks the tie). `describe()`: "fmax_mhz at
+  least 1000, area_um2 at most 80, then least power_w".
+
+- **D659: the problem builder starts empty.** No presets or kinds of problem: add checks (type
+  Lint / Compile / Golden model / Test script / Custom, then that type's settings, per language),
+  add measurements (a tool, its settings, one or more "go on only if" gates), and an Objective row
+  per reported metric (at least / at most / maximise / minimise / balance). Every type maps to a
+  catalog command; a language without one says so. Tested from scratch through `load_task`.

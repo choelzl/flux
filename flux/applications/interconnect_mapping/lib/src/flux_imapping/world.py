@@ -316,7 +316,7 @@ class World:
         return out
 
     # ---- the frontier: dominance over all four costs. The decision is the loop's default (D511):
-    # with no goal and four objectives, the knee over every one of them.
+    # no goal and four `balance: true` objectives, the knee over every one of them (D658).
     def frontier(self, scored: list[Scored], state: LoopState) -> list[Scored]:
         front = {id(s_) for s_ in pareto_front([app_scored(p) for p in scored])}
         return [p for p in scored if id(app_scored(p)) in front]

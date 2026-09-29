@@ -145,7 +145,8 @@ class Stage:
 
     `cutoff` is what is worth the next stage (D454): one of `{"metric": m, "at": x}` (a floor),
     `{"metric": m, "below": x}` (a budget) or `{"metric": m, "within": f}` (a band around this
-    run's best, `f` a fraction). Without one, only the last stage's results decide."""
+    run's best, `f` a fraction), or a list of them, all of which a design must pass, in order
+    (D657). Without one, only the last stage's results decide."""
 
     name: str
     command: tuple[str, ...] | None = None
@@ -153,8 +154,13 @@ class Stage:
     evaluator: str | None = None
     metrics: tuple[str, ...] = ()
     timeout_s: float = 600.0
-    cutoff: dict[str, Any] = field(default_factory=dict)
+    cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = field(default_factory=dict)   # one gate, or several
     needs: tuple[str, ...] = ()          # tools on PATH the stage wants; absent, the stage is skipped (D519)
+
+    @property
+    def cutoffs(self) -> tuple[dict[str, Any], ...]:
+        """The stage's gates in order: the single-dict form is one."""
+        return (self.cutoff,) if isinstance(self.cutoff, dict) else tuple(self.cutoff)
 
 
 @dataclass(frozen=True)
@@ -438,7 +444,8 @@ class TaskSpec:
                        **({"command": list(r.command)} if r.command else {}),
                        **({"metrics_re": dict(r.metrics_re)} if r.metrics_re else {}),
                        **({"evaluator": r.evaluator} if r.evaluator else {}),
-                     **({"cutoff": dict(r.cutoff)} if r.cutoff else {}),
+                     **({"cutoff": dict(r.cutoff) if isinstance(r.cutoff, dict) else [dict(c) for c in r.cutoff]}
+                        if r.cutoff else {}),
                        **({"metrics": list(r.metrics)} if r.metrics else {}),
                        **({"needs": list(r.needs)} if r.needs else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],
@@ -801,19 +808,27 @@ def _stage(i: int, doc: Any, world: bool = False) -> Stage:
     if cmd and not metrics_re:
         raise TaskError(f"stages[{i}] ({doc['name']}): a command stage needs `metrics` (names the command "
                         "prints as `name=value` lines) or `metrics_re` (a regex per metric)")
-    cutoff = dict(doc.get("cutoff") or {})
-    if cutoff:
-        if not isinstance(cutoff.get("metric"), str):
-            raise TaskError(f"stages[{i}].cutoff needs a `metric` naming one this stage measures")
-        rules = [k for k in ("at", "below", "within") if k in cutoff]
+    raw = doc.get("cutoff") or {}
+    if isinstance(raw, dict):
+        cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = dict(raw)
+        named = [(f"stages[{i}].cutoff", cutoff)] if cutoff else []
+    elif isinstance(raw, list) and all(isinstance(c, dict) for c in raw):
+        cutoff = tuple(dict(c) for c in raw)        # several gates, all must pass (D657)
+        named = [(f"stages[{i}].cutoff[{j}]", c) for j, c in enumerate(cutoff)]
+    else:
+        raise TaskError(f"stages[{i}].cutoff is one condition {{metric, at|below|within}} or a list of them")
+    for where, rule in named:
+        if not isinstance(rule.get("metric"), str):
+            raise TaskError(f"{where} needs a `metric` naming one this stage measures")
+        rules = [k for k in ("at", "below", "within") if k in rule]
         if len(rules) != 1:
             raise TaskError(
-                f"stages[{i}].cutoff needs exactly one of `at` (a floor), `below` (a budget) or "
-                f"`within` (a fraction of this run's best), got {sorted(cutoff)}")
-        if not isinstance(cutoff[rules[0]], (int, float)) or isinstance(cutoff[rules[0]], bool):
-            raise TaskError(f"stages[{i}].cutoff.{rules[0]} must be a number")
-        if rules[0] == "within" and not 0 < float(cutoff["within"]) <= 1:
-            raise TaskError(f"stages[{i}].cutoff.within must be a fraction in (0, 1]")
+                f"{where} needs exactly one of `at` (a floor), `below` (a budget) or "
+                f"`within` (a fraction of this run's best), got {sorted(rule)}")
+        if not isinstance(rule[rules[0]], (int, float)) or isinstance(rule[rules[0]], bool):
+            raise TaskError(f"{where}.{rules[0]} must be a number")
+        if rules[0] == "within" and not 0 < float(rule["within"]) <= 1:
+            raise TaskError(f"{where}.within must be a fraction in (0, 1]")
     return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
                 evaluator=ev, metrics=metrics or tuple(metrics_re),
                 timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs))
@@ -1224,7 +1239,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
            if _surrogate_kind(roles) else ""),
         "simulation: " + (", ".join(simulation) if simulation else "none declared"),
         "calibrate: " + ("off" if task.budget.get("calibrate") is False else "on (between every pair of stages, on the record)"),
-        "select: objectives (" + (", ".join(f"{o.direction} {o.metric}" for o in task.objectives) or "none") + ")"
+        "select: objectives (" + (Objectives(task.objectives).describe() or "none") + ")"
         + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
         f"feedback: {flow.get('feedback', 'human')}" + ("" if flow.get("feedback") == "none" else " (the operator's notes, when a terminal is attached)"),
         "knowledge: " + (", ".join(knowledge) if knowledge else "none (the world's mentor, if any)"),

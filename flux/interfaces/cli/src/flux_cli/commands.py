@@ -211,8 +211,9 @@ def cmd_task_check(args: argparse.Namespace) -> int:
             print(f"  {label}: {' '.join(cmd)}")
     print("  stages: " + ", ".join(_stage_label(r) for r in task.stages) if task.stages
           else "  stages: " + ", ".join(problem.stages()))
-    print("  objectives: " + (", ".join(f"{o.direction} {o.metric}" + (f" (goal {o.goal:g}{(' ' + o.unit) if o.unit else ''})" if o.goal is not None else "")
-                                        for o in task.objectives) or "none"))
+    from flux_loop import Objectives
+
+    print("  objectives: " + (Objectives(task.objectives).describe() or "none"))    # limits, then what decides (D658)
     if task.world:
         from flux_loop.document import contract_lines
 
@@ -313,17 +314,21 @@ def _roles_line(task: Any) -> str:
 
 def _stage_label(stage: Any) -> str:
     """A stage, what it needs on PATH and what it takes to climb past it."""
-    cut = stage.cutoff
     needs = f" [needs {', '.join(stage.needs)}]" if getattr(stage, "needs", ()) else ""
-    if not cut:
+    gates = [c for c in stage.cutoffs if c]
+    if not gates:
         return stage.name + needs
-    if "at" in cut:
-        rule = f"{cut['metric']} >= {cut['at']:g}"
-    elif "below" in cut:
-        rule = f"{cut['metric']} <= {cut['below']:g}"
-    else:
-        rule = f"{cut['metric']} within {float(cut['within']):.0%} of the best"
-    return f"{stage.name}{needs} (cutoff: {rule})"
+
+    def said(cut: dict) -> str:
+        if "at" in cut:
+            return f"{cut['metric']} >= {cut['at']:g}"
+        if "below" in cut:
+            return f"{cut['metric']} <= {cut['below']:g}"
+        return f"{cut['metric']} within {float(cut['within']):.0%} of the best"
+
+    if len(gates) == 1:
+        return f"{stage.name}{needs} (cutoff: {said(gates[0])})"
+    return f"{stage.name}{needs} (cutoffs, all must pass: " + ", then ".join(said(c) for c in gates) + ")"
 
 
 def cmd_task_run(args: argparse.Namespace) -> int:

@@ -3,14 +3,16 @@ says which of two measured designs is better.
 
     objectives:
       - {metric: fmax_mhz, direction: maximize, goal: 800, stage: confirm, tie: 0.03}
-      - {metric: area_um2, direction: minimize}
+      - {metric: area_um2, direction: minimize, goal: 80}
       - {metric: power_w,  direction: minimize}
 
-The first objective is the GOAL when it names one; the rest break ties in order. `better`
-reads: a design at the goal beats one below it; two at the goal are ordered by the next
-objectives; two below it by the first objective when they differ by more than its tie band,
-else by the next objectives. The frontier's axes, the decision, the early stop and which of
-a part's admitted designs stands at a reload all derive from this one vector.
+Every objective with a `goal` is a LIMIT that must hold: at least the goal when maximizing, at
+most it when minimizing (D658). Among designs meeting every limit, the objectives without a goal
+decide in the order written, each next one breaking the ties of those before; the ones marked
+`balance: true` decide together, as the knee of their front. A design meeting every limit beats
+one that does not; two that miss are ordered by fewer limits missed, then the smaller relative
+shortfall. The frontier's axes, the decision, the early stop and which of a part's admitted
+designs stands at a reload all derive from this one vector.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ class Objective:
     margins: tuple[tuple[str, float], ...] = ()
     keep: float | None = None        # a goal relative to the best measured: keep this share of its gain
     above: float = 0.0               # ... over this value (1.0 for a speedup)
+    balance: bool = False            # decided with the other balance objectives, as their knee (D658)
 
     @property
     def label(self) -> str:
@@ -58,11 +61,13 @@ class Objective:
             raise ValueError(f"objective {self.metric}: margin must be >= 0")
         if self.keep is not None and (self.goal is not None or not 0 < self.keep <= 1):
             raise ValueError(f"objective {self.metric}: keep is a share in (0, 1], instead of a goal")
+        if self.balance and (self.goal is not None or self.keep is not None):
+            raise ValueError(f"objective {self.metric}: a balance objective has no goal (a goal is a limit)")
 
     @classmethod
     def from_doc(cls, doc: Any, index: int = 0) -> "Objective":
-        """`"fmax_mhz"`, or `{metric, direction?, goal?, stage?, tie?}`; `goal` may be a number
-        or `">= 800"` / `"<= 0.5"` (the comparator names the direction)."""
+        """`"fmax_mhz"`, or `{metric, direction?, goal?, stage?, tie?, balance?}`; `goal` may be a
+        number or `">= 800"` / `"<= 0.5"` (the comparator names the direction)."""
         if isinstance(doc, str):
             doc = {"metric": doc}
         if not isinstance(doc, dict) or not isinstance(doc.get("metric"), str) or not doc["metric"].strip():
@@ -87,14 +92,15 @@ class Objective:
         keep = doc.get("keep")
         return cls(doc["metric"], str(direction or "maximize"), goal, stage, float(doc.get("tie") or 0.0),
                    unit, float(doc.get("margin") or 0.0), keep=float(keep) if keep is not None else None,
-                   above=float(doc.get("above") or 0.0))
+                   above=float(doc.get("above") or 0.0), balance=bool(doc.get("balance")))
 
     def to_doc(self) -> dict[str, Any]:
         """The document form, `from_doc`'s inverse (what the record keeps)."""
         return {k: v for k, v in {"metric": self.metric, "direction": self.direction, "goal": self.goal,
                                   "stage": self.stage, "tie": self.tie or None, "unit": self.unit or None,
                                   "margin": self.margin or None, "keep": self.keep,
-                                  "above": self.above if self.keep is not None and self.above else None}.items()
+                                  "above": self.above if self.keep is not None and self.above else None,
+                                  "balance": True if self.balance else None}.items()
                 if v is not None}
 
     def value(self, metrics: dict[str, Any] | None) -> float | None:
@@ -175,12 +181,35 @@ class Objective:
         where = (f" ({named or 'deepest'}" + (f", +{self.margin:.0%} on a shallower stage" if self.margin else "") + ")"
                  if named or self.margin else "")
         if self.goal is not None:
-            return f"{self.metric} {'>=' if self.direction == 'maximize' else '<='} {self.goal:g}{where}"
+            return f"{self.metric} at {'least' if self.direction == 'maximize' else 'most'} {self.goal:g}{where}"
         return f"{'most' if self.direction == 'maximize' else 'least'} {self.metric}{where}"
+
+    def shortfall(self, metrics: dict[str, Any] | None, stage: str | None = None,
+                  stages: Sequence[str] | None = None) -> float:
+        """How far these numbers are from the goal, relative to it: 0 when met, inf unmeasured."""
+        v, goal = self.value(metrics), self.goal_at(stage, stages)
+        if goal is None:
+            return 0.0
+        if v is None:
+            return float("inf")
+        gap = goal - v if self.direction == "maximize" else v - goal
+        return max(0.0, gap) / max(abs(goal), 1e-12)
+
+    def said(self, stage: str | None = None, stages: Sequence[str] | None = None) -> str:
+        """The limit in force on `stage`, short: `fmax_mhz >= 824 (the 800 asked for, plus the
+        margin on the confirm stage)`."""
+        goal = self.goal_at(stage, stages)
+        return f"{self.metric} {'>=' if self.direction == 'maximize' else '<='} {goal:g}{self._margin_said(stage, stages)}"
+
+    def _margin_said(self, stage: str | None, stages: Sequence[str] | None) -> str:
+        if self.goal_at(stage, stages) == self.goal:
+            return ""
+        return f" (the {self.goal:g} asked for, plus the margin on the {stage} stage)"
 
 
 class Objectives(tuple):
-    """An ordered vector of `Objective`; the first is the goal when it names one."""
+    """An ordered vector of `Objective`: the ones with a goal are limits, the rest decide among
+    the designs meeting every limit, in order (the `balance` ones together, as a knee)."""
 
     def __new__(cls, items: Iterable[Objective] = ()) -> "Objectives":
         return super().__new__(cls, tuple(items))
@@ -190,23 +219,63 @@ class Objectives(tuple):
         return cls(Objective.from_doc(d, i) for i, d in enumerate(docs or ()))
 
     @property
+    def limits(self) -> tuple[Objective, ...]:
+        """Every objective with a goal: each must hold."""
+        return tuple(o for o in self if o.goal is not None)
+
+    @property
     def goal(self) -> Objective | None:
-        return self[0] if self and self[0].goal is not None else None
+        """The first limit, for what speaks of one goal (the report's stage, a plot's line)."""
+        return next(iter(self.limits), None)
+
+    @property
+    def balance(self) -> tuple[Objective, ...]:
+        return tuple(o for o in self if o.balance)
+
+    def missed(self, metrics: dict[str, Any] | None, stage: str | None = None,
+               stages: Sequence[str] | None = None) -> list[Objective]:
+        """The limits these numbers miss (an unmeasured one is missed)."""
+        return [o for o in self.limits if not o.meets(metrics, stage, stages)]
+
+    def _steps(self) -> list[Objective | tuple[Objective, ...]]:
+        """What orders the designs past the limits: each goal-less objective in written order,
+        the balance ones as one group where the first of them stands."""
+        steps: list[Objective | tuple[Objective, ...]] = []
+        for o in self:
+            if o.goal is not None:
+                continue
+            if o.balance:
+                if self.balance[0] is o:
+                    steps.append(self.balance)
+                continue
+            steps.append(o)
+        return steps
 
     def describe(self) -> str:
-        if not self:
-            return ""
-        parts = [o.describe() for o in self]
-        return parts[0] + ("".join(f", then {p}" for p in parts[1:]) if len(parts) > 1 else "")
+        """In plain words: "fmax_mhz at least 1000, area_um2 at most 80, then least power_w"."""
+        limits = [o.describe() for o in self if o.goal is not None or o.keep is not None]
+        rest = []
+        for step in self._steps():
+            if isinstance(step, tuple):
+                names = [o.metric for o in step]
+                rest.append("the balance of " + (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]))
+            elif step.keep is None:
+                rest.append(step.describe())
+        text = ", ".join(limits)
+        for part in rest:
+            text = f"{text}, then {part}" if text else part
+        return text
 
     # ---- the one rule
     def better(self, new: dict[str, Any] | None, old: dict[str, Any] | None,
                stage: str | None = None, stages: Sequence[str] | None = None) -> bool:
-        """Whether `new` stands over `old`. Nothing measured on the old side: yes. With a goal:
-        at it beats below it; both at it, the next objectives decide (an exact tie keeps the
-        new one). Below it, or no goal: the first objective by more than its tie band; within
-        the band the next objectives, strictly. `stage` is where both were measured (the goal
-        there carries the margin)."""
+        """Whether `new` stands over `old`. Nothing measured on the old side: yes. Meeting every
+        limit beats missing one; both meeting, the goal-less objectives decide (an exact tie
+        keeps the new one). Both missing: fewer limits missed, then the nearer -- on the one
+        limit both miss by more than its tie band, else by the smaller total relative
+        shortfall -- then the goal-less objectives, strictly. No limits: the goal-less
+        objectives in order, each by more than its tie band, strictly. `stage` is where both
+        were measured (a goal there carries the margin)."""
         if not self:
             return True
         first = self[0]
@@ -214,34 +283,31 @@ class Objectives(tuple):
             return True
         if first.value(new) is None:
             return False
-        if first.goal is not None:
-            n_ok, o_ok = first.meets(new, stage, stages), first.meets(old, stage, stages)
-            if n_ok and not o_ok:
-                return True
-            if o_ok and not n_ok:
-                return False
-            if n_ok and o_ok:
-                return self._rest_not_worse(new, old, self[1:])
-        c = first.compare(new, old)
-        if c != 0:
-            return c > 0
-        return self._rest_strictly_better(new, old, self[1:])
-
-    @staticmethod
-    def _rest_not_worse(new, old, rest: Sequence[Objective]) -> bool:
-        for o in rest:
-            c = o.compare(new, old)
+        if self.limits:
+            n_miss, o_miss = self.missed(new, stage, stages), self.missed(old, stage, stages)
+            if len(n_miss) != len(o_miss):
+                return len(n_miss) < len(o_miss)
+            if not n_miss:
+                return self._ordered(new, old, strict=False)
+            if len(n_miss) == 1 and n_miss[0] is o_miss[0]:
+                c = n_miss[0].compare(new, old)
+            else:
+                sn = sum(o.shortfall(new, stage, stages) for o in n_miss)
+                so = sum(o.shortfall(old, stage, stages) for o in o_miss)
+                c = (sn < so) - (sn > so)
             if c != 0:
                 return c > 0
-        return True
+        return self._ordered(new, old, strict=True)
 
-    @staticmethod
-    def _rest_strictly_better(new, old, rest: Sequence[Objective]) -> bool:
-        for o in rest:
-            c = o.compare(new, old)
-            if c != 0:
-                return c > 0
-        return False
+    def _ordered(self, new, old, strict: bool) -> bool:
+        """The goal-less objectives in written order. Two designs alone have no knee, so the
+        balance ones are read in order too: a design that dominates on them still wins."""
+        for o in self:
+            if o.goal is None:
+                c = o.compare(new, old)
+                if c != 0:
+                    return c > 0
+        return not strict
 
     def best_of(self, rows: Iterable[tuple[Any, dict[str, Any] | None]], stage: str | None = None,
                 stages: Sequence[str] | None = None) -> Any | None:
@@ -274,46 +340,90 @@ class Objectives(tuple):
         return better, cost
 
     def decide(self, pool: list[Any], stages: Sequence[str] | None = None) -> tuple[Any | None, str]:
-        """The pick and why: with a goal, the least on the next objective among those at the
-        goal (the best on the first when nothing reaches it); without, the knee over every
-        objective; with one objective, its best. The pool is one stage's; the goal there
-        carries the margin when that stage is shallower than the objective's."""
+        """The pick and why. Among the designs meeting every limit: the knee of the balance
+        objectives (the other goal-less ones breaking ties), else the goal-less objectives in
+        order, else the first limit's best. None meets every limit: the closest -- fewest
+        limits missed, then the smallest relative shortfall. A `keep` goal is resolved over the
+        pool first. The pool is one stage's; a goal there carries the margin when that stage
+        is shallower than the objective's."""
         if not pool:
             return None, "nothing measured"
         if not self:
             return pool[0], "the only kind of answer this problem has"
-        if self[0].keep is not None:
-            return Objectives((self[0].resolved(pool), *self[1:])).decide(pool, stages)
-        first = self[0]
-        if first.goal is not None and len(self) >= 2:
-            stage = getattr(pool[0], "stage", None)
-            goal = first.goal_at(stage, stages)
-            at_goal = [p for p in pool if first.meets(p.metrics, getattr(p, "stage", None), stages)]
-            margin = f" (the {first.goal:g} asked for, plus the margin on the {stage} stage)" if goal != first.goal else ""
-            if at_goal:
-                pick = min(at_goal, key=lambda p: self[1].signed(p.metrics))
-                return pick, f"the least {self[1].metric} at {first.metric} {'>=' if first.direction == 'maximize' else '<='} {goal:g}{margin}"
-            pick = min(pool, key=lambda p: first.signed(p.metrics))
-            return pick, f"nothing reaches {first.metric} {goal:g}{margin}; the {'most' if first.direction == 'maximize' else 'least'} {first.metric}"
-        if len(self) == 1:
-            pick = min(pool, key=lambda p: first.signed(p.metrics))
-            return pick, f"the {'largest' if first.direction == 'maximize' else 'smallest'} {first.metric}"
-        from flux_frontier import knee_ranked
+        if any(o.keep is not None for o in self):
+            resolved = Objectives(o.resolved(pool) for o in self)
+            if resolved != self:
+                return resolved.decide(pool, stages)
+        limits = self.limits
+        stage = getattr(pool[0], "stage", None)
+        at = " and ".join(o.said(stage, stages) for o in limits)
+        meeting = [p for p in pool if not self.missed(p.metrics, getattr(p, "stage", None), stages)]
+        if limits and not meeting:
+            def gap(p: Any) -> tuple[int, float]:
+                miss = self.missed(p.metrics, getattr(p, "stage", None), stages)
+                return len(miss), sum(o.shortfall(p.metrics, getattr(p, "stage", None), stages) for o in miss)
 
-        ranked = knee_ranked(pool, [(lambda p, o=o: o.signed(p.metrics)) for o in self])
-        return (ranked[0] if ranked else pool[0]), "the knee of " + " / ".join(o.metric for o in self)
+            pick = min(pool, key=gap)
+            if len(limits) == 1:
+                o = limits[0]
+                return pick, (f"nothing reaches {o.metric} {o.goal_at(stage, stages):g}{o._margin_said(stage, stages)}; "
+                              f"the {'most' if o.direction == 'maximize' else 'least'} {o.metric}")
+            short = ", ".join(f"{o.metric} ({_num(o.value(pick.metrics))} for {o.goal_at(stage, stages):g})"
+                              for o in self.missed(pick.metrics, getattr(pick, "stage", None), stages))
+            return pick, f"nothing meets every limit ({at}); the closest misses {short}"
+        steps = self._steps()
+        free = [s for s in steps if not isinstance(s, tuple)]
+        if self.balance:
+            from flux_frontier import knee_ranked
+
+            ties = sorted(meeting, key=lambda p: tuple(_cost(o, p) for o in free))    # stable: the knee's ties
+            ranked = knee_ranked(ties, [(lambda p, o=o: o.signed(p.metrics)) for o in self.balance])
+            why = "the knee of " + " / ".join(o.metric for o in self.balance)
+            return (ranked[0] if ranked else meeting[0]), why + (f" at {at}" if limits else "")
+        if not free:
+            # only limits: the first one's best
+            o = limits[0]
+            pick = min(meeting, key=lambda p: _cost(o, p))
+            words = f"the {'largest' if o.direction == 'maximize' else 'smallest'} {o.metric}"
+            return pick, words + (f" at {at}" if len(limits) > 1 else "")
+        cands, used = list(meeting), []
+        for o in free:
+            used.append(o)
+            best = min(_cost(o, p) for p in cands)
+            band = abs(best) * o.tie if math.isfinite(best) else 0.0
+            cands = [p for p in cands if _cost(o, p) <= best + band]
+            if len(cands) <= 1:
+                break
+        pick = min(cands, key=lambda p: tuple(_cost(o, p) for o in used))
+        head = used[0]
+        if limits:
+            words = f"the {'least' if head.direction == 'minimize' else 'most'} {head.metric} at {at}"
+        else:
+            words = f"the {'smallest' if head.direction == 'minimize' else 'largest'} {head.metric}"
+        return pick, words + "".join(f", then {o.describe()}" for o in used[1:])
 
     def good_enough(self, metrics: dict[str, Any] | None, stage: str | None = None,
                     stages: Sequence[str] | None = None) -> str | None:
         """Whether the vector is good enough by these numbers, said in words; None when there is
-        no goal, it is not met, or an objective without a goal remains (a goal met with area
+        no limit, one is not met, or an objective without a goal remains (a goal met with area
         still to shrink is a floor reached, not a search finished, D543). On a shallower stage
-        the goal carries the margin, and the words say so."""
-        g = self.goal
-        if g is None or not g.meets(metrics, stage, stages):
+        a goal carries the margin, and the words say so."""
+        limits = self.limits
+        if not limits or self.missed(metrics, stage, stages) or any(o.goal is None for o in self):
             return None
-        if any(o.goal is None for o in self):
-            return None                              # more to improve: the vector's next objectives
-        goal = g.goal_at(stage, stages)
-        return (f"{g.metric} is {g.value(metrics):g}, the {goal:g} asked for"
-                + (f" on the {stage} stage ({g.goal:g} {g.stage or ''} with a {g.margin_at(stage):.0%} margin)".replace("  ", " ") if goal != g.goal else ""))
+        said = []
+        for g in limits:
+            goal = g.goal_at(stage, stages)
+            said.append(f"{g.metric} is {g.value(metrics):g}, the {goal:g} asked for"
+                        + (f" on the {stage} stage ({g.goal:g} {g.stage or ''} with a {g.margin_at(stage):.0%} margin)".replace("  ", " ") if goal != g.goal else ""))
+        return "; ".join(said)
+
+
+def _cost(o: Objective, p: Any) -> float:
+    """The objective's cost for sorting: unmeasured sorts last."""
+    v = o.signed(getattr(p, "metrics", p))
+    return v if math.isfinite(v) else float("inf")
+
+
+def _num(v: float | None) -> str:
+    return "unmeasured" if v is None else f"{v:g}"
