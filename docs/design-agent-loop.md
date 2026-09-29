@@ -80,8 +80,8 @@ instead of artifacts.
 Delegable: validate, orchestrate, plan, dse, generate, critique, extract (with knowledge
 reading its lessons), and select.
 
-Never delegated, refused at load with the D460 reason: test, analytical, simulation,
-calibrate, records. Feedback stays human.
+Never delegated, refused at load with the D460 reason: test and calibrate. The stages (and
+their estimates, D665) and the record are not boxes at all. Feedback stays human.
 
 `select` is the most sensitive box. The objective vector decides. The agent only breaks ties
 and chooses along a Pareto front the document leaves open. Its reason goes on the decision

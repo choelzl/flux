@@ -39,8 +39,9 @@ NODES: dict[str, Node] = {n.name: n for n in (
     Node("repair", "generator", True, "edits driven by a failure, on the text that exists"),
     Node("test", "evaluator", False, "correctness: build, fast vectors, the exhaustive judge"),
     Node("critique", "evaluator", True, "the adversary: a critique of a candidate, a plan or a decision"),
-    Node("analytical", "evaluator", False, "the fast costed stage"),
-    Node("simulation", "evaluator", False, "the slow costed stage"),
+    Node("estimate", "evaluator", False, "a stage's estimate before its tool: skips what cannot pass (D665)"),
+    Node("analytical", "evaluator", False, "a modelled costed stage"),
+    Node("simulation", "evaluator", False, "a costed stage run by its tool"),
     Node("calibrate", "evaluator", False, "the fast stage corrected against the slow one"),
     # the phases the ladder and the agent emit (D542: every phase prefix is a node)
     Node("orchestrate", "orchestrator", True, "the agent orchestrator's pick, with its tools"),
@@ -59,7 +60,7 @@ GROUPS: tuple[tuple[str, ...], ...] = (
     ("test",),
     ("repair",),
     ("critique",),
-    ("analytical", "frontier", "simulation", "calibrate"),
+    ("estimate", "analytical", "frontier", "simulation", "calibrate"),
     ("decide", "output"),
 )
 
@@ -67,7 +68,7 @@ GROUPS: tuple[tuple[str, ...], ...] = (
 FLOW = {
     "outer": ("input", "gate", "records", "knowledge", "feedback", "propose", "DSE",
               "plan", "orchestrate", "sub-loop", "pipeline", "screen",
-              "template-fill", "analytical", "frontier", "simulation", "calibrate",
+              "template-fill", "estimate", "analytical", "frontier", "simulation", "calibrate",
               "decide", "output"),
     "generation": ("generate", "test", "repair", "critique"),
 }

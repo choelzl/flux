@@ -374,23 +374,24 @@ class OrchestratorRole(_Role):
         confirmed answer beside a screened incumbent compares stages, not designs.
 
         `stage` is which stage they are about to pay for (D454), so a three-stage chain can send
-        more candidates to a cheap middle stage than to the expensive last one."""
-        ordered = self.role_order(list(front), state, stage)
-        if ordered is not None:                          # D560: the surrogate's order, its best first
-            return ordered[:max(0, int(state.request.finalists))] if state.request.finalists else ordered
+        more candidates to a cheap middle stage than to the expensive last one.
+
+        One objective has no curve to spread along: the best `request.finalists` by it (D666)."""
         axes = self.frontier_axes()
         if axes is None:
-            return list(front)
+            objs = list(self.objectives() or [])
+            if not objs or not state.request.finalists:
+                return list(front)
+            import math
+
+            def cost(s: Scored) -> float:
+                v = objs[0].signed(s.metrics)
+                return math.inf if math.isnan(v) else v
+
+            return sorted(front, key=cost)[:int(state.request.finalists)]
         from flux_frontier import spread as _spread
 
         return _spread(front, state.request.finalists, cost=axes[1])
-
-    def role_order(self, front: list[Scored], state: LoopState, stage: str) -> list[Scored] | None:
-        """The evaluation component's order of the frontier for `stage` (D560: a surrogate's
-        prediction, best first), or None when it has none -- the problem then spreads."""
-        who = self.roles().evaluator
-        fn = getattr(who, "order", None)
-        return fn(self, list(front), state, stage) if callable(fn) else None
 
     def review(self, stage: str, batch: list[Scored], state: LoopState) -> None:
         """What the orchestrator learns from a stage's results, once per measured batch
@@ -803,6 +804,13 @@ class EvaluatorRole(_Role):
         from .measure import measure_pool
 
         return measure_pool(self, state, cands, stage)
+
+    def estimated(self, cands: list[Candidate], stage: str, state: LoopState
+                  ) -> list[tuple[dict[str, float] | None, str]]:
+        """Per candidate, `stage`'s estimate before its tool runs and why it is skipped ("" =
+        the tool runs) (D665). The default estimates nothing; a document's stage says
+        `estimate:`."""
+        return [(None, "")] * len(cands)
 
     def analytic_stages(self) -> frozenset[str]:
         """Stages whose numbers are modelled, not simulated or placed -- what the record's

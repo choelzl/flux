@@ -380,6 +380,10 @@ class World:
                 state.say(f"  {mapping.describe()}: refused -- {summary[:80]}")
         return Verdict(v.conflict_free, 1.0 - v.clean_fraction, summary)
 
+    def analytic_stages(self) -> frozenset[str]:
+        """The cost is a formula over the mapping: its rows are tagged modelled."""
+        return frozenset({STAGE})
+
     def measure(self, cand: Candidate, stage: str, state: LoopState) -> dict[str, Any] | None:
         m = self.mappings[cand.name]
         return {"hardware_cost": float(m.hardware_cost()), "clean_fraction": 1.0}

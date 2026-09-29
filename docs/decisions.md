@@ -426,3 +426,34 @@ the topics above.
   for", defaulting to an fmax "at least" limit. Evaluator tools write their stage object and the
   top-level `workload`; an objective metric some measurement does not report is an error, as the
   loader refuses it.
+- **D665: a stage's estimate is a pre-gate before its tool, off by default.** `stages[].estimate:
+  {kind: surrogate|command|model, margin: 0.05}` replaces `flow.analytical`/`flow.simulation`,
+  which were labels (the stage order was already `stages:`, `simulation` was read by nothing, and
+  the flow could hide stages that ran). Before the tool runs on a design the estimator predicts
+  the stage's metrics; one that fails the stage's cutoff or an objective's limit at that stage
+  by more than `margin` of the threshold is refused for the stage ("estimated cost 40 fails
+  cost <= 35 (the cutoff) by more than 5%") and never measured; no estimate means the tool runs.
+  `surrogate` fits the record's rows on that stage (nothing under 3 rows), `command` is a script
+  printing the same `name=value` metrics, `model` is one model turn per batch. A skipped design's
+  row carries its estimate; a measured one carries it in its provenance beside the number; the
+  report counts both per stage. The surrogate's old job, ordering the finalists by a prediction
+  (D560), is removed: an estimate may only save a tool run, never choose what climbs. Modelled
+  stages are the world's `analytic_stages` (bankmap, interconnect_mapping); macarray's screen is
+  a synthesis run and is no longer tagged modelled.
+- **D666: the audit's loop fixes.** `dse: pareto` (or a pareto phase) with fewer than two
+  objectives is refused at load. `feedback: none` is no channel: the loop drops the feed, reloads
+  no earlier notes, and `run_passes(notes=False)` never wakes on one. A coding-agent plan runs
+  without a model proposer. `budget.finalists` holds with one objective: the best N by it climb.
+  `describe_flow` says what each default and agent does: orchestrate "default (the model picks
+  the next part, ...; rules pick the kind of work: ...)" or "(one design, no part to pick; ...)",
+  "agent X (a coding agent ...)" vs "agent (the model with tools ...)", "extract: agent X
+  (lessons from the record's rows, each citing its rows)", the library "on by default";
+  `records` is not a flow key (always on).
+
+- **D667: the builder draws what the loop does.** Audit first (57 choices run for real): the
+  diagram had two estimate/measure boxes that were labels, a critic drawn in one place that acts
+  in three, an orchestrate default it described wrongly, and settable steps that were fixed.
+  Now: one Measure box with a per-measurement "estimate first"; red dotted rejection paths
+  (repair, sent back, improve, dropped); the critic at the division, each part and the decision;
+  a "sub-loops, composed" node when there are parts; fixed steps greyed and locked. Every
+  default's popover text is `flux task check`'s own parenthesis, tested against describe_flow.

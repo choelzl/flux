@@ -118,6 +118,9 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     length-invariant bug (D165) and is refused loudly, never re-paired."""
     if not cands:
         return []
+    cands, estimate = _estimated(problem, state, list(cands), stage)
+    if not cands:
+        return []
     # What kind of evaluator this stage is, as the problem declares it (D463), not by position.
     # A stage nothing declares as modelled is treated as measured, as in the record.
     kind = "analytical" if stage in problem.analytic_stages() else "simulation"
@@ -144,7 +147,7 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
             state.refused.append((cand.name, f"{stage}: {why}"[:300]))
             if state.records is not None:
                 try:
-                    state.records.trial(_doc(cand, prov), f"{cand.name}@{stage}", stage=stage,
+                    state.records.trial(_doc(cand, _with(prov, estimate.get(id(cand)))), f"{cand.name}@{stage}", stage=stage,
                                         strategy=_strategy(cand), metrics=None, error=why[:300],
                                         wall_s=seconds, analytic=analytic, evaluator=evaluator)
                 except Exception:  # noqa: BLE001
@@ -156,13 +159,61 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
         scored = Scored(cand, stage, metrics, payload)
         if state.records is not None:
             try:
-                state.records.trial(_doc(cand, prov), f"{cand.name}@{stage}", stage=stage,
+                state.records.trial(_doc(cand, _with(prov, estimate.get(id(cand)))), f"{cand.name}@{stage}", stage=stage,
                                     strategy=_strategy(cand), metrics=scored.metrics,
                                     wall_s=seconds, analytic=analytic, evaluator=evaluator)
             except Exception:  # noqa: BLE001
                 pass
         out.append(scored)
     return out
+
+
+def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage: str
+               ) -> tuple[list[Candidate], dict[int, dict[str, Any]]]:
+    """The stage's estimator before its tool (D665): the candidates the tool still runs on, and
+    each estimate made (by candidate id) for its row. A skipped one is refused and recorded with
+    the estimate that skipped it, never measured."""
+    try:
+        judged = list(problem.estimated(cands, stage, state))
+    except Exception as exc:  # noqa: BLE001 -- an estimator that fails skips nothing
+        state.say(f"  estimate {stage}: did not run ({exc!s:.100}); the tool runs on every design")
+        return cands, {}
+    if len(judged) != len(cands) or not any(e is not None for e, _why in judged):
+        return cands, {}
+    run: list[Candidate] = []
+    made: dict[int, dict[str, Any]] = {}
+    count = state.estimates.setdefault(stage, {"skipped": 0, "measured": 0})
+    with _phase(f"estimate: {stage}", why=f"{len(cands)} candidate(s)") as out:
+        for cand, (est, why) in zip(cands, judged):
+            if est is None:
+                run.append(cand)
+                continue
+            made[id(cand)] = {k: round(float(v), 6) for k, v in est.items()}
+            if not why:
+                run.append(cand)
+                count["measured"] += 1
+                continue
+            count["skipped"] += 1
+            state.refused.append((cand.name, f"{stage}: {why}"[:300]))
+            if state.records is not None:
+                try:
+                    state.records.trial(_doc(cand, stamp(estimate=made[id(cand)])), f"{cand.name}@{stage}", stage=stage,
+                                        strategy=_strategy(cand), metrics=None, error=why[:300], analytic=True,
+                                        evaluator=f"estimate@{stage}")
+                except Exception:  # noqa: BLE001
+                    pass
+        kept = {id(c) for c in run}
+        out["estimated"] = "\n".join(f"{c.name}: " + ", ".join(f"{k}={v:g}" for k, v in made[id(c)].items())
+                                     + ("" if id(c) in kept else " -- skipped") for c in cands if id(c) in made)
+    skipped = len(cands) - len(run)
+    if skipped:
+        state.say(f"  {stage}: {skipped} estimated to fail, skipped; {len(run)} to measure")
+    return run, made
+
+
+def _with(prov: dict[str, Any], estimate: dict[str, Any] | None) -> dict[str, Any]:
+    """The row's provenance, with the estimate made before it was measured (D665)."""
+    return {**prov, "estimate": estimate} if estimate else prov
 
 
 def _record(state: LoopState, cand: Candidate, stage: str, m: dict[str, Any], problem: Problem,

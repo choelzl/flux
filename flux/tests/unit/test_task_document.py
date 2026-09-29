@@ -502,27 +502,26 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
         return next(l for l in lines if l.startswith(name + ":"))
 
     task = TaskSpec.from_dict(_flow_doc({"orchestrate": "rules", "generate": {"catalog": ["a.txt"]},
-                                         "critique": "llm", "analytical": ["screen"], "calibrate": "off",
+                                         "critique": "llm", "calibrate": "off",
                                          "extract": "mined", "feedback": "none", "test": "gate"}))
     assert task.roles == {"orchestrator": "rules", "knowledge": "mined"}
     assert task.generator == {"catalog": ["a.txt"]} and task.critique is True
-    assert task.budget["calibrate"] is False and task.flow["analytical"] == ["screen"]
+    assert task.budget["calibrate"] is False
     assert TaskSpec.from_dict(task.to_dict()) == task
-    assert PromptProblem(task).analytic_stages() == frozenset({"screen"})
     lines = describe_flow(task)
     assert box(lines, "orchestrate").startswith("orchestrate: rules") and box(lines, "generate").startswith("generate: catalog of 1")
-    assert box(lines, "critique").startswith("critique: llm") and box(lines, "analytical") == "analytical: screen"
-    assert box(lines, "simulation") == "simulation: confirm" and box(lines, "calibrate") == "calibrate: off" and box(lines, "feedback") == "feedback: none"
+    assert box(lines, "critique").startswith("critique: llm") and box(lines, "stages") == "stages: screen, confirm"
+    assert box(lines, "calibrate") == "calibrate: off" and box(lines, "feedback").startswith("feedback: none")
     plain = describe_flow(TaskSpec.from_dict(_flow_doc({})))
-    assert box(plain, "simulation") == "simulation: screen, confirm" and box(plain, "calibrate").startswith("calibrate: on")
+    assert box(plain, "stage confirm") == "stage confirm: its command -- estimate: none (the tool runs on every design)"
+    assert box(plain, "calibrate").startswith("calibrate: on")
 
 
 @pytest.mark.parametrize("flow, more, message", [
     ({"test": "llm"}, {}, "never delegated"),
     ({"validate": "model"}, {}, "one of rules, llm"),
     ({"dse": "hillclimb"}, {}, "no such DSE policy"),
-    ({"analytical": ["nowhere"]}, {}, "does not declare"),
-    ({"analytical": ["screen"], "simulation": ["screen"]}, {}, "not both"),
+    ({"analytical": ["screen"]}, {}, "not a box"),
     ({"knowledge": ["sheet"]}, {}, "names none"),
     ({"winner": "llm"}, {}, "not a box"),
 ])

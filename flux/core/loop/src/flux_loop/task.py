@@ -117,10 +117,6 @@ class PromptProblem(Problem):
                 return (head + "\n\n" + index) if head else index
 
             self.prompt_prefix = prefixed
-        declared = frozenset(task.flow.get("analytical") or ())
-        if declared:                                   # the document's analytical stages join the world's (D542)
-            world_analytic = self.__dict__.get("analytic_stages") or (lambda: frozenset())
-            self.analytic_stages = lambda: frozenset(world_analytic()) | declared
 
     def skill_list(self) -> list[Any]:
         """The document's skills (D588): what the `skill` tool loads and the agents receive."""
@@ -1296,15 +1292,7 @@ class PromptProblem(Problem):
         if spec.command:
             subs = self._subs(cand, None, state)
             run = self._run(spec.command, subs, spec.timeout_s, f"stage {stage}")
-            out = (run.stdout or "") + "\n" + (run.stderr or "")
-            got: dict[str, float] = {}
-            for metric, pat in spec.metrics_re.items():
-                m = re.search(pat, out)
-                if m:
-                    try:
-                        got[metric] = float(m.group(1))
-                    except ValueError:
-                        pass
+            got = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))
             if not got:
                 state.say(f"  stage {stage}: no metric matched in the output")
                 return None
@@ -1327,6 +1315,68 @@ class PromptProblem(Problem):
         except Exception as exc:  # noqa: BLE001
             state.say(f"  stage {stage} ({spec.evaluator}) could not measure: {exc!s:.120}")
             return None
+
+    def estimated(self, cands: list[Candidate], stage: str, state: LoopState
+                  ) -> list[tuple[dict[str, float] | None, str]]:
+        """The stage's `estimate:` (D665): per candidate, its estimate and why it skips the tool
+        ("" = the tool runs). A design the cache already holds is not estimated: it costs nothing."""
+        from .estimate import by_model, by_surrogate, failing, measured_rows
+
+        spec = next((r for r in self.task.stages if r.name == stage), None)
+        if spec is None or spec.estimate is None:
+            return [(None, "")] * len(cands)
+        est, metrics = spec.estimate, list(spec.metrics or spec.metrics_re)
+        todo = [i for i, c in enumerate(cands) if not self._cached(c, stage, state)]
+        got: list[dict[str, float] | None] = [None] * len(cands)
+        rows = measured_rows(state, stage) if est.kind != "command" else []
+        if est.kind == "surrogate":
+            for i in todo:
+                got[i] = by_surrogate(rows, cands[i].knobs, metrics)
+        elif est.kind == "model":
+            for i, g in zip(todo, by_model(state, stage, [cands[i] for i in todo], metrics, rows)):
+                got[i] = g
+        else:
+            for i in todo:
+                run = self._run(est.command or (), self._subs(cands[i], None, state), spec.timeout_s, f"estimate {stage}")
+                got[i] = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or "")) or None
+        rules = self._estimate_rules(spec, state, rows or measured_rows(state, stage))
+        return [(g, failing(g, rules, est.margin) if g else "") for g in got]
+
+    def _cached(self, cand: Candidate, stage: str, state: LoopState) -> bool:
+        try:
+            return state.cache is not None and state.cache.holds(f"{self.name}/{stage}/{self.cache_key(cand, stage, state)}")
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _estimate_rules(self, spec: Any, state: LoopState, rows: list) -> list[tuple[str, str, float, str]]:
+        """What an estimate must not fail on this stage: its cutoffs, then every objective's limit
+        at this stage (metric, ">=" | "<=", threshold, what)."""
+        rules: list[tuple[str, str, float, str]] = []
+        directions = {o.metric: o.direction for o in self.task.objectives}
+        for c in spec.cutoffs:
+            if not c:
+                continue
+            m = c["metric"]
+            if "at" in c:
+                rules.append((m, ">=", float(c["at"]), "the cutoff"))
+            elif "below" in c:
+                rules.append((m, "<=", float(c["below"]), "the cutoff"))
+            else:                              # a band around the best measured on this stage
+                vals = [ms[m] for _kn, ms in rows if m in ms]
+                f = float(c["within"])
+                if vals and directions.get(m, "maximize") != "minimize":
+                    best = max(vals)
+                    rules.append((m, ">=", best * f if best >= 0 else best / f, f"the cutoff, within {f:.0%} of the best"))
+                elif vals:
+                    best = min(vals)
+                    rules.append((m, "<=", best / f if best >= 0 else best * f, f"the cutoff, within {f:.0%} of the best"))
+        chain = self.stages()
+        for o in self.objectives():
+            o = o.resolved([ms for _kn, ms in rows]) if o.keep is not None else o
+            goal = o.goal_at(spec.name, chain)
+            if goal is not None:
+                rules.append((o.metric, ">=" if o.direction == "maximize" else "<=", goal, "the objective's limit"))
+        return rules
 
     def cache_suffix(self) -> str | None:
         """The document's `cache:` (D541): the loop's sidecar, none, or a name."""
@@ -1374,6 +1424,19 @@ def library_queries(task: TaskSpec, parts: Any = (), n: int = 8, words: int = 12
     return list(dict.fromkeys(got))[:n]
 
 
+def _metrics_in(spec: Any, out: str) -> dict[str, float]:
+    """The stage's metrics in a command's output, by its `metrics_re`."""
+    got: dict[str, float] = {}
+    for metric, pat in spec.metrics_re.items():
+        m = re.search(pat, out)
+        if m:
+            try:
+                got[metric] = float(m.group(1))
+            except ValueError:
+                pass
+    return got
+
+
 def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str]:
     """The standard report for a task run: the decision and its metrics, the world's
     `report(out)` lines if any, the frontier, then the shared closing sections (D558)."""
@@ -1404,6 +1467,8 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
     for name, tools in skipped:
         lines.append(f"  NOT RUN: stage {name} -- needs {', '.join(tools)}, not on PATH; every number above "
                      "is from the stages before it")
+    for stage, n in ((getattr(out, "provenance", None) or {}).get("estimates") or {}).items():     # D665
+        lines.append(f"  estimates: {stage}: {n['skipped']} estimated to fail, skipped; {n['measured']} measured")
     try:
         from .report import established, not_established, notes, refused
 
@@ -1433,6 +1498,7 @@ def model_use(task: "TaskSpec") -> str:
     for box in ("plan", "critique", "validate"):
         if flow.get(box) == "llm":
             reasons.append(f"{box}: llm")
+    reasons += [f"stage {r.name} estimates with it" for r in task.stages if r.estimate and r.estimate.kind == "model"]
     orch = (task.roles or {}).get("orchestrator")
     if orch in ("llm", "model", "agent") or (isinstance(orch, dict) and set(orch) & {"llm", "model", "agent"}):
         reasons.append(f"the orchestrator is the {orch if isinstance(orch, str) else next(iter(orch))}")

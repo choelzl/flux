@@ -444,8 +444,8 @@ class World:
         self.latency[d.config.label] = v.latency or 0
         return Verdict(True, 0.0)
 
-    # ---- evaluator: the chain (the stages are the document's; `flow: analytical: [screen]`
-    # says the synthesis screen orders and never quotes)
+    # ---- evaluator: the chain (the stages are the document's; the synthesis screen orders
+    # and never quotes)
     def evaluator_name(self, stage: str) -> str:
         return "yosys+opensta@screen" if stage == SCREEN_STAGE else "openroad@place"
 

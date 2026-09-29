@@ -30,7 +30,6 @@ stages:
 
 flow:
   dse: sweep
-  analytical: [screen]
 
 budget:
   steps: 4                    # 1 sweep + 3 invention rounds

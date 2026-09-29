@@ -140,6 +140,10 @@ class World:
     def evaluator_name(self, stage: str) -> str:
         return "imapping@yosys-screen" if stage == PHYS else "imapping@cycle-law"
 
+    def analytic_stages(self) -> frozenset[str]:
+        """The cycle law's stage is a model, not a tool: its rows are tagged modelled."""
+        return frozenset({"analytic"})
+
     # ---- orchestrator: the search
     def _cand(self, sol: Solution, fabric: FabricModel, *, strategy: str) -> Candidate:
         name = f"{sol.name} + {fabric.name}"

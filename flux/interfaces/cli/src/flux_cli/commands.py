@@ -447,9 +447,8 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         cap; a pass at rest is followed by one that explores (D593)."""
         from flux_loop.passes import run_passes
 
-        return run_passes(lambda req, feed: run_loop(problem, req, proposer=proposer,
-                                                     feedback=None if no_feedback else feed, log=print),
-                          request, passes=passes, feedback=fb, proposer=proposer)
+        return run_passes(lambda req, feed: run_loop(problem, req, proposer=proposer, feedback=feed, log=print),
+                          request, passes=passes, feedback=fb, proposer=proposer, notes=not no_feedback)
 
     def _print(out) -> None:
         print()

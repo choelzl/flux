@@ -49,6 +49,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     """One pass of the loop. `depth` is how deep a sub-loop this is (D455): the top-level pass
     owns the live panels, and `request.max_depth` bounds the nesting."""
     say = log or (lambda m: print(m, flush=True))
+    heard = getattr(getattr(problem, "task", None), "flow", {}).get("feedback") != "none"
+    feedback = feedback if heard else None         # D666: `feedback: none` is no channel at all
     state = LoopState(request=request, say=say, proposer=proposer, feedback=feedback,
                       started=time.monotonic(), depth=depth)
     with _phase("gate: tools", why="refuse loudly before spending anything") as out:
@@ -114,7 +116,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         try:
             from flux_feedback import reload_notes
 
-            state.human_notes.extend(reload_notes(state.records, say=say))
+            if heard:                                  # earlier notes too are the channel's
+                state.human_notes.extend(reload_notes(state.records, say=say))
         except Exception:  # noqa: BLE001
             pass
 
@@ -1040,5 +1043,6 @@ def _result(problem: Problem, state: LoopState, pick: Scored | None, decided_by:
             "admitted": sorted(state.admitted),
             "best": {k: v[0] for k, v in state.best.items()},
             "pool": len(state.pool), "measured": len(state.scored),
+            "estimates": {k: dict(v) for k, v in state.estimates.items()},
             "library": sorted({f for files in state.cited.values() for f in files}),
             "workdir": state.workdir})

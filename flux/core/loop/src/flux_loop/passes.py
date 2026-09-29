@@ -86,9 +86,11 @@ def between_passes(out: Any, n: int, *, passes: int = 0, rests: int = 0, feedbac
 
 
 def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | None = None, feedback: Any = None,
-               proposer: Any = None, say: Callable[[str], None] = print) -> Any:
+               proposer: Any = None, say: Callable[[str], None] = print, notes: bool = True) -> Any:
     """`run(request, feedback)` pass after pass, as `between_passes` says; the last result.
-    `passes` None: the request's (the document's `budget.passes`; 0 = until stopped)."""
+    `passes` None: the request's (the document's `budget.passes`; 0 = until stopped).
+    `notes` False (`feedback: none`, D666): no channel, so a note never wakes a waiting run."""
+    feedback = feedback if notes else None
     cap = int(request.passes if passes is None else passes)
     n = rests = 0
     while True:

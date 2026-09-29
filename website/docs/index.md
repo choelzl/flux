@@ -101,14 +101,13 @@ facts are never handed to an AI.
 | generate | writes each design | model, script, fixed list, coding agent |
 | test | the **gate**: refuses any wrong design | rules only, never delegated |
 | critique | challenges the parts and the decision | none, model, coding agent |
-| analytical | cheap estimates: formulas, cost models | rules or a learned estimate, never delegated |
-| simulation | real tools: Verilator, Yosys, OpenROAD, ChampSim | tools only, never delegated |
+| stages | the measurements: Verilator, Yosys, OpenROAD, ChampSim, formulas | tools only, never delegated; an optional estimate skips designs that cannot pass |
 | calibrate | compares cheap stages with costly ones | on or off, never delegated |
 | select | picks the winner from the objectives | objectives; a coding agent may break ties |
 | feedback | your notes, typed during a run | you, or none |
 | knowledge | what the model reads: notes, papers | files, or a model's digest |
 | extract | lessons mined from past runs | none, mined, coding agent |
-| records | keeps every design, number and refusal | always on, never delegated |
+| records | keeps every design, number and refusal | always on, not a setting |
 
 [More on the loop](guide/loop-shape.md).
 

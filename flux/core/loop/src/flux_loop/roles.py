@@ -2,7 +2,7 @@
 
     Orchestration   code, rules or a user-given division   <OR>   a model choosing what next
     Generation      a template, a catalog, a solver        <OR>   a model writing the artifact
-    Evaluation      analytical models and real tools       <OR>   a learned model, plus the tools
+    Evaluation      analytical models and real tools       <OR>   a stage's estimate before its tool (D665)
     Knowledge       what a person fed in                   <OR>   what a model mined from data
 
 This module adds a `Roles` bundle and a registry from name to component, so a document, a
@@ -345,8 +345,8 @@ _IN_CODE = {
     "generator": ("a `template` or `solver` generator is a CALLABLE the problem supplies "
                   "(flux_loop.sources.Template / Solver); name it in code, not in a document"),
     "evaluator": ("the no-AI evaluation half is a problem's `stages` (commands, ABI evaluators, "
-                  "analytical models, its own `measure`) and needs no component; `surrogate` (D560) "
-                  "is the model half: it predicts the costly stage from the record and orders, never decides"),
+                  "analytical models, its own `measure`) and needs no component; a stage's estimate "
+                  "(D665) is its `estimate:` key, not a component"),
     "knowledge": ("the human half is a problem's declared sources (flux_knowledge.Mentor over "
                   "Corpus / Library / RecordReadback / Notes, D449) and is built in code; "
                   "`mined` is the half extracted from this project's own data (D462)"),
@@ -498,5 +498,4 @@ register_role = register
 # the DSE policies register themselves as orchestrators (D553); imported last, they import Rules from here
 import importlib as _importlib  # noqa: E402
 
-for _m in ("dse", "surrogate"):   # the DSE policies and the evaluator's model half register themselves (D553, D560)
-    _importlib.import_module(f".{_m}", __package__)
+_importlib.import_module(".dse", __package__)

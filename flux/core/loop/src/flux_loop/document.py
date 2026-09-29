@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
 from .problem import Problem
+from .estimate import KINDS as ESTIMATE_KINDS, Estimator
 from .objective import Objective, Objectives
 from .types import (LoopRequest)
 
@@ -159,7 +160,10 @@ class Stage:
     `cutoff` is what is worth the next stage (D454): one of `{"metric": m, "at": x}` (a floor),
     `{"metric": m, "below": x}` (a budget) or `{"metric": m, "within": f}` (a band around this
     run's best, `f` a fraction), or a list of them, all of which a design must pass, in order
-    (D657). Without one, only the last stage's results decide."""
+    (D657). Without one, only the last stage's results decide.
+
+    `estimate` (D665, off by default) predicts the stage's metrics before its tool runs; a design
+    whose estimate fails the cutoff or an objective's limit by more than its margin is skipped."""
 
     name: str
     command: tuple[str, ...] | None = None
@@ -169,6 +173,7 @@ class Stage:
     timeout_s: float = 600.0
     cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = field(default_factory=dict)   # one gate, or several
     needs: tuple[str, ...] = ()          # tools on PATH the stage wants; absent, the stage is skipped (D519)
+    estimate: Estimator | None = None    # the pre-gate before the tool (D665)
 
     @property
     def cutoffs(self) -> tuple[dict[str, Any], ...]:
@@ -387,15 +392,9 @@ class TaskSpec:
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
         budget = dict(doc.get("budget") or {})
+        if "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2 and not (world and not objectives):
+            raise TaskError(f"flow.dse: pareto needs two objectives; this document has {len(objectives)}")
         if flow:
-            declared = [r.name for r in stages]
-            for box in ("analytical", "simulation"):
-                for name in flow.get(box) or ():
-                    if name not in declared and name != "surrogate":
-                        raise TaskError(f"flow.{box} names stage {name!r}, which `stages` does not declare")
-            both = set(flow.get("analytical") or ()) & set(flow.get("simulation") or ())
-            if both:
-                raise TaskError(f"flow: a stage is analytical or simulation, not both: {sorted(both)}")
             if flow.get("calibrate") == "off":
                 if "calibrate" in budget:
                     raise TaskError("calibration is said twice: `flow.calibrate` and `budget.calibrate`")
@@ -461,6 +460,7 @@ class TaskSpec:
                         if r.cutoff else {}),
                        **({"metrics": list(r.metrics)} if r.metrics else {}),
                        **({"needs": list(r.needs)} if r.needs else {}),
+                       **({"estimate": r.estimate.to_doc()} if r.estimate else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
             "knowledge": {"text": self.knowledge, "library": self.library} if self.library else self.knowledge,
@@ -497,6 +497,8 @@ class TaskSpec:
         for r in self.stages:
             if r.command:
                 out.append((f"stage {r.name}", r.command))
+            if r.estimate and r.estimate.command:
+                out.append((f"estimate {r.name}", r.estimate.command))
         return out
 
 
@@ -549,6 +551,7 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
     if gate is not None:
         cmds += [(f"gate {c.name}", c.run) for c in gate]
     cmds += [(f"stage {r.name}", r.command or ()) for r in stages]
+    cmds += [(f"estimate {r.name}", r.estimate.command) for r in stages if r.estimate and r.estimate.command]
     if generator.get("command"):
         cmds.append(("generator", generator["command"]))
     for what, cmd in cmds:
@@ -845,7 +848,31 @@ def _stage(i: int, doc: Any, world: bool = False) -> Stage:
             raise TaskError(f"{where}.within must be a fraction in (0, 1]")
     return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
                 evaluator=ev, metrics=metrics or tuple(metrics_re),
-                timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs))
+                timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs),
+                estimate=_estimator(i, doc.get("estimate")))
+
+
+def _estimator(i: int, raw: Any) -> Estimator | None:
+    """`stages[i].estimate` (D665): `{kind: surrogate|command|model, margin: 0.05, command: ...}`,
+    `command` for kind command only."""
+    if raw is None:
+        return None
+    where = f"stages[{i}].estimate"
+    if not isinstance(raw, dict):
+        raise TaskError(f"{where} is {{kind: {'|'.join(ESTIMATE_KINDS)}, margin: 0.05}}")
+    bad = sorted(set(raw) - {"kind", "margin", "command"})
+    if bad:
+        raise TaskError(f"{where} keys {bad} are not known; known: kind, margin, command")
+    kind = raw.get("kind")
+    if kind not in ESTIMATE_KINDS:
+        raise TaskError(f"{where}.kind is one of {', '.join(ESTIMATE_KINDS)}, not {kind!r}")
+    margin = raw.get("margin", 0.05)
+    if isinstance(margin, bool) or not isinstance(margin, (int, float)) or margin < 0:
+        raise TaskError(f"{where}.margin is a number >= 0 (a fraction of the threshold), not {margin!r}")
+    if (kind == "command") != ("command" in raw):
+        raise TaskError(f"{where}.command is said for kind command, and only then")
+    cmd = _command(raw["command"], f"{where}.command") if kind == "command" else None
+    return Estimator(kind, float(margin), cmd)
 
 
 #: Every top-level key a problem document may say; any other is refused with the nearest
@@ -914,7 +941,7 @@ def _substitute(cmd: Iterable[str], subs: dict[str, str]) -> list[str]:
 #: world may fill. `prototype` and `tools_missing` are bound by hand (the problem's own
 #: check may replace the world's; the document's commands and the world's tools add up).
 DOCUMENT_OWNED = frozenset({"objective", "objectives", "subgoals", "ladder", "stages", "roles", "campaign_name",
-                            "cache_suffix", "validate", "chained", "role_cutoff", "role_measure", "role_order",
+                            "cache_suffix", "validate", "chained", "role_cutoff", "role_measure",
                             "role_analytic", "role_evaluator_name", "prototype", "tools_missing"})
 
 
@@ -997,11 +1024,11 @@ def resolve(spec: str, what: str = "world") -> Any:
 
 # ------------------------------------------------------------------ the flow (D542)
 #: The boxes of the drawing a document may say a half for, in flow order.
-FLOW_BOXES = ("validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "analytical",
-              "simulation", "calibrate", "select", "feedback", "knowledge", "extract", "records")
+FLOW_BOXES = ("validate", "orchestrate", "plan", "dse", "generate", "test", "critique",
+              "calibrate", "select", "feedback", "knowledge", "extract")
 _FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("none", "llm"), "plan": ("none", "llm"),
                "calibrate": ("on", "off"), "select": ("objectives",), "feedback": ("human", "none"),
-               "extract": ("none", "mined"), "records": ("on",)}
+               "extract": ("none", "mined")}
 #: What `flow.knowledge` may name (D648): the library is on by default; `none` turns it off.
 _KNOWLEDGE_SOURCES = ("sheet", "library", "digest", "none")
 
@@ -1110,21 +1137,6 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             raise TaskError('flow.generate is "model", {command: [...]}, {catalog: [...]} or {agent: claude|codex|opencode|{...}}, '
                             f"not {value!r}")
         flow["generate"] = value
-    for box in ("analytical", "simulation"):
-        if box in raw:
-            names = raw[box]
-            if not isinstance(names, list):
-                raise TaskError(f"flow.{box} is a list of stage names")
-            if box == "analytical":
-                # a learned screen is the analytical box's model half: `surrogate`, or
-                # `{surrogate: {kind: ...}}` (D461)
-                learned = [n for n in names if n == "surrogate" or (isinstance(n, dict) and "surrogate" in n)]
-                if learned:
-                    roles["evaluator"] = learned[0]
-                names = [n for n in names if n not in learned]
-            if not all(isinstance(n, str) for n in names):
-                raise TaskError(f"flow.{box} is a list of stage names")
-            flow[box] = list(names) + (["surrogate"] if box == "analytical" and "evaluator" in roles else [])
     if "knowledge" in raw:
         sources = raw["knowledge"]
         if isinstance(sources, str):
@@ -1152,13 +1164,16 @@ def library_on(task: "TaskSpec") -> bool:
     return "none" not in (task.flow.get("knowledge") or ())
 
 
-def _surrogate_kind(roles: dict[str, Any]) -> str:
-    who = roles.get("evaluator")
-    if who == "surrogate":
-        return "fitted"
-    if isinstance(who, dict) and "surrogate" in who:
-        return str((who.get("surrogate") or {}).get("kind", "fitted"))
-    return ""
+def _dse_policies(value: Any) -> list[str]:
+    """The policy names `flow.dse` runs: one name, `{name: cfg}`, or a list of phases."""
+    specs = value if isinstance(value, list) else [value] if value else []
+    names = []
+    for spec in specs:
+        if isinstance(spec, str):
+            names.append(spec)
+        elif isinstance(spec, dict):
+            names.append(str(spec.get("policy", "gradient")) if isinstance(value, list) else str(next(iter(spec), "")))
+    return names
 
 
 def _agent_tool(spec: Any) -> str:
@@ -1201,40 +1216,80 @@ def _agent_name(value: dict[str, Any]) -> str:
     return spec if isinstance(spec, str) else str((spec or {}).get("preset") or (spec or {}).get("name") or "command")
 
 
+#: What the rules half of orchestrate does, said the same in every place that shows it.
+_KIND_OF_WORK = "rules pick the kind of work: a design sent back is improved first, then the parts, then the search"
+
+
+def describe_orchestrate(task: "TaskSpec") -> str:
+    """The orchestrate line's half, in words (D666)."""
+    from .roles import available_roles
+
+    raw = task.flow.get("orchestrate")
+    orch = task.roles.get("orchestrator")
+    name = orch if isinstance(orch, str) else (next(iter(orch)) if isinstance(orch, dict) and orch else None)
+    policies = [n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent")]
+    parts = bool(task.parts or task.decompose or task.subtasks or task.split)
+    if name in policies:
+        return f"{name} (a DSE policy picks the points)"
+    if isinstance(raw, dict) and "agent" in raw:
+        return (f"agent {_agent_name(raw)} (a coding agent picks the next part and the kind of work, "
+                "its reasons on the record, D640)")
+    if name == "agent":
+        return "agent (the model with tools picks the next part and the kind of work, its reasons on the record, D505)"
+    if name == "rules":
+        return "rules (the first part waiting, no model; " + _KIND_OF_WORK + ")"
+    if name == "given":
+        return "given (the parts in the order given, no model; " + _KIND_OF_WORK + ")"
+    if name == "llm":
+        return "llm (the model picks the next part; " + _KIND_OF_WORK + ")"
+    if parts:
+        return ("default (the model picks the next part, the first one waiting without a model; "
+                + _KIND_OF_WORK + ")")
+    return "default (one design, no part to pick; " + _KIND_OF_WORK + ")"
+
+
+def describe_stage(stage: "Stage", modelled: bool = False) -> str:
+    """One stage's line: how it is measured, its cutoffs and its estimator (D665)."""
+    how = ("its command" if stage.command else f"evaluator {stage.evaluator}" if stage.evaluator
+           else "the world's measure")
+    cut = "; ".join(f"{c['metric']} " + (f">= {c['at']:g}" if "at" in c else f"<= {c['below']:g}" if "below" in c
+                                        else f"within {c['within']:.0%} of the best") for c in stage.cutoffs if c)
+    return (f"stage {stage.name}: {how}" + (", modelled" if modelled else "")
+            + (f"; cutoff {cut}" if cut else "")
+            + " -- estimate: " + (stage.estimate.describe() if stage.estimate else "none (the tool runs on every design)"))
+
+
 def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     """The drawing, one line per box, with the half in force for this document: from `flow:`,
     the other keys, the world (`problem`, when given) and the defaults (D542)."""
     from .roles import available_roles
 
     flow = task.flow
-    roles = task.roles
-    orch = roles.get("orchestrator")
-    orch_name = orch if isinstance(orch, str) else (next(iter(orch)) if isinstance(orch, dict) and orch else None)
     policies = [n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent")]
+    orch_name = describe_orchestrate(task).split(" ", 1)[0]
     gen = task.generator
     generate = ("catalog of %d design(s), no model" % len(gen["catalog"]) if gen.get("catalog")
                 else "the generator command, no model" if gen.get("command")
                 else f"coding agent `{_agent_tool(gen['agent'])}` (its own model and tools; the loop's build, test and judge around it, D575)" if gen.get("agent")
                 else "model (the prototype stage, transpile, repair)")
-    stage_names = [r.name for r in task.stages]
-    analytical = list(flow.get("analytical") or [])
+    modelled: frozenset[str] = frozenset()
     if problem is not None:
         try:
-            analytical += [s for s in stage_names if s in problem.analytic_stages() and s not in analytical]
+            modelled = frozenset(problem.analytic_stages())
         except Exception:  # noqa: BLE001 -- a world that cannot say is a world with none
             pass
-    simulation = list(flow.get("simulation") or [s for s in stage_names if s not in analytical])
     said = list(flow.get("knowledge") or [])
     knowledge = (["sheet"] if task.knowledge else []) + (
-        [] if not library_on(task) else ["library" + (f" + {task.library}" if task.library else "")])
+        [] if not library_on(task) else ["library" + (f" + {task.library}" if task.library else "")
+                                         + " (on by default; `knowledge: none` turns it off)"])
     knowledge += ["digest"] if "digest" in said else []
+    extract = flow.get("extract", "none")
     lines = [
         ("validate: " + (f"agent {_agent_name(flow['validate'])} (the loader's checks, then the agent reads the document and objects, D640)"
                          if isinstance(flow.get("validate"), dict) else
                          "llm (the loader's checks, then the model reads the document and objects, D556)" if flow.get("validate") == "llm"
                          else "rules (the loader's checks)")),
-        "orchestrate: " + (f"{orch_name} (a DSE policy)" if orch_name in policies else
-                           f"{orch_name}" if orch_name else "the problem default (a model plans the part; rules pick the work)")
+        "orchestrate: " + describe_orchestrate(task)
         + " -- or: " + ", ".join(n for n in ("rules", "given", "llm", "agent") if n != orch_name),
         "plan: " + (f"agent {_agent_name(flow['plan'])} (the pass is planned first, checked by check_plan, D640)"
                     if isinstance(flow.get("plan"), dict) else
@@ -1248,17 +1303,17 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         "critique: " + (f"agent {_agent_name(flow['critique'])} (on the division, each admitted part and the decision, D640)"
                         if isinstance(flow.get("critique"), dict) else
                         "llm (a model adversary on the division, each admitted part and the decision)" if task.critique else "none"),
-        "analytical: " + (", ".join(analytical) if analytical else "none")
-        + (f" -- surrogate ({_surrogate_kind(roles)}) predicts the costly stage from the record and orders the finalists (D560)"
-           if _surrogate_kind(roles) else ""),
-        "simulation: " + (", ".join(simulation) if simulation else "none declared"),
+        "stages: " + (", ".join(r.name for r in task.stages) if task.stages else "none declared (the gate decides)"),
+        *[describe_stage(r, r.name in modelled) for r in task.stages],
         "calibrate: " + ("off" if task.budget.get("calibrate") is False else "on (between every pair of stages, on the record)"),
         "select: objectives (" + (Objectives(task.objectives).describe() or "none") + ")"
         + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
-        f"feedback: {flow.get('feedback', 'human')}" + ("" if flow.get("feedback") == "none" else " (the operator's notes, when a terminal is attached)"),
-        "knowledge: " + (", ".join(knowledge) if knowledge else "none (the world's mentor, if any)"),
-        f"extract: {flow.get('extract', 'none')}" + (" (facts mined from the record reach the prompts)" if flow.get("extract") == "mined"
-                                                    else " (mined: facts from the record reach the prompts)"),
-        "records: on (every candidate, measurement and refusal, read back on resume)",
+        "feedback: " + ("none (no notes are read, reloaded or waited for)" if flow.get("feedback") == "none"
+                        else "human (the operator's notes, when a terminal is attached)"),
+        "knowledge: " + (", ".join(knowledge) if knowledge else "none (the library is off)"),
+        "extract: " + (f"agent {_agent_name(extract)} (lessons from the record's rows, each citing its rows)" if isinstance(extract, dict)
+                       else "mined (facts mined from the record reach the prompts)" if extract == "mined"
+                       else "none (nothing is mined from the record) -- or: mined, agent"),
+        "records: always on (every candidate, measurement and refusal, read back on resume)",
     ]
     return lines

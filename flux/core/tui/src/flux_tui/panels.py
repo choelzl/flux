@@ -660,7 +660,7 @@ ROLE_LINES = (
     ("mentor", "knowledge, records, extract, feedback -- the memory"),
     ("orchestrator", "gate, DSE, propose, frontier, decide -- the policy"),
     ("generator", "template-fill, LLM-gen, repair -- the authors"),
-    ("evaluator", "test, analytical, simulation, physical, calibrate -- the judges"),
+    ("evaluator", "test, estimate, analytical, simulation, physical, calibrate -- the judges"),
     ("(model)", "highlighted on a phase of any role that calls the model"),
 )
 

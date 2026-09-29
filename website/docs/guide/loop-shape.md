@@ -28,14 +28,13 @@ Each box has one job and a set of *halves*: who can fill it. Choose a half in th
 | generate | writes each design | model (default), a script, a fixed list, coding agent | `generate: {command: "..."}` |
 | test | the gate | the document's command or the world's check; **never delegated** | |
 | critique | challenges the parts and the decision | none (default), model, coding agent | `critique: llm` |
-| analytical | cheap stages: formulas, cost models | the stages named, a learned estimate (`surrogate`); **never delegated** | `analytical: [screen]` |
-| simulation | stages run by real tools | the other stages; **never delegated** | |
+| stages | the measurements, cheapest first; each may be estimated before its tool runs | the stage's tool; its `estimate:` (off by default: `surrogate`, `command`, `model`) skips designs that cannot pass; **never delegated** | `estimate: {kind: surrogate, margin: 0.05}` on a stage |
 | calibrate | compares each cheap stage with the costly one | on (default), off; **never delegated** | `calibrate: off` |
 | select | chooses from the objectives | objectives; a coding agent may break ties | |
 | feedback | notes you type during a run (`--tui`, `f`) | human (default), none | `feedback: none` |
 | knowledge | what the model reads | `sheet`, `library` (on by default), `digest` (a model's summary of the library), `none` | `knowledge: [digest]` |
 | extract | lessons mined from the record | none (default), mined, coding agent | `extract: mined` |
-| records | keeps everything; a rerun resumes from it | always on; **never delegated** | |
+| records | keeps everything; a rerun resumes from it | always on, not a setting | |
 
 A coding agent (Claude Code, Codex, OpenCode) answers a box with `{agent: claude}` (or `codex`,
 `opencode`) on validate, orchestrate, plan, dse, generate, critique, select or extract. The loop

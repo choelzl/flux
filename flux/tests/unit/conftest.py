@@ -6,7 +6,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+import os
+
 import pytest
+
+# A test never reads this machine's ~/.config/flux/flux.env (D651): `main()` would load its model
+# settings into the process and leak them into later tests.
+os.environ["FLUX_CONFIG"] = os.devnull + ".flux-tests"
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 

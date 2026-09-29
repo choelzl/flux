@@ -169,8 +169,8 @@ draft can fix what was slow. `validate` refuses a badly posed run before anythin
 `agent` (a model with tools, every pick on the ledger). Generation: `Model` (the prototype
 stage, translation and repair), `Template` (a command), `Catalog`, `Solver`, or a coding agent
 (`flow: {generate: {agent: opencode}}`). Knowledge: a `Mentor` over declared sources,
-`mined`, `digest`. Evaluation: the document's stages, with a surrogate half that may order but
-never decide.
+`mined`, `digest`. Evaluation: the document's stages, each with an optional estimate before its
+tool (`estimate:`, D665) that may skip a design, never choose one.
 
 **The prototype stage.** In the worlds that use it (the NLU is the main one), a part is first
 written as a Python-integer prototype (`flux_loop.pyint`: vectorised, rule-checked) and proven

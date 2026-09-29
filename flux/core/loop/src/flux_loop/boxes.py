@@ -21,7 +21,7 @@ __all__ = ["AgentLessons", "DELEGABLE", "NEVER", "agent_of", "box_turn"]
 
 #: The boxes an agent may answer, and the ones that establish facts and never are.
 DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select"})
-NEVER = frozenset({"test", "analytical", "simulation", "calibrate", "records"})
+NEVER = frozenset({"test", "calibrate"})
 
 _TYPES = {"boolean": bool, "string": str, "array": list, "object": dict, "integer": int, "number": (int, float)}
 

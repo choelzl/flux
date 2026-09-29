@@ -26,9 +26,6 @@ objectives:
 stages:
   - {name: exhaustive, metrics: [hardware_cost, clean_fraction]}
 
-flow:
-  analytical: [exhaustive]
-
 cache: false
 
 budget:

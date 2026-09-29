@@ -33,9 +33,6 @@ stages:
   - {name: phys, metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps],
      needs: [yosys, openroad]}
 
-flow:
-  analytical: [analytic]
-
 cache: false
 
 budget:

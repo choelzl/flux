@@ -32,6 +32,13 @@ Say only what is yours; the rest is inferred.
   `{metric, below: N}` (at most N) or `{metric, within: 0.9}` (within 10% of this run's best).
   "Timing met" at 1 GHz is `cutoff: {metric: fmax_mhz, at: 1000}`. Several gates are a list,
   all must pass, in order: `cutoff: [{metric: fmax_mhz, at: 1000}, {metric: area_um2, below: 80}]`.
+  A stage may be estimated before its tool runs (off by default):
+  `estimate: {kind: surrogate|command|model, margin: 0.05}`. A design whose estimate fails the
+  stage's cutoff or an objective's limit by more than `margin` (a fraction of the threshold) is
+  skipped for that stage, and the report counts it; otherwise the tool runs. `surrogate` fits the
+  record's rows on that stage (nothing until 3 are measured); `command: "..."` (kind command
+  only) runs a script with the stage's placeholders that prints the same `name=value` metrics;
+  `model` asks the model with the design and the stage's measured rows (no model, no estimate).
 - `flux tools` lists every check and stage Flux has, with its command and pass rule.
 - `objectives`: a list of `{metric, direction: minimize|maximize, goal: N}`. Every one with a
   `goal` is a limit that must hold (at least N when maximizing, at most N when minimizing);
@@ -64,9 +71,11 @@ Say only what is yours; the rest is inferred.
   `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
   and on any box but test and the stages, `{agent: opencode|claude|codex}`: a coding agent answers
   that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md),
-  `analytical: [surrogate]`, `knowledge: [digest]` (the model's library digest; `none` turns the library off),
-  `extract: mined` (lessons mined from the record), `records: on`. `flow` is the only place
-  a box is said: there is no `roles:`, `generator:`, `critique:` or `decompose:` key.
+  `knowledge: [digest]` (the model's library digest; `none` turns the library off),
+  `extract: mined` (lessons mined from the record), `feedback: none` (no operator notes),
+  `calibrate: off`. `dse: pareto` needs two objectives. `flow` is the only place a box is said:
+  there is no `roles:`, `generator:`, `critique:` or `decompose:` key. A stage's estimate is the
+  stage's `estimate:`, not a `flow` key.
   `parts: decompose` asks the orchestrator to divide the statement.
 - `budget`, the knobs people change:
   - `steps` (work items per pass), `passes` (a cap; default: until stopped),

@@ -280,7 +280,10 @@ def apply_plan(problem: "Problem", state: "LoopState") -> dict[str, Any]:
         if errors:
             out["errors"] = "\n".join(errors)
         opened = _open_fields(clean, surface, agent, from_file)
-        if opened and agent and state.proposer is not None:
+        from .boxes import agent_of
+
+        coding = agent_of(getattr(getattr(problem, "task", None), "flow", None) or {}, "plan")
+        if opened and agent and (state.proposer is not None or coding is not None):   # D666: a coding agent needs no model
             filled = plan_with_agent(problem, state, clean, surface, opened, out)
             if filled is not None:
                 clean = filled

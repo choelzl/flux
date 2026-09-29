@@ -281,6 +281,8 @@ class LoopState:
     prompt_sha_by_thread: dict = field(default_factory=dict)   # the last prompt's digest, per drafting thread
     cited: dict = field(default_factory=dict)   # prompt digest -> the library files its excerpts cite (D648)
     cache_hits: int = 0
+    #: stage -> {"skipped": estimated to fail, "measured": estimated and measured} (D665)
+    estimates: dict = field(default_factory=dict)
 
     def part(self, name: str | None) -> PartState:
         """The part's state, made on first use."""
