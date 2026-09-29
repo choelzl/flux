@@ -395,3 +395,9 @@ the topics above.
   add measurements (a tool, its settings, one or more "go on only if" gates), and an Objective row
   per reported metric (at least / at most / maximise / minimise / balance). Every type maps to a
   catalog command; a language without one says so. Tested from scratch through `load_task`.
+
+- **D660: every display names every limit.** `flux task check`, the default standing the
+  orchestrator and agents read, and the DSE prompt now give the whole objective in words ("fmax_mhz
+  at least 1000, area_um2 at most 60, then ..."); the report's frontier plot draws each axis's
+  limit, labelled with its rule. Part budgets (ladder) follow the first limit, else the first
+  objective. Tested: the three texts name the second limit; NLU/macarray/golden heavy tests pass.

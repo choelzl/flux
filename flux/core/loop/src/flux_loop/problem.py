@@ -583,8 +583,9 @@ class GeneratorRole(_Role):
         """Where the campaign stands, for the results table (D497):
         {"goal": one line, "now": what this pass is doing, "composed": the whole design's
         last numbers, "parts": {part: its constraint and numbers, one line}}. Any key may be
-        missing; the default says nothing and the table shows the parts alone."""
-        return {}
+        missing; the default is the objective in words: every limit, then what decides (D660)."""
+        objs = self.objectives()
+        return {"goal": objs.describe()} if objs else {}
 
     def locate(self, failure: str, artifact: str) -> list[int]:
         """Line numbers the failure points at (1-based), so a patch prompt can show

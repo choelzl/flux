@@ -679,6 +679,7 @@ class ModelSearch(Policy):
     def walk(self, problem, state, space, seen):
         from .boxes import box_turn
         from .model import _ask, _json
+        from .objective import Objectives
 
         if state.proposer is None and self.agent is None:
             state.say("  dse: llm asks a model for the next points and this run has none")
@@ -714,7 +715,7 @@ class ModelSearch(Policy):
                 f"DESIGN-SPACE EXPLORATION, round {round_ + 1} of {self.rounds}. The space (each knob and its choices, in order):",
                 *(f"  {k}: {json.dumps(v)}" for k, v in space.items()),
                 *([f"The other knobs are held at the incumbent's: {json.dumps(base, default=str)}"] if base else []),
-                ("OBJECTIVE: " + f"{goal.direction} {goal.metric}" + (f", goal {goal.goal:g}" if goal.goal is not None else "")) if goal else
+                ("OBJECTIVE: " + Objectives(objs).describe()) if goal else        # every limit, then what decides (D660)
                 "OBJECTIVE: none declared; propose points that cover the space",
                 (f"MEASURED SO FAR ({len(measured)} point(s), best first):\n" + "\n".join(rows)) if rows else "MEASURED SO FAR: nothing",
                 f"{size(space)} point(s) in this space.",

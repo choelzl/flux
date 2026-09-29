@@ -292,10 +292,14 @@ def _svg_fronts(rep: Report, second: int = 1) -> str:
         body.append(f'<polyline points="{pts}" fill="none" stroke="#1f77b4" stroke-opacity="{shade:.2f}" stroke-width="{1 + shade:.1f}"/>')
         for x, y in front:
             body.append(f'<circle cx="{sx(-x):.1f}" cy="{sy(-y):.1f}" r="2.5" fill="#1f77b4" fill-opacity="{shade:.2f}"><title>{_day(end)}: {o1.metric} {-x:g}, {o2.metric} {y:g}</title></circle>')
-    if o1.goal is not None:
-        gx = sx(o1.goal)
+    if o1.goal is not None:                             # each axis's limit (D660)
+        gx = sx(-o1.signed({o1.metric: o1.goal}))
         body.append(f'<line x1="{gx:.1f}" y1="{_PAD - 20}" x2="{gx:.1f}" y2="{_H - _PAD}" class="goal"/>'
-                    f'<text x="{gx + 3:.1f}" y="{_PAD - 8}" class="k">goal {o1.goal:g}</text>')
+                    f'<text x="{gx + 3:.1f}" y="{_PAD - 8}" class="k">{html.escape(o1.said())}</text>')
+    if o2.goal is not None:
+        gy = sy(-o2.signed({o2.metric: o2.goal}))
+        body.append(f'<line x1="{_PAD}" y1="{gy:.1f}" x2="{_W - 12}" y2="{gy:.1f}" class="goal"/>'
+                    f'<text x="{_W - 14}" y="{gy - 4:.1f}" class="k" text-anchor="end">{html.escape(o2.said())}</text>')
     svg1 = f'<svg viewBox="0 0 {_W} {_H}" class="chart">{"".join(body)}</svg>'
     # the hypervolume per pass
     ts = [t for t, _f, _h in fam]

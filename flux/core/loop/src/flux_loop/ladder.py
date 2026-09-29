@@ -55,8 +55,10 @@ def _digest(text: str) -> str:
 
 
 def _first(problem: "Problem"):
+    """The first limit, else the first objective: part budgets scale one metric's goal by the
+    whole's shortfall; without a limit the parts are still measured on the first objective (D660)."""
     objs = problem.objectives()
-    return objs[0] if objs else None
+    return objs.goal or (objs[0] if objs else None)
 
 
 def alone_stage(problem: "Problem") -> str:

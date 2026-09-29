@@ -455,8 +455,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         print()
         print("\n".join(task_report_lines(task, out, problem)))
 
-    objectives = ", ".join(f"{o.metric} {o.direction}" + (f" (goal {o.goal:g}{(' ' + o.unit) if o.unit else ''})" if o.goal is not None else "")
-                           for o in problem.objectives())
+    objectives = problem.objectives().describe()       # every limit, then what decides (D660)
     info = {"db": db, "parts": " ".join(problem.subgoals()) or "(one artifact)",
             "objectives": objectives or "the gate", "world": task.world or "the document alone",
             "budget": f"{request.steps} steps x {request.repair_attempts} generation attempts",

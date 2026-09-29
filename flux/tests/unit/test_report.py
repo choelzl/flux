@@ -86,7 +86,7 @@ def test_the_report_reads_the_vector_from_the_record_and_draws_the_passes(tmp_pa
     assert best_so_far(rep, "a", rep.objectives[0]) == []       # no part is measured alone here (the NLU's are)
     page = render(rep)
     for text in ("Frontier evolution", "hypervolume dominated", "the whole: best value so far", "the whole: best cost so far",
-                 "The passes", "goal 10"):
+                 "The passes", "value &gt;= 10"):
         assert text in page, text
     assert page.count("<svg") == 4 and "best value so far, and what moved it" not in page   # fronts, hypervolume, 2 best-so-far
 

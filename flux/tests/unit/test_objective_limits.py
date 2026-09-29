@@ -118,3 +118,26 @@ def test_the_single_dict_gate_is_still_one_gate():
     kept, why = PromptProblem(spec).cutoff("screen", [_sc("slow", "screen", fmax_mhz=900, area_um2=1),
                                                       _sc("fast", "screen", fmax_mhz=1100, area_um2=1)], None)
     assert [s.candidate.name for s in kept] == ["fast"] and why == "fmax_mhz below 1000"
+
+
+def test_every_display_names_every_limit(tmp_path):
+    """The task-check line, the standing the orchestrator reads, and the DSE prompt say every
+    limit, not the first alone (D660)."""
+    from flux_llm import ScriptedProposer
+    from flux_loop import LoopRequest, PromptProblem, TaskSpec, run_loop
+
+    stage = ["{python}", "-c", "import sys; x = int(sys.argv[1]); print(f'fmax_mhz={900 + 50 * x}'); "
+             "print(f'area_um2={40 + 10 * x}')", "{x}"]
+    doc = {"id": "two", "statement": "s", "space": {"x": [0, 1, 2, 3]}, "gate": {"test": ["true"]},
+           "stages": [{"name": "run", "command": stage, "metrics": ["fmax_mhz", "area_um2"]}],
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000},
+                          {"metric": "area_um2", "direction": "minimize", "goal": 60}],
+           "flow": {"dse": "llm"}}
+    prob = PromptProblem(TaskSpec.from_dict(doc))
+    words = prob.objectives().describe()
+    assert "fmax_mhz at least 1000" in words and "area_um2 at most 60" in words
+    assert prob.standing(None)["goal"] == words
+    model = ScriptedProposer(['{"points": [{"x": 2}], "why": "-"}'])
+    run_loop(prob, LoopRequest(steps=1, finalists=0, screen_only=True, prototype=False), proposer=model,
+             log=lambda _m: None)
+    assert "area_um2 at most 60" in model.prompts[0], "the DSE prompt names the second limit"
