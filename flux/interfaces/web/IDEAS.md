@@ -27,7 +27,6 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 - Backups of the server's data and every record.
 
 ## Presentation
-- Render the standings as tables and charts instead of key/value lines.
 - Keyboard shortcuts (`g l` for loops, `/` to focus a filter).
 - A check of every page at phone width.
 
