@@ -25,10 +25,14 @@ def _task(tmp_path, **extra):
 def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
     """D679: `measure` runs only the stages named, each on its own budget, concurrently, and says
     whether each meets its limits; the gate runs alone (`gate`) or first (`--gate`)."""
-    stamps = tmp_path / "stamps"
-    stamps.mkdir()
-    slow = (f"import sys, time, pathlib; t0 = time.time(); time.sleep(1.0); "
-            f"pathlib.Path({str(stamps)!r}, str(t0)).write_text(str(time.time())); ")
+    # side by side, proved without timing: while `meet` exists, each stage says it started and
+    # waits (up to 30 s) to see the other's start; run one after the other, the first would not
+    meet = tmp_path / "meet"
+    meet.mkdir()
+    slow = (f"import sys, time, pathlib; d = pathlib.Path({str(meet)!r}); me = sys.argv[1].split('/')[-1] + str(time.time())\n"
+            f"if d.is_dir():\n (d / (me + '.start')).touch(); t = time.time()\n"
+            f" while len(list(d.glob('*.start'))) < 2 and time.time() - t < 30: time.sleep(0.05)\n"
+            f" (d / (me + ('.saw' if len(list(d.glob('*.start'))) >= 2 else '.alone'))).touch()\n")
     count = {"name": "count", "command": ["{python}", "-c", slow + "print('lines=' + str(len(open(sys.argv[1]).read().split())))",
                                           "{artifact}"], "metrics_re": {"lines": r"lines=(\d+)"}, "cutoff": {"metric": "lines", "below": 9}}
     size = {"name": "size", "command": ["{python}", "-c", slow + "print('bytes=' + str(len(open(sys.argv[1]).read())))",
@@ -43,8 +47,10 @@ def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
     code, out = probe("gate", str(bad), ctx_path=ctx)
     assert code == 1 and "GATE: 1 failures" in out and "FAIL line 4" in out and "[gate probe 1 of 2]" in out
     code, out = probe("measure", str(bad), ["count", "size"], ctx_path=ctx)      # no gate: a wrong file is measured
-    (a0, a1), (b0, b1) = sorted((float(f.name), float(f.read_text())) for f in stamps.iterdir())
-    assert b0 < a1, "side by side, not one after another"
+    assert len(list(meet.glob("*.saw"))) == 2 and not list(meet.glob("*.alone")), "side by side, not one after another"
+    import shutil
+
+    shutil.rmtree(meet)                                                          # the later probes run alone
     assert "GATE" not in out and "count: lines=10" in out and "size: bytes=20" in out
     assert "limits at count: lines <= 9 -- FAILS: lines 10 fails lines <= 9 (the cutoff)" in out and code == 1
     assert "[count probe 1 of 2]" in out and "[size probe 1 of 1]" in out and "least bytes" in out

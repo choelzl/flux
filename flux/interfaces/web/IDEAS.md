@@ -28,6 +28,5 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 
 ## Presentation
 - Keyboard shortcuts (`g l` for loops, `/` to focus a filter).
-- A check of every page at phone width.
 
 Not wanted: API tokens, SSO/OIDC, a separate OS user per account.
