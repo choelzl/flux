@@ -317,6 +317,41 @@ class _Live:
         self.output, self.tools, self.words, self.thinking, self.result = output, [], "", "", ""
         self.streamed = False                      # claude: the words came token by token
         self.thought_tokens = 0                    # claude: redacted thinking, counted
+        # D676: signs of life, so a silent agent says why -- the model and version it started
+        # with, its status (requesting, an API retry, an error), a rate limit that holds it,
+        # its stderr, and how long since its last output line
+        self.agent = self.status = self.limit = self.err = ""
+        self.lines, self.last = 0, None
+
+    def feed_err(self, line: str) -> None:
+        self.err = (self.err + line)[-self.OUT_TAIL:]
+
+    def _system(self, ev: dict[str, Any]) -> None:
+        sub = str(ev.get("subtype") or "")
+        if sub == "init":
+            model, version = ev.get("model"), ev.get("claude_code_version")
+            self.agent = ", ".join(str(x) for x in (model, version and f"Claude Code {version}") if x)
+            return
+        if sub == "status":
+            self.status = str(ev.get("status") or "")
+            return
+        skip = {"type", "subtype", "uuid", "session_id"}
+        rest = ", ".join(f"{k} {v}" for k, v in ev.items() if k not in skip and v not in (None, "", [], {}))
+        self.status = f"{sub}: {rest}"[:300] if rest else sub
+
+    def _rate(self, ev: dict[str, Any]) -> None:
+        info = ev.get("rate_limit_info") or {}
+        st = str(info.get("status") or "")
+        if st in ("", "allowed"):
+            self.limit = ""
+            return
+        when = info.get("resetsAt")
+        at = ""
+        if isinstance(when, (int, float)):
+            import time as _t
+
+            at = ", resets " + _t.strftime("%a %H:%M", _t.localtime(when))
+        self.limit = f"{st} ({info.get('rateLimitType') or 'limit'}{at})"
 
     def _say(self, text: str, *, sep: str = "\n") -> None:
         self.words = (self.words + text + sep)[-self.TAIL:]
@@ -324,7 +359,9 @@ class _Live:
     def _think(self, text: str, *, sep: str = "\n") -> None:
         self.thinking = (self.thinking + text + sep)[-self.TAIL:]
 
-    def feed(self, line: str) -> None:
+    def feed(self, line: str, now: float | None = None) -> None:
+        self.lines += 1
+        self.last = now
         if self.output == "text":
             self.words = (self.words + line)[-self.TAIL:]
             return
@@ -347,11 +384,25 @@ class _Live:
                 self._say(str(part.get("text") or ""))
             elif kind == "reasoning":                # with --thinking
                 self._think(str(part.get("text") or ""))
+            elif kind == "step_start":
+                self.status = "model step"
+            elif kind == "step_finish":
+                self.status = "step done"
+            elif kind == "error":
+                err = ev.get("error") or {}
+                msg = (err.get("data") or {}).get("message") if isinstance(err, dict) else None
+                self.status = f"error: {msg or err}"[:300]
             return
         kind = ev.get("type")                        # claude stream-json
-        if kind == "stream_event":                   # --include-partial-messages: token by token
+        if kind == "system":
+            self._system(ev)
+        elif kind == "rate_limit_event":
+            self._rate(ev)
+        elif kind == "stream_event":                   # --include-partial-messages: token by token
             e = ev.get("event") or {}
             d = e.get("delta") or {}
+            if e.get("type") == "message_start":
+                self.status = "responding"
             if e.get("type") == "content_block_delta":
                 if d.get("type") == "text_delta":
                     self.streamed = True
@@ -382,8 +433,19 @@ class _Live:
                     if str(body or "").strip():
                         self.result = str(body).strip()[-self.OUT_TAIL:]
 
-    def fields(self) -> dict[str, str]:
+    def fields(self, now: float | None = None, t0: float | None = None) -> dict[str, str]:
         out = {}
+        if self.agent:
+            out["agent"] = self.agent
+        if now is not None:
+            out["output"] = (f"{self.lines} lines, the last {now - self.last:.0f}s ago" if self.last is not None
+                             else "none yet" + (f" after {now - t0:.0f}s" if t0 is not None else ""))
+        if self.status:
+            out["status"] = self.status
+        if self.limit:
+            out["rate limit"] = self.limit
+        if self.err.strip():
+            out["stderr"] = self.err
         if self.tools:
             shown = self.tools[-8:]
             first = len(self.tools) - len(shown) + 1
@@ -455,13 +517,19 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         except (BrokenPipeError, OSError):
             pass
 
+    live, out = _Live(spec.output), []
+
+    def errors() -> None:
+        for ln in proc.stderr:
+            err.append(ln)
+            live.feed_err(ln)                         # shown live too (D676)
+
     readers = [threading.Thread(target=lambda: [lines.put(ln) for ln in proc.stdout] and None, daemon=True),
-               threading.Thread(target=lambda: err.extend(proc.stderr), daemon=True)]
+               threading.Thread(target=errors, daemon=True)]
     if feed is not None:
         readers.append(threading.Thread(target=write, daemon=True))
     for t in readers:
         t.start()
-    live, out = _Live(spec.output), []
     t0 = time.monotonic()
     timed_out = False
     shown = 0.0
@@ -470,7 +538,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
             try:
                 line = lines.get(timeout=1.0)
                 out.append(line)
-                live.feed(line)
+                live.feed(line, time.monotonic())
             except queue.Empty:
                 if proc.poll() is not None and not readers[0].is_alive():
                     break
@@ -480,7 +548,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
                 timed_out = True
             if now - shown >= 1.0:                    # the row, at most once a second
                 shown = now
-                progress(elapsed=f"{now - t0:.0f}s", **live.fields())
+                progress(elapsed=f"{now - t0:.0f}s", **live.fields(now, t0))
         for t in readers:
             t.join(timeout=5)
         row.update(live.fields())

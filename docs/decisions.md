@@ -541,3 +541,13 @@ the topics above.
   Code runs with `--include-partial-messages`, so the words stream token by token. Its thinking
   arrives redacted (only an estimated size), so the row says "about N tokens". Live, both presets
   sent 11-12 updates in a short turn with tools, output, thinking or its size, and words.
+
+- **D676: a silent agent says why.** Claude Code ran 300 s with an empty row. Its stream carries
+  more than messages: `system` events (init with the model and the Claude Code version, `status:
+  requesting`, API retries) and `rate_limit_event`s (`allowed_warning`, or `rejected` with the
+  reset time; a rejected limit waits with no message). None were shown, and neither was stderr.
+  The row now shows `agent` (model, version), `status` (requesting / responding / a retry;
+  OpenCode's model step or error), `rate limit` (unless plain allowed), `stderr` (live), and
+  `output` ("none yet after 300s", or "N lines, the last Ks ago"). Live, Claude Code: none for
+  5 s, then the model and version, `requesting`, `allowed_warning (seven_day, resets Wed
+  15:00)`, `responding`, and the tool call with its output.

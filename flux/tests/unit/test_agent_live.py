@@ -98,3 +98,26 @@ def test_the_presets_stream_what_they_can_show():
 
     assert "--thinking" in agent_spec("opencode").argv and "--thinking" in agent_spec("opencode").resume
     assert "--include-partial-messages" in agent_spec("claude").argv and "--include-partial-messages" in agent_spec("claude").resume
+
+
+def test_a_silent_agent_says_why(tmp_path):
+    """D676: the model and version it started with, its status, a rate limit that holds it, its
+    stderr, and how long since its last output line -- so 300 s of nothing has a reason."""
+    live = _Live("claude")
+    assert live.fields(310.0, 10.0) == {"output": "none yet after 300s"}
+    live.feed(json.dumps({"type": "system", "subtype": "init", "model": "claude-x", "claude_code_version": "2.1"}) + "\n", 20.0)
+    live.feed(json.dumps({"type": "system", "subtype": "status", "status": "requesting"}) + "\n", 21.0)
+    live.feed(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"status": "rejected", "rateLimitType": "five_hour",
+                                                                          "resetsAt": 1790773200}}) + "\n", 22.0)
+    live.feed_err("API Error: 529 overloaded, retrying\n")
+    f = live.fields(82.0, 10.0)
+    assert f["agent"] == "claude-x, Claude Code 2.1" and f["status"] == "requesting"
+    assert f["rate limit"].startswith("rejected (five_hour, resets ") and "529" in f["stderr"]
+    assert f["output"] == "3 lines, the last 60s ago"
+    live.feed(json.dumps({"type": "system", "subtype": "api_retry", "attempt": 2, "error_status": 529, "uuid": "u"}) + "\n", 83.0)
+    assert live.fields()["status"] == "api_retry: attempt 2, error_status 529"
+    live.feed(json.dumps({"type": "rate_limit_event", "rate_limit_info": {"status": "allowed"}}) + "\n", 84.0)
+    assert "rate limit" not in live.fields()
+    oc = _Live("opencode")
+    oc.feed(json.dumps({"type": "error", "error": {"name": "UnknownError", "data": {"message": "exceeds the available context size"}}}) + "\n", 1.0)
+    assert oc.fields()["status"] == "error: exceeds the available context size"
