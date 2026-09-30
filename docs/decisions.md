@@ -711,3 +711,30 @@ the topics above.
   - the run was admitted and decided (6,033 MHz, 4.08 µm²);
   - the results, answer, turns and report endpoints answered;
   - pages checked by driving headless Firefox over Marionette.
+
+- **D684: operator notes, files, users' models and the admin's view.**
+  - **Inbox.** A run started by `flux serve` gets `FLUX_FEEDBACK_INBOX=<app>/runs/<n>.inbox.jsonl`,
+    inside the sandbox's writable `runs/`. `InboxChannel` drains lines appended since the run
+    began and joins the terminal channel (`Joined`). A note from the page reaches the next
+    prompt and is recorded like a typed one. An agent's `questions: operator` question is now a
+    journal mark, `question`, which the page turns into a banner with the time left; the answer
+    is the next note. Only the run's owner steers.
+  - **Files.** `POST /apps/{name}/files` adds files, or a zip, to an existing application under
+    an optional folder, with the same checks as an upload. A new document means a new id.
+  - **Users' models.** Settings are FLUX_REMOTE_BASE_URL/MODEL, FLUX_LLM_MODEL,
+    OLLAMA_BASE_URL, FLUX_LLM_TIMEOUT_S, and the keys FLUX_REMOTE_API_KEY, OPENROUTER_API_KEY,
+    ANTHROPIC_API_KEY and OPENAI_API_KEY. Keys are Fernet-encrypted under
+    `<data>/secret.key` (0600) and never returned. A run's environment is the server's, with the
+    user's settings over it. `FLUX_CONFIG=/dev/null`, so a run never re-reads the server's
+    flux.env. With their own endpoint, the server's FLUX_REMOTE_API_KEY(_FILE) and
+    OPENROUTER_API_KEY are dropped, so the server's key never goes to a user's URL.
+  - **Admins.** Admins read any user's applications (`?owner=`, read only) and see every
+    application (`/api/admin/apps`) with what is running.
+
+  Live, over HTTP with the Podman sandbox:
+  - my endpoint and key set through the API (the key never printed);
+  - a file added to add8;
+  - a run started and a note sent: inside the sandbox, "feedback noted from cedric: …";
+  - the account and admin pages checked in headless Firefox.
+
+  Ideas for later: `flux/interfaces/web/IDEAS.md`.

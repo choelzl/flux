@@ -89,6 +89,7 @@
             ps.uvicorn
             ps.python-multipart
             ps.httpx
+            ps.cryptography       # users' model keys, encrypted at rest (Fernet)
           ];
           pythonEnv = pkgs.python3.withPackages basePythonPackages;
 

@@ -20,8 +20,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import RunManager
-from .store import SESSION_DAYS, Store, User
+from .runs import RunManager, run_env
+from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
 COOKIE = "flux_session"
@@ -66,6 +66,14 @@ class Stop(BaseModel):
     now: bool = False
 
 
+class NoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=8000)
+
+
+class Settings(BaseModel):
+    values: dict[str, str | None]
+
+
 def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = False, max_running: int = 4) -> FastAPI:
     store = Store(data)
     runs = RunManager(store, sandbox=sandbox, max_running=max_running)
@@ -98,6 +106,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     def ws(user: User) -> Workspace:
         return Workspace(store.data, user.name)
+
+    def reader(user: User, owner: str | None) -> tuple[Workspace, User]:
+        """Whose applications a read names: one's own, or, for an admin, any user's (D684)."""
+        if not owner or owner == user.name:
+            return ws(user), user
+        if not user.admin:
+            raise HTTPException(403, "admins only")
+        other = store.user(name=owner)
+        if other is None:
+            raise HTTPException(404, "no such user")
+        return Workspace(store.data, other.name), other
 
     def run_of(run_id: int, user: User) -> dict[str, Any]:
         r = store.run(run_id)
@@ -168,6 +187,30 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "change password")
         return {"ok": "changed"}
 
+    @app.get("/api/settings")
+    def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
+        return {"values": store.settings(user), "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+
+    @app.put("/api/settings")
+    def put_settings(body: Settings, user: User = Depends(user_of)) -> dict[str, Any]:
+        try:
+            for k, v in body.values.items():
+                store.set_setting(user, k, v)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "settings", ", ".join(sorted(body.values)))
+        return {"values": store.settings(user)}
+
+    @app.get("/api/admin/apps")
+    def all_apps(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        """Every user's applications, and which are running (D684)."""
+        out = []
+        for u in store.users():
+            live = {r["app"] for r in store.runs(u) if runs.live(r)}
+            for a in Workspace(store.data, u.name).apps():
+                out.append({**a, "owner": u.name, "running": a["name"] in live})
+        return out
+
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return store.audit_log()
@@ -192,6 +235,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "upload", f"{name}: {len(got)} file(s)")
         return {"name": name, **meta}
 
+    @app.post("/api/apps/{name}/files")
+    async def add_files(name: str, files: list[UploadFile] = File(...), folder: str = Form(""),
+                        user: User = Depends(user_of)) -> dict[str, Any]:
+        got = [(f.filename or "file", await f.read()) for f in files]
+        try:
+            written = ws(user).add(name, got, folder)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "add files", f"{name}: {len(written)} file(s)")
+        return {"written": written}
+
     @app.post("/api/apps/from-text")
     def from_text(body: DocText, user: User = Depends(user_of)) -> dict[str, Any]:
         try:
@@ -213,26 +267,26 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"ok": name}
 
     @app.get("/api/apps/{name}")
-    def app_info(name: str, user: User = Depends(user_of)) -> dict[str, Any]:
-        w = ws(user)
+    def app_info(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        w, whose = reader(user, owner)
         try:
             w.app(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
-        return {"name": name, **w.meta(name), "files": w.files(name),
-                "runs": [runs.state(r) for r in store.runs(user, name)[:50]]}
+        return {"name": name, "owner": whose.name, "mine": whose.id == user.id, **w.meta(name), "files": w.files(name),
+                "runs": [runs.state(r) for r in store.runs(whose, name)[:50]]}
 
     @app.get("/api/apps/{name}/files")
-    def app_files(name: str, path: str = "", user: User = Depends(user_of)) -> list[dict[str, Any]]:
+    def app_files(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         try:
-            return ws(user).files(name, path)
+            return reader(user, owner)[0].files(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
 
     @app.get("/api/apps/{name}/file")
-    def app_file(name: str, path: str, download: bool = False, user: User = Depends(user_of)):
+    def app_file(name: str, path: str, download: bool = False, owner: str | None = None, user: User = Depends(user_of)):
         try:
-            data, is_text = ws(user).read(name, path)
+            data, is_text = reader(user, owner)[0].read(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         if download or not is_text:
@@ -257,7 +311,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        env = {**os.environ, "FLUX_SANDBOX_APP": f"{user.name}-{name}"}
+        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}-{name}"}
         if sandbox:
             env["FLUX_SANDBOX"] = "1"
         try:
@@ -298,6 +352,21 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         said = runs.stop(r, now=body.now)
         store.audit(user.name, "stop run", f"#{run_id}: {said}")
         return {"ok": said}
+
+    @app.post("/api/runs/{run_id}/notes")
+    def add_note(run_id: int, body: NoteIn, user: User = Depends(user_of)) -> dict[str, str]:
+        r = run_of(run_id, user)
+        if r["user_id"] != user.id:
+            raise HTTPException(403, "only the run's owner steers it")
+        if not runs.live(r):
+            raise HTTPException(409, "the run has ended")
+        runs.note(r, user, body.text.strip())
+        store.audit(user.name, "note", f"#{run_id}")
+        return {"ok": "sent: it reaches the next prompt, or answers the agent's open question"}
+
+    @app.get("/api/runs/{run_id}/notes")
+    def list_notes(run_id: int, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        return runs.notes(run_of(run_id, user))
 
     async def _follow(path_of, start_after: float, offset: int, request: Request, kind: str):
         """Server-sent events: each new line of a file, as it grows, from byte `offset`."""

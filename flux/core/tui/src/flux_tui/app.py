@@ -77,9 +77,14 @@ def demo_run(run: Callable[..., Any], *, tui: bool, title: str, subtitle: str = 
     if tui:
         return demo_tui(run, title=title, subtitle=subtitle,
                         print_report=print_report, info=info, feedback=True)
-    from flux_feedback import FeedbackChannel
+    import os
+
+    from flux_feedback import FeedbackChannel, InboxChannel, Joined
 
     channel = FeedbackChannel()
+    inbox = os.environ.get("FLUX_FEEDBACK_INBOX")      # D684: notes and answers from `flux serve`
+    if inbox:
+        channel = Joined([channel, InboxChannel(inbox)])
     channel.start()
     try:
         return run(channel)

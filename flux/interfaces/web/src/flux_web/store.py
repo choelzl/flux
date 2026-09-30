@@ -26,7 +26,14 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY, t REAL NOT NULL, user TEXT, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS failures (name TEXT NOT NULL, t REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (
+    user_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
 """
+
+#: What a user may set for their runs (D684): the model endpoint, and keys, which are secret --
+#: stored encrypted, never sent back, only handed to that user's runs.
+PUBLIC_SETTINGS = ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_MODEL", "OLLAMA_BASE_URL", "FLUX_LLM_TIMEOUT_S")
+SECRET_SETTINGS = ("FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
 
 
 @dataclass
@@ -174,6 +181,41 @@ class Store:
             r = db.execute("SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id WHERE r.id = ?",
                            (run_id,)).fetchone()
         return dict(r) if r else None
+
+    # ---- a user's model settings (D684)
+    def _fernet(self):
+        from cryptography.fernet import Fernet
+
+        keyfile = self.data / "secret.key"
+        if not keyfile.exists():
+            keyfile.write_bytes(Fernet.generate_key())
+            os.chmod(keyfile, 0o600)
+        return Fernet(keyfile.read_bytes())
+
+    def set_setting(self, user: User, key: str, value: str | None) -> None:
+        if key not in PUBLIC_SETTINGS + SECRET_SETTINGS:
+            raise ValueError(f"{key} is not a setting; settings: {', '.join(PUBLIC_SETTINGS + SECRET_SETTINGS)}")
+        with self._db() as db:
+            if value is None or not str(value).strip():
+                db.execute("DELETE FROM settings WHERE user_id = ? AND key = ?", (user.id, key))
+                return
+            value = str(value).strip()
+            if key == "FLUX_REMOTE_BASE_URL" and not value.startswith(("http://", "https://")):
+                raise ValueError("the endpoint is an http(s) URL")
+            stored = self._fernet().encrypt(value.encode()).decode() if key in SECRET_SETTINGS else value
+            db.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (user.id, key, stored))
+
+    def settings(self, user: User, reveal: bool = False) -> dict[str, str]:
+        """The user's settings; a secret as "set" unless `reveal` (for their runs only)."""
+        with self._db() as db:
+            rows = db.execute("SELECT key, value FROM settings WHERE user_id = ?", (user.id,)).fetchall()
+        out = {}
+        for r in rows:
+            if r["key"] in SECRET_SETTINGS:
+                out[r["key"]] = self._fernet().decrypt(r["value"].encode()).decode() if reveal else "set"
+            else:
+                out[r["key"]] = r["value"]
+        return out
 
     # ---- audit
     def audit(self, user: str | None, action: str, detail: str = "") -> None:

@@ -65,3 +65,5 @@ dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--pa
 @media (max-width: 800px) { .split { grid-template-columns: 1fr; } main { padding: 12px; } }
 .grid2 { display: grid; grid-template-columns: max-content 1fr; gap: 8px 10px; align-items: center; margin: 10px 0 14px; }
 .grid2 input { width: 100%; }
+.inline { display: flex; gap: 6px; align-items: center; }
+.inline input { flex: 1; }

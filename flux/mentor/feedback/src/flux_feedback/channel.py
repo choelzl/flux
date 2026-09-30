@@ -16,7 +16,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence, TextIO
 
-__all__ = ["FeedbackChannel", "Note", "drain_guidance", "reload_notes", "render_guidance", "scripted_channel"]
+__all__ = ["FeedbackChannel", "InboxChannel", "Joined", "Note", "drain_guidance", "reload_notes", "render_guidance",
+           "scripted_channel"]
 
 _LABEL = (
     "HUMAN GUIDANCE (typed by the operator during this run -- advisory directions, not "
@@ -92,6 +93,73 @@ class FeedbackChannel:
         """Stop accepting notes. The daemon thread dies with the process; this only makes the
         cutoff explicit so a note typed during report printing is not half-acknowledged."""
         self._stopped = True
+
+
+class InboxChannel:
+    """Notes appended to a JSON-lines file by another process -- `flux serve`'s page (D684):
+    `{"text": ..., "by": ...}` per line. `drain()` returns the lines added since the last drain;
+    a line still being written waits for the next."""
+
+    def __init__(self, path: str, say: Callable[[str], None] = print) -> None:
+        self.path, self._say, self._offset = path, say, 0
+        self.active = True
+        try:
+            import os
+
+            self._offset = os.path.getsize(path)          # what was there before this run is not this run's
+        except OSError:
+            pass
+
+    def start(self) -> None:
+        self._say(f"feedback: notes and answers also arrive from {self.path}")
+
+    def drain(self) -> list[Note]:
+        import json
+
+        try:
+            with open(self.path, "rb") as fh:
+                fh.seek(self._offset)
+                data = fh.read()
+        except OSError:
+            return []
+        end = data.rfind(b"\n")
+        if end < 0:
+            return []
+        self._offset += end + 1
+        notes = []
+        for line in data[:end].splitlines():
+            try:
+                doc = json.loads(line)
+            except ValueError:
+                continue
+            text = str(doc.get("text") or "").strip()
+            if text:
+                by = str(doc.get("by") or "").strip()
+                notes.append(Note(text=text, received_at=float(doc.get("t") or time.time())))
+                self._say(f'feedback noted{" from " + by if by else ""}: "{text[:200]}" -- it reaches the next proposal prompt')
+        return notes
+
+    def close(self) -> None:
+        pass
+
+
+class Joined:
+    """Several channels drained as one (the terminal and the inbox)."""
+
+    def __init__(self, channels: list) -> None:
+        self.channels = [c for c in channels if c is not None]
+        self.active = any(getattr(c, "active", True) for c in self.channels)
+
+    def start(self) -> None:
+        for c in self.channels:
+            c.start()
+
+    def drain(self) -> list[Note]:
+        return sorted((n for c in self.channels for n in c.drain()), key=lambda n: n.received_at)
+
+    def close(self) -> None:
+        for c in self.channels:
+            c.close()
 
 
 def scripted_channel(*texts: str):

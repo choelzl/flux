@@ -1160,6 +1160,9 @@ class PromptProblem(Problem):
                 import time
 
                 state.say(f"QUESTION from the coding agent (answer at the prompt line within {agent.wait_s:.0f}s):\n{question}")
+                from flux_profile import mark
+
+                mark("question", json.dumps({"question": question, "wait_s": agent.wait_s, "asked": time.time()}))   # D684
                 until = time.monotonic() + agent.wait_s
                 while time.monotonic() < until:
                     before = len(state.human_notes)

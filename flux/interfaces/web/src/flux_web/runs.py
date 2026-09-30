@@ -18,7 +18,24 @@ from typing import Any
 
 from .store import Store, User
 
-__all__ = ["RunManager"]
+__all__ = ["RunManager", "run_env"]
+
+#: The server's own model keys: never in the run of a user who brought their own endpoint.
+_SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
+
+
+def run_env(store: Store, user: User) -> dict[str, str]:
+    """The environment of a user's run or check (D684): the server's, with the user's model
+    settings over it. A run never reads the server's flux.env itself (FLUX_CONFIG): the server
+    loaded it once, and a user with their own endpoint gets none of the server's keys."""
+    env = {**os.environ, "FLUX_CONFIG": os.devnull}
+    mine = store.settings(user, reveal=True)
+    if mine.get("FLUX_REMOTE_BASE_URL"):
+        for k in _SERVER_KEYS:
+            env.pop(k, None)
+        env["FLUX_LLM_REMOTE"] = "1"
+    env.update(mine)
+    return env
 
 
 class RunManager:
@@ -45,7 +62,10 @@ class RunManager:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
-        env = {**os.environ, "FLUX_SANDBOX_APP": f"{user.name}-{app}", "PYTHONUNBUFFERED": "1"}
+        inbox = log.with_suffix(".inbox.jsonl")
+        inbox.touch()
+        env = {**run_env(self.store, user), "FLUX_SANDBOX_APP": f"{user.name}-{app}", "PYTHONUNBUFFERED": "1",
+               "FLUX_FEEDBACK_INBOX": str(inbox)}                  # D684: notes and answers from the page
         env.pop("FLUX_SANDBOX_ALLOW", None)
         if options.get("allow"):
             env["FLUX_SANDBOX_ALLOW"] = ",".join(str(h).strip() for h in options["allow"] if str(h).strip())
@@ -110,6 +130,27 @@ class RunManager:
     def events_path(self, run: dict[str, Any]) -> str | None:
         _cid, rdir = self.campaign(run)
         return os.path.join(rdir, "events.jsonl") if rdir else None
+
+    def inbox(self, run: dict[str, Any]) -> Path:
+        return Path(run["log"]).with_suffix(".inbox.jsonl")
+
+    def note(self, run: dict[str, Any], user: User, text: str) -> None:
+        """A note (or an answer to an agent's question) into the run's inbox (D684)."""
+        with open(self.inbox(run), "a") as fh:
+            fh.write(json.dumps({"text": text, "by": user.name, "t": time.time()}) + "\n")
+
+    def notes(self, run: dict[str, Any]) -> list[dict[str, Any]]:
+        try:
+            lines = self.inbox(run).read_text().splitlines()
+        except OSError:
+            return []
+        out = []
+        for ln in lines:
+            try:
+                out.append(json.loads(ln))
+            except ValueError:
+                pass
+        return out
 
     def turns_path(self, run: dict[str, Any]) -> str | None:
         _cid, rdir = self.campaign(run)

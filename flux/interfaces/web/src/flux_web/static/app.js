@@ -96,7 +96,7 @@ function runsTable(runs) {
   if (!runs.length) return h("p", { class: "muted" }, "No run yet.");
   return h("table", {}, h("tr", {}, h("th", {}, "#"), h("th", {}, "Application"), h("th", {}, "State"), h("th", {}, "Passes"),
       h("th", {}, "Started"), h("th", {}, "By")),
-    runs.map(r => h("tr", {}, h("td", {}, h("a", { href: `#/run/${r.id}` }, `#${r.id}`)), h("td", {}, h("a", { href: `#/app/${r.app}` }, r.app)),
+    runs.map(r => h("tr", {}, h("td", {}, h("a", { href: `#/run/${r.id}` }, `#${r.id}`)), h("td", {}, h("a", { href: r.user && me && r.user !== me.name ? `#/u/${encodeURIComponent(r.user)}/app/${encodeURIComponent(r.app)}` : `#/app/${encodeURIComponent(r.app)}` }, r.app)),
       h("td", {}, stateOf(r)), h("td", {}, r.passes ?? ""), h("td", {}, when(r.started)), h("td", { class: "muted" }, r.user || ""))));
 }
 
@@ -117,27 +117,29 @@ async function newPage() {
       } }, "Create")), err));
 }
 
-async function appPage(name) {
-  const info = await api(`/apps/${encodeURIComponent(name)}`);
+async function appPage(name, owner) {
+  const q = owner ? `&owner=${encodeURIComponent(owner)}` : "";
+  const info = await api(`/apps/${encodeURIComponent(name)}?${q.slice(1)}`);
+  const mine = info.mine;
   const err = errorBox();
   const viewer = h("div", {});
   const out = h("pre", { class: "log", style: "display:none" });
   async function open(path, dir) {
     viewer.replaceChildren(h("p", { class: "muted" }, "…"));
     if (dir) {
-      const list = await api(`/apps/${encodeURIComponent(name)}/files?path=${encodeURIComponent(path)}`);
+      const list = await api(`/apps/${encodeURIComponent(name)}/files?path=${encodeURIComponent(path)}${q}`);
       viewer.replaceChildren(h("h2", {}, path + "/"), fileList(list));
       return;
     }
-    const r = await fetch(`/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`, { credentials: "same-origin" });
+    const r = await fetch(`/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}${q}`, { credentials: "same-origin" });
     if ((r.headers.get("content-type") || "").startsWith("text/")) {
-      const ta = h("textarea", { spellcheck: "false", value: await r.text() });
+      const ta = h("textarea", { spellcheck: "false", value: await r.text(), readonly: !mine });
       const msg = h("span", { class: "muted" });
       viewer.replaceChildren(h("h2", {}, path), ta, h("div", { class: "form-line" },
-        h("button", { onclick: async () => { try { await api(`/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`, { method: "PUT", body: { text: ta.value } }); msg.textContent = "saved"; } catch (x) { msg.textContent = x.message; } } }, "Save"),
-        " ", h("a", { href: `/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}&download=1` }, "download"), " ", msg));
+        !mine ? "" : h("button", { onclick: async () => { try { await api(`/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`, { method: "PUT", body: { text: ta.value } }); msg.textContent = "saved"; } catch (x) { msg.textContent = x.message; } } }, "Save"),
+        " ", h("a", { href: `/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}&download=1${q}` }, "download"), " ", msg));
     } else {
-      viewer.replaceChildren(h("h2", {}, path), h("a", { href: `/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}&download=1` }, "download (binary)"));
+      viewer.replaceChildren(h("h2", {}, path), h("a", { href: `/api/apps/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}&download=1${q}` }, "download (binary)"));
     }
   }
   function fileList(list) {
@@ -164,16 +166,28 @@ async function appPage(name) {
       try { const r = await api(`/apps/${encodeURIComponent(name)}/check`, { method: "POST" }); out.textContent = (r.ok ? "" : "NOT READY\n") + r.output; }
       catch (x) { out.textContent = x.message; }
     } }, "Check the document"), err, out);
+  const addFiles = h("input", { type: "file", multiple: true });
+  const addFolder = h("input", { placeholder: "into folder (optional)", size: 18 });
+  const addMsg = h("span", { class: "muted" });
+  const adder = h("div", { class: "form-line" }, h("h2", {}, "Add files"), addFiles, h("div", { class: "form-line" }, addFolder, " ",
+    h("button", { onclick: async () => {
+      if (!addFiles.files.length) { addMsg.textContent = "choose files or a .zip"; return; }
+      const form = new FormData(); form.append("folder", addFolder.value);
+      for (const f of addFiles.files) form.append("files", f, f.name);
+      try { const r = await api(`/apps/${encodeURIComponent(name)}/files`, { method: "POST", form }); addMsg.textContent = `added ${r.written.length}`; route(); }
+      catch (x) { addMsg.textContent = x.message; }
+    } }, "Add")), addMsg);
   show(
-    h("h1", {}, name, " ", h("span", { class: "muted mono" }, info.document || "")),
+    h("h1", {}, name, " ", h("span", { class: "muted mono" }, info.document || ""), mine ? "" : h("span", { class: "pill" }, ` ${info.owner}'s, read only`)),
     h("div", { class: "row" },
       h("div", { class: "panel", style: "min-width:260px" }, h("h2", {}, "Files"), fileList(info.files),
-        h("div", { class: "form-line" }, h("button", { class: "danger", onclick: async () => {
+        mine ? adder : "",
+        mine ? h("div", { class: "form-line" }, h("button", { class: "danger", onclick: async () => {
           if (!confirm(`Delete ${name} and its records?`)) return;
           try { await api(`/apps/${encodeURIComponent(name)}`, { method: "DELETE" }); location.hash = "#/"; } catch (x) { err.textContent = x.message; }
-        } }, "Delete application"))),
+        } }, "Delete application")) : ""),
       h("div", { class: "grow panel" }, viewer)),
-    h("div", { class: "panel" }, h("h2", {}, "Run"), runForm),
+    mine ? h("div", { class: "panel" }, h("h2", {}, "Run"), runForm) : "",
     h("h2", {}, "Runs"), h("div", { class: "panel" }, runsTable(info.runs)));
   if (info.document) open(info.document, false);
 }
@@ -190,7 +204,8 @@ async function runPage(id) {
     tabBar.replaceChildren(...tabs.map(t => h("button", { class: t === tab ? "on" : "", onclick: () => { tab = t; drawTabs(); drawBody(); } }, t)));
   }
   function drawHead() {
-    head.replaceChildren(h("h1", {}, `Run #${id} `, h("a", { href: `#/app/${state.app}` }, state.app), " ", stateOf(state)),
+    head.replaceChildren(h("h1", {}, `Run #${id} `, h("a", { href: state.user !== me.name ? `#/u/${encodeURIComponent(state.user)}/app/${encodeURIComponent(state.app)}` : `#/app/${encodeURIComponent(state.app)}` }, state.app),
+        state.user !== me.name ? h("span", { class: "muted" }, ` (${state.user}'s)`) : "", " ", stateOf(state)),
       h("p", { class: "muted" }, `started ${when(state.started)}`, state.ended ? `, ended ${when(state.ended)}` : "",
         state.passes != null ? `, ${state.passes} pass(es)` : "", state.container ? `, sandbox ${state.container}` : ""),
       state.live ? h("div", { class: "form-line" },
@@ -202,6 +217,27 @@ async function runPage(id) {
   }
   // the live tree, from the journal
   const nodes = new Map(); const roots = []; const standings = new Map(); let selected = null;
+  let question = null;                      // the agent's open question (D684)
+  const banner = h("div", {});
+  const noteText = h("textarea", { style: "min-height:70px", placeholder: "A note for the run: it joins the next prompt, or answers the agent's open question" });
+  const noteMsg = h("span", { class: "muted" });
+  const noteList = h("div", {});
+  async function sendNote(text) {
+    try { const r = await api(`/runs/${id}/notes`, { method: "POST", body: { text } }); noteMsg.textContent = r.ok; noteText.value = ""; question = null; drawBanner(); drawNotes(); }
+    catch (x) { noteMsg.textContent = x.message; }
+  }
+  async function drawNotes() {
+    const notes = await api(`/runs/${id}/notes`).catch(() => []);
+    noteList.replaceChildren(...notes.slice(-20).reverse().map(n => h("div", {}, h("span", { class: "muted" }, `${when(n.t)} ${n.by}: `), n.text)));
+  }
+  function drawBanner() {
+    if (!question || !state.live) { banner.replaceChildren(); return; }
+    const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
+    const ans = h("textarea", { style: "min-height:60px" });
+    banner.replaceChildren(h("div", { class: "panel", style: "border-color:var(--warn)" },
+      h("h2", {}, "The agent asks", left ? h("span", { class: "muted" }, ` (answer within ${left}s, or it decides)`) : ""),
+      h("pre", {}, question.question), ans, h("div", { class: "form-line" }, h("button", { class: "primary", onclick: () => sendNote(ans.value) }, "Answer"))));
+  }
   const treeBox = h("div", { class: "tree" }); const detail = h("div", { class: "detail" }); const stand = h("div", {});
   function onEvent(e) {
     if (e.ev === "start") {
@@ -212,6 +248,7 @@ async function runPage(id) {
     } else if (e.ev === "update") { const n = nodes.get(e.id); if (n) Object.assign(n.fields, e.fields); }
     else if (e.ev === "end") { const n = nodes.get(e.id); if (n) { n.t1 = e.t; n.seconds = e.seconds; n.failed = e.failed; n.output = e.output; } }
     else if (e.ev === "publish") standings.set(e.key, e.payload);
+    else if (e.ev === "mark" && e.name === "question") { try { question = JSON.parse(e.why); drawBanner(); } catch (_) {} }
   }
   function drawTree() {
     const now = Date.now() / 1000;
@@ -252,8 +289,10 @@ async function runPage(id) {
   });
   cleanup.push(() => { es.close(); ls.close(); clearInterval(tick); });
 
+  const notesPanel = () => state.live && state.user === me.name ? h("div", { class: "panel" }, h("h2", {}, "Notes to the run"), noteText,
+    h("div", { class: "form-line" }, h("button", { onclick: () => noteText.value.trim() && sendNote(noteText.value.trim()) }, "Send"), " ", noteMsg), noteList) : "";
   async function drawBody() {
-    if (tab === "Live") { body.replaceChildren(h("div", { class: "split" }, h("div", { class: "panel" }, treeBox, stand), h("div", { class: "panel" }, detail))); drawTree(); }
+    if (tab === "Live") { body.replaceChildren(h("div", { class: "split" }, h("div", { class: "panel" }, treeBox, stand), h("div", {}, h("div", { class: "panel" }, detail), notesPanel()))); drawTree(); drawNotes(); }
     else if (tab === "Log") { body.replaceChildren(h("div", { class: "panel" }, logBox)); logBox.scrollTop = logBox.scrollHeight; }
     else if (tab === "Agent turns") {
       const { turns } = await api(`/runs/${id}/turns`);
@@ -284,12 +323,12 @@ async function runPage(id) {
     }
   }
   drawHead(); drawTabs(); drawBody();
-  show(head, tabBar, body);
+  show(head, banner, tabBar, body);
 }
 
 // ---------------------------------------------------------------- admin
 async function adminPage() {
-  const [users, audit, runs] = await Promise.all([api("/users"), api("/audit"), api("/runs?everyone=1")]);
+  const [users, audit, runs, allApps] = await Promise.all([api("/users"), api("/audit"), api("/runs?everyone=1"), api("/admin/apps")]);
   const err = errorBox();
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
   const admin = h("input", { type: "checkbox" });
@@ -303,14 +342,45 @@ async function adminPage() {
         err.textContent = "";
         try { await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: admin.checked ? "admin" : "user" } }); route(); } catch (x) { err.textContent = x.message; }
       } }, "Add user")), err),
+    h("h2", {}, "Running now"), h("div", { class: "panel" }, runsTable(runs.filter(r => r.live))),
+    h("h2", {}, "Every application"), h("div", { class: "panel" }, allApps.length ? h("table", {},
+      h("tr", {}, h("th", {}, "User"), h("th", {}, "Application"), h("th", {}, "Document"), h("th", {}, "")),
+      allApps.map(a => h("tr", {}, h("td", {}, a.owner), h("td", {}, h("a", { href: `#/u/${encodeURIComponent(a.owner)}/app/${encodeURIComponent(a.name)}` }, a.name)),
+        h("td", { class: "mono" }, a.document || ""), h("td", {}, a.running ? h("span", { class: "pill live" }, "running") : "")))) : h("p", { class: "muted" }, "None yet.")),
     h("h2", {}, "Every run"), h("div", { class: "panel" }, runsTable(runs.slice(0, 50))),
     h("h2", {}, "Audit"), h("div", { class: "panel" }, h("table", {}, audit.slice(0, 100).map(a => h("tr", {}, h("td", { class: "muted" }, when(a.t)), h("td", {}, a.user || ""), h("td", {}, a.action), h("td", { class: "mono" }, a.detail))))));
 }
 
 async function accountPage() {
   const pw = h("input", { type: "password", autocomplete: "new-password" }); const msg = h("p", {});
-  show(h("h1", {}, "Account"), h("div", { class: "panel" }, h("label", {}, "New password", pw), " ",
-    h("button", { onclick: async () => { try { await api("/password", { method: "POST", body: { text: pw.value } }); msg.textContent = "changed"; } catch (x) { msg.textContent = x.message; } } }, "Change"), msg));
+  const st = await api("/settings");
+  const smsg = h("p", {});
+  const inputs = {};
+  const labels = { FLUX_REMOTE_BASE_URL: "Model endpoint (OpenAI-compatible URL)", FLUX_REMOTE_MODEL: "Model name on it",
+    FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_LLM_TIMEOUT_S: "Seconds per model request",
+    FLUX_REMOTE_API_KEY: "Endpoint key", OPENROUTER_API_KEY: "OpenRouter key", ANTHROPIC_API_KEY: "Anthropic key (Claude Code agents)",
+    OPENAI_API_KEY: "OpenAI key (Codex agents)" };
+  const row = (k, secret) => {
+    const cur = st.values[k];
+    inputs[k] = h("input", { type: secret ? "password" : "text", autocomplete: "off", size: 44,
+      placeholder: secret ? (cur ? "set (type to replace)" : "not set") : "", value: secret ? "" : (cur || "") });
+    return [h("span", {}, labels[k] || k), h("span", { class: "inline" }, inputs[k], cur ? h("button", { onclick: () => save({ [k]: null }) }, "Clear") : "")];
+  };
+  async function save(values) {
+    try { await api("/settings", { method: "PUT", body: { values } }); route(); } catch (x) { smsg.textContent = x.message; }
+  }
+  show(h("h1", {}, "Account"),
+    h("div", { class: "panel" }, h("h2", {}, "Model for my runs"),
+      h("p", { class: "muted" }, "Empty: the server's model. With your own endpoint, none of the server's keys go to your runs. Keys are stored encrypted and never shown again."),
+      h("div", { class: "grid2" }, ...st.public.map(k => row(k, false)).flat(), ...st.secret.map(k => row(k, true)).flat()),
+      h("button", { class: "primary", onclick: () => {
+        const values = {};
+        for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
+        for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
+        save(values);
+      } }, "Save"), smsg),
+    h("div", { class: "panel" }, h("h2", {}, "Password"), h("label", {}, "New password", pw), " ",
+      h("button", { onclick: async () => { try { await api("/password", { method: "POST", body: { text: pw.value } }); msg.textContent = "changed"; } catch (x) { msg.textContent = x.message; } } }, "Change"), msg));
 }
 
 // ---------------------------------------------------------------- routing
@@ -323,6 +393,7 @@ async function route() {
   try {
     let m;
     if ((m = hash.match(/^#\/app\/([^/]+)$/))) return await appPage(decodeURIComponent(m[1]));
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)$/))) return await appPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]));
     if ((m = hash.match(/^#\/run\/(\d+)$/))) return await runPage(m[1]);
     if (hash === "#/new") return await newPage();
     if (hash === "#/admin" && me.role === "admin") return await adminPage();

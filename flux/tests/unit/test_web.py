@@ -119,3 +119,85 @@ def test_a_run_started_from_the_web_is_followed_through_its_journal(server, tmp_
     assert _client(app, "ada", "correct horse battery").get(f"/api/runs/{run}").status_code == 200, "an admin reads every run"
     assert bob.post(f"/api/runs/{run}/stop", json={"now": True}, headers=H).json()["ok"] == "not running"
     assert Path(app.state.store.run(run)["log"]).read_text()
+
+
+def test_files_are_added_to_an_existing_application(server):
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))]
+    assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
+    r = bob.post("/api/apps/x/files", data={"folder": "notes"}, files=[("files", ("a.md", b"# a")), ("files", ("b.md", b"# b"))], headers=H)
+    assert r.status_code == 200 and r.json()["written"] == ["notes/a.md", "notes/b.md"], r.text
+    assert bob.get("/api/apps/x/file", params={"path": "notes/b.md"}).text == "# b"
+    assert bob.post("/api/apps/x/files", files=[("files", (".flux-app.json", b"{}"))], headers=H).status_code == 400
+    assert bob.post("/api/apps/x/files", data={"folder": "../.."}, files=[("files", ("e", b"x"))], headers=H).status_code == 400
+    r = bob.post("/api/apps/x/files", files=[("files", ("x.problem.yaml", b"id: renamed\n"))], headers=H)
+    assert r.status_code == 200 and bob.get("/api/apps").json()[0]["id"] == "renamed", "a new document, a new id"
+
+
+def test_an_admin_sees_every_application_read_only(server):
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\n"))], headers=H)
+    ada = _client(app, "ada", "correct horse battery")
+    everyone = ada.get("/api/admin/apps").json()
+    assert [(a["owner"], a["name"]) for a in everyone] == [("bob", "x")]
+    info = ada.get("/api/apps/x", params={"owner": "bob"}).json()
+    assert info["owner"] == "bob" and info["mine"] is False
+    assert ada.get("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}).text == "id: x\n"
+    assert bob.get("/api/apps/x", params={"owner": "ada"}).status_code == 403, "users read only their own"
+    assert bob.get("/api/admin/apps").status_code == 403
+
+
+def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeypatch):
+    from flux_web.runs import run_env
+
+    app, tmp = server
+    monkeypatch.setenv("FLUX_REMOTE_API_KEY", "the-servers-key")
+    monkeypatch.setenv("FLUX_REMOTE_API_KEY_FILE", "/server/key")
+    bob = _client(app, "bob", "another long secret")
+    assert bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "ftp://x"}}, headers=H).status_code == 400
+    assert bob.put("/api/settings", json={"values": {"PATH": "/evil"}}, headers=H).status_code == 400
+    r = bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "https://bob.example/v1", "FLUX_REMOTE_MODEL": "m",
+                                                   "ANTHROPIC_API_KEY": "sk-bob"}}, headers=H)
+    assert r.status_code == 200 and r.json()["values"]["ANTHROPIC_API_KEY"] == "set"
+    assert "sk-bob" not in bob.get("/api/settings").text
+    assert b"sk-bob" not in (tmp / "data" / "flux-web.db").read_bytes(), "encrypted at rest"
+    store = app.state.store
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_REMOTE_BASE_URL"] == "https://bob.example/v1" and env["ANTHROPIC_API_KEY"] == "sk-bob"
+    assert "FLUX_REMOTE_API_KEY" not in env and "FLUX_REMOTE_API_KEY_FILE" not in env, "the server's key never goes to bob's endpoint"
+    assert env["FLUX_LLM_REMOTE"] == "1" and env["FLUX_CONFIG"].startswith("/dev/null")
+    ada_env = run_env(store, store.user(name="ada"))
+    assert ada_env["FLUX_REMOTE_API_KEY"] == "the-servers-key", "no settings: the server's model"
+    bob.put("/api/settings", json={"values": {"ANTHROPIC_API_KEY": None}}, headers=H)
+    assert "ANTHROPIC_API_KEY" not in bob.get("/api/settings").json()["values"]
+
+
+def test_notes_reach_a_live_run_through_its_inbox(server, tmp_path):
+    import json as _json
+
+    app, _ = server
+    store, runs = app.state.store, app.state.runs
+    bob = store.user(name="bob")
+    log = tmp_path / "r.log"
+    log.write_text("")
+    import subprocess
+    import sys
+
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        rid = store.add_run(bob, "x", str(tmp_path / "x.db"), str(log), ["x"], {})
+        store.set_run(rid, pid=proc.pid)
+        c = _client(app, "bob", "another long secret")
+        assert c.post(f"/api/runs/{rid}/notes", json={"text": "try carry-select"}, headers=H).status_code == 200
+        line = _json.loads((tmp_path / "r.inbox.jsonl").read_text())
+        assert line["text"] == "try carry-select" and line["by"] == "bob"
+        assert [n["text"] for n in c.get(f"/api/runs/{rid}/notes").json()] == ["try carry-select"]
+        ada = _client(app, "ada", "correct horse battery")
+        assert ada.post(f"/api/runs/{rid}/notes", json={"text": "x"}, headers=H).status_code == 403, "only the owner steers"
+    finally:
+        proc.kill()
+        proc.wait()
+    store.set_run(rid, ended=1.0)
+    assert c.post(f"/api/runs/{rid}/notes", json={"text": "late"}, headers=H).status_code == 409

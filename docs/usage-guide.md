@@ -134,8 +134,8 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
-- **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page. Every
-  file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
+- **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
+  files (or a `.zip`) to an existing one. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
   sandbox.
 - **Runs:** passes, screen only, and a network allowlist, always sandboxed. Stop one after its
   pass or at once.
@@ -145,10 +145,17 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Log:** the run's output as it grows.
   - **Agent turns:** each prompt, reply and tool call.
   - **Results:** every measured design, the answer, and the report.
+  - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
+    When an agent asks (`questions: operator`), the page shows the question and its time left,
+    and the answer goes back to the agent.
+- **Model for my runs (Account):** an endpoint, a model and keys per user. Keys are stored
+  encrypted (`secret.key` beside the server's data) and never shown again. With their own
+  endpoint, none of the server's keys go to that user's runs. Empty: the server's model.
 - **Accounts:** passwords are hashed with scrypt; five failures lock a name for ten minutes;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
-  A user sees only their own applications and runs. An admin manages users and reads every run
-  and the audit trail.
+  A user sees only their own applications and runs. An admin manages users, sees every
+  application (read only) and every run (and may stop it), what is running now, and the audit
+  trail.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
 - **Limits:** `--max-running` runs at once per user (4).

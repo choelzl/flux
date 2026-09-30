@@ -93,6 +93,34 @@ class Workspace:
         (d / ".flux-app.json").write_text(json.dumps(meta))
         return meta
 
+    def add(self, name: str, files: list[tuple[str, bytes]], sub: str = "") -> list[str]:
+        """Files added to (or replacing files in) an existing application, under `sub`; a single
+        .zip is unpacked. The same checks as a new one."""
+        d = self.app(name)
+        if len(files) == 1 and files[0][0].lower().endswith(".zip"):
+            files = _unzip(files[0][1])
+        if not files:
+            raise WorkspaceError("no files")
+        if len(files) > MAX_FILES or sum(len(b) for _p, b in files) > MAX_BYTES:
+            raise WorkspaceError(f"at most {MAX_FILES} files and {MAX_BYTES // 2**20} MB")
+        prefix = safe_rel(sub) + "/" if sub.strip("/") else ""
+        rels = [safe_rel(prefix + p) for p, _b in files]
+        written = []
+        for rel, (_p, content) in zip(rels, files):
+            if rel == ".flux-app.json":
+                raise WorkspaceError("that name is the server's")
+            target = self.path(name, rel)
+            if target.is_dir():
+                raise WorkspaceError(f"{rel!r} is a folder")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+            written.append(rel)
+        meta = self.meta(name)
+        if meta.get("document") in written:
+            meta["id"] = _doc_id(d / meta["document"]) or meta.get("id")
+            (d / ".flux-app.json").write_text(json.dumps(meta))
+        return written
+
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
         rel = safe_rel(filename)
         if not rel.endswith(DOC_SUFFIXES):
