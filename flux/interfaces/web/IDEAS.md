@@ -10,9 +10,9 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 - Clone an application, or start from another user's (with their consent).
 
 ## Following runs
+- Notifications beyond the page (D688 has the page, the bell, the desktop): e-mail or a webhook.
+- The workbench's history: how its tools and notes changed, run by run.
 - Compare runs: frontiers and best-so-far of two campaigns overlaid.
-- The workbench browser: the agents' tools and notes per application, with their history.
-- Notifications when a run ends, fails or an agent asks (browser, e-mail, a webhook).
 - A pass timeline: what each pass tried, admitted and refused, from the record.
 - Probes on the agent-turn view: which gate and stage checks the agent ran, and their results.
 - Resume / "one more pass" on an ended run; a run's options edited before it restarts.

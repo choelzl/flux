@@ -46,7 +46,11 @@ class RunManager:
     # ---- start
     def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str,
               options: dict[str, Any]) -> int:
-        if sum(1 for r in self.store.runs(user) if self.live(r)) >= self.max_running:
+        mine = self.store.runs(user)
+        busy = next((r for r in mine if r["app"] == app and self.live(r)), None)
+        if busy is not None:             # one record, one writer (D688)
+            raise ValueError(f"run #{busy['id']} of {app} is running; stop it first (runs of one application share its record)")
+        if sum(1 for r in mine if self.live(r)) >= self.max_running:
             raise ValueError(f"at most {self.max_running} runs at once per user")
         out = app_dir / "out"
         out.mkdir(exist_ok=True)
@@ -122,10 +126,44 @@ class RunManager:
                                 "campaign": cid, "options": json.loads(run.get("options") or "{}")}
         if cid:
             st = ops.status(cid, run["db"])
-            info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
-                        container=st.get("container"), last_pass_ended=st.get("last_pass_ended"))
+            # the registration is the campaign's latest run's: this run's only when it started with it (D688)
+            if st.get("started") and abs(float(st["started"]) - float(run["started"])) < 300:
+                info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
+                            container=st.get("container"), last_pass_ended=st.get("last_pass_ended"))
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
+        info["question"] = self.open_question(run, rdir) if info["live"] else None
         return info
+
+    def open_question(self, run: dict[str, Any], rdir: str | None) -> dict[str, Any] | None:
+        """The agent's question still waiting for the operator (D688): the journal's last
+        `question` mark of this run, when no note came after it and its time is not up."""
+        if not rdir:
+            return None
+        path = os.path.join(rdir, "events.jsonl")
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(max(0, os.path.getsize(path) - 256 * 1024))
+                tail = fh.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            return None
+        asked = None
+        for line in reversed(tail):
+            if '"question"' not in line:
+                continue
+            try:
+                e = json.loads(line)
+                if e.get("ev") == "mark" and e.get("name") == "question" and e.get("t", 0) >= run["started"] - 1:
+                    asked = json.loads(e["why"])
+                    break
+            except ValueError:
+                continue
+        if not asked:
+            return None
+        if time.time() > float(asked.get("asked", 0)) + float(asked.get("wait_s", 0)):
+            return None
+        if any(float(n.get("t", 0)) >= float(asked.get("asked", 0)) for n in self.notes(run)):
+            return None
+        return asked
 
     def events_path(self, run: dict[str, Any]) -> str | None:
         _cid, rdir = self.campaign(run)

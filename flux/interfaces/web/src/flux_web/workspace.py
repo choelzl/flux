@@ -152,6 +152,36 @@ class Workspace:
                         "size": st.st_size, "mtime": st.st_mtime})
         return out
 
+    def workbench(self, name: str) -> list[dict[str, Any]]:
+        """The agents' workbench (D677) as the browser lists it (D688): each file with its first
+        line, newest first within tools/ and notes/."""
+        root = self.app(name).resolve()
+        bench = root / "workbench"
+        out = []
+        if not bench.is_dir():
+            return out
+        for p in sorted(bench.rglob("*"), key=lambda q: q.stat().st_mtime, reverse=True):
+            rel = p.relative_to(bench)
+            if not p.is_file() or p.is_symlink() or p.suffix in (".pyc", ".pyo") or any(x.startswith(".") or x == "__pycache__" for x in rel.parts):
+                continue
+            first = ""
+            try:
+                with p.open(errors="replace") as fh:
+                    for _ in range(20):
+                        ln = fh.readline()
+                        if not ln:
+                            break
+                        ln = ln.strip().lstrip("#").strip().strip('"').strip("'").strip()
+                        if ln and not ln.startswith("!"):
+                            first = ln[:160]
+                            break
+            except OSError:
+                pass
+            st = p.stat()
+            out.append({"path": str(p.relative_to(root)), "kind": rel.parts[0] if len(rel.parts) > 1 else "",
+                        "first": first, "size": st.st_size, "mtime": st.st_mtime})
+        return out
+
     def read(self, name: str, rel: str) -> tuple[bytes, bool]:
         """(content, whether it is text) of a file, at most TEXT_MAX for text."""
         p = self.path(name, rel)

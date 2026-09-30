@@ -47,8 +47,9 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
     d = run_dir(campaign_id)
     os.makedirs(d, exist_ok=True)
     mine = _read(os.path.join(d, "run.json")) or {}
-    if mine.get("pid") != os.getpid():
+    if mine.get("pid") != os.getpid() or mine.get("container") != (os.environ.get("FLUX_SANDBOX_NAME") or None):
         mine = {}                          # every pass registers; the same process keeps its count and start
+        # (in a sandbox every run's flux has the same pid: the container tells two runs apart, D688)
     doc = {"pid": os.getpid(), "argv": list(argv if argv is not None else sys.argv), "cwd": os.getcwd(),
            "started": mine.get("started") or time.time(), "workdir": workdir,
            "log": os.environ.get("FLUX_RUN_LOG") or None,

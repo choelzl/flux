@@ -142,12 +142,20 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
   files (or a `.zip`) to an existing one. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
   sandbox.
-- **Runs:** passes, screen only, and a network allowlist, always sandboxed. Stop one after its
-  pass or at once.
+- **Runs:** passes, screen only, and a network allowlist, always sandboxed. One live run per
+  application (its runs share a record). Stop one after its pass or at once.
+- **The agents' workbench:** on the application's page, the tools and notes the agents keep,
+  each with its first line.
+- **Notifications:** the page tells you, and the bell keeps a list, when a run ends, fails, or
+  its agent asks a question; desktop notifications when allowed.
 - **A run's page:**
-  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`; select a
-    task for its parameters, live fields (an agent's commands, output, thinking) and output.
-  - **Log:** the run's output as it grows.
+  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
+    default it follows the running task (an agent first) and collapses finished branches, and it
+    can be searched. Select a task for its parameters, live fields (an agent's commands, output,
+    thinking) and output. Standings show as counts, the frontier and the parts.
+  - **Log:** the run's output as it grows, numbered, problems highlighted. It can follow (it
+    pauses when you scroll up), wrap, filter by text or `/regex/`, show problems only, and
+    download.
   - **Agent turns:** each prompt, reply and tool call.
   - **Results:** every measured design, the answer, and the report.
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.

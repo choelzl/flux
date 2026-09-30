@@ -225,9 +225,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/apps")
     def apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         out = ws(user).apps()
-        live = {r["app"] for r in store.runs(user) if runs.live(r)}
+        mine = store.runs(user)
         for a in out:
-            a["running"] = a["name"] in live
+            last = next((r for r in mine if r["app"] == a["name"]), None)       # newest first
+            a["running"] = any(runs.live(r) for r in mine if r["app"] == a["name"])
+            a["last_run"] = ({"id": last["id"], "live": runs.live(last), "rc": last.get("rc"), "started": last["started"],
+                              "ended": last.get("ended")} if last else None)
         return out
 
     @app.post("/api/apps")
@@ -318,6 +321,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def app_files(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         try:
             return reader(user, owner)[0].files(name, path)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+
+    @app.get("/api/apps/{name}/workbench")
+    def workbench(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        try:
+            return reader(user, owner)[0].workbench(name)
         except WorkspaceError as exc:
             raise fail(exc) from exc
 
@@ -451,6 +461,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         r = run_of(run_id, user)
         stream = _follow(lambda: r["log"], 0, _offset(request, offset), request, "log")
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/runs/{run_id}/log/raw")
+    def log_raw(run_id: int, user: User = Depends(user_of)):
+        r = run_of(run_id, user)
+        if not os.path.exists(r["log"]):
+            raise HTTPException(404, "no log yet")
+        return FileResponse(r["log"], media_type="text/plain; charset=utf-8",
+                            headers={"Content-Disposition": f'attachment; filename="run-{run_id}.log"'})
 
     @app.get("/api/runs/{run_id}/turns")
     def turns(run_id: int, k: int | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

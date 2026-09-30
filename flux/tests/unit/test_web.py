@@ -283,3 +283,62 @@ def test_two_users_same_named_applications_never_share_a_sandbox(server):
         finally:
             del os.environ["FLUX_SANDBOX_APP"]
     assert keys[0] != keys[1], keys
+
+
+def test_the_workbench_the_log_download_and_an_open_question(server, tmp_path):
+    """D688: the workbench listed with first lines; the whole log as a file; an agent's question
+    in the run's state until it is answered or its time is up; each application's last run."""
+    import json as _json
+    import subprocess
+    import sys
+    import time as _time
+
+    app, _ = server
+    store, runs = app.state.store, app.state.runs
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n")),
+                                                     ("files", ("workbench/notes/adders.md", b"# Carry-select wins above 3 GHz\n")),
+                                                     ("files", ("workbench/tools/fit.py", b'"""Fit a cubic per segment."""\n'))], headers=H)
+    wb = bob.get("/api/apps/x/workbench").json()
+    assert {(w["kind"], w["first"]) for w in wb} == {("notes", "Carry-select wins above 3 GHz"), ("tools", "Fit a cubic per segment.")}
+    rdir = tmp_path / "rundir"
+    rdir.mkdir()
+    (tmp_path / "x.db.runs.json").write_text(_json.dumps({"x": str(rdir)}))
+    log = tmp_path / "r.log"
+    log.write_text("line one\nERROR two\n")
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(log), ["x"], {})
+        store.set_run(rid, pid=proc.pid)
+        r = bob.get(f"/api/runs/{rid}/log/raw")
+        assert r.text == "line one\nERROR two\n" and "attachment" in r.headers["content-disposition"]
+        assert bob.get(f"/api/runs/{rid}").json()["question"] is None
+        q = {"question": "Ripple or carry-select?", "wait_s": 300, "asked": _time.time()}
+        (rdir / "events.jsonl").write_text(_json.dumps({"t": _time.time(), "ev": "mark", "name": "question", "why": _json.dumps(q)}) + "\n")
+        assert bob.get(f"/api/runs/{rid}").json()["question"]["question"] == "Ripple or carry-select?"
+        assert bob.get("/api/apps").json()[0]["last_run"]["id"] == rid
+        bob.post(f"/api/runs/{rid}/notes", json={"text": "carry-select"}, headers=H)
+        assert bob.get(f"/api/runs/{rid}").json()["question"] is None, "answered"
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_one_live_run_per_application(server, tmp_path):
+    """D688: runs of one application share its record: a second is refused while one is live."""
+    import subprocess
+    import sys
+
+    app, _ = server
+    store = app.state.store
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(tmp_path / "r.log"), ["x"], {})
+        store.set_run(rid, pid=proc.pid)
+        r = bob.post("/api/apps/x/runs", json={"passes": 1}, headers=H)
+        assert r.status_code == 429 and f"run #{rid}" in r.json()["detail"]
+    finally:
+        proc.kill()
+        proc.wait()

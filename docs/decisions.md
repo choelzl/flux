@@ -785,3 +785,30 @@ the topics above.
     is in neither name.
   - **No templates in the web app.** "Write the YAML yourself" starts empty; the `flux new`
     templates stay the command line's.
+
+- **D688: the web interface refined.**
+  - **No `alert` / `confirm` / `prompt`:** notices (toasts) and modal dialogs. A dialog closes
+    with its page.
+  - **The log.** It is numbered and highlighted (problems red, warnings amber, decisions
+    green). It can follow (scrolling up pauses it), wrap, filter by text or `/regex/`, show
+    problems only, and download whole (`/api/runs/{id}/log/raw`). It keeps 50,000 lines and
+    shows 4,000.
+  - **The live tree.** It follows the deepest running task, an agent first. Finished branches
+    fold with their count, except those holding a failure. It can be searched. The detail
+    panel shows the task's path. Standings are a card of their own: counts, the frontier with
+    the objective's axes, the parts.
+  - **Notifications.** `/api/runs` every 10 s: a run that ended, failed or was stopped, and an
+    agent's open question, which the run's state now carries (the journal's last `question`
+    mark, until a note follows or its time is up). They appear as a toast, in the bell (kept
+    in localStorage), and on the desktop when allowed and the tab is hidden. List pages
+    redraw their tables when a run changes state.
+  - **The agents' workbench** on the application's page (`/api/apps/{name}/workbench`: each
+    file, its first line, newest first).
+  - **General.** Page heads with actions, cards, relative times with durations, empty states,
+    buttons that show they are busy and say their failure, focus rings, narrow screens.
+  - **Found live.**
+    - Two runs of one application could run at once on one record: now one live run per
+      application.
+    - Every sandboxed flux has the same pid, so a new run continued the last one's pass
+      count: the registration now also compares the container.
+    - A run's pass count is shown only when the campaign's registration is that run's.
