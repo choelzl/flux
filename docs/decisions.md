@@ -661,3 +661,27 @@ the topics above.
   - the decision is over the whole record.
 
   A point measured again replaces its recalled row.
+
+- **D682: rootless Podman, preferred over Docker.** Docker's daemon is root: the `docker`
+  group is root on the machine. Rootless Podman has no daemon, and a container is one of your
+  own processes. `FLUX_SANDBOX_ENGINE=podman|docker`; the default is Podman when installed.
+  - **Setup here:** no subuid ranges, so Podman uses a single mapping (root inside is uid 10017
+  outside, so files come out yours). It needs no image: `--rootfs` is a bare local directory of
+  merged-/usr links and mount points. `--init` gives Podman's own init.
+  - **State on local disk:** `--root`/`--runroot` go under `/var/tmp/flux-sandbox-<uid>`
+    (`FLUX_SANDBOX_STORAGE`), because the home is sshfs.
+  - **Reaching the run:** it records its engine command (`container_cli`), so `flux status` and
+    `stop --now` reach it with either engine.
+  - **Merged /usr:** a host's `/bin` and `/lib` are links, so they are not mounted (`/usr`
+    covers them).
+  - **Scratch in the container's `/tmp`.** With TMPDIR on any directory mounted from the host,
+    even local ext4, Yosys's `abc -liberty` hung in both engines: yosys-abc waited in `select`,
+    Yosys in `pipe_read`. The same script took 0.5 s on the container's tmpfs and on the host.
+    Scratch is lost after the run; traces stay in `apps/<id>/tmp`.
+
+  Live, Podman:
+  - the digits run; the hostile gate blocked as under Docker (it is root inside, which is
+    you outside);
+  - the allowlist refused `example.com`;
+  - `flux stop --now` from the host;
+  - OpenCode on add8, drafted and synthesised inside: 4,554.77 MHz, 3.135 µm².

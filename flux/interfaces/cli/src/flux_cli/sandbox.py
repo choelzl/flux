@@ -1,5 +1,5 @@
-"""The run's sandbox (D680): `flux task run` and `flux ask` re-launch themselves in a Docker
-container, so an agent's or a document's code cannot touch the rest of the machine.
+"""The run's sandbox (D680, D682): `flux task run` and `flux ask` re-launch themselves in a
+container -- rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE`) -- so an agent's or a document's code cannot touch the rest of the machine.
 
 The container is the host seen read-only: the system directories and `/nix/store` at their
 real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux source, the
@@ -20,6 +20,7 @@ On by default; `--no-sandbox` or `FLUX_SANDBOX=0` runs on the host.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -28,7 +29,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ["IMAGE", "enabled", "in_sandbox", "launch", "mounts_for", "relay_proxy"]
+__all__ = ["IMAGE", "app_dir", "container_argv", "enabled", "engine", "engine_cli", "in_sandbox", "launch", "mounts_for",
+           "relay_proxy"]
 
 #: A glibc base: the host's own libraries are mounted over it; only its shape is used.
 IMAGE = os.environ.get("FLUX_SANDBOX_IMAGE", "debian:stable-slim")
@@ -97,7 +99,10 @@ def app_dir(args: Any, command: str) -> Path:
 
 def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     """(read-only, writable) host paths the command needs, each mounted at its own path."""
-    ro: list[str] = [p for p in SYSTEM if _exists(p)] + [f"/etc/{e}" for e in ETC if _exists(f"/etc/{e}")]
+    # a merged-/usr host's /bin, /lib, ... are links into /usr: /usr covers them, and the root
+    # directory holds the same links
+    ro: list[str] = ([p for p in SYSTEM if _exists(p) and not Path(p).is_symlink()]
+                     + [f"/etc/{e}" for e in ETC if _exists(f"/etc/{e}")])
     rw: list[str] = []
     root = os.environ.get("FLUX_ROOT")
     if root:
@@ -177,26 +182,72 @@ def _allowlist() -> list[str]:
     return [h.strip() for h in raw.replace(";", ",").split(",") if h.strip()]
 
 
-def docker_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None) -> list[str]:
+def engine() -> str:
+    """`FLUX_SANDBOX_ENGINE`, else rootless Podman when installed (no root daemon: a container is
+    one of your processes, D682), else Docker."""
+    e = os.environ.get("FLUX_SANDBOX_ENGINE", "").strip().lower()
+    if e in ("podman", "docker"):
+        return e
+    return "podman" if shutil.which("podman") else "docker"
+
+
+def _local() -> Path:
+    """The sandbox's local disk (a home on sshfs/NFS cannot hold container storage):
+    `FLUX_SANDBOX_STORAGE`, else /var/tmp/flux-sandbox-<uid>. Podman's storage, its root directory."""
+    return Path(os.environ.get("FLUX_SANDBOX_STORAGE") or f"/var/tmp/flux-sandbox-{os.getuid()}")
+
+
+def engine_cli(eng: str) -> list[str]:
+    """The engine's command, with where Podman keeps its state (the same for run, inspect, kill)."""
+    if eng == "podman":
+        run = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"flux-podman-{os.getuid()}"
+        return ["podman", "--root", str(_local() / "podman"), "--runroot", str(run), "--log-level", "error"]
+    return ["docker"]
+
+
+def _rootfs() -> Path:
+    """Podman's root directory: empty but for the merged-/usr links and mount points; everything
+    the run uses is mounted from the host. No image to pull."""
+    root = _local() / "rootfs"
+    for d in ("etc", "home", "tmp", "nix", "run", "proc", "dev", "sys", "usr", "var"):
+        (root / d).mkdir(parents=True, exist_ok=True)
+    for link in ("bin", "sbin", "lib", "lib32", "lib64"):
+        p = root / link
+        if not p.is_symlink():
+            p.symlink_to(f"usr/{link}")
+    return root
+
+
+def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None,
+                   eng: str | None = None) -> list[str]:
+    eng = eng or engine()
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
     home, sh = _home(), _sandbox_home(app)
-    for p in ro + rw:                                         # mount points under HOME: made by us, not by docker as root
+    for p in ro + rw:                                         # mount points under HOME: made by us, not by the engine as root
         if p.startswith(str(home) + "/"):
             (sh / Path(p).relative_to(home)).mkdir(parents=True, exist_ok=True)
-    cmd = ["docker", "run", "--rm", "--name", name, "--user", f"{os.getuid()}:{os.getgid()}",
-           "--read-only", "--tmpfs", "/tmp:exec,mode=1777", "--tmpfs", "/run", "--cap-drop", "ALL",
-           "--security-opt", "no-new-privileges", "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
+    cli = engine_cli(eng)
+    # scratch on the container's own /tmp: with TMPDIR on any directory mounted from the host,
+    # Yosys's abc step hangs (both engines, D682); the traces stay in the application's cache
+    size = os.environ.get("FLUX_SANDBOX_TMP_SIZE")
+    cmd = [*cli, "run", "--rm", "--name", name, "--read-only",
+           "--tmpfs", "/tmp:exec,mode=1777" + (f",size={size}" if size else ""),
+           "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+           "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
            "--workdir", os.getcwd(), "--label", "flux.sandbox=1"]
-    if sys.stdin.isatty():
-        cmd += ["-it"]
+    if eng == "docker":
+        # the daemon is root: run as you; PID 1 is tini (Docker's --init lives under /sbin, the host's here)
+        cmd += ["--user", f"{os.getuid()}:{os.getgid()}", "--tmpfs", "/run"]
     else:
-        cmd += ["-i"]
+        # rootless: root inside is you outside; Podman's own init is PID 1
+        cmd += ["--init"]
+    cmd += ["-it"] if sys.stdin.isatty() else ["-i"]
     for lim, flag in (("FLUX_SANDBOX_MEMORY", "--memory"), ("FLUX_SANDBOX_CPUS", "--cpus")):
         if os.environ.get(lim):
             cmd += [flag, os.environ[lim]]
     cmd += ["--network", "none" if proxy_dir else "host"]
-    cmd += ["-v", f"{sh}:{home}"]                              # HOME: the sandbox's own
+    cmd += ["-v", f"{sh}:{home}"]                              # HOME: the application's
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
     for rel in _HOME_RO:
@@ -205,10 +256,9 @@ def docker_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: 
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
-    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home))
-    tmp = str(app / "tmp")                                    # scratch and traces: the application's
-    env.update(TMPDIR=tmp, TMP=tmp, TEMP=tmp, FLUX_TMPDIR=tmp, FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"),
-               XDG_CACHE_HOME=str(app / "cache"))
+    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home), FLUX_SANDBOX_CLI=json.dumps(cli))
+    env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
+               FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=str(app / "cache"))
     if proxy_dir:
         cmd += ["-v", f"{proxy_dir}:{proxy_dir}"]
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))
@@ -217,28 +267,35 @@ def docker_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: 
         env["NO_PROXY"] = env["no_proxy"] = ""
     for k, v in env.items():
         cmd += ["-e", f"{k}={v}"]
-    # PID 1: tini from the store (Docker's --init lives under /sbin, which is the host's here)
+    if eng == "podman":
+        return cmd + ["--rootfs", str(_rootfs()), *argv]
     init = shutil.which("tini")
     return cmd + [IMAGE, *([init, "-g", "--"] if init else []), *argv]
 
 
-def _docker_ok() -> str:
-    """"" when Docker answers, else why not."""
-    if not shutil.which("docker"):
-        return "docker is not installed"
+def _engine_ok(eng: str) -> str:
+    """"" when the engine answers, else why not."""
+    if not shutil.which(eng):
+        return f"{eng} is not installed"
+    probe = ["info", "--format", "{{.Host.Security.Rootless}}" if eng == "podman" else "{{.ServerVersion}}"]
     try:
-        r = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True, timeout=30)
+        r = subprocess.run([*engine_cli(eng), *probe], capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return f"docker did not answer ({exc})"
-    return "" if r.returncode == 0 else (r.stderr.strip().splitlines() or ["docker info failed"])[-1]
+        return f"{eng} did not answer ({exc})"
+    if r.returncode != 0:
+        return (r.stderr.strip().splitlines() or [f"{eng} info failed"])[-1]
+    if eng == "podman" and r.stdout.strip() != "true":
+        return "podman is not rootless here; run flux as your own user"
+    return ""
 
 
 def launch(argv: list[str], args: Any, command: str) -> int:
     """Run `flux <argv>` in the sandbox and return its exit code."""
-    why = _docker_ok()
+    eng = engine()
+    why = _engine_ok(eng)
     if why:
-        print(f"flux {command}: the sandbox needs Docker: {why}. `--no-sandbox` (or FLUX_SANDBOX=0) runs on "
-              f"this machine directly.", file=sys.stderr)
+        print(f"flux {command}: the sandbox needs Podman or Docker: {why}. `--no-sandbox` (or FLUX_SANDBOX=0) "
+              f"runs on this machine directly.", file=sys.stderr)
         return 2
     name = f"flux-{uuid.uuid4().hex[:10]}"
     allow = _allowlist() if os.environ.get("FLUX_SANDBOX_NET", "open") == "allowlist" or _allowlist() else []
@@ -254,13 +311,13 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow)
         proxy.start()
     exe = shutil.which("flux") or sys.argv[0]
-    cmd = docker_argv([exe, *argv], args, command, name, proxy_dir)
-    print(f"flux {command}: in the sandbox {name} (network: {'allowlist ' + ','.join(allow) if allow else 'open'}; "
+    cmd = container_argv([exe, *argv], args, command, name, proxy_dir, eng)
+    print(f"flux {command}: in the {eng} sandbox {name} (network: {'allowlist ' + ','.join(allow) if allow else 'open'}; "
           f"--no-sandbox to run on the host)", file=sys.stderr, flush=True)
     try:
         return subprocess.call(cmd)
     except KeyboardInterrupt:
-        subprocess.run(["docker", "kill", "--signal", "INT", name], capture_output=True)
+        subprocess.run([*engine_cli(eng), "kill", "--signal", "INT", name], capture_output=True)
         return 130
     finally:
         if proxy is not None:

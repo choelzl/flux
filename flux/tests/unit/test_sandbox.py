@@ -61,21 +61,22 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_x")
     monkeypatch.setenv("FLUX_REMOTE_API_KEY", "k")
     monkeypatch.delenv("FLUX_SANDBOX_ALLOW", raising=False)
-    cmd = sandbox.docker_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-t", None)
+    cmd = sandbox.container_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-t", None, "docker")
     env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     app = sandbox.app_dir(_args(tmp_path), "task run")
     assert f"{app / 'home'}:{Path.home()}" in vols, "HOME is the application's"
-    assert env["TMPDIR"] == str(app / "tmp") and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces")
+    assert env["TMPDIR"] == "/tmp" and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces"), \
+        "scratch on the container's own /tmp (abc hangs on a mounted one), traces in the cache"
     assert env["XDG_CACHE_HOME"] == str(app / "cache")
     assert not any("docker.sock" in v for v in vols) and not any(v.startswith(f"{Path.home()}/.config/flux") for v in vols)
     for flag in ("--read-only", "--rm", "no-new-privileges", "ALL"):
         assert flag in cmd
     assert cmd[cmd.index("--network") + 1] == "host"
     assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
-    boxed = sandbox.docker_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x")
+    boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
     assert boxed[boxed.index("--network") + 1] == "none" and "HTTPS_PROXY=http://127.0.0.1:18080" in boxed
 
 
@@ -124,3 +125,25 @@ def test_the_proxy_forwards_to_allowed_hosts_and_refuses_the_rest(tmp_path):
     finally:
         proxy.stop()
         srv.shutdown()
+
+
+def test_podman_rootless_from_a_bare_root_directory(monkeypatch, tmp_path):
+    """D682: rootless Podman, no image: a local root directory of links and mount points, its
+    state on a local disk, its own init; the run records how to reach it."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("FLUX_SANDBOX_STORAGE", str(tmp_path / "pod"))
+    monkeypatch.setenv("FLUX_SANDBOX_ENGINE", "podman")
+    assert sandbox.engine() == "podman"
+    cmd = sandbox.container_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-p", None)
+    cli = sandbox.engine_cli("podman")
+    assert cmd[:len(cli)] == cli and cli[cli.index("--root") + 1] == str(tmp_path / "pod" / "podman")
+    assert "--init" in cmd and "--user" not in cmd and sandbox.IMAGE not in cmd
+    root = Path(cmd[cmd.index("--rootfs") + 1])
+    assert root == tmp_path / "pod" / "rootfs" and (root / "bin").is_symlink() and (root / "etc").is_dir()
+    assert cmd[cmd.index("--rootfs") + 2:] == ["flux", "task", "run", "x"]
+    env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
+    import json as _json
+
+    assert _json.loads(env["FLUX_SANDBOX_CLI"]) == cli
+    monkeypatch.setenv("FLUX_SANDBOX_ENGINE", "docker")
+    assert sandbox.engine() == "docker"

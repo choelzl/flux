@@ -53,6 +53,7 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
            "started": mine.get("started") or time.time(), "workdir": workdir,
            "log": os.environ.get("FLUX_RUN_LOG") or None,
            "container": os.environ.get("FLUX_SANDBOX_NAME") or None,   # D680: its pid is the container's
+           "container_cli": json.loads(os.environ.get("FLUX_SANDBOX_CLI") or "null"),   # D682: how to reach it
            "passes": int(mine.get("passes") or 0), "last_pass_ended": mine.get("last_pass_ended"),
            "campaign": campaign_id}
     _write(os.path.join(d, "run.json"), doc)
@@ -159,13 +160,19 @@ def _outside(doc: dict[str, Any]) -> bool:
     return bool(doc.get("container")) and os.environ.get("FLUX_SANDBOX_NAME") != doc.get("container")
 
 
+def _cli(doc: dict[str, Any]) -> list[str]:
+    """The engine command the run was started with (Podman with its storage, or Docker)."""
+    cli = doc.get("container_cli")
+    return [str(c) for c in cli] if isinstance(cli, list) and cli else ["docker"]
+
+
 def _running(doc: dict[str, Any]) -> bool:
     if not _outside(doc):
         return alive(doc.get("pid"))
     import subprocess
 
     try:
-        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", str(doc["container"])],
+        r = subprocess.run([*_cli(doc), "inspect", "-f", "{{.State.Running}}", str(doc["container"])],
                            capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -182,7 +189,7 @@ def interrupt(campaign_id: str, db: str | None = None) -> bool:
         import subprocess
 
         # to the container's init, which hands it to flux
-        return subprocess.run(["docker", "kill", "--signal", "INT", str(st["container"])],
+        return subprocess.run([*_cli(st), "kill", "--signal", "INT", str(st["container"])],
                               capture_output=True).returncode == 0
     os.kill(int(st["pid"]), signal.SIGINT)
     return True

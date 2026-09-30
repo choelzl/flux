@@ -96,7 +96,7 @@ flux knowledge digest --db DB     # the library's key points, digested once by t
 
 ## The sandbox
 
-`flux task run` and `flux ask` run in a Docker container (D680), so neither an agent nor a
+`flux task run` and `flux ask` run in a container (D680), so neither an agent nor a
 document's code (its commands, `golden.py`, scripts, `world:` hooks) can touch the rest of the
 machine.
 
@@ -105,7 +105,8 @@ machine.
   included.
 - **It writes:** the record's folder, the problem's `out/` and `workbench/`, and the
   application's cache `~/.cache/flux/apps/<id>/`. That cache is shared by the application's
-  runs: `tmp/` holds scratch and traces, `cache/` its caches.
+  runs: `tmp/` holds its traces, `cache/` its caches. Tool scratch lives in the container's own
+  `/tmp`, in memory and gone after the run (`FLUX_SANDBOX_TMP_SIZE` caps it).
 - **HOME** is the application's (`apps/<id>/home`), holding the agents' sessions, their
   configuration and a copy of their login. Another application's cache is not there. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
   not there. The model settings and key come in through the environment.
@@ -113,8 +114,13 @@ machine.
   network except those hosts, through a proxy on the host. A refused host is said once.
 - **Limits:** `FLUX_SANDBOX_MEMORY=16g`, `FLUX_SANDBOX_CPUS=8`, `FLUX_SANDBOX_PIDS` (4096).
 - **Off:** `--no-sandbox` or `FLUX_SANDBOX=0`.
-- **Needs:** Docker, with your user in the `docker` group. `flux status` and `flux stop --now`
-  find a sandboxed run by its container.
+- **Engine:** rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE=podman|docker`)
+  (D682).
+  - **Podman** has no root daemon: a container is one of your own processes, and root inside is
+    you outside. It needs no image, since it starts from a bare local root directory, and it
+    keeps its state on a local disk (`/var/tmp/flux-podman-<uid>`, or `FLUX_SANDBOX_STORAGE`).
+  - **Docker's** daemon is root, and the `docker` group is root-equivalent on the machine.
+- **Stopping:** `flux status` and `flux stop --now` find a sandboxed run by its container.
 - **Not inside:** Timeloop through Docker (no Docker socket inside). Run those with
   `--no-sandbox`.
 
