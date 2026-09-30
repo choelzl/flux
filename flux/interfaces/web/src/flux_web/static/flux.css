@@ -294,3 +294,39 @@ table.designs td { white-space: nowrap; }
 .editor-input[readonly] { cursor: default; }
 pre.code { white-space: pre; overflow: auto; }
 .theme { white-space: nowrap; }
+
+/* ---- the overview (D692) */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+.stat.clickable { cursor: pointer; }
+.stat.clickable:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.stat small, .num-cell small { color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; font-weight: 600; }
+.stat .big { font-size: 22px; font-weight: 650; margin: 2px 0; }
+.stat .obj-line { font-size: 13.5px; font-weight: 500; display: block; }
+.decision-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.decision-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.num-cell { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.num-cell .big { font-size: 18px; font-weight: 600; }
+.num-cell.meets .big { color: var(--ok); }
+.num-cell.misses .big { color: var(--bad); }
+.chart-box { margin: 0 0 12px; }
+.chart-box figcaption { font-size: 13px; margin-bottom: 4px; }
+svg.chart { width: 100%; height: auto; display: block; }
+svg.chart .axis { stroke: var(--line); }
+svg.chart .grid { stroke: var(--line); stroke-dasharray: 2 4; }
+svg.chart .pass { stroke: color-mix(in srgb, var(--muted) 35%, transparent); }
+svg.chart .limit { stroke: var(--warn); stroke-dasharray: 6 4; }
+svg.chart .tick { fill: var(--muted); font-size: 10.5px; font-family: var(--mono); }
+svg.chart .limit-t { fill: var(--warn); }
+svg.chart .pt { fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+svg.chart .pt.miss { fill: color-mix(in srgb, var(--bad) 60%, transparent); }
+svg.chart .best { fill: none; stroke: var(--accent); stroke-width: 2; }
+@media (max-width: 960px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+th.sorted { color: var(--ink); }
+th .arrow { font-size: 10px; }
+.logview .ln.marker { color: var(--accent); font-weight: 600; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
+.logview .ln.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { 0% { background: color-mix(in srgb, var(--warn) 40%, transparent); } }
+select.starts { max-width: 330px; padding: 4px 8px; }

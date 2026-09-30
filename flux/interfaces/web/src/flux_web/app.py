@@ -513,7 +513,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
         decision = ((answer or {}).get("decision") or {}).get("name") if isinstance((answer or {}).get("decision"), dict) else None
         listed = designs(run["db"], _stages(_w, name), decision)
-        return {"campaign": cid, "objectives": rep.objectives.describe(), "rows": rows,
+        objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
+                          for o in rep.objectives]                     # for the Overview's charts (D692)
+        return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
                 "agent_turns": len(rep.agent_turns), "answer": answer, **listed}
 

@@ -116,6 +116,52 @@ function promptDialog(title, label, { type = "text", ok = "Save", min = 0 } = {}
   return dialog(title, body, [["Cancel", null], [ok, () => (input.value.length >= min ? input.value : null), "primary"]]);
 }
 
+// ================================================================ charts (D692)
+const SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs = {}, ...kids) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) el.setAttribute(k, v);
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== "") el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const num4 = (v) => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
+/** One objective over time: every measurement (dots), the best so far (a step line), its limit
+    (dashed), the passes (faint ticks). `rows`: [{when, stage, metrics}]. */
+function bestChart(rows, obj, passes) {
+  const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
+  const pts = rows.filter(r => r.metrics[obj.metric] != null && (!obj.stage || obj.stage === "deepest" || r.stage === obj.stage))
+    .map(r => ({ t: r.when, v: Number(r.metrics[obj.metric]) })).sort((a, b) => a.t - b.t);
+  if (!pts.length) return empty(`No ${obj.metric} measured${obj.stage ? " at " + obj.stage : ""} yet.`);
+  const maxi = obj.direction !== "minimize";
+  let best = null; const steps = [];
+  for (const p of pts) { if (best === null || (maxi ? p.v > best : p.v < best)) best = p.v; steps.push({ t: p.t, v: best }); }
+  const vals = pts.map(p => p.v).concat(obj.goal != null ? [obj.goal] : []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  // x is the order of measurement: a loop measures in bursts, and time would pile them up
+  const n = pts.length, t0 = pts[0].t, t1 = pts[n - 1].t;
+  const xi = (i) => L + (W - L - R) * (n === 1 ? 0.5 : i / (n - 1)), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  pts.forEach((p, i) => { p.x = xi(i); }); steps.forEach((p, i) => { p.x = xi(i); });
+  const passX = (w) => { const k = pts.filter(p => p.t <= w).length; return k <= 0 || k >= n ? null : (xi(k - 1) + xi(k)) / 2; };
+  const path = steps.map((p, i) => (i ? `H${p.x.toFixed(1)}V${y(p.v).toFixed(1)}` : `M${p.x.toFixed(1)},${y(p.v).toFixed(1)}`)).join("") + `H${xi(n - 1).toFixed(1)}`;
+  const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": `${obj.metric}: best so far ${num4(best)}` },
+    sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }),
+    [lo + pad, (lo + hi) / 2, hi - pad].map(v => [sv("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }),
+      sv("text", { x: L - 6, y: y(v) + 4, class: "tick", "text-anchor": "end" }, num4(v))]),
+    (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
+    obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
+      sv("text", { x: W - R, y: y(obj.goal) - 4, class: "tick limit-t", "text-anchor": "end" }, `${maxi ? "≥" : "≤"} ${num4(obj.goal)}`)] : "",
+    pts.map(p => sv("circle", { cx: p.x, cy: y(p.v), r: 3, class: "pt" + (obj.goal != null && (maxi ? p.v < obj.goal : p.v > obj.goal) ? " miss" : "") },
+      sv("title", {}, `${num4(p.v)} · ${new Date(p.t * 1000).toLocaleString()}`))),
+    sv("path", { d: path, class: "best" }),
+    sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} measurement(s), in order`),
+    sv("text", { x: L, y: H - 8, class: "tick" }, new Date(t0 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
+    sv("text", { x: W - R, y: H - 8, class: "tick", "text-anchor": "end" }, new Date(t1 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })));
+  return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
+    ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · best `), h("strong", {}, num4(best))), g);
+}
+
 // ================================================================ notifications (D688, D689)
 const bell = { list: [], seen: new Map(), unread: 0, primed: false };
 try { bell.list = JSON.parse(localStorage.getItem("flux-notes") || "[]"); } catch (_) { bell.list = []; }
@@ -278,7 +324,7 @@ async function newPage() {
       }, { cls: "primary" }))]));
 }
 
-async function loopPage(name, owner, tab = "Live") {
+async function loopPage(name, owner, tab = "Overview") {
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
   const base = `/api/apps/${enc(name)}`;
@@ -286,7 +332,7 @@ async function loopPage(name, owner, tab = "Live") {
   const mine = info.mine;
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
-  const tabs = ["Live", "Log", "Agent turns", "Results", "Files", "Workbench"];
+  const tabs = ["Overview", "Live", "Log", "Agent turns", "Results", "Files", "Workbench"];
   const tabBar = h("div", { class: "tabs", role: "tablist" });
   let question = st.question || null;
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
@@ -295,7 +341,7 @@ async function loopPage(name, owner, tab = "Live") {
 
   function drawTabs() {
     tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
-      onclick: () => { tab = t; history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${t === "Live" ? "" : "/" + t.toLowerCase().replace(" ", "-")}`); drawTabs(); drawBody(); } }, t)));
+      onclick: () => { tab = t; history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${t === "Overview" ? "" : "/" + t.toLowerCase().replace(" ", "-")}`); drawTabs(); drawBody(); } }, t)));
   }
   function drawHead() {
     const acts = [];
@@ -322,7 +368,7 @@ async function loopPage(name, owner, tab = "Live") {
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
   }
-  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && tab === "Live") drawBody(); }
+  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && (tab === "Live" || tab === "Overview")) drawBody(); }
   // notes and the agent's question
   const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
   const noteList = h("div", { class: "notes" });
@@ -413,13 +459,29 @@ async function loopPage(name, owner, tab = "Live") {
         full.artifact ? h("div", { class: "blk" }, h("h3", {}, "The design"), codeBlock(full.artifact, "")) : "");
     }
     const table = h("div", {});
+    let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
+    const valueOf = (d, key) => key === "name" ? d.name : key === "verdict" ? d.verdict : key === "stage" ? (r.stages || []).indexOf(d.shown)
+      : key === "when" ? Date.parse(d.last || "") || 0 : d.numbers[key];
+    function sorted(list) {
+      if (!sortKey) return list;
+      return list.slice().sort((a, b) => {
+        const x = valueOf(a, sortKey), y = valueOf(b, sortKey);
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;                            // missing values last, either way
+        if (y == null) return -1;
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })) * sortDir;
+      });
+    }
+    const th = (key, label, extra = {}, ...more) => h("th", { ...extra, class: `sortable ${extra.class || ""}${sortKey === key ? " sorted" : ""}`,
+      onclick: () => { if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; } drawTable(); } },
+      label, sortKey === key ? h("span", { class: "arrow" }, sortDir > 0 ? " ▲" : " ▼") : "", ...more);
     function drawTable() {
-      const shown = r.designs.filter(d => filter === "all" || d.verdict === filter);
+      const shown = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
       table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
-        h("thead", {}, h("tr", {}, h("th", {}, "Design"), h("th", {}, "Verdict"), h("th", {}, "Stage"),
-          ...r.metrics.map(m => { const l = limitOf(m); return h("th", { class: "num", title: l ? `${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : "" },
-            m, l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
-          h("th", {}, "When"))),
+        h("thead", {}, h("tr", {}, th("name", "Design"), th("verdict", "Verdict"), th("stage", "Stage"),
+          ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num", title: l ? `${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : "" },
+            l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
+          th("when", "When"))),
         h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
           h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "", d.name, d.part ? h("div", { class: "muted small" }, d.part) : ""),
           h("td", {}, verdictPill(d)),
@@ -441,7 +503,57 @@ async function loopPage(name, owner, tab = "Live") {
       h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })));
   }
 
+  const goTab = (t) => { tab = t; drawTabs(); drawBody(); };
+  /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
+      per objective, the latest notes and the agents' newest workbench entries. */
+  async function overview() {
+    const [r, notes, bench] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
+      api(`/apps/${enc(name)}/workbench${qs}`).catch(() => [])]);
+    const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
+    const objs = (r.objective_list || []).slice(0, 2);
+    const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
+      h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
+    const decisionCard = dec ? card("The decision", [
+        h("div", { class: "decision-head" }, h("span", { class: "mono strong" }, dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
+          h("span", { class: "muted" }, `measured at ${dec.shown}`)),
+        h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => dec.numbers[m] != null).slice(0, 6).map(m => {
+          const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
+          return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : "") }, h("small", {}, m),
+            h("div", { class: "big mono" }, num4(dec.numbers[m])), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}${ok === true ? " ✓" : ok === false ? " ✗" : ""}`) : "");
+        })),
+        dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : ""],
+        { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
+      : card("The decision", empty(designs.length ? "No decision yet." : "No design measured yet."));
+    const q0 = st.question;
+    body.replaceChildren(
+      h("div", { class: "stats" },
+        stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
+          st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
+        stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
+        stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
+        stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
+      q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
+        h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
+      h("div", { class: "grid-2" }, decisionCard,
+        card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart."))),
+      h("div", { class: "grid-2" },
+        card("Latest notes", notes.length ? h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
+          h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text)))) : empty(st.running && mine ? "No note yet: send one from the Live tab." : "No note yet.")),
+        card("Agents' workbench", bench.length ? h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
+          h("a", { href: "javascript:void 0", onclick: () => goTab("Workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
+          b.first ? h("div", { class: "first" }, b.first) : ""))) : empty("Empty."))));
+  }
+
   async function drawBody() {
+    if (tab === "Overview") {
+      if (!st.running && !st.last_active) {
+        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")));
+        return;
+      }
+      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      await overview();
+      return;
+    }
     if (tab === "Live") {
       if (!st.running && !st.last_active) {
         body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
@@ -502,7 +614,8 @@ async function loopPage(name, owner, tab = "Live") {
   show(header, banner, tabBar, body);
 }
 
-/** The log: follow, wrap, a filter (text or /regex/), problems only, download. */
+/** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
+    pick one from, and the previous or next problem to jump to (D692). */
 function logView(base, qs) {
   const lines = []; let partial = "", seen = 0;
   const MAX = 50000, SHOWN = 4000;
@@ -512,21 +625,36 @@ function logView(base, qs) {
   const problems = h("input", { type: "checkbox" });
   const filter = h("input", { placeholder: "filter (text or /regex/)", class: "filter" });
   const count = h("span", { class: "muted" });
+  const startSel = h("select", { class: "starts", title: "Show one start of the loop" });
   const PROBLEM = /\b(error|errors|traceback|exception|failed|failure|refused|did not build|timed out|killed)\b|✗/i;
   const WARN = /\b(warning|nudged|retry|stopping|interrupted|could not)\b/i;
   const GOOD = /\b(ADMITTED|DECISION|passed|decided)\b/;
+  const MARK = /^── started (.+?) ──$/;
+  const starts = [];                                      // [{n, text}], a line per start
+  let startIdx = -1;                                      // -1: every start
   let matcher = null;
   function makeMatcher() {
     const f = filter.value.trim(); matcher = null; filter.classList.remove("bad");
     if (!f) return;
     if (f.length > 2 && f.startsWith("/") && f.lastIndexOf("/") > 0) {
       try { matcher = new RegExp(f.slice(1, f.lastIndexOf("/")), f.slice(f.lastIndexOf("/") + 1) || "i"); } catch (_) { filter.classList.add("bad"); }
-    } else { const low = f.toLowerCase(); matcher = { test: (s) => s.toLowerCase().includes(low) }; }
+    } else { const low = f.toLowerCase(); matcher = { test: (x) => x.toLowerCase().includes(low) }; }
   }
-  const keep = (l) => (!problems.checked || PROBLEM.test(l.text) || WARN.test(l.text)) && (!matcher || matcher.test(l.text));
+  function inStart(l) {
+    if (startIdx < 0 || !starts[startIdx]) return true;
+    const from = starts[startIdx].n, to = starts[startIdx + 1] ? starts[startIdx + 1].n : Infinity;
+    return l.n >= from && l.n < to;
+  }
+  const keep = (l) => inStart(l) && (!problems.checked || PROBLEM.test(l.text) || WARN.test(l.text) || MARK.test(l.text)) && (!matcher || matcher.test(l.text));
   function lineEl(l) {
-    const cls = PROBLEM.test(l.text) ? "bad" : WARN.test(l.text) ? "warn" : GOOD.test(l.text) ? "good" : "";
-    return h("div", { class: "ln " + cls }, h("span", { class: "no" }, String(l.n)), h("span", { class: "tx" }, l.text || " "));
+    const cls = MARK.test(l.text) ? "marker" : PROBLEM.test(l.text) ? "bad" : WARN.test(l.text) ? "warn" : GOOD.test(l.text) ? "good" : "";
+    return h("div", { class: "ln " + cls, "data-n": String(l.n) }, h("span", { class: "no" }, String(l.n)), h("span", { class: "tx" }, l.text || " "));
+  }
+  function drawStarts() {
+    const cur = startSel.value;
+    startSel.replaceChildren(h("option", { value: "-1" }, `All starts (${starts.length})`),
+      ...starts.map((st, i) => h("option", { value: String(i) }, MARK.exec(st.text)[1])));
+    startSel.value = cur && Number(cur) < starts.length ? cur : String(startIdx);
   }
   function render() {
     const shown = lines.filter(keep);
@@ -537,26 +665,42 @@ function logView(base, qs) {
   }
   function add(chunk) {
     const parts = (partial + chunk).split("\n"); partial = parts.pop();
-    const fresh = parts.map(t => { const l = { n: ++seen, text: t }; lines.push(l); return l; });
+    const fresh = parts.map(t => { const l = { n: ++seen, text: t }; lines.push(l); if (MARK.test(t)) starts.push(l); return l; });
     if (lines.length > MAX) lines.splice(0, lines.length - MAX);
+    if (fresh.some(l => MARK.test(l.text))) drawStarts();
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     for (const l of fresh) if (keep(l)) box.append(lineEl(l));
     while (box.childElementCount > SHOWN + 200) box.firstChild.remove();
     count.textContent = `${lines.length} line(s)`;
-    if (follow.checked && atEnd || follow.checked && fresh.length && box.dataset.pinned !== "0") box.scrollTop = box.scrollHeight;
+    if (follow.checked && (atEnd || fresh.length)) box.scrollTop = box.scrollHeight;
+  }
+  /** The previous (-1) or next (+1) problem line from the middle of the view: scrolled to, flashed. */
+  function jump(dir) {
+    const rows = [...box.querySelectorAll(".ln.bad")];
+    if (!rows.length) { toast("No problem line in view.", "info", { timeout: 2500 }); return; }
+    follow.checked = false;
+    const mid = box.scrollTop + box.clientHeight / 2;
+    const target = dir > 0 ? rows.find(r => r.offsetTop > mid + 4) : rows.reverse().find(r => r.offsetTop < mid - 4);
+    if (!target) { toast(dir > 0 ? "No later problem." : "No earlier problem.", "info", { timeout: 2500 }); return; }
+    box.scrollTop = target.offsetTop - box.clientHeight / 2;
+    target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
   }
   box.addEventListener("scroll", () => {                       // scrolling up pauses the follow
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-    if (!atEnd && follow.checked) { follow.checked = false; }
+    if (!atEnd && follow.checked) follow.checked = false;
   });
   follow.addEventListener("change", () => { if (follow.checked) box.scrollTop = box.scrollHeight; });
   wrap.addEventListener("change", () => box.classList.toggle("wrap", wrap.checked));
   problems.addEventListener("change", render);
+  startSel.addEventListener("change", () => { startIdx = Number(startSel.value); render(); });
   let t; filter.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { makeMatcher(); render(); }, 150); });
-  const bar = h("div", { class: "toolbar" },
+  drawStarts();
+  const bar = h("div", { class: "toolbar" }, startSel,
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
-    h("label", { class: "check" }, problems, "problems only"), filter, count,
-    h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
+    h("label", { class: "check" }, problems, "problems only"), filter,
+    h("div", { class: "actions" }, h("button", { class: "small", title: "The previous problem", onclick: () => jump(-1) }, "◀ problem"),
+      h("button", { class: "small", title: "The next problem", onclick: () => jump(1) }, "problem ▶")),
+    count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const es = new EventSource(`${base}/log${qs}`);
   es.addEventListener("log", (m) => add(JSON.parse(m.data)));
   return { el: h("div", {}, bar, box), close: () => es.close(), render };
@@ -800,12 +944,12 @@ async function route() {
   if (hash === "#/login") { drawNav(); return loginPage(); }
   if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
-  const TABS = { "": "Live", log: "Log", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench" };
+  const TABS = { "": "Overview", live: "Live", log: "Log", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench" };
   try {
     let m;
     if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
-    if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Live");
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Live");
+    if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Overview");
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Overview");
     if (hash === "#/new") return await newPage();
     if (hash === "#/configure") return await configurePage(null);
     if (hash === "#/admin" && me.role === "admin") return await adminPage();

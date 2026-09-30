@@ -129,4 +129,4 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
             metrics.append(m)
     limits = [{"metric": o["metric"], "direction": o["direction"], "goal": o["goal"]} for o in objectives]
     return {"designs": out[:limit], "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "failed")},
-            "metrics": metrics[:8], "limits": limits}
+            "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}

@@ -870,3 +870,26 @@ the topics above.
 
   Checked in headless Firefox, light and dark: the document editor, a design's SystemVerilog,
   an agent turn, the configurator.
+
+- **D692: the Overview tab, sortable results, a log to navigate.**
+  - **Overview** is the loop page's first tab and its link. It shows four figures (state,
+    designs measured with accepted and failed, passes on record, the objective), the decision
+    card, and a best-so-far chart per objective (up to two). It also shows the agent's open
+    question, the latest notes and the newest workbench entries.
+  - **The charts** are inline SVG, no library. The x axis is the order of measurement, because
+    a loop measures in bursts and time piles the dots up; the two ends carry their dates.
+    Measurements are dots (red when they miss the limit), the best so far a step line, the
+    limit dashed, the passes faint lines between the measurements they separate. The results
+    endpoint now also returns every objective (`objective_list`) and the stage order.
+  - **Results** sort by any column: text, verdict, stage in the document's order, numbers,
+    time. Missing values go last in either direction; the default is the decision, then the
+    newest.
+  - **The log.** A menu of the loop's starts (from their "── started … ──" lines) shows one, or
+    all. "◀ / ▶ problem" scrolls to the previous or next problem line and flashes it. Start
+    markers are drawn as separators.
+  - **`test_probe`** proves the side-by-side stages by a handshake: each stage says it started
+    and waits (up to 30 s) to see the other; one after the other, the first would report it
+    was alone. No timing assumption, and 2.5 s instead of 4.5 s.
+
+  Checked in headless Firefox: add8's Overview (the decision, 12 passes, the two charts),
+  Results sorted by fmax, the log showing its second start.

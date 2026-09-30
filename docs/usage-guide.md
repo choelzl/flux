@@ -154,20 +154,25 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Code:** files, a design's source and the code in agent prompts are highlighted (YAML,
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
-- **A loop's page** (tabs: Live, Log, Agent turns, Results, Files, Workbench):
+- **A loop's page** (tabs: Overview, Live, Log, Agent turns, Results, Files, Workbench):
+  - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
+    objective, and the decision's numbers against the limits. A best-so-far chart per objective
+    shows each measurement in order, the best as a step line, the limit dashed and the passes
+    marked. Also the agent's open question, the latest notes and the newest workbench entries.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
-  - **Log:** the run's output as it grows, numbered, problems highlighted. It can follow (it
-    pauses when you scroll up), wrap, filter by text or `/regex/`, show problems only, and
-    download.
+  - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
+    Show one start or all; jump to the previous or next problem. It can follow (it pauses when
+    you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
   - **Agent turns:** each prompt, reply and tool call.
   - **Results:** the designs the loop measured successfully, across every start, each
     **accepted** or **failed** by the loop's limits (the stages' cutoffs, the objectives'
     limits), with its numbers at the deepest stage it reached and a mark on each limited one.
-    The decision comes first. Filter: all / accepted / failed. A design opens with the limits
+    The decision comes first; any column sorts (again to reverse, missing numbers last).
+    Filter: all / accepted / failed. A design opens with the limits
     it misses, every stage's numbers and its source. A draft sent to repair or refused by the
     gate is not a result.
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
