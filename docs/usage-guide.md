@@ -140,11 +140,18 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   into the same form and saves it. What the form cannot say (a `world:`, its own stages or
   settings, `params`, a `{build, test}` gate, a failure pattern, objectives with a stage or tie
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
+  A save first shows what it changes, line by line, and writes only when you confirm it.
+- **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
+  accepted designs or decision. Each loop shows its accepted and measured designs and the
+  decision's number on the first objective (✓ or ✗ against its limit).
 - **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
-  files (or a `.zip`) to an existing one. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
+  files (or a `.zip`) to an existing one. Files and folders can also be dragged onto the page:
+  a dropped folder keeps its paths, and names the new loop. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
   sandbox.
 - **Start and stop:** a start takes passes (or "until I stop it"), screen only and a network
-  allowlist, and is always sandboxed. It resumes the loop from its record. Stop after the pass
+  allowlist, and is always sandboxed. The dialog offers the last start's choices, and runs the
+  check when the inputs changed since it last ran; when it fails, the button says "Start
+  anyway". It resumes the loop from its record. Stop after the pass
   or at once. A loop has one log (every start marked in it), one answer and one notes inbox;
   it has no run numbers.
 - **The agents' workbench:** on the application's page, the tools and notes the agents keep,
@@ -159,6 +166,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
     marked. Also the agent's open question, the latest notes and the newest workbench entries.
+    While the loop runs, it redraws every 10 s.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
@@ -172,7 +180,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **accepted** or **failed** by the loop's limits (the stages' cutoffs, the objectives'
     limits), with its numbers at the deepest stage it reached and a mark on each limited one.
     The decision comes first; any column sorts (again to reverse, missing numbers last).
-    Filter: all / accepted / failed. A design opens with the limits
+    Filter: all / accepted / failed. Two charts come first. **Pareto front:** any two metrics,
+    at one stage or each design's deepest, accepted and failed designs coloured, the decision a
+    diamond, the non-dominated designs joined; a click opens the design. **Improvement over
+    time:** the best so far of each chosen metric. A design opens with the limits
     it misses, every stage's numbers and its source. A draft sent to repair or refused by the
     gate is not a result.
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.

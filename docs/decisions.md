@@ -893,3 +893,39 @@ the topics above.
 
   Checked in headless Firefox: add8's Overview (the decision, 12 passes, the two charts),
   Results sorted by fmax, the log showing its second start.
+
+- **D693: the overview follows a running loop, a start checks first, results charts, the
+  configurator's diff, the loops list, drag and drop.**
+  - **The check is kept against the inputs.** `inputs_digest` is a sha256 of the application's
+    files (not `out/`, `runs/`, `workbench/` or its metadata). A check stores its verdict and
+    output with the digest; a start stores the digest and its options. `GET preflight` says
+    whether the inputs changed since the last start, and whether the check ran on them as they
+    are. The start dialog runs the check only when it did not; a failure turns the button into
+    "Start anyway". It never blocks: the operator decides.
+  - **The start dialog offers the last start's options** (passes, until stopped, screen only,
+    allowlist).
+  - **The Overview redraws every 10 s while the loop runs** and the tab is shown and visible.
+    It skips a beat while a redraw is still loading, and drops one whose tab changed meanwhile.
+  - **Pareto front** (inline SVG): x and y metrics, a stage (or each design's deepest). The
+    direction of each metric is the objective's, else read from its name (area, power, time,
+    count, … lower). The non-dominated designs are joined as a staircase. Accepted and failed
+    designs are coloured, the decision is a diamond, the limits are dashed, and a click opens the
+    design in the table.
+  - **Improvement over time:** `bestChart` per chosen metric, at the objective's stage or one
+    chosen.
+  - **The configurator previews its save.** `POST document/preview` returns the document as it
+    is and as the save would write it (kept keys merged). The page shows an LCS line diff
+    (common ends cut first), three lines of context, the rest folded, and saves only on
+    confirmation. When nothing changes, it says so and writes nothing.
+  - **Loops list:** search (name, document, owner), state chips with counts, order (activity,
+    name, accepted designs, has a decision). `/api/apps` adds `summary`: designs, accepted, and
+    the decision's number on the first objective with whether it meets the limit. A background
+    refresh does not redraw while focus is in the list.
+  - **Drag and drop:** `webkitGetAsEntry` walks dropped folders (in batches) and keeps relative
+    paths. One dropped folder puts its contents at the top and names the loop. On the Files tab
+    a drop uploads at once, into the "into folder" value.
+
+  Tests: preflight across a check and an added file; preview writes nothing; the list's
+  summary matches the results. Checked in headless Firefox: the list with its bar and columns,
+  the Pareto front and the charts, the start dialog's check, the diff dialog (Cancel wrote
+  nothing), a drop on the Files tab. The Overview's redraw while running was not watched live.

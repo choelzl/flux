@@ -162,6 +162,56 @@ function bestChart(rows, obj, passes) {
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · best `), h("strong", {}, num4(best))), g);
 }
 
+/** Which way a metric is better (D693): the objective's direction, else the name's plain sense. */
+function directionOf(metric, objectives) {
+  const o = (objectives || []).find(x => x.metric === metric);
+  if (o && o.direction) return o.direction;
+  return /area|power|energy|delay|latency|time|cells?|count|luts?|ffs?|error|loss|slack_viol|cost|size|bytes|cycles/i.test(metric) ? "minimize" : "maximize";
+}
+/** Two metrics against each other (D693): every design measured with both (accepted, failed, the
+    decision), the non-dominated front joined, the limits dashed. A click opens the design. */
+function paretoChart(designs, xm, ym, stage, objectives, onPick) {
+  const W = 560, H = 300, L = 62, R = 14, T = 14, B = 34;
+  const pts = designs.map(d => { const n = stage ? d.stages[stage] : d.numbers; return n && n[xm] != null && n[ym] != null ? { d, x: Number(n[xm]), y: Number(n[ym]) } : null; })
+    .filter(Boolean);
+  if (!pts.length) return empty(`No design has both ${xm} and ${ym}${stage ? " at " + stage : ""}.`);
+  const dx = directionOf(xm, objectives), dy = directionOf(ym, objectives);
+  const better = (a, b, dir) => dir === "minimize" ? a < b : a > b, notWorse = (a, b, dir) => dir === "minimize" ? a <= b : a >= b;
+  const dominated = (p) => pts.some(o => o !== p && notWorse(o.x, p.x, dx) && notWorse(o.y, p.y, dy) && (better(o.x, p.x, dx) || better(o.y, p.y, dy)));
+  const front = pts.filter(p => !dominated(p)).sort((a, b) => a.x - b.x);
+  const goal = (m) => { const o = (objectives || []).find(x => x.metric === m); return o && o.goal != null ? Number(o.goal) : null; };
+  const gx = goal(xm), gy = goal(ym);
+  const span = (vals) => { let lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; } const p = (hi - lo) * 0.08; return [lo - p, hi + p]; };
+  const [x0, x1] = span(pts.map(p => p.x).concat(gx != null ? [gx] : [])), [y0, y1] = span(pts.map(p => p.y).concat(gy != null ? [gy] : []));
+  const X = (v) => L + (W - L - R) * (v - x0) / (x1 - x0), Y = (v) => T + (H - T - B) * (1 - (v - y0) / (y1 - y0));
+  const ticks = (a, b) => [a + (b - a) * 0.08 / 1.16, (a + b) / 2, b - (b - a) * 0.08 / 1.16];
+  // the front as a staircase: between two designs on it, the corner neither beats
+  const worseY = (a, b) => (dy === "minimize" ? Math.max(a, b) : Math.min(a, b));
+  const line = front.map((p, i) => i ? `L${X(p.x).toFixed(1)},${Y(worseY(p.y, front[i - 1].y)).toFixed(1)}L${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`
+    : `M${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join("");
+  const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart pareto", role: "img", "aria-label": `${ym} against ${xm}: ${front.length} design(s) on the front` },
+    sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }), sv("line", { x1: L, x2: L, y1: T, y2: H - B, class: "axis" }),
+    ticks(y0, y1).map(v => [sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "grid" }), sv("text", { x: L - 6, y: Y(v) + 4, class: "tick", "text-anchor": "end" }, num4(v))]),
+    ticks(x0, x1).map(v => [sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "grid" }), sv("text", { x: X(v), y: H - B + 14, class: "tick", "text-anchor": "middle" }, num4(v))]),
+    gx != null ? sv("line", { x1: X(gx), x2: X(gx), y1: T, y2: H - B, class: "limit" }) : "",
+    gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
+    front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
+    pts.sort((a, b) => (a.d.decision ? 1 : 0) - (b.d.decision ? 1 : 0)).map(p => {
+      const on = front.includes(p);
+      const c = sv(p.d.decision ? "rect" : "circle", p.d.decision
+        ? { x: X(p.x) - 5, y: Y(p.y) - 5, width: 10, height: 10, transform: `rotate(45 ${X(p.x)} ${Y(p.y)})`, class: `pt ${p.d.verdict} decided` }
+        : { cx: X(p.x), cy: Y(p.y), r: on ? 4.5 : 3.2, class: `pt ${p.d.verdict}${on ? " on-front" : ""}` },
+        sv("title", {}, `${p.d.name}${p.d.part ? " (" + p.d.part + ")" : ""} · ${p.d.verdict}${on ? " · on the front" : ""}\n${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}`));
+      if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
+      return c;
+    }),
+    sv("text", { x: (W + L - R) / 2, y: H - 6, class: "tick", "text-anchor": "middle" }, `${xm} · ${dx === "minimize" ? "lower" : "higher"} is better`),
+    sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
+  return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, `${front.length} on the front`),
+    h("span", { class: "muted" }, ` of ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"} · `),
+    h("span", { class: "legend" }, h("i", { class: "sw accepted" }), "accepted ", h("i", { class: "sw failed" }), "failed ", h("i", { class: "sw decided" }), "the decision")), g);
+}
+
 // ================================================================ notifications (D688, D689)
 const bell = { list: [], seen: new Map(), unread: 0, primed: false };
 try { bell.list = JSON.parse(localStorage.getItem("flux-notes") || "[]"); } catch (_) { bell.list = []; }
@@ -234,21 +284,46 @@ async function loginPage() {
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
 async function startLoop(name) {
-  const passes = h("input", { type: "number", min: 1, value: 1, style: "width:90px" });
-  const forever = h("input", { type: "checkbox" });
-  const screen = h("input", { type: "checkbox" });
-  const allow = h("input", { placeholder: "empty: open network", style: "width:100%" });
+  // D693: the last start's options, and the check when the inputs changed since it was run
+  const pre = await api(`/apps/${enc(name)}/preflight`).catch(() => ({}));
+  const last = pre.options || {};
+  const passes = h("input", { type: "number", min: 1, value: last.passes || 1, style: "width:90px" });
+  const forever = h("input", { type: "checkbox", checked: last.passes === null });
+  const screen = h("input", { type: "checkbox", checked: !!last.screen_only });
+  const allow = h("input", { placeholder: "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
+  passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
+  const checkBox = h("div", { class: "preflight" });
   const body = h("div", {},
     h("p", { class: "muted" }, "It resumes from its record: what was judged stays judged."),
+    checkBox,
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
     h("label", { class: "check" }, screen, "screen only (skip the costly stages)"),
     h("label", { class: "stack", style: "margin-top:10px" }, "Network allowlist (hosts, domains, CIDRs)", allow));
-  const go = await dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
+  const said = (ok, text, output) => checkBox.replaceChildren(h("div", { class: `callout ${ok === true ? "good" : ok === false ? "bad" : ""}` },
+    h("strong", {}, text), output ? h("details", {}, h("summary", {}, "the check's output"), h("pre", { class: "log small" }, output)) : ""));
+  const waiting = dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
+  const dlg = [...document.querySelectorAll("dialog.dlg")].pop();
+  const startBtn = dlg ? dlg.querySelector("button.primary") : null;
+  const verdict = (ok, output) => {
+    if (ok) said(true, pre.checked ? `The check passed on these inputs (${when(pre.when)}).` : "The check passes on these inputs.", "");
+    else {
+      said(false, "The check fails: the loop would not get far.", output);
+      if (startBtn) { startBtn.textContent = "Start anyway"; startBtn.className = "danger solid"; }
+    }
+  };
+  if (pre.checked && pre.ok !== null) verdict(pre.ok, pre.output);
+  else {
+    said(null, pre.changed ? "The inputs changed since the last start: checking them in the sandbox…" : "Checking the inputs in the sandbox…", "");
+    if (startBtn) startBtn.disabled = true;
+    api(`/apps/${enc(name)}/check`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => said(false, "The check could not run: " + x.message, ""))
+      .finally(() => { if (startBtn) startBtn.disabled = false; });
+  }
+  const go = await waiting;
   if (!go) return false;
   const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: {
     passes: forever.checked ? null : (Number(passes.value) || 1), screen_only: screen.checked,
-    allow: allow.value.split(",").map(s => s.trim()).filter(Boolean) } });
+    allow: allow.value.split(",").map(x => x.trim()).filter(Boolean) } });
   toast(r.ok, "ok");
   return true;
 }
@@ -262,12 +337,48 @@ function lastSaid(st) {
   return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
 }
 
+/** A drop target for files and folders (D693): a folder keeps its paths ("rtl/top.sv"). `onFiles`
+    gets [{file, path}] and the dropped folder's name, when one folder was dropped. */
+function dropZone(label, onFiles) {
+  const z = h("div", { class: "dropzone", tabindex: "-1" }, h("span", { class: "dz-ic" }, "⇪"), h("span", {}, label));
+  const walk = (entry, prefix, out) => new Promise((resolve) => {
+    if (!entry) return resolve();
+    if (entry.isFile) { entry.file(f => { out.push({ file: f, path: prefix + f.name }); resolve(); }, () => resolve()); return; }
+    const reader = entry.createReader(), all = [];
+    const more = () => reader.readEntries(async (batch) => {        // a directory reads in batches
+      if (batch.length) { all.push(...batch); more(); return; }
+      for (const e of all) await walk(e, prefix + entry.name + "/", out);
+      resolve();
+    }, () => resolve());
+    more();
+  });
+  let depth = 0;
+  z.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; z.classList.add("over"); });
+  z.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  z.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; z.classList.remove("over"); } });
+  z.addEventListener("drop", async (e) => {
+    e.preventDefault(); depth = 0; z.classList.remove("over");
+    const items = [...(e.dataTransfer.items || [])].filter(i => i.kind === "file");
+    const entries = items.map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null);
+    const out = [];
+    if (entries.length && entries.every(Boolean)) for (const en of entries) await walk(en, "", out);
+    else for (const f of e.dataTransfer.files) out.push({ file: f, path: f.name });
+    const dirs = entries.filter(en => en && en.isDirectory);
+    // one folder dropped: its contents at the top, the folder's name for the loop
+    const folder = entries.length === 1 && dirs.length === 1 ? dirs[0].name : null;
+    if (folder) for (const o of out) o.path = o.path.slice(folder.length + 1);
+    if (out.length) onFiles(out, folder);
+  });
+  return z;
+}
+
 function loopsTable(loops, { who = false } = {}) {
   if (!loops.length) return empty("No loop yet.", h("p", {}, h("a", { class: "btn primary", href: "#/configure" }, "Build a new loop"), " or upload a document with its files."));
   return h("table", { class: "list" },
-    h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"), h("th", {}, "Document"), h("th", {}, ""))),
+    h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"),
+      h("th", { class: "num" }, "Designs"), h("th", {}, "Best"), h("th", {}, "Document"), h("th", {}, ""))),
     h("tbody", {}, loops.map(l => {
-      const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null;
+      const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
       const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
       const acts = owner ? (l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })] : [])
         : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
@@ -278,9 +389,41 @@ function loopsTable(loops, { who = false } = {}) {
         h("td", {}, h("a", { href, class: "strong" }, name)),
         h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
         h("td", { class: "muted" }, lastSaid(l)),
+        h("td", { class: "num mono" }, sm.designs ? [String(sm.accepted), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
+        h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
+          title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
+          sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
         h("td", { class: "mono muted" }, l.document || ""),
         h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
     })));
+}
+
+const loopView = { q: "", state: "all", sort: "activity" };     // the list's search, filter and order (D693)
+function loopsBrowser(loops) {
+  const box = h("div", {});
+  const stateOf = (l) => l.running ? "running" : l.failed ? "failed" : "idle";
+  const bestOf = (l) => (l.summary && l.summary.best) ? l.summary.best.value : null;
+  function draw() {
+    const q = loopView.q.trim().toLowerCase();
+    let list = loops.filter(l => (loopView.state === "all" || stateOf(l) === loopView.state)
+      && (!q || [l.name, l.document, l.owner].some(x => String(x || "").toLowerCase().includes(q))));
+    if (loopView.sort === "name") list = list.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    else if (loopView.sort === "designs") list = list.slice().sort((a, b) => ((b.summary || {}).accepted || 0) - ((a.summary || {}).accepted || 0));
+    else if (loopView.sort === "best") list = list.slice().sort((a, b) => (bestOf(a) == null) - (bestOf(b) == null) || a.name.localeCompare(b.name));
+    const count = (k) => loops.filter(l => k === "all" || stateOf(l) === k).length;
+    bar.replaceChildren(search,
+      h("div", { class: "chips" }, ["all", "running", "idle", "failed"].map(k => h("button", { class: `chip${loopView.state === k ? " on" : ""}`,
+        onclick: () => { loopView.state = k; draw(); } }, `${k[0].toUpperCase() + k.slice(1)} ${count(k)}`))),
+      h("label", { class: "sort" }, "Order ", h("select", { onchange: (e) => { loopView.sort = e.target.value; draw(); } },
+        [["activity", "latest activity"], ["name", "name"], ["designs", "accepted designs"], ["best", "has a decision"]].map(([v, t]) => h("option", { value: v, selected: loopView.sort === v }, t)))));
+    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list));
+  }
+  const search = h("input", { type: "search", placeholder: "Search loops", value: loopView.q, class: "search",
+    oninput: (e) => { loopView.q = e.target.value; draw(); } });
+  const bar = h("div", { class: "list-bar" }), table = h("div", {});
+  draw();
+  box.append(loops.length ? bar : "", table);
+  return box;
 }
 
 async function appsPage() {
@@ -288,25 +431,34 @@ async function appsPage() {
   const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", required: true });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
+  let dropped = [];
+  const droppedSaid = h("div", { class: "muted small" });
+  const dz = dropZone("Drop the loop's folder or files here", (got, dir) => {
+    dropped = got;
+    if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^[^A-Za-z0-9]+/, "");
+    droppedSaid.replaceChildren(`${got.length} file(s) ready`, dir ? ` from ${dir}/` : "", " · ",
+      h("a", { href: "javascript:void 0", onclick: () => { dropped = []; droppedSaid.replaceChildren(); } }, "clear"));
+  });
   const upload = h("form", { class: "stack-form", onsubmit: async (e) => {
       e.preventDefault();
-      const chosen = [...files.files, ...folder.files];
-      if (!chosen.length) { toast("Choose files, a folder or a .zip.", "warn"); return; }
+      const chosen = [...[...files.files, ...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), ...dropped];
+      if (!chosen.length) { toast("Choose or drop files, a folder or a .zip.", "warn"); return; }
       const form = new FormData(); form.append("name", name.value);
-      for (const f of chosen) form.append("files", f, f.webkitRelativePath || f.name);
+      for (const f of chosen) form.append("files", f.file, f.path);
       try { await api("/apps", { method: "POST", form }); toast(`${name.value} uploaded`, "ok"); location.hash = `#/app/${enc(name.value)}`; }
       catch (x) { toast(x.message, "bad"); }
     } },
     h("label", { class: "stack" }, "Name", name),
+    dz, droppedSaid,
     h("label", { class: "stack" }, "Files or a .zip", files),
     h("label", { class: "stack" }, "or a folder", folder),
     h("button", { class: "primary", type: "submit" }, "Upload"));
-  const box = h("div", {}, loopsTable(loops));
+  const box = h("div", {}, loopsBrowser(loops));
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
       h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
     h("div", { class: "grid-main" }, card(null, box), card("Upload a loop", upload, { cls: "side" })));
-  pageRefresh = async () => box.replaceChildren(loopsTable(await api("/apps")));
+  pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps"))); };
 }
 
 async function newPage() {
@@ -423,7 +575,15 @@ async function loopPage(name, owner, tab = "Overview") {
   function adder() {
     const addFiles = h("input", { type: "file", multiple: true });
     const addFolder = h("input", { placeholder: "folder (optional)" });
-    return h("details", { class: "adder" }, h("summary", {}, "Add files"),
+    const dz = dropZone("Drop files or folders to add them", async (got) => {
+      const form = new FormData(); form.append("folder", addFolder.value);
+      for (const f of got) form.append("files", f.file, f.path);
+      try {
+        const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
+        toast(`Added ${r.written.length} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok"); drawBody();
+      } catch (x) { toast(x.message, "bad"); }
+    });
+    return h("div", {}, dz, h("details", { class: "adder" }, h("summary", {}, "Add files"),
       h("label", { class: "stack" }, "Files or a .zip", addFiles), h("label", { class: "stack" }, "Into folder", addFolder),
       act("Add", async () => {
         if (!addFiles.files.length) { toast("Choose files or a .zip.", "warn"); return; }
@@ -431,7 +591,7 @@ async function loopPage(name, owner, tab = "Overview") {
         for (const f of addFiles.files) form.append("files", f, f.name);
         const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
         toast(`Added ${r.written.length} file(s)`, "ok"); drawBody();
-      }, { cls: "small primary" }));
+      }, { cls: "small primary" })));
   }
 
   /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
@@ -496,10 +656,40 @@ async function loopPage(name, owner, tab = "Overview") {
       chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), chip("failed", `Failed ${r.counts.failed}`));
     }
     chips(); drawTable();
+    // the charts (D693): two metrics against each other, and each metric's best so far
+    const objectives = r.objective_list || r.limits || [];
+    const nums = r.metrics.filter(m => r.designs.some(d => Object.values(d.stages).some(n => n[m] != null)));
+    const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
+      .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));
+    const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
+    let px = nums[1] || nums[0], py = nums[0], pst = "", tMetrics = new Set(nums.slice(0, 2)), tst = "";
+    const paretoBox = h("div", {}), timeBox = h("div", {});
+    const pickRow = (d) => { const tr = [...table.querySelectorAll("tbody tr")].find(t => t.firstChild && t.firstChild.textContent.replace(/^★ /, "").startsWith(d.name));
+      if (tr) { tr.scrollIntoView({ block: "nearest" }); open(d, tr); } };
+    const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
+    function drawPareto() {
+      paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
+        h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; drawPareto(); })),
+        h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; drawPareto(); })),
+        h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; drawPareto(); }))),
+        nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow));
+    }
+    function drawTime() {
+      const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
+      timeBox.replaceChildren(h("div", { class: "chart-ctl" },
+        h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
+          onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); drawTime(); } }, m))),
+        h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; drawTime(); }))),
+        tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => bestChart(r.rows || [], objFor(m), r.passes)))
+          : empty("Pick a metric to chart."));
+    }
+    drawPareto(); drawTime();
+    const charts = nums.length ? h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", timeBox)) : "";
     return h("div", {},
       card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives)),
         h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
           h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")))),
+      charts,
       h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })));
   }
 
@@ -525,6 +715,7 @@ async function loopPage(name, owner, tab = "Overview") {
         { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
       : card("The decision", empty(designs.length ? "No decision yet." : "No design measured yet."));
     const q0 = st.question;
+    if (tab !== "Overview") return;                   // the tab changed while it loaded
     body.replaceChildren(
       h("div", { class: "stats" },
         stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
@@ -607,7 +798,14 @@ async function loopPage(name, owner, tab = "Overview") {
       viewer.replaceChildren(empty("Select a tool or a note."));
     }
   }
-  const tick = setInterval(() => refresh().catch(() => {}), 5000);
+  let beat = 0, busy = false;
+  const tick = setInterval(async () => {
+    await refresh().catch(() => {});
+    // the Overview follows a running loop (D693): its numbers and charts every 10 s
+    if (++beat % 2 === 0 && tab === "Overview" && st.running && !document.hidden && !busy) {
+      busy = true; try { await overview(); } catch (_) { /* the next beat */ } finally { busy = false; }
+    }
+  }, 5000);
   cleanup.push(() => clearInterval(tick));
   pageRefresh = () => refresh();
   drawHead(); drawTabs(); drawBanner(); drawBody();
@@ -832,6 +1030,44 @@ function liveTree(base, qs, onQuestion) {
 
 // ================================================================ the configurator (D686)
 let crafterCatalog = null;
+/** A line diff (D693): the longest common subsequence of lines, as [op, text] with op " ", "-"
+    or "+". The ends every document shares are cut off before the table, so it stays small. */
+function lineDiff(a, b) {
+  const A = String(a).split("\n"), B = String(b).split("\n");
+  let s = 0; while (s < A.length && s < B.length && A[s] === B[s]) s++;
+  let e = 0; while (e < A.length - s && e < B.length - s && A[A.length - 1 - e] === B[B.length - 1 - e]) e++;
+  const a2 = A.slice(s, A.length - e), b2 = B.slice(s, B.length - e), n = a2.length, m = b2.length;
+  const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a2[i] === b2[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const mid = []; let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a2[i] === b2[j]) { mid.push([" ", a2[i]]); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) mid.push(["-", a2[i++]]);
+    else mid.push(["+", b2[j++]]);
+  }
+  while (i < n) mid.push(["-", a2[i++]]);
+  while (j < m) mid.push(["+", b2[j++]]);
+  return [...A.slice(0, s).map(t => [" ", t]), ...mid, ...A.slice(A.length - e).map(t => [" ", t])];
+}
+/** The changes with three lines of context each, the rest folded. */
+function diffView(ops, context = 3) {
+  const keep = ops.map(() => false);
+  ops.forEach((o, k) => { if (o[0] !== " ") for (let d = -context; d <= context; d++) if (ops[k + d]) keep[k + d] = true; });
+  const pre = h("pre", { class: "diff" });
+  let a = 0, b = 0, folded = 0;
+  const fold = () => { if (folded) { pre.append(h("div", { class: "d-fold" }, `⋯ ${folded} unchanged line(s)`)); folded = 0; } };
+  ops.forEach((o, k) => {
+    if (o[0] !== "+") a++; if (o[0] !== "-") b++;
+    if (!keep[k]) { folded++; return; }
+    fold();
+    pre.append(h("div", { class: o[0] === "+" ? "d-add" : o[0] === "-" ? "d-del" : "d-ctx" },
+      h("span", { class: "d-no" }, o[0] === "+" ? "" : String(a)), h("span", { class: "d-no" }, o[0] === "-" ? "" : String(b)),
+      h("span", { class: "d-op" }, o[0]), o[1] || " "));
+  });
+  fold();
+  return pre;
+}
+
 async function configurePage(name) {
   const C = window.FluxCrafter;
   if (!C) { show(card(null, empty("The configurator's script did not load."))); return; }
@@ -850,6 +1086,14 @@ async function configurePage(name) {
       host);
     C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document,
       save: async (yaml) => {
+        // D693: what the save changes, line by line, before it writes
+        const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
+        if (p.before === p.after) { toast("Nothing changes: the document already says this.", "info"); return "No change."; }
+        const ops = lineDiff(p.before, p.after);
+        const plus = ops.filter(o => o[0] === "+").length, minus = ops.filter(o => o[0] === "-").length;
+        const ok = await dialog(`Save ${p.document}?`, h("div", {}, h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
+          [["Cancel", false], ["Save", true, "primary"]]);
+        if (!ok) return "Not saved.";
         const r = await api(`/apps/${enc(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
         toast(r.ok, r.error ? "warn" : "ok"); return r.ok;
       } });

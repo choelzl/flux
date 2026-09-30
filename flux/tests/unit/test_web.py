@@ -167,6 +167,31 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
     assert TestClient(app).get("/crafter-assets/tools.json").json()
 
 
+def test_before_a_start_the_check_is_known_for_the_inputs_as_they_are(server, tmp_path):
+    """D693: the check's verdict is kept against a digest of the inputs; an edit makes it unknown
+    again, and the configurator's save is previewed before it writes."""
+    from flux_cli.main import main
+
+    app, _ = server
+    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path / "sw")]) == 0
+    bob = _client(app, "bob", "another long secret")
+    files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
+    assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
+    pre = bob.get("/api/apps/sw/preflight").json()
+    assert pre["changed"] and not pre["checked"] and pre["ok"] is None and pre["options"] is None, pre
+    r = bob.post("/api/apps/sw/check", headers=H).json()
+    assert r["ok"], r["output"]
+    pre = bob.get("/api/apps/sw/preflight").json()
+    assert pre["checked"] and pre["ok"] is True and pre["when"], pre
+    assert bob.post("/api/apps/sw/files", files=[("files", ("extra.txt", b"x"))], headers=H).status_code == 200
+    assert not bob.get("/api/apps/sw/preflight").json()["checked"], "an added file: the check is unknown again"
+    doc = bob.get("/api/apps/sw/document").json()["document"]
+    before = bob.get("/api/apps/sw/file", params={"path": doc}).text
+    p = bob.post("/api/apps/sw/document/preview", json={"text": "id: sw\nstatement: other\n", "kept": []}, headers=H).json()
+    assert p["before"] == before and "statement: other" in p["after"] and p["document"] == doc
+    assert bob.get("/api/apps/sw/file", params={"path": doc}).text == before, "a preview writes nothing"
+
+
 def test_two_users_same_named_applications_never_share_a_sandbox(server):
     from flux_web.runs import run_env  # noqa: F401 -- the key is set where runs start
 
@@ -237,6 +262,10 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     res = bob.get("/api/apps/sw/results").json()
     assert res["rows"] and "time_ms" in res["rows"][0]["metrics"] and res["answer"], res
     assert bob.get("/api/apps/sw/report").status_code == 200
+    sm = bob.get("/api/apps").json()[0]["summary"]                  # D693: the list's line
+    assert sm["designs"] == len(res["designs"]) > 0 and sm["accepted"] == res["counts"]["accepted"], sm
+    pre = bob.get("/api/apps/sw/preflight").json()
+    assert pre["changed"] is False and pre["options"]["passes"] == 1, "the last start's inputs and options"
     ada = _client(app, "ada", "correct horse battery")
     assert ada.get("/api/apps/sw/state", params={"owner": "bob"}).status_code == 200, "an admin reads every loop"
     assert any(a["owner"] == "bob" and a["name"] == "sw" for a in ada.get("/api/admin/apps").json())

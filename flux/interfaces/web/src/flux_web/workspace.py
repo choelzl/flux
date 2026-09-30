@@ -182,6 +182,26 @@ class Workspace:
                         "first": first, "size": st.st_size, "mtime": st.st_mtime})
         return out
 
+    def set_meta(self, name: str, **fields: Any) -> dict[str, Any]:
+        meta = {**self.meta(name), **fields}
+        (self.app(name) / ".flux-app.json").write_text(json.dumps(meta))
+        return meta
+
+    def inputs_digest(self, name: str) -> str:
+        """What a start reads (D693): the document and its files, not what runs write (out/,
+        runs/, the workbench) -- a change here is what a check before starting looks for."""
+        import hashlib
+
+        root = self.app(name).resolve()
+        h = hashlib.sha256()
+        for p in sorted(root.rglob("*")):
+            rel = p.relative_to(root)
+            if not p.is_file() or p.is_symlink() or rel.parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json" \
+                    or "__pycache__" in rel.parts:
+                continue
+            h.update(str(rel).encode() + b"\0" + p.read_bytes() + b"\0")
+        return h.hexdigest()[:16]
+
     def read(self, name: str, rel: str) -> tuple[bytes, bool]:
         """(content, whether it is text) of a file, at most TEXT_MAX for text."""
         p = self.path(name, rel)

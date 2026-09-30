@@ -218,8 +218,36 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/apps")
     def apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """The user's loops, each running or not (D689), the most recently active first."""
-        out = [{**a, **runs.state(user, a["name"])} for a in ws(user).apps()]
+        w = ws(user)
+        out = [{**a, **runs.state(user, a["name"]), "summary": _summary(w, user, a["name"])} for a in w.apps()]
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
+        return out
+
+    def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
+        """A loop in a line (D693): designs measured, accepted, and the decision's value on the
+        first objective."""
+        from .results import designs
+
+        run = runs.latest(whose, name)
+        if not run or not os.path.exists(run["db"]):
+            return {"designs": 0, "accepted": 0}
+        try:
+            answer = json.loads(loop_files(w.app(name))["answer"].read_text())
+            decision = (answer.get("decision") or {}).get("name") if isinstance(answer.get("decision"), dict) else None
+        except (OSError, ValueError, WorkspaceError):
+            decision = None
+        try:
+            got = designs(run["db"], _stages(w, name), decision)
+        except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
+            return {"designs": 0, "accepted": 0}
+        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"]}
+        dec = next((d for d in got["designs"] if d["decision"]), None)
+        if dec is not None:
+            lim = got["limits"][0] if got["limits"] else None
+            metric = lim["metric"] if lim else (got["metrics"][0] if got["metrics"] else None)
+            if metric and metric in dec["numbers"]:
+                out["best"] = {"design": dec["name"], "metric": metric, "value": dec["numbers"][metric],
+                               "meets": dec["meets"].get(metric)}
         return out
 
     @app.post("/api/apps")
@@ -255,6 +283,20 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
             return {"document": doc, **views(path)}
+        except (WorkspaceError, ValueError, OSError) as exc:
+            raise fail(exc) from exc
+
+    @app.post("/api/apps/{name}/document/preview")
+    def preview_document(name: str, body: DocSave, user: User = Depends(user_of)) -> dict[str, Any]:
+        """What a configurator save would write (D693): the document now, and after -- the kept
+        keys carried over as the save would."""
+        from .configure import merged, views
+
+        w = ws(user)
+        try:
+            doc = w.meta(name).get("document")
+            path = w.path(name, doc or "")
+            return {"document": doc, "before": path.read_text(), "after": merged(body.text, views(path)["raw"], body.kept)}
         except (WorkspaceError, ValueError, OSError) as exc:
             raise fail(exc) from exc
 
@@ -351,12 +393,31 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
         if sandbox:
             env["FLUX_SANDBOX"] = "1"
+        digest = w.inputs_digest(name)
         try:
             r = subprocess.run([shutil.which("flux") or sys.argv[0], "task", "check", str(d / doc)], cwd=str(d), env=env,
                                capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+            ok, output = r.returncode == 0, (r.stdout + r.stderr)[-20000:]
         except subprocess.TimeoutExpired:
-            return {"ok": False, "output": "the check ran past 600 s"}
-        return {"ok": r.returncode == 0, "output": (r.stdout + r.stderr)[-20000:]}
+            ok, output = False, "the check ran past 600 s"
+        w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output})   # D693
+        return {"ok": ok, "output": output}
+
+    @app.get("/api/apps/{name}/preflight")
+    def preflight(name: str, user: User = Depends(user_of)) -> dict[str, Any]:
+        """Before a start (D693): did the inputs change since the last start, and was the check
+        run on them as they are now -- with what result."""
+        w = ws(user)
+        try:
+            w.app(name)
+        except WorkspaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        meta, digest = w.meta(name), w.inputs_digest(name)
+        last = meta.get("last_check") or {}
+        return {"digest": digest, "changed": digest != meta.get("last_start_digest"),
+                "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
+                "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
+                "options": meta.get("last_options")}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
     def loop_of(name: str, user: User, owner: str | None = None) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
@@ -386,6 +447,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             runs.start(user, name, d, meta["document"], str(meta.get("id") or name), body.model_dump())
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+        w.set_meta(name, last_start_digest=w.inputs_digest(name), last_options=body.model_dump())    # D693
         store.audit(user.name, "start", name)
         return {"ok": f"{name} started: it resumes from its record"}
 
