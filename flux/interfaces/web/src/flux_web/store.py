@@ -1,0 +1,189 @@
+"""The server's own database (D683): users, sessions, runs, and an audit trail. SQLite beside
+the users' data; every function opens its own connection (FastAPI serves from threads)."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+import secrets
+import sqlite3
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+SESSION_DAYS = 7
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, pw TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
+    created REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created REAL NOT NULL, expires REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, app TEXT NOT NULL, db TEXT NOT NULL, log TEXT NOT NULL,
+    pid INTEGER, argv TEXT NOT NULL, started REAL NOT NULL, ended REAL, rc INTEGER, options TEXT NOT NULL DEFAULT '{}');
+CREATE TABLE IF NOT EXISTS audit (
+    id INTEGER PRIMARY KEY, t REAL NOT NULL, user TEXT, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS failures (name TEXT NOT NULL, t REAL NOT NULL);
+"""
+
+
+@dataclass
+class User:
+    id: int
+    name: str
+    role: str
+    disabled: bool
+
+    @property
+    def admin(self) -> bool:
+        return self.role == "admin"
+
+
+class Store:
+    def __init__(self, data: str | Path) -> None:
+        self.data = Path(data)
+        self.data.mkdir(parents=True, exist_ok=True)
+        os.chmod(self.data, 0o700)
+        self.path = self.data / "flux-web.db"
+        with self._db() as db:
+            db.executescript(_SCHEMA)
+
+    def _db(self) -> sqlite3.Connection:
+        con = sqlite3.connect(self.path, timeout=30)
+        con.row_factory = sqlite3.Row
+        return con
+
+    # ---- users
+    @staticmethod
+    def hash_password(password: str, salt: bytes | None = None) -> str:
+        salt = salt or secrets.token_bytes(16)
+        dk = hashlib.scrypt(password.encode(), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+        return f"scrypt${salt.hex()}${dk.hex()}"
+
+    @staticmethod
+    def check_password(password: str, stored: str) -> bool:
+        try:
+            _kind, salt, want = stored.split("$")
+        except ValueError:
+            return False
+        got = Store.hash_password(password, bytes.fromhex(salt)).split("$")[2]
+        return hmac.compare_digest(got, want)
+
+    def add_user(self, name: str, password: str, role: str = "user") -> User:
+        if not name or not name.replace("-", "").replace("_", "").isalnum() or len(name) > 40:
+            raise ValueError("a user name is letters, digits, - and _ (at most 40)")
+        if len(password) < 10:
+            raise ValueError("a password has at least 10 characters")
+        if role not in ("user", "admin"):
+            raise ValueError("role is user or admin")
+        with self._db() as db:
+            try:
+                cur = db.execute("INSERT INTO users(name, pw, role, created) VALUES (?, ?, ?, ?)",
+                                 (name, self.hash_password(password), role, time.time()))
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f"user {name!r} exists") from exc
+            return User(cur.lastrowid, name, role, False)
+
+    def users(self) -> list[User]:
+        with self._db() as db:
+            return [User(r["id"], r["name"], r["role"], bool(r["disabled"]))
+                    for r in db.execute("SELECT * FROM users ORDER BY name")]
+
+    def user(self, user_id: int | None = None, name: str | None = None) -> User | None:
+        with self._db() as db:
+            r = (db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) if user_id is not None
+                 else db.execute("SELECT * FROM users WHERE name = ?", (name,))).fetchone()
+        return User(r["id"], r["name"], r["role"], bool(r["disabled"])) if r else None
+
+    def set_user(self, name: str, *, password: str | None = None, disabled: bool | None = None,
+                 role: str | None = None) -> None:
+        with self._db() as db:
+            if password is not None:
+                if len(password) < 10:
+                    raise ValueError("a password has at least 10 characters")
+                db.execute("UPDATE users SET pw = ? WHERE name = ?", (self.hash_password(password), name))
+            if disabled is not None:
+                db.execute("UPDATE users SET disabled = ? WHERE name = ?", (int(disabled), name))
+                if disabled:
+                    db.execute("DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = ?)", (name,))
+            if role is not None:
+                db.execute("UPDATE users SET role = ? WHERE name = ?", (role, name))
+
+    # ---- login and sessions
+    def login(self, name: str, password: str) -> str | None:
+        """A session token, or None; five failures in ten minutes lock the name for that long."""
+        now = time.time()
+        with self._db() as db:
+            db.execute("DELETE FROM failures WHERE t < ?", (now - 600,))
+            failed = db.execute("SELECT COUNT(*) FROM failures WHERE name = ?", (name,)).fetchone()[0]
+            r = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+            ok = (failed < 5 and r is not None and not r["disabled"] and self.check_password(password, r["pw"]))
+            if not ok:
+                db.execute("INSERT INTO failures(name, t) VALUES (?, ?)", (name, now))
+                return None
+            token = secrets.token_urlsafe(32)
+            db.execute("INSERT INTO sessions VALUES (?, ?, ?, ?)",
+                       (_digest(token), r["id"], now, now + SESSION_DAYS * 86400))
+            return token
+
+    def session_user(self, token: str | None) -> User | None:
+        if not token:
+            return None
+        with self._db() as db:
+            r = db.execute("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id "
+                           "WHERE s.token = ? AND s.expires > ? AND u.disabled = 0",
+                           (_digest(token), time.time())).fetchone()
+        return User(r["id"], r["name"], r["role"], False) if r else None
+
+    def logout(self, token: str) -> None:
+        with self._db() as db:
+            db.execute("DELETE FROM sessions WHERE token = ?", (_digest(token),))
+
+    # ---- runs
+    def add_run(self, user: User, app: str, db_path: str, log: str, argv: list[str], options: dict[str, Any]) -> int:
+        import json
+
+        with self._db() as db:
+            cur = db.execute("INSERT INTO runs(user_id, app, db, log, argv, started, options) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (user.id, app, db_path, log, json.dumps(argv), time.time(), json.dumps(options)))
+            return int(cur.lastrowid)
+
+    def set_run(self, run_id: int, **fields: Any) -> None:
+        cols = ", ".join(f"{k} = ?" for k in fields)
+        with self._db() as db:
+            db.execute(f"UPDATE runs SET {cols} WHERE id = ?", (*fields.values(), run_id))
+
+    def runs(self, user: User | None = None, app: str | None = None) -> list[dict[str, Any]]:
+        q, args = "SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id", []
+        where = []
+        if user is not None:
+            where.append("r.user_id = ?")
+            args.append(user.id)
+        if app is not None:
+            where.append("r.app = ?")
+            args.append(app)
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        with self._db() as db:
+            return [dict(r) for r in db.execute(q + " ORDER BY r.id DESC", args)]
+
+    def run(self, run_id: int) -> dict[str, Any] | None:
+        with self._db() as db:
+            r = db.execute("SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id WHERE r.id = ?",
+                           (run_id,)).fetchone()
+        return dict(r) if r else None
+
+    # ---- audit
+    def audit(self, user: str | None, action: str, detail: str = "") -> None:
+        with self._db() as db:
+            db.execute("INSERT INTO audit(t, user, action, detail) VALUES (?, ?, ?, ?)", (time.time(), user, action, detail))
+
+    def audit_log(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._db() as db:
+            return [dict(r) for r in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))]
+
+
+def _digest(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()

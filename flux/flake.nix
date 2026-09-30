@@ -83,6 +83,12 @@
             ps.z3-solver
             ps.numpy
             chipPkgs.zigzag-dse
+            # `flux serve`, the web interface (D683): the API, its server, form uploads,
+            # and httpx for FastAPI's test client
+            ps.fastapi
+            ps.uvicorn
+            ps.python-multipart
+            ps.httpx
           ];
           pythonEnv = pkgs.python3.withPackages basePythonPackages;
 
@@ -99,6 +105,7 @@
             "evaluator/timeloop/src"
             "core/stores/src"
             "interfaces/cli/src"
+            "interfaces/web/src"
             "evaluator/calibration/src"
             "evaluator/rtl/src"
             "mentor/knowledge/src"

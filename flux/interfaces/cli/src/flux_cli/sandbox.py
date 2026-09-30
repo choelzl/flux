@@ -78,7 +78,7 @@ def app_dir(args: Any, command: str) -> Path:
     on its directory's name."""
     import re
 
-    if command == "task run":
+    if command in ("task run", "task check"):
         doc = Path(args.file).resolve()
         try:
             from flux_loop import load_task
@@ -90,6 +90,8 @@ def app_dir(args: Any, command: str) -> Path:
     else:
         where = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
         ident = f"ask-{where.name}"
+    # `flux serve` names it per user (D683): two users' applications of one id stay apart
+    ident = os.environ.get("FLUX_SANDBOX_APP") or ident
     key = re.sub(r"[^A-Za-z0-9_.-]+", "_", ident)[:80] or "unnamed"
     d = _cache() / "apps" / key
     for sub in ("tmp", "home", "cache"):
@@ -134,7 +136,7 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     for s in getattr(args, "skill", None) or []:
         if _exists(s):
             ro.append(str(Path(s).resolve()))
-    if command == "task run":
+    if command in ("task run", "task check"):
         doc = Path(args.file).resolve()
         ro.append(str(doc.parent))
         for sub in ("out", "workbench"):                     # the run's own, under the problem

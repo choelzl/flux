@@ -113,7 +113,10 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         # D510: the traces of this pass under a name the record can point at
         state.workdir = trace_dir(getattr(state.records, "campaign_id", None), problem.name)
         if state.depth == 0 and getattr(state.records, "campaign_id", None):
-            ops.register(state.records.campaign_id, state.workdir, db=state.request.db)     # D513: `flux status/stop` see this run
+            run_dir = ops.register(state.records.campaign_id, state.workdir, db=state.request.db)     # D513: `flux status/stop` see this run
+            from .journal import attach
+
+            attach(run_dir)                  # D683: the live task tree, for `flux serve`
         try:
             from flux_feedback import reload_notes
 

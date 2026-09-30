@@ -23,6 +23,50 @@ _STARTED = time.perf_counter()
 # Optional observer (D391): the TUI subscribes so every phased block becomes a live task row.
 # Every callback is wrapped; a listener that raises is ignored for that event.
 _LISTENER = None
+_PRIMARY = None                        # the TUI's (set_listener)
+_EXTRA: list = []                      # others beside it: the run's journal (D683)
+
+
+class _Tee:
+    """Several listeners as one: each gets every event, with its own token."""
+
+    def __init__(self, listeners: list) -> None:
+        self.listeners = listeners
+
+    def phase_start(self, name, why, params):
+        return [_call(lis, "phase_start", name, why, params) for lis in self.listeners]
+
+    def phase_update(self, token, name, output):
+        for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
+            _call(lis, "phase_update", tok, name, output)
+
+    def phase_end(self, token, name, seconds, failed, output):
+        for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
+            _call(lis, "phase_end", tok, name, seconds, failed, output)
+
+    def mark(self, name, why):
+        for lis in self.listeners:
+            _call(lis, "mark", name, why)
+
+    def publish(self, key, payload):
+        for lis in self.listeners:
+            _call(lis, "publish", key, payload)
+
+
+def _call(lis, method: str, *args):
+    fn = getattr(lis, method, None)
+    if fn is None:
+        return None
+    try:
+        return fn(*args)
+    except Exception:  # noqa: BLE001 -- the instrument never fails the run
+        return None
+
+
+def _refresh() -> None:
+    global _LISTENER
+    ls = [x for x in (_PRIMARY, *_EXTRA) if x is not None]
+    _LISTENER = None if not ls else ls[0] if len(ls) == 1 else _Tee(ls)
 
 
 def set_listener(listener) -> None:
@@ -31,13 +75,28 @@ def set_listener(listener) -> None:
     `listener.phase_update(token, name, output)` (what a running phase has so far, D493);
     any may be missing. `output` is the dict the block filled through
     `with phase(...) as out:` (D470)."""
-    global _LISTENER
-    _LISTENER = listener
+    global _PRIMARY
+    _PRIMARY = listener
+    _refresh()
 
 
 def clear_listener() -> None:
-    global _LISTENER
-    _LISTENER = None
+    global _PRIMARY
+    _PRIMARY = None
+    _refresh()
+
+
+def add_listener(listener) -> None:
+    """A listener beside the primary one (D683): the run's journal, whatever the TUI does."""
+    if listener not in _EXTRA:
+        _EXTRA.append(listener)
+    _refresh()
+
+
+def remove_listener(listener) -> None:
+    if listener in _EXTRA:
+        _EXTRA.remove(listener)
+    _refresh()
 
 
 def progress(**fields) -> None:

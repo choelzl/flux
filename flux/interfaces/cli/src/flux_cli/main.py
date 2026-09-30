@@ -81,6 +81,21 @@ def build_parser() -> argparse.ArgumentParser:
     probe_p.add_argument("--gate", action="store_true", help="measure: run the gate first.")
     probe_p.set_defaults(func=cmd_probe)
 
+    serve_p = subparsers.add_parser("serve", help="The web interface: accounts, applications, runs followed live (D683).")
+    serve_p.add_argument("--host", default="127.0.0.1", help="Address to listen on (default 127.0.0.1; put a TLS proxy in front for others).")
+    serve_p.add_argument("--port", type=int, default=8765)
+    serve_p.add_argument("--data", default=None, help="The server's data (default: $XDG_DATA_HOME/flux/web).")
+    serve_p.add_argument("--max-running", type=int, default=4, help="Runs at once per user.")
+    serve_p.add_argument("--secure-cookie", action="store_true", help="Session cookie over HTTPS only (behind a TLS proxy).")
+    serve_p.add_argument("--no-sandbox", action="store_true", help="Runs on the host, not sandboxed: a single trusted user only.")
+    serve_p.set_defaults(func=_cmd_serve)
+    user_p = subparsers.add_parser("user", help="The web interface's accounts, from the server's machine.")
+    user_p.add_argument("action", choices=["add", "list", "passwd", "disable", "enable"])
+    user_p.add_argument("name", nargs="?", default=None)
+    user_p.add_argument("--admin", action="store_true", help="add: an admin.")
+    user_p.add_argument("--data", default=None, help="The server's data (default: $XDG_DATA_HOME/flux/web).")
+    user_p.set_defaults(func=_cmd_user)
+
     st_p = subparsers.add_parser("selftest", help="Does Flux work on this machine: tools, a sweep, an RTL sweep, the model, a model-written problem.")
     st_p.add_argument("--full", action="store_true", help="Also the README's first run (adder16, about three minutes).")
     st_p.add_argument("--no-model", action="store_true", help="Only the checks that need no model.")
@@ -127,6 +142,8 @@ def build_parser() -> argparse.ArgumentParser:
     task_sub = task_p.add_subparsers(dest="task_command", required=True)
     check_p = task_sub.add_parser("check", help="Validate a task document and its tools; run nothing.")
     check_p.add_argument("file", help="Path to a .json/.yaml task document.")
+    check_p.add_argument("--no-sandbox", action="store_true",
+                         help="Check on this machine, not in the sandbox (the check imports the document's code).")
     check_p.set_defaults(func=cmd_task_check)
     run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
     run_p.add_argument("file", help="Path to a .json/.yaml task document.")
@@ -281,6 +298,18 @@ def build_parser() -> argparse.ArgumentParser:
 _READS_A_RECORD = frozenset({"report", "status", "stop", "attach", "log"})
 
 
+def _cmd_serve(args):
+    from flux_web.cli import serve
+
+    return serve(args)
+
+
+def _cmd_user(args):
+    from flux_web.cli import user
+
+    return user(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     """The CLI. An unexpected failure prints one line naming the error (D590); `FLUX_DEBUG=1`
     shows the traceback."""
@@ -304,7 +333,9 @@ def main(argv: list[str] | None = None) -> int:
     relay_proxy()                            # inside an allowlisted sandbox: the way out (D680)
     parser = build_parser()
     args = parser.parse_args(argv)
+    # `task check` too: building the problem imports its world hooks and its golden model (D683)
     boxed = ("task run" if args.command == "task" and getattr(args, "task_command", None) == "run"
+             else "task check" if args.command == "task" and getattr(args, "task_command", None) == "check"
              else "ask" if args.command == "ask" else "")
     if boxed and enabled(args):              # D680: the run re-launched in its container
         return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)

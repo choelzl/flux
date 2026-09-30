@@ -685,3 +685,29 @@ the topics above.
   - the allowlist refused `example.com`;
   - `flux stop --now` from the host;
   - OpenCode on add8, drafted and synthesised inside: 4,554.77 MHz, 3.135 µm².
+
+- **D683: `flux serve`, the web interface.** FastAPI and uvicorn (added to the nix shell); plain
+  JavaScript pages, no build.
+  - **The journal.** `flux_profile` takes listeners beside the TUI's (`add_listener`, a tee).
+    At registration a run attaches a journal that appends every phase event (start, update at
+    most 1/s, end, mark, publish; text cut to its last 4,000 chars) to `<run dir>/events.jsonl`.
+    Another process follows a run the way the TUI does, sandboxed or not.
+  - **Server.** Its SQLite holds users (scrypt), sessions (random tokens stored hashed),
+    runs and an audit trail. `X-Flux: 1` is required on every change (CSRF).
+  - **Applications.** They live under `users/<name>/apps/<app>/`. Paths are resolved inside the
+    application. Zips may not hold links or `..`. At most 500 files and 50 MB.
+  - **Runs.** Each is a detached `flux task run --db --json`, forced into the sandbox (no
+    `--no-sandbox` on a shared server), and followed by what it writes: the record's run pointer,
+    `run.json`, `events.jsonl`, `turns.jsonl`, the log. Server-sent events stream the journal and
+    the log.
+  - **Sandbox changes.** `FLUX_SANDBOX_APP=<user>-<app>` names the sandbox cache, so two users'
+    applications of one id stay apart. `flux task check` is now sandboxed too, because building
+    the problem imports its `world:` hooks and its golden model.
+
+  Live, a server on 127.0.0.1 with the Podman sandbox:
+  - login, upload of add8, check, and a run started over HTTP;
+  - the event stream carried the tree, including the agent's tool calls and thinking, and the
+    log stream the refusal and the resumed session;
+  - the run was admitted and decided (6,033 MHz, 4.08 µm²);
+  - the results, answer, turns and report endpoints answered;
+  - pages checked by driving headless Firefox over Marionette.

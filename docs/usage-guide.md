@@ -124,6 +124,35 @@ machine.
 - **Not inside:** Timeloop through Docker (no Docker socket inside). Run those with
   `--no-sandbox`.
 
+## The web interface
+
+`flux serve` is a shared server with accounts. Each user uploads applications (a problem
+document and its files), checks them, starts runs, and follows each run live (D683).
+
+```bash
+flux user add ada --admin            # the first account, on the server's machine
+flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
+```
+
+- **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page. Every
+  file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
+  sandbox.
+- **Runs:** passes, screen only, and a network allowlist, always sandboxed. Stop one after its
+  pass or at once.
+- **A run's page:**
+  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`; select a
+    task for its parameters, live fields (an agent's commands, output, thinking) and output.
+  - **Log:** the run's output as it grows.
+  - **Agent turns:** each prompt, reply and tool call.
+  - **Results:** every measured design, the answer, and the report.
+- **Accounts:** passwords are hashed with scrypt; five failures lock a name for ten minutes;
+  sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
+  A user sees only their own applications and runs. An admin manages users and reads every run
+  and the audit trail.
+- **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
+  `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
+- **Limits:** `--max-running` runs at once per user (4).
+
 ## RTL tools
 
 The commands an RTL document names as its gate and stages:
