@@ -3,8 +3,9 @@
 Not built yet, roughly in the order they would help. D683-D684 hold what is built.
 
 ## Creating loops
-- The loop crafter inside the app: build the document on its graph, then "Create" posts the YAML
-  (`crafter.js` already exports `buildYaml`; serve it and add the button).
+- The configurator (D686) keeps aside what it cannot say: grow it to edit an agent's own
+  settings, objectives with a stage or tie, a failure pattern, parts with statements.
+- Keep the document's comments when the configurator saves (a round-trip YAML editor).
 - Templates: `flux new --kind python|rtl|sweep|tune|rtl-sweep` from the page.
 - Validate while typing: `flux task check` on save, its findings beside the editor.
 - Clone an application, or start from another user's (with their consent).
