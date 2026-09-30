@@ -145,6 +145,19 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     assert len(got["frontier"]) < 15
 
 
+def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tmp_path, capsys, monkeypatch):
+    """D695: its pass ended on "nothing left to do", not a rest, so pass after pass began at once."""
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    main(["new", "primes", "--kind", "sweep", "--dir", str(tmp_path / "p")])
+    doc, db = str(tmp_path / "p/primes.problem.yaml"), str(tmp_path / "p.db")
+    assert main(["task", "run", doc, "--passes", "1", "--db", db]) == 0
+    capsys.readouterr()
+    assert main(["task", "run", doc, "--passes", "5", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "sweep: 0 point(s) of 6" in out and "at rest: the search measured every point" in out
+    assert "── pass 2 ──" not in out, "at rest with nothing to draft: the remaining passes are not run"
+
+
 def test_the_report_of_a_tuning_ranks_every_point_with_its_knobs(tmp_path, monkeypatch):
     """A DSE's report is read from its points, ranked by the decision's rule; one objective gets no front, saying why (D609)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))

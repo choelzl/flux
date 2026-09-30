@@ -1003,3 +1003,62 @@ the topics above.
   | 2 s after the new server | live again |
 
   A line written after the restart showed once.
+
+- **D695: the admin's view of the machine and the controls, and two loop bugs it showed.**
+  - **Admin tabs:**
+    - **Loops:** every loop, pause new starts, stop every loop after its pass or now.
+    - **Resources:** the machine, the sandbox's containers, every loop's disk, the caches no loop
+      owns.
+    - **Users:** a running limit per user, and usage.
+    - **Audit.**
+  - **Containers** come from `podman ps -a --filter label=flux.sandbox=1` and `podman stats
+    --no-stream`, with the sandbox's own `--root/--runroot`.
+    - A run from `flux serve` now carries `--label flux.app=<user>.<app>`, so a container is
+      matched to its loop even after its run died.
+    - A container with no running loop is "left behind" and can be killed. The loop's own
+      container is refused: stop the loop instead.
+    - Only `flux-<hex>` names are accepted.
+  - **Disk:**
+    - A loop's inputs, `out/`, `runs/`, `workbench/`, and its cache
+      `~/.cache/flux/apps/<user>.<app>/`. Sizes are walked and kept for a minute.
+    - Caches are classed as a loop's, a deleted loop's (its user still exists), or not the web's
+      (a `flux task run` of this machine's user).
+    - Clean-ups:
+      - `tools`: empties the XDG cache.
+      - `scratch`: removes a trace folder's dated pass folders; `events.jsonl`, `turns.jsonl` and
+        `run.json` stay, so the Timeline and turns survive.
+      - `all`: removes the whole cache.
+    - Every clean-up is refused while the loop runs.
+  - **Server settings:** a `server` table in `flux-web.db`.
+    - `paused`: a start fails with the reason (409), and the start dialog says so before asking.
+    - `max_running:<user>` overrides `--max-running`; 0 to 64, and empty means the default.
+    - Every control is audited.
+  - **Bug: a start obeyed the stop of the start before it.**
+    - "Stop now" interrupts the pass, so the stop file (`<run dir>/stop`) was never cleared at
+      the pass boundary. The next start stopped at its first boundary, citing a stop from an hour
+      earlier.
+    - `ops.register` now removes it when a new process (or container) registers. The same
+      process registering again keeps it.
+  - **Bug: a resumed sweep with every point on record spun.**
+    - Its pass ended on "nothing left to do", not a rest, so the next pass began at once: 454
+      passes in 30 s at 50% CPU, and a log thousands of lines long.
+    - The first bug had hidden it: every restart stopped after one pass.
+    - A finished search now turns "nothing left to do" into "at rest: the search measured every
+      point". The loop then waits for a note, as a fresh sweep does. The test fails without the
+      fix.
+
+  Tests:
+  - `test_web_admin.py`:
+    - admin only;
+    - loop disk and cache kinds;
+    - scratch cleaned with the journal kept, tools and all;
+    - bad keys and container names refused;
+    - pause (409 and preflight), limit (0 refuses, 99 refused, default back), stop every loop,
+      and no clean-up of a running loop's cache.
+  - The sandbox label, the stale stop, and the resumed sweep resting.
+
+  Live, in headless Firefox:
+  - a left-behind `flux.app` container killed from Resources;
+  - the sweep's container at 4 to 5% CPU and 52.8 MB;
+  - disk totals, the Loops controls and the Users limits;
+  - the sweep, restarted, rests after one pass and keeps running.

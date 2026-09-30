@@ -407,7 +407,10 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
             # D608: a search that handed over its last batch says so, so the report does not
             # claim it may have had more to propose
             live = False
-        if getattr(state, "search_done", False) and not todo and not state.improve and not state.stopped:
+        if (getattr(state, "search_done", False) and not todo and not state.improve
+                and state.stopped in (None, "", "nothing left to do")):
+            # D695: a resumed sweep whose points are all on record ends its pass on "nothing left
+            # to do" -- not a rest, so the next pass began at once, and the next: hundreds a minute
             # a search that proposed its last point leaves the next pass nothing to do: at rest,
             # so a campaign with nothing to draft waits instead of re-running the sweep
             state.stopped = "at rest: the search measured every point it had to propose"

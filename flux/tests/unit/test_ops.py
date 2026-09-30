@@ -66,6 +66,13 @@ def test_a_stop_request_is_seen_by_the_running_process_and_a_dead_pid_is_stale(t
     assert ops.status("abcdef0123456789")["stop"].startswith("the tree changed")
     ops.clear_stop()
     assert ops.stop_requested() is None and ops.status("abcdef0123456789")["stop"] is None
+    # D695: a run stopped at once leaves its stop behind; the next run's registration is not bound by it
+    ops.request_stop("abcdef0123456789", "stopped from the web")
+    ops.register("abcdef0123456789", str(tmp_path))                 # the same process: the ask holds
+    assert ops.stop_requested().startswith("stopped from the web")
+    json.dump({"pid": 2 ** 22 - 1}, open(os.path.join(ops.run_dir("abcdef0123456789"), "run.json"), "w"))
+    ops.register("abcdef0123456789", str(tmp_path))                 # a new run: the old ask is gone
+    assert ops.stop_requested() is None
     # a registration whose process is gone is stale, never "running"
     d = ops.run_dir("deadbeefdeadbeef")
     os.makedirs(d)

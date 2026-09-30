@@ -50,6 +50,12 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
     if mine.get("pid") != os.getpid() or mine.get("container") != (os.environ.get("FLUX_SANDBOX_NAME") or None):
         mine = {}                          # every pass registers; the same process keeps its count and start
         # (in a sandbox every run's flux has the same pid: the container tells two runs apart, D688)
+        # D695: a stop asked of an earlier run is not this one's -- a run stopped at once never
+        # reached the pass boundary that clears it, and the next start would obey it
+        try:
+            os.remove(os.path.join(d, "stop"))
+        except OSError:
+            pass
     doc = {"pid": os.getpid(), "argv": list(argv if argv is not None else sys.argv), "cwd": os.getcwd(),
            "started": mine.get("started") or time.time(), "workdir": workdir,
            "log": os.environ.get("FLUX_RUN_LOG") or None,

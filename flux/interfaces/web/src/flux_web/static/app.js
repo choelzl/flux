@@ -319,6 +319,7 @@ async function loginPage() {
 async function startLoop(name) {
   // D693: the last start's options, and the check when the inputs changed since it was run
   const pre = await api(`/apps/${enc(name)}/preflight`).catch(() => ({}));
+  if (pre.paused) { toast(`New starts are paused by an admin: ${pre.paused}`, "warn", { timeout: 8000 }); return false; }
   const last = pre.options || {};
   const passes = h("input", { type: "number", min: 1, value: last.passes || 1, style: "width:90px" });
   const forever = h("input", { type: "checkbox", checked: last.passes === null });
@@ -432,7 +433,7 @@ function loopsTable(loops, { who = false } = {}) {
 }
 
 const loopView = { q: "", state: "all", sort: "activity" };     // the list's search, filter and order (D693)
-function loopsBrowser(loops) {
+function loopsBrowser(loops, { who = false } = {}) {
   const box = h("div", {});
   const stateOf = (l) => l.running ? "running" : l.failed ? "failed" : "idle";
   const bestOf = (l) => (l.summary && l.summary.best) ? l.summary.best.value : null;
@@ -449,7 +450,7 @@ function loopsBrowser(loops) {
         onclick: () => { loopView.state = k; draw(); } }, `${k[0].toUpperCase() + k.slice(1)} ${count(k)}`))),
       h("label", { class: "sort" }, "Order ", h("select", { onchange: (e) => { loopView.sort = e.target.value; draw(); } },
         [["activity", "latest activity"], ["name", "name"], ["designs", "accepted designs"], ["best", "has a decision"]].map(([v, t]) => h("option", { value: v, selected: loopView.sort === v }, t)))));
-    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list));
+    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list, { who }));
   }
   const search = h("input", { type: "search", placeholder: "Search loops", value: loopView.q, class: "search",
     oninput: (e) => { loopView.q = e.target.value; draw(); } });
@@ -1293,39 +1294,154 @@ async function configurePage(name) {
 }
 
 // ================================================================ admin and account
-async function adminPage() {
-  const [users, audit, allApps, use] = await Promise.all([api("/users"), api("/audit"), api("/admin/apps"), api("/admin/usage").catch(() => [])]);
+/** The admin's pages (D695): every loop and the controls over all of them, what the machine
+    holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
+const ADMIN_TABS = { "": "Loops", resources: "Resources", users: "Users", audit: "Audit" };
+const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
+function meter(frac, cls = "") {
+  const f = Math.max(0, Math.min(1, frac || 0));
+  return h("div", { class: `meter ${cls}${f > 0.9 ? " high" : f > 0.75 ? " mid" : ""}` }, h("div", { style: `width:${(f * 100).toFixed(1)}%` }));
+}
+async function adminPage(sub = "") {
+  const tab = ADMIN_TABS[sub] ? sub : "";
+  const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
+    h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
+  const body = h("div", {});
+  show(head("Admin", "Every loop and the controls over them, what the machine holds up, users and their limits, the audit trail."), tabBar, body);
+  if (tab === "") return adminLoops(body);
+  if (tab === "resources") return adminResources(body);
+  if (tab === "users") return adminUsers(body);
+  const audit = await api("/audit");
+  body.replaceChildren(card(null, h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))),
+    h("tbody", {}, audit.map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", {}, x.action), h("td", { class: "mono muted" }, x.detail)))))));
+}
+
+async function adminLoops(body) {
+  const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null)]);
+  const paused = res ? res.paused : null;
+  const running = allApps.filter(l => l.running).length;
+  const reason = h("input", { placeholder: "why (users see it)", style: "min-width:260px" });
+  const controls = card("Controls", [
+    paused ? h("div", { class: "callout bad" }, h("strong", {}, "New starts are paused: "), paused, " ",
+      act("Resume starts", async () => { await api("/admin/paused", { method: "PUT", body: { reason: null } }); toast("Starts resumed", "ok"); route(); }, { cls: "small primary" }))
+      : h("div", { class: "row" }, reason, act("Pause new starts", async () => {
+          await api("/admin/paused", { method: "PUT", body: { reason: reason.value.trim() || "maintenance" } }); toast("New starts paused; running loops go on", "ok"); route();
+        }), h("span", { class: "muted" }, "running loops go on; nobody can start one")),
+    h("div", { class: "row", style: "margin-top:10px" },
+      h("span", {}, `${running} loop(s) running`),
+      act("Stop every loop after its pass", async () => {
+        if (!await confirmDialog("Stop every loop?", `Each of the ${running} running loop(s) stops at the end of its pass.`, { ok: "Stop after the pass" })) return;
+        const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${Object.keys(r.stopped).length} loop(s) asked to stop`, "ok"); route();
+      }),
+      act("Stop every loop now", async () => {
+        if (!await confirmDialog("Stop every loop now?", `Each of the ${running} running loop(s) ends its pass at once; the records keep what was judged.`, { ok: "Stop now", danger: true })) return;
+        const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
+      }, { cls: "danger" }))]);
+  const box = h("div", {}, loopsBrowser(allApps, { who: true }));
+  body.replaceChildren(controls, card("Every loop", box));
+  pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); };
+}
+
+async function adminResources(body) {
+  body.replaceChildren(h("p", { class: "muted" }, "Measuring…"));
+  let r;
+  async function load() { r = await api("/admin/resources"); draw(); }
+  function draw() {
+    const m = r.machine, mem = m.memory || {};
+    const machineCard = card("The machine", h("div", { class: "stats five" },
+      h("div", { class: "stat" }, h("small", {}, "CPUs"), h("div", { class: "big" }, String(m.cpus))),
+      h("div", { class: "stat" }, h("small", {}, "Load (1 · 5 · 15 min)"), h("div", { class: "big" }, (m.load || []).map(x => x.toFixed(1)).join(" · ")),
+        meter((m.load || [0])[0] / m.cpus), h("div", { class: "muted" }, `${Math.round((m.load || [0])[0] / m.cpus * 100)}% of the CPUs`)),
+      h("div", { class: "stat" }, h("small", {}, "Memory used"), h("div", { class: "big" }, mem.total ? bytes(mem.total - mem.available) : "?"),
+        mem.total ? [meter(1 - mem.available / mem.total), h("div", { class: "muted" }, `of ${bytes(mem.total)}`)] : ""),
+      ...m.disks.filter(d => !d.same_as).slice(0, 2).map(d => h("div", { class: "stat" }, h("small", {}, `Disk: ${d.label}`), h("div", { class: "big" }, `${bytes(d.free)} free`),
+        meter(d.used / d.total), h("div", { class: "muted", title: d.path }, `of ${bytes(d.total)}${m.disks.some(x => x.same_as === d.label) ? " · also " + m.disks.filter(x => x.same_as === d.label).map(x => x.label).join(", ") : ""}`)))));
+    const cs = r.containers || [];
+    const loopLink = (u, a) => u ? h("a", { href: appHref(u, a) }, `${u} / ${a}`) : h("span", { class: "muted" }, "no loop");
+    const contCard = card(`Sandbox containers (${r.engine || "none"})`, r.error ? h("p", { class: "callout bad" }, r.error)
+      : cs.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Container", "Loop", "State", "CPU", "Memory", "PIDs", ""].map((x, i) => h("th", { class: i >= 3 && i <= 5 ? "num" : "" }, x)))),
+          h("tbody", {}, cs.map(c => h("tr", {},
+            h("td", { class: "mono" }, c.name), h("td", {}, loopLink(c.user, c.loop)),
+            h("td", {}, h("span", { class: `pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}` }, c.orphan && c.state === "running" ? "left behind" : c.state), " ", h("small", { class: "muted" }, c.status)),
+            h("td", { class: "num mono" }, c.cpu != null ? `${c.cpu.toFixed(1)}%` : ""),
+            h("td", { class: "num mono" }, c.mem != null ? bytes(Math.round(c.mem)) : ""),
+            h("td", { class: "num mono" }, c.pids != null ? String(c.pids) : ""),
+            h("td", { class: "right" }, c.orphan ? act("Kill", async () => {
+                if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it: it is stopped and removed.", { ok: "Kill", danger: true })) return;
+                toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
+              }, { cls: "small danger" })
+              : act("Stop the loop now", async () => { await stopLoop(c.loop, true, c.user); load(); }, { cls: "small" }))))))) : empty("No sandbox container."));
+    const loops = r.loops.slice().sort((a, b) => b.total - a.total);
+    const totalOf = (k) => loops.reduce((s, l) => s + (l[k] || 0), 0);
+    const cleanBtn = (l, what, label, text) => act(label, async () => {
+      if (!await confirmDialog(`${label}: ${l.user} / ${l.app}?`, text, { ok: label, danger: what === "all" })) return;
+      const x = await api(`/admin/caches/${enc(l.cache_key || l.key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
+    }, { cls: "small" });
+    const diskCard = card("Disk per loop", h("div", { class: "scroll-x" }, h("table", { class: "list compact" },
+      h("thead", {}, h("tr", {}, ["Loop", "", "Inputs", "Record", "Log", "Workbench", "Sandbox cache", "Total", ""].map((x, i) => h("th", { class: i >= 2 && i <= 7 ? "num" : "" }, x)))),
+      h("tbody", {}, loops.map(l => h("tr", {}, h("td", {}, loopLink(l.user, l.app)), h("td", {}, l.running ? h("span", { class: "pill live" }, "running") : ""),
+          ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: `num mono${k === "total" ? " strong" : ""}` }, bytes(l[k]))),
+          h("td", { class: "right" }, l.running || !l.cache ? "" : h("div", { class: "actions end" },
+            cleanBtn(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need."),
+            cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay."))))),
+        h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {}))))),
+      { actions: [h("span", { class: "muted small" }, "sizes kept for a minute")] });
+    const other = r.caches;
+    const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "A cache of a deleted loop, or not the web's (a `flux task run` on this machine). Deleting one frees its space; a loop that comes back rebuilds it."),
+      h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Cache", "Whose", "Size", "Last touched", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
+        h("tbody", {}, other.map(c => h("tr", {}, h("td", { class: "mono" }, c.key),
+          h("td", {}, c.kind === "gone" ? h("span", {}, `${c.user}'s ${c.app}, `, h("span", { class: "pill warn" }, "deleted")) : h("span", { class: "muted" }, "not the web's")),
+          h("td", { class: "num mono" }, bytes(c.size)), h("td", { class: "muted" }, c.touched ? ago(c.touched) : ""),
+          h("td", { class: "right" }, act("Delete", async () => {
+            if (!await confirmDialog(`Delete the cache ${c.key}?`, `${bytes(c.size)}: its scratch, the agents' sessions and the tools' cache.`, { ok: "Delete", danger: true })) return;
+            const x = await api(`/admin/caches/${enc(c.key)}/clean`, { method: "POST", body: { what: "all" } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
+          }, { cls: "small danger" }))))))]) : "";
+    body.replaceChildren(h("div", { class: "row end" }, h("span", { class: "muted" }, "measured ", ago(Date.now() / 1000)),
+        act("Measure again", load, { cls: "small" })), machineCard, contCard, diskCard, cacheCard);
+  }
+  await load();
+  const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);
+  cleanup.push(() => clearInterval(t));
+}
+
+async function adminUsers(body) {
+  const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/resources").catch(() => null)]);
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
   const admin = h("input", { type: "checkbox" });
-  const box = h("div", {}, loopsTable(allApps, { who: true }));
-  show(head("Admin", "Users, every loop and what runs, the audit trail."),
-    h("div", { class: "grid-2" },
-      card("Users", [h("table", { class: "list" }, h("tbody", {}, users.map(u => h("tr", {},
-          h("td", { class: "strong" }, u.name), h("td", {}, h("span", { class: "pill" }, u.role), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
-          h("td", { class: "right" }, h("div", { class: "actions end" },
-            act(u.disabled ? "Enable" : "Disable", async () => {
-              if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
-              await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
-            }, { cls: "small" }),
-            act("Reset password", async () => {
-              const p = await promptDialog(`New password for ${u.name}`, "At least 10 characters", { type: "password", min: 10 });
-              if (p === null) return;
-              await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { password: p } }); toast(`${u.name}'s password changed`, "ok");
-            }, { cls: "small" }))))))),
-        h("div", { class: "row add-user" }, name, pw, h("label", { class: "check" }, admin, "admin"),
-          act("Add user", async () => {
-            await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: admin.checked ? "admin" : "user" } });
-            toast(`${name.value} added`, "ok"); route();
-          }, { cls: "primary" }))]),
-      card("Audit", h("div", { class: "audit" }, h("table", { class: "list" }, h("tbody", {}, audit.slice(0, 100).map(a => h("tr", {}, h("td", { class: "muted" }, ago(a.t)),
-        h("td", {}, a.user || ""), h("td", {}, a.action), h("td", { class: "mono muted" }, a.detail)))))))),
-    card("Every loop", box),
-    card("Usage per user", h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["User", "Loops", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i ? "num" : "" }, x)))),
-      h("tbody", {}, use.map(u => h("tr", {}, h("td", { class: "strong" }, u.user), h("td", { class: "num mono" }, String(u.loops)),
-        h("td", { class: "num mono" }, String(u.turns)), h("td", { class: "num mono" }, dur(u.seconds) || "0s"),
-        h("td", { class: "num mono" }, u.counted ? fmtTok(u.tokens_in) : "—"), h("td", { class: "num mono" }, u.counted ? fmtTok(u.tokens_out) : "—"),
-        h("td", { class: "num mono" }, u.cost_usd ? `$${u.cost_usd.toFixed(2)}` : "—")))))));
-  pageRefresh = async () => box.replaceChildren(loopsTable(await api("/admin/apps"), { who: true }));
+  const useOf = (n) => use.find(u => u.user === n) || {};
+  const def = res ? res.max_running : 4;
+  const limitCell = (u) => {
+    const cur = res && res.limits ? res.limits[u.name] : null;
+    const inp = h("input", { type: "number", min: 0, max: 64, value: cur ?? "", placeholder: String(def), style: "width:64px" });
+    return h("td", {}, h("span", { class: "inline" }, inp, act("Set", async () => {
+      const v = inp.value.trim() === "" ? null : Number(inp.value);
+      await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: v } });
+      toast(`${u.name}: ${v == null ? `the default (${def})` : v} loop(s) at once`, "ok");
+    }, { cls: "small" })));
+  };
+  body.replaceChildren(card("Users", [h("div", { class: "scroll-x" }, h("table", { class: "list" },
+      h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Role"), h("th", { title: "Loops running at once; empty: the server's default" }, "Running limit"),
+        h("th", { class: "num" }, "Loops"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Time"), h("th", { class: "num" }, "Tokens in → out"), h("th", { class: "num" }, "Cost"), h("th", {}, ""))),
+      h("tbody", {}, users.map(u => { const x = useOf(u.name); return h("tr", {},
+        h("td", { class: "strong" }, u.name), h("td", {}, h("span", { class: "pill" }, u.role), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
+        limitCell(u),
+        h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
+        h("td", { class: "num mono" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
+        h("td", { class: "right" }, h("div", { class: "actions end" },
+          act(u.disabled ? "Enable" : "Disable", async () => {
+            if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
+            await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
+          }, { cls: "small" }),
+          act("Reset password", async () => {
+            const p = await promptDialog(`New password for ${u.name}`, "At least 10 characters", { type: "password", min: 10 });
+            if (p === null) return;
+            await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { password: p } }); toast(`${u.name}'s password changed`, "ok");
+          }, { cls: "small" })))); })))),
+    h("div", { class: "row add-user" }, name, pw, h("label", { class: "check" }, admin, "admin"),
+      act("Add user", async () => {
+        await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: admin.checked ? "admin" : "user" } });
+        toast(`${name.value} added`, "ok"); route();
+      }, { cls: "primary" }))]));
 }
 
 async function accountPage() {
@@ -1384,7 +1500,7 @@ async function route() {
     if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Overview");
     if (hash === "#/new") return await newPage();
     if (hash === "#/configure") return await configurePage(null);
-    if (hash === "#/admin" && me.role === "admin") return await adminPage();
+    if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");
     if (hash === "#/account") return await accountPage();
     return await appsPage();
   } catch (x) { if (x.message !== "log in") show(card(null, h("p", { class: "err" }, x.message))); }
@@ -1407,7 +1523,7 @@ function drawNav() {
   document.getElementById("nav").replaceChildren(...(me ? [
     link("#/", "Loops", here === "#/" || (here.startsWith("#/app") && !here.endsWith("/configure")) || here.startsWith("#/u/")),
     link("#/configure", "New loop", here === "#/configure" || here === "#/new"),
-    me.role === "admin" ? link("#/admin", "Admin", here === "#/admin") : ""] : []));
+    me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""] : []));
   drawBell();
   document.getElementById("who").replaceChildren(themeBtn, ...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu), h("a", { href: "#/account", class: "me" }, me.name),
     h("button", { class: "small", onclick: async () => { await api("/logout", { method: "POST" }).catch(() => {}); me = null; location.hash = "#/login"; } }, "Log out")] : []));

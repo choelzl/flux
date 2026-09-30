@@ -53,11 +53,15 @@ class RunManager:
 
     # ---- start: the loop resumes from its record
     def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any]) -> None:
+        paused = self.store.server_get("paused")
+        if paused:
+            raise ValueError(f"starts are paused by an admin: {paused}")
         mine = self.store.runs(user)
         if any(r["app"] == app and self.live(r) for r in mine):
             raise ValueError(f"{app} is running")
-        if sum(1 for r in mine if self.live(r)) >= self.max_running:
-            raise ValueError(f"at most {self.max_running} loops running at once per user")
+        limit = self.limit(user)
+        if sum(1 for r in mine if self.live(r)) >= limit:
+            raise ValueError(f"at most {limit} loop(s) running at once for {user.name}")
         (app_dir / "out").mkdir(exist_ok=True)
         files = loop_files(app_dir)
         files["log"].parent.mkdir(exist_ok=True)
@@ -88,6 +92,11 @@ class RunManager:
         fh.close()
         self.store.set_run(run_id, pid=proc.pid)
         threading.Thread(target=self._wait, args=(run_id, proc), daemon=True).start()
+
+    def limit(self, user: User) -> int:
+        """The user's loops running at once: an admin's setting for them (D695), else the server's."""
+        got = self.store.server_get(f"max_running:{user.name}")
+        return int(got) if got is not None else self.max_running
 
     def _wait(self, run_id: int, proc: subprocess.Popen) -> None:
         rc = proc.wait()

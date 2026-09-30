@@ -238,6 +238,8 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
            "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
            "--workdir", os.getcwd(), "--label", "flux.sandbox=1"]
+    if os.environ.get("FLUX_SANDBOX_APP"):
+        cmd += ["--label", f"flux.app={os.environ['FLUX_SANDBOX_APP']}"]    # `flux serve`'s admin finds its loop (D695)
     if eng == "docker":
         # the daemon is root: run as you; PID 1 is tini (Docker's --init lives under /sbin, the host's here)
         cmd += ["--user", f"{os.getuid()}:{os.getgid()}", "--tmpfs", "/run"]

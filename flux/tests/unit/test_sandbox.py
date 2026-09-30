@@ -78,6 +78,11 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
     boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
     assert boxed[boxed.index("--network") + 1] == "none" and "HTTPS_PROXY=http://127.0.0.1:18080" in boxed
+    labels = [c for c, prev in zip(cmd[1:], cmd) if prev == "--label"]
+    assert labels == ["flux.sandbox=1"], "a run of this machine's user: no loop's label"
+    monkeypatch.setenv("FLUX_SANDBOX_APP", "bob.x")
+    web = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
+    assert "flux.app=bob.x" in [c for c, prev in zip(web[1:], web) if prev == "--label"], "D695: the admin finds its loop"
 
 
 def test_the_allowlist_matches_domains_ips_and_localhost():

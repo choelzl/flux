@@ -76,6 +76,22 @@ class DocSave(BaseModel):
     kept: list[str] = Field(default_factory=list)
 
 
+class Clean(BaseModel):                   # D695: the admin's controls
+    what: str
+
+
+class Paused(BaseModel):
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class Limit(BaseModel):
+    max_running: int | None = None
+
+
+class StopAll(BaseModel):
+    now: bool = False
+
+
 class Settings(BaseModel):
     values: dict[str, str | None]
 
@@ -210,6 +226,103 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 out.append({**a, "owner": u.name, **runs.state(u, a["name"]),
                             "summary": _summary(Workspace(store.data, u.name), u, a["name"])})
         return out
+
+    # ---- the machine and its controls (D695)
+    def _live_loops() -> dict[tuple[str, str], dict[str, Any]]:
+        """(user, app) -> the live start, over every user."""
+        out = {}
+        for u in store.users():
+            for r in store.runs(u):
+                if (u.name, r["app"]) not in out and runs.live(r):
+                    out[(u.name, r["app"])] = r
+        return out
+
+    @app.get("/api/admin/resources")
+    def resources(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """The machine, the sandbox's containers and every loop's disk (D695)."""
+        from flux_cli.sandbox import _local
+
+        from . import admin as adm
+
+        live = _live_loops()
+        users = store.users()
+        loops, pairs = [], set()
+        for u in users:
+            w = Workspace(store.data, u.name)
+            for a in w.apps():
+                pairs.add((u.name, a["name"]))
+                try:
+                    disk = adm.loop_disk(w.app(a["name"]), u.name, a["name"])
+                except WorkspaceError:
+                    continue
+                st = runs.state(u, a["name"])
+                loops.append({"user": u.name, "app": a["name"], "running": (u.name, a["name"]) in live,
+                              "container": st.get("container"), "last_active": st.get("last_active"), **disk})
+        by_key = {adm._key(x["user"], x["app"]): x for x in loops}
+        cont = adm.containers()
+        for c in cont["containers"]:
+            owner = by_key.get(adm._key(*c["app"].split(".", 1))) if c.get("app") and "." in c["app"] else None
+            owner = owner or next((x for x in loops if x.get("container") == c["name"]), None)
+            c["user"], c["loop"] = (owner["user"], owner["app"]) if owner else (None, None)
+            c["orphan"] = c["state"] != "running" or not (owner and owner["running"])
+        caches = [c for c in adm.caches(pairs, {u.name for u in users}) if c["kind"] != "loop"]
+        paths = {"server data": str(store.data), "sandbox caches": str(adm.cache_root().parent), "sandbox storage": str(_local())}
+        return {"machine": adm.machine({k: v for k, v in paths.items() if os.path.exists(v)}), **cont, "loops": loops,
+                "caches": caches, "paused": store.server_get("paused"), "max_running": runs.max_running,
+                "limits": {u.name: store.server_get(f"max_running:{u.name}") for u in users},
+                "running": [{"user": k[0], "app": k[1]} for k in live]}
+
+    @app.post("/api/admin/containers/{cname}/kill")
+    def kill_container(cname: str, a: User = Depends(admin_of)) -> dict[str, str]:
+        from . import admin as adm
+
+        for (_u, _app), r in _live_loops().items():
+            if runs.state(store.user(name=_u), _app).get("container") == cname:
+                raise HTTPException(409, f"{cname} is {_u}'s {_app}, running: stop the loop instead")
+        try:
+            said = adm.kill_container(cname)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "kill container", cname)
+        return {"ok": said}
+
+    @app.post("/api/admin/caches/{key}/clean")
+    def clean_cache(key: str, body: Clean, a: User = Depends(admin_of)) -> dict[str, Any]:
+        from . import admin as adm
+
+        for (u, app_name) in _live_loops():
+            if adm._key(u, app_name) == key:
+                raise HTTPException(409, f"{u}'s {app_name} is running: its cache is in use")
+        try:
+            freed = adm.clean(key, body.what)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "clean cache", f"{key}: {body.what}, {freed} bytes")
+        return {"freed": freed}
+
+    @app.post("/api/admin/stop-all")
+    def stop_all(body: StopAll, a: User = Depends(admin_of)) -> dict[str, Any]:
+        said = {f"{u}/{app_name}": runs.stop(r, now=body.now, why=f"every loop stopped by {a.name}")
+                for (u, app_name), r in _live_loops().items()}
+        store.audit(a.name, "stop all", f"{len(said)} loop(s){' now' if body.now else ''}")
+        return {"stopped": said}
+
+    @app.put("/api/admin/paused")
+    def set_paused(body: Paused, a: User = Depends(admin_of)) -> dict[str, Any]:
+        reason = (body.reason or "").strip() or None
+        store.server_set("paused", reason)
+        store.audit(a.name, "starts paused" if reason else "starts resumed", reason or "")
+        return {"paused": reason}
+
+    @app.put("/api/admin/users/{uname}/limit")
+    def set_limit(uname: str, body: Limit, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if store.user(name=uname) is None:
+            raise HTTPException(404, "no such user")
+        if body.max_running is not None and not 0 <= body.max_running <= 64:
+            raise HTTPException(400, "a limit from 0 to 64")
+        store.server_set(f"max_running:{uname}", body.max_running)
+        store.audit(a.name, "running limit", f"{uname}: {body.max_running if body.max_running is not None else 'the default'}")
+        return {"max_running": body.max_running}
 
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
@@ -418,7 +531,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"digest": digest, "changed": digest != meta.get("last_start_digest"),
                 "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
                 "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
-                "options": meta.get("last_options")}
+                "options": meta.get("last_options"), "paused": store.server_get("paused")}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
     def loop_of(name: str, user: User, owner: str | None = None) -> tuple[Workspace, User, Path, dict[str, Any] | None]:

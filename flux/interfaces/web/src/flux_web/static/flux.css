@@ -403,3 +403,14 @@ dialog.dlg:has(.compare) { width: min(980px, calc(100vw - 32px)); }
 .offline { position: fixed; top: 0; left: 0; right: 0; z-index: 50; text-align: center; padding: 6px 12px; font-size: 13.5px;
   background: var(--warn); color: #1c1e22; box-shadow: var(--shadow); }
 .offline[hidden] { display: none; }
+
+/* D695: the admin's resources */
+.meter { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 18%, transparent); margin: 6px 0 4px; overflow: hidden; }
+.meter > div { height: 100%; background: var(--accent); border-radius: 3px; }
+.meter.mid > div { background: var(--warn); }
+.meter.high > div { background: var(--bad); }
+.row.end { justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
+tr.sum td { border-top: 2px solid var(--line); }
+.tabs a[role=tab] { text-decoration: none; border-bottom: 2px solid transparent; padding: 8px 14px; color: var(--muted); }
+.tabs a[role=tab]:hover { color: var(--ink); }
+.tabs a[role=tab].on { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }

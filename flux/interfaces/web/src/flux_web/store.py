@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE TABLE IF NOT EXISTS failures (name TEXT NOT NULL, t REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (
     user_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
+CREATE TABLE IF NOT EXISTS server (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
 #: What a user may set for their runs (D684): the model endpoint, and keys, which are secret --
@@ -216,6 +217,23 @@ class Store:
             else:
                 out[r["key"]] = r["value"]
         return out
+
+    # ---- the server's own settings (D695): starts paused, a user's running limit
+    def server_get(self, key: str, default: Any = None) -> Any:
+        import json
+
+        with self._db() as db:
+            row = db.execute("SELECT value FROM server WHERE key = ?", (key,)).fetchone()
+        return json.loads(row["value"]) if row else default
+
+    def server_set(self, key: str, value: Any) -> None:
+        import json
+
+        with self._db() as db:
+            if value is None:
+                db.execute("DELETE FROM server WHERE key = ?", (key,))
+            else:
+                db.execute("INSERT OR REPLACE INTO server VALUES (?, ?)", (key, json.dumps(value)))
 
     # ---- audit
     def audit(self, user: str | None, action: str, detail: str = "") -> None:

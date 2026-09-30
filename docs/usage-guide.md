@@ -210,11 +210,20 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Model for my runs (Account):** an endpoint, a model and keys per user. Keys are stored
   encrypted (`secret.key` beside the server's data) and never shown again. With their own
   endpoint, none of the server's keys go to that user's runs. Empty: the server's model.
+- **Admin** (tabs: Loops, Resources, Users, Audit):
+  - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
+    reason users see; running loops go on), **stop every loop** after its pass or at once.
+  - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
+    and the sandbox storage). The sandbox's containers with CPU, memory and PIDs, each with its
+    loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
+    Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
+    or its past passes' scratch (the journal, transcript and record stay); delete a cache no
+    loop owns (a deleted loop's, or a `flux task run` of this machine's user).
+  - **Users:** role, a running limit per user (empty: the server's `--max-running`), and usage.
 - **Accounts:** passwords are hashed with scrypt; five failures lock a name for ten minutes;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
   A user sees only their own applications and runs. An admin manages users, sees every
-  application (read only) and every run (and may stop it), what is running now, and the audit
-  trail.
+  application (read only) and every run (and may stop it), and the audit trail.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
 - **Limits:** `--max-running` runs at once per user (4).
