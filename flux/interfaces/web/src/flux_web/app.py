@@ -509,9 +509,50 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 answer = json.loads(ans.read_text())
             except ValueError:
                 pass
+        from .results import designs
+
+        decision = ((answer or {}).get("decision") or {}).get("name") if isinstance((answer or {}).get("decision"), dict) else None
+        listed = designs(run["db"], _stages(_w, name), decision)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "rows": rows,
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
-                "agent_turns": len(rep.agent_turns), "answer": answer}
+                "agent_turns": len(rep.agent_turns), "answer": answer, **listed}
+
+    def _stages(w: Workspace, name: str) -> list[dict[str, Any]]:
+        """The document's stages (order, cutoffs) as the loader reads them; [] when it refuses."""
+        from .configure import views
+
+        try:
+            normal = views(w.path(name, w.meta(name).get("document") or ""))["normal"] or {}
+        except Exception:  # noqa: BLE001 -- the record's own order then, no cutoffs
+            return []
+        return [st for st in normal.get("stages") or [] if st.get("name")]
+
+    @app.get("/api/apps/{name}/design")
+    def design(name: str, design: str, part: str = "", owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """One design of the loop: its source, why it failed, every stage's numbers (D690)."""
+        from flux_store import CampaignStore
+
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        if not run or not os.path.exists(run["db"]):
+            raise HTTPException(404, "no record yet")
+        store = CampaignStore(run["db"])
+        found: dict[str, Any] = {"name": design, "part": part, "artifact": None, "trials": []}
+        try:
+            for camp in store.list_campaigns():
+                for t in store.trials(camp["campaign_id"], status="ok"):
+                    c = t.candidate or {}
+                    if str(c.get("name")) != design or str(c.get("subgoal") or "") != part:
+                        continue
+                    if c.get("artifact"):
+                        found["artifact"] = c["artifact"]
+                    if t.result is not None and t.stage not in ("gate", "admit", "prototype"):
+                        found["trials"].append({"stage": t.stage, "when": t.created_at,
+                                                "metrics": {m: t.result.value_of(m) for m in t.result.metrics}})
+        finally:
+            store.close()
+        if not found["trials"]:
+            raise HTTPException(404, "no such design")
+        return found
 
     @app.get("/api/apps/{name}/report", response_class=HTMLResponse)
     def report(name: str, owner: str | None = None, user: User = Depends(user_of)) -> HTMLResponse:

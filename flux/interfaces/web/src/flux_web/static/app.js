@@ -384,6 +384,59 @@ async function loopPage(name, owner, tab = "Live") {
       }, { cls: "small primary" }));
   }
 
+  /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
+  function resultsView(r) {
+    let filter = "all";
+    const fmt = (v) => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
+      : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
+    const unit = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
+    const limitOf = (m) => r.limits.find(l => l.metric === m);
+    const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted") : h("span", { class: "pill bad" }, "failed");
+    const detail = h("div", { class: "detail" }, empty("Select a design to see the limits it misses, every stage's numbers and its source."));
+    async function open(d, tr) {
+      for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
+      detail.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      const full = await api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`);
+      const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
+      const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
+      detail.replaceChildren(
+        h("div", { class: "detail-head" }, h("h2", {}, d.name), verdictPill(d), d.decision ? h("span", { class: "pill ok" }, "★ decision") : "",
+          d.part ? h("span", { class: "muted" }, `part ${d.part}`) : ""),
+        d.why.length ? h("div", { class: "blk" }, h("h3", {}, "Limits it misses"), h("ul", { class: "misses" }, d.why.map(w => h("li", {}, w)))) : "",
+        stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
+          h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
+          h("tbody", {}, stages.map(([st, m]) => h("tr", {}, h("td", {}, st), ...metrics.map(k => h("td", { class: "mono num" }, fmt(m[k])))))))) : "",
+        full.artifact ? h("div", { class: "blk" }, h("h3", {}, "The design"), h("pre", { class: "val tall" }, full.artifact)) : "");
+    }
+    const table = h("div", {});
+    function drawTable() {
+      const shown = r.designs.filter(d => filter === "all" || d.verdict === filter);
+      table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
+        h("thead", {}, h("tr", {}, h("th", {}, "Design"), h("th", {}, "Verdict"), h("th", {}, "Stage"),
+          ...r.metrics.map(m => { const l = limitOf(m); return h("th", { class: "num", title: l ? `${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : "" },
+            m, l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
+          h("th", {}, "When"))),
+        h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
+          h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "", d.name, d.part ? h("div", { class: "muted small" }, d.part) : ""),
+          h("td", {}, verdictPill(d)),
+          h("td", { class: "muted" }, d.shown),
+          ...r.metrics.map(m => { const v = d.numbers[m]; const ok = d.meets[m];
+            return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", {}, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
+          h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; })))) : empty("No design matches."));
+    }
+    const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; chips(); drawTable(); } }, label);
+    const chipBox = h("div", { class: "chips" });
+    function chips() {
+      chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), chip("failed", `Failed ${r.counts.failed}`));
+    }
+    chips(); drawTable();
+    return h("div", {},
+      card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives)),
+        h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
+          h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")))),
+      h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })));
+  }
+
   async function drawBody() {
     if (tab === "Live") {
       if (!st.running && !st.last_active) {
@@ -417,16 +470,8 @@ async function loopPage(name, owner, tab = "Live") {
     } else if (tab === "Results") {
       body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
       const r = await api(`/apps/${enc(name)}/results${qs}`);
-      if (!r.campaign) { body.replaceChildren(card(null, empty("No record yet: the loop has not measured anything."))); return; }
-      const metrics = [...new Set(r.rows.flatMap(x => Object.keys(x.metrics)))].slice(0, 8);
-      body.replaceChildren(
-        card("Objectives", [h("p", {}, r.objectives),
-          r.answer ? h("details", {}, h("summary", {}, "The latest answer (JSON)"), h("pre", { class: "val tall" }, JSON.stringify(r.answer.decision || r.answer, null, 1).slice(0, 20000))) : ""],
-          { actions: [h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")] }),
-        card(`Measured (${r.rows.length})`, r.rows.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" },
-          h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Stage"), h("th", {}, "Design"), h("th", {}, "Part"), ...metrics.map(m => h("th", { class: "num" }, m)))),
-          h("tbody", {}, r.rows.slice().reverse().slice(0, 300).map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.when)), h("td", {}, x.stage), h("td", { class: "mono" }, x.name),
-            h("td", {}, x.whole ? "whole" : (x.part || "")), ...metrics.map(m => h("td", { class: "mono num" }, x.metrics[m] != null ? Number(x.metrics[m]).toPrecision(5) : ""))))))) : empty("Nothing measured yet.")));
+      if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No result yet: a design is a result once a stage measured it."))); return; }
+      body.replaceChildren(resultsView(r));
     } else if (tab === "Files") {
       const files = await api(`/apps/${enc(name)}/files${qs}`);
       body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [fileList(files), mine ? adder() : ""], { cls: "files-card" }), card(null, viewer, { cls: "viewer-card" })));

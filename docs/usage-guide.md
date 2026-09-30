@@ -161,7 +161,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     pauses when you scroll up), wrap, filter by text or `/regex/`, show problems only, and
     download.
   - **Agent turns:** each prompt, reply and tool call.
-  - **Results:** every measured design, the answer, and the report.
+  - **Results:** the designs the loop measured successfully, across every start, each
+    **accepted** or **failed** by the loop's limits (the stages' cutoffs, the objectives'
+    limits), with its numbers at the deepest stage it reached and a mark on each limited one.
+    The decision comes first. Filter: all / accepted / failed. A design opens with the limits
+    it misses, every stage's numbers and its source. A draft sent to repair or refused by the
+    gate is not a result.
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
     When an agent asks (`questions: operator`), the page shows the question and its time left,
     and the answer goes back to the agent.

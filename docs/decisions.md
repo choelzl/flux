@@ -834,3 +834,22 @@ the topics above.
 
   Live, in headless Firefox: add8 started from the page ("Start (resume)", the dialog), running
   with the new start's tree, one log with its start line; the list showing it running with Stop.
+
+- **D690: a loop's results are its measured designs, accepted or failed by its limits.**
+  `flux_web/results.py` reads the record's `ok` trials of a measuring stage, across every
+  campaign: not `gate`, `admit` or `prototype`, and not a draft in repair. Per design it keeps
+  each stage's latest numbers; `shown` is the deepest stage in the document's order.
+  - **Accepted** when every applicable limit holds:
+    - the stages' cutoffs on that stage's numbers: `at`, `below`, and `within` judged against
+      the best design measured at that stage;
+    - each objective's limit at its stage, only for a design that reached it (an objective
+      without a stage judges the deepest measured).
+  - **Failed** otherwise, with each missed limit said ("fmax_mhz 800 is below the limit 1000
+    (confirm)", "… (the screen cutoff)").
+  - **The page.** The decision first, then the newest. Filter chips. The limited columns carry
+    their limit and ✓/✗. A row opens the misses, every stage's numbers and the design's source
+    (`/api/apps/{name}/design`).
+
+  Tested on a written record: accepted, failed by an objective, failed by a cutoff; a gate
+  refusal is not listed; a `within` cutoff. Live: add8's two designs, accepted, 5513.6 and
+  4242.3 MHz against ≥ 2000.
