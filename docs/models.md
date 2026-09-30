@@ -102,7 +102,7 @@ uses its own model and configuration. The loop gives it a work directory, a brie
 limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, simulate,
 synthesize or test. The loop runs the gate and the stages, and a failure goes back to the agent's
 session with the exact output (D673). The agent keeps a shell for reading, searching and
-computing (`python3`, `pdftotext`). The presets deny the design tools (verilator, iverilog,
+computing (`python3`, `pdftotext`), and simulating its draft with Icarus (`iverilog`, `vvp`, D685). The presets deny the design tools (verilator,
 yosys, openroad, sta, the C compilers, make, `flux rtl`, `flux task`, ...) and `bash`/`sh` (D674).
 Claude Code gets them as `--disallowedTools "Bash(yosys:*)" ...`. OpenCode gets them as
 `permission.bash` rules merged into `OPENCODE_CONFIG_CONTENT`; an `--agent` of your own with

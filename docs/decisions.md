@@ -738,3 +738,7 @@ the topics above.
   - the account and admin pages checked in headless Firefox.
 
   Ideas for later: `flux/interfaces/web/IDEAS.md`.
+
+- **D685: agents may run Icarus.** `iverilog` and `vvp`, now in the shell from nixchip, left the
+  deny list: an agent can simulate its own draft. Verilator, Yosys, OpenROAD, OpenSTA, and
+  `flux rtl` and `flux task` stay the loop's to run.

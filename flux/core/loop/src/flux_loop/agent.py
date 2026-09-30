@@ -58,7 +58,8 @@ __all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "ag
 #: computing (python3, pdftotext), without the commands that compile, simulate, synthesize or
 #: test, and without `bash` / `sh` (a `bash -c` would pass by the list). Best effort: the brief
 #: says it too, and Codex, whose shell is its only tool, has only the brief.
-DENIED = ("verilator", "iverilog", "vvp", "yosys", "openroad", "sta", "klayout", "champsim", "timeloop-model",
+#: Not iverilog / vvp (D685): an agent may simulate its own draft with Icarus.
+DENIED = ("verilator", "yosys", "openroad", "sta", "klayout", "champsim", "timeloop-model",
           "timeloop-mapper", "gcc", "g++", "cc", "c++", "clang", "clang++", "make", "cmake", "ninja", "pytest",
           "flux rtl", "flux task", "flux run", "bash", "sh")
 _CLAUDE_DENY = ("--allowedTools", "Bash", "--disallowedTools", "AskUserQuestion", *(f"Bash({c}:*)" for c in DENIED))
