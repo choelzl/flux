@@ -106,7 +106,9 @@ label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--
 .inline { display: flex; gap: 6px; align-items: center; }
 .inline input { flex: 1; min-width: 0; }
 details summary { cursor: pointer; color: var(--accent); font-weight: 500; margin: 6px 0; }
-.add-user input { flex: 1; min-width: 120px; }
+.add-user { align-items: center; margin-top: 14px; }
+.add-user input:not([type=checkbox]) { flex: 0 1 240px; min-width: 120px; }
+.add-user input[type=checkbox] { flex: none; }
 
 /* ---- the login */
 .card.login { max-width: 380px; margin: 9vh auto; padding: 28px; }
