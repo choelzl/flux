@@ -44,7 +44,8 @@ def test_the_running_agent_streams_its_tools_and_words(tmp_path):
         flux_profile.clear_listener()
     assert turn.ok and "wrote the file" in turn.text
     mid = [u for u in lis.updates if "tool calls" in u]
-    assert mid and mid[0]["tool calls"].startswith("1: bash"), "the row updated while the agent ran"
+    # an update at most once a second: under load the first may already count both tools
+    assert mid and mid[0]["tool calls"].split(": ", 1)[1].startswith("bash"), "the row updated while the agent ran"
     assert any("elapsed" in u for u in lis.updates)
     assert lis.ends and lis.ends[-1]["name"] == "agent: fake" and "2: bash, edit" in lis.ends[-1]["tool calls"]
 

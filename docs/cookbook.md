@@ -92,9 +92,9 @@ A policy of your own is a class in a file beside the document: `dse: my_search:M
 - **Steer it.** Type a note in the TUI (`f`, or a line on the terminal of a run without it); it reaches the next
   prompt.
 - **A coding agent instead of a model turn**: `flow.generate: {agent: opencode|claude|codex}`.
-  It gets a work directory and the gate command to check its draft against. With
-  `budget.prototype: true` it writes the Python prototype instead and runs `flux rtl proto` on it
-  (a check of every input in seconds). The loop spells the RTL. For hard numeric functions this
+  It gets a work directory and writes the file; the loop runs the gate and brings a failure back
+  to the same session. With `budget.prototype: true` it writes the Python prototype instead, which
+  the loop checks with `flux rtl proto` (every input in seconds). The loop spells the RTL. For hard numeric functions this
   works better than asking an agent for the RTL itself.
 
 ## Reading the results

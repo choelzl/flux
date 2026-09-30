@@ -64,8 +64,8 @@ def test_the_agent_writes_the_artifact_and_is_repaired_from_the_failure(tmp_path
     assert "HOW TO ANSWER" in last and "Write the complete text artifact" in last
     assert "THE LAST DRAFT" in last and "FAIL line 4" in last, "the repair brief carries the prior and the failure"
     first = seen.split("=====")[0]
-    assert "THE GATE that will judge the file is this command" in first and "digits" in first, \
-        "D595: the agent is told the gate's own command, so it can run it on its draft"
+    assert "do not run the gate" in first and "comes back to you" in first and "THE GATE" not in first, \
+        "D673: the agent writes, the loop runs the gate and comes back with its output"
 
 
 def test_the_agent_may_print_the_artifact_instead(tmp_path):
@@ -89,6 +89,7 @@ def test_the_presets_and_the_missing_binary():
     assert agent_spec("opencode").resume[-2:] == ("--session", "{session}") and agent_spec("opencode").output == "opencode"
     assert "--dir" in agent_spec("opencode").argv and "{workdir}" in agent_spec("opencode").argv
     assert "AskUserQuestion" in agent_spec("claude").argv and "--resume" in agent_spec("claude").resume
+    assert "Bash" in agent_spec("claude").argv and "Bash" in agent_spec("claude").resume      # D673: no shell
     a = agent_spec({"preset": "codex", "timeout_s": 60, "questions": "model"})
     assert a.tool == "codex" and a.timeout_s == 60.0 and a.questions == "model" and a.resume is None
     with pytest.raises(ValueError, match="not a preset"):
@@ -274,3 +275,14 @@ def test_an_agent_that_ran_out_of_context_continues_in_a_fresh_session(tmp_path)
     subs = {"prompt": "write out.txt", "artifact": str(art), "python": sys.executable, "workdir": str(tmp_path)}
     converse(spec, subs, workdir=tmp_path, artifact=art, answer=lambda q: ("", "nobody"), say=said.append)
     assert art.read_text() == "done\n" and any("ran out of context; a fresh session" in m for m in said)
+
+
+def test_opencode_is_denied_its_shell_in_its_inline_config(monkeypatch):
+    """D673: `permission.bash: deny` merged into OPENCODE_CONFIG_CONTENT, the machine's own kept."""
+    from flux_loop.agent import _config_env
+
+    spec = agent_spec("opencode")
+    env = _config_env(spec, {"OPENCODE_CONFIG_CONTENT": '{"permission": {"edit": "allow"}, "model": "m"}'})
+    assert json.loads(env["OPENCODE_CONFIG_CONTENT"]) == {"permission": {"edit": "allow", "bash": "deny"}, "model": "m"}
+    assert json.loads(_config_env(spec, {})["OPENCODE_CONFIG_CONTENT"]) == {"permission": {"bash": "deny"}}
+    assert _config_env(agent_spec("claude"), {}) == {}

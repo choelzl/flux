@@ -505,3 +505,15 @@ the topics above.
   by its own thread and closed, beside the streaming readers; with nothing to send it is closed
   at once. Extra `args` go at the end (before codex's `-`). Live: OpenCode read a 132 KB brief
   on stdin and its resumed session recalled the code word in it.
+
+- **D673: the agent writes, the loop runs.** Agents compiled and ran tests on their own drafts
+  (D595 had put the gate command in the brief). Now the brief says: do not compile, lint,
+  simulate, synthesize, test or run; write the file and end the turn. The loop runs the gate and
+  the stages, and a refusal resumes the part's session with the exact output ("THE LOOP RAN
+  YOUR DRAFT AND REFUSED IT: ..."). The same holds for the prototype: the loop runs
+  `flux rtl proto`. The presets enforce it: Claude Code runs with `--disallowedTools Bash`, and
+  OpenCode gets `permission.bash: deny` merged into `OPENCODE_CONFIG_CONTENT` (the machine's
+  own keys kept). Codex has only the brief. Live: OpenCode on add8 made one `write` call and
+  no shell call, and the loop gated and measured the draft (4,555 MHz, 3.1 µm²). With a golden
+  that disagreed with the contract, the loop's refusal came back into the same session as
+  failing vectors.

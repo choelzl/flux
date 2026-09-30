@@ -155,8 +155,9 @@ Each of these is one flag or one line; mix them.
 - **Let a model plan each pass:** `--agent plan` (or `flow: {plan: llm}`): the parts, the order,
   the method to try first, the budgets. It is checked against the problem before it applies.
 - **Hand the writing to a coding agent:** `flow: {generate: {agent: opencode}}` (or `claude`,
-  `codex`). With `prototype: true` the agent writes the Python prototype and runs
-  `flux rtl proto` on it itself; the loop still writes the RTL and runs the gate.
+  `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
+  `prototype: true` the agent writes the Python prototype, which the loop checks with
+  `flux rtl proto` before it writes the RTL.
 - **Give it knowledge:** `knowledge: {files: [method-note.md]}`: a method, measured facts, a
   paper. Not a design. `applications/gelu_fp16/` shows a method note for a hard function.
 - **Steer it while it runs:** type a note in the TUI (`f`); it reaches the next prompt.

@@ -91,17 +91,21 @@ turns every failure into the next prompt. For hard numeric RTL:
   For the GELU, the note covered not putting a float into one fixed-point format, the function
   factored as x times a smooth h(x), the regions where the answer is x, -0 or a short Taylor
   series, and a polynomial per segment;
-- hand the prototype to a coding agent, which runs `flux rtl proto` on its own draft and reads
-  where it fails.
+- hand the prototype to a coding agent; the loop checks each draft with `flux rtl proto` and
+  tells the agent where it fails.
 
 ## Coding agents
 
 A document can hand generation to a coding agent (`flow: {generate: {agent: opencode}}`), and
 `flux ask --author opencode|claude|codex` hands it the writing of the problem itself. The agent
-uses its own model and configuration. The loop gives it a work directory, a brief with the gate
-command to check its draft against (D595), and a time limit, and records every agent turn (see
-`flux log`). With `budget.prototype: true` the agent writes the Python prototype instead. It
-checks the prototype with `flux rtl proto`, and the loop spells the RTL (D618). An agent that
+uses its own model and configuration. The loop gives it a work directory, a brief and a time
+limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, test
+or run anything. The loop runs the gate and the stages, and a failure goes back to the agent's
+session with the exact output (D673). The presets enforce it: Claude Code runs without its Bash
+tool, and OpenCode with `permission.bash: deny` merged into `OPENCODE_CONFIG_CONTENT` (an
+`--agent` of your own that allows `bash` overrides that). Codex has only the brief's word. With
+`budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with
+`flux rtl proto` and spells the RTL (D618). An agent that
 ends a turn without writing its file is nudged to write it, twice at most. An agent whose
 session outgrew the model's context window continues in a fresh session from the brief and its
 last file.

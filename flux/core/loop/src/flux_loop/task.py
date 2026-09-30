@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 import shutil
 import sys
 import time
@@ -1002,24 +1001,19 @@ class PromptProblem(Problem):
             body, _schema = self.rewrite_prompt(sg, prior, failure, state)
         else:
             body, _schema = self.design_prompt(sg, "", state, None, prior, failure)
-        gate = self.task.gate                          # the agent can run the gate it is judged by (D595)
-        check_subs = {"artifact": str(path), "workdir": str(workdir), "name": name, "part": sg or "",
-                      "python": sys.executable, "home": str(Path(self.task.home or ".").resolve())}
-        check = " && ".join(shlex.join(_substitute(c.run, check_subs)) for c in gate)
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=prior.artifact if prior is not None else None, failure=failure,
-                            questions=agent.questions, check=check,
+                            questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state))
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
         if resume:
             # the session holds the brief: what failed, the file, fix it (D669)
             path.write_text(prior.artifact)
-            message = (f"YOUR DRAFT WAS REFUSED:\n{failure.strip()[:4000]}\n\nThe refused draft is in `{path}`. "
-                       f"Fix that file in place (or rewrite it if the approach is wrong)"
-                       + ("; run the gate command from the brief again until it reports no failures. " if check else ". ")
-                       + "Then reply with one line saying the file is written.\n")
+            message = (f"THE LOOP RAN YOUR DRAFT AND REFUSED IT:\n{failure.strip()[:4000]}\n\nThe refused draft is in "
+                       f"`{path}`. Fix that file in place (or rewrite it if the approach is wrong); do not run it, the "
+                       f"loop does. Then reply with one line saying the file is written.\n")
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
         prompt_file = workdir / f"PROMPT-{safe}.md"
@@ -1079,11 +1073,10 @@ class PromptProblem(Problem):
 
     def prototype_agent_turn(self, agent: Any, prompt: str, code: str | None, failure: str,
                              subgoal: str | None, state: LoopState) -> str:
-        """One agent turn on the prototype (D618): it edits a file and runs `flux rtl proto` (the
-        stage's own check) until it passes. Returns the file as a `{"prototype": ...}` reply,
-        or "" when nothing new was written."""
+        """One agent turn on the prototype (D618): it edits a file; the loop runs the stage's own
+        check (`flux rtl proto`) and comes back with what failed (D673). Returns the file as a
+        `{"prototype": ...}` reply, or "" when nothing new was written."""
         from .agent import agent_brief, converse, library_section
-        from .golden_proto import TABLE_MAX, golden_path
 
         sess = self._part_session(state, subgoal, "prototype", agent.tool)       # D669: until the prototype passes
         workdir = sess.workdir
@@ -1094,23 +1087,17 @@ class PromptProblem(Problem):
             path.write_text(code)
         else:
             path.unlink(missing_ok=True)
-        from .document import _command
-
-        check = shlex.join(_substitute(_command(
-            ["flux", "rtl", "proto", str(path), "--golden", str(golden_path(self.task)),
-             "--table-max", str(int(self.task.budget.get("prototype_table_max") or TABLE_MAX))], "the prototype check") or (),
-            {"python": sys.executable}))
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",
                             part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
-                            failure=failure, questions=agent.questions, check=check,
+                            failure=failure, questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state))
         resume = sess.id if agent.resume and sess.id and code else None
         message = ""
         if resume:
             # the session holds the brief: what the check said, the file, fix it (D669)
-            message = (f"YOUR PROTOTYPE WAS REFUSED:\n{(failure or 'see the check').strip()[:4000]}\n\nIt is in `{path}`. "
-                       f"Edit it there (or rewrite it if the approach is wrong) and run the check command from the brief "
-                       f"again until it reports 0 failing. Then reply with one line saying the file is written.\n")
+            message = (f"THE LOOP RAN YOUR PROTOTYPE AND REFUSED IT:\n{(failure or 'see the check').strip()[:4000]}\n\n"
+                       f"It is in `{path}`. Edit it there (or rewrite it if the approach is wrong); do not run it, the "
+                       f"loop does. Then reply with one line saying the file is written.\n")
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),

@@ -457,7 +457,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
     budget = max(1, req.prototype_attempts)
     cap = max(budget, int(req.prototype_attempts_max or budget))
     patience = max(0, int(req.prototype_patience or 0))
-    # D618: a coding agent may write the prototype (it runs `flux rtl proto` itself; no in-turn tools)
+    # D618: a coding agent may write the prototype; the loop runs its check (D673)
     agent = problem.prototype_agent() if callable(getattr(problem, "prototype_agent", None)) else None
     attempt = -1
     while attempt + 1 < budget:
@@ -467,7 +467,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         help_lines = [(PROTOTYPE_FIRST_HELP if code is None else PROTOTYPE_HELP).replace("complete python", f"complete {name}"),
                       TOOLS_HELP if req.tools else ""]
         if agent is not None:
-            help_lines = []           # the agent writes the file and runs the check itself
+            help_lines = []           # the agent writes the file; the loop checks it
         if code is None:
             # the method the planning step chose for this part
             plan_line = (f"YOUR PLAN for {tag}, from your planning step: {method.strip()}"
@@ -476,7 +476,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         elif agent is not None:
             parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
                       "The prototype is already in the file named below: edit it there (or rewrite it if "
-                      "the approach itself is wrong) until the check command reports 0 failing.",
+                      "the approach itself is wrong). Do not run it: the loop checks it and comes back with the result.",
                       reminder_for(proto, subgoal, state)]
         else:
             numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(code.splitlines()))

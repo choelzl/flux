@@ -39,8 +39,8 @@ in the report).
 - `{command: "..."}`: a script renders it. With a `space`, the script runs once per point with
   the knobs as placeholders (`flux new --kind sweep`).
 - `{agent: opencode|claude|codex}` or `{agent: {command: [...], timeout_s: N, questions:
-  decide|model|operator}}`: a coding agent writes it in a work directory. Its brief includes
-  the gate command to check its draft against.
+  decide|model|operator}}`: a coding agent writes it in a work directory. It runs nothing: the
+  loop runs the gate and brings a failure back to its session (D673).
 - `{catalog: [files]}`: designs that already exist.
 
 ### A prototype before the target (evolving, D604)
@@ -65,7 +65,7 @@ spelled nor synthesised. If the document
 names a `golden.py` that does not exist, the model writes it first from the statement and the
 contract. That golden is checked (it imports, makes its vectors, answers every output port),
 but read it before trusting a decision made against it. With `flow.generate: {agent: ...}`, a coding agent writes the prototype
-and checks it with `flux rtl proto FILE --golden golden.py`, the stage's own check (D618).
+and the loop checks it with `flux rtl proto FILE --golden golden.py`, the stage's own check (D618).
 
 ## 4. How the search goes (stable names, evolving fields)
 

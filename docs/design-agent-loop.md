@@ -47,9 +47,9 @@ A box turn is a file exchange in a work directory under the pass's trace directo
 | `in/*.json`, `in/*.md` | loop | the box's inputs: standings, the menu, history, the frontier, record rows |
 | `out.json` (or `artifact.*` for generate) | agent | the decision, with `why` |
 
-The agent may read the repository and run `flux report`, `flux task check` and
-`flux rtl proto`. It may not run the gate or a stage on its own behalf: the loop measures what
-it chooses.
+The agent reads and writes; it runs nothing (D673). The presets have no shell: Claude Code
+without its Bash tool, OpenCode with `bash` denied. The loop runs the gate and the stages on what
+it writes and brings the output back to its session.
 
 The loop:
 

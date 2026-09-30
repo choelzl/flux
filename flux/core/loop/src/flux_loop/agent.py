@@ -53,16 +53,20 @@ __all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "ag
 #: resumes its session with an answer, and how its output says the session and its words.
 #: The prompt (and a resume's answer) goes on stdin: no argument-size limit, nothing on the
 #: command line (D672). Each reads stdin when its prompt argument is left out (codex: `-`).
+#: No shell (D673): the agent writes, the loop compiles, tests and measures, and a failure comes
+#: back to the agent's session. Claude Code loses its Bash tool; OpenCode is denied `bash` by
+#: an inline config merged into OPENCODE_CONFIG_CONTENT. Codex runs everything through its
+#: shell, so it has only the brief's word.
 PRESETS: dict[str, dict[str, Any]] = {
     "claude": {"argv": ("claude", "-p", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
-                        "--verbose", "--disallowedTools", "AskUserQuestion"),
+                        "--verbose", "--disallowedTools", "AskUserQuestion", "Bash"),
                "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
-                          "--output-format", "stream-json", "--verbose", "--disallowedTools", "AskUserQuestion"),
+                          "--output-format", "stream-json", "--verbose", "--disallowedTools", "AskUserQuestion", "Bash"),
                "output": "claude"},
     "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}"),
                  "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}"),
-                 "output": "opencode"},
+                 "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": {"permission": {"bash": "deny"}}}},
 }
 OUTPUTS = ("text", "opencode", "claude")
 POLICIES = ("decide", "model", "operator")
@@ -80,6 +84,7 @@ class AgentSpec:
     max_questions: int = 2
     wait_s: float = 300.0
     session: str = "turn"          # a decision box's span: a fresh agent each turn, or one per pass (D669)
+    config: tuple[tuple[str, str], ...] = ()   # JSON merged into these variables of the agent's environment (D673)
 
 
 def agent_spec(spec: Any) -> AgentSpec:
@@ -133,7 +138,26 @@ def agent_spec(spec: Any) -> AgentSpec:
     extra = tuple(str(a) for a in extra)
     argv = _with_args((exe, *p["argv"][1:]), extra)
     resume = _with_args((exe, *p["resume"][1:]), extra) if p["resume"] else None
-    return AgentSpec(preset, argv, resume, p["output"], **common)
+    config = tuple((k, json.dumps(v)) for k, v in (p.get("config") or {}).items())
+    return AgentSpec(preset, argv, resume, p["output"], **common, config=config)
+
+
+def _merged(base: Any, over: Any) -> Any:
+    """`over` merged into `base`, objects key by key; `over` wins elsewhere."""
+    if isinstance(base, dict) and isinstance(over, dict):
+        return {**base, **{k: _merged(base.get(k), v) for k, v in over.items()}}
+    return over
+
+
+def _config_env(spec: AgentSpec, env: dict[str, str]) -> dict[str, str]:
+    """The spec's JSON config merged into what the environment already holds there (D673)."""
+    for key, text in spec.config:
+        try:
+            base = json.loads(env.get(key) or "{}")
+        except ValueError:
+            base = {}
+        env[key] = json.dumps(_merged(base, json.loads(text)))
+    return env
 
 
 def _with_args(argv: tuple[str, ...], extra: tuple[str, ...]) -> tuple[str, ...]:
@@ -152,6 +176,12 @@ _ASKING = {
               "nothing yet; it will be answered and you will continue. Otherwise decide yourself and write the file."),
 }
 _ASKING["operator"] = _ASKING["model"]
+
+#: Who runs what (D673): the agent writes, the loop runs.
+HANDOFF = ("Do not compile, lint, simulate, synthesize, test or run the file, and do not run the gate: you have "
+           "no shell for it. The loop does all of that on the file you write and, when something fails, comes "
+           "back to you in this session with its exact output. Read files as you need; write the file and end "
+           "your turn.")
 
 #: The answer when nobody answers.
 DECIDE = ("Nobody is available to answer questions during this run. Choose the option you judge best for the brief, "
@@ -175,8 +205,7 @@ def library_section(problem: Any, question: str | list[str], state: Any = None) 
 
 
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
-                prior: str | None, failure: str, questions: str = "decide", check: str = "",
-                library: str = "") -> str:
+                prior: str | None, failure: str, questions: str = "decide", library: str = "") -> str:
     """The brief an agent reads: the static prefix (contract, knowledge), the design or the
     repair prompt, the LIBRARY section, then what the loop expects of a terminal tool --
     including whether its questions will be answered."""
@@ -188,10 +217,8 @@ def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, langua
     parts.append(
         f"HOW TO ANSWER. You are a coding agent working in `{workdir}`. Write the complete {language} "
         f"artifact for `{part}` to `{artifact}` (create the file; that file is what gets built and tested, "
-        f"nothing else is read). You may run any tool in this directory to check your work first"
-        + (f"; THE GATE that will judge the file is this command -- run it yourself until it reports no "
-           f"failures, and fix what it prints:\n    {check}\n" if check else ". ")
-        + f"When the file is written, reply with one line saying so. {_ASKING.get(questions, _ASKING['decide'])}")
+        f"nothing else is read). {HANDOFF} When the file is written, reply with one line saying so. "
+        f"{_ASKING.get(questions, _ASKING['decide'])}")
     return "\n\n".join(parts) + "\n"
 
 
@@ -337,7 +364,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
-    env = {**os.environ, "PWD": str(workdir)}
+    env = _config_env(spec, {**os.environ, "PWD": str(workdir)})
     # the prompt on stdin unless the command names a slot for it (D672); a resume's answer
     # comes in `answer`. With nothing to send, stdin is closed so no agent waits on it.
     slots = {m for t in argv for m in re.findall(r"\{(\w+)\}", t)}
@@ -461,14 +488,14 @@ def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: 
         if (not turn.ok and not full) or wrote() or question_in(turn.text) is not None:
             break
         nudge = (f"You have not {'changed' if before is not None else 'written'} `{artifact}` yet. Write the "
-                 f"complete file now with your file-writing tool, run the check command from the brief on it, "
-                 f"and fix what it prints. Then reply with one line saying the file is written.")
+                 f"complete file now with your file-writing tool; the loop checks it. Then reply with one line "
+                 f"saying the file is written.")
         if full:
             # A session that outgrew the context window fails on every resume, so a fresh
             # session starts from the brief and the file.
             nudge = (f"A previous session on this task ran out of context. `{artifact}` holds its last work, if any: "
                      f"read it, keep what is right, and finish the task. Keep tool output short (pipe long "
-                     f"output through `tail`). " + nudge)
+                     f"output short. " + nudge)
             say(f"  agent {spec.tool} ran out of context; a fresh session continues ({n + 1} of {NUDGES})")
         else:
             say(f"  agent {spec.tool} ended without writing {artifact.name}; nudged ({n + 1} of {NUDGES})")
