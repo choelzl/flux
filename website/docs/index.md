@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 # Flux
 
 **Flux searches for the best hardware design for a problem you describe: a model or a script
@@ -64,8 +69,15 @@ the rest and keeps a record of every design it tried.
     Flux builds twelve 16-bit adders, proves each one correct, synthesises them and prints the
     one to build.
 
-Next: [run the applications](demos/index.md), follow the [tutorial](guide/tutorial.md), or
-[build your own problem](guide/build-your-own.md).
+## Where next
+
+| you want to | read |
+|---|---|
+| see a whole problem, start to finish | the [tutorial](guide/tutorial.md): a square root circuit in ten minutes |
+| write your own problem by hand | [build your own](guide/build-your-own.md): the document, key by key |
+| fill in a form instead | the [loop crafter](guide/loop-crafter.md): a form that writes the document |
+| run it, steer it, read the result | [run a problem](guide/run.md): the options, the report, the AI model |
+| know what happens inside | [the loop](guide/loop-shape.md): every step, and who can do it |
 
 ## What it can do
 
@@ -86,45 +98,10 @@ Next: [run the applications](demos/index.md), follow the [tutorial](guide/tutori
   what was only modelled, and every design that was refused, with the reason.
 - **From a sentence.** `flux ask "what you want"` writes the document for you.
 
-## The loop
+## How it works
 
-Every problem runs through the same loop. Each **box** does one job and can be filled by
-*rules* (plain code), a *model* (an AI language model) or a *coding agent*. Boxes that establish
-facts are never handed to an AI.
-
-| box | what it does | who can fill it |
-|---|---|---|
-| validate | checks the document before anything runs | rules, model, coding agent |
-| orchestrate | picks the next piece of work | rules, model, coding agent |
-| plan | plans each pass: parts, order, method, budget | none, model, coding agent |
-| dse | searches the knobs | a search policy, model, coding agent |
-| generate | writes each design | model, script, fixed list, coding agent |
-| test | the **gate**: refuses any wrong design | rules only, never delegated |
-| critique | challenges the parts and the decision | none, model, coding agent |
-| stages | the measurements: Verilator, Yosys, OpenROAD, ChampSim, formulas | tools only, never delegated; an optional estimate skips designs that cannot pass |
-| calibrate | compares cheap stages with costly ones | on or off, never delegated |
-| select | picks the winner from the objectives | objectives; a coding agent may break ties |
-| feedback | your notes, typed during a run | you, or none |
-| knowledge | what the model reads: notes, papers | files, or a model's digest |
-| extract | lessons mined from past runs | none, mined, coding agent |
-| records | keeps every design, number and refusal | always on, not a setting |
-
-[More on the loop](guide/loop-shape.md).
-
-## Applications
-
-| application | what it finds |
-|---|---|
-| [NLU](demos/nlu.md) | an FP16 unit for seven math functions, each within 1 ULP, at 800 MHz |
-| [MAC array](demos/macarray.md) | the smallest multiply-accumulate element that makes 1 GHz |
-| [Prefetcher](demos/prefetcher.md) | the best cache prefetcher configuration, or a new prefetcher, in ChampSim |
-| [Bank mapping](demos/bankmap.md) | a conflict-free memory-bank mapping, or a proof none exists |
-| [Interconnect mapping](demos/interconnect_mapping.md) | memory bank hash and interconnect, chosen together |
-| [GELU FP16](demos/gelu_fp16.md) | an FP16 GELU within 1 ULP, invented as a formula by a coding agent |
-| [NPU GEMM](demos/npu_gemm.md) | the smallest accelerator that runs a workload in 500 cycles |
-| [Starter examples](demos/starters.md) | `adder16`, `mul8`, `primes`: the smallest complete problems |
-
-## Loop crafter
-
-Prefer a form to a text file? The [Loop crafter](guide/loop-crafter.md): fill in a form, get a
-`problem.yaml`.
+Every problem runs through the same loop: a design is proposed, written, checked, measured
+stage by stage, and the best one is chosen. Each step can be done by *rules* (plain code), a
+*model* (an AI language model) or a *coding agent*; you choose in the document, and the defaults
+are usually right. Two steps are never handed to an AI: the checks that say a design is correct,
+and the measurements. [The loop](guide/loop-shape.md) draws every step.

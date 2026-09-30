@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 # Build your own problem
 
 From an empty folder to a running search in six steps. Prefer a form? Use the
@@ -19,7 +24,8 @@ flux new myproblem --kind rtl
 | `tune` | the knobs go straight into your own commands | `check.py`, `bench.py` | no |
 
 `flux new` writes `myproblem/` with a document, the scripts it names and a README. It runs as it
-is.
+is. For larger complete problems to copy from, see the repository's
+[`flux/applications/`](https://github.com/choelzl/flux/tree/main/flux/applications) folder.
 
 ## 2. Say what you want
 
@@ -57,6 +63,7 @@ flux task run myproblem/myproblem.problem.yaml --passes 1
 ```
 
 Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen.
+[Run a problem](run.md) has the options, stopping and resuming, and choosing the AI model.
 
 ## 6. Read the result
 

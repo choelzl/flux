@@ -7,7 +7,8 @@ The public site is [MkDocs](https://www.mkdocs.org/) with the
 | path | what it is |
 |---|---|
 | `mkdocs.yml` | the site configuration and the navigation |
-| `docs/index.md`, `docs/demos/`, `docs/guide/` | the hand-written pages: the home page, one page per application, the guides |
+| `docs/index.md`, `docs/guide/` | the hand-written pages: the home page and the guides (the site guides a new user; the applications are documented in the repository) |
+| `docs/assets/` | the loop crafter (`crafter.js`, `crafter.css`) and the tool catalog it reads (`tools.json` = `flux tools --json`) |
 | `overrides/` | theme overrides (the footer) |
 | `site/` | the build output (git-ignored) |
 

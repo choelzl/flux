@@ -138,6 +138,8 @@ s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "agents_everywher
 for (const b of c.DELEGABLE) if (b !== "dse") s.flow[b] = "agent:claude";
 s.flow.knowledge = "none"; s.flow.critique = "llm";
 add("agents_everywhere", "rtl", s);
+out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES[b].title, says: c.BOXES[b].says,
+                                                                 flow: c.FLOW_BOXES.includes(b), values: c.BOXES[b].choices.map(x => x.value)}]));
 out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
 out.defaults = {orchestrate: c.BOXES.orchestrate.choices[0].label, knowledge: c.BOXES.knowledge.choices[0].label,
                 extract: c.BOXES.extract.choices[0].value, flowBoxes: c.FLOW_BOXES};
@@ -402,3 +404,33 @@ def test_the_estimates_say_what_task_check_says(tmp_path):
     t = _load(tmp_path, BUILT["estimates_said"])
     said = [describe_stage(st).split(" -- estimate: ", 1)[1] for st in t.stages]
     assert said == BUILT["explained"]["estimates"]
+
+
+def test_the_loop_page_lists_the_crafters_boxes():
+    """guide/loop-shape.md shows the crafter's drawing and explains it: its table has one row per
+    box of the drawing, under the drawing's title, with the box's `flow:` key and every word the
+    crafter can write for it."""
+    page = (REPO / "website/docs/guide/loop-shape.md").read_text()
+    assert 'id="flux-loop-drawing"' in page and "assets/crafter.js" in page
+    rows = {}
+    for line in page.split("## The boxes", 1)[1].split("### ", 1)[0].splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.startswith("|") and len(cells) == 4 and not set(cells[0]) <= set("-"):
+            rows[cells[0]] = cells
+    rows.pop("box")
+    boxes = BUILT["boxes"]
+    assert sorted(rows) == sorted(b["title"] for b in boxes.values())
+    for key, box in boxes.items():
+        _, flow_key, does, choices = rows[box["title"]]
+        assert flow_key == (f"`{key}`" if box["flow"] else ""), key
+        assert does.startswith(box["says"]), (key, does)
+        said = set(re.findall(r"`\{?(\w+)", choices))
+        for value in box["values"]:
+            if value == "default" or value.startswith("agent:") or len(box["values"]) == 1:
+                continue                                # unsaid, `{agent: ...}` (below the table), fixed
+            assert value in said, (key, value, choices)
+        if any(v.startswith("agent:") for v in box["values"]):
+            assert "coding agent" in choices, key
+        if len(box["values"]) == 1:
+            assert "**fixed**" in choices, key
+

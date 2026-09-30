@@ -52,18 +52,8 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Applications:
-      - Run an application: demos/index.md
-      - NLU: demos/nlu.md
-      - MAC array: demos/macarray.md
-      - Prefetcher: demos/prefetcher.md
-      - Bank mapping: demos/bankmap.md
-      - Interconnect mapping: demos/interconnect_mapping.md
-      - GELU FP16: demos/gelu_fp16.md
-      - NPU GEMM: demos/npu_gemm.md
-      - Starter examples: demos/starters.md
-  - Build a loop:
-      - Tutorial: guide/tutorial.md
-      - The loop: guide/loop-shape.md
-      - Build your own: guide/build-your-own.md
-      - Loop crafter: guide/loop-crafter.md
+  - Tutorial: guide/tutorial.md
+  - Build your own: guide/build-your-own.md
+  - Loop crafter: guide/loop-crafter.md
+  - Run a problem: guide/run.md
+  - The loop: guide/loop-shape.md

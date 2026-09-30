@@ -567,3 +567,14 @@ the topics above.
   a checked draft in the first minutes"), and drafted from its own generator: admitted at
   998.9 MHz, 20.5 µm². A Claude turn stopped before its `result` event now keeps its session
   id, which every event carries.
+- **D679: the site guides a new user, and the loop page shows the crafter's drawing.** No
+  Applications pages (the applications keep their READMEs in the repository); six flat tabs:
+  Home, Tutorial, Build your own, Loop crafter, Run a problem, The loop. `guide/run.md` holds
+  the run options, stop/resume, the results and the model choice. `guide/loop-shape.md` mounts
+  `crafter.js` read-only (`#flux-loop-drawing`: the loop at its defaults, nothing to click), and
+  its box table uses the drawing's titles and `flow:` keys;
+  `test_the_loop_page_lists_the_crafters_boxes` fails when a box, a key or a choice of the
+  crafter is missing from the table. Crafter Advanced: the form's own fields and rows behind one
+  toggle, not a Material `details` with a fixed 11rem + 7rem grid (Material's rem is 20-30 px, so
+  the unit column collapsed to one letter per line). Widths in em. A new measurement starts with
+  the first tool that times (`rtl-synth`), not `rtl-stat`, which reports no fmax.

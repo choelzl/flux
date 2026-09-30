@@ -28,7 +28,8 @@ number and a short entry under "Since the fold" in docs/decisions.md: the decisi
   to Flux ([docs/extending.md](docs/extending.md)).
 - The loop itself: `flux/core/loop/README.md` maps the modules.
 - A new application under `flux/applications/` needs a document, a README and a line in the
-  tables of the README, `flux/README.md` and `website/docs/demos/index.md`.
+  tables of the README and `flux/README.md`. The website guides a new user and lists no
+  applications.
   `tests/unit/test_rim_conformance.py` lists the applications.
 
 ## Before sending a change

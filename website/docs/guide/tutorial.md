@@ -1,10 +1,15 @@
+---
+hide:
+  - navigation
+---
+
 # Tutorial: a square root circuit
 
 Goal: a 16-bit integer square root in SystemVerilog, as fast and small as possible on ASAP7,
 written by an AI model and checked by Flux. About ten minutes of running.
 
 Before you start: the [full install](../index.md#get-started), and an AI model
-([choosing one](../demos/index.md#choosing-an-ai-model)). Run `flux selftest`: every line should
+([choosing one](run.md#choosing-an-ai-model)). Run `flux selftest`: every line should
 say PASS.
 
 ## 1. Start from a template
@@ -101,4 +106,5 @@ No design reached 1000 MHz, and the report says so. Left running, the loop keeps
 | give the model a method note | `knowledge: {files: [method-note.md]}` |
 | steer it while it runs | `--tui`, then `f` to type a note |
 
-Next: [build your own](build-your-own.md) or [the loop](loop-shape.md).
+Next: [build your own](build-your-own.md), or [the loop](loop-shape.md) for what each of these
+steps is.

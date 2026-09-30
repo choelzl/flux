@@ -5,7 +5,8 @@
    from. The words mirror flux_loop/document.py (DOCUMENT_KEYS, FLOW_BOXES,
    _FLOW_WORDS, EXTENSIONS), flux_loop/boxes.py (DELEGABLE, NEVER) and the registered DSE
    policies; flux/tests/unit/test_loop_crafter.py loads what this writes with the real loader.
-   The page wiring (`mount`) is at the bottom and only runs in a browser. */
+   The page wiring (`mount`) is at the bottom and only runs in a browser; on a page with a
+   `#flux-loop-drawing` (guide/loop-shape.md) it draws the loop alone, at its defaults. */
 (function (root) {
   "use strict";
 
@@ -217,6 +218,17 @@
     }
     var first = names[0].length > max - 5 ? names[0].slice(0, max - 6) + "\u2026" : names[0];
     return names.length > 1 ? first + " +" + (names.length - 1) : first;
+  }
+
+  /** The tool a new measurement starts with: the first made for this language that is not used
+      yet (Yosys alone reports no fmax, so it comes after the tools that time), else custom. */
+  function nextStageTool(lang, used, cat) {
+    var ids = stageTools(cat).map(function (x) { return x[0]; }).filter(function (id) {
+      var t = toolOf(id, cat);
+      return t && !isCustom(id) && lang && (t.languages || []).indexOf(lang) >= 0 && (used || []).indexOf(id) < 0;
+    });
+    ids.sort(function (a, b) { return (a === "rtl-stat") - (b === "rtl-stat"); });
+    return ids[0] || "custom-stage";
   }
 
   function checkType(key) { for (var i = 0; i < CHECK_TYPES.length; i++) if (CHECK_TYPES[i].key === key) return CHECK_TYPES[i]; return null; }
@@ -805,7 +817,7 @@
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
-              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
+              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
               explain: explain, explainEstimate: explainEstimate };
@@ -833,7 +845,7 @@
     return el;
   }
 
-  function mount(host) {
+  function mount(host, readonly) {
     var state = base();
     var openBox = null, openNode = null;
     var parts = {};
@@ -914,15 +926,15 @@
       var p = t.params[k];
       if (k === "clock_ps") {
         var auto = autoClock(state), dflt = auto || num(p.default) || 1000;
-        return field("Clock the tools aim for (MHz)", function () {
+        return field("Clock (MHz)", function () {
           var v = String(row.params.clock_ps || ""), ps = num(v);
           return ps ? String(Math.round(1e6 / ps)) : v;
         }, function (v) { var ps = clockPs(v); row.params.clock_ps = ps ? String(ps) : v; },
-        { compact: true, placeholder: String(Math.round(1e6 / dflt)) + (auto ? " (from the objective)" : ""),
-          hint: "fmax is measured; this steers synthesis: tighter = faster and bigger" });
+        { compact: true, narrow: true, placeholder: String(Math.round(1e6 / dflt)),
+          hint: "The clock the tools aim for" + (auto ? " (empty: from the objective)" : "") + ". fmax is measured; this steers synthesis: tighter = faster and bigger" });
       }
       return field(p.label + (p.unit ? " (" + p.unit + ")" : ""), function () { return row.params[k]; }, function (v) { row.params[k] = v; },
-                   { compact: true, placeholder: shown(p.default), grow: k === "command" });
+                   { compact: true, placeholder: shown(p.default), grow: typeof p.default !== "number" });
     }
 
     // -- checks
@@ -982,7 +994,7 @@
         var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? "estimated first" : null }),
           field("Tool", function () { return st.tool; }, function (v) {
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
-          }, { compact: true, structural: true, options: tools }),
+          }, { compact: true, structural: true, grow: true, options: tools }),
           field("Name", function () { return st.name; }, function (v) { st.name = v; }, { compact: true, narrow: true })];
         if (keys.length) line.push(paramField(t, st, keys[0]));
         if (custom) {
@@ -1028,10 +1040,7 @@
       var add = button("+ Add a measurement", function () {
         // the first tool made for this language that is not used yet, else a custom command
         var lang = language(state, true), used = state.stages.map(function (x) { return x.tool; });
-        var pick = tools.map(function (x) { return x[0]; }).filter(function (id) {
-          var t = toolOf(id); return t && !isCustom(id) && lang && (t.languages || []).indexOf(lang) >= 0 && used.indexOf(id) < 0;
-        })[0] || "custom-stage";
-        state.stages.push(newStage(state, pick));
+        state.stages.push(newStage(state, nextStageTool(lang, used)));
         changed(true);
       }, "fc-add-btn");
       return titled("Measurements", [h("span", { class: "fc-hint fc-inline", text: " cheapest first" })], [h("div", { class: "fc-rows" }, rows), add]);
@@ -1192,9 +1201,10 @@
         var box = BOXES[n.box] || { title: "Parts", fixed: "Set under Advanced > Parts." };
         var title = n.id === "crit-division" ? "Critic: division" : n.id === "crit-part" ? "Critic: each part"
                   : n.id === "crit-decision" ? "Critic: decision" : n.id === "parts" ? "parts: sub-loops, composed" : box.title;
-        var attrs = { class: "fc-box fc-" + half + (fixed ? " fc-static" : "") + (openNode === n.id ? " fc-open" : "") + (n.small ? " fc-smallbox" : ""),
+        var live = !fixed && !readonly;
+        var attrs = { class: "fc-box fc-" + half + (fixed ? " fc-static" : "") + (live ? "" : " fc-inert") + (openNode === n.id ? " fc-open" : "") + (n.small ? " fc-smallbox" : ""),
                       "data-box": n.box, "data-node": n.id };
-        if (!fixed) {
+        if (live) {
           attrs.tabindex = "0"; attrs.role = "button"; attrs["aria-haspopup"] = "dialog";
           attrs["aria-expanded"] = openNode === n.id ? "true" : "false";
           attrs["aria-label"] = title + ": " + (choiceOf(n.box, state.flow[n.box]) || {}).label;
@@ -1203,7 +1213,8 @@
         }
         var g = s("g", attrs);
         var full = stepNames(n.box);
-        g.appendChild(s("title", {}, title + (full && full.length ? ": " + full.join(" → ") : "") + (fixed ? " — " + (box.fixed || "fixed") : "")));
+        g.appendChild(s("title", {}, readonly ? title + " (" + n.box + "): " + (box.says || box.fixed)
+                                   : title + (full && full.length ? ": " + full.join(" → ") : "") + (fixed ? " — " + (box.fixed || "fixed") : "")));
         if (n.id === "parts") {                       // a stack: two shadows behind
           [6, 3].forEach(function (d) { g.appendChild(s("rect", { x: n.x + d, y: n.y - d, width: n.w, height: n.h, rx: 6, class: "fc-stack" })); });
         }
@@ -1215,7 +1226,7 @@
           g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 35, "text-anchor": "middle", class: "fc-box-half" }, subtitle(n.box, half)));
         }
         if (fixed && !n.small) lock(g, n.x + n.w - 11, n.y + 5);
-        if (!fixed) {
+        if (live) {
           g.addEventListener("click", function () { openPopover(openNode === n.id ? null : n.box, false, n.id); });
           g.addEventListener("keydown", function (ev) {
             if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPopover(openNode === n.id ? null : n.box, true, n.id); }
@@ -1252,6 +1263,7 @@
       if (name === "orchestrate" && state.flow.orchestrate === "default" && !(state.flow.dse && state.flow.dse !== "none")) {
         text = hasParts() ? "model picks the part" : "default: one design";
       }
+      if (readonly && (name === "test" || name === "measure")) return name === "test" ? "your checks" : "your measurements";
       var names = stepNames(name);
       max = max || 24;
       if (names) return names.length ? abbreviate(names, max) : "none yet";
@@ -1338,7 +1350,8 @@
       p.style.setProperty("--fc-arrow-x", Math.round(Math.min(Math.max(14, r.left + r.width / 2 - left), w - 14)) + "px");
     }
 
-    function renderLevel2() {
+    /** The legend and the drawing. */
+    function drawing() {
       parts.svg = document.createElementNS(SVGNS, "svg");
       parts.svg.setAttribute("viewBox", "0 0 " + LAYOUT.width + " " + LAYOUT.height);
       parts.svg.setAttribute("class", "fc-diagram");
@@ -1348,77 +1361,66 @@
         return h("span", { class: "fc-key fc-" + k }, [h("i"), HALVES[k]]);
       }));
       parts.lists = h("p", { class: "fc-hint fc-lists" });
-      return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [
-        legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists])])]);
+      return [legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists])];
     }
 
-    // -- level 3
-    /** A label | input | unit row: every Advanced row shares the same three columns. */
-    function kv(label, get, set, opts) {
-      opts = opts || {};
-      var input;
-      if (opts.options) {
-        input = h("select", { "aria-label": label, class: "fc-v" });
-        opts.options.forEach(function (o) {
-          var op = h("option", { value: o[0], text: o[1] });
-          if (String(get()) === o[0]) op.selected = true;
-          input.appendChild(op);
-        });
-        input.addEventListener("change", function () { set(input.value); changed(!!opts.structural); });
-      } else {
-        input = h("input", { type: "text", "aria-label": label, class: "fc-v", placeholder: opts.placeholder || "",
-                             inputmode: opts.numeric ? "numeric" : null });
-        input.value = get() || "";
-        input.addEventListener("input", function () { set(input.value); changed(false); });
-      }
-      if (opts.title) input.setAttribute("title", opts.title);
-      return h("label", { class: "fc-kv" + (opts.wide ? " fc-kv-wide" : ""), title: opts.title || null },
-               [h("span", { class: "fc-k", text: label }), input, h("span", { class: "fc-u", text: opts.unit || "" })]);
+    function renderLevel2() {
+      return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], drawing())]);
     }
 
-    function group(title, rows) { return h("div", { class: "fc-group" }, [h("h4", { text: title })].concat(rows)); }
+    // -- level 3: the same fields and rows as above, behind one toggle
+    function sub(title, note, kids) {
+      return h("div", { class: "fc-sub" }, [h("h4", {}, [title, note ? h("span", { class: "fc-hint fc-inline", text: " " + note }) : null])].concat(kids));
+    }
 
     function renderLevel3() {
       var b = state.budget;
-      function num(label, key, dflt, unit, title) {
-        return kv(label, function () { return b[key]; }, function (v) { b[key] = v; },
-                  { numeric: true, placeholder: dflt, unit: unit, title: title + " (" + key + "; empty: " + dflt + ")" });
+      function num(label, key, dflt, hint) {
+        return field(label, function () { return b[key]; }, function (v) { b[key] = v; },
+                     { compact: true, placeholder: dflt, hint: hint + " (budget." + key + "; empty: " + dflt + ")" });
       }
-      var budget = h("div", { class: "fc-budget" }, [
-        group("Run", [
-          num("Designs per round", "steps", "24", "steps", "Work items in one round"),
-          num("Rounds", "passes", "until stopped", "passes", "How many rounds before the run stops"),
-          num("Measurements at once", "workers", "auto", "workers", "Tool runs in parallel; 1 for anything timed")]),
-        h("div", {}, [
-          group("Repair", [num("Fix attempts per design", "repair_attempts", "12", "attempts", "Repairs a draft gets after a check fails")]),
-          group("Measure", [num("Designs to the last measurement", "finalists", "3", "finalists", "How many designs reach the costliest measurement")]),
-          group("Prototype", [kv("Prove the idea first", function () { return b.prototype; }, function (v) { b.prototype = v; },
-            { title: "prototype: yes for maths, no for plain logic (empty: on with a golden model)", unit: "prototype",
-              options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]] })])])]);
+      var budget = h("div", { class: "fc-grid" }, [
+        num("Designs per round", "steps", "24", "Work items in one round"),
+        num("Rounds", "passes", "until stopped", "How many rounds before the run stops"),
+        num("Repairs per design", "repair_attempts", "12", "Repairs a draft gets after a check fails"),
+        num("Designs fully measured", "finalists", "3", "How many designs reach the costliest measurement"),
+        num("Tool runs at once", "workers", "auto", "Measurements in parallel; 1 for anything timed"),
+        field("Prototype first", function () { return b.prototype; }, function (v) { b.prototype = v; },
+              { compact: true, hint: "The model proves the algorithm before the design is written: yes for maths, no for plain logic (budget.prototype; empty: on with a golden model)",
+                options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]] })]);
 
-      var table = h("div", { class: "fc-table" }, [h("div", { class: "fc-table-head" }, [h("span", { text: "Setting" }), h("span", { text: "Its choices, in order" }), h("span")])]
-        .concat(state.space.map(function (r, i) {
-          return h("div", { class: "fc-table-row" }, [
-            h("input", { type: "text", "aria-label": "Setting", placeholder: "block", value: r.knob, on: { input: function (e) { r.knob = e.target.value; changed(false); } } }),
-            h("input", { type: "text", "aria-label": "Its choices, in order", placeholder: "16, 32, 64", value: r.choices, on: { input: function (e) { r.choices = e.target.value; changed(false); } } }),
-            button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")]);
-        }))
-        .concat([h("div", { class: "fc-table-foot" }, [button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-small")])]));
+      var knobs = state.space.map(function (r, i) {
+        return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
+          h("span", { class: "fc-idx", text: String(i + 1) }),
+          field("Setting", function () { return r.knob; }, function (v) { r.knob = v; },
+                { compact: true, placeholder: "block", hint: "Its name; {name} in a command is the value tried" }),
+          field("Its choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
+                { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas" }),
+          h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")])])]);
+      });
+      var searching = state.flow.dse && state.flow.dse !== "none";
+      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the drawing above", [
+        h("div", { class: "fc-rows" }, knobs),
+        button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 
-      var partsBox = h("div", { class: "fc-group fc-parts" }, [
-        kv("Split the design", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
-           { structural: true, title: "Divide one design into parts, each made and checked on its own, then composed",
-             options: [["none", "no"], ["list", "into these parts"], ["decompose", "let it decide"]] }),
-        state.partsMode === "list" ? kv("Parts", function () { return state.parts; }, function (v) { state.parts = v; },
-                                         { placeholder: "decoder, datapath", wide: true, title: "Part names, separated by commas" }) : null]);
+      var split = sub("Parts", "one design made as several, each checked on its own, then composed", [h("div", { class: "fc-line" }, [
+        field("Split the design", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
+              { compact: true, structural: true, options: [["none", "no"], ["list", "into these parts"], ["decompose", "let it decide"]] }),
+        state.partsMode === "list" ? field("Parts", function () { return state.parts; }, function (v) { state.parts = v; },
+                                           { compact: true, grow: true, placeholder: "decoder, datapath", hint: "Part names, separated by commas" }) : null])]);
 
-      var details = h("details", { class: "fc-advanced" }, [h("summary", { text: "3. Advanced" }),
-        titled("Budget", [h("span", { class: "fc-hint fc-inline", text: " empty = the loop's default (shown greyed)" })], [budget]),
-        titled("Settings to search", [h("span", { class: "fc-hint fc-inline", text: state.flow.dse === "none" ? " turn on \"Search the settings\" above to use them" : " each is {its name} in the commands" })], [table]),
-        titled("Parts", [], [partsBox])]);
-      if (parts.advancedOpen) details.open = true;
-      details.addEventListener("toggle", function () { parts.advancedOpen = details.open; });
-      return details;
+      // closed until asked for, or until something in it is in use
+      var inUse = !!(searching || state.space.length || hasParts());
+      if (inUse && !parts.advancedUsed) parts.advancedOpen = true;
+      parts.advancedUsed = inUse;
+      var body = h("div", { class: "fc-advanced-body" }, [sub("Budget", "empty = the loop's default, shown greyed", [budget]), space, split]);
+      body.hidden = !parts.advancedOpen;
+      var toggle = h("button", { type: "button", class: "fc-toggle", "aria-expanded": parts.advancedOpen ? "true" : "false", on: { click: function () {
+        parts.advancedOpen = !parts.advancedOpen;
+        body.hidden = !parts.advancedOpen;
+        toggle.setAttribute("aria-expanded", parts.advancedOpen ? "true" : "false");
+      } } }, ["3. Advanced", h("span", { class: "fc-hint fc-inline", text: " budget, settings to search, parts" })]);
+      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), body]);
     }
 
     function renderForm() {
@@ -1461,6 +1463,11 @@
     }
 
     host.innerHTML = "";
+    if (readonly) {                                    // the loop at its defaults, nothing to click
+      drawing().forEach(function (el) { host.appendChild(el); });
+      renderDiagram();
+      return;
+    }
     parts.form = h("div", { class: "fc-form" });
     parts.code = h("code", {});
     parts.file = h("span", { class: "fc-file" });
@@ -1494,8 +1501,11 @@
 
   var SCRIPT_SRC = document.currentScript && document.currentScript.src;
 
-  /** The tool catalog beside this script (tools.json), then the builder. */
+  /** The drawing alone where a page asks for it; the tool catalog beside this script
+      (tools.json), then the builder. */
   function start() {
+    var still = document.getElementById("flux-loop-drawing");
+    if (still && !still.dataset.mounted) { still.dataset.mounted = "1"; mount(still, true); }
     var host = document.getElementById("flux-crafter");
     if (!host || host.dataset.mounted) return;
     host.dataset.mounted = "1";
