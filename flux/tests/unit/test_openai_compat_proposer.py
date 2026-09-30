@@ -1034,5 +1034,6 @@ def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp
     assert os.environ["FLUX_REMOTE_MODEL"] == "qwen-apex" and os.environ["FLUX_LLM_TIMEOUT_S"] == "86400"
     assert os.environ.get("PATH") != "/nope", "only FLUX_/OLLAMA_ variables"
     assert remote_api_key() == "sk-test-123"
-    for name in got:
+    assert os.environ["FLUX_REMOTE_API_KEY"] == "sk-test-123", "agents inherit the key from the environment"
+    for name in [*got, "FLUX_REMOTE_API_KEY"]:
         monkeypatch.delenv(name, raising=False)

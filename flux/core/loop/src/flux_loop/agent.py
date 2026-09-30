@@ -18,6 +18,13 @@ The answer goes back into the SAME session (OpenCode `--session`, Claude Code `-
 an agent the loop cannot resume gets a fresh run whose brief carries the exchange. At most
 `max_questions` a draft; every exchange is said in the log and kept on the candidate.
 
+Sessions (D669): a generate agent keeps ONE session per part until the part is admitted -- the
+first draft, the gate's repairs and the critic's send-backs resume it with a short message (what
+failed, the file, "fix it"); an agent that cannot resume gets the full brief again. A decision
+box's agent takes `session: turn` (a fresh agent every turn, the default) or `session: pass`
+(one session per box for the pass, resumed turn after turn):
+    critique: {agent: {preset: opencode, session: pass}}
+
 Substitutions in a command: `{prompt}` (the brief's text), `{prompt_file}` (its path),
 `{artifact}` (where to write), `{workdir}`, `{part}`, `{name}`, `{python}`; in a `resume`
 command also `{session}` and `{answer}`.
@@ -34,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["AgentSpec", "DECIDE", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
+__all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
 
 #: The agents this repository knows how to call headless: the first turn, the turn that
 #: resumes its session with an answer, and how its output says the session and its words.
@@ -51,6 +58,7 @@ PRESETS: dict[str, dict[str, Any]] = {
 }
 OUTPUTS = ("text", "opencode", "claude")
 POLICIES = ("decide", "model", "operator")
+SESSIONS = ("turn", "pass")
 
 
 @dataclass(frozen=True)
@@ -63,24 +71,31 @@ class AgentSpec:
     questions: str = "decide"
     max_questions: int = 2
     wait_s: float = 300.0
+    session: str = "turn"          # a decision box's span: a fresh agent each turn, or one per pass (D669)
 
 
 def agent_spec(spec: Any) -> AgentSpec:
     """The document's `agent:` value: a preset's name, or an object with `preset` or
-    `command` (+ `resume`, `output`) and `timeout_s`, `questions`, `max_questions`, `wait_s`."""
+    `command` (+ `resume`, `output`) and `timeout_s`, `questions`, `max_questions`, `wait_s`,
+    `session` (turn | pass)."""
     if isinstance(spec, str):
         spec = {"preset": spec}
     if not isinstance(spec, dict):
         raise ValueError("agent: a preset's name or {preset|command, timeout_s, questions, ...}")
-    known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s"}
+    known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s",
+             "session"}
     unknown = sorted(set(spec) - known)
     if unknown:
         raise ValueError(f"agent: {', '.join(unknown)} is not one of {', '.join(sorted(known))}")
     questions = str(spec.get("questions") or "decide")
     if questions not in POLICIES:
         raise ValueError(f"agent.questions is one of {', '.join(POLICIES)}, not {questions!r}")
+    session = str(spec.get("session") or "turn")
+    if session not in SESSIONS:
+        raise ValueError(f"agent.session is one of {', '.join(SESSIONS)}, not {session!r}")
     common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
-                  max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0))
+                  max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0),
+                  session=session)
     if spec.get("command"):
         argv = tuple(str(t) for t in spec["command"])
         output = str(spec.get("output") or "text")
@@ -158,6 +173,8 @@ class Turn:
     session: str | None = None
     stdout: str = ""
     stderr: str = ""
+    resumed: bool = False          # this run resumed a session (D669)
+    began: str = "fresh"           # how the conversation that ended on this turn began: fresh | resumed
 
 
 def _parse(output: str, stdout: str) -> tuple[str, str | None]:
@@ -197,8 +214,14 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
 
     t0 = time.monotonic()
     turn = _run_turn(spec, argv, subs, workdir=workdir)
-    transcript.record("agent", agent=spec.tool, workdir=str(workdir), prompt=subs.get("prompt", ""), ok=turn.ok,
-                      rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2))
+    turn.resumed = spec.resume is not None and argv == spec.resume
+    if turn.resumed:
+        turn.began = "resumed"
+        turn.session = turn.session or subs.get("session")     # an output that does not repeat its id
+    transcript.record("agent", agent=spec.tool, workdir=str(workdir),
+                      prompt=subs.get("answer", "") if turn.resumed else subs.get("prompt", ""), ok=turn.ok,
+                      rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
+                      session="resumed" if turn.resumed else "fresh", session_id=turn.session or "")
     return turn
 
 
@@ -324,17 +347,32 @@ class Exchange:
 
 def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: Path,
              answer: Callable[[str], tuple[str, str]], say: Callable[[str], None] = lambda _m: None,
-             prompt_file: Path | None = None) -> tuple[Turn, list[Exchange]]:
+             prompt_file: Path | None = None, session: str | None = None,
+             message: str = "") -> tuple[Turn, list[Exchange]]:
     """The agent's turn, and every question it ends on answered (by `answer(question) ->
     (text, by)`) until it writes the artifact, stops asking, fails, or has asked
     `max_questions`. The answer resumes its session; without one, a fresh run's brief
-    carries the exchange."""
+    carries the exchange.
+
+    Given a `session` (D669), the turn resumes it with `message` instead of the brief; a
+    session that cannot be resumed (gone, failed, out of context) starts fresh from
+    `subs["prompt"]`, the full brief."""
     before = artifact.read_text() if artifact.is_file() else None     # a prototype's file exists to be edited
 
     def wrote() -> bool:
         return artifact.is_file() and artifact.read_text() != before
 
-    turn = run_turn(spec, spec.argv, subs, workdir=workdir)
+    if session and spec.resume:
+        turn = run_turn(spec, spec.resume, {**subs, "session": session, "answer": message}, workdir=workdir)
+        if (not turn.ok and not wrote()) or overflowed(turn):
+            why = "out of context" if overflowed(turn) else f"exited {turn.rc}"
+            say(f"  agent {spec.tool}: session {session} could not be resumed ({why}); a fresh session starts from the brief")
+            if prompt_file is not None:
+                prompt_file.write_text(subs["prompt"])
+            turn = run_turn(spec, spec.argv, subs, workdir=workdir)
+    else:
+        turn = run_turn(spec, spec.argv, subs, workdir=workdir)
+    began = turn.began
     asked: list[Exchange] = []
     while (turn.ok and not wrote() and len(asked) < spec.max_questions
            and (q := question_in(turn.text)) is not None):
@@ -373,6 +411,8 @@ def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: 
             if prompt_file is not None:
                 prompt_file.write_text(brief)
             turn = run_turn(spec, spec.argv, {**subs, "prompt": brief}, workdir=workdir)
+            began = "fresh"                  # the conversation now continues in a new session
+    turn.began = began
     return turn, asked
 
 

@@ -6,7 +6,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import os
 
 import pytest
 
@@ -57,6 +56,7 @@ HEAVY_TESTS = {
     "test_golden_prototype.py::test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype",
     "test_golden_prototype.py::test_the_prototype_is_proven_then_transcribed",
     "test_golden_prototype.py::test_a_coding_agent_writes_the_prototype_and_runs_its_check",
+    "test_golden_prototype.py::test_the_prototype_agent_is_resumed_until_its_prototype_passes",
     "test_golden_prototype.py::test_a_spelled_design_on_record_is_not_synthesised_again_once_over_the_ceiling",
     "test_golden_prototype.py::test_a_prototype_over_the_ceiling_is_made_cheaper_before_anything_is_built",
     "test_flux_new.py::test_a_sweep_phase_moves_only_its_knobs",

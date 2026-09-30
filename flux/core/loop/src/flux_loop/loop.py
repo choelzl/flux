@@ -192,6 +192,9 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
         with _phase("evaluation", why="compose, chain, cutoffs, routing"):
             _climb(problem, state, goals)
+    from .boxes import flush_turns
+
+    flush_turns(state)
     with _phase("decide", why="frontier, decision, conclusion"):
         out = _conclude(problem, state, goals)
     if state.ahead is not None:
@@ -499,8 +502,16 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     say(f"improve {item.candidate.name} (from the {item.stage or 'gate'} stage): "
         f"{item.why[:120]}")
     rested_before = len(state.rested)
-    with _phase(f"generation: improve {item.candidate.name}", why=item.stage):
-        cand, built, reason = problem.improve(item, state)
+    ps = state.part(item.subgoal)
+    ps.sessions.clear()                     # D669: an improve is a new job, a new agent ...
+    try:
+        with _phase(f"generation: improve {item.candidate.name}", why=item.stage):
+            cand, built, reason = problem.improve(item, state)
+    finally:
+        ps.sessions.clear()                 # ... whose session ends with it
+        from .boxes import flush_turns
+
+        flush_turns(state)
     if cand is None and len(state.rested) > rested_before:
         # D509: the design stands -- a rest on the ledger, never a refusal
         from .ledger import Kind
@@ -717,6 +728,9 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
     say = state.say
     key = sg or "*"
     tag = sg or problem.name
+    from .boxes import flush_turns
+
+    flush_turns(state)                  # the draft's agent turns, written on this thread (D669)
     if cand is None:
         state.fail_streak[key] = state.fail_streak.get(key, 0) + 1
         state.refused.append((f"{tag} (generate)", reason))
@@ -749,6 +763,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         if sg is not None and cand.subgoal is None:
             cand = dataclasses.replace(cand, subgoal=sg)
         state.admitted[key] = cand
+        state.part(sg).sessions.clear()     # D669: the part is done; its next job is a new agent
         _forget_stale_compositions(state)
         if sg in todo:
             todo.remove(sg)

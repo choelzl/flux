@@ -5,10 +5,12 @@ from __future__ import annotations
 from .ledger import Ledger
 
 import json
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["BuildError", "Candidate", "Improve", "LoopRequest", "LoopResult", "LoopState", "Option",
+__all__ = ["AgentSession", "BuildError", "Candidate", "Improve", "LoopRequest", "LoopResult", "LoopState", "Option",
            "StageNames", "Scored", "SubLoop", "Verdict"]
 
 class StageNames:
@@ -201,6 +203,18 @@ class LoopRequest:
 
 
 @dataclass
+class AgentSession:
+    """A coding agent's session the loop resumes (D669): the tool, the directory it works in
+    (a resume must run where the session began), its id once a turn reported one, its turns."""
+
+    tool: str
+    workdir: Path
+    id: str | None = None
+    turns: int = 0
+    schema: str = ""                       # a box's answer schema, said once per session
+
+
+@dataclass
 class PartState:
     """What the loop knows about one part beyond its admitted design: its numbers measured
     alone, its depth proxies, and the improve ladder's counters (D509)."""
@@ -215,6 +229,9 @@ class PartState:
     proto_passes: int = 0                  # prototype passes this run (the trace directory's number)
     timing: dict[str, Any] | None = None   # the placed critical path of its design alone, as data
     shortlist: list[dict[str, Any]] = field(default_factory=list)   # its admitted designs on record, best first
+    # D669: "generate" / "prototype" -> the agent's session, kept until the part (or its
+    # prototype) passes, so repairs and send-backs continue the same conversation
+    sessions: dict[str, AgentSession] = field(default_factory=dict)
 
 
 @dataclass
@@ -283,6 +300,9 @@ class LoopState:
     cache_hits: int = 0
     #: stage -> {"skipped": estimated to fail, "measured": estimated and measured} (D665)
     estimates: dict = field(default_factory=dict)
+    agent_sessions: dict[str, AgentSession] = field(default_factory=dict)   # box -> its `session: pass` session (D669)
+    pending_turns: list[dict[str, Any]] = field(default_factory=list)       # agent_turn rows drafted off the loop's thread
+    loop_thread: int = field(default_factory=threading.get_ident)          # the thread that owns the record
 
     def part(self, name: str | None) -> PartState:
         """The part's state, made on first use."""

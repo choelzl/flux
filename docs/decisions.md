@@ -463,3 +463,25 @@ the topics above.
   -- read from OpenCode's JSON events and Claude Code's `stream-json` (the claude preset moves to
   it; the answer is the stream's `result` event). Live with OpenCode on the hosted model: the row
   showed 1, 2, 3, 4 tool calls at 22 s, 23 s, 33 s, 34 s, not only at the end.
+
+- **D669: one agent session per job.** A generate agent keeps ONE session per part until the part
+  is admitted: the first draft reads the whole brief in `agents/generate/<part>/`; a gate repair
+  or a critic's send-back resumes that session with a short message (what failed, the file, fix
+  it), the file kept at one path so the brief's gate command stays true. Admission drops the
+  session; an improve is a new agent (`<part>-2/`) whose session ends with it. The prototype
+  agent's session spans the part's prototype stage until the prototype passes. An agent that
+  cannot resume (codex, a session gone or out of context) gets the full brief with the prior
+  draft, as before. A decision box takes `session: turn` (fresh each turn, the default) or
+  `session: pass` (one session per box for the pass in `agents/<box>/pass/`, `out-NNN.json` per
+  turn, later turns resumed with the new question); `session` on generate is a load error, its
+  span is fixed. Every agent turn is an `agent_turn` row with `session: fresh|resumed` + id (the
+  report's Agent turns table has the column; the transcript too); rows drafted on worker threads
+  are queued and written by the loop's thread. A send-back from an earlier step now reaches a
+  template/agent source too (it read no `state.best` before). Live, OpenCode on the hosted model:
+  the gate refused the first draft (a closing line only its failure names); the repair resumed
+  `ses_f0ea11c0...` with 427 chars against the brief's 11,854 and the part was admitted; a
+  `session: pass` critic answered four turns (the division, lo, hi, the decision) in one session,
+  5,940 chars then 1,223, 1,223, 863.
+- **D669 (addendum): agents get the key.** OpenCode reads `{env:FLUX_REMOTE_API_KEY}`; when only
+  `FLUX_REMOTE_API_KEY_FILE` is set, Flux loads the key into its own environment (memory only), so
+  agents it starts are not refused with HTTP 401.

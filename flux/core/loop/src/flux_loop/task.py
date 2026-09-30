@@ -26,6 +26,7 @@ import re
 import shlex
 import shutil
 import sys
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -956,45 +957,85 @@ class PromptProblem(Problem):
         command = tuple(spec["command"])
         return Template(lambda attempt: self._rendered(attempt, command))
 
+    def _part_session(self, state: LoopState, sg: str | None, kind: str, tool: str):
+        """The part's `kind` ("generate" | "prototype") agent session (D669), made on first use in
+        a directory of its own: `agents/<kind>/<part>/`, then `<part>-2`, ... for a later fresh
+        session of the same part (an improve after admission)."""
+        from .types import AgentSession
+
+        ps = state.part(sg)
+        sess = ps.sessions.get(kind)
+        if sess is None or sess.tool != tool:
+            root = Path(state.workdir or ".").resolve() / "agents" / kind
+            base = re.sub(r"[^A-Za-z0-9_.-]+", "_", sg or _leaf(self.task.id))
+            n, workdir = 1, root / base
+            while workdir.exists():
+                n += 1
+                workdir = root / f"{base}-{n}"
+            workdir.mkdir(parents=True)
+            sess = ps.sessions[kind] = AgentSession(tool, workdir)
+        return sess
+
     def _agent_draft(self, attempt: Any, agent: Any):
-        """A coding agent's turn (D575): brief on disk, agent run in the work directory, its
-        questions answered by the document's policy (D585). The candidate is the file it wrote,
-        or its printed reply parsed like a model's."""
+        """A coding agent's turn (D575): brief on disk, agent run in the part's session directory,
+        its questions answered by the document's policy (D585). The candidate is the file it
+        wrote, or its printed reply parsed like a model's. A repair or a send-back of a part not
+        yet admitted resumes the part's session with a short message (D669); without a session
+        to resume, the full brief carries the prior draft and the failure."""
         from dataclasses import asdict
 
         from .agent import agent_brief, converse, library_section
 
         state = attempt.state
-        workdir = Path(state.workdir or ".")
-        workdir.mkdir(parents=True, exist_ok=True)
-        self._count += 1
         sg = attempt.subgoal
+        sess = self._part_session(state, sg, "generate", agent.tool)
+        workdir = sess.workdir
+        self._count += 1
         name = f"{sg or _leaf(self.task.id)}#{self._count}"
         safe = re.sub(r'[^A-Za-z0-9_.-]+', '_', name)
-        path = workdir / f"draft-{safe}{self.task.extension}"
-        if attempt.prior is not None and attempt.failure:
-            body, _schema = self.rewrite_prompt(sg, attempt.prior, attempt.failure, state)
+        path = workdir / f"draft-{re.sub(r'[^A-Za-z0-9_.-]+', '_', sg or _leaf(self.task.id))}{self.task.extension}"
+        prior, failure = attempt.prior, attempt.failure
+        if prior is None and (sg or "*") in state.best:
+            # a part the gate refused or the critic sent back on an earlier step (D669)
+            _score, prior, failure = state.best[sg or "*"]
+        if prior is not None and failure:
+            body, _schema = self.rewrite_prompt(sg, prior, failure, state)
         else:
-            body, _schema = self.design_prompt(sg, "", state, None, attempt.prior, attempt.failure)
+            body, _schema = self.design_prompt(sg, "", state, None, prior, failure)
         gate = self.task.gate                          # the agent can run the gate it is judged by (D595)
         check_subs = {"artifact": str(path), "workdir": str(workdir), "name": name, "part": sg or "",
                       "python": sys.executable, "home": str(Path(self.task.home or ".").resolve())}
         check = " && ".join(shlex.join(_substitute(c.run, check_subs)) for c in gate)
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
-                            prior=attempt.prior.artifact if attempt.prior is not None else None, failure=attempt.failure,
+                            prior=prior.artifact if prior is not None else None, failure=failure,
                             questions=agent.questions, check=check,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state))
+        resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
+        message = ""
+        if resume:
+            # the session holds the brief: what failed, the file, fix it (D669)
+            path.write_text(prior.artifact)
+            message = (f"YOUR DRAFT WAS REFUSED:\n{failure.strip()[:4000]}\n\nThe refused draft is in `{path}`. "
+                       f"Fix that file in place (or rewrite it if the approach is wrong)"
+                       + ("; run the gate command from the brief again until it reports no failures. " if check else ". ")
+                       + "Then reply with one line saying the file is written.\n")
+        else:
+            path.unlink(missing_ok=True)               # a fresh session creates the file
         prompt_file = workdir / f"PROMPT-{safe}.md"
-        prompt_file.write_text(brief)
+        prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or "."}
-        if self.skill_list():                          # install skills where the agent looks (D588)
+        if self.skill_list() and not resume:           # install skills where the agent looks (D588)
             from .skills import install
 
             install(self.skill_list(), workdir)
+        t0 = time.monotonic()
         turn, asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
-                               answer=self._agent_answerer(agent, brief, state), say=state.say)
+                               answer=self._agent_answerer(agent, brief, state), say=state.say,
+                               session=resume, message=message)
+        self._session_turn(state, sess, turn, "generate", sg, agent.tool, path.is_file(),
+                           f"exited {turn.rc}, wrote no {path.name}", message or brief, t0)
         knobs = {"task": self.task.id, "part": sg or "", "generator": f"agent:{agent.tool}"}
         meta = {"questions": [asdict(e) for e in asked]} if asked else {}
         if path.is_file():
@@ -1010,6 +1051,19 @@ class PromptProblem(Problem):
                  else " (it asked, and its questions are answered by nobody here)" if question_in(turn.text) is not None else "")
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
+
+    def _session_turn(self, state: LoopState, sess: Any, turn: Any, kind: str, sg: str | None, tool: str,
+                      ok: bool, why: str, sent: str, t0: float) -> None:
+        """The session after an agent turn (D669): its id kept, the turn said and on the record."""
+        from .boxes import record_turn
+
+        sess.id = turn.session or sess.id
+        sess.turns += 1
+        state.say(f"  {kind} {sg or self.task.id}: agent {tool}, {turn.began} session"
+                  + (f" {sess.id}" if sess.id else "") + f", turn {sess.turns}, {len(sent)} chars sent")
+        record_turn(state, {"box": kind, "part": sg or "", "agent": tool, "ok": ok, "why": "" if ok else why,
+                            "seconds": round(time.monotonic() - t0, 1), "session": turn.began,
+                            "session_id": sess.id or "", "message_chars": len(sent)})
 
     def prototype_agent(self) -> Any | None:
         """The coding agent that writes the prototype (D618), when `flow.generate: {agent: ...}`
@@ -1031,13 +1085,15 @@ class PromptProblem(Problem):
         from .agent import agent_brief, converse, library_section
         from .golden_proto import TABLE_MAX, golden_path
 
-        workdir = Path(state.workdir or ".")
-        workdir.mkdir(parents=True, exist_ok=True)
+        sess = self._part_session(state, subgoal, "prototype", agent.tool)       # D669: until the prototype passes
+        workdir = sess.workdir
         self._count += 1
         safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"{subgoal or _leaf(self.task.id)}_{self._count}")
-        path = workdir / f"prototype-{safe}.py"
+        path = workdir / f"prototype-{re.sub(r'[^A-Za-z0-9_.-]+', '_', subgoal or _leaf(self.task.id))}.py"
         if code:
             path.write_text(code)
+        else:
+            path.unlink(missing_ok=True)
         from .document import _command
 
         check = shlex.join(_substitute(_command(
@@ -1048,13 +1104,24 @@ class PromptProblem(Problem):
                             part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
                             failure=failure, questions=agent.questions, check=check,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state))
+        resume = sess.id if agent.resume and sess.id and code else None
+        message = ""
+        if resume:
+            # the session holds the brief: what the check said, the file, fix it (D669)
+            message = (f"YOUR PROTOTYPE WAS REFUSED:\n{(failure or 'see the check').strip()[:4000]}\n\nIt is in `{path}`. "
+                       f"Edit it there (or rewrite it if the approach is wrong) and run the check command from the brief "
+                       f"again until it reports 0 failing. Then reply with one line saying the file is written.\n")
         prompt_file = workdir / f"PROMPT-{safe}.md"
-        prompt_file.write_text(brief)
+        prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or "."}
+        t0 = time.monotonic()
         turn, _asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
-                                answer=self._agent_answerer(agent, brief, state), say=state.say)
+                                answer=self._agent_answerer(agent, brief, state), say=state.say,
+                                session=resume, message=message)
         text = path.read_text() if path.is_file() else ""
+        self._session_turn(state, sess, turn, "prototype", subgoal, agent.tool, bool(text.strip()) and text != code,
+                           f"exited {turn.rc}, left no new {path.name}", message or brief, t0)
         if not text.strip() or (code and text == code):
             tail = ((turn.text or turn.stdout or "") + "\n" + (turn.stderr or "")).strip()[-400:]
             state.say(f"  prototype {subgoal or self.task.id}: the coding agent {agent.tool} exited {turn.rc} "

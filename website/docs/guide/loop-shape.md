@@ -38,7 +38,9 @@ Each box has one job and a set of *halves*: who can fill it. Choose a half in th
 
 A coding agent (Claude Code, Codex, OpenCode) answers a box with `{agent: claude}` (or `codex`,
 `opencode`) on validate, orchestrate, plan, dse, generate, critique, select or extract. The loop
-checks its answer and falls back to the rules half if the answer is unusable.
+checks its answer and falls back to the rules half if the answer is unusable. A generate agent
+keeps one session per part until the part is admitted; a box's agent takes `session: turn`
+(fresh every turn, the default) or `session: pass` (one session per pass).
 
 `flux task check <document>` prints this table for a given document, with the half in force.
 

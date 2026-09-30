@@ -594,6 +594,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
             state.say(f"  PROTOTYPE {tag} passes: 0 over on the full domain "
                       f"(attempt {attempt + 1}); transcribing to the target next")
             state.prototypes[key] = code
+            state.part(subgoal).sessions.pop("prototype", None)   # D669: the agent's prototype job is done
             _record_prototype(state, subgoal, code, v, ok=True, reply=answer,
                               seconds=round(time.monotonic() - t_attempt, 3))
             return code, ""

@@ -785,9 +785,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"campaign {rep.campaign[:12]}: {len(rep.rows)} measured rows, {len(rep.passes)} pass(es), "
           f"objective {rep.objectives.describe() or '(none)'}")
     if rep.agent_turns:
-        fell = sum(1 for t in rep.agent_turns if not t.get("ok"))
+        fell = sum(1 for t in rep.agent_turns if not t.get("ok") and t.get("box") not in ("generate", "prototype"))
+        resumed = sum(1 for t in rep.agent_turns if t.get("session") == "resumed")
         print(f"  agent turns: {len(rep.agent_turns)} (" + ", ".join(sorted({str(t.get('box')) for t in rep.agent_turns}))
-              + f"), {fell} fell back to the rules half")
+              + f"), {resumed} resumed a session, {fell} fell back to the rules half")
     if rep.library:
         print(f"  library: {len(rep.library)} file(s) cited by the drafts' prompts: "
               + ", ".join(f"{k} ({v})" for k, v in sorted(rep.library.items(), key=lambda t: -t[1])[:8]))

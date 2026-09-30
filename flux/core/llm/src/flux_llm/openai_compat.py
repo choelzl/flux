@@ -120,6 +120,12 @@ def load_user_config(path: Path | None = None) -> list[str]:
         if name.startswith(("FLUX_", "OLLAMA_")) and name not in os.environ:
             os.environ[name] = value.strip("'\"")
             set_now.append(name)
+    # coding agents (OpenCode's config reads {env:FLUX_REMOTE_API_KEY}) inherit the key from the
+    # environment, in memory only, never written anywhere (D669)
+    if "FLUX_REMOTE_API_KEY" not in os.environ and os.environ.get("FLUX_REMOTE_API_KEY_FILE"):
+        key = remote_api_key()
+        if key:
+            os.environ["FLUX_REMOTE_API_KEY"] = key
     return set_now
 
 

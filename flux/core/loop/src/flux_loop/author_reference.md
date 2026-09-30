@@ -70,8 +70,12 @@ Say only what is yours; the rest is inferred.
   `dse: sweep|montecarlo|anneal|gradient|genetic|pareto|llm` or a list of phases,
   `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
   and on any box but test and the stages, `{agent: opencode|claude|codex}`: a coding agent answers
-  that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md),
-  `knowledge: [digest]` (the model's library digest; `none` turns the library off),
+  that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md);
+  `{agent: {preset: opencode, session: pass}}` keeps one agent session per box for the pass
+  (resumed turn after turn), `session: turn` (the default) is a fresh agent every turn. A
+  generate agent's span is fixed, not set: one session per part until the part is admitted
+  (repairs and critique send-backs resume it with a short message; an improve starts fresh;
+  `session` on generate is refused). Also `knowledge: [digest]` (the model's library digest; `none` turns the library off),
   `extract: mined` (lessons mined from the record), `feedback: none` (no operator notes),
   `calibrate: off`. `dse: pareto` needs two objectives. `flow` is the only place a box is said:
   there is no `roles:`, `generator:`, `critique:` or `decompose:` key. A stage's estimate is the

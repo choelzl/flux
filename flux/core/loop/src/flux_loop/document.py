@@ -305,6 +305,10 @@ class TaskSpec:
                 agent_spec(generator["agent"])
             except ValueError as exc:
                 raise TaskError(f"flow.generate.agent: {exc}") from exc
+            if isinstance(generator["agent"], dict) and "session" in generator["agent"]:
+                # D669: generate's span is fixed -- one session per part until it is admitted
+                raise TaskError("flow.generate.agent.session: generate keeps one session per part until the part is "
+                                "admitted (repairs and send-backs resume it); `session` is set on a decision box")
         elif "catalog" in generator:
             value = generator["catalog"]
             if not isinstance(value, list) or not value or not all(isinstance(t, str) for t in value):
@@ -1181,7 +1185,8 @@ def _agent_tool(spec: Any) -> str:
 
     try:
         a = agent_spec(spec)
-        return a.tool + ("" if a.questions == "decide" else f", questions answered by the {a.questions}")
+        return (a.tool + ("" if a.questions == "decide" else f", questions answered by the {a.questions}")
+                + (", one session a pass" if a.session == "pass" else ""))
     except ValueError:
         return "?"
 
@@ -1213,7 +1218,10 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
 
 def _agent_name(value: dict[str, Any]) -> str:
     spec = value.get("agent")
-    return spec if isinstance(spec, str) else str((spec or {}).get("preset") or (spec or {}).get("name") or "command")
+    if isinstance(spec, str):
+        return spec
+    name = str((spec or {}).get("preset") or (spec or {}).get("name") or "command")
+    return name + (", one session a pass" if (spec or {}).get("session") == "pass" else "")   # D669
 
 
 #: What the rules half of orchestrate does, said the same in every place that shows it.

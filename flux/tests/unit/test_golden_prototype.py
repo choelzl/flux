@@ -373,3 +373,46 @@ def test_a_prototype_the_loop_cannot_spell_is_told_at_the_check(tmp_path):
     v = check(looping, g, rows)
     assert not v.ok and "cannot spell it" in v.why and "While" in v.why
     assert check("def design(a):\n    return {'y': a}\n", g, rows).ok
+
+
+RESUMING = '''
+import json, sys
+from pathlib import Path
+here = Path(sys.argv[0]).parent
+mode = sys.argv[1]
+if mode == "first":
+    sid, out, shift = "ses_p1", sys.argv[3], 3             # a wrong first prototype
+else:
+    sid, out, shift = sys.argv[2], sys.argv[4], 4
+    assert "REFUSED" in sys.argv[3] and "HOW TO ANSWER" not in sys.argv[3], sys.argv[3][:400]
+open(out, "w").write(f"def design(a):\\n    return {{'y': (a * a) >> {shift}}}\\n")
+with open(here / "turns.txt", "a") as f:
+    f.write(f"{mode} {sid} {Path.cwd()}\\n")
+print(json.dumps({"type": "text", "sessionID": sid, "part": {"text": "written"}}))
+'''
+
+
+def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, monkeypatch):
+    """The prototype agent's refused prototype goes back into the same session with the check's
+    report (D669); the prototype that passes ends the session."""
+    from flux_loop import PromptProblem, request_for, run_loop
+
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    _sq_doc(tmp_path)
+    doc = tmp_path / "p" / "sq.problem.yaml"
+    d = yaml.safe_load(doc.read_text())
+    fake = tmp_path / "agent.py"
+    fake.write_text(RESUMING)
+    d.setdefault("flow", {})["generate"] = {"agent": {
+        "command": ["{python}", str(fake), "first", "{prompt_file}", "{artifact}"],
+        "resume": ["{python}", str(fake), "resume", "{session}", "{answer}", "{artifact}"], "output": "opencode"}}
+    doc.write_text(yaml.safe_dump(d, sort_keys=False))
+    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    said: list[str] = []
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
+                   log=said.append)
+    assert out.decision is not None, (said[-12:], out.refused)
+    turns = [ln.split() for ln in (tmp_path / "turns.txt").read_text().splitlines()]
+    assert [t[0] for t in turns] == ["first", "resume"] and turns[0][1:] == turns[1][1:], turns
+    assert Path(turns[0][2]).parent.name == "prototype"
+    assert any("prototype" in m and "resumed session ses_p1" in m for m in said), said

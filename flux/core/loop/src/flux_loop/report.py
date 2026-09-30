@@ -402,10 +402,20 @@ def render(rep: Report) -> str:
         sections.append("<p class=note>library papers the drafts' prompts cited: " + html.escape(
             ", ".join(f"{k} ({v})" for k, v in sorted(rep.library.items(), key=lambda t: -t[1]))) + "</p>")
     if rep.agent_turns:
-        cells = "".join(f"<tr><td>{html.escape(str(t.get('box')))}</td><td>{html.escape(str(t.get('agent')))}</td>"
-                        f"<td>{'answered' if t.get('ok') else 'fell back'}</td><td>{float(t.get('seconds') or 0):g}s</td>"
+        def session(t: dict) -> str:            # D669: fresh or resumed, and which session
+            sid = str(t.get("session_id") or "")
+            return str(t.get("session") or "fresh") + (f" {sid[:40]}" if sid else "")
+
+        def outcome(t: dict) -> str:
+            if t.get("box") in ("generate", "prototype"):
+                return "wrote the file" if t.get("ok") else "wrote nothing"
+            return "answered" if t.get("ok") else "fell back"
+
+        cells = "".join(f"<tr><td>{html.escape(str(t.get('box')))}{html.escape(' ' + str(t['part']) if t.get('part') else '')}</td>"
+                        f"<td>{html.escape(str(t.get('agent')))}</td><td>{html.escape(session(t))}</td>"
+                        f"<td>{outcome(t)}</td><td>{float(t.get('seconds') or 0):g}s</td>"
                         f"<td>{html.escape(str(t.get('why') or ''))[:200]}</td></tr>" for t in rep.agent_turns)
-        sections.append("<h2>Agent turns</h2><table><tr><th>box</th><th>agent</th><th>outcome</th><th>time</th>"
+        sections.append("<h2>Agent turns</h2><table><tr><th>box</th><th>agent</th><th>session</th><th>outcome</th><th>time</th>"
                         f"<th>why it fell back</th></tr>{cells}</table>")
     for k in range(2, len(objs)):                       # the other pairs beside the first
         sections.append(f"<h3>{html.escape(objs[0].metric)} against {html.escape(objs[k].metric)}</h3>")

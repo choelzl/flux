@@ -44,6 +44,10 @@ flow:
   # generate: {agent: {command: [my-agent, "{prompt_file}", "{artifact}"], timeout_s: 900}}
 ```
 
+One session per part (D669): the first draft reads the whole brief; a repair or a critic's
+send-back of a part not yet admitted resumes that session with a short message (what failed, the
+file, fix it). Once the part is admitted the session ends; an improve is a new agent.
+
 The loop gives the agent a work directory, a brief (`PROMPT.md`: the same design prompt the
 model gets, plus the prior artifact and the failure on a repair) and a time limit. The agent
 uses its own model, tools and skills; the loop then reads the artifact and runs its own build,
