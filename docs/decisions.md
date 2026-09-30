@@ -853,3 +853,20 @@ the topics above.
   Tested on a written record: accepted, failed by an objective, failed by a cutoff; a gate
   refusal is not listed; a `within` cutoff. Live: add8's two designs, accepted, 5513.6 and
   4242.3 MHz against ≥ 2000.
+
+- **D691: highlighted code and a theme switch.**
+  - **The highlighter** (`static/highlight.js`, no library, no build) has a small sticky-regex
+    tokenizer per language: YAML (keys, `{placeholders}`), Python, SystemVerilog/Verilog (sized
+    literals, `$tasks`, `` `macros ``), VHDL, C/C++, JSON, Markdown, shell, Tcl. The language
+    comes from the extension, or from the text for a design's source. It builds text nodes and
+    spans, never HTML. Past 400 kB a file stays plain.
+  - **The editor** is still a textarea, transparent over a highlighted layer that follows its
+    scroll; Tab indents. Prompts and replies are prose with their fenced code blocks
+    highlighted.
+  - **The theme** cycles system → light → dark in the top bar and is kept in localStorage. It
+    is applied before the page draws, from an inline head script. The CSS has light tokens by
+    default and dark under `[data-theme="dark"]`, or the system's dark when nothing is chosen.
+    Token colours exist for both, and the scrollbars follow the theme.
+
+  Checked in headless Firefox, light and dark: the document editor, a design's SystemVerilog,
+  an agent turn, the configurator.

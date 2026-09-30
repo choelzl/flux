@@ -2,6 +2,8 @@
 // a start resumes it from its record. Every node is built with h() -- text goes in as text, never as
 // HTML -- so nothing a run prints can inject script.
 
+import { codeBlock, codeEditor, langOf, proseBlock } from "./highlight.js";
+
 const main = document.getElementById("main");
 let me = null;
 let cleanup = [];
@@ -264,10 +266,12 @@ async function appsPage() {
 async function newPage() {
   const name = h("input", { placeholder: "application name", required: true });
   const file = h("input", { value: "problem.problem.yaml", size: 28 });
-  const text = h("textarea", { spellcheck: "false", class: "code", placeholder: "id: my_problem\nstatement: >-\n  What the design must do.\n..." });
+  const ed = codeEditor("", "yaml");
+  ed.textarea.placeholder = "id: my_problem\nstatement: >-\n  What the design must do.\n...";
+  const text = ed.textarea;
   show(head("Write a problem document", "Paste or write the YAML; upload its other files afterwards on the application's page.",
       h("a", { class: "btn", href: "#/configure" }, "Use the configurator instead")),
-    card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "Application", name), h("label", { class: "stack" }, "File", file)), text,
+    card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "Application", name), h("label", { class: "stack" }, "File", file)), ed.el,
       h("div", { class: "form-actions" }, act("Create", async () => {
         await api("/apps/from-text", { method: "POST", body: { name: name.value, filename: file.value, text: text.value } });
         toast(`${name.value} created`, "ok"); location.hash = `#/app/${enc(name.value)}`;
@@ -355,11 +359,11 @@ async function loopPage(name, owner, tab = "Live") {
     }
     const r = await fetch(fileUrl(path), { credentials: "same-origin" });
     if ((r.headers.get("content-type") || "").startsWith("text/")) {
-      const ta = h("textarea", { spellcheck: "false", class: "code", value: await r.text(), readonly: !mine });
+      const ed = codeEditor(await r.text(), langOf(path), { readonly: !mine });
       viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path),
           h("div", { class: "actions" }, mine ? act("Save", async () => {
-            await api(`/apps/${enc(name)}/file?path=${enc(path)}`, { method: "PUT", body: { text: ta.value } }); toast(`${path} saved`, "ok");
-          }, { cls: "small" }) : "", h("a", { class: "btn small", href: fileUrl(path, true) }, "Download"))), ta);
+            await api(`/apps/${enc(name)}/file?path=${enc(path)}`, { method: "PUT", body: { text: ed.textarea.value } }); toast(`${path} saved`, "ok");
+          }, { cls: "small" }) : "", h("a", { class: "btn small", href: fileUrl(path, true) }, "Download"))), ed.el);
     } else {
       viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path)),
         empty("A binary file.", h("a", { class: "btn", href: fileUrl(path, true) }, "Download")));
@@ -406,7 +410,7 @@ async function loopPage(name, owner, tab = "Live") {
         stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
           h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
           h("tbody", {}, stages.map(([st, m]) => h("tr", {}, h("td", {}, st), ...metrics.map(k => h("td", { class: "mono num" }, fmt(m[k])))))))) : "",
-        full.artifact ? h("div", { class: "blk" }, h("h3", {}, "The design"), h("pre", { class: "val tall" }, full.artifact)) : "");
+        full.artifact ? h("div", { class: "blk" }, h("h3", {}, "The design"), codeBlock(full.artifact, "")) : "");
     }
     const table = h("div", {});
     function drawTable() {
@@ -457,7 +461,7 @@ async function loopPage(name, owner, tab = "Live") {
         for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
         const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
         one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
-          ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), h("pre", { class: "val tall" }, String(full[k])))),
+          ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
           ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []));
       };
       body.replaceChildren(h("div", { class: "split" },
@@ -809,6 +813,18 @@ async function route() {
     return await appsPage();
   } catch (x) { if (x.message !== "log in") show(card(null, h("p", { class: "err" }, x.message))); }
 }
+// ---- the theme: system, light or dark, remembered in this browser (D691)
+const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
+function theme() { try { return localStorage.getItem("flux-theme") || "system"; } catch (_) { return "system"; } }
+function applyTheme(t) {
+  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("flux-theme", t); } catch (_) {}
+}
+applyTheme(theme());
+const themeBtn = h("button", { class: "small theme", title: "Theme: system, light or dark" });
+themeBtn.addEventListener("click", () => { const order = ["system", "light", "dark"]; applyTheme(order[(order.indexOf(theme()) + 1) % 3]); themeBtn.textContent = THEMES[theme()]; });
+themeBtn.textContent = THEMES[theme()];
+
 function drawNav() {
   const here = location.hash || "#/";
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
@@ -817,7 +833,7 @@ function drawNav() {
     link("#/configure", "New loop", here === "#/configure" || here === "#/new"),
     me.role === "admin" ? link("#/admin", "Admin", here === "#/admin") : ""] : []));
   drawBell();
-  document.getElementById("who").replaceChildren(...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu), h("a", { href: "#/account", class: "me" }, me.name),
+  document.getElementById("who").replaceChildren(themeBtn, ...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu), h("a", { href: "#/account", class: "me" }, me.name),
     h("button", { class: "small", onclick: async () => { await api("/logout", { method: "POST" }).catch(() => {}); me = null; location.hash = "#/login"; } }, "Log out")] : []));
 }
 window.addEventListener("hashchange", route);

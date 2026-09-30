@@ -151,6 +151,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   each with its first line.
 - **Notifications:** the page tells you, and the bell keeps a list, when a run ends, fails, or
   its agent asks a question; desktop notifications when allowed.
+- **Code:** files, a design's source and the code in agent prompts are highlighted (YAML,
+  Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
+  light or dark, from the top bar, remembered in the browser.
 - **A loop's page** (tabs: Live, Log, Agent turns, Results, Files, Workbench):
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it

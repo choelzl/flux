@@ -19,17 +19,16 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 - Remember a loop's start options (the last ones as the dialog's defaults).
 
 ## Accounts and operations
-- API tokens so `flux` on a laptop can drive the server (start, follow, fetch results).
 - Groups: share an application with read or run access.
 - Quotas: CPU-hours, runs and storage per user; the admin sees usage.
 - A server policy that users bring their own model key (`--user-model-required`).
 - A "test the endpoint" button (with care: the server would fetch a URL a user names).
-- OIDC login beside local accounts.
-- Each user's runs as their own OS user (or a subuid range), not the server's.
 - Clean-up: old runs' logs and traces, per user and per age (`flux gc` for the server).
 - Backups of the server's data and every record.
 
 ## Presentation
 - Render the standings as tables and charts instead of key/value lines.
-- Syntax highlighting in the editor (a small highlighter, still no build step).
-- A dark/light switch beside the system preference.
+- Keyboard shortcuts (`g l` for loops, `/` to focus a filter).
+- A check of every page at phone width.
+
+Not wanted: API tokens, SSO/OIDC, a separate OS user per account.

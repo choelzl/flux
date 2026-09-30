@@ -6,13 +6,29 @@
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 10px;
   color-scheme: light;
+  /* highlighted code (D691) */
+  --tk-com: #6a737d; --tk-str: #1a7f37; --tk-kw: #8250df; --tk-num: #b35900; --tk-key: #0550ae; --tk-fn: #0a6e8a;
+  --tk-deco: #bc4c00; --tk-sub: #9a6700; --tk-punc: #6e7781;
 }
+/* dark: chosen, or the system's when nothing is chosen (D691) */
+:root[data-theme="dark"] { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
+  --accent: #6f9dff; --accent-ink: #0d1420; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+  --tk-com: #7d8590; --tk-str: #a5d6a7; --tk-kw: #c792ea; --tk-num: #f2b36b; --tk-key: #82aaff; --tk-fn: #89ddff;
+  --tk-deco: #f78c6c; --tk-sub: #ffcb6b; --tk-punc: #89929b; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
-          --accent: #6f9dff; --accent-ink: #0d1420; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
-          --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
+  --accent: #6f9dff; --accent-ink: #0d1420; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+  --tk-com: #7d8590; --tk-str: #a5d6a7; --tk-kw: #c792ea; --tk-num: #f2b36b; --tk-key: #82aaff; --tk-fn: #89ddff;
+  --tk-deco: #f78c6c; --tk-sub: #ffcb6b; --tk-punc: #89929b; }
 }
 * { box-sizing: border-box; }
+/* scrollbars in the theme's colours: inherited by every scrolling panel (D691) */
+:root { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -255,3 +271,26 @@ table.designs tr.decided td { background: color-mix(in srgb, var(--ok) 6%, trans
 ul.misses { margin: 4px 0; padding-left: 18px; color: var(--bad); }
 ul.misses li { margin: 2px 0; }
 table.designs td { white-space: nowrap; }
+
+/* ---- highlighted code and the editor (D691) */
+.hl .tk-com { color: var(--tk-com); font-style: italic; }
+.hl .tk-str { color: var(--tk-str); }
+.hl .tk-kw { color: var(--tk-kw); font-weight: 600; }
+.hl .tk-num { color: var(--tk-num); }
+.hl .tk-key { color: var(--tk-key); }
+.hl .tk-fn { color: var(--tk-fn); }
+.hl .tk-deco { color: var(--tk-deco); }
+.hl .tk-sub { color: var(--tk-sub); font-weight: 600; }
+.hl .tk-punc { color: var(--tk-punc); }
+.editor { position: relative; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+.editor-layer, .editor-input { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 10px 12px; margin: 0;
+  white-space: pre; tab-size: 4; letter-spacing: normal; word-spacing: normal; border: 0; }
+.editor-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: var(--ink); }
+.editor-input { position: relative; display: block; width: 100%; min-height: 440px; resize: vertical; background: transparent;
+  color: transparent; caret-color: var(--ink); overflow: auto; border-radius: 7px; }
+.editor-input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); outline: none; }
+.editor-input::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: transparent; }
+.editor-input::placeholder { color: var(--muted); }
+.editor-input[readonly] { cursor: default; }
+pre.code { white-space: pre; overflow: auto; }
+.theme { white-space: nowrap; }
