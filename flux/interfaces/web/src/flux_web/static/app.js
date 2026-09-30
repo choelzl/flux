@@ -79,7 +79,7 @@ async function appsPage() {
     h("div", { class: "form-line" }, h("label", {}, "Name", name)),
     h("div", { class: "form-line" }, h("label", {}, "Files or a .zip", files), h("label", {}, "or a folder", folder)),
     h("button", { class: "primary", type: "submit" }, "Upload"), " ",
-    h("a", { href: "#/new" }, "or write a document"), err);
+    h("a", { href: "#/configure" }, "or build one in the configurator"), err);
   show(
     h("h1", {}, "Applications"),
     h("div", { class: "row" },
@@ -178,7 +178,8 @@ async function appPage(name, owner) {
       catch (x) { addMsg.textContent = x.message; }
     } }, "Add")), addMsg);
   show(
-    h("h1", {}, name, " ", h("span", { class: "muted mono" }, info.document || ""), mine ? "" : h("span", { class: "pill" }, ` ${info.owner}'s, read only`)),
+    h("h1", {}, name, " ", h("span", { class: "muted mono" }, info.document || ""), mine ? "" : h("span", { class: "pill" }, ` ${info.owner}'s, read only`),
+      mine && info.document ? [" ", h("a", { class: "btn", href: `#/app/${encodeURIComponent(name)}/configure` }, "Configure")] : ""),
     h("div", { class: "row" },
       h("div", { class: "panel", style: "min-width:260px" }, h("h2", {}, "Files"), fileList(info.files),
         mine ? adder : "",
@@ -326,6 +327,47 @@ async function runPage(id) {
   show(head, banner, tabBar, body);
 }
 
+// ---------------------------------------------------------------- the configurator (D686)
+let crafterCatalog = null;
+async function configurePage(name) {
+  const C = window.FluxCrafter;
+  if (!C) { show(h("p", { class: "err" }, "The configurator's script did not load.")); return; }
+  if (!crafterCatalog) {
+    crafterCatalog = await fetch("/crafter-assets/tools.json").then(r => r.json()).catch(() => []);
+    C.setCatalog(crafterCatalog);
+  }
+  const host = h("div", { class: "flux-crafter" });
+  const err = errorBox();
+  if (name) {                                           // an existing loop, read back
+    const v = await api(`/apps/${encodeURIComponent(name)}/document`);
+    const got = C.fromDoc(v.raw, v.normal || v.raw);
+    show(h("h1", {}, "Configure ", h("a", { href: `#/app/${encodeURIComponent(name)}` }, name), " ",
+        h("span", { class: "muted mono" }, v.document)),
+      v.error ? h("p", { class: "err" }, "The loader refuses the document as it stands: " + v.error) : "",
+      h("p", { class: "muted" }, "Saving rewrites ", v.document, " from what you see here; comments are not kept. ",
+        got.kept.length ? "What the configurator does not edit is kept as written (listed beside the file)." : ""),
+      host, err);
+    C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document,
+      save: async (yaml) => {
+        const r = await api(`/apps/${encodeURIComponent(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
+        return r.ok;
+      } });
+    return;
+  }
+  const appName = h("input", { placeholder: "application name", required: true });
+  show(h("h1", {}, "New loop"),
+    h("p", { class: "muted" }, "Build the document here, then save it as a new application; add its other files (golden model, scripts) on the application's page. ",
+      h("a", { href: "#/new" }, "Or write the YAML yourself.")),
+    h("div", { class: "form-line" }, h("label", {}, "Application", appName)), host, err);
+  C.mount(host, false, { saveLabel: "Create the application", save: async (yaml, state) => {
+    if (!appName.value.trim()) throw new Error("name the application first (above)");
+    const id = String(state.id || "").trim() || "my_problem";
+    await api("/apps/from-text", { method: "POST", body: { name: appName.value.trim(), filename: `${id}.problem.yaml`, text: yaml } });
+    setTimeout(() => { location.hash = `#/app/${encodeURIComponent(appName.value.trim())}`; }, 600);
+    return "Created.";
+  } });
+}
+
 // ---------------------------------------------------------------- admin
 async function adminPage() {
   const [users, audit, runs, allApps] = await Promise.all([api("/users"), api("/audit"), api("/runs?everyone=1"), api("/admin/apps")]);
@@ -396,13 +438,15 @@ async function route() {
     if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)$/))) return await appPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]));
     if ((m = hash.match(/^#\/run\/(\d+)$/))) return await runPage(m[1]);
     if (hash === "#/new") return await newPage();
+    if (hash === "#/configure") return await configurePage(null);
+    if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
     if (hash === "#/admin" && me.role === "admin") return await adminPage();
     if (hash === "#/account") return await accountPage();
     return await appsPage();
   } catch (x) { if (x.message !== "log in") show(h("p", { class: "err" }, x.message)); }
 }
 function drawNav() {
-  document.getElementById("nav").replaceChildren(...(me ? [h("a", { href: "#/" }, "Applications"), h("a", { href: "#/new" }, "Write a document"),
+  document.getElementById("nav").replaceChildren(...(me ? [h("a", { href: "#/" }, "Applications"), h("a", { href: "#/configure" }, "New loop"),
     me.role === "admin" ? h("a", { href: "#/admin" }, "Admin") : ""] : []));
   document.getElementById("who").replaceChildren(...(me ? [h("a", { href: "#/account" }, me.name),
     h("button", { onclick: async () => { await api("/logout", { method: "POST" }).catch(() => {}); me = null; location.hash = "#/login"; } }, "Log out")] : []));

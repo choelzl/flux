@@ -67,3 +67,10 @@ dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--pa
 .grid2 input { width: 100%; }
 .inline { display: flex; gap: 6px; align-items: center; }
 .inline input { flex: 1; }
+/* the loop crafter (website/docs/assets/crafter.css) reads the docs theme's variables: ours (D686) */
+.flux-crafter { --md-default-fg-color: var(--ink); --md-default-fg-color--light: var(--muted);
+  --md-default-fg-color--lighter: var(--muted); --md-default-fg-color--lightest: var(--line);
+  --md-default-bg-color: var(--panel); --md-code-bg-color: var(--bg); --md-accent-fg-color: var(--accent);
+  --md-primary-fg-color: var(--accent); --md-primary-bg-color: #fff; --md-typeset-a-color: var(--accent);
+  --md-code-font-family: var(--mono); }
+.flux-crafter { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }

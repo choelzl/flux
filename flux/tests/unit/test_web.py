@@ -4,6 +4,7 @@ users, and a run started through the API and followed through its journal."""
 from __future__ import annotations
 
 import io
+import json
 import time
 import zipfile
 from pathlib import Path
@@ -201,3 +202,24 @@ def test_notes_reach_a_live_run_through_its_inbox(server, tmp_path):
         proc.wait()
     store.set_run(rid, ended=1.0)
     assert c.post(f"/api/runs/{rid}/notes", json={"text": "late"}, headers=H).status_code == 409
+
+
+def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    doc = b"id: x\nstatement: make x\nlanguage: python\ngate:\n  - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
+          b"stages:\n  - {name: bench, command: '{python} {home}/bench.py {artifact}', metrics: [time_ms]}\n" \
+          b"objectives:\n  - {metric: time_ms, direction: minimize}\nparams: {n: 5}\n"
+    files = [("files", ("x.problem.yaml", doc)), ("files", ("check.py", b"print('0 failing')\n")), ("files", ("bench.py", b"print('time_ms=1')\n"))]
+    assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
+    v = bob.get("/api/apps/x/document").json()
+    assert v["document"] == "x.problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["gate"])
+    new = "id: x\nstatement: make x faster\nlanguage: python\n"
+    r = bob.put("/api/apps/x/document", json={"text": new, "kept": ["params"]}, headers=H)
+    assert r.status_code == 200, r.text
+    text = bob.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).text
+    assert "make x faster" in text and "Kept as written" in text and "n: 5" in text
+    assert bob.put("/api/apps/x/document", json={"text": "params: {n: 1}\n", "kept": ["params"]}, headers=H).status_code == 400, \
+        "a kept key the configurator also wrote is refused"
+    assert TestClient(app).get("/crafter-assets/crafter.js").status_code == 200
+    assert TestClient(app).get("/crafter-assets/tools.json").json()

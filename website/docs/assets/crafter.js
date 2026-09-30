@@ -376,9 +376,10 @@
       if (o.label === "atleast") r = { metric: m, direction: "maximize", goal: num(o.value) };
       else if (o.label === "atmost") r = { metric: m, direction: "minimize", goal: num(o.value) };
       else if (o.label === "min") r = { metric: m, direction: "minimize" };
-      else if (o.label === "balance") r = { metric: m, direction: naturalDirection(m), balance: true };
+      else if (o.label === "balance") r = { metric: m, direction: o.direction || naturalDirection(m), balance: true };
       else r = { metric: m, direction: "maximize" };
-      if (!UNITS[m] && unitFor(m, cat)) r.unit = unitFor(m, cat);
+      if (o.unit && o.unit !== UNITS[m]) r.unit = o.unit;            // a unit the document said (D686)
+      else if (!UNITS[m] && unitFor(m, cat)) r.unit = unitFor(m, cat);
       return r;
     });
   }
@@ -513,7 +514,8 @@
       }
       return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
                metrics: write ? rep : [], needs: needs, gates: gates, estimate: estimateOf(st),
-               clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null };
+               clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null,
+               timeout: String(st.timeout || "").trim() };
     });
     return { checks: checks, stages: stages, objectives: objectives, document: docKeys };
   }
@@ -558,6 +560,8 @@
   /** The problem document for `state`, as the text of a `.problem.yaml`. */
   function buildYaml(state, cat) {
     var r = resolve(state, cat);
+    var kept = state.kept || [];                     // kept as written: the server appends them (D686)
+    function own(key) { return kept.indexOf(key) < 0; }
     var id = String(state.id || "").trim() || "my_problem";
     var out = "# " + id + ": made with the Flux problem builder.\n" +
               "#     flux task check " + id + ".problem.yaml\n" +
@@ -568,27 +572,28 @@
     if (language(state, true)) out += "language: " + q(language(state, true)) + "\n";
 
     var kfiles = list(state.knowledgeFiles);
-    if (kfiles.length) out += "\nknowledge:\n  files: " + flowSeq(kfiles) + "\n";
+    if (kfiles.length && own("knowledge")) out += "\nknowledge:\n  files: " + flowSeq(kfiles) + "\n";
 
-    if (state.partsMode === "decompose") out += "\nparts: decompose\n";
+    if (!own("parts")) { /* kept */ }
+    else if (state.partsMode === "decompose") out += "\nparts: decompose\n";
     else if (state.partsMode === "list" && list(state.parts).length) out += "\nparts: " + flowSeq(list(state.parts)) + "\n";
 
     var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && list(x.choices).length; });
-    if (space.length) {
+    if (space.length && own("space")) {
       out += "\nspace:\n";
       space.forEach(function (x) { out += "  " + q(x.knob.trim()) + ": " + flowSeq(list(x.choices).map(typed)) + "\n"; });
     }
 
-    for (var dk in r.document) out += "\n" + q(dk) + ": " + inline(r.document[dk][0].value, false) + "\n";   // an evaluator's own keys
+    for (var dk in r.document) if (own(dk)) out += "\n" + q(dk) + ": " + inline(r.document[dk][0].value, false) + "\n";   // an evaluator's own keys
 
     var said = flowSaid(state);
-    if (said.length) {
+    if (said.length && own("flow")) {
       out += "\nflow:\n";
       said.forEach(function (b) { out += "  " + b + ": " + flowValue(state, b) + "\n"; });
     }
 
     var checks = r.checks.filter(function (c) { return c.run; });
-    if (checks.length) {
+    if (checks.length && own("gate")) {
       out += "\ngate:                       # each must pass, in order\n";
       checks.forEach(function (c) {
         var p = [["name", c.name], ["run", c.run]];
@@ -598,7 +603,7 @@
       });
     }
 
-    if (r.stages.length) {
+    if (r.stages.length && own("stages")) {
       out += "\nstages:                     # cheapest first\n";
       r.stages.forEach(function (st) {
         out += "  - name: " + q(st.name) + "\n";
@@ -611,12 +616,13 @@
           if (st.estimate.kind === "command") ep.push(["command", st.estimate.command || "(the command)"]);
           out += "    estimate: " + flowMap(ep) + "\n";                 // estimated first; a likely failure is skipped
         }
+        if (st.timeout) out += "    timeout_s: " + scalar(typed(st.timeout)) + "\n";
         if (st.gates.length === 1) out += "    cutoff: " + gateMap(st.gates[0]) + "\n";   // go on only if
         else if (st.gates.length > 1) out += "    cutoff: [" + st.gates.map(gateMap).join(", ") + "]\n";
       });
     }
 
-    if (r.objectives.length) {
+    if (r.objectives.length && own("objectives")) {
       out += "\nobjectives:                 # limits must hold; the rest decide, in order\n";
       r.objectives.forEach(function (o) {
         var p = [["metric", o.metric], ["direction", o.direction]];
@@ -633,7 +639,7 @@
       if (v !== "") bp.push([key, typed(v)]);
     });
     if (b.prototype) bp.push(["prototype", typed(b.prototype)]);
-    if (bp.length) out += "\nbudget: " + flowMap(bp) + "\n";
+    if (bp.length && own("budget")) out += "\nbudget: " + flowMap(bp) + "\n";
     return out;
   }
 
@@ -672,7 +678,8 @@
     }
 
     // the checks
-    if (!r.checks.length) error("Add a check: a design that fails it goes no further.");
+    var kept = state.kept || [];
+    if (!r.checks.length && kept.indexOf("gate") < 0) error("Add a check: a design that fails it goes no further.");
     var seen = {};
     (state.checks || []).forEach(function (c, i) {
       var nm = r.checks[i].name, ty = checkType(c.type);
@@ -698,7 +705,7 @@
     });
 
     // the measurements
-    if (!r.stages.length) error("Add a measurement: designs are compared on what it reports.");
+    if (!r.stages.length && kept.indexOf("stages") < 0) error("Add a measurement: designs are compared on what it reports.");
     seen = {};
     var all = reported(state, cat);
     (state.stages || []).forEach(function (st, i) {
@@ -741,7 +748,7 @@
     }
 
     // the objective
-    if (!r.objectives.length) error("Add an objective: which reported numbers matter, and how.");
+    if (!r.objectives.length && kept.indexOf("objectives") < 0) error("Add an objective: which reported numbers matter, and how.");
     var metricsSeen = {}, balanced = 0;
     (state.objectives || []).forEach(function (o, i) {
       var m = String(o.metric || "").trim(), ro = r.objectives[i];
@@ -813,7 +820,198 @@
     return msgs;
   }
 
-  var api = { buildYaml: buildYaml, check: check, resolve: resolve, setCatalog: setCatalog, toolOf: toolOf,
+  // ------------------------------------------------------------------ a document read back (D686)
+  /* `fromDoc(raw, normal, cat)`: an existing document as a state, for the web configurator.
+     `raw` is the document as written (yaml.safe_load), `normal` the loader's form of it
+     (TaskSpec.to_dict: gate and stages as lists, commands as argv, `flux` spelled
+     `{python} -W ignore -m flux_cli.main`). A command is matched against the catalog's
+     templates; what matches none is a custom row with the command itself. Whatever the state
+     cannot say is `kept`: those top-level keys are carried over exactly as written, and each
+     is named in `notes`. Nothing is dropped silently. */
+  var CHECK_TIMEOUT = 120, STAGE_TIMEOUT = 600;
+  var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
+  var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
+                    "objectives", "budget"];
+  var BUDGET_KEYS = ["steps", "passes", "repair_attempts", "finalists", "workers", "prototype"];
+
+  function argvOf(run) {
+    var a = Array.isArray(run) ? run.map(String) : String(run || "").trim().split(/\s+/).filter(Boolean);
+    var flux = FLUX_ARGV.every(function (t, i) { return a[i] === t; });
+    return flux ? ["flux"].concat(a.slice(FLUX_ARGV.length)) : a;
+  }
+
+  /** A shell word as `shlex.split` reads it back. */
+  function shellWord(t) {
+    return /^[A-Za-z0-9_@%+=:,.\/{}-]+$/.test(t) ? t : "'" + String(t).replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  /** The catalog tool of `role` whose command template this argv fills, and its params. */
+  function matchTool(argv, role, cat) {
+    var tools = (cat || CATALOG).filter(function (t) { return t.role === role && t.run && !isCustom(t.id); });
+    for (var i = 0; i < tools.length; i++) {
+      var t = tools[i], tmpl = String(t.run).trim().split(/\s+/), params = {}, ok = tmpl.length === argv.length;
+      for (var k = 0; ok && k < tmpl.length; k++) {
+        var m = /^\{([A-Za-z_]\w*)\}$/.exec(tmpl[k]);
+        if (m && t.params && Object.prototype.hasOwnProperty.call(t.params, m[1])) params[m[1]] = shown(argv[k]);
+        else if (tmpl[k] !== argv[k]) ok = false;
+      }
+      if (ok) return { tool: t, params: params };
+    }
+    return null;
+  }
+
+  function checkTypeOf(toolId, name) {
+    if (toolId === "rtl-lint") return name === "compile" ? "compile" : "lint";
+    if (toolId === "champsim-build") return "compile";
+    if (toolId === "rtl-golden") return "golden";
+    if (toolId === "python-test-script" || toolId === "champsim-check") return "test";
+    return "custom";
+  }
+
+  function fromDoc(raw, normal, cat) {
+    raw = raw || {}; normal = normal || raw;
+    var s = base(), kept = [], notes = [];
+    function keep(key, why) {
+      if (kept.indexOf(key) < 0 && raw[key] !== undefined) { kept.push(key); notes.push("`" + key + "` is kept as written: " + why + "."); }
+    }
+    s.id = String(raw.id || normal.id || "");
+    s.statement = String(raw.statement || normal.statement || "").trim();
+    s.contract = String(raw.contract || "").trim();
+    var lang = String(raw.language || normal.language || "");
+    if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
+    else if (lang) { s.language = "other"; s.languageOther = lang; }
+
+    // knowledge: a list of files only
+    var kn = raw.knowledge;
+    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files"; }))
+      s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
+    else if (kn) keep("knowledge", "the configurator lists knowledge files only");
+
+    // parts: decompose, or names alone
+    var pa = raw.parts;
+    if (pa === "decompose") s.partsMode = "decompose";
+    else if (Array.isArray(pa) && pa.every(function (x) { return typeof x === "string"; })) { s.partsMode = "list"; s.parts = pa.join(", "); }
+    else if (pa !== undefined && pa !== null) keep("parts", "parts with their own statements");
+
+    // space: knob -> choices
+    var sp = raw.space;
+    if (sp && typeof sp === "object" && !Array.isArray(sp)) {
+      var plain = Object.keys(sp).every(function (k) { return Array.isArray(sp[k]); });
+      if (plain) s.space = Object.keys(sp).map(function (k) { return { knob: k, choices: sp[k].join(", ") }; });
+      else keep("space", "knobs that move with others (`when`)");
+    }
+
+    // flow: each box as one of its choices
+    var fl = normal.flow || raw.flow || {}, flowOk = true;
+    Object.keys(fl).forEach(function (box) {
+      var v = fl[box];
+      if (["test", "measure", "records"].indexOf(box) >= 0) return;
+      if (!BOXES[box]) { flowOk = false; return; }
+      if (box === "knowledge") {
+        var ls = Array.isArray(v) ? v : [v];
+        if (ls.length === 1 && ls[0] === "none") s.flow.knowledge = "none";
+        else if (!(ls.length === 0 || (ls.length === 1 && ls[0] === "library"))) flowOk = false;
+        return;
+      }
+      if (typeof v === "string" && choiceOf(box, v)) { s.flow[box] = v; return; }
+      if (v && typeof v === "object" && typeof v.agent === "string" && choiceOf(box, "agent:" + v.agent)) { s.flow[box] = "agent:" + v.agent; return; }
+      if (box === "generate" && v && typeof v === "object" && v.command !== undefined) {
+        s.flow.generate = "command"; s.generateCommand = argvOf(v.command).map(shellWord).join(" "); return;
+      }
+      flowOk = false;
+    });
+    if (!flowOk) { s.flow = defaultFlow(); keep("flow", "some of its choices are not the configurator's (an agent's own settings, a catalog, knowledge sources)"); }
+
+    // gate: checks in order
+    var gate = normal.gate;
+    var gateOk = true;
+    if (gate && !Array.isArray(gate) && typeof gate === "object" && gate.build) {
+      gate = []; gateOk = false;             // its build step fails on any exit but 0: the list has no such check
+    } else if (gate && !Array.isArray(gate) && typeof gate === "object") {   // the old {test} form
+      gate = ["build", "test"].filter(function (n) { return gate[n]; }).map(function (n) {
+        return { name: n, run: gate[n], count_re: n === "test" ? gate.count_re : null, timeout_s: gate.timeout_s };
+      });
+    }
+    (gate || []).forEach(function (c) {
+      if (c.fail_re) gateOk = false;
+      var argv = argvOf(c.run), m = matchTool(argv, "check", cat);
+      var custom = !m || (c.count_re && c.count_re !== "(\\d+) failing");
+      var row = custom ? { type: "custom", tool: "custom-check", name: c.name, params: { command: argv.map(shellWord).join(" ") },
+                           count_re: c.count_re && c.count_re !== "(\\d+) failing" ? c.count_re : "", timeout: "" }
+                       : { type: checkTypeOf(m.tool.id, c.name), tool: m.tool.id, name: c.name, params: paramsOf(m.tool, m.params),
+                           count_re: "", timeout: "" };
+      if (c.timeout_s && Number(c.timeout_s) !== CHECK_TIMEOUT) row.timeout = String(c.timeout_s);
+      s.checks.push(row);
+    });
+    if (!gateOk) { s.checks = []; keep("gate", "a failure pattern (`fail_re`), or the `{build, test}` form, whose build step has no list form"); }
+
+    // stages: a catalog tool, an evaluator, or a command of one's own
+    var stagesOk = true;
+    var rawStages = {};                          // what the document wrote: the loader adds patterns of its own
+    (Array.isArray(raw.stages) ? raw.stages : []).forEach(function (x) { if (x && x.name) rawStages[x.name] = x; });
+    (normal.stages || []).forEach(function (st) {
+      var said = rawStages[st.name] || {};
+      if (said.metrics_re && Object.keys(said.metrics_re).length) { stagesOk = false; return; }
+      var row = null;
+      if (st.command) {
+        var argv = argvOf(st.command), m = matchTool(argv, "stage", cat);
+        if (m) row = { tool: m.tool.id, name: st.name, params: paramsOf(m.tool, m.params), metrics: "", needs: "", gates: [] };
+        else row = { tool: "custom-stage", name: st.name, params: { command: argv.map(shellWord).join(" ") },
+                     metrics: (st.metrics || []).join(", "), needs: (st.needs || []).join(", "), gates: [] };
+      } else if (st.evaluator) {
+        var ev = (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.stage && t.stage.evaluator === st.evaluator; })[0];
+        if (!ev) { stagesOk = false; return; }
+        var p = {};
+        for (var dk in ev.document || {}) {
+          var mm = /^\{([A-Za-z_]\w*)\}$/.exec(String(ev.document[dk]));
+          if (mm && raw[dk] !== undefined) p[mm[1]] = shown(String(raw[dk]));
+        }
+        row = { tool: ev.id, name: st.name, params: paramsOf(ev, p), metrics: "", needs: "", gates: [] };
+      } else { stagesOk = false; return; }                         // measured by the world's own code
+      var cuts = st.cutoff ? (Array.isArray(st.cutoff) ? st.cutoff : [st.cutoff]) : [];
+      row.gates = cuts.map(function (c) {
+        if ("within" in c) return { metric: c.metric, rule: "within", value: String(Math.round(Number(c.within) * 100000) / 1000) };
+        if ("below" in c) return { metric: c.metric, rule: "below", value: String(c.below) };
+        return { metric: c.metric, rule: "at", value: String(c.at) };
+      });
+      var e = st.estimate;
+      row.estimate = e ? { kind: e.kind, margin: String(Math.round(Number(e.margin || 0) * 100000) / 1000), command: e.command ? argvOf(e.command).map(shellWord).join(" ") : "" }
+                       : { kind: "off", margin: "5", command: "" };
+      if (st.timeout_s && Number(st.timeout_s) !== STAGE_TIMEOUT) row.timeout = String(st.timeout_s);
+      s.stages.push(row);
+    });
+    if (!stagesOk) { s.stages = []; keep("stages", "a stage measured by the world's code or read with its own patterns (`metrics_re`)"); }
+    if (raw.workload !== undefined && !s.stages.some(function (r) { var t = toolOf(r.tool, cat); return t && t.document && "workload" in t.document; }))
+      keep("workload", "no evaluator stage here writes it");
+
+    // objectives: the labels the configurator has
+    var objOk = true, rawObjs = Array.isArray(raw.objectives) ? raw.objectives : [];
+    (normal.objectives || []).forEach(function (o, i) {
+      // what the document wrote decides; the loader fills stage, tie, margin and unit of its own
+      var said = rawObjs[i] && typeof rawObjs[i] === "object" ? rawObjs[i] : {};
+      var extra = Object.keys(said).filter(function (k) { return ["metric", "direction", "goal", "balance", "unit"].indexOf(k) < 0; });
+      if (extra.length) objOk = false;
+      var label = o.balance ? "balance" : o.goal !== undefined && o.goal !== null ? (o.direction === "minimize" ? "atmost" : "atleast")
+                : o.direction === "minimize" ? "min" : "max";
+      s.objectives.push({ metric: o.metric, label: label, value: o.goal !== undefined && o.goal !== null ? String(o.goal) : "",
+                          unit: o.unit || "", direction: o.balance ? o.direction : "" });
+    });
+    if (!objOk) { s.objectives = []; keep("objectives", "objectives with a stage, a tie or a margin of their own"); }
+
+    // budget
+    var bu = raw.budget || {};
+    if (Object.keys(bu).every(function (k) { return BUDGET_KEYS.indexOf(k) >= 0; }))
+      BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
+    else keep("budget", "it sets " + Object.keys(bu).filter(function (k) { return BUDGET_KEYS.indexOf(k) < 0; }).join(", "));
+
+    Object.keys(raw).forEach(function (k) {
+      if (STATE_KEYS.indexOf(k) < 0 && k !== "workload") keep(k, "the configurator does not edit it");
+    });
+    s.kept = kept;
+    return { state: s, kept: kept, notes: notes };
+  }
+
+  var api = { buildYaml: buildYaml, check: check, fromDoc: fromDoc, argvOf: argvOf, resolve: resolve, setCatalog: setCatalog, toolOf: toolOf,
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
@@ -845,8 +1043,11 @@
     return el;
   }
 
-  function mount(host, readonly) {
-    var state = base();
+  /** `opts` (the web configurator, D686): `state` to start from, `save(yaml, state)` returning a
+      promise of a line to show, `notes` on what is kept as written. */
+  function mount(host, readonly, opts) {
+    opts = opts || {};
+    var state = opts.state || base();
     var openBox = null, openNode = null;
     var parts = {};
 
@@ -1473,14 +1674,22 @@
     parts.file = h("span", { class: "fc-file" });
     parts.checks = h("ul", { class: "fc-checks" });
     parts.next = h("code", {});
-    parts.copyBtn = button("Copy", copy, "fc-primary");
+    parts.copyBtn = button("Copy", copy, opts.save ? "" : "fc-primary");
+    parts.saved = h("span", { class: "fc-hint" });
+    var saveBtn = opts.save ? button(opts.saveLabel || "Save", function () {
+      parts.saved.textContent = "Saving...";
+      Promise.resolve(opts.save(buildYaml(state), state)).then(function (said) { parts.saved.textContent = said || "Saved."; },
+        function (e) { parts.saved.textContent = (e && e.message) || String(e); });
+    }, "fc-primary") : null;
+    var keptNotes = (opts.notes || []).length ? [h("h4", { text: "Kept as written" }),
+      h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))] : [];
     var out = h("div", { class: "fc-output" }, [
-      h("div", { class: "fc-output-head" }, [parts.file, parts.copyBtn, button("Download", download)]),
+      h("div", { class: "fc-output-head" }, [parts.file, saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
       h("pre", { class: "fc-yaml" }, [parts.code]),
-      h("h4", { text: "Checklist" }), parts.checks,
+      h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat([
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
-      h("pre", {}, [parts.next])]);
+      h("pre", {}, [parts.next])]));
     host.appendChild(h("div", { class: "fc-body" }, [parts.form, out]));
     parts.pop = h("div", { class: "fc-pop", role: "dialog", hidden: "hidden" });
     host.appendChild(parts.pop);
@@ -1516,6 +1725,7 @@
     fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (list) { setCatalog(list); go(); }, function () { go(); });
   }
+  root.FluxCrafter = Object.assign({ mount: mount }, api);      // the web configurator mounts it itself (D686)
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
   // Material's instant navigation swaps pages without a reload

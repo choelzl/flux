@@ -742,3 +742,34 @@ the topics above.
 - **D685: agents may run Icarus.** `iverilog` and `vvp`, now in the shell from nixchip, left the
   deny list: an agent can simulate its own draft. Verilator, Yosys, OpenROAD, OpenSTA, and
   `flux rtl` and `flux task` stay the loop's to run.
+
+- **D686: the configurator, the crafter reading a document back.** `fromDoc(raw, normal)` in
+  crafter.js is `buildYaml`'s inverse.
+  - **Inputs.** `raw` is the document as written (`yaml.safe_load`); `normal` is the loader's
+    form (`TaskSpec.to_dict`: gate and stages as lists, argv, `flux` spelled
+    `{python} -W ignore -m flux_cli.main`). Neither runs the document's code: `world:` and
+    `hooks:` are imported only when a problem is built.
+  - **Matching.** A check's or stage's argv is matched against the catalog's command templates
+    (`{param}` = one word), else it becomes a custom row with the command itself.
+  - **Kept as written.** What the form cannot say is kept, and each kept key is named. What the
+    document wrote decides, not what the loader adds (inferred `metrics_re`, an objective's
+    default stage, tie or margin).
+  - **Saving.** The form no longer writes the kept keys (`state.kept`). The server appends them
+    from the old document; a clash is refused.
+  - **Carried in the state:** stage `timeout_s`, units the crafter does not know (`XOR`), and a
+    balanced objective's direction.
+  - **Web.** `window.FluxCrafter.mount(host, false, {state, save, notes})`. The app serves
+    `website/docs/assets` (`FLUX_CRAFTER_ASSETS`) and maps the docs theme's variables onto its
+    own. Pages: "New loop" (`#/configure`) and "Configure" (`#/app/<name>/configure`).
+
+  Tests:
+  - every document of the repository (the applications, the `flux new` templates, digits)
+    read back, written again and reloaded gives the same gate, stages, objectives, flow,
+    budget, space, parts and workload;
+  - the templates keep nothing aside.
+
+  Kept by the applications: bankmap, interconnect_mapping and macarray keep their world's
+  stages; nlu keeps knowledge, stages, objectives, budget, world and ladder; gelu keeps flow;
+  npu_gemm and prefetcher keep objectives; invent keeps gate; adder16, mul8 and primes keep
+  nothing. Live, in headless Firefox: add8 opened, saved through the button, and reloaded to
+  the same loop.

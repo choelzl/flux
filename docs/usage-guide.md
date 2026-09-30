@@ -134,6 +134,11 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
+- **The configurator:** the loop crafter inside the app (D686). **New loop** builds a document and
+  creates the application from it. **Configure**, on an application, reads its document back
+  into the same form and saves it. What the form cannot say (a `world:`, its own stages or
+  settings, `params`, a `{build, test}` gate, a failure pattern, objectives with a stage or tie
+  of their own) is kept exactly as written and listed beside the file. Comments are not kept.
 - **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
   files (or a `.zip`) to an existing one. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
   sandbox.

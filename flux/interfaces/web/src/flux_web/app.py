@@ -26,7 +26,8 @@ from .workspace import Workspace, WorkspaceError
 
 COOKIE = "flux_session"
 STATIC = Path(__file__).parent / "static"
-CRAFTER = Path(__file__).resolve().parents[4] / "website" / "docs" / "assets"
+#: The loop crafter's script, style and tool catalog (website/docs/assets), for the configurator (D686)
+CRAFTER = Path(os.environ.get("FLUX_CRAFTER_ASSETS") or Path(__file__).resolve().parents[5] / "website" / "docs" / "assets")
 
 
 class Login(BaseModel):
@@ -68,6 +69,11 @@ class Stop(BaseModel):
 
 class NoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
+
+
+class DocSave(BaseModel):
+    text: str = Field(max_length=2_000_000)
+    kept: list[str] = Field(default_factory=list)
 
 
 class Settings(BaseModel):
@@ -245,6 +251,38 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         store.audit(user.name, "add files", f"{name}: {len(written)} file(s)")
         return {"written": written}
+
+    @app.get("/api/apps/{name}/document")
+    def document_views(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The document as the configurator reads it back (D686): as written, and as the loader
+        takes it; neither runs any of its code."""
+        from .configure import views
+
+        w, _whose = reader(user, owner)
+        try:
+            doc = w.meta(name).get("document")
+            path = w.path(name, doc or "")
+            return {"document": doc, **views(path)}
+        except (WorkspaceError, ValueError, OSError) as exc:
+            raise fail(exc) from exc
+
+    @app.put("/api/apps/{name}/document")
+    def save_document(name: str, body: DocSave, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The configurator's YAML, with the keys it keeps carried over as written (D686)."""
+        from .configure import merged, views
+
+        w = ws(user)
+        try:
+            doc = w.meta(name).get("document")
+            path = w.path(name, doc or "")
+            text = merged(body.text, views(path)["raw"], body.kept)
+            w.write(name, doc, text)
+            after = views(path)
+        except (WorkspaceError, ValueError, OSError) as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "configure", name)
+        return {"ok": "saved" + ("" if not after["error"] else f"; the loader says: {after['error']}"),
+                "id": w.meta(name).get("id"), "error": after["error"]}
 
     @app.post("/api/apps/from-text")
     def from_text(body: DocText, user: User = Depends(user_of)) -> dict[str, Any]:
