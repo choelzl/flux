@@ -93,6 +93,8 @@ class AgentSpec:
     session: str = "turn"          # a decision box's span: a fresh agent each turn, or one per pass (D669)
     config: tuple[tuple[str, str], ...] = ()   # JSON merged into these variables of the agent's environment (D673)
     add_dir: tuple[str, ...] = ()  # the option that opens a folder outside the work directory (the workbench, D677)
+    probe: tuple[tuple[str, int], ...] | None = (("gate", 20), ("stages", 3))   # `flux probe` per turn (D678); None = off
+    allowed: tuple[str, ...] = ()  # denied commands this agent was given back (`allow:`, D678)
 
 
 def agent_spec(spec: Any) -> AgentSpec:
@@ -104,7 +106,7 @@ def agent_spec(spec: Any) -> AgentSpec:
     if not isinstance(spec, dict):
         raise ValueError("agent: a preset's name or {preset|command, timeout_s, questions, ...}")
     known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args",
-             "session"}
+             "session", "probe", "allow"}
     unknown = sorted(set(spec) - known)
     if unknown:
         raise ValueError(f"agent: {', '.join(unknown)} is not one of {', '.join(sorted(known))}")
@@ -116,7 +118,15 @@ def agent_spec(spec: Any) -> AgentSpec:
         raise ValueError(f"agent.session is one of {', '.join(SESSIONS)}, not {session!r}")
     common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
                   max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0),
-                  session=session)
+                  session=session, probe=_probe(spec.get("probe", True)))
+    allow = spec.get("allow") or []
+    if allow == "all":
+        allow = list(DENIED)                          # the restriction lifted for this agent (D678)
+    if isinstance(allow, str) or not all(isinstance(a, str) for a in allow):
+        raise ValueError("agent.allow is `all`, or a list of denied commands to give back, e.g. [verilator, yosys]")
+    unknown_allow = sorted(set(allow) - set(DENIED))
+    if unknown_allow:
+        raise ValueError(f"agent.allow: {', '.join(unknown_allow)} is not denied; denied: {', '.join(DENIED)}")
     if spec.get("command") and (spec.get("bin") or spec.get("args")):
         raise ValueError("agent: `bin` and `args` adjust a preset; with your own `command`, write them there")
     if spec.get("command"):
@@ -144,10 +154,40 @@ def agent_spec(spec: Any) -> AgentSpec:
     if isinstance(extra, str) or not all(isinstance(a, (str, int, float)) for a in extra):
         raise ValueError("agent.args is a list of arguments, e.g. [--agent, flux]")
     extra = tuple(str(a) for a in extra)
-    argv = _with_args((exe, *p["argv"][1:]), extra)
-    resume = _with_args((exe, *p["resume"][1:]), extra) if p["resume"] else None
-    config = tuple((k, json.dumps(v)) for k, v in (p.get("config") or {}).items())
-    return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()))
+    argv = _with_args((exe, *_allowed(p["argv"][1:], allow)), extra)
+    resume = _with_args((exe, *_allowed(p["resume"][1:], allow)), extra) if p["resume"] else None
+    config = tuple((k, json.dumps(_allowed_config(v, allow))) for k, v in (p.get("config") or {}).items())
+    return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()),
+                     allowed=tuple(allow))
+
+
+def _probe(value: Any) -> tuple[tuple[str, int], ...] | None:
+    """`probe:` (D678): true (the default budget), false (off), or {gate: N, <stage>: N, stages: N}."""
+    from .probe import PROBE_DEFAULT
+
+    if value is True or value is None:
+        return tuple(PROBE_DEFAULT.items())
+    if value is False:
+        return None
+    if not isinstance(value, dict) or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in value.values()):
+        raise ValueError("agent.probe is true, false, or {gate: N, <stage>: N, stages: N} (probes per turn)")
+    return tuple({**PROBE_DEFAULT, **{str(k): int(v) for k, v in value.items()}}.items())
+
+
+def _allowed(argv: tuple[str, ...], allow: list[str]) -> tuple[str, ...]:
+    """A preset's arguments without the denies `allow` gives back (D678)."""
+    gone = {f"Bash({c}:*)" for c in allow}
+    return tuple(a for a in argv if a not in gone)
+
+
+def _allowed_config(config: Any, allow: list[str]) -> Any:
+    if not allow or not isinstance(config, dict):
+        return config
+    bash = ((config.get("permission") or {}).get("bash"))
+    if not isinstance(bash, dict):
+        return config
+    gone = {k for c in allow for k in (c, f"{c} *")}
+    return {**config, "permission": {**config["permission"], "bash": {k: v for k, v in bash.items() if k not in gone}}}
 
 
 def _merged(base: Any, over: Any) -> Any:
@@ -186,9 +226,10 @@ _ASKING = {
 _ASKING["operator"] = _ASKING["model"]
 
 #: Who runs what (D673): the agent writes, the loop runs.
-HANDOFF = ("Do not compile, lint, simulate, synthesize, test or run the file, and do not run the gate: those "
-           "commands are denied to you. The loop does all of that on the file you write and, when something "
-           "fails, comes back to you in this session with its exact output. Use the shell to read, search and "
+DENIED_LINE = ("Do not compile, lint, simulate, synthesize or test the file with the raw tools: they are denied to "
+               "you. ")
+HANDOFF = ("The loop runs the gate and the measurements on the file you write and, when something fails, "
+           "comes back to you in this session with its exact output. Use the shell to read, search and "
            "compute (python3 for a calculation, pdftotext for a PDF); write the file and end your turn.")
 
 #: The answer when nobody answers.
@@ -278,7 +319,7 @@ def library_section(problem: Any, question: str | list[str], state: Any = None) 
 
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
                 prior: str | None, failure: str, questions: str = "decide", library: str = "",
-                workbench: str = "") -> str:
+                workbench: str = "", probes: str = "", denied: bool = True) -> str:
     """The brief an agent reads: the static prefix (contract, knowledge), the design or the
     repair prompt, the LIBRARY section, then what the loop expects of a terminal tool --
     including whether its questions will be answered."""
@@ -290,7 +331,7 @@ def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, langua
     parts.append(
         f"HOW TO ANSWER. You are a coding agent working in `{workdir}`. Write the complete {language} "
         f"artifact for `{part}` to `{artifact}` (create the file; that file is what gets built and tested, "
-        f"nothing else is read). {HANDOFF} When the file is written, reply with one line saying so. "
+        f"nothing else is read). " + (DENIED_LINE if denied else "") + HANDOFF + (f" {probes}" if probes else "") + " When the file is written, reply with one line saying so. "
         f"{_ASKING.get(questions, _ASKING['decide'])}")
     return "\n\n".join(parts) + "\n"
 
@@ -573,6 +614,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
     env = _config_env(spec, {**os.environ, "PWD": str(workdir)})
+    if subs.get("probe"):
+        env["FLUX_PROBE"] = subs["probe"]            # `flux probe` finds its turn's context (D678)
     # the prompt on stdin unless the command names a slot for it (D672); a resume's answer
     # comes in `answer`. With nothing to send, stdin is closed so no agent waits on it.
     slots = {m for t in argv for m in re.findall(r"\{(\w+)\}", t)}

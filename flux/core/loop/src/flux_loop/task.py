@@ -983,7 +983,8 @@ class PromptProblem(Problem):
         to resume, the full brief carries the prior draft and the failure."""
         from dataclasses import asdict
 
-        from .agent import agent_brief, converse, library_section, workbench_link, workbench_section
+        from .agent import DENIED, agent_brief, converse, library_section, workbench_link, workbench_section
+        from .probe import probe_context, probe_line
 
         state = attempt.state
         sg = attempt.subgoal
@@ -994,6 +995,7 @@ class PromptProblem(Problem):
         safe = re.sub(r'[^A-Za-z0-9_.-]+', '_', name)
         path = workdir / f"draft-{re.sub(r'[^A-Za-z0-9_.-]+', '_', sg or _leaf(self.task.id))}{self.task.extension}"
         prior, failure = attempt.prior, attempt.failure
+        budget = dict(agent.probe) if agent.probe is not None else None          # D678
         if prior is None and (sg or "*") in state.best:
             # a part the gate refused or the critic sent back on an earlier step (D669)
             _score, prior, failure = state.best[sg or "*"]
@@ -1006,23 +1008,27 @@ class PromptProblem(Problem):
                             prior=prior.artifact if prior is not None else None, failure=failure,
                             questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state),
-                            workbench=workbench_section(self.task.workbench))
+                            workbench=workbench_section(self.task.workbench),
+                            probes=probe_line([s.name for s in self.task.stages], budget, allowed=agent.allowed),
+                            denied=set(agent.allowed) < set(DENIED))
         workbench_link(self.task.workbench, workdir)
+        probe_ctx = probe_context(self.task, workdir, sg or "", budget)
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
         if resume:
             # the session holds the brief: what failed, the file, fix it (D669)
             path.write_text(prior.artifact)
             message = (f"THE LOOP RAN YOUR DRAFT AND REFUSED IT:\n{failure.strip()[:4000]}\n\nThe refused draft is in "
-                       f"`{path}`. Fix that file in place (or rewrite it if the approach is wrong); do not run it, the "
-                       f"loop does. Then reply with one line saying the file is written.\n")
+                       f"`{path}`. Fix that file in place (or rewrite it if the approach is wrong)"
+                       + ("; `flux probe` has a new budget for this turn. " if budget is not None else ". ")
+                       + "Then reply with one line saying the file is written.\n")
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or ".",
-                "workbench": self.task.workbench}
+                "workbench": self.task.workbench, "probe": probe_ctx}
         if self.skill_list() and not resume:           # install skills where the agent looks (D588)
             from .skills import install
 
@@ -1032,7 +1038,7 @@ class PromptProblem(Problem):
                                answer=self._agent_answerer(agent, brief, state), say=state.say,
                                session=resume, message=message)
         self._session_turn(state, sess, turn, "generate", sg, agent.tool, path.is_file(),
-                           f"exited {turn.rc}, wrote no {path.name}", message or brief, t0)
+                           f"exited {turn.rc}, wrote no {path.name}", message or brief, t0, probe_ctx)
         knobs = {"task": self.task.id, "part": sg or "", "generator": f"agent:{agent.tool}"}
         meta = {"questions": [asdict(e) for e in asked]} if asked else {}
         if path.is_file():
@@ -1050,17 +1056,27 @@ class PromptProblem(Problem):
                       + (f": {tail}" if tail else ""))
 
     def _session_turn(self, state: LoopState, sess: Any, turn: Any, kind: str, sg: str | None, tool: str,
-                      ok: bool, why: str, sent: str, t0: float) -> None:
-        """The session after an agent turn (D669): its id kept, the turn said and on the record."""
+                      ok: bool, why: str, sent: str, t0: float, probe_ctx: str = "") -> None:
+        """The session after an agent turn (D669): its id kept, the turn said and on the record,
+        with the probes it ran (D678)."""
         from .boxes import record_turn
+        from .probe import probes_done
 
         sess.id = turn.session or sess.id
         sess.turns += 1
         state.say(f"  {kind} {sg or self.task.id}: agent {tool}, {turn.began} session"
                   + (f" {sess.id}" if sess.id else "") + f", turn {sess.turns}, {len(sent)} chars sent")
+        probes = probes_done(probe_ctx)
+        if probes:
+            by: dict[str, int] = {}
+            for p in probes:
+                by[p["key"]] = by.get(p["key"], 0) + 1
+            state.say(f"  {kind} {sg or self.task.id}: the agent probed " + ", ".join(f"{k} x{n}" for k, n in by.items())
+                      + f"; last: {probes[-1].get('result', '')[:120]}")
         record_turn(state, {"box": kind, "part": sg or "", "agent": tool, "ok": ok, "why": "" if ok else why,
                             "seconds": round(time.monotonic() - t0, 1), "session": turn.began,
-                            "session_id": sess.id or "", "message_chars": len(sent)})
+                            "session_id": sess.id or "", "message_chars": len(sent),
+                            **({"probes": probes} if probes else {})})
 
     def prototype_agent(self) -> Any | None:
         """The coding agent that writes the prototype (D618), when `flow.generate: {agent: ...}`
@@ -1079,7 +1095,10 @@ class PromptProblem(Problem):
         """One agent turn on the prototype (D618): it edits a file; the loop runs the stage's own
         check (`flux rtl proto`) and comes back with what failed (D673). Returns the file as a
         `{"prototype": ...}` reply, or "" when nothing new was written."""
-        from .agent import agent_brief, converse, library_section, workbench_link, workbench_section
+        from .agent import DENIED, agent_brief, converse, library_section, workbench_link, workbench_section
+        from .document import _command
+        from .golden_proto import TABLE_MAX, golden_path
+        from .probe import probe_context, probe_line
 
         sess = self._part_session(state, subgoal, "prototype", agent.tool)       # D669: until the prototype passes
         workdir = sess.workdir
@@ -1090,31 +1109,40 @@ class PromptProblem(Problem):
             path.write_text(code)
         else:
             path.unlink(missing_ok=True)
+        budget = dict(agent.probe) if agent.probe is not None else None          # D678: the prototype's check
+        proto = list(_substitute(_command(
+            ["flux", "rtl", "proto", "{artifact}", "--golden", str(golden_path(self.task)),
+             "--table-max", str(int(self.task.budget.get("prototype_table_max") or TABLE_MAX))], "the prototype check") or (),
+            {"python": sys.executable}))
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",
                             part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
                             failure=failure, questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state),
-                            workbench=workbench_section(self.task.workbench))
+                            workbench=workbench_section(self.task.workbench),
+                            probes=probe_line([], budget, proto=True, allowed=agent.allowed),
+                            denied=set(agent.allowed) < set(DENIED))
         workbench_link(self.task.workbench, workdir)
+        probe_ctx = probe_context(self.task, workdir, subgoal or "", budget, proto=proto)
         resume = sess.id if agent.resume and sess.id and code else None
         message = ""
         if resume:
             # the session holds the brief: what the check said, the file, fix it (D669)
             message = (f"THE LOOP RAN YOUR PROTOTYPE AND REFUSED IT:\n{(failure or 'see the check').strip()[:4000]}\n\n"
-                       f"It is in `{path}`. Edit it there (or rewrite it if the approach is wrong); do not run it, the "
-                       f"loop does. Then reply with one line saying the file is written.\n")
+                       f"It is in `{path}`. Edit it there (or rewrite it if the approach is wrong)"
+                       + ("; `flux probe gate` has a new budget for this turn. " if budget is not None else ". ")
+                       + "Then reply with one line saying the file is written.\n")
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or ".",
-                "workbench": self.task.workbench}
+                "workbench": self.task.workbench, "probe": probe_ctx}
         t0 = time.monotonic()
         turn, _asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
                                 answer=self._agent_answerer(agent, brief, state), say=state.say,
                                 session=resume, message=message)
         text = path.read_text() if path.is_file() else ""
         self._session_turn(state, sess, turn, "prototype", subgoal, agent.tool, bool(text.strip()) and text != code,
-                           f"exited {turn.rc}, left no new {path.name}", message or brief, t0)
+                           f"exited {turn.rc}, left no new {path.name}", message or brief, t0, probe_ctx)
         if not text.strip() or (code and text == code):
             tail = ((turn.text or turn.stdout or "") + "\n" + (turn.stderr or "")).strip()[-400:]
             state.say(f"  prototype {subgoal or self.task.id}: the coding agent {agent.tool} exited {turn.rc} "

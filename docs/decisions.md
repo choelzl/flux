@@ -578,3 +578,21 @@ the topics above.
   toggle, not a Material `details` with a fixed 11rem + 7rem grid (Material's rem is 20-30 px, so
   the unit column collapsed to one letter per line). Widths in em. A new measurement starts with
   the first tool that times (`rtl-synth`), not `rtl-stat`, which reports no fmax.
+
+- **D678: `flux probe`, the loop's tools inside an agent's turn.** Agents kept trying to run
+  synthesis: the loop's feedback comes only after the turn ends. The raw tools stay denied.
+  - **Probe.** `flux probe gate FILE` and `flux probe measure FILE --stage S` rebuild the
+    `PromptProblem` from a context file the loop writes for each turn (`FLUX_PROBE`) and run its
+    own build, judge and measure: the same commands, flags and metric parsing. A failed stage
+    shows the tool's output tail. The prototype turn's gate is `flux rtl proto`.
+  - **Budget.** Per turn: `probe: {gate: 20, stages: 3, <stage>: N}` or `false`.
+  - **Record.** Each probe is a line in the turn's log. The loop says them ("probed screen x3,
+    gate x2, confirm x1") and puts them on the `agent_turn` row, never as a trial.
+  - **Allow.** `allow: [cmds]` gives denied commands back to one agent; `allow: all` lifts the
+    deny list, and the brief then does not call anything denied.
+
+  Live, Claude Code on add8: 6 probes in one turn, then admitted at 2.96 µm², 24 cells,
+  4,306 MHz. Without probes the same problem had given 3.135 µm² and 32 cells.
+
+  Also from D677, live: the second isq16 run drafted in its first turn, as its note said
+  (999.4 MHz).

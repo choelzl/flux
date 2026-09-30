@@ -16,7 +16,7 @@ from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_new, cmd_log)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_new, cmd_log, cmd_probe)
 from flux_evaluator_abi import available_evaluators
 
 
@@ -71,6 +71,13 @@ def build_parser() -> argparse.ArgumentParser:
     log_p.add_argument("--turn", type=int, default=None, metavar="K", help="Turn K whole: the prompt, the reply, the tool calls.")
     log_p.add_argument("--full", action="store_true", help="Every listed turn whole, not a line each.")
     log_p.set_defaults(func=cmd_log)
+
+    probe_p = subparsers.add_parser(
+        "probe", help="Inside an agent's turn: check a file with the loop's own gate or stage (D678).")
+    probe_p.add_argument("what", choices=["gate", "measure"], help="gate: the gate; measure: the gate, then a stage.")
+    probe_p.add_argument("file", help="The file to check.")
+    probe_p.add_argument("--stage", default=None, help="The stage to measure (default: the first).")
+    probe_p.set_defaults(func=cmd_probe)
 
     st_p = subparsers.add_parser("selftest", help="Does Flux work on this machine: tools, a sweep, an RTL sweep, the model, a model-written problem.")
     st_p.add_argument("--full", action="store_true", help="Also the README's first run (adder16, about three minutes).")

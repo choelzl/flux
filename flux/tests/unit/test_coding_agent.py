@@ -64,8 +64,9 @@ def test_the_agent_writes_the_artifact_and_is_repaired_from_the_failure(tmp_path
     assert "HOW TO ANSWER" in last and "Write the complete text artifact" in last
     assert "THE LAST DRAFT" in last and "FAIL line 4" in last, "the repair brief carries the prior and the failure"
     first = seen.split("=====")[0]
-    assert "do not run the gate" in first and "comes back to you" in first and "THE GATE" not in first, \
+    assert "raw tools: they are denied" in first and "comes back to you" in first and "THE GATE" not in first, \
         "D673: the agent writes, the loop runs the gate and comes back with its output"
+    assert "flux probe gate FILE" in first, "D678: and it may check its file through the loop's own gate"
 
 
 def test_the_agent_may_print_the_artifact_instead(tmp_path):

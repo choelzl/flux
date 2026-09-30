@@ -107,7 +107,15 @@ yosys, openroad, sta, the C compilers, make, `flux rtl`, `flux task`, ...) and `
 Claude Code gets them as `--disallowedTools "Bash(yosys:*)" ...`. OpenCode gets them as
 `permission.bash` rules merged into `OPENCODE_CONFIG_CONTENT`; an `--agent` of your own with
 its own `bash` rules may override them. Codex has only the brief's word. A deny list is best
-effort: `python3` can still start a tool. With
+effort: `python3` can still start a tool.
+
+**Checking mid-turn: `flux probe`.** A generate or prototype agent may run the loop's own tools
+on its file inside its turn (D678). `flux probe gate FILE` runs the document's gate (for a
+prototype, its check). `flux probe measure FILE --stage S` runs the gate, then stage S. Each
+uses the loop's exact commands and flags, prints what the loop would see, and is on the record
+with the agent's turn. A budget per turn bounds them: `probe: {gate: 20, stages: 3, place: 1}`
+(the defaults are 20 and 3; `probe: false` turns it off). `allow: [verilator, yosys]` gives
+denied commands back to one agent, and `allow: all` lifts the deny list for it. With
 `budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with
 `flux rtl proto` and spells the RTL (D618). An agent that
 ends a turn without writing its file is nudged to write it, twice at most. An agent whose

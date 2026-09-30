@@ -1068,6 +1068,15 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_probe(args: argparse.Namespace) -> int:
+    """`flux probe gate|measure FILE`: an agent's check through the loop's own tools (D678)."""
+    from flux_loop.probe import probe
+
+    code, text = probe(args.what, args.file, args.stage)
+    print(text)
+    return code
+
+
 def cmd_log(args: argparse.Namespace) -> int:
     """`flux log <record>`: the turns the run's transcript holds, one line each, or
     whole with `--turn K` / `--full`."""

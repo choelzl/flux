@@ -50,6 +50,9 @@ A box turn is a file exchange in a work directory under the pass's trace directo
 The agent reads, searches, computes and writes; it does not compile, simulate, synthesize or
 test (D673, D674). The presets deny those commands (`DENIED` in `flux_loop/agent.py`). The loop
 runs the gate and the stages on what the agent writes and brings the output back to its session.
+Inside a turn it may check its file through the loop's own gate and stages with `flux probe`,
+within a budget. Each probe is on the record as the agent's own check, not a measured candidate
+(D678).
 
 The loop:
 
