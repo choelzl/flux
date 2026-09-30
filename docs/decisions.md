@@ -812,3 +812,25 @@ the topics above.
     - Every sandboxed flux has the same pid, so a new run continued the last one's pass
       count: the registration now also compares the container.
     - A run's pass count is shown only when the campaign's registration is that run's.
+
+- **D689: a loop runs or it does not; no run numbers.** An application is a loop with one
+  record. Starting it again resumes from that record, as `flux task run` on the same `--db`
+  always did.
+  - **API.** `/api/apps/{name}/start|stop|state|events|log|log/raw|notes|turns|results|report`,
+    and `/api/loops` for the notifications. The `/api/runs/{id}` routes are gone.
+  - **The loop's files** (`runs/`): one `loop.log`, each start marked in it ("── started <time>
+    by <user> · <passes, screen only, network> ──"); one `answer.json`; one `inbox.jsonl`.
+  - **Its view.** The live tree is the latest start's: its journal's `hello` clears the tree.
+    Agent turns and results cover the whole loop.
+  - **Starts** are kept by the server only for the process, the log and the audit trail;
+    nothing shows them as numbers.
+  - **State:** running since, or idle / stopped / failed, with the last activity. While it
+    runs: its pass, a stop asked, the sandbox, an open question. The list is ordered running
+    first, then by last activity.
+  - **Pages.** "Loops" lists each with Start/Stop. A loop's page has Start (resume), a dialog
+    for passes / until stopped / screen only / network, and tabs: Live, Log, Agent turns,
+    Results, Files, Workbench.
+  - **Notifications** say "<loop> finished its passes / stopped / failed / its agent asks".
+
+  Live, in headless Firefox: add8 started from the page ("Start (resume)", the dialog), running
+  with the new start's tree, one log with its start line; the list showing it running with Stop.

@@ -1,7 +1,10 @@
-"""Runs started from the web (D683): `flux task run` detached in its own session, sandboxed, its
-output to `<app>/runs/<n>.log`, its record in `<app>/out/`. What a run is doing is read from what
-it writes -- the record's run pointer, `run.json`, `events.jsonl`, `turns.jsonl` -- so a run
-outlives the server, and a restarted server finds it again."""
+"""A loop's starts from the web (D683, D689). A loop -- an application -- is running or not; starting
+it again resumes it from its record. Each start is `flux task run` detached in its own session,
+sandboxed, appending to the loop's one log (`<app>/runs/loop.log`, a line marking each start), with
+one answer (`runs/answer.json`) and one notes inbox (`runs/inbox.jsonl`). The server keeps its
+starts to know the process and the audit trail; nothing shows them as numbers. What a loop is doing
+is read from what it writes -- the record's run pointer, `run.json`, `events.jsonl`, `turns.jsonl` --
+so a loop outlives the server, and a restarted server finds it again."""
 
 from __future__ import annotations
 
@@ -18,7 +21,7 @@ from typing import Any
 
 from .store import Store, User
 
-__all__ = ["RunManager", "run_env"]
+__all__ = ["RunManager", "loop_files", "run_env"]
 
 #: The server's own model keys: never in the run of a user who brought their own endpoint.
 _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
@@ -38,57 +41,57 @@ def run_env(store: Store, user: User) -> dict[str, str]:
     return env
 
 
+def loop_files(app_dir: Path) -> dict[str, Path]:
+    """The loop's one log, answer and inbox, whatever the number of starts."""
+    d = app_dir / "runs"
+    return {"log": d / "loop.log", "answer": d / "answer.json", "inbox": d / "inbox.jsonl"}
+
+
 class RunManager:
     def __init__(self, store: Store, *, sandbox: bool = True, max_running: int = 4) -> None:
         self.store, self.sandbox, self.max_running = store, sandbox, max_running
-        self._procs: dict[int, subprocess.Popen] = {}
 
-    # ---- start
-    def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str,
-              options: dict[str, Any]) -> int:
+    # ---- start: the loop resumes from its record
+    def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any]) -> None:
         mine = self.store.runs(user)
-        busy = next((r for r in mine if r["app"] == app and self.live(r)), None)
-        if busy is not None:             # one record, one writer (D688)
-            raise ValueError(f"run #{busy['id']} of {app} is running; stop it first (runs of one application share its record)")
+        if any(r["app"] == app and self.live(r) for r in mine):
+            raise ValueError(f"{app} is running")
         if sum(1 for r in mine if self.live(r)) >= self.max_running:
-            raise ValueError(f"at most {self.max_running} runs at once per user")
-        out = app_dir / "out"
-        out.mkdir(exist_ok=True)
-        logs = app_dir / "runs"
-        logs.mkdir(exist_ok=True)
-        db = out / f"{doc_id}.db"
-        n = 1 + len(list(logs.glob("*.log")))
-        log = logs / f"{n:04d}.log"
+            raise ValueError(f"at most {self.max_running} loops running at once per user")
+        (app_dir / "out").mkdir(exist_ok=True)
+        files = loop_files(app_dir)
+        files["log"].parent.mkdir(exist_ok=True)
+        files["inbox"].touch()
+        db = app_dir / "out" / f"{doc_id}.db"
         flux = shutil.which("flux") or sys.argv[0]
-        argv = [flux, "task", "run", str(app_dir / document), "--db", str(db), "--json", str(log.with_suffix(".json"))]
+        argv = [flux, "task", "run", str(app_dir / document), "--db", str(db), "--json", str(files["answer"])]
         passes = options.get("passes")
         if passes is not None:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
-        inbox = log.with_suffix(".inbox.jsonl")
-        inbox.touch()
         env = {**run_env(self.store, user), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
-               "FLUX_FEEDBACK_INBOX": str(inbox)}                  # D684: notes and answers from the page
+               "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         env.pop("FLUX_SANDBOX_ALLOW", None)
         if options.get("allow"):
             env["FLUX_SANDBOX_ALLOW"] = ",".join(str(h).strip() for h in options["allow"] if str(h).strip())
         if self.sandbox:
             env["FLUX_SANDBOX"] = "1"                       # a shared server runs nothing on the host
-        run_id = self.store.add_run(user, app, str(db), str(log), argv, options)
-        fh = open(log, "ab")
+        said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
+            + ([f"network {env['FLUX_SANDBOX_ALLOW']}"] if options.get("allow") else [])
+        with open(files["log"], "a") as fh:
+            fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {user.name} · {', '.join(said)} ──\n")
+        run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)
+        fh = open(files["log"], "ab")
         proc = subprocess.Popen(argv, cwd=str(app_dir), stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 env=env, start_new_session=True)
         fh.close()
         self.store.set_run(run_id, pid=proc.pid)
-        self._procs[run_id] = proc
         threading.Thread(target=self._wait, args=(run_id, proc), daemon=True).start()
-        return run_id
 
     def _wait(self, run_id: int, proc: subprocess.Popen) -> None:
         rc = proc.wait()
         self.store.set_run(run_id, ended=time.time(), rc=rc)
-        self._procs.pop(run_id, None)
 
     # ---- state
     def live(self, run: dict[str, Any]) -> bool:
@@ -106,8 +109,14 @@ class RunManager:
             return True
         return True
 
-    def campaign(self, run: dict[str, Any]) -> tuple[str | None, str | None]:
-        """(campaign id, its run directory) from the record's run pointer, once the run has one."""
+    def latest(self, user: User, app: str) -> dict[str, Any] | None:
+        runs = self.store.runs(user, app)
+        return runs[0] if runs else None
+
+    def campaign(self, run: dict[str, Any] | None) -> tuple[str | None, str | None]:
+        """(campaign id, its run directory) from the record's run pointer, once a start made one."""
+        if not run:
+            return None, None
         try:
             pointer = json.loads(Path(f"{run['db']}.runs.json").read_text())
         except (OSError, ValueError):
@@ -117,26 +126,35 @@ class RunManager:
         cid, rdir = list(pointer.items())[-1]
         return cid, rdir
 
-    def state(self, run: dict[str, Any]) -> dict[str, Any]:
+    def state(self, user: User, app: str) -> dict[str, Any]:
+        """The loop's state: running or not, since when, its last activity, and while it runs its
+        pass, whether a stop is asked, its sandbox and an open question."""
         from flux_loop import ops
 
+        run = self.latest(user, app)
+        info: dict[str, Any] = {"app": app, "user": user.name, "running": False, "since": None, "last_active": None,
+                                "failed": False, "stopped": False, "question": None, "events": False, "options": {}}
+        if run is None:
+            return info
+        running = self.live(run)
+        info.update(running=running, since=run["started"] if running else None,
+                    last_active=(time.time() if running else (run.get("ended") or run["started"])),
+                    failed=(not running and run.get("rc") not in (0, None, 130)), stopped=(not running and run.get("rc") == 130),
+                    options=json.loads(run.get("options") or "{}"))
         cid, rdir = self.campaign(run)
-        info: dict[str, Any] = {"id": run["id"], "app": run["app"], "user": run.get("user"), "started": run["started"],
-                                "ended": run.get("ended"), "rc": run.get("rc"), "live": self.live(run),
-                                "campaign": cid, "options": json.loads(run.get("options") or "{}")}
-        if cid:
+        info["campaign"] = cid
+        if cid and running:
             st = ops.status(cid, run["db"])
-            # the registration is the campaign's latest run's: this run's only when it started with it (D688)
-            if st.get("started") and abs(float(st["started"]) - float(run["started"])) < 300:
+            if st.get("started") and abs(float(st["started"]) - float(run["started"])) < 300:   # this start's registration
                 info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
-                            container=st.get("container"), last_pass_ended=st.get("last_pass_ended"))
+                            container=st.get("container"))
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
-        info["question"] = self.open_question(run, rdir) if info["live"] else None
+        info["question"] = self.open_question(run, rdir) if running else None
         return info
 
     def open_question(self, run: dict[str, Any], rdir: str | None) -> dict[str, Any] | None:
         """The agent's question still waiting for the operator (D688): the journal's last
-        `question` mark of this run, when no note came after it and its time is not up."""
+        `question` mark of this start, when no note came after it and its time is not up."""
         if not rdir:
             return None
         path = os.path.join(rdir, "events.jsonl")
@@ -161,25 +179,26 @@ class RunManager:
             return None
         if time.time() > float(asked.get("asked", 0)) + float(asked.get("wait_s", 0)):
             return None
-        if any(float(n.get("t", 0)) >= float(asked.get("asked", 0)) for n in self.notes(run)):
+        if any(float(n.get("t", 0)) >= float(asked.get("asked", 0)) for n in self.notes(Path(run["log"]).parent)):
             return None
         return asked
 
-    def events_path(self, run: dict[str, Any]) -> str | None:
+    def events_path(self, run: dict[str, Any] | None) -> str | None:
         _cid, rdir = self.campaign(run)
         return os.path.join(rdir, "events.jsonl") if rdir else None
 
-    def inbox(self, run: dict[str, Any]) -> Path:
-        return Path(run["log"]).with_suffix(".inbox.jsonl")
+    def turns_path(self, run: dict[str, Any] | None) -> str | None:
+        _cid, rdir = self.campaign(run)
+        return os.path.join(rdir, "turns.jsonl") if rdir else None
 
-    def note(self, run: dict[str, Any], user: User, text: str) -> None:
-        """A note (or an answer to an agent's question) into the run's inbox (D684)."""
-        with open(self.inbox(run), "a") as fh:
+    # ---- notes, into the loop's inbox (D684)
+    def note(self, runs_dir: Path, user: User, text: str) -> None:
+        with open(runs_dir / "inbox.jsonl", "a") as fh:
             fh.write(json.dumps({"text": text, "by": user.name, "t": time.time()}) + "\n")
 
-    def notes(self, run: dict[str, Any]) -> list[dict[str, Any]]:
+    def notes(self, runs_dir: Path) -> list[dict[str, Any]]:
         try:
-            lines = self.inbox(run).read_text().splitlines()
+            lines = (runs_dir / "inbox.jsonl").read_text().splitlines()
         except OSError:
             return []
         out = []
@@ -190,25 +209,21 @@ class RunManager:
                 pass
         return out
 
-    def turns_path(self, run: dict[str, Any]) -> str | None:
-        _cid, rdir = self.campaign(run)
-        return os.path.join(rdir, "turns.jsonl") if rdir else None
-
     # ---- stop
-    def stop(self, run: dict[str, Any], now: bool = False, why: str = "stopped from the web") -> str:
+    def stop(self, run: dict[str, Any] | None, now: bool = False, why: str = "stopped from the web") -> str:
         from flux_loop import ops
 
-        cid, _rdir = self.campaign(run)
-        if not self.live(run):
+        if not run or not self.live(run):
             return "not running"
+        cid, _rdir = self.campaign(run)
         if cid:
             ops.request_stop(cid, why, db=run["db"])
             if now and ops.interrupt(cid, run["db"]):
-                return "interrupted: the pass ends now"
+                return "stopping now: the pass ends, the record keeps what was judged"
             if not now:
-                return "the run stops at the end of this pass"
+                return "it stops at the end of this pass"
         try:                                                  # before it registered, or no answer: the process group
             os.killpg(int(run["pid"]), signal.SIGINT)
-            return "interrupted"
+            return "stopping now"
         except (ProcessLookupError, PermissionError, TypeError):
             return "not running"

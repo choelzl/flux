@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import RunManager, run_env
+from .runs import RunManager, loop_files, run_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -95,7 +95,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         resp = await call_next(request)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
-        if not request.url.path.startswith("/api/runs/") or not request.url.path.endswith("/report"):
+        if not request.url.path.endswith("/report"):
             resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         return resp
 
@@ -123,12 +123,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if other is None:
             raise HTTPException(404, "no such user")
         return Workspace(store.data, other.name), other
-
-    def run_of(run_id: int, user: User) -> dict[str, Any]:
-        r = store.run(run_id)
-        if r is None or (r["user_id"] != user.id and not user.admin):
-            raise HTTPException(404, "no such run")
-        return r
 
     def fail(exc: Exception) -> HTTPException:
         return HTTPException(400, str(exc))
@@ -209,12 +203,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/admin/apps")
     def all_apps(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        """Every user's applications, and which are running (D684)."""
+        """Every user's loops and their state (D684, D689)."""
         out = []
         for u in store.users():
-            live = {r["app"] for r in store.runs(u) if runs.live(r)}
             for a in Workspace(store.data, u.name).apps():
-                out.append({**a, "owner": u.name, "running": a["name"] in live})
+                out.append({**a, "owner": u.name, **runs.state(u, a["name"])})
         return out
 
     @app.get("/api/audit")
@@ -224,13 +217,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     # ---- applications
     @app.get("/api/apps")
     def apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        out = ws(user).apps()
-        mine = store.runs(user)
-        for a in out:
-            last = next((r for r in mine if r["app"] == a["name"]), None)       # newest first
-            a["running"] = any(runs.live(r) for r in mine if r["app"] == a["name"])
-            a["last_run"] = ({"id": last["id"], "live": runs.live(last), "rc": last.get("rc"), "started": last["started"],
-                              "ended": last.get("ended")} if last else None)
+        """The user's loops, each running or not (D689), the most recently active first."""
+        out = [{**a, **runs.state(user, a["name"])} for a in ws(user).apps()]
+        out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
         return out
 
     @app.post("/api/apps")
@@ -299,7 +288,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.delete("/api/apps/{name}")
     def delete_app(name: str, user: User = Depends(user_of)) -> dict[str, str]:
         if any(runs.live(r) for r in store.runs(user, name)):
-            raise HTTPException(409, "stop its runs first")
+            raise HTTPException(409, "stop the loop first")
         try:
             ws(user).delete(name)
         except WorkspaceError as exc:
@@ -315,7 +304,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         return {"name": name, "owner": whose.name, "mine": whose.id == user.id, **w.meta(name), "files": w.files(name),
-                "runs": [runs.state(r) for r in store.runs(whose, name)[:50]]}
+                "state": runs.state(whose, name)}
 
     @app.get("/api/apps/{name}/files")
     def app_files(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
@@ -369,55 +358,61 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return {"ok": False, "output": "the check ran past 600 s"}
         return {"ok": r.returncode == 0, "output": (r.stdout + r.stderr)[-20000:]}
 
-    # ---- runs
-    @app.post("/api/apps/{name}/runs")
-    def start(name: str, body: RunOptions, user: User = Depends(user_of)) -> dict[str, Any]:
-        w = ws(user)
+    # ---- the loop: running or not; a start resumes it from its record (D689)
+    def loop_of(name: str, user: User, owner: str | None = None) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
+        """(workspace, whose, the application's folder, its latest start or None)."""
+        w, whose = reader(user, owner)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
+        return w, whose, d, runs.latest(whose, name)
+
+    @app.get("/api/apps/{name}/state")
+    def loop_state(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        return runs.state(whose, name)
+
+    @app.get("/api/loops")
+    def loops_state(user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """Every loop of the user with its state: what the page's notifications watch."""
+        return [runs.state(user, a["name"]) for a in ws(user).apps()]
+
+    @app.post("/api/apps/{name}/start")
+    def start(name: str, body: RunOptions, user: User = Depends(user_of)) -> dict[str, str]:
+        w, _whose, d, _run = loop_of(name, user)
         meta = w.meta(name)
         try:
-            run_id = runs.start(user, name, d, meta["document"], str(meta.get("id") or name), body.model_dump())
+            runs.start(user, name, d, meta["document"], str(meta.get("id") or name), body.model_dump())
         except ValueError as exc:
-            raise HTTPException(429, str(exc)) from exc
-        store.audit(user.name, "start run", f"{name} #{run_id}")
-        return {"id": run_id}
+            raise HTTPException(409, str(exc)) from exc
+        store.audit(user.name, "start", name)
+        return {"ok": f"{name} started: it resumes from its record"}
 
-    @app.get("/api/runs")
-    def list_runs(everyone: bool = False, user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        rows = store.runs(None if (everyone and user.admin) else user)[:200]
-        return [runs.state(r) for r in rows]
-
-    @app.get("/api/runs/{run_id}")
-    def run_state(run_id: int, user: User = Depends(user_of)) -> dict[str, Any]:
-        return runs.state(run_of(run_id, user))
-
-    @app.post("/api/runs/{run_id}/stop")
-    def stop(run_id: int, body: Stop, user: User = Depends(user_of)) -> dict[str, str]:
-        r = run_of(run_id, user)
-        said = runs.stop(r, now=body.now)
-        store.audit(user.name, "stop run", f"#{run_id}: {said}")
+    @app.post("/api/apps/{name}/stop")
+    def stop(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, whose, _d, run = loop_of(name, user, owner)         # an admin may stop anyone's
+        said = runs.stop(run, now=body.now)
+        store.audit(user.name, "stop", f"{whose.name}/{name}: {said}")
         return {"ok": said}
 
-    @app.post("/api/runs/{run_id}/notes")
-    def add_note(run_id: int, body: NoteIn, user: User = Depends(user_of)) -> dict[str, str]:
-        r = run_of(run_id, user)
-        if r["user_id"] != user.id:
-            raise HTTPException(403, "only the run's owner steers it")
-        if not runs.live(r):
-            raise HTTPException(409, "the run has ended")
-        runs.note(r, user, body.text.strip())
-        store.audit(user.name, "note", f"#{run_id}")
+    @app.post("/api/apps/{name}/notes")
+    def add_note(name: str, body: NoteIn, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, _whose, d, run = loop_of(name, user)                 # the owner's only
+        if not run or not runs.live(run):
+            raise HTTPException(409, "the loop is not running")
+        runs.note(d / "runs", user, body.text.strip())
+        store.audit(user.name, "note", name)
         return {"ok": "sent: it reaches the next prompt, or answers the agent's open question"}
 
-    @app.get("/api/runs/{run_id}/notes")
-    def list_notes(run_id: int, user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        return runs.notes(run_of(run_id, user))
+    @app.get("/api/apps/{name}/notes")
+    def list_notes(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        return runs.notes(d / "runs")
 
-    async def _follow(path_of, start_after: float, offset: int, request: Request, kind: str):
-        """Server-sent events: each new line of a file, as it grows, from byte `offset`."""
+    async def _follow(path_of, start_after, offset: int, request: Request, kind: str):
+        """Server-sent events: each new line of a file, as it grows, from byte `offset`. For the
+        journal, `start_after()` is when the loop's latest start began: its tree, not the last."""
         from flux_loop.journal import read_events
 
         while True:
@@ -427,8 +422,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             if path and os.path.exists(path):
                 if kind == "events":
                     events, new = read_events(path, offset)
+                    since = start_after()
                     for e in events:
-                        if e.get("t", 0) >= start_after:
+                        if e.get("t", 0) >= since:
                             yield f"id: {new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n"
                 else:
                     with open(path, "rb") as fh:
@@ -449,31 +445,36 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except ValueError:
             return offset
 
-    @app.get("/api/runs/{run_id}/events")
-    async def events(run_id: int, request: Request, offset: int = 0, user: User = Depends(user_of)):
-        r = run_of(run_id, user)
-        stream = _follow(lambda: runs.events_path(store.run(run_id) or r), r["started"] - 1, _offset(request, offset),
-                         request, "events")
+    @app.get("/api/apps/{name}/events")
+    async def events(name: str, request: Request, offset: int = 0, owner: str | None = None, user: User = Depends(user_of)):
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        latest = lambda: runs.latest(whose, name)                               # noqa: E731 -- a new start moves it
+        stream = _follow(lambda: runs.events_path(latest()), lambda: (latest() or {"started": 0})["started"] - 1,
+                         _offset(request, offset), request, "events")
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
-    @app.get("/api/runs/{run_id}/log")
-    async def log(run_id: int, request: Request, offset: int = 0, user: User = Depends(user_of)):
-        r = run_of(run_id, user)
-        stream = _follow(lambda: r["log"], 0, _offset(request, offset), request, "log")
+    @app.get("/api/apps/{name}/log")
+    async def log(name: str, request: Request, offset: int = 0, owner: str | None = None, user: User = Depends(user_of)):
+        """The loop's one log, every start in it."""
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        path = str(loop_files(d)["log"])
+        stream = _follow(lambda: path, lambda: 0, _offset(request, offset), request, "log")
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
-    @app.get("/api/runs/{run_id}/log/raw")
-    def log_raw(run_id: int, user: User = Depends(user_of)):
-        r = run_of(run_id, user)
-        if not os.path.exists(r["log"]):
+    @app.get("/api/apps/{name}/log/raw")
+    def log_raw(name: str, owner: str | None = None, user: User = Depends(user_of)):
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        path = loop_files(d)["log"]
+        if not path.exists():
             raise HTTPException(404, "no log yet")
-        return FileResponse(r["log"], media_type="text/plain; charset=utf-8",
-                            headers={"Content-Disposition": f'attachment; filename="run-{run_id}.log"'})
+        return FileResponse(path, media_type="text/plain; charset=utf-8",
+                            headers={"Content-Disposition": f'attachment; filename="{name}.log"'})
 
-    @app.get("/api/runs/{run_id}/turns")
-    def turns(run_id: int, k: int | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        r = run_of(run_id, user)
-        path = runs.turns_path(r)
+    @app.get("/api/apps/{name}/turns")
+    def turns(name: str, k: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The loop's model and agent turns, all of them, newest last."""
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        path = runs.turns_path(run)
         out: list[dict[str, Any]] = []
         if path and os.path.exists(path):
             with open(path) as fh:
@@ -482,29 +483,27 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                         t = json.loads(line)
                     except ValueError:
                         continue
-                    if t.get("ts", 0) < r["started"] - 1:
-                        continue
                     if k is None:
                         t = {key: (v[:300] + "..." if isinstance(v, str) and len(v) > 300 else v)
                              for key, v in t.items() if key not in ("hops",)} | {"hops": len(t.get("hops") or [])}
                     elif n != k:
                         continue
                     out.append({"k": n, **t})
-        return {"turns": out}
+        return {"turns": out[-500:] if k is None else out}
 
-    @app.get("/api/runs/{run_id}/results")
-    def results(run_id: int, user: User = Depends(user_of)) -> dict[str, Any]:
+    @app.get("/api/apps/{name}/results")
+    def results(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         from flux_loop.report import load
 
-        r = run_of(run_id, user)
-        cid, _rdir = runs.campaign(r)
-        if not cid or not os.path.exists(r["db"]):
+        _w, _whose, d, run = loop_of(name, user, owner)
+        cid, _rdir = runs.campaign(run)
+        if not cid or not os.path.exists(run["db"]):
             return {"campaign": None}
-        rep = load(r["db"], cid)
+        rep = load(run["db"], cid)
         rows = [{"when": x.when, "stage": x.stage, "name": x.name, "part": x.part, "whole": x.whole,
                  "metrics": x.metrics} for x in rep.rows[-500:]]
         answer = None
-        ans = Path(r["log"]).with_suffix(".json")
+        ans = loop_files(d)["answer"]
         if ans.exists():
             try:
                 answer = json.loads(ans.read_text())
@@ -514,15 +513,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
                 "agent_turns": len(rep.agent_turns), "answer": answer}
 
-    @app.get("/api/runs/{run_id}/report", response_class=HTMLResponse)
-    def report(run_id: int, user: User = Depends(user_of)) -> HTMLResponse:
+    @app.get("/api/apps/{name}/report", response_class=HTMLResponse)
+    def report(name: str, owner: str | None = None, user: User = Depends(user_of)) -> HTMLResponse:
         from flux_loop.report import load, render
 
-        r = run_of(run_id, user)
-        cid, _rdir = runs.campaign(r)
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        cid, _rdir = runs.campaign(run)
         if not cid:
             raise HTTPException(404, "no record yet")
-        return HTMLResponse(render(load(r["db"], cid)),
+        return HTMLResponse(render(load(run["db"], cid)),
                             headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
                                      "X-Frame-Options": "SAMEORIGIN"})
 

@@ -93,35 +93,6 @@ def test_uploads_are_checked_and_users_are_apart(server):
     assert ada.get("/api/apps/sw").status_code == 404
 
 
-def test_a_run_started_from_the_web_is_followed_through_its_journal(server, tmp_path):
-    from flux_cli.main import main
-
-    app, _ = server
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path / "sw")]) == 0
-    bob = _client(app, "bob", "another long secret")
-    files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
-    assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
-    r = bob.post("/api/apps/sw/runs", json={"passes": 1}, headers=H)
-    assert r.status_code == 200, r.text
-    run = r.json()["id"]
-    deadline = time.time() + 240
-    while time.time() < deadline and bob.get(f"/api/runs/{run}").json()["live"]:
-        time.sleep(1)
-    st = bob.get(f"/api/runs/{run}").json()
-    assert not st["live"] and st["rc"] == 0 and st["campaign"] and st["events"], st
-    runs = app.state.runs
-    from flux_loop.journal import read_events
-
-    events, _ = read_events(runs.events_path(app.state.store.run(run)))
-    assert any(e["ev"] == "start" for e in events) and any(e["ev"] == "end" for e in events)
-    res = bob.get(f"/api/runs/{run}/results").json()
-    assert res["rows"] and "time_ms" in res["rows"][0]["metrics"] and res["answer"], res
-    assert "<svg" in bob.get(f"/api/runs/{run}/report").text or "<h1>" in bob.get(f"/api/runs/{run}/report").text
-    assert _client(app, "ada", "correct horse battery").get(f"/api/runs/{run}").status_code == 200, "an admin reads every run"
-    assert bob.post(f"/api/runs/{run}/stop", json={"now": True}, headers=H).json()["ok"] == "not running"
-    assert Path(app.state.store.run(run)["log"]).read_text()
-
-
 def test_files_are_added_to_an_existing_application(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
@@ -175,35 +146,6 @@ def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeyp
     assert "ANTHROPIC_API_KEY" not in bob.get("/api/settings").json()["values"]
 
 
-def test_notes_reach_a_live_run_through_its_inbox(server, tmp_path):
-    import json as _json
-
-    app, _ = server
-    store, runs = app.state.store, app.state.runs
-    bob = store.user(name="bob")
-    log = tmp_path / "r.log"
-    log.write_text("")
-    import subprocess
-    import sys
-
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-    try:
-        rid = store.add_run(bob, "x", str(tmp_path / "x.db"), str(log), ["x"], {})
-        store.set_run(rid, pid=proc.pid)
-        c = _client(app, "bob", "another long secret")
-        assert c.post(f"/api/runs/{rid}/notes", json={"text": "try carry-select"}, headers=H).status_code == 200
-        line = _json.loads((tmp_path / "r.inbox.jsonl").read_text())
-        assert line["text"] == "try carry-select" and line["by"] == "bob"
-        assert [n["text"] for n in c.get(f"/api/runs/{rid}/notes").json()] == ["try carry-select"]
-        ada = _client(app, "ada", "correct horse battery")
-        assert ada.post(f"/api/runs/{rid}/notes", json={"text": "x"}, headers=H).status_code == 403, "only the owner steers"
-    finally:
-        proc.kill()
-        proc.wait()
-    store.set_run(rid, ended=1.0)
-    assert c.post(f"/api/runs/{rid}/notes", json={"text": "late"}, headers=H).status_code == 409
-
-
 def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
@@ -223,43 +165,6 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
         "a kept key the configurator also wrote is refused"
     assert TestClient(app).get("/crafter-assets/crafter.js").status_code == 200
     assert TestClient(app).get("/crafter-assets/tools.json").json()
-
-
-def test_a_user_can_neither_see_nor_use_another_users_loops(server, tmp_path):
-    """Loops are per user (D687): every route that names another user's application or run
-    answers as if it did not exist, or refuses; only an admin reads them."""
-    app, _ = server
-    store = app.state.store
-    store.add_user("cy", "a third long secret")
-    bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
-    log = tmp_path / "r.log"
-    log.write_text("secret output\n")
-    rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(log), ["x"], {})
-    cy = _client(app, "cy", "a third long secret")
-    assert cy.get("/api/apps").json() == [] and cy.get("/api/runs").json() == []
-    assert cy.get("/api/runs", params={"everyone": 1}).json() == [], "everyone is an admin's"
-    for path in ("/api/apps/x", "/api/apps/x/files", "/api/apps/x/document"):
-        assert cy.get(path).status_code in (400, 404), path
-    assert cy.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).status_code == 400
-    for path, kw in (("/api/apps/x", {"owner": "bob"}), ("/api/apps/x/document", {"owner": "bob"}),
-                     ("/api/apps/x/file", {"owner": "bob", "path": "x.problem.yaml"})):
-        assert cy.get(path, params=kw).status_code == 403, path
-    for path in ("", "/turns", "/results", "/report", "/notes"):
-        assert cy.get(f"/api/runs/{rid}{path}").status_code == 404, path
-    assert cy.post(f"/api/runs/{rid}/stop", json={"now": True}, headers=H).status_code == 404
-    assert cy.post(f"/api/runs/{rid}/notes", json={"text": "hi"}, headers=H).status_code == 404
-    for method, path, kw in (("post", "/api/apps/x/runs", {"json": {"passes": 1}}), ("post", "/api/apps/x/check", {}),
-                             ("put", "/api/apps/x/document", {"json": {"text": "id: y\\n"}}),
-                             ("put", "/api/apps/x/file", {"params": {"path": "x.problem.yaml"}, "json": {"text": "id: y"}}),
-                             ("delete", "/api/apps/x", {})):
-        r = getattr(cy, method)(path, headers=H, **kw)
-        assert r.status_code in (400, 404), (path, r.status_code)
-    assert bob.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).text.startswith("id: x"), "untouched"
-    ada = _client(app, "ada", "correct horse battery")
-    assert ada.get(f"/api/runs/{rid}").status_code == 200 and ada.get("/api/apps/x", params={"owner": "bob"}).status_code == 200
-    assert ada.put("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}, json={"text": "id: z"},
-                   headers=H).status_code in (400, 404), "an admin reads; the owner writes"
 
 
 def test_two_users_same_named_applications_never_share_a_sandbox(server):
@@ -285,60 +190,143 @@ def test_two_users_same_named_applications_never_share_a_sandbox(server):
     assert keys[0] != keys[1], keys
 
 
-def test_the_workbench_the_log_download_and_an_open_question(server, tmp_path):
-    """D688: the workbench listed with first lines; the whole log as a file; an agent's question
-    in the run's state until it is answered or its time is up; each application's last run."""
-    import json as _json
+def _fake_start(app, user, name):
+    """A live start of the loop `name`: a sleeping process in its place, its log the loop's."""
     import subprocess
     import sys
+
+    from flux_web.runs import loop_files
+
+    store = app.state.store
+    d = store.data / "users" / user / "apps" / name
+    files = loop_files(d)
+    files["log"].parent.mkdir(exist_ok=True)
+    files["log"].write_text("line one\nERROR two\n")
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    rid = store.add_run(store.user(name=user), name, str(d / "out" / "x.db"), str(files["log"]), ["x"], {})
+    store.set_run(rid, pid=proc.pid)
+    return proc, rid, d
+
+
+def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
+    """D689: a loop is running or not; a start resumes it from its record; its one log keeps
+    every start, marked; its state, journal, turns, results and report are the loop's."""
+    from flux_cli.main import main
+    from flux_loop.journal import read_events
+
+    app, _ = server
+    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path / "sw")]) == 0
+    bob = _client(app, "bob", "another long secret")
+    files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
+    assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
+    assert bob.get("/api/apps/sw/state").json()["running"] is False and bob.get("/api/apps").json()[0]["last_active"] is None
+    for i in range(2):                                  # the second start resumes the first's record
+        r = bob.post("/api/apps/sw/start", json={"passes": 1}, headers=H)
+        assert r.status_code == 200 and "resumes" in r.json()["ok"], r.text
+        assert bob.post("/api/apps/sw/start", json={"passes": 1}, headers=H).status_code == 409, "running already"
+        deadline = time.time() + 240
+        while time.time() < deadline and bob.get("/api/apps/sw/state").json()["running"]:
+            time.sleep(1)
+        st = bob.get("/api/apps/sw/state").json()
+        assert st["running"] is False and not st["failed"] and st["events"] and st["campaign"], st
+    log = bob.get("/api/apps/sw/log/raw").text
+    assert log.count("── started ") == 2 and "resumed" in log, "one log, each start marked, the second resumed"
+    run = app.state.runs.latest(app.state.store.user(name="bob"), "sw")
+    events, _ = read_events(app.state.runs.events_path(run))
+    assert any(e["ev"] == "start" for e in events)
+    res = bob.get("/api/apps/sw/results").json()
+    assert res["rows"] and "time_ms" in res["rows"][0]["metrics"] and res["answer"], res
+    assert bob.get("/api/apps/sw/report").status_code == 200
+    ada = _client(app, "ada", "correct horse battery")
+    assert ada.get("/api/apps/sw/state", params={"owner": "bob"}).status_code == 200, "an admin reads every loop"
+    assert any(a["owner"] == "bob" and a["name"] == "sw" for a in ada.get("/api/admin/apps").json())
+    assert bob.post("/api/apps/sw/stop", json={"now": True}, headers=H).json()["ok"] == "not running"
+
+
+def test_notes_reach_a_running_loop_through_its_inbox(server):
+    import json as _json
+
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    assert bob.post("/api/apps/x/notes", json={"text": "early"}, headers=H).status_code == 409, "not running"
+    proc, rid, d = _fake_start(app, "bob", "x")
+    try:
+        assert bob.post("/api/apps/x/notes", json={"text": "try carry-select"}, headers=H).status_code == 200
+        line = _json.loads((d / "runs" / "inbox.jsonl").read_text())
+        assert line["text"] == "try carry-select" and line["by"] == "bob"
+        assert [n["text"] for n in bob.get("/api/apps/x/notes").json()] == ["try carry-select"]
+        ada = _client(app, "ada", "correct horse battery")
+        assert ada.post("/api/apps/x/notes", json={"text": "x"}, headers=H).status_code == 404, "only the owner steers"
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_a_user_can_neither_see_nor_use_another_users_loops(server):
+    """Loops are per user (D687): every route that names another user's loop answers as if it did
+    not exist, or refuses; only an admin reads them, and may stop them."""
+    app, _ = server
+    store = app.state.store
+    store.add_user("cy", "a third long secret")
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    proc, _rid, _d = _fake_start(app, "bob", "x")
+    try:
+        cy = _client(app, "cy", "a third long secret")
+        assert cy.get("/api/apps").json() == [] and cy.get("/api/loops").json() == []
+        for path in ("/api/apps/x", "/api/apps/x/files", "/api/apps/x/document", "/api/apps/x/state", "/api/apps/x/turns",
+                     "/api/apps/x/results", "/api/apps/x/report", "/api/apps/x/notes", "/api/apps/x/log/raw", "/api/apps/x/workbench"):
+            assert cy.get(path).status_code in (400, 404), path
+            assert cy.get(path, params={"owner": "bob"}).status_code == 403, path
+        assert cy.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).status_code == 400
+        for method, path, kw in (("post", "/api/apps/x/start", {"json": {"passes": 1}}), ("post", "/api/apps/x/check", {}),
+                                 ("post", "/api/apps/x/stop", {"json": {"now": True}}), ("post", "/api/apps/x/notes", {"json": {"text": "hi"}}),
+                                 ("put", "/api/apps/x/document", {"json": {"text": "id: y\n"}}),
+                                 ("put", "/api/apps/x/file", {"params": {"path": "x.problem.yaml"}, "json": {"text": "id: y"}}),
+                                 ("delete", "/api/apps/x", {})):
+            r = getattr(cy, method)(path, headers=H, **kw)
+            assert r.status_code in (400, 404), (path, r.status_code)
+        assert cy.post("/api/apps/x/stop", params={"owner": "bob"}, json={"now": True}, headers=H).status_code == 403
+        assert bob.get("/api/apps/x/state").json()["running"] is True, "untouched"
+        ada = _client(app, "ada", "correct horse battery")
+        assert ada.get("/api/apps/x/state", params={"owner": "bob"}).json()["running"] is True
+        assert ada.put("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}, json={"text": "id: z"},
+                       headers=H).status_code in (400, 404), "an admin reads; the owner writes"
+        assert ada.post("/api/apps/x/stop", params={"owner": "bob"}, json={"now": True}, headers=H).status_code == 200
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_the_workbench_the_log_download_and_an_open_question(server):
+    """D688-D689: the workbench listed with first lines; the loop's whole log as a file; an
+    agent's question in the loop's state until it is answered or its time is up."""
+    import json as _json
     import time as _time
 
     app, _ = server
-    store, runs = app.state.store, app.state.runs
     bob = _client(app, "bob", "another long secret")
     bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n")),
                                                      ("files", ("workbench/notes/adders.md", b"# Carry-select wins above 3 GHz\n")),
                                                      ("files", ("workbench/tools/fit.py", b'"""Fit a cubic per segment."""\n'))], headers=H)
     wb = bob.get("/api/apps/x/workbench").json()
     assert {(w["kind"], w["first"]) for w in wb} == {("notes", "Carry-select wins above 3 GHz"), ("tools", "Fit a cubic per segment.")}
-    rdir = tmp_path / "rundir"
-    rdir.mkdir()
-    (tmp_path / "x.db.runs.json").write_text(_json.dumps({"x": str(rdir)}))
-    log = tmp_path / "r.log"
-    log.write_text("line one\nERROR two\n")
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    proc, _rid, d = _fake_start(app, "bob", "x")
     try:
-        rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(log), ["x"], {})
-        store.set_run(rid, pid=proc.pid)
-        r = bob.get(f"/api/runs/{rid}/log/raw")
+        rdir = d / "rundir"
+        rdir.mkdir()
+        (d / "out").mkdir(exist_ok=True)
+        (d / "out" / "x.db.runs.json").write_text(_json.dumps({"x": str(rdir)}))
+        r = bob.get("/api/apps/x/log/raw")
         assert r.text == "line one\nERROR two\n" and "attachment" in r.headers["content-disposition"]
-        assert bob.get(f"/api/runs/{rid}").json()["question"] is None
+        assert bob.get("/api/apps/x/state").json()["question"] is None
         q = {"question": "Ripple or carry-select?", "wait_s": 300, "asked": _time.time()}
         (rdir / "events.jsonl").write_text(_json.dumps({"t": _time.time(), "ev": "mark", "name": "question", "why": _json.dumps(q)}) + "\n")
-        assert bob.get(f"/api/runs/{rid}").json()["question"]["question"] == "Ripple or carry-select?"
-        assert bob.get("/api/apps").json()[0]["last_run"]["id"] == rid
-        bob.post(f"/api/runs/{rid}/notes", json={"text": "carry-select"}, headers=H)
-        assert bob.get(f"/api/runs/{rid}").json()["question"] is None, "answered"
-    finally:
-        proc.kill()
-        proc.wait()
-
-
-def test_one_live_run_per_application(server, tmp_path):
-    """D688: runs of one application share its record: a second is refused while one is live."""
-    import subprocess
-    import sys
-
-    app, _ = server
-    store = app.state.store
-    bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-    try:
-        rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(tmp_path / "r.log"), ["x"], {})
-        store.set_run(rid, pid=proc.pid)
-        r = bob.post("/api/apps/x/runs", json={"passes": 1}, headers=H)
-        assert r.status_code == 429 and f"run #{rid}" in r.json()["detail"]
+        assert bob.get("/api/apps/x/state").json()["question"]["question"] == "Ripple or carry-select?"
+        assert bob.get("/api/loops").json()[0]["question"], "what the notifications watch"
+        bob.post("/api/apps/x/notes", json={"text": "carry-select"}, headers=H)
+        assert bob.get("/api/apps/x/state").json()["question"] is None, "answered"
     finally:
         proc.kill()
         proc.wait()

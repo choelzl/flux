@@ -12,10 +12,11 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 ## Following runs
 - Notifications beyond the page (D688 has the page, the bell, the desktop): e-mail or a webhook.
 - The workbench's history: how its tools and notes changed, run by run.
-- Compare runs: frontiers and best-so-far of two campaigns overlaid.
+- Compare two loops: frontiers and best-so-far overlaid.
 - A pass timeline: what each pass tried, admitted and refused, from the record.
+- The log split by start (jump to a start's line).
 - Probes on the agent-turn view: which gate and stage checks the agent ran, and their results.
-- Resume / "one more pass" on an ended run; a run's options edited before it restarts.
+- Remember a loop's start options (the last ones as the dialog's defaults).
 
 ## Accounts and operations
 - API tokens so `flux` on a laptop can drive the server (start, follow, fetch results).

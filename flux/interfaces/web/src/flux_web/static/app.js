@@ -1,10 +1,11 @@
-// Flux web (D683-D688): hash-routed pages over /api. Every node is built with h() -- text goes in
-// as text, never as HTML -- so nothing a run prints can inject script.
+// Flux web (D683-D689): hash-routed pages over /api. A loop -- an application -- is running or not;
+// a start resumes it from its record. Every node is built with h() -- text goes in as text, never as
+// HTML -- so nothing a run prints can inject script.
 
 const main = document.getElementById("main");
 let me = null;
 let cleanup = [];
-let pageRefresh = null;                  // a list page's own redraw, when a run changes state (D688)
+let pageRefresh = null;                  // a page's own redraw, when a loop changes state (D688)
 
 // ================================================================ building blocks
 function h(tag, attrs = {}, ...kids) {
@@ -50,13 +51,13 @@ function ago(t) {
   const text = s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
   return h("time", { title: when(t) }, text);
 }
-function pill(r) {
-  if (!r) return "";
-  if (r.live) return h("span", { class: "pill live" }, h("i", { class: "dot" }), r.stop_requested ? "stopping" : "running");
-  if (r.rc === 0) return h("span", { class: "pill ok" }, "done");
-  if (r.rc === null || r.rc === undefined) return h("span", { class: "pill" }, "ended");
-  if (r.rc === 130) return h("span", { class: "pill warn" }, "stopped");
-  return h("span", { class: "pill bad" }, `failed (exit ${r.rc})`);
+/** A loop's state: running (since), idle, or how its last start ended. */
+function statePill(st) {
+  if (!st) return "";
+  if (st.running) return h("span", { class: "pill live" }, h("i", { class: "dot" }), st.stop_requested ? "stopping" : "running");
+  if (st.failed) return h("span", { class: "pill bad" }, "failed");
+  if (st.stopped) return h("span", { class: "pill warn" }, "stopped");
+  return h("span", { class: "pill" }, st.last_active ? "idle" : "never run");
 }
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
 function head(title, sub, ...actions) {
@@ -113,7 +114,7 @@ function promptDialog(title, label, { type = "text", ok = "Save", min = 0 } = {}
   return dialog(title, body, [["Cancel", null], [ok, () => (input.value.length >= min ? input.value : null), "primary"]]);
 }
 
-// ================================================================ notifications (D688)
+// ================================================================ notifications (D688, D689)
 const bell = { list: [], seen: new Map(), unread: 0, primed: false };
 try { bell.list = JSON.parse(localStorage.getItem("flux-notes") || "[]"); } catch (_) { bell.list = []; }
 function notify(text, kind, href) {
@@ -126,30 +127,31 @@ function notify(text, kind, href) {
   }
   drawBell();
 }
-async function pollRuns() {
+/** Every 10 s: a loop that stopped (finished, failed, stopped) or whose agent asks. */
+async function pollLoops() {
   if (!me) return;
-  let runs;
-  try { runs = await api("/runs"); } catch (_) { return; }
+  let loops;
+  try { loops = await api("/loops"); } catch (_) { return; }
   let changed = false;
-  for (const r of runs) {
-    const before = bell.seen.get(r.id);
-    if (!before || before.live !== r.live) changed = true;
-    const was = bell.seen.get(r.id);
-    const key = r.question ? `q:${r.question.asked}` : "";
+  for (const l of loops) {
+    const was = bell.seen.get(l.app);
+    const key = l.question ? `q:${l.question.asked}` : "";
+    if (!was || was.running !== l.running) changed = true;
     if (bell.primed && was) {
-      if (was.live && !r.live) {
-        if (r.rc === 0) notify(`Run #${r.id} (${r.app}) finished`, "ok", `#/run/${r.id}`);
-        else if (r.rc === 130) notify(`Run #${r.id} (${r.app}) stopped`, "warn", `#/run/${r.id}`);
-        else notify(`Run #${r.id} (${r.app}) failed (exit ${r.rc})`, "bad", `#/run/${r.id}`);
+      const href = `#/app/${enc(l.app)}`;
+      if (was.running && !l.running) {
+        if (l.failed) notify(`${l.app} failed`, "bad", href);
+        else if (l.stopped) notify(`${l.app} stopped`, "warn", href);
+        else notify(`${l.app} finished its passes`, "ok", href);
       }
-      if (key && key !== was.key) notify(`Run #${r.id} (${r.app}): the agent asks a question`, "warn", `#/run/${r.id}`);
+      if (key && key !== was.key) notify(`${l.app}: the agent asks a question`, "warn", href);
     }
-    bell.seen.set(r.id, { live: r.live, key });
+    bell.seen.set(l.app, { running: l.running, key });
   }
   if (changed && bell.primed && pageRefresh) pageRefresh().catch(() => {});
   bell.primed = true;
 }
-setInterval(pollRuns, 10000);
+setInterval(pollLoops, 10000);
 const bellBtn = h("button", { class: "bell", title: "Notifications", "aria-label": "Notifications" });
 const bellMenu = h("div", { class: "bell-menu", hidden: true });
 function drawBell() {
@@ -160,7 +162,7 @@ function drawBell() {
       canAsk ? h("button", { class: "link", onclick: async () => { await Notification.requestPermission(); drawBell(); } }, "Allow desktop notifications") : "",
       bell.list.length ? h("button", { class: "link", onclick: () => { bell.list = []; bell.unread = 0; localStorage.removeItem("flux-notes"); drawBell(); } }, "Clear") : ""),
     ...(bell.list.length ? bell.list.map(n => h("a", { class: `bell-item ${n.kind}`, href: n.href || "#/", onclick: () => { bellMenu.hidden = true; } },
-      h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "Nothing yet: you are told here when a run ends, fails, or an agent asks.")]));
+      h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "Nothing yet: you are told here when a loop stops, fails, or its agent asks.")]));
 }
 bellBtn.addEventListener("click", (e) => { e.stopPropagation(); bellMenu.hidden = !bellMenu.hidden; bell.unread = 0; drawBell(); });
 document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.contains(e.target)) bellMenu.hidden = true; });
@@ -182,8 +184,59 @@ async function loginPage() {
   name.focus();
 }
 
+/** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
+async function startLoop(name) {
+  const passes = h("input", { type: "number", min: 1, value: 1, style: "width:90px" });
+  const forever = h("input", { type: "checkbox" });
+  const screen = h("input", { type: "checkbox" });
+  const allow = h("input", { placeholder: "empty: open network", style: "width:100%" });
+  forever.addEventListener("change", () => { passes.disabled = forever.checked; });
+  const body = h("div", {},
+    h("p", { class: "muted" }, "It resumes from its record: what was judged stays judged."),
+    h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
+    h("label", { class: "check" }, screen, "screen only (skip the costly stages)"),
+    h("label", { class: "stack", style: "margin-top:10px" }, "Network allowlist (hosts, domains, CIDRs)", allow));
+  const go = await dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
+  if (!go) return false;
+  const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: {
+    passes: forever.checked ? null : (Number(passes.value) || 1), screen_only: screen.checked,
+    allow: allow.value.split(",").map(s => s.trim()).filter(Boolean) } });
+  toast(r.ok, "ok");
+  return true;
+}
+async function stopLoop(name, now, owner) {
+  if (now && !await confirmDialog(`Stop ${name} now?`, "The pass ends at once; the record keeps what was judged. Starting it again resumes from there.", { ok: "Stop now", danger: true })) return;
+  const r = await api(`/apps/${enc(name)}/stop${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
+  toast(r.ok, now ? "warn" : "info");
+}
+function lastSaid(st) {
+  if (st.running) return ["running since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""];
+  return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
+}
+
+function loopsTable(loops, { who = false } = {}) {
+  if (!loops.length) return empty("No loop yet.", h("p", {}, h("a", { class: "btn primary", href: "#/configure" }, "Build a new loop"), " or upload a document with its files."));
+  return h("table", { class: "list" },
+    h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"), h("th", {}, "Document"), h("th", {}, ""))),
+    h("tbody", {}, loops.map(l => {
+      const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null;
+      const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
+      const acts = owner ? (l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })] : [])
+        : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+        : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
+           h("a", { class: "btn small", href: `#/app/${enc(name)}/configure` }, "Configure")];
+      return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
+        who ? h("td", {}, l.owner) : "",
+        h("td", {}, h("a", { href, class: "strong" }, name)),
+        h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
+        h("td", { class: "muted" }, lastSaid(l)),
+        h("td", { class: "mono muted" }, l.document || ""),
+        h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
+    })));
+}
+
 async function appsPage() {
-  const apps = await api("/apps");
+  const loops = await api("/apps");
   const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", required: true });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
@@ -200,41 +253,12 @@ async function appsPage() {
     h("label", { class: "stack" }, "Files or a .zip", files),
     h("label", { class: "stack" }, "or a folder", folder),
     h("button", { class: "primary", type: "submit" }, "Upload"));
-  const table = appsTable(apps);
-  function appsTable(apps) { return apps.length ? h("table", { class: "list" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Application"), h("th", {}, "Document"), h("th", {}, "Last run"), h("th", {}, ""))),
-    h("tbody", {}, apps.map(a => h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a")) location.hash = `#/app/${enc(a.name)}`; } },
-      h("td", {}, h("a", { href: `#/app/${enc(a.name)}`, class: "strong" }, a.name)),
-      h("td", { class: "mono muted" }, a.document || ""),
-      h("td", {}, a.last_run ? [pill(a.last_run), " ", h("a", { href: `#/run/${a.last_run.id}`, class: "muted" }, `#${a.last_run.id}`), " ", h("span", { class: "muted" }, ago(a.last_run.started))] : h("span", { class: "muted" }, "never run")),
-      h("td", { class: "right" }, h("a", { class: "btn small", href: `#/app/${enc(a.name)}/configure` }, "Configure"))))))
-    : empty("No application yet.", h("p", {}, h("a", { class: "btn primary", href: "#/configure" }, "Build a new loop"), " or upload a document with its files.")); }
-  const runs = await api("/runs");
-  const appsBox = h("div", {}, table), runsBox = h("div", {}, runsTable(runs.slice(0, 12)));
+  const box = h("div", {}, loopsTable(loops));
   show(
-    head("Applications", "Your loops: a problem document and its files.", h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
-    h("div", { class: "grid-main" },
-      card(null, appsBox),
-      card("Upload an application", upload, { cls: "side" })),
-    card("Recent runs", runsBox));
-  pageRefresh = async () => {                       // the tables only: a half-filled upload form stays
-    const [a2, r2] = await Promise.all([api("/apps"), api("/runs")]);
-    appsBox.replaceChildren(appsTable(a2)); runsBox.replaceChildren(runsTable(r2.slice(0, 12)));
-  };
-}
-
-function runsTable(runs, { who = false } = {}) {
-  if (!runs.length) return empty("No run yet.");
-  return h("table", { class: "list" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Run"), h("th", {}, "Application"), h("th", {}, "State"), h("th", {}, "Passes"),
-      h("th", {}, "Started"), h("th", {}, "Took"), who ? h("th", {}, "User") : "")),
-    h("tbody", {}, runs.map(r => h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a")) location.hash = `#/run/${r.id}`; } },
-      h("td", {}, h("a", { href: `#/run/${r.id}`, class: "strong" }, `#${r.id}`)),
-      h("td", {}, h("a", { href: appHref(r.user, r.app) }, r.app)),
-      h("td", {}, pill(r), r.question ? h("span", { class: "pill warn" }, "asks") : ""),
-      h("td", {}, r.passes ?? ""), h("td", {}, ago(r.started)),
-      h("td", { class: "muted" }, dur((r.ended || Date.now() / 1000) - r.started)),
-      who ? h("td", { class: "muted" }, r.user || "") : ""))));
+    head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
+      h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
+    h("div", { class: "grid-main" }, card(null, box), card("Upload a loop", upload, { cls: "side" })));
+  pageRefresh = async () => box.replaceChildren(loopsTable(await api("/apps")));
 }
 
 async function newPage() {
@@ -250,13 +274,79 @@ async function newPage() {
       }, { cls: "primary" }))]));
 }
 
-async function appPage(name, owner) {
+async function loopPage(name, owner, tab = "Live") {
+  const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
-  const info = await api(`/apps/${enc(name)}?${q.slice(1)}`);
+  const base = `/api/apps/${enc(name)}`;
+  const info = await api(`/apps/${enc(name)}${qs}`);
   const mine = info.mine;
+  let st = info.state;
+  const header = h("div", {}), banner = h("div", {}), body = h("div", {});
+  const tabs = ["Live", "Log", "Agent turns", "Results", "Files", "Workbench"];
+  const tabBar = h("div", { class: "tabs", role: "tablist" });
+  let question = st.question || null;
+  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
+  const log = logView(base, qs);
+  cleanup.push(() => { live.close(); log.close(); });
+
+  function drawTabs() {
+    tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
+      onclick: () => { tab = t; history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${t === "Live" ? "" : "/" + t.toLowerCase().replace(" ", "-")}`); drawTabs(); drawBody(); } }, t)));
+  }
+  function drawHead() {
+    const acts = [];
+    if (st.running) {
+      acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
+    } else if (mine) {
+      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name)) { await refresh(); tab = "Live"; drawTabs(); drawBody(); } }, { cls: "primary" }));
+    }
+    if (mine) {
+      acts.push(act("Check", async () => {
+        const out = h("pre", { class: "log small" }, "Checking in the sandbox…");
+        const d = dialog("Check the document", out, [["Close", null]]);
+        const r = await api(`/apps/${enc(name)}/check`, { method: "POST" });
+        out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
+        await d;
+      }));
+      if (info.document) acts.push(h("a", { class: "btn", href: `#/app/${enc(name)}/configure` }, "Configure"));
+      if (!st.running) acts.push(act("Delete", async () => {
+        if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
+        await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
+      }, { cls: "danger" }));
+    }
+    header.replaceChildren(head(h("span", {}, name, " ", statePill(st), mine ? "" : h("span", { class: "pill" }, `${info.owner}'s · read only`)),
+      h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
+        st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
+  }
+  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && tab === "Live") drawBody(); }
+  // notes and the agent's question
+  const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
+  const noteList = h("div", { class: "notes" });
+  async function sendNote(text) {
+    const r = await api(`/apps/${enc(name)}/notes`, { method: "POST", body: { text } });
+    toast(r.ok, "ok"); noteText.value = ""; question = null; drawBanner(); drawNotes();
+  }
+  async function drawNotes() {
+    const notes = await api(`/apps/${enc(name)}/notes${qs}`).catch(() => []);
+    noteList.replaceChildren(...notes.slice(-20).reverse().map(n => h("div", { class: "note" }, h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text))));
+  }
+  function drawBanner() {
+    if (!question || !st.running) { banner.replaceChildren(); return; }
+    const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
+    const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
+    banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
+        h("span", { class: "muted" }, left ? `answer within ${dur(left)}, or it decides` : "its time is up: it decided")),
+      h("pre", { class: "question" }, question.question), mine ? [ans,
+      h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))] : ""));
+  }
+  const notesCard = () => st.running && mine ? card("Notes to the loop", [noteText,
+    h("div", { class: "form-actions" }, act("Send", async () => { if (noteText.value.trim()) await sendNote(noteText.value.trim()); })), noteList]) : "";
+
+  // files and the workbench
   const viewer = h("div", { class: "viewer" });
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
-  async function open(path, dir) {
+  const size = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+  async function openFile(path, dir) {
     viewer.replaceChildren(h("p", { class: "muted" }, "Loading…"));
     if (dir) {
       const list = await api(`/apps/${enc(name)}/files?path=${enc(path)}${q}`);
@@ -277,79 +367,94 @@ async function appPage(name, owner) {
   }
   function fileList(list) {
     return h("ul", { class: "files" }, list.map(f => h("li", {},
-      h("a", { href: "javascript:void 0", onclick: () => open(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
+      h("a", { href: "javascript:void 0", onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
       f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
-  const size = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+  function adder() {
+    const addFiles = h("input", { type: "file", multiple: true });
+    const addFolder = h("input", { placeholder: "folder (optional)" });
+    return h("details", { class: "adder" }, h("summary", {}, "Add files"),
+      h("label", { class: "stack" }, "Files or a .zip", addFiles), h("label", { class: "stack" }, "Into folder", addFolder),
+      act("Add", async () => {
+        if (!addFiles.files.length) { toast("Choose files or a .zip.", "warn"); return; }
+        const form = new FormData(); form.append("folder", addFolder.value);
+        for (const f of addFiles.files) form.append("files", f, f.name);
+        const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
+        toast(`Added ${r.written.length} file(s)`, "ok"); drawBody();
+      }, { cls: "small primary" }));
+  }
 
-  // run form
-  const passes = h("input", { type: "number", min: 1, value: 1, style: "width:80px" });
-  const screen = h("input", { type: "checkbox" });
-  const allow = h("input", { placeholder: "open network, or hosts: api.example.org, 10.0.0.0/8", style: "width:100%" });
-  const checkOut = h("pre", { class: "log small", hidden: true });
-  const runCard = card("Run", [
-    h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, screen, "screen only (skip the costly stages)")),
-    h("label", { class: "stack" }, "Network allowlist (empty: open)", allow),
-    h("div", { class: "form-actions" },
-      act("Start a run", async () => {
-        const r = await api(`/apps/${enc(name)}/runs`, { method: "POST", body: { passes: Number(passes.value) || 1, screen_only: screen.checked,
-          allow: allow.value.split(",").map(s => s.trim()).filter(Boolean) } });
-        toast(`Run #${r.id} started`, "ok"); location.hash = `#/run/${r.id}`;
-      }, { cls: "primary" }),
-      act("Check the document", async () => {
-        checkOut.hidden = false; checkOut.textContent = "Checking in the sandbox…";
-        const r = await api(`/apps/${enc(name)}/check`, { method: "POST" });
-        checkOut.textContent = (r.ok ? "" : "NOT READY\n") + r.output;
-        toast(r.ok ? "The document is ready to run" : "The document is not ready: see the check", r.ok ? "ok" : "warn");
-      })),
-    checkOut]);
-
-  // add files
-  const addFiles = h("input", { type: "file", multiple: true });
-  const addFolder = h("input", { placeholder: "folder (optional)" });
-  const adder = h("details", { class: "adder" }, h("summary", {}, "Add files"),
-    h("label", { class: "stack" }, "Files or a .zip", addFiles), h("label", { class: "stack" }, "Into folder", addFolder),
-    act("Add", async () => {
-      if (!addFiles.files.length) { toast("Choose files or a .zip.", "warn"); return; }
-      const form = new FormData(); form.append("folder", addFolder.value);
-      for (const f of addFiles.files) form.append("files", f, f.name);
-      const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
-      toast(`Added ${r.written.length} file(s)`, "ok"); route();
-    }, { cls: "small primary" }));
-
-  // the agents' workbench (D688)
-  const bench = await api(`/apps/${enc(name)}/workbench?${q.slice(1)}`).catch(() => []);
-  const benchCard = card("Agents' workbench", bench.length
-    ? ["tools", "notes", ""].map(kind => {
-        const items = bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)));
-        if (!items.length) return "";
-        return h("div", { class: "bench-group" }, h("h3", {}, kind || "other"), h("ul", { class: "bench" }, items.map(b => h("li", {},
-          h("a", { href: "javascript:void 0", onclick: () => { open(b.path, false); viewer.scrollIntoView({ behavior: "smooth", block: "start" }); } }, b.path.split("/").pop()),
-          h("small", { class: "muted" }, " ", ago(b.mtime)), b.first ? h("div", { class: "first" }, b.first) : ""))));
-      })
-    : empty("Empty. The coding agents keep the tools they build and the notes they write here, across runs."), { cls: "bench-card" });
-
-  const runsBox = h("div", {}, runsTable(info.runs));
-  const actions = [];
-  if (mine && info.document) actions.push(h("a", { class: "btn", href: `#/app/${enc(name)}/configure` }, "Configure"));
-  if (mine) actions.push(act("Delete", async () => {
-    if (!await confirmDialog(`Delete ${name}?`, "Its document, files, records and runs' logs go. This cannot be undone.", { ok: "Delete", danger: true })) return;
-    await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
-  }, { cls: "danger" }));
-  show(
-    head(h("span", {}, name, mine ? "" : h("span", { class: "pill" }, `${info.owner}'s · read only`)), info.document ? h("span", { class: "mono" }, info.document) : "", ...actions),
-    h("div", { class: "grid-app" },
-      card("Files", [fileList(info.files), mine ? adder : ""], { cls: "files-card" }),
-      card(null, viewer, { cls: "viewer-card" })),
-    h("div", { class: "grid-2" }, mine ? runCard : "", benchCard),
-    card("Runs", runsBox));
-  pageRefresh = async () => { const i2 = await api(`/apps/${enc(name)}?${q.slice(1)}`); runsBox.replaceChildren(runsTable(i2.runs)); };
-  if (info.document) open(info.document, false);
+  async function drawBody() {
+    if (tab === "Live") {
+      if (!st.running && !st.last_active) {
+        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
+        return;
+      }
+      body.replaceChildren(h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Not running: the last start's tree."), live.tree], { cls: "tree-card" }),
+        h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), notesCard(), card(null, live.stand, { cls: "stand-card" }))));
+      live.draw(); drawNotes();
+    } else if (tab === "Log") {
+      body.replaceChildren(card(null, log.el, { cls: "log-card" }));
+      log.render();
+    } else if (tab === "Agent turns") {
+      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      const { turns } = await api(`/apps/${enc(name)}/turns${qs}`);
+      const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
+      const pick = async (t, tr) => {
+        for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
+        const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
+        one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
+          ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), h("pre", { class: "val tall" }, String(full[k])))),
+          ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []));
+      };
+      body.replaceChildren(h("div", { class: "split" },
+        card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"), h("th", {}, ""))),
+          h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
+            h("td", { class: "strong" }, t.agent || t.model || t.kind), h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
+            h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: "pill bad" }, `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; })))
+          : empty("No model or agent turn yet.")),
+        card(null, one, { cls: "detail-card" })));
+    } else if (tab === "Results") {
+      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      const r = await api(`/apps/${enc(name)}/results${qs}`);
+      if (!r.campaign) { body.replaceChildren(card(null, empty("No record yet: the loop has not measured anything."))); return; }
+      const metrics = [...new Set(r.rows.flatMap(x => Object.keys(x.metrics)))].slice(0, 8);
+      body.replaceChildren(
+        card("Objectives", [h("p", {}, r.objectives),
+          r.answer ? h("details", {}, h("summary", {}, "The latest answer (JSON)"), h("pre", { class: "val tall" }, JSON.stringify(r.answer.decision || r.answer, null, 1).slice(0, 20000))) : ""],
+          { actions: [h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")] }),
+        card(`Measured (${r.rows.length})`, r.rows.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" },
+          h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Stage"), h("th", {}, "Design"), h("th", {}, "Part"), ...metrics.map(m => h("th", { class: "num" }, m)))),
+          h("tbody", {}, r.rows.slice().reverse().slice(0, 300).map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.when)), h("td", {}, x.stage), h("td", { class: "mono" }, x.name),
+            h("td", {}, x.whole ? "whole" : (x.part || "")), ...metrics.map(m => h("td", { class: "mono num" }, x.metrics[m] != null ? Number(x.metrics[m]).toPrecision(5) : ""))))))) : empty("Nothing measured yet.")));
+    } else if (tab === "Files") {
+      const files = await api(`/apps/${enc(name)}/files${qs}`);
+      body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [fileList(files), mine ? adder() : ""], { cls: "files-card" }), card(null, viewer, { cls: "viewer-card" })));
+      if (info.document) openFile(info.document, false);
+    } else if (tab === "Workbench") {
+      const bench = await api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []);
+      body.replaceChildren(h("div", { class: "grid-app" }, card("Agents' workbench", bench.length
+        ? ["tools", "notes", ""].map(kind => {
+            const items = bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)));
+            if (!items.length) return "";
+            return h("div", { class: "bench-group" }, h("h3", {}, kind || "other"), h("ul", { class: "bench" }, items.map(b => h("li", {},
+              h("a", { href: "javascript:void 0", onclick: () => openFile(b.path, false) }, b.path.split("/").pop()),
+              h("small", { class: "muted" }, " ", ago(b.mtime)), b.first ? h("div", { class: "first" }, b.first) : ""))));
+          })
+        : empty("Empty. The coding agents keep the tools they build and the notes they write here, across starts.")),
+        card(null, viewer, { cls: "viewer-card" })));
+      viewer.replaceChildren(empty("Select a tool or a note."));
+    }
+  }
+  const tick = setInterval(() => refresh().catch(() => {}), 5000);
+  cleanup.push(() => clearInterval(tick));
+  pageRefresh = () => refresh();
+  drawHead(); drawTabs(); drawBanner(); drawBody();
+  show(header, banner, tabBar, body);
 }
 
-// ================================================================ a run
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download. */
-function logView(id) {
+function logView(base, qs) {
   const lines = []; let partial = "", seen = 0;
   const MAX = 50000, SHOWN = 4000;
   const box = h("div", { class: "logview" });
@@ -402,14 +507,14 @@ function logView(id) {
   const bar = h("div", { class: "toolbar" },
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
     h("label", { class: "check" }, problems, "problems only"), filter, count,
-    h("a", { class: "btn small", href: `/api/runs/${id}/log/raw` }, "Download"));
-  const es = new EventSource(`/api/runs/${id}/log`);
+    h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
+  const es = new EventSource(`${base}/log${qs}`);
   es.addEventListener("log", (m) => add(JSON.parse(m.data)));
   return { el: h("div", {}, bar, box), close: () => es.close(), render };
 }
 
 /** The live task tree: follow the running task, collapse what finished, search. */
-function liveTree(id, onQuestion) {
+function liveTree(base, qs, onQuestion) {
   const nodes = new Map(), roots = [], standings = new Map();
   let selected = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
@@ -418,6 +523,10 @@ function liveTree(id, onQuestion) {
   const search = h("input", { placeholder: "search tasks", class: "filter" });
   const treeBox = h("div", { class: "tree" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
   function onEvent(e) {
+    if (e.ev === "hello") {                        // a new start: its tree begins afresh (D689)
+      nodes.clear(); roots.length = 0; standings.clear(); open.clear(); selected = null; dirty = true;
+      return;
+    }
     if (e.ev === "start") {
       const n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, fields: {}, kids: [], parent: null };
       nodes.set(e.id, n);
@@ -520,113 +629,12 @@ function liveTree(id, onQuestion) {
   search.addEventListener("input", draw);
   follow.addEventListener("change", draw);
   collapse.addEventListener("change", () => { open.clear(); draw(); });
-  const es = new EventSource(`/api/runs/${id}/events`);
+  const es = new EventSource(`${base}/events${qs}`);
   es.addEventListener("events", (m) => onEvent(JSON.parse(m.data)));
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
   const bar = h("div", { class: "toolbar" }, h("label", { class: "check" }, follow, "follow the running task"),
     h("label", { class: "check" }, collapse, "collapse finished"), search);
   return { tree: h("div", {}, bar, treeBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
-}
-
-async function runPage(id) {
-  let state = await api(`/runs/${id}`);
-  const header = h("div", {});
-  const banner = h("div", {});
-  const body = h("div", {});
-  const tabs = ["Live", "Log", "Agent turns", "Results"];
-  let tab = "Live";
-  const tabBar = h("div", { class: "tabs", role: "tablist" });
-  let question = null;
-  const live = liveTree(id, (q) => { question = q; drawBanner(); });
-  const log = logView(id);
-  cleanup.push(() => { live.close(); log.close(); });
-
-  function drawTabs() {
-    tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
-      onclick: () => { tab = t; drawTabs(); drawBody(); } }, t)));
-  }
-  function drawHead() {
-    const others = state.user !== me.name;
-    const stop = state.live ? [
-      act("Stop after this pass", async () => { const r = await api(`/runs/${id}/stop`, { method: "POST", body: { now: false } }); toast(r.ok, "info"); }),
-      act("Stop now", async () => {
-        if (!await confirmDialog("Stop the run now?", "The pass ends at once; the record keeps what was judged.", { ok: "Stop now", danger: true })) return;
-        const r = await api(`/runs/${id}/stop`, { method: "POST", body: { now: true } }); toast(r.ok, "warn");
-      }, { cls: "danger" })] : [];
-    header.replaceChildren(head(h("span", {}, `Run #${id} `, pill(state)),
-      h("span", {}, h("a", { href: appHref(state.user, state.app) }, state.app), others ? ` · ${state.user}'s` : "",
-        " · started ", ago(state.started), " · ", dur((state.ended || Date.now() / 1000) - state.started),
-        state.passes != null ? ` · ${state.passes} pass(es)` : "", state.container ? h("span", { class: "muted" }, ` · sandbox ${state.container}`) : ""),
-      ...stop));
-  }
-  // notes and the agent's question
-  const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
-  const noteList = h("div", { class: "notes" });
-  async function sendNote(text) {
-    const r = await api(`/runs/${id}/notes`, { method: "POST", body: { text } });
-    toast(r.ok, "ok"); noteText.value = ""; question = null; drawBanner(); drawNotes();
-  }
-  async function drawNotes() {
-    const notes = await api(`/runs/${id}/notes`).catch(() => []);
-    noteList.replaceChildren(...notes.slice(-20).reverse().map(n => h("div", { class: "note" }, h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text))));
-  }
-  function drawBanner() {
-    if (!question || !state.live) { banner.replaceChildren(); return; }
-    const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
-    const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
-    banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
-        h("span", { class: "muted" }, left ? `answer within ${dur(left)}, or it decides` : "its time is up: it decided")),
-      h("pre", { class: "question" }, question.question), ans,
-      h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))));
-  }
-  const notesCard = () => state.live && state.user === me.name ? card("Notes to the run", [noteText,
-    h("div", { class: "form-actions" }, act("Send", async () => { if (noteText.value.trim()) await sendNote(noteText.value.trim()); })), noteList]) : "";
-
-  async function drawBody() {
-    if (tab === "Live") {
-      body.replaceChildren(h("div", { class: "split" }, card(null, live.tree, { cls: "tree-card" }),
-        h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), notesCard(), card(null, live.stand, { cls: "stand-card" }))));
-      live.draw(); drawNotes();
-    } else if (tab === "Log") {
-      body.replaceChildren(card(null, log.el, { cls: "log-card" }));
-      log.render();
-    } else if (tab === "Agent turns") {
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
-      const { turns } = await api(`/runs/${id}/turns`);
-      const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
-      const pick = async (t, tr) => {
-        for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
-        const full = (await api(`/runs/${id}/turns?k=${t.k}`)).turns[0] || {};
-        one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, `Turn ${t.k}`), h("span", { class: "muted" }, full.agent || full.model || full.kind, " · ", dur(full.seconds))),
-          ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), h("pre", { class: "val tall" }, String(full[k])))),
-          ...(full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []);
-      };
-      body.replaceChildren(h("div", { class: "split" },
-        card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "#"), h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"), h("th", {}, ""))),
-          h("tbody", {}, turns.map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
-            h("td", { class: "strong" }, `#${t.k}`), h("td", {}, t.agent || t.model || t.kind), h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
-            h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: "pill bad" }, `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; })))
-          : empty("No model or agent turn yet.")),
-        card(null, one, { cls: "detail-card" })));
-    } else if (tab === "Results") {
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
-      const r = await api(`/runs/${id}/results`);
-      if (!r.campaign) { body.replaceChildren(card(null, empty("No record yet: the run has not measured anything."))); return; }
-      const metrics = [...new Set(r.rows.flatMap(x => Object.keys(x.metrics)))].slice(0, 8);
-      body.replaceChildren(
-        card("Objectives", [h("p", {}, r.objectives),
-          r.answer ? h("details", {}, h("summary", {}, "The answer (JSON)"), h("pre", { class: "val tall" }, JSON.stringify(r.answer.decision || r.answer, null, 1).slice(0, 20000))) : ""],
-          { actions: [h("a", { class: "btn small", href: `/api/runs/${id}/report`, target: "_blank", rel: "noopener" }, "Open the report")] }),
-        card(`Measured (${r.rows.length})`, r.rows.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" },
-          h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Stage"), h("th", {}, "Design"), h("th", {}, "Part"), ...metrics.map(m => h("th", { class: "num" }, m)))),
-          h("tbody", {}, r.rows.slice().reverse().slice(0, 300).map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.when)), h("td", {}, x.stage), h("td", { class: "mono" }, x.name),
-            h("td", {}, x.whole ? "whole" : (x.part || "")), ...metrics.map(m => h("td", { class: "mono num" }, x.metrics[m] != null ? Number(x.metrics[m]).toPrecision(5) : ""))))))) : empty("Nothing measured yet.")));
-    }
-  }
-  const tick = setInterval(async () => { try { const was = state.live; state = await api(`/runs/${id}`); drawHead(); if (was !== state.live) drawBody(); } catch (_) {} }, 5000);
-  cleanup.push(() => clearInterval(tick));
-  drawHead(); drawTabs(); drawBody();
-  show(header, banner, tabBar, body);
 }
 
 // ================================================================ the configurator (D686)
@@ -670,14 +678,15 @@ async function configurePage(name) {
 
 // ================================================================ admin and account
 async function adminPage() {
-  const [users, audit, runs, allApps] = await Promise.all([api("/users"), api("/audit"), api("/runs?everyone=1"), api("/admin/apps")]);
+  const [users, audit, allApps] = await Promise.all([api("/users"), api("/audit"), api("/admin/apps")]);
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
   const admin = h("input", { type: "checkbox" });
-  show(head("Admin", "Users, what runs, every application, the audit trail."),
+  const box = h("div", {}, loopsTable(allApps, { who: true }));
+  show(head("Admin", "Users, every loop and what runs, the audit trail."),
     h("div", { class: "grid-2" },
       card("Users", [h("table", { class: "list" }, h("tbody", {}, users.map(u => h("tr", {},
           h("td", { class: "strong" }, u.name), h("td", {}, h("span", { class: "pill" }, u.role), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
-          h("td", { class: "right" },
+          h("td", { class: "right" }, h("div", { class: "actions end" },
             act(u.disabled ? "Enable" : "Disable", async () => {
               if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
               await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
@@ -686,20 +695,16 @@ async function adminPage() {
               const p = await promptDialog(`New password for ${u.name}`, "At least 10 characters", { type: "password", min: 10 });
               if (p === null) return;
               await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { password: p } }); toast(`${u.name}'s password changed`, "ok");
-            }, { cls: "small" })))))),
+            }, { cls: "small" }))))))),
         h("div", { class: "row add-user" }, name, pw, h("label", { class: "check" }, admin, "admin"),
           act("Add user", async () => {
             await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: admin.checked ? "admin" : "user" } });
             toast(`${name.value} added`, "ok"); route();
           }, { cls: "primary" }))]),
-      card("Running now", runsTable(runs.filter(r => r.live), { who: true }))),
-    card("Every application", allApps.length ? h("table", { class: "list" },
-      h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Application"), h("th", {}, "Document"), h("th", {}, ""))),
-      h("tbody", {}, allApps.map(a => h("tr", {}, h("td", {}, a.owner), h("td", {}, h("a", { href: appHref(a.owner, a.name), class: "strong" }, a.name)),
-        h("td", { class: "mono muted" }, a.document || ""), h("td", {}, a.running ? pill({ live: true }) : ""))))) : empty("None yet.")),
-    card("Every run", runsTable(runs.slice(0, 50), { who: true })),
-    card("Audit", h("table", { class: "list" }, h("tbody", {}, audit.slice(0, 100).map(a => h("tr", {}, h("td", { class: "muted" }, ago(a.t)),
-      h("td", {}, a.user || ""), h("td", {}, a.action), h("td", { class: "mono muted" }, a.detail)))))));
+      card("Audit", h("div", { class: "audit" }, h("table", { class: "list" }, h("tbody", {}, audit.slice(0, 100).map(a => h("tr", {}, h("td", { class: "muted" }, ago(a.t)),
+        h("td", {}, a.user || ""), h("td", {}, a.action), h("td", { class: "mono muted" }, a.detail)))))))),
+    card("Every loop", box));
+  pageRefresh = async () => box.replaceChildren(loopsTable(await api("/admin/apps"), { who: true }));
 }
 
 async function accountPage() {
@@ -731,7 +736,7 @@ async function accountPage() {
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
-      card("Notifications", [h("p", { class: "muted" }, "You are told when a run ends, fails, or an agent asks a question, in the page and in the bell."),
+      card("Notifications", [h("p", { class: "muted" }, "You are told when a loop stops, fails, or its agent asks a question, in the page and in the bell."),
         "Notification" in window ? (Notification.permission === "granted" ? h("p", {}, "Desktop notifications are on.")
           : Notification.permission === "denied" ? h("p", { class: "muted" }, "Desktop notifications are blocked in this browser's settings.")
           : act("Allow desktop notifications", async () => { await Notification.requestPermission(); route(); })) : ""])));
@@ -744,16 +749,16 @@ async function route() {
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
   const hash = location.hash || "#/";
   if (hash === "#/login") { drawNav(); return loginPage(); }
-  if (!me) { try { me = await api("/me"); pollRuns(); } catch (_) { return; } }
+  if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
+  const TABS = { "": "Live", log: "Log", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench" };
   try {
     let m;
-    if ((m = hash.match(/^#\/app\/([^/]+)$/))) return await appPage(decodeURIComponent(m[1]));
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)$/))) return await appPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]));
-    if ((m = hash.match(/^#\/run\/(\d+)$/))) return await runPage(m[1]);
+    if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
+    if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Live");
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Live");
     if (hash === "#/new") return await newPage();
     if (hash === "#/configure") return await configurePage(null);
-    if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
     if (hash === "#/admin" && me.role === "admin") return await adminPage();
     if (hash === "#/account") return await accountPage();
     return await appsPage();
@@ -763,7 +768,7 @@ function drawNav() {
   const here = location.hash || "#/";
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
   document.getElementById("nav").replaceChildren(...(me ? [
-    link("#/", "Applications", here === "#/" || here.startsWith("#/app") || here.startsWith("#/run")),
+    link("#/", "Loops", here === "#/" || (here.startsWith("#/app") && !here.endsWith("/configure")) || here.startsWith("#/u/")),
     link("#/configure", "New loop", here === "#/configure" || here === "#/new"),
     me.role === "admin" ? link("#/admin", "Admin", here === "#/admin") : ""] : []));
   drawBell();

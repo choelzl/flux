@@ -234,3 +234,5 @@ dialog.dlg h2 { font-size: 16px; margin-bottom: 8px; }
   #nav a { padding: 0 6px; }
 }
 @media (max-width: 560px) { .top .brand { display: none; } .bell-menu { right: -60px; width: min(340px, 92vw); } }
+.actions.end { justify-content: flex-end; }
+.audit { max-height: 420px; overflow: auto; }
