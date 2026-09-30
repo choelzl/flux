@@ -52,6 +52,7 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
     doc = {"pid": os.getpid(), "argv": list(argv if argv is not None else sys.argv), "cwd": os.getcwd(),
            "started": mine.get("started") or time.time(), "workdir": workdir,
            "log": os.environ.get("FLUX_RUN_LOG") or None,
+           "container": os.environ.get("FLUX_SANDBOX_NAME") or None,   # D680: its pid is the container's
            "passes": int(mine.get("passes") or 0), "last_pass_ended": mine.get("last_pass_ended"),
            "campaign": campaign_id}
     _write(os.path.join(d, "run.json"), doc)
@@ -149,8 +150,26 @@ def status(campaign_id: str, db: str | None = None) -> dict[str, Any]:
     if not doc:
         return out
     out.update(doc)
-    out["state"] = "running" if alive(doc.get("pid")) else "stale"
+    out["state"] = "running" if _running(doc) else "stale"
     return out
+
+
+def _outside(doc: dict[str, Any]) -> bool:
+    """The run is in a sandbox this process is not in (D680): its pid means nothing here."""
+    return bool(doc.get("container")) and os.environ.get("FLUX_SANDBOX_NAME") != doc.get("container")
+
+
+def _running(doc: dict[str, Any]) -> bool:
+    if not _outside(doc):
+        return alive(doc.get("pid"))
+    import subprocess
+
+    try:
+        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", str(doc["container"])],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.stdout.strip() == "true"
 
 
 def interrupt(campaign_id: str, db: str | None = None) -> bool:
@@ -159,6 +178,12 @@ def interrupt(campaign_id: str, db: str | None = None) -> bool:
     st = status(campaign_id, db)
     if st["state"] != "running":
         return False
+    if _outside(st):
+        import subprocess
+
+        # to the container's init, which hands it to flux
+        return subprocess.run(["docker", "kill", "--signal", "INT", str(st["container"])],
+                              capture_output=True).returncode == 0
     os.kill(int(st["pid"]), signal.SIGINT)
     return True
 

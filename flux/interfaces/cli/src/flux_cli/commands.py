@@ -870,8 +870,10 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
     cid = _campaign_of(args.db, args.campaign)
     if args.now:
+        st = ops.status(cid, args.db)
         if ops.interrupt(cid, args.db):
-            print(f"campaign {cid[:12]}: SIGINT sent to pid {ops.status(cid, args.db).get('pid')}; the pass ends now, the record holds what was judged")
+            to = f"the sandbox {st['container']}" if st.get("container") else f"pid {st.get('pid')}"
+            print(f"campaign {cid[:12]}: SIGINT sent to {to}; the pass ends now, the record holds what was judged")
             return 0
         print(f"campaign {cid[:12]}: no running process registered")
         return 1

@@ -117,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("--num-predict", type=int, default=None)
     ask_p.add_argument("--replies", default=None, help="Scripted replies (a JSON list) for the loop's model: no model.")
     ask_p.add_argument("--author-replies", default=None, help="Scripted replies for a model author (tests, dry runs).")
+    ask_p.add_argument("--no-sandbox", action="store_true",
+                       help="Run on this machine, not in the Docker sandbox (also FLUX_SANDBOX=0).")
     ask_p.set_defaults(func=cmd_ask)
 
     task_p = subparsers.add_parser(
@@ -166,6 +168,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--json", default=None, metavar="FILE", help="Also write the answer as JSON: the decision, the frontier, what was refused, the application's own result.")
     run_p.add_argument("--no-prototype", action="store_true", help="No prototype stage: the target directly.")
     run_p.add_argument("--no-patching", action="store_true", help="Repair by rewrite, not by edits.")
+    run_p.add_argument("--no-sandbox", action="store_true",
+                       help="Run on this machine, not in the Docker sandbox (also FLUX_SANDBOX=0).")
     run_p.set_defaults(func=cmd_task_run)
 
     gc_p = subparsers.add_parser("gc", help="Remove trace directories no campaign record names.")
@@ -295,8 +299,15 @@ def main(argv: list[str] | None = None) -> int:
                 stream.reconfigure(line_buffering=True)
             except (ValueError, OSError):
                 pass
+    from .sandbox import enabled, launch, relay_proxy
+
+    relay_proxy()                            # inside an allowlisted sandbox: the way out (D680)
     parser = build_parser()
     args = parser.parse_args(argv)
+    boxed = ("task run" if args.command == "task" and getattr(args, "task_command", None) == "run"
+             else "ask" if args.command == "ask" else "")
+    if boxed and enabled(args):              # D680: the run re-launched in its container
+        return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)
     db = getattr(args, "db", None)
     if args.command in _READS_A_RECORD and db and not Path(db).is_file():
         print(f"flux {args.command}: no campaign record at {db} (a run writes <document dir>/out/<id>.db)")

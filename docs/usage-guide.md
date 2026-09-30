@@ -94,6 +94,29 @@ flux gc --db DB --keep-days 7 --apply   # remove trace directories no record nam
 flux knowledge digest --db DB     # the library's key points, digested once by the model
 ```
 
+## The sandbox
+
+`flux task run` and `flux ask` run in a Docker container (D680), so neither an agent nor a
+document's code (its commands, `golden.py`, scripts, `world:` hooks) can touch the rest of the
+machine.
+
+- **It sees:** the host read-only, meaning the system, `/nix/store`, the flux source, the
+  executables on PATH and the problem folder. The same tools run, OpenCode and Claude Code
+  included.
+- **It writes:** the record's folder, the problem's `out/` and `workbench/`, and
+  `~/.cache/flux`.
+- **HOME** is its own (`~/.cache/flux/sandbox/home`), holding the agents' configuration and a
+  copy of their login. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
+  not there. The model settings and key come in through the environment.
+- **Network:** the host's by default. `FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8` gives no
+  network except those hosts, through a proxy on the host. A refused host is said once.
+- **Limits:** `FLUX_SANDBOX_MEMORY=16g`, `FLUX_SANDBOX_CPUS=8`, `FLUX_SANDBOX_PIDS` (4096).
+- **Off:** `--no-sandbox` or `FLUX_SANDBOX=0`.
+- **Needs:** Docker, with your user in the `docker` group. `flux status` and `flux stop --now`
+  find a sandboxed run by its container.
+- **Not inside:** Timeloop through Docker (no Docker socket inside). Run those with
+  `--no-sandbox`.
+
 ## RTL tools
 
 The commands an RTL document names as its gate and stages:

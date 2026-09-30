@@ -12,6 +12,7 @@ import pytest
 # A test never reads this machine's ~/.config/flux/flux.env (D651): `main()` would load its model
 # settings into the process and leak them into later tests.
 os.environ["FLUX_CONFIG"] = os.devnull + ".flux-tests"
+os.environ["FLUX_SANDBOX"] = "0"             # the tests run flux in-process; tests/unit/test_sandbox.py covers the sandbox
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 

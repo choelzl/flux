@@ -604,3 +604,35 @@ the topics above.
   cutoffs, then each objective's limit at that stage), e.g. `limits at confirm: fmax_mhz >= 2000
   -- met`. The exit code is 0 when all met, 1 for a miss or a failed measurement, 2 when
   refused. Live, add8: synthesis and placement in one probe, 4,306 and 4,190 MHz, both met.
+
+- **D680: the run's sandbox.** `flux task run` and `flux ask` re-launch themselves with
+  `docker run`, on by default (`--no-sandbox`, `FLUX_SANDBOX=0`). A container may run any number
+  of processes; its first one is PID 1. That is `tini` from nix: Docker's `--init` lives under
+  `/sbin`, which is the host's `/usr` here.
+  - **Read-only:** `/usr` (merged-usr: `/bin`, `/lib` follow), `/nix/store`, a list of `/etc`
+    files (Docker owns `resolv.conf` and `hosts`), the flux source, the cwd, PATH directories
+    and their links' targets, the problem folder.
+  - **Writable:** the record's folder, `<problem>/out` and `/workbench`, `~/.cache/flux`,
+    `--out`/`--json` targets, `flux ask --dir`.
+  - **Container settings:** `--read-only`, tmpfs `/tmp`, `--cap-drop ALL`,
+    `no-new-privileges`, `--pids-limit`, your uid/gid.
+  - **HOME:** a sandbox home kept across runs (agent sessions), with `~/.config/opencode` and
+    `~/.opencode` read-only and Claude/OpenCode credentials copied in. Not mounted: `~/.ssh`,
+    the Docker socket, `~/.config/flux` (the host reads flux.env and passes settings and key by
+    environment). Environment dropped: SSH/GPG agents, display, D-Bus, `*TOKEN*`, `*SECRET*`,
+    `AWS_*`, `GITHUB_*`, ...
+  - **Network:** the host's (`--network host`: a local Ollama stays reachable). With
+    `FLUX_SANDBOX_ALLOW`, `--network none` and an allowlisting CONNECT/HTTP proxy on the host,
+    on a Unix socket in `$XDG_RUNTIME_DIR` (a home on sshfs cannot hold a socket). Inside, flux
+    relays 127.0.0.1:18080 to it, and HTTP(S)_PROXY points every client there (urllib, Node,
+    Bun).
+  - **Stopping:** the run state names its container, so `flux status` asks `docker inspect`
+    and `flux stop --now` sends `docker kill --signal INT`.
+
+  Live:
+  - A hostile gate read nothing from `~/.ssh`, `~/.config/flux` or other repositories, could
+    not write the repository, `/usr` or its own document, and found no Docker socket.
+  - OpenCode and Claude Code agents ran (Claude Code with probes), and the loop admitted add8
+    at 3.135 and 2.96 µm² respectively.
+  - Allowlist `localai.cyprien.ch`: OpenCode worked, and `example.com` was refused.
+  - `flux stop --now` from the host ended a sandboxed pass with the record intact.
