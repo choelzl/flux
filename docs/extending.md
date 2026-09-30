@@ -135,7 +135,8 @@ A skill is a folder with a `SKILL.md` (a `name`, a `description`, then instructi
 files it brings. `skills: [dir]` in a document, or `--skill DIR`, gives it to the loop's model
 (in every prompt, or through the `skill` tool for large libraries) and to coding agents (copied
 where they look for skills). `knowledge: {files: [...]}` puts specs, reference code and PDFs in
-every prompt.
+every prompt. The agents keep their own tools and notes in `workbench/` beside the document,
+across runs; the loop never reads it (D677).
 
 ## 8. Driving Flux from a script (stable)
 

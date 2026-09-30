@@ -53,6 +53,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     feedback = feedback if heard else None         # D666: `feedback: none` is no channel at all
     state = LoopState(request=request, say=say, proposer=proposer, feedback=feedback,
                       started=time.monotonic(), depth=depth)
+    state.__dict__["workbench"] = str(getattr(getattr(problem, "task", None), "workbench", "") or "")   # D677: every box agent's
     with _phase("gate: tools", why="refuse loudly before spending anything") as out:
         missing = problem.tools_missing()
         out["verdict"] = ("MISSING: " + ", ".join(missing)) if missing else "every tool the problem names is on PATH"

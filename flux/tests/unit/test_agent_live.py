@@ -121,3 +121,11 @@ def test_a_silent_agent_says_why(tmp_path):
     oc = _Live("opencode")
     oc.feed(json.dumps({"type": "error", "error": {"name": "UnknownError", "data": {"message": "exceeds the available context size"}}}) + "\n", 1.0)
     assert oc.fields()["status"] == "error: exceeds the available context size"
+
+
+def test_a_claude_turn_stopped_before_its_result_keeps_its_session():
+    """D677: a timeout leaves no `result` event; every event names the session."""
+    events = [{"type": "system", "subtype": "init", "session_id": "s-9"},
+              {"type": "assistant", "session_id": "s-9", "message": {"content": [{"type": "text", "text": "working"}]}}]
+    text, session = _parse("claude", "".join(json.dumps(e) + "\n" for e in events))
+    assert session == "s-9"

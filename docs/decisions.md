@@ -551,3 +551,19 @@ the topics above.
   `output` ("none yet after 300s", or "N lines, the last Ks ago"). Live, Claude Code: none for
   5 s, then the model and version, `requesting`, `allowed_warning (seven_day, resets Wed
   15:00)`, `responding`, and the tool call with its output.
+
+- **D677: the agents' workbench, inner-loop knowledge.** `workbench/` beside the document
+  (`workbench: path` or `false`), made on the first agent turn with `tools/` and `notes/`, kept
+  across runs. It is where, not what: not compared, not in the digest. Every agent (generate,
+  prototype, each box) finds it as `workbench/` in its work directory, through a link. OpenCode
+  follows the link; Claude Code checks real paths, so it also gets `--add-dir <workbench>`. The
+  brief lists the folder, one line per file (its first line, 3,000 chars at most), and asks for
+  a note whenever the agent worked something out. The loop never reads it. The `extract` box's
+  lessons come from measured results between passes; the workbench holds what agents build
+  while they work. Live, Claude Code on isq16 (16-bit integer sqrt): turn 1 built its own ASAP7
+  liberty timing model and technology mapper and ran past the 1,800 s limit with no draft; its
+  tools stayed. Turn 2's brief listed them. It calibrated them against a real measurement,
+  tabulated 11 architectures, left `notes/isq16-status.md` ("TIME LIMIT (read first) ... write
+  a checked draft in the first minutes"), and drafted from its own generator: admitted at
+  998.9 MHz, 20.5 µm². A Claude turn stopped before its `result` event now keeps its session
+  id, which every event carries.

@@ -30,8 +30,9 @@ so its size is not bounded by the command line. A custom command that names `{pr
 `{prompt_file}` or `{answer}` gets it there instead (a `{prompt}` over INLINE_MAX through a file).
 
 Substitutions in a command: `{prompt}` (the brief's text), `{prompt_file}` (its path),
-`{artifact}` (where to write), `{workdir}`, `{part}`, `{name}`, `{python}`; in a `resume`
-command also `{session}` and `{answer}`.
+`{artifact}` (where to write), `{workdir}`, `{part}`, `{name}`, `{python}`, `{workbench}` (the
+agents' folder of tools and notes, D677; "" without one); in a `resume` command also
+`{session}` and `{answer}`.
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ PRESETS: dict[str, dict[str, Any]] = {
                         "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
                "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
                           "--output-format", "stream-json", "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
-               "output": "claude"},
+               "output": "claude", "add_dir": ("--add-dir",)},
     "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}"),
                  "resume": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}", "--session", "{session}"),
@@ -91,6 +92,7 @@ class AgentSpec:
     wait_s: float = 300.0
     session: str = "turn"          # a decision box's span: a fresh agent each turn, or one per pass (D669)
     config: tuple[tuple[str, str], ...] = ()   # JSON merged into these variables of the agent's environment (D673)
+    add_dir: tuple[str, ...] = ()  # the option that opens a folder outside the work directory (the workbench, D677)
 
 
 def agent_spec(spec: Any) -> AgentSpec:
@@ -145,7 +147,7 @@ def agent_spec(spec: Any) -> AgentSpec:
     argv = _with_args((exe, *p["argv"][1:]), extra)
     resume = _with_args((exe, *p["resume"][1:]), extra) if p["resume"] else None
     config = tuple((k, json.dumps(v)) for k, v in (p.get("config") or {}).items())
-    return AgentSpec(preset, argv, resume, p["output"], **common, config=config)
+    return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()))
 
 
 def _merged(base: Any, over: Any) -> Any:
@@ -194,6 +196,70 @@ DECIDE = ("Nobody is available to answer questions during this run. Choose the o
           "say in one line what you chose, and write the file now.")
 
 
+WORKBENCH_LIST_MAX = 3000
+
+
+def workbench_link(bench: str, workdir: Path) -> Path | None:
+    """The workbench (D677) made if new (`tools/`, `notes/`) and linked into the agent's work
+    directory as `workbench/`; None without one."""
+    if not bench:
+        return None
+    root = Path(bench)
+    for sub in ("tools", "notes"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    link = workdir / "workbench"
+    if not link.exists() and not link.is_symlink():
+        link.symlink_to(root, target_is_directory=True)
+    return root
+
+
+def _first_line(path: Path) -> str:
+    try:
+        with path.open(errors="replace") as fh:
+            for _ in range(20):
+                ln = fh.readline()
+                if not ln:
+                    break
+                ln = ln.strip().lstrip("#").strip().strip('"').strip("'").strip()
+                if ln and not ln.startswith("!") and not ln.startswith("-*-"):
+                    return ln[:120]
+    except OSError:
+        pass
+    return ""
+
+
+def workbench_section(bench: str) -> str:
+    """The WORKBENCH section of a brief (D677): what the folder is for, and what is in it now
+    (each file with its first line), within a budget; "" without one."""
+    if not bench:
+        return ""
+    root = Path(bench)
+    files = sorted((p for p in root.rglob("*") if p.is_file() and p.suffix not in (".pyc", ".pyo")
+                    and not any(q.startswith(".") or q == "__pycache__" for q in p.relative_to(root).parts)),
+                   key=lambda p: str(p.relative_to(root)))
+    lines, used = [], 0
+    for p in files:
+        first = _first_line(p)
+        line = f"  workbench/{p.relative_to(root)}" + (f" -- {first}" if first else "")
+        if used + len(line) > WORKBENCH_LIST_MAX:
+            lines.append(f"  ... and {len(files) - len(lines)} more (look in the folder)")
+            break
+        lines.append(line)
+        used += len(line)
+    held = "\n".join(lines) if lines else "  (empty: you are the first)"
+    return ("YOUR WORKBENCH: `workbench/` in your directory. It is one folder for every agent working on this "
+            "problem, and it is kept across runs, so what you leave there helps the next agent, and you in a "
+            "later session. The loop gives it to you and never reads it: it is your own knowledge, built while "
+            "you work. Put tools you build in `workbench/tools/`: scripts that compute, generate or analyse, "
+            "such as fitting coefficients, making a table, or checking an identity numerically. Give each a "
+            "first line saying what it does. Put notes in `workbench/notes/`: the method, what failed and why, "
+            "facts you worked out, what the next agent should know. Start each with a one-line summary. Use "
+            "what is there before rebuilding it; correct a note that turned out wrong. Before you end a turn in "
+            "which you worked something out (a method, a number, why a draft failed), leave it there for the "
+            "next agent. The draft goes to its own path, not here. A tool may not run the design tools either.\n"
+            f"What it holds now:\n{held}")
+
+
 def library_section(problem: Any, question: str | list[str], state: Any = None) -> str:
     """The LIBRARY section of an agent's brief (D648): one line per paper and the absolute
     paths of the files nearest `question`, from the problem's `library` source; "" without one."""
@@ -211,13 +277,14 @@ def library_section(problem: Any, question: str | list[str], state: Any = None) 
 
 
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
-                prior: str | None, failure: str, questions: str = "decide", library: str = "") -> str:
+                prior: str | None, failure: str, questions: str = "decide", library: str = "",
+                workbench: str = "") -> str:
     """The brief an agent reads: the static prefix (contract, knowledge), the design or the
     repair prompt, the LIBRARY section, then what the loop expects of a terminal tool --
     including whether its questions will be answered."""
     # the model half's reply shape (JSON with the artifact) is not how an agent answers: it writes the file
     prefix = "\n\n".join(p for p in prefix.split("\n\n") if not p.lstrip().startswith("REPLY SHAPE"))
-    parts = [p for p in (prefix.strip(), body.strip(), library.strip()) if p]
+    parts = [p for p in (prefix.strip(), body.strip(), library.strip(), workbench.strip()) if p]
     if prior:
         parts.append(f"THE LAST DRAFT (refused: {failure.strip()[:2000] or 'see above'}):\n```\n{prior}\n```")
     parts.append(
@@ -260,7 +327,9 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
                 texts.append(str((ev.get("part") or {}).get("text") or ""))
         return "\n".join(t for t in texts if t.strip()), session
     if output == "claude":
-        # stream-json: the `result` event holds the answer and the session (D668)
+        # stream-json: the `result` event holds the answer and the session (D668); a turn
+        # stopped before it (a timeout) still names its session on every event (D677)
+        session = None
         for line in reversed(stdout.strip().splitlines()):
             try:
                 doc = json.loads(line)
@@ -268,7 +337,9 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
                 continue
             if isinstance(doc, dict) and doc.get("type") == "result":
                 return str(doc.get("result") or ""), doc.get("session_id")
-        return stdout, None
+            if isinstance(doc, dict) and session is None:
+                session = doc.get("session_id")
+        return stdout, session
     return stdout, None
 
 
@@ -494,6 +565,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     from .observe import _phase
 
     cmd = [t.format(**_inline(subs, workdir)) for t in argv]
+    if spec.add_dir and subs.get("workbench"):
+        cmd += [*spec.add_dir, subs["workbench"]]  # its real path: a tool that checks it sees past the link (D677)
     if shutil.which(cmd[0]) is None and not Path(cmd[0]).is_file():
         return Turn(False, 127, "", stderr=f"{cmd[0]} is not on PATH (the coding agent named by the document)")
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
@@ -554,9 +627,9 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         row.update(live.fields())
         row["exit"] = proc.returncode
     stdout = "".join(out)
-    if timed_out:
-        return Turn(False, 124, "", stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
     text, session = _parse(spec.output, stdout)
+    if timed_out:                                     # its session kept: a later turn may resume it
+        return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
     return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err))
 
 

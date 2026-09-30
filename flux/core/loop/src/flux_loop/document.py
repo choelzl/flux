@@ -234,6 +234,10 @@ class TaskSpec:
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
     knowledge_sheet: str = ""            # where `knowledge` was read from, for the report
     library: str = ""                    # `knowledge: {library: dir}`, absolute: indexed with the shared one (D648)
+    #: The agents' workbench (D677), absolute; "" = none. Their tools and notes, kept across
+    #: runs beside the document; the loop provides it and never reads it. Where, like `home`,
+    #: not what: not compared, not in the digest (only `workbench: false` is written).
+    workbench: str = field(default="", compare=False)
     #: The directory the document was loaded from ("" inline); every artifact of a run lives
     #: under `<home>/out/`, never beside the source (D578).
     home: str = field(default="", compare=False)      # not the document's: two loads of one text are equal
@@ -425,6 +429,7 @@ class TaskSpec:
             skills = tuple(str(sk.path) for sk in load_skills(skills_raw, base=Path(base) if base is not None else None))
         except SkillError as exc:
             raise TaskError(f"skills: {exc}") from exc
+        workbench = _workbench(doc.get("workbench", True), base)
         return cls(
             id=tid.strip(), statement=statement.strip(), contract=str(doc.get("contract") or ""),
             language=language, extension=ext,
@@ -440,7 +445,7 @@ class TaskSpec:
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, cache=cache, hooks=hooks, record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, library=library,
-            skills=skills,
+            skills=skills, workbench=workbench,
         )
 
     def _to_dict(self) -> dict[str, Any]:
@@ -479,6 +484,7 @@ class TaskSpec:
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),
+            **({"workbench": False} if not self.workbench and self.home else {}),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -643,7 +649,7 @@ def _gate_doc(gate: Gate) -> Any:
 
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
-_INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
+_INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills", "workbench",
               "params", "workload", "joiner", "budget", "brief", "space", "world", "hooks", "ladder",
               "cache", "flow")
 
@@ -879,13 +885,30 @@ def _estimator(i: int, raw: Any) -> Estimator | None:
     return Estimator(kind, float(margin), cmd)
 
 
+def _workbench(value: Any, base: Any) -> str:
+    """`workbench:` (D677): true (the default) = `workbench/` beside the document, a path (beside
+    the document unless absolute), false = none. An inline document without a path has none."""
+    if value is False or value is None:
+        return ""
+    if value is True:
+        return str((Path(base) / "workbench").resolve()) if base is not None else ""
+    if not isinstance(value, str) or not value.strip():
+        raise TaskError("workbench is true, false, or a folder (beside the document unless absolute)")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        if base is None:
+            return ""
+        path = Path(base) / path
+    return str(path.resolve())
+
+
 #: Every top-level key a problem document may say; any other is refused with the nearest
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
     "id", "statement", "contract", "language", "parts", "max_parts",
     "flow", "subtasks", "max_subtasks", "seeds", "brief", "gate", "stages", "objectives",
     "knowledge", "joiner", "budget", "params", "space", "workload", "world", "hooks", "ladder", "cache",
-    "skills"})
+    "skills", "workbench"})
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
 _INTERNAL_KEYS = frozenset({"_record"})

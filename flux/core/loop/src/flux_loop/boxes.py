@@ -105,7 +105,7 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
              problem: Any = None) -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
     on the record). Given the `problem`, the brief carries its LIBRARY section (D648)."""
-    from .agent import DECIDE, agent_spec, converse, library_section, run_turn
+    from .agent import DECIDE, agent_spec, converse, library_section, run_turn, workbench_link, workbench_section
 
     a = agent_spec(spec)
     # before the pass has its trace directory (validate runs first), the scratch directory
@@ -122,18 +122,22 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
         workdir.mkdir()
         out = workdir / "out.json"
     library = library_section(problem, question, state) if problem is not None else ""
+    bench = str(getattr(getattr(problem, "task", None), "workbench", "") or state.__dict__.get("workbench") or "")  # D677
+    workbench_link(bench, workdir)
+    shelf = workbench_section(bench)
     brief = (f"{question.strip()}\n\n" + (f"{library}\n\n" if library else "") + f"HOW TO ANSWER. You are a coding agent answering the `{box}` box of a "
              f"design-space exploration loop. "
              + (f"THE PROBLEM'S FILES are in `{home}` (its document, scripts and golden model): read those"
-                + (" and the LIBRARY files above" if library else "") + " and nothing else; what is being judged is quoted above. " if home else
+                + (" and the LIBRARY files above" if library else "") + (" and your workbench" if shelf else "")
+                + " and nothing else; what is being judged is quoted above. " if home else
                 "Everything you need is quoted above. ")
              + f"Do not run "
              f"the gate or the measurement stages: the loop runs them. Write your answer to `{out}` as ONE JSON "
              f"object matching this schema, then reply with one line saying so:\n"
-             f"{json.dumps(schema, indent=1)}\n")
+             f"{json.dumps(schema, indent=1)}\n" + (f"\n{shelf}\n" if shelf else ""))
     prompt_file = workdir / (f"BRIEF-{sess.turns:03d}.md" if sess is not None else "BRIEF.md")
     subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(out), "workdir": str(workdir),
-            "part": box, "name": box, "python": sys.executable}
+            "part": box, "name": box, "python": sys.executable, "workbench": bench}
     resume = sess.id if sess is not None and a.resume else None
     shape = json.dumps(schema, indent=1)
     message = ""

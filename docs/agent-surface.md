@@ -74,6 +74,18 @@ more. A coding agent finds them where it looks for skills (the loop copies them 
 model sees an index in every prompt and loads a skill's instructions or files with the `skill`
 tool inside its turn.
 
+## The workbench
+
+The agents' own folder for tools and notes ([D677](decisions.md)): `workbench/` beside the
+document (`workbench: path` elsewhere, `workbench: false` for none). It is made on the first
+agent turn with `tools/` and `notes/` and is kept across runs. Every agent of the problem
+(generate, prototype, every box) finds it as `workbench/` in its work directory, and its brief
+lists what the folder holds, one line per file. The agents build tools there (scripts that fit,
+tabulate or analyse) and keep notes (the method, what failed and why). This is knowledge built
+inside the loop, beside the lessons that `extract` draws from measured results between passes.
+The loop provides the folder and never reads it. Commit it with the application if it is worth
+keeping.
+
 ## The model and the agentic halves
 
 A model is an OpenAI-compatible server ([D508](decisions.md)): a hosted LocalAI

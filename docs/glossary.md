@@ -54,6 +54,10 @@ opencode|claude|codex`). After each pass it reads the report and may revise the 
 any files it needs. Skills give the author, the model and coding agents extra know-how.
 Add them with `skills:` in a document or `--skill DIR`.
 
+**Workbench.** The coding agents' own folder beside the document (`workbench/`): tools they
+build and notes they keep, shared by every agent of the problem and kept across runs. The loop
+provides it and never reads it.
+
 **Golden model.** A short Python file, `golden.py`, that says what a design must compute
 (`PORTS` and a `golden(**inputs)` function), not how. `flux rtl test` checks RTL against it.
 

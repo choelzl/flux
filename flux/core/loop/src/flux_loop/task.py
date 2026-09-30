@@ -983,7 +983,7 @@ class PromptProblem(Problem):
         to resume, the full brief carries the prior draft and the failure."""
         from dataclasses import asdict
 
-        from .agent import agent_brief, converse, library_section
+        from .agent import agent_brief, converse, library_section, workbench_link, workbench_section
 
         state = attempt.state
         sg = attempt.subgoal
@@ -1005,7 +1005,9 @@ class PromptProblem(Problem):
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=prior.artifact if prior is not None else None, failure=failure,
                             questions=agent.questions,
-                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state))
+                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state),
+                            workbench=workbench_section(self.task.workbench))
+        workbench_link(self.task.workbench, workdir)
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
         if resume:
@@ -1019,7 +1021,8 @@ class PromptProblem(Problem):
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
-                "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or "."}
+                "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or ".",
+                "workbench": self.task.workbench}
         if self.skill_list() and not resume:           # install skills where the agent looks (D588)
             from .skills import install
 
@@ -1076,7 +1079,7 @@ class PromptProblem(Problem):
         """One agent turn on the prototype (D618): it edits a file; the loop runs the stage's own
         check (`flux rtl proto`) and comes back with what failed (D673). Returns the file as a
         `{"prototype": ...}` reply, or "" when nothing new was written."""
-        from .agent import agent_brief, converse, library_section
+        from .agent import agent_brief, converse, library_section, workbench_link, workbench_section
 
         sess = self._part_session(state, subgoal, "prototype", agent.tool)       # D669: until the prototype passes
         workdir = sess.workdir
@@ -1090,7 +1093,9 @@ class PromptProblem(Problem):
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",
                             part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
                             failure=failure, questions=agent.questions,
-                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state))
+                            library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state),
+                            workbench=workbench_section(self.task.workbench))
+        workbench_link(self.task.workbench, workdir)
         resume = sess.id if agent.resume and sess.id and code else None
         message = ""
         if resume:
@@ -1101,7 +1106,8 @@ class PromptProblem(Problem):
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
-                "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or "."}
+                "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or ".",
+                "workbench": self.task.workbench}
         t0 = time.monotonic()
         turn, _asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
                                 answer=self._agent_answerer(agent, brief, state), say=state.say,
