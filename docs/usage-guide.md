@@ -103,10 +103,11 @@ machine.
 - **It sees:** the host read-only, meaning the system, `/nix/store`, the flux source, the
   executables on PATH and the problem folder. The same tools run, OpenCode and Claude Code
   included.
-- **It writes:** the record's folder, the problem's `out/` and `workbench/`, and
-  `~/.cache/flux`.
-- **HOME** is its own (`~/.cache/flux/sandbox/home`), holding the agents' configuration and a
-  copy of their login. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
+- **It writes:** the record's folder, the problem's `out/` and `workbench/`, and the
+  application's cache `~/.cache/flux/apps/<id>/`. That cache is shared by the application's
+  runs: `tmp/` holds scratch and traces, `cache/` its caches.
+- **HOME** is the application's (`apps/<id>/home`), holding the agents' sessions, their
+  configuration and a copy of their login. Another application's cache is not there. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
   not there. The model settings and key come in through the environment.
 - **Network:** the host's by default. `FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8` gives no
   network except those hosts, through a proxy on the host. A refused host is said once.

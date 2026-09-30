@@ -44,7 +44,12 @@ def test_the_problem_is_read_only_its_out_workbench_and_record_writable(monkeypa
     ro, rw = sandbox.mounts_for(args, "task run")
     home = str(tmp_path / "p")
     assert home in ro and f"{home}/out" in rw and f"{home}/workbench" in rw
-    assert str(tmp_path / "rec") in rw and str(tmp_path / "cache" / "flux") in rw
+    app = sandbox.app_dir(args, "task run")
+    assert app == tmp_path / "cache" / "flux" / "apps" / "x", "the application's id"
+    assert str(tmp_path / "rec") in rw and str(app / "tmp") in rw and str(app / "cache") in rw
+    assert str(tmp_path / "cache" / "flux") not in rw, "nothing shared between applications (D681)"
+    (tmp_path / "elsewhere").mkdir()
+    assert sandbox.app_dir(_args(tmp_path / "elsewhere"), "task run") == app, "one id: one cache, whatever the run"
     assert "/nix/store" in ro and "/etc/passwd" in ro and not any(p == "/etc" for p in ro + rw)
     assert not set(ro) & set(rw)
     assert str(Path.home() / ".ssh") not in ro + rw
@@ -61,7 +66,10 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
-    assert f"{tmp_path / 'cache' / 'flux' / 'sandbox' / 'home'}:{Path.home()}" in vols, "HOME is the sandbox's"
+    app = sandbox.app_dir(_args(tmp_path), "task run")
+    assert f"{app / 'home'}:{Path.home()}" in vols, "HOME is the application's"
+    assert env["TMPDIR"] == str(app / "tmp") and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces")
+    assert env["XDG_CACHE_HOME"] == str(app / "cache")
     assert not any("docker.sock" in v for v in vols) and not any(v.startswith(f"{Path.home()}/.config/flux") for v in vols)
     for flag in ("--read-only", "--rm", "no-new-privileges", "ALL"):
         assert flag in cmd

@@ -3,12 +3,13 @@ container, so an agent's or a document's code cannot touch the rest of the machi
 
 The container is the host seen read-only: the system directories and `/nix/store` at their
 real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux source, the
-executables on PATH under the home directory. Writable: the record's folder, the problem's
-`out/` and `workbench/`, the flux cache (`~/.cache/flux`: scratch, traces, caches), and the
-places the command writes to (`--out`, `--json`, `flux ask --dir`). HOME is a sandbox home of
-its own (`~/.cache/flux/sandbox/home`, kept across runs, for the agents' sessions) with the
-agents' configuration read-only and their credentials copied in; the real home -- `~/.ssh`,
-other repositories -- and the Docker socket are not there.
+executables on PATH. Writable: the record's folder, the problem's `out/` and `workbench/`, the
+places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
+cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
+agents' directories), `home/` (HOME: the agents' sessions, kept across runs, their
+configuration read-only, their credentials copied in) and `cache/` (XDG_CACHE_HOME). Another
+application's traces, sessions and caches, the real home (`~/.ssh`, other repositories) and
+the Docker socket are not there.
 
 Network: the host's (`FLUX_SANDBOX_NET=open`, the default), or only the hosts an allowlist names
 (`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): the container has no
@@ -70,6 +71,30 @@ def _exists(p: str | Path) -> bool:
     return Path(p).exists()
 
 
+def app_dir(args: Any, command: str) -> Path:
+    """The application's own cache (D681): `apps/<id>`, shared by all its runs; `flux ask` keys
+    on its directory's name."""
+    import re
+
+    if command == "task run":
+        doc = Path(args.file).resolve()
+        try:
+            from flux_loop import load_task
+
+            ident = load_task(str(doc)).id
+        except Exception:  # noqa: BLE001 -- a document the run itself will refuse: its file name
+            ident = doc.name.split(".")[0]
+        where = doc.parent
+    else:
+        where = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
+        ident = f"ask-{where.name}"
+    key = re.sub(r"[^A-Za-z0-9_.-]+", "_", ident)[:80] or "unnamed"
+    d = _cache() / "apps" / key
+    for sub in ("tmp", "home", "cache"):
+        (d / sub).mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     """(read-only, writable) host paths the command needs, each mounted at its own path."""
     ro: list[str] = [p for p in SYSTEM if _exists(p)] + [f"/etc/{e}" for e in ETC if _exists(f"/etc/{e}")]
@@ -86,9 +111,8 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
                     target = f.resolve()
                     if target.exists() and not any(str(target).startswith(s) for s in SYSTEM):
                         ro.append(str(target.parent))
-    cache = _cache()
-    cache.mkdir(parents=True, exist_ok=True)
-    rw.append(str(cache))
+    app = app_dir(args, command)
+    rw += [str(app / "tmp"), str(app / "cache")]              # the application's own, nothing shared (D681)
     for flag in ("db", "out", "json"):
         v = getattr(args, flag, None)
         if v and v != ":memory:":
@@ -121,9 +145,9 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     return ro, rw
 
 
-def _sandbox_home() -> Path:
-    """The container's HOME, kept across runs: the agents' sessions live there."""
-    sh = _cache() / "sandbox" / "home"
+def _sandbox_home(app: Path) -> Path:
+    """The container's HOME, the application's, kept across its runs: the agents' sessions."""
+    sh = app / "home"
     sh.mkdir(parents=True, exist_ok=True)
     home = _home()
     for rel in _HOME_RO:
@@ -136,8 +160,6 @@ def _sandbox_home() -> Path:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dst)
             dst.chmod(0o600)
-    for rel in (".cache/flux",):
-        (sh / rel).mkdir(parents=True, exist_ok=True)
     return sh
 
 
@@ -157,7 +179,11 @@ def _allowlist() -> list[str]:
 
 def docker_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None) -> list[str]:
     ro, rw = mounts_for(args, command)
-    home, sh = _home(), _sandbox_home()
+    app = app_dir(args, command)
+    home, sh = _home(), _sandbox_home(app)
+    for p in ro + rw:                                         # mount points under HOME: made by us, not by docker as root
+        if p.startswith(str(home) + "/"):
+            (sh / Path(p).relative_to(home)).mkdir(parents=True, exist_ok=True)
     cmd = ["docker", "run", "--rm", "--name", name, "--user", f"{os.getuid()}:{os.getgid()}",
            "--read-only", "--tmpfs", "/tmp:exec,mode=1777", "--tmpfs", "/run", "--cap-drop", "ALL",
            "--security-opt", "no-new-privileges", "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
@@ -180,6 +206,9 @@ def docker_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: 
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home))
+    tmp = str(app / "tmp")                                    # scratch and traces: the application's
+    env.update(TMPDIR=tmp, TMP=tmp, TEMP=tmp, FLUX_TMPDIR=tmp, FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"),
+               XDG_CACHE_HOME=str(app / "cache"))
     if proxy_dir:
         cmd += ["-v", f"{proxy_dir}:{proxy_dir}"]
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))

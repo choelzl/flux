@@ -636,3 +636,14 @@ the topics above.
     at 3.135 and 2.96 µm² respectively.
   - Allowlist `localai.cyprien.ch`: OpenCode worked, and `example.com` was refused.
   - `flux stop --now` from the host ended a sandboxed pass with the record intact.
+
+- **D681: the sandbox's cache is the application's.** D680 mounted all of `~/.cache/flux`
+  writable, so a run could reach every campaign's traces, agent sessions and caches. Now only
+  `~/.cache/flux/apps/<id>/` is writable, shared by that application's runs:
+  - `tmp/` is TMPDIR and FLUX_TRACE_ROOT (scratch, traces, agent directories);
+  - `home/` is HOME (agent sessions, copied logins);
+  - `cache/` is XDG_CACHE_HOME.
+
+  Mount points under HOME are made in advance, as the user, not by Docker as root. Live: a
+  gate found no shared trace folder, saw only its own application under `apps/`, and wrote its
+  traces to its own `tmp/`.
