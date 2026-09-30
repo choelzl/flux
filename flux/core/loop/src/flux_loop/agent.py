@@ -350,6 +350,8 @@ class Turn:
     stderr: str = ""
     resumed: bool = False          # this run resumed a session (D669)
     began: str = "fresh"           # how the conversation that ended on this turn began: fresh | resumed
+    about: str = ""                # which model and tool version answered, as far as known (D696)
+    tools: int = 0                 # the tool calls it made
 
 
 def _parse(output: str, stdout: str) -> tuple[str, str | None]:
@@ -439,6 +441,7 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       prompt=subs.get("answer", "") if turn.resumed else subs.get("prompt", ""), ok=turn.ok,
                       rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
+                      about=turn.about, tool_calls=turn.tools, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
                       **usage(spec.output, turn.stdout or ""))
     return turn
 
@@ -711,9 +714,32 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         row["exit"] = proc.returncode
     stdout = "".join(out)
     text, session = _parse(spec.output, stdout)
+    about = live.agent or _about(cmd[0], env)
     if timed_out:                                     # its session kept: a later turn may resume it
-        return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
-    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err))
+        return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
+                    about=about, tools=len(live.tools))
+    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools))
+
+
+_VERSIONS: dict[str, str] = {}
+
+
+def _about(exe: str, env: dict[str, str]) -> str:
+    """An agent that does not say which model answered (OpenCode): the model its configuration
+    names, and the tool's version (asked once per process)."""
+    model = ""
+    try:
+        model = str(json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}").get("model") or "")
+    except ValueError:
+        pass
+    if exe not in _VERSIONS:
+        try:
+            r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+            _VERSIONS[exe] = (r.stdout.strip().splitlines() or [""])[0][:60] if r.returncode == 0 else ""
+        except (OSError, subprocess.TimeoutExpired):
+            _VERSIONS[exe] = ""
+    version = _VERSIONS[exe]
+    return ", ".join(x for x in (model, version and f"{Path(exe).name} {version}") if x)
 
 
 _CODE = re.compile(r"```.*?```", re.S)

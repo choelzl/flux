@@ -157,6 +157,22 @@ function sv(tag, attrs = {}, ...kids) {
   for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== "") el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
   return el;
 }
+/** The Flux mark (D696): a chip whose pins and body follow the theme, the orange trace its "f". */
+function logo(size = 22) {
+  const pins = [[78, 8, 16, 28], [120, 8, 16, 28], [162, 8, 16, 28], [120, 220, 16, 28], [162, 220, 16, 28], [8, 78, 28, 16], [8, 120, 28, 16], [8, 162, 28, 16],
+    [220, 78, 28, 16], [220, 120, 28, 16], [220, 162, 28, 16]];
+  return sv("svg", { viewBox: "0 0 256 256", width: size, height: size, class: "logo", "aria-hidden": "true" },
+    sv("g", { class: "lg-g" }, pins.map(([x, y, w, hh]) => sv("rect", { x, y, width: w, height: hh, rx: 8 }))),
+    sv("rect", { x: 78, y: 208, width: 16, height: 40, rx: 8, class: "lg-o" }),
+    sv("rect", { x: 40, y: 40, width: 176, height: 176, rx: 32, class: "lg-gs" }),
+    sv("path", { d: "M86 248V118A32 32 0 0 1 118 86H174", class: "lg-os" }),
+    sv("path", { d: "M128 248V146A18 18 0 0 1 146 128H166", class: "lg-gs" }));
+}
+function bellIcon() {
+  return sv("svg", { viewBox: "0 0 24 24", width: 18, height: 18, class: "icon", "aria-hidden": "true" },
+    sv("path", { d: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z", fill: "none", stroke: "currentColor", "stroke-width": 1.7, "stroke-linejoin": "round" }),
+    sv("path", { d: "M10 20.5a2 2 0 0 0 4 0", fill: "none", stroke: "currentColor", "stroke-width": 1.7, "stroke-linecap": "round" }));
+}
 const num4 = (v) => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
 /** One objective over time: every measurement (dots), the best so far (a step line), its limit
     (dashed), the passes (faint ticks). `rows`: [{when, stage, metrics}]. */
@@ -286,7 +302,7 @@ setInterval(pollLoops, 10000);
 const bellBtn = h("button", { class: "bell", title: "Notifications", "aria-label": "Notifications" });
 const bellMenu = h("div", { class: "bell-menu", hidden: true });
 function drawBell() {
-  bellBtn.replaceChildren("🔔", bell.unread ? h("span", { class: "badge" }, String(bell.unread)) : "");
+  bellBtn.replaceChildren(bellIcon(), bell.unread ? h("span", { class: "badge" }, String(bell.unread)) : "");
   const canAsk = "Notification" in window && Notification.permission === "default";
   bellMenu.replaceChildren(
     h("div", { class: "bell-head" }, h("strong", {}, "Notifications"),
@@ -308,7 +324,7 @@ async function loginPage() {
       try { me = await api("/login", { method: "POST", body: { name: name.value, password: pw.value } }); location.hash = "#/"; route(); }
       catch (x) { err.textContent = x.message; }
     } },
-    h("h1", {}, "Flux"), h("p", { class: "sub" }, "Log in to your loops."),
+    h("div", { class: "login-mark" }, logo(56)), h("h1", {}, "Flux"), h("p", { class: "sub" }, "Log in to your loops."),
     h("label", { class: "stack" }, "Name", name), h("label", { class: "stack" }, "Password", pw),
     h("button", { class: "primary wide", type: "submit" }, "Log in"), err);
   show(form);
@@ -410,7 +426,7 @@ function loopsTable(loops, { who = false } = {}) {
   if (!loops.length) return empty("No loop yet.", h("p", {}, h("a", { class: "btn primary", href: "#/configure" }, "Build a new loop"), " or upload a document with its files."));
   return h("table", { class: "list" },
     h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"),
-      h("th", { class: "num" }, "Designs"), h("th", {}, "Best"), h("th", {}, "Document"), h("th", {}, ""))),
+      h("th", { class: "num" }, "Designs"), h("th", {}, "Best"), h("th", {}, ""))),
     h("tbody", {}, loops.map(l => {
       const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
       const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
@@ -427,7 +443,6 @@ function loopsTable(loops, { who = false } = {}) {
         h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
           title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
           sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
-        h("td", { class: "mono muted" }, l.document || ""),
         h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
     })));
 }
@@ -460,38 +475,41 @@ function loopsBrowser(loops, { who = false } = {}) {
   return box;
 }
 
-async function appsPage() {
-  const loops = await api("/apps");
-  const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", required: true });
+/** Upload a loop (D696): a folder or files dropped or chosen, a `.zip`, under a name. */
+async function uploadDialog() {
+  const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%" });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
   let dropped = [];
-  const droppedSaid = h("div", { class: "muted small" });
-  const dz = dropZone("Drop the loop's folder or files here", (got, dir) => {
+  const said = h("div", { class: "muted small" });
+  const dz = dropZone("Drop the loop's folder, its files or a .zip here", (got, dir) => {
     dropped = got;
     if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^[^A-Za-z0-9]+/, "");
-    droppedSaid.replaceChildren(`${got.length} file(s) ready`, dir ? ` from ${dir}/` : "", " · ",
-      h("a", { href: "javascript:void 0", onclick: () => { dropped = []; droppedSaid.replaceChildren(); } }, "clear"));
+    said.replaceChildren(`${got.length} file(s) ready`, dir ? ` from ${dir}/` : "");
   });
-  const upload = h("form", { class: "stack-form", onsubmit: async (e) => {
-      e.preventDefault();
-      const chosen = [...[...files.files, ...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), ...dropped];
-      if (!chosen.length) { toast("Choose or drop files, a folder or a .zip.", "warn"); return; }
-      const form = new FormData(); form.append("name", name.value);
-      for (const f of chosen) form.append("files", f.file, f.path);
-      try { await api("/apps", { method: "POST", form }); toast(`${name.value} uploaded`, "ok"); location.hash = `#/app/${enc(name.value)}`; }
-      catch (x) { toast(x.message, "bad"); }
-    } },
-    h("label", { class: "stack" }, "Name", name),
-    dz, droppedSaid,
-    h("label", { class: "stack" }, "Files or a .zip", files),
-    h("label", { class: "stack" }, "or a folder", folder),
-    h("button", { class: "primary", type: "submit" }, "Upload"));
+  const body = h("div", { class: "upload" }, h("label", { class: "stack" }, "Name", name), dz, said,
+    h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)));
+  while (true) {
+    const go = await dialog("Upload a loop", body, [["Cancel", false], ["Upload", true, "primary"]]);
+    if (!go) return;
+    const chosen = [...[...files.files, ...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), ...dropped];
+    if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); continue; }
+    if (!name.value.trim()) { toast("Name the loop first.", "warn"); continue; }
+    const form = new FormData(); form.append("name", name.value.trim());
+    for (const f of chosen) form.append("files", f.file, f.path);
+    try { await api("/apps", { method: "POST", form }); toast(`${name.value} uploaded`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`; return; }
+    catch (x) { toast(x.message, "bad"); }
+  }
+}
+
+async function appsPage() {
+  const loops = await api("/apps");
   const box = h("div", {}, loopsBrowser(loops));
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
+      h("button", { class: "", type: "button", onclick: () => uploadDialog() }, "Upload a loop"),
       h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
-    h("div", { class: "grid-main" }, card(null, box), card("Upload a loop", upload, { cls: "side" })));
+    card(null, box));
   pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps"))); };
 }
 
@@ -540,8 +558,8 @@ async function loopPage(name, owner, tab = "Overview") {
   const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench"];
   const tabBar = h("div", { class: "tabs", role: "tablist" });
   let question = st.question || null;
-  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
   const log = logView(base, qs);
+  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); }, (k) => log.tail(k));
   cleanup.push(() => { live.close(); log.close(); });
 
   function drawTabs() {
@@ -689,7 +707,7 @@ async function loopPage(name, owner, tab = "Overview") {
           sv("text", { x: X(v), y: H - 8, class: "tick", "text-anchor": v === a ? "start" : v === b ? "end" : "middle" }, `+${dur(v - a) || "0s"}`)]),
         t.passes.filter(p => p > a && p < b).map(p => sv("line", { x1: X(p), x2: X(p), y1: T, y2: H - B, class: "pass-line" })),
         bars.map(x => { const i = lanes.indexOf(x.kind); const x0 = X(x.t0), x1 = X(x.t1);
-          return sv("rect", { x: x0, y: T + i * lane + 3, width: Math.max(1.5, x1 - x0), height: lane - 6, rx: 2,
+          return sv("rect", { x: x0, y: T + i * lane + 3, width: Math.max(3, x1 - x0), height: lane - 6, rx: 2,
             fill: color[x.kind], class: `bar${x.failed ? " failed" : ""}${x.running ? " running" : ""}` },
             sv("title", {}, `${x.name}${x.why ? " · " + x.why : ""}\n${dur(x.t1 - x.t0)}${x.running ? " so far" : ""}${x.failed ? " · failed" : ""}`)); })));
     }
@@ -851,7 +869,11 @@ async function loopPage(name, owner, tab = "Overview") {
     }
     drawPareto(); drawTime();
     const thinned = r.rows_total > (r.rows || []).length ? h("p", { class: "muted small" }, `${r.rows.length} of ${r.rows_total} measurements drawn: every new best, and an even share of the rest.`) : "";
-    const charts = nums.length ? h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", [timeBox, thinned])) : "";
+    let shut = false;
+    try { shut = localStorage.getItem("flux-charts") === "shut"; } catch (_) { /* a default */ }
+    const charts = nums.length ? h("details", { class: "charts-box", open: !shut, ontoggle: (e) => { try { localStorage.setItem("flux-charts", e.target.open ? "open" : "shut"); } catch (_) { /* per viewer */ } } },
+      h("summary", {}, "Charts: the Pareto front and the improvement over time"),
+      h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", [timeBox, thinned]))) : "";
     return h("div", {},
       card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
           r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
@@ -862,6 +884,23 @@ async function loopPage(name, owner, tab = "Overview") {
   }
 
   const goTab = (t) => { tab = t; drawTabs(); drawBody(); };
+  /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
+      first, the deepest stage reached, then each objective without a limit in turn. */
+  function topDesigns(r, n) {
+    const objs = r.objective_list || [], order = r.stages || [];
+    const key = (d) => [d.decision ? 0 : 1, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
+      ...objs.filter(o => o.goal == null).map(o => { const v = d.numbers[o.metric]; return v == null ? Infinity : o.direction === "minimize" ? v : -v; })];
+    const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
+    const top = (r.designs || []).slice().sort(cmp).slice(0, n);
+    if (top.length < 2) return "";
+    const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])].filter(m => top.some(d => d.numbers[m] != null)).slice(0, 4);
+    return h("div", { class: "blk" }, h("h3", {}, `The best ${top.length}`),
+      h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num" }, m)))),
+        h("tbody", {}, top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
+          h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, d.name, d.verdict === "failed" ? h("span", { class: "pill bad small" }, "failed") : ""),
+          h("td", { class: "muted" }, d.shown),
+          ...ms.map(m => { const ok = d.meets[m]; return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}` }, d.numbers[m] == null ? "" : num4(d.numbers[m])); }))))));
+  }
   /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
       per objective, the latest notes and the agents' newest workbench entries. */
   async function overview() {
@@ -879,7 +918,8 @@ async function loopPage(name, owner, tab = "Overview") {
           return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : "") }, h("small", {}, m),
             h("div", { class: "big mono" }, num4(dec.numbers[m])), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}${ok === true ? " ✓" : ok === false ? " ✗" : ""}`) : "");
         })),
-        dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : ""],
+        dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
+        topDesigns(r, 3)],
         { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
       : card("The decision", empty(designs.length ? "No decision yet." : "No design measured yet."));
     const q0 = st.question;
@@ -937,7 +977,15 @@ async function loopPage(name, owner, tab = "Overview") {
       const pick = async (t, tr) => {
         for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
         const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
+        const nt = full.notes && typeof full.notes === "object" ? full.notes : {};
+        const facts = [["kind", full.kind], ["model", full.about || nt.model || full.model], ["server", full.server],
+          ["session", full.session ? `${full.session}${full.session_id ? " · " + full.session_id : ""}` : null], ["exit", full.rc],
+          ["tokens in", full.tokens_in ?? nt.input_tokens], ["tokens out", full.tokens_out ?? nt.output_tokens], ["from the cache", full.tokens_cached],
+          ["cost", full.cost_usd ? `$${Number(full.cost_usd).toFixed(4)}` : null], ["tool calls", full.tool_calls ?? (full.hops || []).length],
+          ["prompt", full.prompt_chars ? `${full.prompt_chars} chars` : full.prompt ? `${String(full.prompt).length} chars` : null],
+          ["finish", nt.finish], ["schema", nt.schema], ["folder", full.workdir]].filter(([, v]) => v != null && v !== "");
         one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
+          h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v))))),
           ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
           ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []));
       };
@@ -946,10 +994,12 @@ async function loopPage(name, owner, tab = "Overview") {
         return i == null && o == null ? "" : `${fmtTok(i || 0)} → ${fmtTok(o || 0)}`; };
       body.replaceChildren(usageCard(use), h("div", { class: "split" },
         card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
-            h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", {}, ""))),
+            h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", { class: "num", title: "tool calls" }, "Tools"), h("th", {}, ""))),
           h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
-            h("td", { class: "strong" }, t.agent || t.model || t.kind), h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
-            h("td", { class: "num mono muted" }, tokOf(t)),
+            h("td", {}, h("span", { class: "strong" }, t.agent || t.model || t.kind),
+              h("div", { class: "muted small" }, [t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed" : ""].filter(Boolean).join(" · "))),
+            h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
+            h("td", { class: "num mono muted" }, tokOf(t)), h("td", { class: "num mono muted" }, t.tool_calls != null ? String(t.tool_calls) : t.hops ? String(t.hops) : ""),
             h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: "pill bad" }, `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; })))
           : empty("No model or agent turn yet.")),
         card(null, one, { cls: "detail-card" })));
@@ -980,8 +1030,8 @@ async function loopPage(name, owner, tab = "Overview") {
   let beat = 0, busy = false;
   const tick = setInterval(async () => {
     await refresh().catch(() => {});
-    // the Overview follows a running loop (D693): its numbers and charts every 10 s
-    if (++beat % 2 === 0 && (tab === "Overview" || tab === "Timeline") && st.running && !document.hidden && !busy) {
+    // the Overview and the Timeline follow a running loop (D693, D696): once a minute
+    if (++beat % 12 === 0 && (tab === "Overview" || tab === "Timeline") && st.running && !document.hidden && !busy) {   // every minute (D696)
       busy = true; try { await (tab === "Overview" ? overview() : timelineView()); } catch (_) { /* the next beat */ } finally { busy = false; }
     }
   }, 5000);
@@ -1081,11 +1131,11 @@ function logView(base, qs) {
   const pill = streamPill();
   bar.append(pill.el);
   const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
-  return { el: h("div", {}, bar, box), close: () => es.close(), render };
+  return { el: h("div", {}, bar, box), close: () => es.close(), render, tail: (k) => lines.slice(-k).map(l => l.text) };
 }
 
 /** The live task tree: follow the running task, collapse what finished, search. */
-function liveTree(base, qs, onQuestion) {
+function liveTree(base, qs, onQuestion, tailOf) {
   const nodes = new Map(), roots = [], standings = new Map();
   let selected = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
@@ -1122,6 +1172,11 @@ function liveTree(base, qs, onQuestion) {
     roots.forEach(r => walk(r, 0));
     return best;
   }
+  function lastEnded() {                                  // at rest: the task that ended last (D696)
+    let best = null;
+    for (const n of nodes.values()) if (!n.kids.length && n.t1 != null && (!best || n.t1 >= best.t1)) best = n;
+    return best;
+  }
   function isOpen(n) {
     if (open.has(n.id)) return open.get(n.id);
     if (!collapse.checked) return true;
@@ -1131,7 +1186,7 @@ function liveTree(base, qs, onQuestion) {
   function visibleUnder(n, q) { return matches(n, q) || n.kids.some(k => visibleUnder(k, q)); }
   function draw() {
     const now = Date.now() / 1000;
-    if (follow.checked) { const t = followTarget(); if (t) selected = t; }
+    if (follow.checked) { const t = followTarget() || lastEnded(); if (t) selected = t; }
     const q = search.value.trim().toLowerCase();
     const row = (n) => {
       if (q && !visibleUnder(n, q)) return "";
@@ -1194,7 +1249,8 @@ function liveTree(base, qs, onQuestion) {
         h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
-      block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output));
+      block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output),
+      tailOf ? h("div", { class: "blk" }, h("h3", {}, "The log, its latest lines"), h("pre", { class: "val log-tail" }, tailOf(14).join("\n") || "(empty)")) : "");
     for (const pre of detail.querySelectorAll("pre.val")) pre.scrollTop = pre.scrollHeight;   // a live tail shows its end
   }
   search.addEventListener("input", draw);
@@ -1248,6 +1304,76 @@ function diffView(ops, context = 3) {
   return pre;
 }
 
+/** The files that go with a loop's document (D696): scripts, golden models, specs. For a loop
+    that exists, its own files, edited in place; for a new one, files kept here until it is
+    created. Each file the document names as `{home}/…` and nobody has is said to be missing. */
+function filesPanel(name, yamlOf) {
+  const staged = new Map();                                   // a new loop: path -> {text} | {file}
+  const box = h("div", { class: "files-panel" });
+  const into = h("input", { placeholder: "folder (optional)", class: "narrow-in" });
+  const named = () => [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
+  async function list() {
+    if (!name) return [...staged.entries()].map(([path, x]) => ({ path, size: x.text != null ? x.text.length : x.file.size, staged: true }));
+    return (await api(`/apps/${enc(name)}/inputs`)).filter(f => !f.document);
+  }
+  async function editor(path, text) {
+    const pathIn = h("input", { value: path || "", placeholder: "check.py, scripts/bench.sh", style: "width:100%", readonly: path ? true : null });
+    const ed = codeEditor(text || "", langOf(path || ""));
+    pathIn.addEventListener("input", () => { /* the language follows the name on the next open */ });
+    const ok = await dialog(path ? `Edit ${path}` : "A new file", h("div", { class: "file-edit" }, h("label", { class: "stack" }, "Path in the loop", pathIn), ed.el),
+      [["Cancel", false], ["Save", true, "primary"]]);
+    if (!ok) return;
+    const p = pathIn.value.trim();
+    if (!p) { toast("Name the file.", "warn"); return; }
+    if (name) { await api(`/apps/${enc(name)}/file?path=${enc(p)}`, { method: "PUT", body: { text: ed.textarea.value } }); toast(`${p} saved`, "ok"); }
+    else staged.set(p, { text: ed.textarea.value });
+    draw();
+  }
+  async function open(f) {
+    if (!name) { const x = staged.get(f.path); if (x.text != null) return editor(f.path, x.text); toast("A dropped file is kept as it is.", "info"); return; }
+    const r = await fetch(`/api/apps/${enc(name)}/file?path=${enc(f.path)}`, { credentials: "same-origin" });
+    if (!(r.headers.get("content-type") || "").startsWith("text/")) { toast("A binary file: replace it by dropping a new one.", "info"); return; }
+    editor(f.path, await r.text());
+  }
+  async function remove(f) {
+    if (!name) { staged.delete(f.path); draw(); return; }
+    if (!await confirmDialog(`Delete ${f.path}?`, "The file goes from the loop; the document may still name it.", { ok: "Delete", danger: true })) return;
+    await api(`/apps/${enc(name)}/file?path=${enc(f.path)}`, { method: "DELETE" }); toast(`${f.path} deleted`, "ok"); draw();
+  }
+  const dz = dropZone("Drop scripts, models or folders here", async (got) => {
+    const pre = into.value.trim().replace(/^\/+|\/+$/g, "");
+    if (!name) { for (const g of got) staged.set(pre ? `${pre}/${g.path}` : g.path, { file: g.file }); draw(); return; }
+    const form = new FormData(); form.append("folder", pre);
+    for (const g of got) form.append("files", g.file, g.path);
+    try { const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form }); toast(`Added ${r.written.length} file(s)`, "ok"); draw(); }
+    catch (x) { toast(x.message, "bad"); }
+  });
+  async function draw() {
+    const files = await list().catch(() => []);
+    const have = new Set(files.map(f => f.path));
+    const missing = named().filter(p => !have.has(p));
+    box.replaceChildren(
+      files.length ? h("ul", { class: "files flist" }, files.map(f => h("li", {},
+        h("a", { href: "javascript:void 0", onclick: () => open(f) }, h("span", { class: "ic" }, "·"), f.path),
+        h("small", { class: "muted" }, f.size < 1024 ? `${f.size} B` : `${(f.size / 1024).toFixed(1)} KB`, f.staged ? " · with the new loop" : ""),
+        h("button", { class: "link danger-link", title: `Delete ${f.path}`, onclick: () => remove(f) }, "×")))) : h("p", { class: "muted" }, "No file beside the document yet."),
+      missing.length ? h("div", { class: "callout bad" }, h("strong", {}, "The document names these, and the loop does not have them: "),
+        missing.map((p, i) => [i ? ", " : "", h("a", { href: "javascript:void 0", title: "Write it here", onclick: () => editor(p, "") }, p)])) : "",
+      h("div", { class: "row" }, h("button", { class: "small", type: "button", onclick: () => editor("", "") }, "New file"), into), dz);
+  }
+  let t;
+  const watch = () => { clearTimeout(t); t = setTimeout(draw, 600); };
+  draw();
+  return { el: card("Files that go with it", box, { cls: "files-card" }), watch, draw,
+    async upload(appName) {                                  // a new loop: its files, once it exists
+      if (!staged.size) return 0;
+      const form = new FormData(); form.append("folder", "");
+      for (const [p, x] of staged) form.append("files", x.file || new Blob([x.text], { type: "text/plain" }), p);
+      const r = await api(`/apps/${enc(appName)}/files`, { method: "POST", form });
+      return r.written.length;
+    } };
+}
+
 async function configurePage(name) {
   const C = window.FluxCrafter;
   if (!C) { show(card(null, empty("The configurator's script did not load."))); return; }
@@ -1259,11 +1385,14 @@ async function configurePage(name) {
   if (name) {                                           // an existing loop, read back
     const v = await api(`/apps/${enc(name)}/document`);
     const got = C.fromDoc(v.raw, v.normal || v.raw);
+    const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
+    const panel = filesPanel(name, yamlOf);
     show(head(h("span", {}, "Configure ", h("a", { href: `#/app/${enc(name)}` }, name)),
         h("span", {}, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
           got.kept.length ? "; what the form does not edit is kept as written" : "")),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
-      host);
+      host, panel.el);
+    host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
     C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document,
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
@@ -1275,19 +1404,26 @@ async function configurePage(name) {
           [["Cancel", false], ["Save", true, "primary"]]);
         if (!ok) return "Not saved.";
         const r = await api(`/apps/${enc(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
-        toast(r.ok, r.error ? "warn" : "ok"); return r.ok;
+        toast(r.ok, r.error ? "warn" : "ok"); panel.draw(); return r.ok;
       } });
+    setTimeout(panel.draw, 300);
     return;
   }
   const appName = h("input", { placeholder: "application name", required: true });
-  show(head("New loop", h("span", {}, "Build the document, then create the application; add its files (golden model, scripts) on its page. ",
-      h("a", { href: "#/new" }, "Or write the YAML yourself."))),
-    card(null, h("label", { class: "stack narrow" }, "Application name", appName)), host);
+  const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
+  const panel = filesPanel(null, yamlOf);
+  show(head("New loop", h("span", {}, "Build the document and give it the files it runs (golden model, scripts), then create the loop. ",
+      h("a", { href: "#/new" }, "Or write the YAML yourself.")),
+      h("button", { type: "button", onclick: () => uploadDialog() }, "Upload a loop instead")),
+    card(null, h("label", { class: "stack narrow" }, "Application name", appName)), host, panel.el);
+  host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
+  setTimeout(panel.draw, 300);
   C.mount(host, false, { saveLabel: "Create the application", save: async (yaml, state) => {
     if (!appName.value.trim()) { appName.focus(); throw new Error("Name the application first (above)."); }
     const id = String(state.id || "").trim() || "my_problem";
     await api("/apps/from-text", { method: "POST", body: { name: appName.value.trim(), filename: `${id}.problem.yaml`, text: yaml } });
-    toast(`${appName.value.trim()} created`, "ok");
+    const n = await panel.upload(appName.value.trim());
+    toast(`${appName.value.trim()} created${n ? ` with ${n} file(s)` : ""}`, "ok");
     setTimeout(() => { location.hash = `#/app/${enc(appName.value.trim())}`; }, 400);
     return "Created.";
   } });
@@ -1296,7 +1432,7 @@ async function configurePage(name) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", resources: "Resources", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", resources: "Resources", models: "Models", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -1311,6 +1447,13 @@ async function adminPage(sub = "") {
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
+  if (tab === "models") {
+    const st = await api("/admin/settings");
+    const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
+    body.replaceChildren(card("The server's models", [h("p", { class: "muted" }, "What every run gets, for Flux's own model calls and for each coding agent, unless its user sets their own on their Account page. Keys are stored encrypted and never shown again."),
+      ...settingsForm(st, { save, scope: "server" })]));
+    return;
+  }
   const audit = await api("/audit");
   body.replaceChildren(card(null, h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))),
     h("tbody", {}, audit.map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", {}, x.action), h("td", { class: "mono muted" }, x.detail)))))));
@@ -1444,36 +1587,52 @@ async function adminUsers(body) {
       }, { cls: "primary" }))]));
 }
 
+/** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
+    the admin's values a field falls back to when empty (a key only said to be set). */
+const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
+  FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_REMOTE_API_KEY: "Key", OPENROUTER_API_KEY: "OpenRouter key",
+  FLUX_OPENCODE_BASE_URL: "Endpoint URL (OpenAI-compatible)", FLUX_OPENCODE_MODEL: "Model", FLUX_OPENCODE_API_KEY: "Key",
+  ANTHROPIC_BASE_URL: "Endpoint URL", FLUX_CLAUDE_MODEL: "Model", ANTHROPIC_API_KEY: "Anthropic key",
+  OPENAI_BASE_URL: "Endpoint URL", FLUX_CODEX_MODEL: "Model", OPENAI_API_KEY: "OpenAI key" };
+function settingsForm(st, { server = null, save, scope }) {
+  const inputs = {};
+  const secret = new Set(st.secret);
+  const row = (k) => {
+    const cur = st.values[k], fall = server ? server[k] : null, sec = secret.has(k);
+    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""),
+      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set") });
+    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, SETTING_LABELS[k] || k),
+      h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }),
+        cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : ""),
+      h("code", { class: "muted small var" }, k));
+  };
+  const groups = st.groups.map(g => {
+    const own = [...g.public, ...g.secret].some(k => st.values[k]);
+    const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
+      : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
+    return h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
+      note ? h("p", { class: "small hint-line" }, note) : "", ...g.public.map(row), ...g.secret.map(row));
+  });
+  return [h("div", { class: "set-groups" }, groups), h("div", { class: "form-actions" }, act("Save", () => {
+    const values = {};
+    for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
+    for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
+    return save(values);
+  }, { cls: "primary" }))];
+}
+
 async function accountPage() {
   const st = await api("/settings");
-  const inputs = {};
-  const labels = { FLUX_REMOTE_BASE_URL: "Model endpoint (OpenAI-compatible URL)", FLUX_REMOTE_MODEL: "Model name on it",
-    FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_LLM_TIMEOUT_S: "Seconds per model request",
-    FLUX_REMOTE_API_KEY: "Endpoint key", OPENROUTER_API_KEY: "OpenRouter key", ANTHROPIC_API_KEY: "Anthropic key (Claude Code agents)",
-    OPENAI_API_KEY: "OpenAI key (Codex agents)" };
   async function save(values) { await api("/settings", { method: "PUT", body: { values } }); toast("Settings saved", "ok"); route(); }
-  const row = (k, secret) => {
-    const cur = st.values[k];
-    inputs[k] = h("input", { type: secret ? "password" : "text", autocomplete: "off",
-      placeholder: secret ? (cur ? "set · type to replace" : "not set") : "", value: secret ? "" : (cur || "") });
-    return [h("span", { class: "lbl" }, labels[k] || k), h("span", { class: "inline" }, inputs[k],
-      cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : "")];
-  };
   const pw = h("input", { type: "password", autocomplete: "new-password" });
   const mine = await api("/usage").catch(() => null);
   show(head("Account", `Logged in as ${me.name}`),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
       mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} as the agents priced it` : "", ".")) : "",
-    card("Model for my runs", [
-      h("p", { class: "muted" }, "Empty: the server's model. With your own endpoint, none of the server's keys go to your runs. Keys are stored encrypted and never shown again."),
-      h("div", { class: "grid2" }, ...st.public.map(k => row(k, false)).flat(), ...st.secret.map(k => row(k, true)).flat()),
-      h("div", { class: "form-actions" }, act("Save", () => {
-        const values = {};
-        for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
-        for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
-        return save(values);
-      }, { cls: "primary" }))]),
+    card("Models for my runs", [
+      h("p", { class: "muted" }, "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
+      ...settingsForm(st, { server: st.server, save, scope: "me" })]),
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
@@ -1513,6 +1672,7 @@ function applyTheme(t) {
   try { localStorage.setItem("flux-theme", t); } catch (_) {}
 }
 applyTheme(theme());
+document.querySelector(".brand").replaceChildren(logo(24), h("span", {}, "flux"));    // D696: the mark
 const themeBtn = h("button", { class: "small theme", title: "Theme: system, light or dark" });
 themeBtn.addEventListener("click", () => { const order = ["system", "light", "dark"]; applyTheme(order[(order.indexOf(theme()) + 1) % 3]); themeBtn.textContent = THEMES[theme()]; });
 themeBtn.textContent = THEMES[theme()];

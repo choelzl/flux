@@ -202,6 +202,37 @@ class Workspace:
             h.update(str(rel).encode() + b"\0" + p.read_bytes() + b"\0")
         return h.hexdigest()[:16]
 
+    def inputs(self, name: str) -> list[dict[str, Any]]:
+        """The loop's own files (D696): the document and what it runs -- scripts, golden models,
+        specs -- not what its runs write (out/, runs/, the workbench)."""
+        root = self.app(name).resolve()
+        doc = self.meta(name).get("document")
+        out = []
+        for p in sorted(root.rglob("*")):
+            rel = p.relative_to(root)
+            if not p.is_file() or rel.parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json" \
+                    or "__pycache__" in rel.parts:
+                continue
+            out.append({"path": str(rel), "size": p.lstat().st_size, "document": str(rel) == doc})
+        return out
+
+    def remove(self, name: str, rel: str) -> None:
+        """One of the loop's own files deleted; never its document, nor what its runs write."""
+        p = self.path(name, rel)
+        root = self.app(name).resolve()
+        parts = p.relative_to(root).parts
+        if not parts or parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json":
+            raise WorkspaceError(f"{rel!r} is not one of the loop's own files")
+        if str(p.relative_to(root)) == self.meta(name).get("document"):
+            raise WorkspaceError("the document itself cannot be deleted here")
+        if not p.is_file():
+            raise WorkspaceError(f"no file {rel!r}")
+        p.unlink()
+        d = p.parent
+        while d != root and not any(d.iterdir()):
+            d.rmdir()
+            d = d.parent
+
     def read(self, name: str, rel: str) -> tuple[bytes, bool]:
         """(content, whether it is text) of a file, at most TEXT_MAX for text."""
         p = self.path(name, rel)

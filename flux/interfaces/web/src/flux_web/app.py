@@ -203,9 +203,32 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "change password")
         return {"ok": "changed"}
 
+    def _groups() -> list[dict[str, Any]]:
+        from .store import GROUPS
+
+        return [{"id": k, "label": g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
+                 "endpoint": g["endpoint"], "hint": g.get("hint", "")} for k, g in GROUPS.items()]
+
     @app.get("/api/settings")
     def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
-        return {"values": store.settings(user), "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+        """The user's model settings, and the server's they fall back to (D696): a server key is
+        only said to be set, never shown."""
+        return {"values": store.settings(user), "server": store.server_settings(), "groups": _groups(),
+                "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+
+    @app.get("/api/admin/settings")
+    def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        return {"values": store.server_settings(), "groups": _groups(), "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+
+    @app.put("/api/admin/settings")
+    def put_server_settings(body: Settings, a: User = Depends(admin_of)) -> dict[str, Any]:
+        try:
+            for k, v in body.values.items():
+                store.set_server_setting(k, v)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "server settings", ", ".join(sorted(body.values)))
+        return {"values": store.server_settings()}
 
     @app.put("/api/settings")
     def put_settings(body: Settings, user: User = Depends(user_of)) -> dict[str, Any]:
@@ -486,6 +509,24 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return Response(data, media_type="application/octet-stream",
                             headers={"Content-Disposition": f'attachment; filename="{Path(path).name}"'})
         return Response(data, media_type="text/plain; charset=utf-8")
+
+    @app.get("/api/apps/{name}/inputs")
+    def list_inputs(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """The loop's own files (D696): what the configurator edits beside the document."""
+        w, _whose = reader(user, owner)
+        try:
+            return w.inputs(name)
+        except WorkspaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.delete("/api/apps/{name}/file")
+    def delete_file(name: str, path: str, user: User = Depends(user_of)) -> dict[str, str]:
+        try:
+            ws(user).remove(name, path)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "delete file", f"{name}/{path}")
+        return {"ok": f"{path} deleted"}
 
     @app.put("/api/apps/{name}/file")
     def put_file(name: str, path: str, body: FileText, user: User = Depends(user_of)) -> dict[str, str]:

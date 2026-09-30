@@ -136,13 +136,17 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 ```
 
 - **The configurator:** the loop crafter inside the app (D686). **New loop** builds a document and
-  creates the application from it. **Configure**, on an application, reads its document back
+  creates the application from it, with the files it runs. Beside the form, **Files that go with
+  it** lists the loop's own files (scripts, golden models, specs): open one to edit it, write a new
+  one, drop files or folders, delete one. A file the document names as `{home}/…` that the loop
+  does not have is said to be missing, and a click writes it. **Configure**, on an application, reads its document back
   into the same form and saves it. What the form cannot say (a `world:`, its own stages or
   settings, `params`, a `{build, test}` gate, a failure pattern, objectives with a stage or tie
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
-  accepted designs or decision. Each loop shows its accepted and measured designs and the
+  accepted designs or decision. **Upload a loop** (beside New loop) takes a dropped folder, files
+  or a `.zip`. Each loop shows its accepted and measured designs and the
   decision's number on the first objective (✓ or ✗ against its limit).
 - **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
   files (or a `.zip`) to an existing one. Files and folders can also be dragged onto the page:
@@ -166,12 +170,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
     marked. Also the agent's open question, the latest notes and the newest workbench entries.
-    While the loop runs, it redraws every 10 s. A figure gives the model and agent turns, their
-    time and tokens.
+    While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
+    time and tokens. Under the decision, the best three designs: the decision, then accepted
+    before failed, the deepest stage, then each objective without a limit.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
-    thinking) and output. Standings show as counts, the frontier and the parts. It shows the
+    thinking), output and the log's latest lines; following, it shows the running task, and at
+    rest the one that ended last. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
     Show one start or all; jump to the previous or next problem. It can follow (it pauses when
@@ -181,7 +187,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     stage, generation, re-verify, knowledge, the loop's own work. Per kind: phases, busy time (work
     side by side counted once), share of the wall clock, summed time, and how many ran at once.
     Choose a start and a pass. It redraws every 10 s while the loop runs.
-  - **Agent turns:** each prompt, reply and tool call, with its tokens. Above them, what the
+  - **Agent turns:** each prompt, reply and tool call, with its model and tool version, tokens,
+    tool calls, session, exit and folder. Above them, what the
     turns cost: turns, time, tokens in (and from the cache), out, and USD where the agent prices
     it, in all and per agent or model. Tokens are counted from D694 on: an agent's own report
     (Claude Code's `result`, OpenCode's `step_finish`), every exchange of a model turn.
@@ -207,9 +214,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   again where it left off (no line twice, none lost), waiting up to 30 s between tries, and a
   banner says when the server cannot be reached. A stopped server waits at most 3 s for open
   streams; a restarted one finds its running loops again.
-- **Model for my runs (Account):** an endpoint, a model and keys per user. Keys are stored
-  encrypted (`secret.key` beside the server's data) and never shown again. With their own
-  endpoint, none of the server's keys go to that user's runs. Empty: the server's model.
+- **Models (Admin › Models, Account):** endpoint, model and key for Flux's own model calls and for
+  each coding agent: OpenCode (its own, else Flux's model's), Claude Code and Codex (a `--model`,
+  their endpoint and key). The admin sets them for the server; on their Account a user sees the
+  server's values in grey and may set their own. A user who names their own endpoint in a group
+  gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
+  the server's data) and never shown again. With nothing set, runs use the machine's own
+  configuration (flux.env, OpenCode's and Claude Code's own).
 - **Admin** (tabs: Loops, Resources, Users, Audit):
   - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
     reason users see; running loops go on), **stop every loop** after its pass or at once.

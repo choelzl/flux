@@ -1062,3 +1062,70 @@ the topics above.
   - the sweep's container at 4 to 5% CPU and 52.8 MB;
   - disk totals, the Loops controls and the Users limits;
   - the sweep, restarted, rests after one pass and keeps running.
+
+- **D696: the review of the web pages, round one.**
+  - **Loops:** the Document column is gone. Upload moved to an **Upload a loop** dialog beside New
+    loop (and on the New loop page). The page is the list alone.
+  - **Overview:** redraws once a minute, not every 10 s.
+    - The decision card lists the best three designs: the decision first, then accepted before
+      failed, the deepest stage reached, then each objective without a limit in turn. The
+      limits are already in the verdict.
+    - A table classed `top` took the page header's flex style; it is now `best-n`.
+  - **Live:**
+    - The tree is as tall as the window allows.
+    - Following, the detail shows the running task, and at rest the task that ended last,
+      instead of "select a task".
+    - The detail adds the log's latest 14 lines.
+  - **Timeline:** a bar is at least 3 px wide.
+  - **Agent turns:**
+    - An agent turn now records `about`: the model and tool version. Claude Code says both when
+      it starts. OpenCode's events name neither, so it records the model its configuration names
+      and `opencode --version`, asked once per process.
+    - It also records `tool_calls` and `prompt_chars`.
+    - The page shows these, with tokens, cached tokens, cost, session, exit, finish, schema and
+      folder, as facts on the turn.
+  - **Results:** the charts sit in a section that folds; the viewer's choice is kept in their
+    browser.
+  - **Configurator files:**
+    - `GET inputs` lists the loop's own files (not `out/`, `runs/`, `workbench/`).
+    - `DELETE file` removes one; never the document, nor what runs write.
+    - Configure and New loop show them to edit, write, drop or delete; a new loop's are sent once
+      it is created.
+    - A file the document names as `{home}/…` and the loop lacks is listed as missing, one click
+      from writing it.
+  - **Models by group, for the server and each user:** Flux's own model, OpenCode, Claude Code,
+    Codex.
+    - The admin's values live in the `server` table (keys encrypted). `run_env` layers the
+      machine's environment, then the server's, then the user's, per group.
+    - Naming one's own endpoint in a group drops all the server's values of that group, so no
+      server key reaches another endpoint.
+    - A key set on the web wins over the machine's `FLUX_REMOTE_API_KEY_FILE`.
+    - **OpenCode** gets a `flux` provider in `OPENCODE_CONFIG_CONTENT` (merged under the loop's
+      own permission rules) and `model: flux/<model>`. Its key is `{env:FLUX_OPENCODE_API_KEY}`,
+      never inline. It uses its own settings, else Flux's model's.
+    - **Claude Code and Codex** get `--model` through `FLUX_<AGENT>_ARGS`, and their
+      endpoint and key in their own variables.
+    - With nothing set on the web, a run uses the machine's own configuration, as before.
+    - Checked on a real OpenCode turn through the generated provider against LocalAI: it answered
+      "hi", 10666 tokens in, 22 out, and recorded `flux/qwen3.6-35b-a3b-apex, opencode 1.18.32`.
+  - **The mark:** the chip logo (`.github/logo.svg`) is drawn inline, its graphite following the
+    theme. It is the favicon, and appears in the top bar and on the login page. The bell is a line
+    icon in the text colour instead of an emoji.
+
+  Tests (`test_web_models.py`):
+    - admin-only settings, keys never sent back, URL checks;
+    - the run environment per group;
+    - OpenCode on Flux's model, then on its own;
+    - `--model` for Claude Code and Codex;
+    - with nothing set on the web, the machine's own configuration;
+    - the loop's files listed, written, deleted, with the document and run output refused.
+
+  Checked in headless Firefox, light and dark:
+    - the login page;
+    - the loop list and the upload dialog;
+    - the Overview's best 2;
+    - Live at rest showing the last task and the log;
+    - the facts of an agent turn;
+    - folded charts;
+    - the files panel, with golden.py taken away and flagged missing;
+    - Account and Admin › Models.

@@ -28,17 +28,64 @@ _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_A
 
 
 def run_env(store: Store, user: User) -> dict[str, str]:
-    """The environment of a user's run or check (D684): the server's, with the user's model
-    settings over it. A run never reads the server's flux.env itself (FLUX_CONFIG): the server
-    loaded it once, and a user with their own endpoint gets none of the server's keys."""
+    """The environment of a user's run or check (D684, D696): the server's, then the model
+    settings the admin set for the server, then the user's own. A run never reads the server's
+    flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, OpenCode,
+    Claude Code, Codex), a user who names their own endpoint gets none of the server's values of
+    that group -- no server key goes to someone else's endpoint."""
+    from .store import GROUPS
+
     env = {**os.environ, "FLUX_CONFIG": os.devnull}
-    mine = store.settings(user, reveal=True)
-    if mine.get("FLUX_REMOTE_BASE_URL"):
-        for k in _SERVER_KEYS:
-            env.pop(k, None)
+    server, mine = store.server_settings(reveal=True), store.settings(user, reveal=True)
+    web: dict[str, str] = {}
+    for name, g in GROUPS.items():
+        keys = (*g["public"], *g["secret"])
+        if mine.get(g["endpoint"]):
+            for k in keys:
+                env.pop(k, None)
+            if name == "model":
+                for k in _SERVER_KEYS:
+                    env.pop(k, None)
+            vals = {k: mine[k] for k in keys if k in mine}
+        else:
+            vals = {**{k: server[k] for k in keys if k in server}, **{k: mine[k] for k in keys if k in mine}}
+            if name == "model" and vals.get("FLUX_REMOTE_API_KEY"):
+                env.pop("FLUX_REMOTE_API_KEY_FILE", None)             # a key set here wins over the server's file
+        web.update(vals)
+    env.update(web)
+    if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
-    env.update(mine)
+    _agents(env, web)
     return env
+
+
+def _agents(env: dict[str, str], web: dict[str, str]) -> None:
+    """The coding agents told their endpoint and model (D696). OpenCode: a provider in
+    OPENCODE_CONFIG_CONTENT (merged under the loop's own permissions), its key from an
+    environment variable; its own settings, else Flux's model's. Claude Code and Codex: a
+    `--model` among their arguments, their endpoint and key in their own variables."""
+    import shlex
+
+    base = web.get("FLUX_OPENCODE_BASE_URL") or web.get("FLUX_REMOTE_BASE_URL")
+    model = web.get("FLUX_OPENCODE_MODEL") or (web.get("FLUX_REMOTE_MODEL") if not web.get("FLUX_OPENCODE_BASE_URL") else None)
+    if base and model:
+        key = web.get("FLUX_OPENCODE_API_KEY") or (web.get("FLUX_REMOTE_API_KEY") if not web.get("FLUX_OPENCODE_BASE_URL") else None)
+        options: dict[str, object] = {"baseURL": base.rstrip("/"), "timeout": 1800000}
+        if key:
+            env["FLUX_OPENCODE_API_KEY"] = key
+            options["apiKey"] = "{env:FLUX_OPENCODE_API_KEY}"
+        try:
+            have = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+        except ValueError:
+            have = {}
+        have.setdefault("provider", {})["flux"] = {"npm": "@ai-sdk/openai-compatible", "name": "Flux (web settings)",
+                                                   "options": options, "models": {model: {"name": model}}}
+        have["model"] = f"flux/{model}"
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(have)
+    for preset, key in (("CLAUDE", "FLUX_CLAUDE_MODEL"), ("CODEX", "FLUX_CODEX_MODEL")):
+        if web.get(key):
+            args = env.get(f"FLUX_{preset}_ARGS", "")
+            env[f"FLUX_{preset}_ARGS"] = f"{args} --model {shlex.quote(web[key])}".strip()
 
 
 def loop_files(app_dir: Path) -> dict[str, Path]:

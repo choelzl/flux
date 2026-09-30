@@ -45,7 +45,7 @@ h3 { font-size: 11.5px; margin: 12px 0 6px; color: var(--muted); text-transform:
 /* ---- the top bar */
 .top { display: flex; align-items: center; gap: 22px; padding: 0 24px; height: 52px; border-bottom: 1px solid var(--line);
        background: var(--panel); position: sticky; top: 0; z-index: 5; }
-.brand { font-weight: 800; font-size: 17px; color: var(--ink); letter-spacing: -.02em; }
+.brand { font-weight: 800; font-size: 17px; color: var(--ink); letter-spacing: -.02em; display: inline-flex; align-items: center; gap: 8px; }
 .brand:hover { text-decoration: none; }
 #nav { display: flex; gap: 4px; flex: 1; height: 100%; }
 #nav a { display: flex; align-items: center; padding: 0 10px; color: var(--muted); border-bottom: 2px solid transparent; }
@@ -416,3 +416,52 @@ tr.sum td { border-top: 2px solid var(--line); }
 .tabs a[role=tab] { text-decoration: none; border-bottom: 2px solid transparent; padding: 8px 14px; color: var(--muted); }
 .tabs a[role=tab]:hover { color: var(--ink); }
 .tabs a[role=tab].on { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
+
+/* D696: the mark, the bell, the login, uploads */
+:root { --logo-ink: #3f5268; --logo-forge: #f66824; }
+:root[data-theme="dark"] { --logo-ink: #b7c4d4; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --logo-ink: #b7c4d4; } }
+svg.logo .lg-g rect, svg.logo rect.lg-o { stroke: none; }
+svg.logo .lg-g { fill: var(--logo-ink); }
+svg.logo .lg-o { fill: var(--logo-forge); }
+svg.logo .lg-gs, svg.logo .lg-os { fill: none; stroke-width: 18; stroke-linecap: round; stroke-linejoin: round; }
+svg.logo .lg-gs { stroke: var(--logo-ink); }
+svg.logo .lg-os { stroke: var(--logo-forge); }
+.bell { color: var(--muted); display: inline-flex; align-items: center; }
+.bell:hover { color: var(--ink); background: none; }
+.login-mark { display: flex; justify-content: center; margin-bottom: 6px; }
+.card.login h1 { text-align: center; }
+.card.login .sub { text-align: center; }
+.upload { display: grid; gap: 10px; }
+dialog.dlg:has(.upload) { width: min(600px, calc(100vw - 32px)); }
+.upload input[type=file] { max-width: 100%; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.fact { display: flex; flex-direction: column; background: var(--soft); border-radius: 6px; padding: 4px 9px; max-width: 100%; }
+.fact small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.fact span { overflow-wrap: anywhere; }
+details.charts-box { margin-bottom: 16px; }
+details.charts-box > summary { cursor: pointer; color: var(--muted); font-size: 13.5px; padding: 4px 2px 10px; }
+details.charts-box > summary:hover { color: var(--ink); }
+table.best-n td, table.best-n th { padding-top: 4px; padding-bottom: 4px; }
+.pill.small { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
+.tree { max-height: calc(100vh - 250px); min-height: 420px; }
+pre.log-tail { max-height: 240px; font-size: 11.5px; }
+.files-card { margin-top: 16px; }
+ul.flist li { display: flex; align-items: center; gap: 10px; }
+ul.flist li a { flex: 1; }
+.link.danger-link { color: var(--bad); font-size: 16px; padding: 0 6px; }
+.narrow-in { max-width: 220px; }
+.file-edit { display: grid; gap: 10px; min-width: min(760px, 86vw); }
+.file-edit .editor { height: 52vh; }
+dialog.dlg:has(.file-edit) { width: min(900px, calc(100vw - 32px)); }
+.set-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; margin: 10px 0; }
+fieldset.set-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin: 0; display: grid; gap: 8px; }
+fieldset.set-group legend { font-weight: 600; padding: 0 6px; }
+.set-row { display: grid; grid-template-columns: 150px 1fr; gap: 2px 10px; align-items: center; }
+.set-row .inline input { width: 100%; }
+.set-row .inline { display: flex; gap: 6px; }
+.set-row code.var { grid-column: 2; font-size: 10.5px; }
+.hint-line { color: var(--accent); margin: 0; }
+@media (max-width: 560px) { .set-row { grid-template-columns: 1fr; } .set-row code.var { grid-column: 1; } }
+.set-groups { align-items: start; }
+fieldset.set-group { align-content: start; }

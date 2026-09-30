@@ -31,10 +31,26 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS server (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
-#: What a user may set for their runs (D684): the model endpoint, and keys, which are secret --
-#: stored encrypted, never sent back, only handed to that user's runs.
-PUBLIC_SETTINGS = ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_MODEL", "OLLAMA_BASE_URL", "FLUX_LLM_TIMEOUT_S")
-SECRET_SETTINGS = ("FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+#: The model settings of runs (D684, D696), by what uses them: Flux's own model calls, and each
+#: coding agent. The admin sets them for the server; a user's own override theirs. Keys are
+#: secret: stored encrypted, never sent back, only handed to runs. `endpoint`: a user who names
+#: their own gets none of the server's values of that group.
+GROUPS: dict[str, dict[str, Any]] = {
+    "model": {"label": "Flux's own model (OpenAI-compatible)", "endpoint": "FLUX_REMOTE_BASE_URL",
+              "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_LLM_MODEL", "OLLAMA_BASE_URL"),
+              "secret": ("FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY")},
+    "opencode": {"label": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
+                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL"), "secret": ("FLUX_OPENCODE_API_KEY",),
+                 "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
+    "claude": {"label": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
+               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL"), "secret": ("ANTHROPIC_API_KEY",),
+               "hint": "Empty: Claude Code's own login and model."},
+    "codex": {"label": "Codex", "endpoint": "OPENAI_BASE_URL",
+              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL"), "secret": ("OPENAI_API_KEY",),
+              "hint": "Empty: Codex's own login and model."},
+}
+PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
+SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 
 
 @dataclass
@@ -193,18 +209,45 @@ class Store:
             os.chmod(keyfile, 0o600)
         return Fernet(keyfile.read_bytes())
 
-    def set_setting(self, user: User, key: str, value: str | None) -> None:
+    @staticmethod
+    def _checked(key: str, value: str | None) -> str | None:
         if key not in PUBLIC_SETTINGS + SECRET_SETTINGS:
             raise ValueError(f"{key} is not a setting; settings: {', '.join(PUBLIC_SETTINGS + SECRET_SETTINGS)}")
+        if value is None or not str(value).strip():
+            return None
+        value = str(value).strip()
+        if key.endswith("_BASE_URL") and not value.startswith(("http://", "https://")):
+            raise ValueError(f"{key}: an endpoint is an http(s) URL")
+        return value
+
+    def set_setting(self, user: User, key: str, value: str | None) -> None:
+        value = self._checked(key, value)
         with self._db() as db:
-            if value is None or not str(value).strip():
+            if value is None:
                 db.execute("DELETE FROM settings WHERE user_id = ? AND key = ?", (user.id, key))
                 return
-            value = str(value).strip()
-            if key == "FLUX_REMOTE_BASE_URL" and not value.startswith(("http://", "https://")):
-                raise ValueError("the endpoint is an http(s) URL")
             stored = self._fernet().encrypt(value.encode()).decode() if key in SECRET_SETTINGS else value
             db.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (user.id, key, stored))
+
+    def set_server_setting(self, key: str, value: str | None) -> None:
+        """The server's model settings (D696): what every run gets unless its user sets their own."""
+        value = self._checked(key, value)
+        stored = None if value is None else (self._fernet().encrypt(value.encode()).decode() if key in SECRET_SETTINGS else value)
+        self.server_set(f"setting:{key}", stored)
+
+    def server_settings(self, reveal: bool = False) -> dict[str, str]:
+        with self._db() as db:
+            rows = db.execute("SELECT key, value FROM server WHERE key LIKE 'setting:%'").fetchall()
+        import json
+
+        out = {}
+        for r in rows:
+            k, v = r["key"].split(":", 1)[1], json.loads(r["value"])
+            if k in SECRET_SETTINGS:
+                out[k] = self._fernet().decrypt(v.encode()).decode() if reveal else "set"
+            elif k in PUBLIC_SETTINGS:
+                out[k] = v
+        return out
 
     def settings(self, user: User, reveal: bool = False) -> dict[str, str]:
         """The user's settings; a secret as "set" unless `reveal` (for their runs only)."""
