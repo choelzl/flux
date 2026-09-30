@@ -457,3 +457,9 @@ the topics above.
   (repair, sent back, improve, dropped); the critic at the division, each part and the decision;
   a "sub-loops, composed" node when there are parts; fixed steps greyed and locked. Every
   default's popover text is `flux task check`'s own parenthesis, tested against describe_flow.
+
+- **D668: a running agent shows in the TUI.** An agent turn is its own task row ("agent: <tool>")
+  updated once a second while it runs: elapsed time, the tools it called, the tail of its words
+  -- read from OpenCode's JSON events and Claude Code's `stream-json` (the claude preset moves to
+  it; the answer is the stream's `result` event). Live with OpenCode on the hosted model: the row
+  showed 1, 2, 3, 4 tool calls at 22 s, 23 s, 33 s, 34 s, not only at the end.

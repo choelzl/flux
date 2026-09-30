@@ -39,10 +39,10 @@ __all__ = ["AgentSpec", "DECIDE", "Exchange", "PRESETS", "Turn", "agent_brief", 
 #: The agents this repository knows how to call headless: the first turn, the turn that
 #: resumes its session with an answer, and how its output says the session and its words.
 PRESETS: dict[str, dict[str, Any]] = {
-    "claude": {"argv": ("claude", "-p", "{prompt}", "--permission-mode", "acceptEdits", "--output-format", "json",
-                        "--disallowedTools", "AskUserQuestion"),
+    "claude": {"argv": ("claude", "-p", "{prompt}", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
+                        "--verbose", "--disallowedTools", "AskUserQuestion"),
                "resume": ("claude", "-p", "{answer}", "--resume", "{session}", "--permission-mode", "acceptEdits",
-                          "--output-format", "json", "--disallowedTools", "AskUserQuestion"),
+                          "--output-format", "stream-json", "--verbose", "--disallowedTools", "AskUserQuestion"),
                "output": "claude"},
     "codex": {"argv": ("codex", "exec", "--full-auto", "{prompt}"), "resume": None, "output": "text"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "{prompt}"),
@@ -177,11 +177,15 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
                 texts.append(str((ev.get("part") or {}).get("text") or ""))
         return "\n".join(t for t in texts if t.strip()), session
     if output == "claude":
-        try:
-            doc = json.loads(stdout.strip().splitlines()[-1]) if stdout.strip() else {}
-        except ValueError:
-            return stdout, None
-        return str(doc.get("result") or ""), doc.get("session_id")
+        # stream-json: the `result` event holds the answer and the session (D668)
+        for line in reversed(stdout.strip().splitlines()):
+            try:
+                doc = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(doc, dict) and doc.get("type") == "result":
+                return str(doc.get("result") or ""), doc.get("session_id")
+        return stdout, None
     return stdout, None
 
 
@@ -198,25 +202,103 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
     return turn
 
 
+class _Live:
+    """What a running agent has done so far, read from its output as it streams (D668): the
+    tools it called and the tail of its words, for the TUI's running task row."""
+
+    TAIL = 1500
+
+    def __init__(self, output: str) -> None:
+        self.output, self.tools, self.words = output, [], ""
+
+    def feed(self, line: str) -> None:
+        if self.output == "text":
+            self.words = (self.words + line)[-self.TAIL:]
+            return
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(ev, dict):
+            return
+        if self.output == "opencode":
+            part = ev.get("part") or {}
+            if ev.get("type") == "tool_use":
+                self.tools.append(str(part.get("tool") or "tool"))
+            elif ev.get("type") == "text":
+                self.words = (self.words + str(part.get("text") or "") + "\n")[-self.TAIL:]
+        elif ev.get("type") == "assistant":           # claude stream-json
+            for c in (ev.get("message") or {}).get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    self.tools.append(str(c.get("name") or "tool"))
+                elif isinstance(c, dict) and c.get("type") == "text":
+                    self.words = (self.words + str(c.get("text") or "") + "\n")[-self.TAIL:]
+
+    def fields(self) -> dict[str, str]:
+        out = {}
+        if self.tools:
+            out["tool calls"] = f"{len(self.tools)}: " + ", ".join(self.tools[-8:])
+        if self.words.strip():
+            out["agent (live tail)"] = self.words
+        return out
+
+
 def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
-    """The agent run once. A missing binary or a timeout is a refusal with its own words,
-    never a crash."""
+    """The agent run once, its output streamed into the running task's row as it comes (D668).
+    A missing binary or a timeout is a refusal with its own words, never a crash."""
+    import os
+    import queue
+    import threading
+    import time
+
+    from flux_profile import progress
+
+    from .observe import _phase
+
     cmd = [t.format(**subs) for t in argv]
     if shutil.which(cmd[0]) is None and not Path(cmd[0]).is_file():
         return Turn(False, 127, "", stderr=f"{cmd[0]} is not on PATH (the coding agent named by the document)")
-    try:
-        # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
-        # block on the loop's inherited socket until the timeout.
-        # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
-        import os
-
-        env = {**os.environ, "PWD": str(workdir)}
-        r = subprocess.run(cmd, cwd=str(workdir), capture_output=True, text=True, timeout=spec.timeout_s,
-                           stdin=subprocess.DEVNULL, env=env)
-    except subprocess.TimeoutExpired:
-        return Turn(False, 124, "", stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
-    text, session = _parse(spec.output, r.stdout or "")
-    return Turn(r.returncode == 0, r.returncode, text, session, r.stdout or "", r.stderr or "")
+    # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
+    # block on the loop's inherited socket until the timeout.
+    # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
+    env = {**os.environ, "PWD": str(workdir)}
+    proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdin=subprocess.DEVNULL, text=True, env=env, bufsize=1)
+    lines: queue.Queue = queue.Queue()
+    err: list[str] = []
+    readers = [threading.Thread(target=lambda: [lines.put(ln) for ln in proc.stdout] and None, daemon=True),
+               threading.Thread(target=lambda: err.extend(proc.stderr), daemon=True)]
+    for t in readers:
+        t.start()
+    live, out = _Live(spec.output), []
+    t0 = time.monotonic()
+    timed_out = False
+    shown = 0.0
+    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row:
+        while True:
+            try:
+                line = lines.get(timeout=1.0)
+                out.append(line)
+                live.feed(line)
+            except queue.Empty:
+                if proc.poll() is not None and not readers[0].is_alive():
+                    break
+            now = time.monotonic()
+            if now - t0 > spec.timeout_s and proc.poll() is None:
+                proc.kill()
+                timed_out = True
+            if now - shown >= 1.0:                    # the row, at most once a second
+                shown = now
+                progress(elapsed=f"{now - t0:.0f}s", **live.fields())
+        for t in readers:
+            t.join(timeout=5)
+        row.update(live.fields())
+        row["exit"] = proc.returncode
+    stdout = "".join(out)
+    if timed_out:
+        return Turn(False, 124, "", stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped")
+    text, session = _parse(spec.output, stdout)
+    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err))
 
 
 _CODE = re.compile(r"```.*?```", re.S)
