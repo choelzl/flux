@@ -413,8 +413,10 @@ class OpenAIChatProposer:
         except Exception as exc:
             transcript.record("model", **base, error=f"{type(exc).__name__}: {exc}", seconds=round(time.monotonic() - t0, 2))
             raise
+        notes = getattr(reply, "notes", None) or {}
         transcript.record("model", **base, reply=reply.text, hops=[h.line(400) for h in getattr(reply, "hops", None) or []],
-                          notes=getattr(reply, "notes", None) or {}, seconds=round(time.monotonic() - t0, 2))
+                          notes=notes, seconds=round(time.monotonic() - t0, 2),
+                          **{k: notes[n] for k, n in (("tokens_in", "turn_tokens_in"), ("tokens_out", "turn_tokens_out")) if notes.get(n)})
         return reply
 
     def _propose_turn(self, prompt: str, *, schema: dict | None = None, tools: list | None = None,
@@ -618,6 +620,9 @@ class OpenAIChatProposer:
         usage = payload.get("usage") or {}
         # The reply's notes describe the last exchange of a turn
         notes = notes if notes is not None else {}
+        # the whole turn's tokens, every exchange of its tool hops (D694)
+        notes["turn_tokens_in"] = notes.get("turn_tokens_in", 0) + int(usage.get("prompt_tokens") or 0)
+        notes["turn_tokens_out"] = notes.get("turn_tokens_out", 0) + int(usage.get("completion_tokens") or 0)
         notes.update({
             "input_tokens": usage.get("prompt_tokens"),
             "output_tokens": usage.get("completion_tokens"),

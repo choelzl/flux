@@ -161,12 +161,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Code:** files, a design's source and the code in agent prompts are highlighted (YAML,
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
-- **A loop's page** (tabs: Overview, Live, Log, Agent turns, Results, Files, Workbench):
+- **A loop's page** (tabs: Overview, Live, Log, Timeline, Agent turns, Results, Files, Workbench):
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
     marked. Also the agent's open question, the latest notes and the newest workbench entries.
-    While the loop runs, it redraws every 10 s.
+    While the loop runs, it redraws every 10 s. A figure gives the model and agent turns, their
+    time and tokens.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
@@ -175,7 +176,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
     Show one start or all; jump to the previous or next problem. It can follow (it pauses when
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
-  - **Agent turns:** each prompt, reply and tool call.
+  - **Timeline:** where one start's time went, from its journal. Every phase that does the work
+    (a tool, an agent, a model call) is a bar in the lane of its kind: agent, model, gate, a
+    stage, generation, re-verify, knowledge, the loop's own work. Per kind: phases, busy time (work
+    side by side counted once), share of the wall clock, summed time, and how many ran at once.
+    Choose a start and a pass. It redraws every 10 s while the loop runs.
+  - **Agent turns:** each prompt, reply and tool call, with its tokens. Above them, what the
+    turns cost: turns, time, tokens in (and from the cache), out, and USD where the agent prices
+    it, in all and per agent or model. Tokens are counted from D694 on: an agent's own report
+    (Claude Code's `result`, OpenCode's `step_finish`), every exchange of a model turn.
   - **Results:** the designs the loop measured successfully, across every start, each
     **accepted** or **failed** by the loop's limits (the stages' cutoffs, the objectives'
     limits), with its numbers at the deepest stage it reached and a mark on each limited one.
@@ -183,12 +192,21 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Filter: all / accepted / failed. Two charts come first. **Pareto front:** any two metrics,
     at one stage or each design's deepest, accepted and failed designs coloured, the decision a
     diamond, the non-dominated designs joined; a click opens the design. **Improvement over
-    time:** the best so far of each chosen metric. A design opens with the limits
+    time:** the best so far of each chosen metric. With more than 3000 measurements the charts
+    draw every new best and an even share of the rest. The table grows by 200 rows. **Compare:**
+    tick two designs for their numbers side by side at each stage, the change (green where it is
+    better), and a diff of their sources. A design opens with the limits
     it misses, every stage's numbers and its source. A draft sent to repair or refused by the
     gate is not a result.
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
     When an agent asks (`questions: operator`), the page shows the question and its time left,
     and the answer goes back to the agent.
+- **Usage:** the Account page gives your turns, time and tokens over all your loops; the Admin
+  page, every user's.
+- **Streams:** the Live and Log tabs say whether their stream is live. A dropped stream is opened
+  again where it left off (no line twice, none lost), waiting up to 30 s between tries, and a
+  banner says when the server cannot be reached. A stopped server waits at most 3 s for open
+  streams; a restarted one finds its running loops again.
 - **Model for my runs (Account):** an endpoint, a model and keys per user. Keys are stored
   encrypted (`secret.key` beside the server's data) and never shown again. With their own
   endpoint, none of the server's keys go to that user's runs. Empty: the server's model.

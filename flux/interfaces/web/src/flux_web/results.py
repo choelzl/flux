@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["designs"]
+__all__ = ["designs", "thin"]
 
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
@@ -128,5 +128,29 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o["metric"], "direction": o["direction"], "goal": o["goal"]} for o in objectives]
-    return {"designs": out[:limit], "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "failed")},
+    return {"designs": out[:limit], "total": len(out), "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "failed")},
             "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
+
+
+def thin(all_rows: list[Any], objectives: list[tuple[str, str]], cap: int = 3000) -> list[dict[str, Any]]:
+    """At most `cap` measurements for the charts (D694): every one that set a new best on an
+    objective at its stage, and an even share of the rest, in order."""
+    keep = set(range(len(all_rows))) if len(all_rows) <= cap else set()
+    if not keep:
+        best: dict[tuple[str, str], float] = {}
+        for i, x in enumerate(all_rows):
+            for m, d in objectives:
+                v = (x.metrics or {}).get(m)
+                if not isinstance(v, (int, float)):
+                    continue
+                b = best.get((x.stage, m))
+                if b is None or (v < b if d == "minimize" else v > b):
+                    best[(x.stage, m)] = v
+                    keep.add(i)
+        room = max(0, cap - len(keep))
+        rest = [i for i in range(len(all_rows)) if i not in keep]
+        if room and rest:
+            step = len(rest) / room
+            keep.update(rest[int(k * step)] for k in range(min(room, len(rest))))
+    return [{"when": x.when, "stage": x.stage, "name": x.name, "part": x.part, "whole": x.whole, "metrics": x.metrics}
+            for i, x in enumerate(all_rows) if i in keep]

@@ -92,7 +92,8 @@ def test_thinking_off_is_a_request_field_and_the_schema_rides_along(monkeypatch,
     assert seen[0]["timeout"] == 7
     assert r.usage == {"input_tokens": 31, "output_tokens": 22}
     assert r.notes == {"input_tokens": 31, "output_tokens": 22, "finish": "stop", "model": "qwen-apex",
-                       "schema": "applied", "max_tokens": 400, "retried": None}
+                       "schema": "applied", "max_tokens": 400, "retried": None,
+                       "turn_tokens_in": 31, "turn_tokens_out": 22}     # D694: the whole turn's
 
 
 def test_thinking_on_says_nothing_about_reasoning_and_drops_the_schema(monkeypatch, hosted):

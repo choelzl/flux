@@ -30,7 +30,9 @@ def serve(args) -> int:
               "and pass --secure-cookie", file=sys.stderr)
     app = create_app(data, sandbox=not args.no_sandbox, secure_cookie=args.secure_cookie, max_running=args.max_running)
     print(f"flux serve: http://{args.host}:{args.port}/ (data {data})", file=sys.stderr, flush=True)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    # a live stream never ends by itself: a stopped server waits 3 s for it, not for every
+    # open page to close (D694); the page reconnects to the next server where it left off
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", timeout_graceful_shutdown=3)
     return 0
 
 

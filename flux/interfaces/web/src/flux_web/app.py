@@ -207,7 +207,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         out = []
         for u in store.users():
             for a in Workspace(store.data, u.name).apps():
-                out.append({**a, "owner": u.name, **runs.state(u, a["name"])})
+                out.append({**a, "owner": u.name, **runs.state(u, a["name"]),
+                            "summary": _summary(Workspace(store.data, u.name), u, a["name"])})
         return out
 
     @app.get("/api/audit")
@@ -477,38 +478,50 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         journal, `start_after()` is when the loop's latest start began: its tree, not the last."""
         from flux_loop.journal import read_events
 
+        ino, offset = offset
+        yield "retry: 3000\n\n"
         while True:
             if await request.is_disconnected():
                 return
             path = path_of()
             if path and os.path.exists(path):
+                st = os.stat(path)
+                if st.st_ino != ino or st.st_size < offset:      # D694: another file (a new start's), or cut
+                    if ino is not None or st.st_size < offset:
+                        offset = 0
+                    ino = st.st_ino
                 if kind == "events":
                     events, new = read_events(path, offset)
                     since = start_after()
                     for e in events:
                         if e.get("t", 0) >= since:
-                            yield f"id: {new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n"
+                            yield f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n"
                 else:
                     with open(path, "rb") as fh:
                         fh.seek(offset)
                         chunk = fh.read(256 * 1024)
                     new = offset + len(chunk)
                     if chunk:
-                        yield f"id: {new}\nevent: {kind}\ndata: {json.dumps(chunk.decode('utf-8', 'replace'))}\n\n"
+                        yield f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(chunk.decode('utf-8', 'replace'))}\n\n"
                 if new != offset:
                     offset = new
                     continue
             yield ": keep-alive\n\n"
             await asyncio.sleep(1.0)
 
-    def _offset(request: Request, offset: int) -> int:
+    def _offset(request: Request, offset: str) -> tuple[int | None, int]:
+        """Where a follower resumes (D694): `<inode>-<byte>` from its last event's id (the header
+        a reconnecting EventSource sends, or `offset` from a page that reopened it); a bare byte
+        offset is taken on whatever file is there."""
+        said = request.headers.get("last-event-id") or offset or "0"
+        ino, _, at = said.rpartition("-")
         try:
-            return int(request.headers.get("last-event-id") or offset)
+            return (int(ino) if ino else None), int(at)
         except ValueError:
-            return offset
+            return None, 0
 
     @app.get("/api/apps/{name}/events")
-    async def events(name: str, request: Request, offset: int = 0, owner: str | None = None, user: User = Depends(user_of)):
+    async def events(name: str, request: Request, offset: str = "0", owner: str | None = None, user: User = Depends(user_of)):
         _w, whose, _d, _run = loop_of(name, user, owner)
         latest = lambda: runs.latest(whose, name)                               # noqa: E731 -- a new start moves it
         stream = _follow(lambda: runs.events_path(latest()), lambda: (latest() or {"started": 0})["started"] - 1,
@@ -516,7 +529,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/log")
-    async def log(name: str, request: Request, offset: int = 0, owner: str | None = None, user: User = Depends(user_of)):
+    async def log(name: str, request: Request, offset: str = "0", owner: str | None = None, user: User = Depends(user_of)):
         """The loop's one log, every start in it."""
         _w, _whose, d, _run = loop_of(name, user, owner)
         path = str(loop_files(d)["log"])
@@ -553,6 +566,46 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                     out.append({"k": n, **t})
         return {"turns": out[-500:] if k is None else out}
 
+    @app.get("/api/apps/{name}/timeline")
+    def loop_timeline(name: str, start: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """Where one start's time went (D694): its phases as bars, and per kind of work."""
+        from .timeline import timeline
+
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        path = runs.events_path(run)
+        if not path or not os.path.exists(path):
+            return {"starts": [], "start": None, "bars": [], "kinds": [], "passes": []}
+        return timeline(path, start)
+
+    @app.get("/api/apps/{name}/usage")
+    def loop_usage(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """What the loop's model and agent turns cost (D694)."""
+        from .usage import usage
+
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        return usage(runs.turns_path(run))
+
+    def _user_usage(u: User) -> dict[str, Any]:
+        from .usage import usage
+
+        total: dict[str, Any] = {"user": u.name, "loops": 0, "turns": 0, "seconds": 0.0, "tokens_in": 0.0, "tokens_out": 0.0,
+                                 "tokens_cached": 0.0, "cost_usd": 0.0, "counted": 0}
+        for a in Workspace(store.data, u.name).apps():
+            got = usage(runs.turns_path(runs.latest(u, a["name"])))["total"]
+            total["loops"] += 1
+            for k in ("turns", "seconds", "tokens_in", "tokens_out", "tokens_cached", "cost_usd", "counted"):
+                total[k] += got[k]
+        return total
+
+    @app.get("/api/usage")
+    def my_usage(user: User = Depends(user_of)) -> dict[str, Any]:
+        """The user's turns over all their loops (D694)."""
+        return _user_usage(user)
+
+    @app.get("/api/admin/usage")
+    def all_usage(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        return [_user_usage(u) for u in store.users()]
+
     @app.get("/api/apps/{name}/results")
     def results(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         from flux_loop.report import load
@@ -562,8 +615,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if not cid or not os.path.exists(run["db"]):
             return {"campaign": None}
         rep = load(run["db"], cid)
-        rows = [{"when": x.when, "stage": x.stage, "name": x.name, "part": x.part, "whole": x.whole,
-                 "metrics": x.metrics} for x in rep.rows[-500:]]
+        from .results import designs, thin
+
+        rows = thin(rep.rows, [(o.metric, o.direction) for o in rep.objectives])
         answer = None
         ans = loop_files(d)["answer"]
         if ans.exists():
@@ -571,13 +625,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 answer = json.loads(ans.read_text())
             except ValueError:
                 pass
-        from .results import designs
-
         decision = ((answer or {}).get("decision") or {}).get("name") if isinstance((answer or {}).get("decision"), dict) else None
-        listed = designs(run["db"], _stages(_w, name), decision)
+        listed = designs(run["db"], _stages(_w, name), decision, limit=20000)
         objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
                           for o in rep.objectives]                     # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
+                "rows_total": len(rep.rows),
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
                 "agent_turns": len(rep.agent_turns), "answer": answer, **listed}
 

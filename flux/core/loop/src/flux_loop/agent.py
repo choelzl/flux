@@ -385,6 +385,44 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
     return stdout, None
 
 
+def usage(output: str, stdout: str) -> dict[str, float]:
+    """What a turn cost, as the agent reported it (D694): tokens in (cache reads included), out,
+    read from the cache, and the cost in USD when the agent prices it. Claude's `result` event
+    carries the turn's total; OpenCode says each step's in its `step_finish`, summed here."""
+    got: dict[str, float] = {}
+
+    def add(key: str, v: Any) -> None:
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v:
+            got[key] = got.get(key, 0) + v
+
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or ('"step_finish"' not in line and '"result"' not in line):
+            continue
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(ev, dict):
+            continue
+        if output == "opencode" and ev.get("type") == "step_finish":
+            part = ev.get("part") or {}
+            tok = part.get("tokens") or {}
+            cache = tok.get("cache") or {}
+            add("tokens_in", (tok.get("input") or 0) + (cache.get("read") or 0) + (cache.get("write") or 0))
+            add("tokens_out", (tok.get("output") or 0) + (tok.get("reasoning") or 0))
+            add("tokens_cached", cache.get("read"))
+            add("cost_usd", part.get("cost"))
+        elif output == "claude" and ev.get("type") == "result":
+            u = ev.get("usage") or {}
+            add("tokens_in", (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
+                + (u.get("cache_creation_input_tokens") or 0))
+            add("tokens_out", u.get("output_tokens"))
+            add("tokens_cached", u.get("cache_read_input_tokens"))
+            add("cost_usd", ev.get("total_cost_usd"))
+    return got
+
+
 def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
     """The agent run once, recorded in the run's transcript (D599)."""
     import time
@@ -400,7 +438,8 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
     transcript.record("agent", agent=spec.tool, workdir=str(workdir),
                       prompt=subs.get("answer", "") if turn.resumed else subs.get("prompt", ""), ok=turn.ok,
                       rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
-                      session="resumed" if turn.resumed else "fresh", session_id=turn.session or "")
+                      session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
+                      **usage(spec.output, turn.stdout or ""))
     return turn
 
 

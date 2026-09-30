@@ -31,13 +31,46 @@ async function api(path, { method = "GET", body, form } = {}) {
   const opt = { method, headers: { "X-Flux": "1" }, credentials: "same-origin" };
   if (form) opt.body = form;
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
-  const r = await fetch("/api" + path, opt);
+  let r;
+  try { r = await fetch("/api" + path, opt); }
+  catch (x) { offline(true); throw new Error("The server cannot be reached."); }
+  offline(false);
   if (r.status === 401 && path !== "/login") { me = null; location.hash = "#/login"; throw new Error("log in"); }
   const type = r.headers.get("content-type") || "";
   const data = type.includes("json") ? await r.json() : await r.text();
   if (!r.ok) throw new Error((data && data.detail) ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : r.statusText);
   return data;
 }
+
+// ---- the server out of reach (D694): a banner while it is, gone at the next answer
+const offlineBar = h("div", { class: "offline", role: "alert", hidden: true }, "The server cannot be reached: retrying…");
+document.body.append(offlineBar);
+function offline(on) { if (offlineBar.hidden === on) offlineBar.hidden = !on; }
+
+/** A server-sent stream that outlives a dropped connection (D694). The browser reconnects by
+    itself with the last event's id; when it gives up (a proxy's error page, a restarted server),
+    the stream is opened again with that id, waiting longer each time, up to 30 s. */
+function followStream(url, event, onData, onState) {
+  let es = null, last = null, closed = false, wait = 1000, timer = null;
+  const say = (st) => { if (onState) onState(st); };
+  const open = () => {
+    es = new EventSource(last ? `${url}${url.includes("?") ? "&" : "?"}offset=${encodeURIComponent(last)}` : url);
+    es.addEventListener(event, (m) => { if (m.lastEventId) last = m.lastEventId; onData(JSON.parse(m.data)); });
+    es.onopen = () => { wait = 1000; say("live"); };
+    es.onerror = () => {
+      if (closed) return;
+      say("reconnecting");
+      if (es.readyState === EventSource.CLOSED) { es.close(); timer = setTimeout(open, wait); wait = Math.min(wait * 2, 30000); }
+    };
+  };
+  open();
+  return { close: () => { closed = true; clearTimeout(timer); if (es) es.close(); } };
+}
+function streamPill() {
+  const el = h("span", { class: "pill stream", title: "The live stream" }, "connecting");
+  return { el, set: (st) => { el.textContent = st === "live" ? "● live" : "reconnecting…"; el.className = `pill stream ${st === "live" ? "live" : "warn"}`; } };
+}
+const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
 
 const enc = encodeURIComponent;
 const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
@@ -476,6 +509,25 @@ async function newPage() {
       }, { cls: "primary" }))]));
 }
 
+/** What the model and agent turns cost (D694): in all, and per agent or model. */
+function usageCard(u) {
+  const t = u.total;
+  if (!t.turns) return "";
+  const fig = (label, value, sub) => h("div", { class: "stat" }, h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
+  return card("What the turns cost", [
+    h("div", { class: "stats five" },
+      fig("Turns", String(t.turns), t.errors ? `${t.errors} failed` : ""),
+      fig("Time", dur(t.seconds) || "0s", t.turns ? `${dur(t.seconds / t.turns)} a turn` : ""),
+      fig("Tokens in", t.counted ? fmtTok(t.tokens_in) : "—", t.tokens_cached ? `${fmtTok(t.tokens_cached)} from the cache` : ""),
+      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", t.counted < t.turns ? `${t.turns - t.counted} turn(s) without a count (recorded since D694)` : ""),
+      fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "as the agents priced it" : "no agent priced its turns")),
+    u.by.length > 1 ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i > 1 ? "num" : "" }, x)))),
+      h("tbody", {}, u.by.map(b => h("tr", {}, h("td", { class: "strong" }, b.who), h("td", { class: "muted" }, b.kind),
+        h("td", { class: "num mono" }, String(b.turns)), h("td", { class: "num mono" }, dur(b.seconds)),
+        h("td", { class: "num mono" }, b.counted ? fmtTok(b.tokens_in) : "—"), h("td", { class: "num mono" }, b.counted ? fmtTok(b.tokens_out) : "—"),
+        h("td", { class: "num mono" }, b.cost_usd ? `$${b.cost_usd.toFixed(2)}` : "—"))))) : ""]);
+}
+
 async function loopPage(name, owner, tab = "Overview") {
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
@@ -484,7 +536,7 @@ async function loopPage(name, owner, tab = "Overview") {
   const mine = info.mine;
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
-  const tabs = ["Overview", "Live", "Log", "Agent turns", "Results", "Files", "Workbench"];
+  const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench"];
   const tabBar = h("div", { class: "tabs", role: "tablist" });
   let question = st.question || null;
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
@@ -594,6 +646,61 @@ async function loopPage(name, owner, tab = "Overview") {
       }, { cls: "small primary" })));
   }
 
+  /** Where the time goes (D694): one start's phases as bars in lanes by kind of work, and per
+      kind the busy time (parallel work once), its share of the wall clock and the summed time. */
+  const PALETTE = ["#5b8def", "#e8804f", "#4fb286", "#b176e0", "#d9b440", "#e0607e", "#48b3c9", "#8f9aa6", "#a3c956", "#c98a56"];
+  let tlStart = null, tlPass = "";
+  async function timelineView() {
+    const params = new URLSearchParams(owner ? { owner } : {});
+    if (tlStart != null) params.set("start", tlStart);
+    const t = await api(`/apps/${enc(name)}/timeline?${params}`);
+    if (tab !== "Timeline") return;
+    if (!t.bars.length) { body.replaceChildren(card(null, empty("No phase in the journal yet."))); return; }
+    const color = {}; t.kinds.forEach((k, i) => { color[k.kind] = PALETTE[i % PALETTE.length]; });
+    const startSel = h("select", { onchange: (e) => { tlStart = Number(e.target.value); tlPass = ""; timelineView(); } },
+      t.starts.slice().reverse().map(st => h("option", { value: st.index, selected: st.index === t.start },
+        `start ${st.index + 1} · ${st.t0 ? new Date(st.t0 * 1000).toLocaleString() : "?"}${st.t0 && st.t1 ? " · " + dur(st.t1 - st.t0) : ""}`)));
+    const passSel = h("select", { onchange: (e) => { tlPass = e.target.value; draw(); } },
+      h("option", { value: "" }, `every pass (${t.passes.length})`), t.passes.map((p, i) => h("option", { value: String(i), selected: tlPass === String(i) }, `pass ${i + 1}`)));
+    const kindsTable = h("table", { class: "list compact kinds" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Kind of work"), h("th", { class: "num" }, "Phases"), h("th", { class: "num" }, "Busy"),
+        h("th", {}, "Share of the wall clock"), h("th", { class: "num", title: "Every phase's own time added: above Busy when they ran side by side" }, "Summed"),
+        h("th", { class: "num", title: "Summed over busy: how many ran at once, on average" }, "At once"))),
+      h("tbody", {}, t.kinds.map(k => h("tr", {},
+        h("td", {}, h("i", { class: "sw", style: `background:${color[k.kind]}` }), k.kind),
+        h("td", { class: "num mono" }, String(k.count)), h("td", { class: "num mono" }, dur(k.busy)),
+        h("td", {}, h("div", { class: "share" }, h("div", { class: "share-bar", style: `width:${Math.min(100, k.share * 100).toFixed(1)}%;background:${color[k.kind]}` }),
+          h("span", {}, `${(k.share * 100).toFixed(k.share < 0.1 ? 1 : 0)}%`))),
+        h("td", { class: "num mono" }, dur(k.summed)), h("td", { class: "num mono" }, k.busy > 0 ? `×${(k.summed / k.busy).toFixed(1)}` : "")))));
+    const chartBox = h("div", { class: "gantt-box" });
+    function draw() {
+      let a = t.t0, b = t.t1;
+      if (tlPass !== "") { const i = Number(tlPass); a = t.passes[i]; b = t.passes[i + 1] || t.t1; }
+      const bars = t.bars.filter(x => x.t1 >= a && x.t0 <= b);
+      const lanes = t.kinds.map(k => k.kind).filter(k => bars.some(x => x.kind === k));
+      const W = 1200, L = 120, R = 12, T = 8, lane = 30, B = 26, H = T + lanes.length * lane + B, span = Math.max(b - a, 1e-6);
+      const X = (v) => L + (W - L - R) * (Math.min(Math.max(v, a), b) - a) / span;
+      const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => a + f * span);
+      chartBox.replaceChildren(sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart gantt", role: "img", "aria-label": "phases over time by kind" },
+        lanes.map((k, i) => [sv("text", { x: L - 8, y: T + i * lane + lane / 2 + 4, class: "tick", "text-anchor": "end" }, k),
+          sv("line", { x1: L, x2: W - R, y1: T + (i + 1) * lane, y2: T + (i + 1) * lane, class: "grid" })]),
+        ticks.map(v => [sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "grid" }),
+          sv("text", { x: X(v), y: H - 8, class: "tick", "text-anchor": v === a ? "start" : v === b ? "end" : "middle" }, `+${dur(v - a) || "0s"}`)]),
+        t.passes.filter(p => p > a && p < b).map(p => sv("line", { x1: X(p), x2: X(p), y1: T, y2: H - B, class: "pass-line" })),
+        bars.map(x => { const i = lanes.indexOf(x.kind); const x0 = X(x.t0), x1 = X(x.t1);
+          return sv("rect", { x: x0, y: T + i * lane + 3, width: Math.max(1.5, x1 - x0), height: lane - 6, rx: 2,
+            fill: color[x.kind], class: `bar${x.failed ? " failed" : ""}${x.running ? " running" : ""}` },
+            sv("title", {}, `${x.name}${x.why ? " · " + x.why : ""}\n${dur(x.t1 - x.t0)}${x.running ? " so far" : ""}${x.failed ? " · failed" : ""}`)); })));
+    }
+    draw();
+    body.replaceChildren(
+      card(null, h("div", { class: "tl-head" }, startSel, passSel,
+        h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${t.bars.length} phase(s) · ${t.passes.length} pass(es)`))),
+      card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed lines: a pass begins. Hover a bar for its phase.")]),
+      card("Where the time goes", [kindsTable,
+        h("p", { class: "muted small" }, "Each phase that does the work (a tool, an agent, a model call) counts in the kind of its nearest named phase. Busy: the wall clock it held, work side by side counted once.")]));
+  }
+
   /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
   function resultsView(r) {
     let filter = "all";
@@ -604,7 +711,8 @@ async function loopPage(name, owner, tab = "Overview") {
     const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted") : h("span", { class: "pill bad" }, "failed");
     const detail = h("div", { class: "detail" }, empty("Select a design to see the limits it misses, every stage's numbers and its source."));
     async function open(d, tr) {
-      for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
+      if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
+      tr.classList.add("sel");
       detail.replaceChildren(h("p", { class: "muted" }, "Loading…"));
       const full = await api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`);
       const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
@@ -620,6 +728,41 @@ async function loopPage(name, owner, tab = "Overview") {
     }
     const table = h("div", {});
     let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
+    const PAGE = 200;
+    let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
+    const keyOf = (d) => `${d.part}|${d.name}`;
+    let picked = [];                                      // two designs to compare (D694)
+    const cmpBtn = h("button", { class: "small", disabled: true, onclick: () => compare() }, "Compare");
+    const drawPicked = () => { cmpBtn.disabled = picked.length !== 2; cmpBtn.textContent = picked.length ? `Compare ${picked.length}/2` : "Compare"; };
+    async function compare() {
+      const [a, b] = picked;
+      const [fa, fb] = await Promise.all([a, b].map(d => api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`)));
+      const stages = (r.stages || []).filter(st => a.stages[st] || b.stages[st]).concat(Object.keys({ ...a.stages, ...b.stages }).filter(st => !(r.stages || []).includes(st)));
+      const rows = [];
+      for (const st of stages) {
+        const ms = [...new Set([...Object.keys(a.stages[st] || {}), ...Object.keys(b.stages[st] || {})])];
+        for (const m of ms) rows.push({ st, m, va: (a.stages[st] || {})[m], vb: (b.stages[st] || {})[m] });
+      }
+      const dirs = r.objective_list || r.limits || [];
+      const cell = (v) => h("td", { class: "num mono" }, v == null ? "—" : fmt(v));
+      const delta = (row) => {
+        if (row.va == null || row.vb == null) return h("td", {}, "");
+        const d = row.vb - row.va, rel = row.va ? d / Math.abs(row.va) : null;
+        const better = d === 0 ? null : (directionOf(row.m, dirs) === "minimize" ? d < 0 : d > 0);
+        return h("td", { class: `num mono${better === true ? " meets" : better === false ? " misses" : ""}` },
+          d === 0 ? "=" : `${d > 0 ? "+" : ""}${fmt(d)}${rel != null && isFinite(rel) ? ` (${d > 0 ? "+" : ""}${(rel * 100).toFixed(1)}%)` : ""}`);
+      };
+      const ops = fa.artifact != null && fb.artifact != null ? lineDiff(fa.artifact, fb.artifact) : null;
+      const changed = ops ? ops.filter(o => o[0] !== " ").length : 0;
+      await dialog(`${a.name} → ${b.name}`, h("div", { class: "compare" },
+        h("p", { class: "muted" }, "B against A: the change, green where B is better by the metric's direction."),
+        h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "stage"), h("th", {}, "metric"),
+            h("th", { class: "num" }, "A ", verdictPill(a)), h("th", { class: "num" }, "B ", verdictPill(b)), h("th", { class: "num" }, "B − A"))),
+          h("tbody", {}, rows.map(row => h("tr", {}, h("td", { class: "muted" }, row.st), h("td", {}, row.m), cell(row.va), cell(row.vb), delta(row))))),
+        h("h3", {}, "The source", ops ? h("span", { class: "muted" }, changed ? ` · ${changed} line(s) differ` : " · the same") : ""),
+        ops ? (changed ? diffView(ops) : empty("The two sources are the same.")) : empty("A source is missing.")),
+        [["Close", null, "primary"]]);
+    }
     const valueOf = (d, key) => key === "name" ? d.name : key === "verdict" ? d.verdict : key === "stage" ? (r.stages || []).indexOf(d.shown)
       : key === "when" ? Date.parse(d.last || "") || 0 : d.numbers[key];
     function sorted(list) {
@@ -636,24 +779,41 @@ async function loopPage(name, owner, tab = "Overview") {
       onclick: () => { if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; } drawTable(); } },
       label, sortKey === key ? h("span", { class: "arrow" }, sortDir > 0 ? " ▲" : " ▼") : "", ...more);
     function drawTable() {
-      const shown = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
+      const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
+      const shown = all.slice(0, pageN);
+      const boxes = new Map();
+      const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", checked: picked.some(p => keyOf(p) === keyOf(d)),
+        onclick: (e) => {
+          e.stopPropagation();
+          if (box.checked) {
+            picked.push(d);
+            if (picked.length > 2) { const gone = picked.shift(); const b = boxes.get(keyOf(gone)); if (b) b.checked = false; }   // the oldest pick goes
+          } else picked = picked.filter(p => keyOf(p) !== keyOf(d));
+          drawPicked();
+        } });
+        boxes.set(keyOf(d), box);
+        return h("td", { class: "pick" }, box); };
+      const more = all.length > shown.length ? h("div", { class: "more" }, h("button", { class: "small", onclick: () => { pageN += PAGE; drawTable(); } },
+        `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
       table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
-        h("thead", {}, h("tr", {}, th("name", "Design"), th("verdict", "Verdict"), th("stage", "Stage"),
+        h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Verdict"), th("stage", "Stage"),
           ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num", title: l ? `${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : "" },
             l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
           th("when", "When"))),
         h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
+          tick(d),
           h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "", d.name, d.part ? h("div", { class: "muted small" }, d.part) : ""),
           h("td", {}, verdictPill(d)),
           h("td", { class: "muted" }, d.shown),
           ...r.metrics.map(m => { const v = d.numbers[m]; const ok = d.meets[m];
             return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", {}, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
-          h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; })))) : empty("No design matches."));
+          h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; }))), more) : empty("No design matches."));
     }
-    const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; chips(); drawTable(); } }, label);
+    const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
     const chipBox = h("div", { class: "chips" });
     function chips() {
-      chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), chip("failed", `Failed ${r.counts.failed}`));
+      chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), chip("failed", `Failed ${r.counts.failed}`),
+        h("span", { class: "grow" }), cmpBtn);
     }
     chips(); drawTable();
     // the charts (D693): two metrics against each other, and each metric's best so far
@@ -664,8 +824,13 @@ async function loopPage(name, owner, tab = "Overview") {
     const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
     let px = nums[1] || nums[0], py = nums[0], pst = "", tMetrics = new Set(nums.slice(0, 2)), tst = "";
     const paretoBox = h("div", {}), timeBox = h("div", {});
-    const pickRow = (d) => { const tr = [...table.querySelectorAll("tbody tr")].find(t => t.firstChild && t.firstChild.textContent.replace(/^★ /, "").startsWith(d.name));
-      if (tr) { tr.scrollIntoView({ block: "nearest" }); open(d, tr); } };
+    const pickRow = (d) => {
+      const all = sorted(r.designs.filter(x => filter === "all" || x.verdict === filter));
+      const at = all.indexOf(d);
+      if (at >= pageN) { pageN = Math.ceil((at + 1) / PAGE) * PAGE; drawTable(); }
+      const tr = [...table.querySelectorAll("tbody tr")][at];
+      if (tr) { tr.scrollIntoView({ block: "nearest" }); open(d, tr); } else open(d, h("tr"));   // filtered out: the detail alone
+    };
     const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
     function drawPareto() {
       paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
@@ -684,9 +849,11 @@ async function loopPage(name, owner, tab = "Overview") {
           : empty("Pick a metric to chart."));
     }
     drawPareto(); drawTime();
-    const charts = nums.length ? h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", timeBox)) : "";
+    const thinned = r.rows_total > (r.rows || []).length ? h("p", { class: "muted small" }, `${r.rows.length} of ${r.rows_total} measurements drawn: every new best, and an even share of the rest.`) : "";
+    const charts = nums.length ? h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", [timeBox, thinned])) : "";
     return h("div", {},
-      card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives)),
+      card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
+          r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
         h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
           h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")))),
       charts,
@@ -697,8 +864,8 @@ async function loopPage(name, owner, tab = "Overview") {
   /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
       per objective, the latest notes and the agents' newest workbench entries. */
   async function overview() {
-    const [r, notes, bench] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
-      api(`/apps/${enc(name)}/workbench${qs}`).catch(() => [])]);
+    const [r, notes, bench, use] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
+      api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null)]);
     const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
     const objs = (r.objective_list || []).slice(0, 2);
     const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
@@ -717,11 +884,14 @@ async function loopPage(name, owner, tab = "Overview") {
     const q0 = st.question;
     if (tab !== "Overview") return;                   // the tab changed while it loaded
     body.replaceChildren(
-      h("div", { class: "stats" },
+      h("div", { class: "stats five" },
         stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
           st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
         stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
         stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
+        use ? stat("Models and agents", `${use.total.turns} turn(s)`, [dur(use.total.seconds) || "0s",
+          use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",
+          use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agent turns")) : "",
         stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
       q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
@@ -753,12 +923,15 @@ async function loopPage(name, owner, tab = "Overview") {
       body.replaceChildren(h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Not running: the last start's tree."), live.tree], { cls: "tree-card" }),
         h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), notesCard(), card(null, live.stand, { cls: "stand-card" }))));
       live.draw(); drawNotes();
+    } else if (tab === "Timeline") {
+      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      await timelineView();
     } else if (tab === "Log") {
       body.replaceChildren(card(null, log.el, { cls: "log-card" }));
       log.render();
     } else if (tab === "Agent turns") {
       body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
-      const { turns } = await api(`/apps/${enc(name)}/turns${qs}`);
+      const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
       const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
       const pick = async (t, tr) => {
         for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
@@ -767,10 +940,15 @@ async function loopPage(name, owner, tab = "Overview") {
           ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
           ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []));
       };
-      body.replaceChildren(h("div", { class: "split" },
-        card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"), h("th", {}, ""))),
+      const tokOf = (t) => { const n = t.notes && typeof t.notes === "object" ? t.notes : {};
+        const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
+        return i == null && o == null ? "" : `${fmtTok(i || 0)} → ${fmtTok(o || 0)}`; };
+      body.replaceChildren(usageCard(use), h("div", { class: "split" },
+        card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
+            h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", {}, ""))),
           h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
             h("td", { class: "strong" }, t.agent || t.model || t.kind), h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
+            h("td", { class: "num mono muted" }, tokOf(t)),
             h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: "pill bad" }, `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; })))
           : empty("No model or agent turn yet.")),
         card(null, one, { cls: "detail-card" })));
@@ -802,8 +980,8 @@ async function loopPage(name, owner, tab = "Overview") {
   const tick = setInterval(async () => {
     await refresh().catch(() => {});
     // the Overview follows a running loop (D693): its numbers and charts every 10 s
-    if (++beat % 2 === 0 && tab === "Overview" && st.running && !document.hidden && !busy) {
-      busy = true; try { await overview(); } catch (_) { /* the next beat */ } finally { busy = false; }
+    if (++beat % 2 === 0 && (tab === "Overview" || tab === "Timeline") && st.running && !document.hidden && !busy) {
+      busy = true; try { await (tab === "Overview" ? overview() : timelineView()); } catch (_) { /* the next beat */ } finally { busy = false; }
     }
   }, 5000);
   cleanup.push(() => clearInterval(tick));
@@ -899,8 +1077,9 @@ function logView(base, qs) {
     h("div", { class: "actions" }, h("button", { class: "small", title: "The previous problem", onclick: () => jump(-1) }, "◀ problem"),
       h("button", { class: "small", title: "The next problem", onclick: () => jump(1) }, "problem ▶")),
     count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
-  const es = new EventSource(`${base}/log${qs}`);
-  es.addEventListener("log", (m) => add(JSON.parse(m.data)));
+  const pill = streamPill();
+  bar.append(pill.el);
+  const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
   return { el: h("div", {}, bar, box), close: () => es.close(), render };
 }
 
@@ -1020,11 +1199,11 @@ function liveTree(base, qs, onQuestion) {
   search.addEventListener("input", draw);
   follow.addEventListener("change", draw);
   collapse.addEventListener("change", () => { open.clear(); draw(); });
-  const es = new EventSource(`${base}/events${qs}`);
-  es.addEventListener("events", (m) => onEvent(JSON.parse(m.data)));
+  const pill = streamPill();
+  const es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
   const bar = h("div", { class: "toolbar" }, h("label", { class: "check" }, follow, "follow the running task"),
-    h("label", { class: "check" }, collapse, "collapse finished"), search);
+    h("label", { class: "check" }, collapse, "collapse finished"), search, pill.el);
   return { tree: h("div", {}, bar, treeBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
 }
 
@@ -1115,7 +1294,7 @@ async function configurePage(name) {
 
 // ================================================================ admin and account
 async function adminPage() {
-  const [users, audit, allApps] = await Promise.all([api("/users"), api("/audit"), api("/admin/apps")]);
+  const [users, audit, allApps, use] = await Promise.all([api("/users"), api("/audit"), api("/admin/apps"), api("/admin/usage").catch(() => [])]);
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
   const admin = h("input", { type: "checkbox" });
   const box = h("div", {}, loopsTable(allApps, { who: true }));
@@ -1140,7 +1319,12 @@ async function adminPage() {
           }, { cls: "primary" }))]),
       card("Audit", h("div", { class: "audit" }, h("table", { class: "list" }, h("tbody", {}, audit.slice(0, 100).map(a => h("tr", {}, h("td", { class: "muted" }, ago(a.t)),
         h("td", {}, a.user || ""), h("td", {}, a.action), h("td", { class: "mono muted" }, a.detail)))))))),
-    card("Every loop", box));
+    card("Every loop", box),
+    card("Usage per user", h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["User", "Loops", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i ? "num" : "" }, x)))),
+      h("tbody", {}, use.map(u => h("tr", {}, h("td", { class: "strong" }, u.user), h("td", { class: "num mono" }, String(u.loops)),
+        h("td", { class: "num mono" }, String(u.turns)), h("td", { class: "num mono" }, dur(u.seconds) || "0s"),
+        h("td", { class: "num mono" }, u.counted ? fmtTok(u.tokens_in) : "—"), h("td", { class: "num mono" }, u.counted ? fmtTok(u.tokens_out) : "—"),
+        h("td", { class: "num mono" }, u.cost_usd ? `$${u.cost_usd.toFixed(2)}` : "—")))))));
   pageRefresh = async () => box.replaceChildren(loopsTable(await api("/admin/apps"), { who: true }));
 }
 
@@ -1160,7 +1344,11 @@ async function accountPage() {
       cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : "")];
   };
   const pw = h("input", { type: "password", autocomplete: "new-password" });
+  const mine = await api("/usage").catch(() => null);
   show(head("Account", `Logged in as ${me.name}`),
+    mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
+      mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
+      mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} as the agents priced it` : "", ".")) : "",
     card("Model for my runs", [
       h("p", { class: "muted" }, "Empty: the server's model. With your own endpoint, none of the server's keys go to your runs. Keys are stored encrypted and never shown again."),
       h("div", { class: "grid2" }, ...st.public.map(k => row(k, false)).flat(), ...st.secret.map(k => row(k, true)).flat()),
@@ -1188,7 +1376,7 @@ async function route() {
   if (hash === "#/login") { drawNav(); return loginPage(); }
   if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
-  const TABS = { "": "Overview", live: "Live", log: "Log", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench" };
+  const TABS = { "": "Overview", live: "Live", log: "Log", timeline: "Timeline", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench" };
   try {
     let m;
     if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));

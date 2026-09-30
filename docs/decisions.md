@@ -929,3 +929,77 @@ the topics above.
   summary matches the results. Checked in headless Firefox: the list with its bar and columns,
   the Pareto front and the charts, the start dialog's check, the diff dialog (Cancel wrote
   nothing), a drop on the Files tab. The Overview's redraw while running was not watched live.
+
+- **D694: compare two designs, where the time goes, what the turns cost, streams that
+  reconnect, results that scale.**
+  - **D693's gap closed.** The Overview redrew while a sweep ran: a marker put on its figures
+    was gone 22 s later. A folder drop, fed through the real handler with entries read in
+    batches, uploaded `rtl/a.sv`, `rtl/b.sv`, `notes.md` and the document with their paths, and
+    named the loop after the folder.
+  - **Compare:** tick two designs in Results. The dialog shows every stage's numbers for A and B,
+    B − A in value and %, green or red by the metric's direction, and a line diff of the two
+    sources.
+  - **Timeline** (`GET timeline`): one start (a `hello` in the journal) as bars.
+    - Only phases without a child are bars (the work itself). Each goes to the kind of its
+      nearest ancestor, itself included: agent, model, gate, `stage <name>`, generation,
+      re-verify, knowledge, else the loop.
+    - Busy time is the union of a kind's bars, so side-by-side work counts once. Summed is their
+      total, and summed over busy is how many ran at once. Passes begin at a top-level
+      `propose: decompose`.
+    - A phase not ended in the latest start runs to now, if the journal was written within the
+      hour. Update and publish lines are skipped, and the parse is cached by the file's size and
+      mtime.
+  - **Token counts:**
+    - A model turn now records `tokens_in` and `tokens_out` summed over every exchange of its tool
+      hops; the notes described only the last exchange.
+    - `agent.usage()` reads an agent's own report: Claude Code's `result` (usage with cache
+      reads, `total_cost_usd`) and OpenCode's `step_finish`, summed per step (input plus cache,
+      output plus reasoning, cost). Each agent turn in `turns.jsonl` carries these counts.
+    - A zero cost is not a price. Checked on a real OpenCode turn against LocalAI: 10667 in, 22
+      out.
+  - **Usage** (`GET usage`, `/api/usage`, `/api/admin/usage`): turns, seconds, failed turns, tokens
+    in, out and cached, and cost, per loop, per agent or model, and per user. It is cached by the
+    file's size and mtime. Turns before D694 count in turns and time, and are said to be
+    uncounted.
+  - **Streams:**
+    - The event id is `<inode>-<byte>`. A new file (a new start's journal) or a shorter one is
+      read from 0; the id the browser resends is otherwise honoured, so no line comes twice.
+    - `retry: 3000` is sent. The page's `followStream` reopens a stream the browser gave up on
+      with its last id, backing off up to 30 s, and shows live or reconnecting.
+    - A failed fetch shows a banner until the next answer.
+  - **A stopped `flux serve` waited forever for open streams**: uvicorn's graceful shutdown has
+    no limit, and a stream never ends. `timeout_graceful_shutdown=3` fixes it: with a stream
+    open, the process was still there after 10 s before, and was gone after 4 s after.
+  - **Results that scale:**
+    - Designs are returned up to 20000, with `total`, and the table draws 200 rows at a time. A
+      Pareto click pages in its row.
+    - Chart rows are thinned to 3000 (`results.thin`): every row that set a new best on an
+      objective at its stage, plus an even share of the rest, in order. `rows_total` says how
+      many there were. Before, the last 500 were cut, which broke the best-so-far line.
+  - **The admin's loop list** has the designs and best columns too.
+
+  Tests (`test_web_time.py`):
+    - parallel tools are busy once and summed twice;
+    - an agent under a generation counts as the agent's;
+    - a phase that has not ended runs to now;
+    - starts are split;
+    - usage totals, including turns before D694;
+    - Claude and OpenCode reports parsed;
+    - thinning keeps each new best;
+    - a new server process finds a running loop and stops it.
+
+  Live, in headless Firefox:
+    - the timeline of add8's third start (1m51s: re-verify 39%, agent 36%);
+    - the compare dialog;
+    - the turns' cost;
+    - the admin's usage.
+
+  Server stopped under an open Log:
+
+  | When | What |
+  |---|---|
+  | +3 s | banner and "reconnecting…" |
+  | every 3 s | retries |
+  | 2 s after the new server | live again |
+
+  A line written after the restart showed once.
