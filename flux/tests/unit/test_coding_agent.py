@@ -89,7 +89,8 @@ def test_the_presets_and_the_missing_binary():
     assert agent_spec("opencode").resume[-2:] == ("--session", "{session}") and agent_spec("opencode").output == "opencode"
     assert "--dir" in agent_spec("opencode").argv and "{workdir}" in agent_spec("opencode").argv
     assert "AskUserQuestion" in agent_spec("claude").argv and "--resume" in agent_spec("claude").resume
-    assert "Bash" in agent_spec("claude").argv and "Bash" in agent_spec("claude").resume      # D673: no shell
+    for argv in (agent_spec("claude").argv, agent_spec("claude").resume):    # D673: a shell without the design tools
+        assert argv[argv.index("--allowedTools") + 1] == "Bash" and "Bash(yosys:*)" in argv and "Bash(bash:*)" in argv
     a = agent_spec({"preset": "codex", "timeout_s": 60, "questions": "model"})
     assert a.tool == "codex" and a.timeout_s == 60.0 and a.questions == "model" and a.resume is None
     with pytest.raises(ValueError, match="not a preset"):
@@ -277,12 +278,16 @@ def test_an_agent_that_ran_out_of_context_continues_in_a_fresh_session(tmp_path)
     assert art.read_text() == "done\n" and any("ran out of context; a fresh session" in m for m in said)
 
 
-def test_opencode_is_denied_its_shell_in_its_inline_config(monkeypatch):
-    """D673: `permission.bash: deny` merged into OPENCODE_CONFIG_CONTENT, the machine's own kept."""
-    from flux_loop.agent import _config_env
+def test_opencode_is_denied_the_design_tools_in_its_inline_config():
+    """D673: the shell allowed, the deny list merged into OPENCODE_CONFIG_CONTENT, the machine's
+    own keys kept."""
+    from flux_loop.agent import DENIED, _config_env
 
     spec = agent_spec("opencode")
     env = _config_env(spec, {"OPENCODE_CONFIG_CONTENT": '{"permission": {"edit": "allow"}, "model": "m"}'})
-    assert json.loads(env["OPENCODE_CONFIG_CONTENT"]) == {"permission": {"edit": "allow", "bash": "deny"}, "model": "m"}
-    assert json.loads(_config_env(spec, {})["OPENCODE_CONFIG_CONTENT"]) == {"permission": {"bash": "deny"}}
+    cfg = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    assert cfg["model"] == "m" and cfg["permission"]["edit"] == "allow"
+    bash = cfg["permission"]["bash"]
+    assert list(bash)[0] == "*" and bash["*"] == "allow"            # first: a later, narrower rule wins
+    assert bash["yosys"] == bash["yosys *"] == bash["flux rtl *"] == "deny" and len(bash) == 1 + 2 * len(DENIED)
     assert _config_env(agent_spec("claude"), {}) == {}

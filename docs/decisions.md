@@ -517,3 +517,14 @@ the topics above.
   no shell call, and the loop gated and measured the draft (4,555 MHz, 3.1 µm²). With a golden
   that disagreed with the contract, the loop's refusal came back into the same session as
   failing vectors.
+
+- **D674: a deny list, not no shell.** The shell has legitimate uses: reading PDFs from the
+  library (`pdftotext`, which the LIBRARY section names), scratch calculation (fitting
+  coefficients, error bounds), searching. Denied: the commands that compile, simulate,
+  synthesize or test (`DENIED`: verilator, iverilog, vvp, yosys, openroad, sta, klayout,
+  champsim, timeloop, the C compilers, make, cmake, ninja, pytest, `flux rtl`/`task`/`run`), and
+  `bash`/`sh`, because `bash -c "yosys ..."` got past the Claude list. Claude Code: `acceptEdits`
+  alone had never let `-p` run a shell command (each needs an approval nobody gives), so it now
+  gets `--allowedTools Bash` plus `Bash(<cmd>:*)` denies. OpenCode: `"*": "allow"` first, then
+  `<cmd>` and `<cmd> *` deny. Live, both presets: `python3` ran; `yosys -V`, `bash -c "yosys -V"`
+  and `flux rtl --help` were refused.

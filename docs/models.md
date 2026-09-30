@@ -99,11 +99,15 @@ turns every failure into the next prompt. For hard numeric RTL:
 A document can hand generation to a coding agent (`flow: {generate: {agent: opencode}}`), and
 `flux ask --author opencode|claude|codex` hands it the writing of the problem itself. The agent
 uses its own model and configuration. The loop gives it a work directory, a brief and a time
-limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, test
-or run anything. The loop runs the gate and the stages, and a failure goes back to the agent's
-session with the exact output (D673). The presets enforce it: Claude Code runs without its Bash
-tool, and OpenCode with `permission.bash: deny` merged into `OPENCODE_CONFIG_CONTENT` (an
-`--agent` of your own that allows `bash` overrides that). Codex has only the brief's word. With
+limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, simulate,
+synthesize or test. The loop runs the gate and the stages, and a failure goes back to the agent's
+session with the exact output (D673). The agent keeps a shell for reading, searching and
+computing (`python3`, `pdftotext`). The presets deny the design tools (verilator, iverilog,
+yosys, openroad, sta, the C compilers, make, `flux rtl`, `flux task`, ...) and `bash`/`sh` (D674).
+Claude Code gets them as `--disallowedTools "Bash(yosys:*)" ...`. OpenCode gets them as
+`permission.bash` rules merged into `OPENCODE_CONFIG_CONTENT`; an `--agent` of your own with
+its own `bash` rules may override them. Codex has only the brief's word. A deny list is best
+effort: `python3` can still start a tool. With
 `budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with
 `flux rtl proto` and spells the RTL (D618). An agent that
 ends a turn without writing its file is nudged to write it, twice at most. An agent whose

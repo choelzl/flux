@@ -53,20 +53,26 @@ __all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "ag
 #: resumes its session with an answer, and how its output says the session and its words.
 #: The prompt (and a resume's answer) goes on stdin: no argument-size limit, nothing on the
 #: command line (D672). Each reads stdin when its prompt argument is left out (codex: `-`).
-#: No shell (D673): the agent writes, the loop compiles, tests and measures, and a failure comes
-#: back to the agent's session. Claude Code loses its Bash tool; OpenCode is denied `bash` by
-#: an inline config merged into OPENCODE_CONFIG_CONTENT. Codex runs everything through its
-#: shell, so it has only the brief's word.
+#: The design is the loop's to run (D673): the agent has a shell for reading, searching and
+#: computing (python3, pdftotext), without the commands that compile, simulate, synthesize or
+#: test, and without `bash` / `sh` (a `bash -c` would pass by the list). Best effort: the brief
+#: says it too, and Codex, whose shell is its only tool, has only the brief.
+DENIED = ("verilator", "iverilog", "vvp", "yosys", "openroad", "sta", "klayout", "champsim", "timeloop-model",
+          "timeloop-mapper", "gcc", "g++", "cc", "c++", "clang", "clang++", "make", "cmake", "ninja", "pytest",
+          "flux rtl", "flux task", "flux run", "bash", "sh")
+_CLAUDE_DENY = ("--allowedTools", "Bash", "--disallowedTools", "AskUserQuestion", *(f"Bash({c}:*)" for c in DENIED))
+_OPENCODE_DENY = {"permission": {"bash": {"*": "allow", **{k: "deny" for c in DENIED for k in (c, f"{c} *")}}}}
+
 PRESETS: dict[str, dict[str, Any]] = {
     "claude": {"argv": ("claude", "-p", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
-                        "--verbose", "--disallowedTools", "AskUserQuestion", "Bash"),
+                        "--verbose", *_CLAUDE_DENY),
                "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
-                          "--output-format", "stream-json", "--verbose", "--disallowedTools", "AskUserQuestion", "Bash"),
+                          "--output-format", "stream-json", "--verbose", *_CLAUDE_DENY),
                "output": "claude"},
     "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}"),
                  "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}"),
-                 "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": {"permission": {"bash": "deny"}}}},
+                 "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": _OPENCODE_DENY}},
 }
 OUTPUTS = ("text", "opencode", "claude")
 POLICIES = ("decide", "model", "operator")
@@ -178,10 +184,10 @@ _ASKING = {
 _ASKING["operator"] = _ASKING["model"]
 
 #: Who runs what (D673): the agent writes, the loop runs.
-HANDOFF = ("Do not compile, lint, simulate, synthesize, test or run the file, and do not run the gate: you have "
-           "no shell for it. The loop does all of that on the file you write and, when something fails, comes "
-           "back to you in this session with its exact output. Read files as you need; write the file and end "
-           "your turn.")
+HANDOFF = ("Do not compile, lint, simulate, synthesize, test or run the file, and do not run the gate: those "
+           "commands are denied to you. The loop does all of that on the file you write and, when something "
+           "fails, comes back to you in this session with its exact output. Use the shell to read, search and "
+           "compute (python3 for a calculation, pdftotext for a PDF); write the file and end your turn.")
 
 #: The answer when nobody answers.
 DECIDE = ("Nobody is available to answer questions during this run. Choose the option you judge best for the brief, "

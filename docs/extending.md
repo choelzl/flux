@@ -39,8 +39,8 @@ in the report).
 - `{command: "..."}`: a script renders it. With a `space`, the script runs once per point with
   the knobs as placeholders (`flux new --kind sweep`).
 - `{agent: opencode|claude|codex}` or `{agent: {command: [...], timeout_s: N, questions:
-  decide|model|operator}}`: a coding agent writes it in a work directory. It runs nothing: the
-  loop runs the gate and brings a failure back to its session (D673).
+  decide|model|operator}}`: a coding agent writes it in a work directory. It does not compile or
+  test: the loop runs the gate and brings a failure back to its session (D673, D674).
 - `{catalog: [files]}`: designs that already exist.
 
 ### A prototype before the target (evolving, D604)
