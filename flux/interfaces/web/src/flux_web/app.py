@@ -349,7 +349,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}-{name}"}
+        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
         if sandbox:
             env["FLUX_SANDBOX"] = "1"
         try:

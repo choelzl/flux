@@ -223,3 +223,63 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
         "a kept key the configurator also wrote is refused"
     assert TestClient(app).get("/crafter-assets/crafter.js").status_code == 200
     assert TestClient(app).get("/crafter-assets/tools.json").json()
+
+
+def test_a_user_can_neither_see_nor_use_another_users_loops(server, tmp_path):
+    """Loops are per user (D687): every route that names another user's application or run
+    answers as if it did not exist, or refuses; only an admin reads them."""
+    app, _ = server
+    store = app.state.store
+    store.add_user("cy", "a third long secret")
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    log = tmp_path / "r.log"
+    log.write_text("secret output\n")
+    rid = store.add_run(store.user(name="bob"), "x", str(tmp_path / "x.db"), str(log), ["x"], {})
+    cy = _client(app, "cy", "a third long secret")
+    assert cy.get("/api/apps").json() == [] and cy.get("/api/runs").json() == []
+    assert cy.get("/api/runs", params={"everyone": 1}).json() == [], "everyone is an admin's"
+    for path in ("/api/apps/x", "/api/apps/x/files", "/api/apps/x/document"):
+        assert cy.get(path).status_code in (400, 404), path
+    assert cy.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).status_code == 400
+    for path, kw in (("/api/apps/x", {"owner": "bob"}), ("/api/apps/x/document", {"owner": "bob"}),
+                     ("/api/apps/x/file", {"owner": "bob", "path": "x.problem.yaml"})):
+        assert cy.get(path, params=kw).status_code == 403, path
+    for path in ("", "/turns", "/results", "/report", "/notes"):
+        assert cy.get(f"/api/runs/{rid}{path}").status_code == 404, path
+    assert cy.post(f"/api/runs/{rid}/stop", json={"now": True}, headers=H).status_code == 404
+    assert cy.post(f"/api/runs/{rid}/notes", json={"text": "hi"}, headers=H).status_code == 404
+    for method, path, kw in (("post", "/api/apps/x/runs", {"json": {"passes": 1}}), ("post", "/api/apps/x/check", {}),
+                             ("put", "/api/apps/x/document", {"json": {"text": "id: y\\n"}}),
+                             ("put", "/api/apps/x/file", {"params": {"path": "x.problem.yaml"}, "json": {"text": "id: y"}}),
+                             ("delete", "/api/apps/x", {})):
+        r = getattr(cy, method)(path, headers=H, **kw)
+        assert r.status_code in (400, 404), (path, r.status_code)
+    assert bob.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).text.startswith("id: x"), "untouched"
+    ada = _client(app, "ada", "correct horse battery")
+    assert ada.get(f"/api/runs/{rid}").status_code == 200 and ada.get("/api/apps/x", params={"owner": "bob"}).status_code == 200
+    assert ada.put("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}, json={"text": "id: z"},
+                   headers=H).status_code in (400, 404), "an admin reads; the owner writes"
+
+
+def test_two_users_same_named_applications_never_share_a_sandbox(server):
+    from flux_web.runs import run_env  # noqa: F401 -- the key is set where runs start
+
+    app, _ = server
+    store = app.state.store
+    store.add_user("a-b", "long enough one")
+    store.add_user("a", "long enough two")
+    import types
+
+    from flux_cli.sandbox import app_dir
+
+    keys = []
+    for user, name in (("a-b", "c"), ("a", "b-c")):
+        import os
+
+        os.environ["FLUX_SANDBOX_APP"] = f"{user}.{name}"
+        try:
+            keys.append(app_dir(types.SimpleNamespace(file="nope.yaml"), "task run").name)
+        finally:
+            del os.environ["FLUX_SANDBOX_APP"]
+    assert keys[0] != keys[1], keys

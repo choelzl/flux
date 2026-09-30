@@ -773,3 +773,15 @@ the topics above.
   npu_gemm and prefetcher keep objectives; invent keeps gate; adder16, mul8 and primes keep
   nothing. Live, in headless Firefox: add8 opened, saved through the button, and reloaded to
   the same loop.
+
+- **D687: loops are per user.** A user sees and uses only their own applications and runs. An
+  admin reads anyone's and may stop any run; only the owner writes, runs or sends notes.
+  - **Tested.** A second user tried every application and run route of another's: the
+    document, a file, the listings, `?owner=`, the run and its turns, results, report and
+    notes, stop, starting a run, checking, saving, editing, deleting. Each answered not found
+    or refused, and the owner's file was untouched.
+  - **Sandbox key.** It was `<user>-<app>`, and both names may hold `-`, so `a-b`/`c` and
+    `a`/`b-c` shared one sandbox cache (traces, agent sessions). It is now `<user>.<app>`: `.`
+    is in neither name.
+  - **No templates in the web app.** "Write the YAML yourself" starts empty; the `flux new`
+    templates stay the command line's.

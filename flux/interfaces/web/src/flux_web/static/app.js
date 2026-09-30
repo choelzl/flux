@@ -104,8 +104,7 @@ async function newPage() {
   const err = errorBox();
   const name = h("input", { placeholder: "application name", required: true });
   const file = h("input", { value: "problem.problem.yaml", size: 28 });
-  const text = h("textarea", { spellcheck: "false" },
-    "id: my_problem\nstatement: >-\n  What the design must do.\nlanguage: systemverilog\ngate:\n  - {name: test, run: flux rtl test {artifact} --golden {home}/golden.py}\nobjectives:\n  - {metric: fmax_mhz, direction: maximize}\n");
+  const text = h("textarea", { spellcheck: "false", placeholder: "id: my_problem\nstatement: >-\n  What the design must do.\n..." });
   show(h("h1", {}, "Write a problem document"),
     h("p", { class: "muted" }, "Paste or write the YAML (the loop crafter on the documentation site builds one). Upload its other files afterwards on the application's page."),
     h("div", { class: "panel" },

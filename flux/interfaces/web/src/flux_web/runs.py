@@ -64,7 +64,7 @@ class RunManager:
             argv.append("--screen-only")
         inbox = log.with_suffix(".inbox.jsonl")
         inbox.touch()
-        env = {**run_env(self.store, user), "FLUX_SANDBOX_APP": f"{user.name}-{app}", "PYTHONUNBUFFERED": "1",
+        env = {**run_env(self.store, user), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(inbox)}                  # D684: notes and answers from the page
         env.pop("FLUX_SANDBOX_ALLOW", None)
         if options.get("allow"):
