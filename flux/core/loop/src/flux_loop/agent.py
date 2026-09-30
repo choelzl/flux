@@ -65,13 +65,13 @@ _OPENCODE_DENY = {"permission": {"bash": {"*": "allow", **{k: "deny" for c in DE
 
 PRESETS: dict[str, dict[str, Any]] = {
     "claude": {"argv": ("claude", "-p", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
-                        "--verbose", *_CLAUDE_DENY),
+                        "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
                "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
-                          "--output-format", "stream-json", "--verbose", *_CLAUDE_DENY),
+                          "--output-format", "stream-json", "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
                "output": "claude"},
     "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
-    "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}"),
-                 "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}"),
+    "opencode": {"argv": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}"),
+                 "resume": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}", "--session", "{session}"),
                  "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": _OPENCODE_DENY}},
 }
 OUTPUTS = ("text", "opencode", "claude")
@@ -291,14 +291,38 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
     return turn
 
 
+def _detail(tool: str, args: Any) -> str:
+    """One line for a tool call: the command, the file or the pattern it was given."""
+    if not isinstance(args, dict):
+        return tool
+    for key in ("command", "filePath", "file_path", "path", "pattern", "query", "url", "description"):
+        v = args.get(key)
+        if isinstance(v, str) and v.strip():
+            v = " ".join(v.split())
+            if key in ("filePath", "file_path", "path") and "/" in v:
+                v = v.rsplit("/", 1)[1] or v
+            return f"{tool}: {v[:100]}" + ("..." if len(v) > 100 else "")
+    return tool
+
+
 class _Live:
-    """What a running agent has done so far, read from its output as it streams (D668): the
-    tools it called and the tail of its words, for the TUI's running task row."""
+    """What a running agent is doing, read from its output as it streams (D668, D675): each tool
+    call with its command or file, the tail of its thinking and of its words, and the last tool
+    output, in the fields the model's own turns use."""
 
     TAIL = 1500
+    OUT_TAIL = 400
 
     def __init__(self, output: str) -> None:
-        self.output, self.tools, self.words = output, [], ""
+        self.output, self.tools, self.words, self.thinking, self.result = output, [], "", "", ""
+        self.streamed = False                      # claude: the words came token by token
+        self.thought_tokens = 0                    # claude: redacted thinking, counted
+
+    def _say(self, text: str, *, sep: str = "\n") -> None:
+        self.words = (self.words + text + sep)[-self.TAIL:]
+
+    def _think(self, text: str, *, sep: str = "\n") -> None:
+        self.thinking = (self.thinking + text + sep)[-self.TAIL:]
 
     def feed(self, line: str) -> None:
         if self.output == "text":
@@ -312,23 +336,66 @@ class _Live:
             return
         if self.output == "opencode":
             part = ev.get("part") or {}
-            if ev.get("type") == "tool_use":
-                self.tools.append(str(part.get("tool") or "tool"))
-            elif ev.get("type") == "text":
-                self.words = (self.words + str(part.get("text") or "") + "\n")[-self.TAIL:]
-        elif ev.get("type") == "assistant":           # claude stream-json
+            kind = ev.get("type")
+            if kind == "tool_use":
+                state = part.get("state") or {}
+                self.tools.append(_detail(str(part.get("tool") or "tool"), state.get("input")))
+                out = state.get("output") or state.get("error")
+                if isinstance(out, str) and out.strip():
+                    self.result = out.strip()[-self.OUT_TAIL:]
+            elif kind == "text":
+                self._say(str(part.get("text") or ""))
+            elif kind == "reasoning":                # with --thinking
+                self._think(str(part.get("text") or ""))
+            return
+        kind = ev.get("type")                        # claude stream-json
+        if kind == "stream_event":                   # --include-partial-messages: token by token
+            e = ev.get("event") or {}
+            d = e.get("delta") or {}
+            if e.get("type") == "content_block_delta":
+                if d.get("type") == "text_delta":
+                    self.streamed = True
+                    self._say(str(d.get("text") or ""), sep="")
+                elif d.get("type") == "thinking_delta":
+                    if d.get("thinking"):
+                        self._think(str(d["thinking"]), sep="")
+                    else:                            # redacted: only its size
+                        self.thought_tokens += int(d.get("estimated_tokens") or 0)
+            elif e.get("type") == "content_block_stop" and self.words and not self.words.endswith("\n"):
+                self.words += "\n"
+        elif kind == "assistant":
             for c in (ev.get("message") or {}).get("content") or []:
-                if isinstance(c, dict) and c.get("type") == "tool_use":
-                    self.tools.append(str(c.get("name") or "tool"))
-                elif isinstance(c, dict) and c.get("type") == "text":
-                    self.words = (self.words + str(c.get("text") or "") + "\n")[-self.TAIL:]
+                if not isinstance(c, dict):
+                    continue
+                if c.get("type") == "tool_use":
+                    self.tools.append(_detail(str(c.get("name") or "tool"), c.get("input")))
+                elif c.get("type") == "text" and not self.streamed:
+                    self._say(str(c.get("text") or ""))
+                elif c.get("type") == "thinking" and c.get("thinking") and not self.thinking:
+                    self._think(str(c["thinking"]))
+        elif kind == "user":                         # a tool's result
+            for c in (ev.get("message") or {}).get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "tool_result":
+                    body = c.get("content")
+                    if isinstance(body, list):
+                        body = "\n".join(str(b.get("text") or "") for b in body if isinstance(b, dict))
+                    if str(body or "").strip():
+                        self.result = str(body).strip()[-self.OUT_TAIL:]
 
     def fields(self) -> dict[str, str]:
         out = {}
         if self.tools:
-            out["tool calls"] = f"{len(self.tools)}: " + ", ".join(self.tools[-8:])
+            shown = self.tools[-8:]
+            first = len(self.tools) - len(shown) + 1
+            out["tool calls"] = "\n".join(f"{first + i}. {t}" for i, t in enumerate(shown))   # numbered: the count
+        if self.result:
+            out["last tool output"] = self.result
+        if self.thinking.strip():
+            out["thinking (live tail)"] = self.thinking
+        elif self.thought_tokens:
+            out["thinking"] = f"about {self.thought_tokens:,} tokens (the tool does not show its thinking)"
         if self.words.strip():
-            out["agent (live tail)"] = self.words
+            out["reply (live tail)"] = self.words
         return out
 
 

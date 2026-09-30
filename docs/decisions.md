@@ -528,3 +528,16 @@ the topics above.
   gets `--allowedTools Bash` plus `Bash(<cmd>:*)` denies. OpenCode: `"*": "allow"` first, then
   `<cmd>` and `<cmd> *` deny. Live, both presets: `python3` ran; `yosys -V`, `bash -c "yosys -V"`
   and `flux rtl --help` were refused.
+
+- **D675: a running agent shows what it does.** The TUI row had shown a tool count, tool names and
+  an occasional line of words. Now it shows:
+  - each tool call with its command, file or pattern (`1. bash: python3 -c "print(255+255)"`,
+    `2. write: add8.sv`), the last eight;
+  - the last tool output (400 chars);
+  - the thinking tail;
+  - the reply tail, in the fields a model's turn uses.
+
+  OpenCode runs with `--thinking`, which adds its reasoning blocks to the JSON events. Claude
+  Code runs with `--include-partial-messages`, so the words stream token by token. Its thinking
+  arrives redacted (only an estimated size), so the row says "about N tokens". Live, both presets
+  sent 11-12 updates in a short turn with tools, output, thinking or its size, and words.

@@ -1,5 +1,6 @@
-"""A running coding agent shows in the TUI as a model turn does (D668): its task row gets the
-elapsed time, the tools it called and the tail of its words while it runs, not only at the end."""
+"""A running coding agent shows in the TUI as a model turn does (D668, D675): its task row gets
+the elapsed time, each tool call with its command or file, the last tool output, the tail of its
+thinking and of its words, while it runs, not only at the end."""
 
 from __future__ import annotations
 
@@ -10,8 +11,11 @@ import flux_profile
 from flux_loop.agent import AgentSpec, _Live, _parse, run_turn
 
 SLOW = r'''import json, sys, time
-for ev in [{"type": "tool_use", "part": {"tool": "bash"}}, {"type": "text", "part": {"text": "reading the brief"}},
-           {"type": "tool_use", "part": {"tool": "edit"}}, {"type": "text", "part": {"text": "wrote the file"}}]:
+for ev in [{"type": "tool_use", "part": {"tool": "bash", "state": {"input": {"command": "python3 -c 'print(42)'"}, "output": "42"}}},
+           {"type": "reasoning", "part": {"text": "a ripple adder is enough"}},
+           {"type": "text", "part": {"text": "reading the brief"}},
+           {"type": "tool_use", "part": {"tool": "edit", "state": {"input": {"filePath": "/w/draft.sv"}}}},
+           {"type": "text", "part": {"text": "wrote the file"}}]:
     print(json.dumps(ev), flush=True)
     time.sleep(0.8)
 '''
@@ -45,9 +49,11 @@ def test_the_running_agent_streams_its_tools_and_words(tmp_path):
     assert turn.ok and "wrote the file" in turn.text
     mid = [u for u in lis.updates if "tool calls" in u]
     # an update at most once a second: under load the first may already count both tools
-    assert mid and mid[0]["tool calls"].split(": ", 1)[1].startswith("bash"), "the row updated while the agent ran"
+    assert mid and mid[0]["tool calls"].startswith("1. bash: python3 -c 'print(42)'"), "the row updated while the agent ran"
     assert any("elapsed" in u for u in lis.updates)
-    assert lis.ends and lis.ends[-1]["name"] == "agent: fake" and "2: bash, edit" in lis.ends[-1]["tool calls"]
+    assert lis.ends and lis.ends[-1]["name"] == "agent: fake" and lis.ends[-1]["tool calls"].endswith("2. edit: draft.sv")
+    end = lis.ends[-1]
+    assert end["last tool output"] == "42" and "ripple" in end["thinking (live tail)"] and "wrote the file" in end["reply (live tail)"]
 
 
 def test_claude_stream_json_is_read_live_and_its_result_is_the_answer():
@@ -60,5 +66,35 @@ def test_claude_stream_json_is_read_live_and_its_result_is_the_answer():
               {"type": "rate_limit_event"}]
     for ev in events:
         live.feed(json.dumps(ev) + "\n")
-    assert live.fields() == {"tool calls": "1: Bash", "agent (live tail)": "done\n"}
+    assert live.fields() == {"tool calls": "1. Bash", "reply (live tail)": "done\n"}
     assert _parse("claude", "".join(json.dumps(e) + "\n" for e in events)) == ("the file is written", "s-1")
+
+
+def test_claude_partial_messages_stream_the_words_and_count_redacted_thinking():
+    """--include-partial-messages: the words token by token (the whole message is not added
+    again), the tool's command, and a thinking the model redacts shown by its size."""
+    live = _Live("claude")
+    delta = lambda d: {"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": d}}
+    events = [delta({"type": "thinking_delta", "thinking": "", "estimated_tokens": 50}),
+              delta({"type": "thinking_delta", "thinking": "", "estimated_tokens": 70}),
+              delta({"type": "text_delta", "text": "The smallest "}), delta({"type": "text_delta", "text": "adder"}),
+              {"type": "stream_event", "event": {"type": "content_block_stop", "index": 1}},
+              {"type": "assistant", "message": {"content": [{"type": "text", "text": "The smallest adder"}]}},
+              {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash",
+                                                             "input": {"command": "python3 -c 'print(255+255)'"}}]}},
+              {"type": "user", "message": {"content": [{"type": "tool_result", "content": [{"type": "text", "text": "510"}]}]}},
+              {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Write",
+                                                             "input": {"file_path": "/w/note.txt", "content": "x"}}]}}]
+    for ev in events:
+        live.feed(json.dumps(ev) + "\n")
+    f = live.fields()
+    assert f["reply (live tail)"] == "The smallest adder\n"
+    assert f["tool calls"] == "1. Bash: python3 -c 'print(255+255)'\n2. Write: note.txt"
+    assert f["last tool output"] == "510" and f["thinking"].startswith("about 120 tokens")
+
+
+def test_the_presets_stream_what_they_can_show():
+    from flux_loop.agent import agent_spec
+
+    assert "--thinking" in agent_spec("opencode").argv and "--thinking" in agent_spec("opencode").resume
+    assert "--include-partial-messages" in agent_spec("claude").argv and "--include-partial-messages" in agent_spec("claude").resume
