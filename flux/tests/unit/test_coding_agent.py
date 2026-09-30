@@ -84,9 +84,9 @@ def test_an_agent_that_fails_is_a_refusal_with_its_words(tmp_path):
 def test_the_presets_and_the_missing_binary():
     for name in ("claude", "codex", "opencode"):
         a = agent_spec(name)
-        assert a.tool == name and a.argv[0] == name and "{prompt}" in a.argv and a.timeout_s == 1800.0
+        assert a.tool == name and a.argv[0] == name and "{prompt}" not in a.argv and a.timeout_s == 1800.0
         assert a.questions == "decide" and a.max_questions == 2
-    assert agent_spec("opencode").resume[-2:] == ("{session}", "{answer}") and agent_spec("opencode").output == "opencode"
+    assert agent_spec("opencode").resume[-2:] == ("--session", "{session}") and agent_spec("opencode").output == "opencode"
     assert "--dir" in agent_spec("opencode").argv and "{workdir}" in agent_spec("opencode").argv
     assert "AskUserQuestion" in agent_spec("claude").argv and "--resume" in agent_spec("claude").resume
     a = agent_spec({"preset": "codex", "timeout_s": 60, "questions": "model"})

@@ -1,5 +1,5 @@
-"""Size limits on what reaches an agent or a prompt (D671): a brief too long for one command-line
-argument goes through a file; a mined refusal quotes the head of its message, not a raw agent
+"""Size limits on what reaches an agent or a prompt (D671, D672): the presets send the brief on
+stdin; a custom command naming `{prompt}` gets a brief too long for one argument through a file; a mined refusal quotes the head of its message, not a raw agent
 output; the mined block has a budget."""
 
 from __future__ import annotations
@@ -28,6 +28,30 @@ def test_a_brief_over_the_argument_limit_reaches_the_agent_through_a_file(tmp_pa
     small = run_turn(spec, spec.argv, {"prompt": "short"}, workdir=tmp_path)
     assert "arg=5" in small.text and "file=" not in small.text, "a short prompt stays inline"
     assert INLINE_MAX < 128 * 1024
+
+
+STDIN = r'''import sys
+print(f"argv={sys.argv[1:]} stdin={len(sys.stdin.read())}")
+'''
+
+
+def test_a_command_without_a_prompt_slot_reads_the_brief_on_stdin(tmp_path):
+    """No argument carries the brief (no E2BIG at any size); a resume sends its answer."""
+    from flux_loop.agent import PRESETS
+
+    fake = tmp_path / "stdin.py"
+    fake.write_text(STDIN)
+    spec = AgentSpec("stdin", (sys.executable, str(fake), "--dir", "{workdir}"), None, "text", timeout_s=30)
+    turn = run_turn(spec, spec.argv, {"prompt": "x" * 1_000_000, "workdir": "w"}, workdir=tmp_path)
+    assert turn.ok and "stdin=1000000" in turn.text, turn.stderr
+    again = run_turn(spec, spec.argv + ("{session}",), {"prompt": "brief", "workdir": "w", "session": "S1", "answer": "fix it"},
+                     workdir=tmp_path)
+    assert "'S1']" in again.text and "stdin=6" in again.text
+    named = run_turn(spec, spec.argv + ("{prompt}",), {"prompt": "hi", "workdir": "w"}, workdir=tmp_path)
+    assert "stdin=0" in named.text, "a command naming {prompt} gets it as an argument, stdin closed"
+    for p in PRESETS.values():                                  # no preset puts the brief in argv
+        for argv in (p["argv"], p["resume"] or ()):
+            assert not {"{prompt}", "{answer}", "{prompt_file}"} & set(argv)
 
 
 def test_a_refusal_fact_quotes_the_head_of_its_message(tmp_path):

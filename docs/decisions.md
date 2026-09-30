@@ -497,3 +497,11 @@ the topics above.
   refusal fact quotes the first line of its message (160 chars) and groups on it -- raw agent
   output and compiler logs had been quoted whole, each tail its own fact; the full messages stay
   in the evidence by their start and end. The mined block carries 12 facts and 3,000 chars.
+
+- **D672: the brief on stdin.** The presets (OpenCode, Claude Code, Codex `exec -`) take the
+  prompt, and a resume's message, on stdin; no argument carries it, so no size hits the 128 KiB
+  argument limit. A custom `command` naming `{prompt}`, `{prompt_file}` or `{answer}` still gets
+  it there (the D671 file for a long `{prompt}`); naming none, it reads stdin. Stdin is written
+  by its own thread and closed, beside the streaming readers; with nothing to send it is closed
+  at once. Extra `args` go at the end (before codex's `-`). Live: OpenCode read a 132 KB brief
+  on stdin and its resumed session recalled the code word in it.

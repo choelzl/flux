@@ -252,9 +252,9 @@ def test_a_preset_s_executable_can_be_renamed_and_nothing_else(monkeypatch):
         agent_spec({"command": ["x"], "bin": "y"})
 
 
-def test_a_preset_takes_extra_arguments_before_its_prompt(monkeypatch):
+def test_a_preset_takes_extra_arguments(monkeypatch):
     """`args` (per document) or FLUX_<PRESET>_ARGS (per machine), e.g. OpenCode's `--agent flux`,
-    go before the prompt and before the answer on resume (D670)."""
+    go at the end, the prompt being on stdin (D670, D672); codex's `-` stays last."""
     import pytest
 
     from flux_loop.agent import agent_spec
@@ -262,9 +262,10 @@ def test_a_preset_takes_extra_arguments_before_its_prompt(monkeypatch):
     monkeypatch.delenv("FLUX_OPENCODE_BIN", raising=False)
     monkeypatch.setenv("FLUX_OPENCODE_ARGS", "--agent flux")
     spec = agent_spec("opencode")
-    assert spec.argv[-3:] == ("--agent", "flux", "{prompt}") and spec.resume[-3:] == ("--agent", "flux", "{answer}")
+    assert spec.argv[-2:] == ("--agent", "flux") and spec.resume[-2:] == ("--agent", "flux")
     doc = agent_spec({"preset": "opencode", "args": ["--agent", "review"]})     # the document's wins
-    assert doc.argv[-3:] == ("--agent", "review", "{prompt}")
+    assert doc.argv[-2:] == ("--agent", "review")
+    assert agent_spec({"preset": "codex", "args": ["-m", "o4"]}).argv[-3:] == ("-m", "o4", "-")
     monkeypatch.delenv("FLUX_OPENCODE_ARGS")
     assert "--agent" not in agent_spec("opencode").argv
     with pytest.raises(ValueError, match="list of arguments"):

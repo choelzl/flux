@@ -25,6 +25,10 @@ box's agent takes `session: turn` (a fresh agent every turn, the default) or `se
 (one session per box for the pass, resumed turn after turn):
     critique: {agent: {preset: opencode, session: pass}}
 
+The brief goes on the agent's stdin (D672), and a resume's message too: no argument carries it,
+so its size is not bounded by the command line. A custom command that names `{prompt}`,
+`{prompt_file}` or `{answer}` gets it there instead (a `{prompt}` over INLINE_MAX through a file).
+
 Substitutions in a command: `{prompt}` (the brief's text), `{prompt_file}` (its path),
 `{artifact}` (where to write), `{workdir}`, `{part}`, `{name}`, `{python}`; in a `resume`
 command also `{session}` and `{answer}`.
@@ -47,15 +51,17 @@ __all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "ag
 
 #: The agents this repository knows how to call headless: the first turn, the turn that
 #: resumes its session with an answer, and how its output says the session and its words.
+#: The prompt (and a resume's answer) goes on stdin: no argument-size limit, nothing on the
+#: command line (D672). Each reads stdin when its prompt argument is left out (codex: `-`).
 PRESETS: dict[str, dict[str, Any]] = {
-    "claude": {"argv": ("claude", "-p", "{prompt}", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
+    "claude": {"argv": ("claude", "-p", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
                         "--verbose", "--disallowedTools", "AskUserQuestion"),
-               "resume": ("claude", "-p", "{answer}", "--resume", "{session}", "--permission-mode", "acceptEdits",
+               "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
                           "--output-format", "stream-json", "--verbose", "--disallowedTools", "AskUserQuestion"),
                "output": "claude"},
-    "codex": {"argv": ("codex", "exec", "--full-auto", "{prompt}"), "resume": None, "output": "text"},
-    "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "{prompt}"),
-                 "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}", "{answer}"),
+    "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
+    "opencode": {"argv": ("opencode", "run", "--format", "json", "--dir", "{workdir}"),
+                 "resume": ("opencode", "run", "--format", "json", "--dir", "{workdir}", "--session", "{session}"),
                  "output": "opencode"},
 }
 OUTPUTS = ("text", "opencode", "claude")
@@ -131,8 +137,9 @@ def agent_spec(spec: Any) -> AgentSpec:
 
 
 def _with_args(argv: tuple[str, ...], extra: tuple[str, ...]) -> tuple[str, ...]:
-    """`extra` before the trailing `{prompt}` / `{answer}`, where the tools read their options."""
-    if extra and argv and argv[-1] in ("{prompt}", "{answer}"):
+    """`extra` among the tool's options: before a trailing prompt slot (`-`, `{prompt}`,
+    `{answer}`), else at the end."""
+    if extra and argv and argv[-1] in ("-", "{prompt}", "{answer}"):
         return (*argv[:-1], *extra, argv[-1])
     return (*argv, *extra)
 
@@ -331,12 +338,27 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
     env = {**os.environ, "PWD": str(workdir)}
+    # the prompt on stdin unless the command names a slot for it (D672); a resume's answer
+    # comes in `answer`. With nothing to send, stdin is closed so no agent waits on it.
+    slots = {m for t in argv for m in re.findall(r"\{(\w+)\}", t)}
+    feed = None if slots & {"prompt", "prompt_file", "answer"} else subs.get("answer", subs.get("prompt"))
     proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            stdin=subprocess.DEVNULL, text=True, env=env, bufsize=1)
+                            stdin=subprocess.PIPE if feed is not None else subprocess.DEVNULL,
+                            text=True, env=env, bufsize=1)
     lines: queue.Queue = queue.Queue()
     err: list[str] = []
+
+    def write() -> None:
+        try:
+            proc.stdin.write(feed)
+            proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+
     readers = [threading.Thread(target=lambda: [lines.put(ln) for ln in proc.stdout] and None, daemon=True),
                threading.Thread(target=lambda: err.extend(proc.stderr), daemon=True)]
+    if feed is not None:
+        readers.append(threading.Thread(target=write, daemon=True))
     for t in readers:
         t.start()
     live, out = _Live(spec.output), []
