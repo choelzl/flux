@@ -187,6 +187,7 @@
               pythonEnv pkgs.docker-client
               pkgs.ruff        # the lint CI runs: `ruff check` (pyflakes rules; honours noqa)
               chipPkgs.verilator chipPkgs.sv-lang chipPkgs.yosys
+              chipPkgs.iverilog  # Icarus Verilog: event-driven simulation beside Verilator
               # CMU-SAFARI/Pythia: ChampSim, with its source tree under
               # $out/share/pythia so `flux champsim build` can rebuild it.
               chipPkgs.pythia
