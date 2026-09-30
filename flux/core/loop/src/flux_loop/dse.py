@@ -181,14 +181,15 @@ class Policy(Rules):
         if not space:
             state.say(f"  {self.name}: no `space:` is declared and the world names none; nothing to search")
             return None
-        seen = {_key(point_of(s.candidate)) for s in state.scored if point_of(s.candidate)}
         self._space, self._when = space, dict(getattr(getattr(problem, "task", None), "when", None) or {})
         seeds = [dict(p) for p in (getattr(problem, "seeds", None) or (lambda _s: []))(state) or []]
         self._home = dict(seeds[0]) if seeds else {}
-        return self._seeded(problem, state, space, seen, seeds)
+        return self._seeded(problem, state, space, seeds)
 
-    def _seeded(self, problem, state, space, seen, seeds):
-        """The seeds first (D583), once, then the walk."""
+    def _seeded(self, problem, state, space, seeds):
+        """The seeds first (D583), once, then the walk. What is measured is read when the walk
+        starts, so a resumed record's points (D682) count as seen."""
+        seen = {_key(point_of(s.candidate)) for s in state.scored if point_of(s.candidate)}
         state.dse.append({"label": "seed", "points": seeds})
         fresh = [p for p in seeds if _key(p) not in seen]
         if fresh:
@@ -335,6 +336,8 @@ class Sweep(Policy):
             pts = points(space)
         pts = list({_key(p): p for p in map(self.canon, pts)}.values())
         todo = [p for p in pts if _key(p) not in seen]
+        if not todo:
+            state.search_done = True                  # every point is on record: nothing to propose
         size = int(self.batch_size) or max(1, len(todo))
         state.say(f"  sweep: {len(todo)} point(s) of {len(pts)}"
                   + (f" (over {', '.join(moving)})" if len(moving) < len(space) else "") + f", {size} a batch")

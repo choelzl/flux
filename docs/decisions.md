@@ -647,3 +647,17 @@ the topics above.
   Mount points under HOME are made in advance, as the user, not by Docker as root. Live: a
   gate found no shared trace folder, saw only its own application under `apps/`, and wrote its
   traces to its own `tmp/`.
+
+- **D682: a resumed search goes on from its record.** Only parts were reloaded, so a DSE
+  campaign run again started with nothing measured. It walked from the start, got every
+  number from the cache, found nothing new and reported "at rest" (adder16 resumed: `sweep:
+  12 point(s) of 12`). Now every point measured on earlier passes rejoins `state.scored`
+  before the walk (one row per point and stage), and the policy reads `seen` when the walk
+  starts:
+  - a sweep proposes only unmeasured points; with none left it is at rest;
+  - a sampler draws new points (MonteCarlo: 6 new each pass, none repeated);
+  - a gradient starts from the record's incumbent;
+  - a model search sees the whole history;
+  - the decision is over the whole record.
+
+  A point measured again replaces its recalled row.

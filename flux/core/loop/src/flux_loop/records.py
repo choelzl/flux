@@ -7,12 +7,12 @@ from typing import Any, TYPE_CHECKING
 
 from .observe import _phase
 from .provenance import stamp
-from .types import Candidate, LoopState, StageNames, Verdict
+from .types import Candidate, LoopState, Scored, StageNames, Verdict
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
 
-__all__ = ["_record_trial", "_reload", "prototype_digest"]
+__all__ = ["_record_trial", "_reload", "_reload_measured", "prototype_digest"]
 
 
 def prototype_digest(code: str) -> str:
@@ -104,6 +104,37 @@ def shortlist_of(problem: Problem, options: list[Candidate], stage: str | None, 
                     "prototype_sha": str((c.meta or {}).get("prototype_sha") or ""),
                     "standing": dg == stands})
     return out
+
+
+_NOT_KNOBS = ("name", "artifact", "meta", "subgoal", "knobs", "score", "why")
+
+
+def _reload_measured(problem: Problem, state: LoopState) -> None:
+    """A search resumes where the record left it (D682): every point an earlier pass measured
+    rejoins `state.scored`, the latest row per point and stage, so the policy proposes only
+    what is new, ranks from the record's incumbent, and a model search sees the whole history.
+    Without it a resumed search walked from the start again, took every number from the cache
+    and called the unchanged answer rest."""
+    if state.records is None or not getattr(state.records, "resumed", False):
+        return
+    stages = set(problem.stages() or [])
+    latest: dict[tuple[str, str], Scored] = {}
+    try:
+        for t in state.records.store.trials(state.records.campaign_id, status="ok"):
+            if t.stage not in stages or t.result is None:
+                continue
+            doc = dict(t.candidate or {})
+            knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
+            cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
+                             dict(doc.get("meta") or {}), doc.get("subgoal"))
+            latest[(cand.name, cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
+                                                             {"recalled": True})
+    except Exception as exc:  # noqa: BLE001 -- a record that cannot be read back: the search starts over
+        state.say(f"reload: the record's measurements could not be read back ({exc!s:.80}); the search starts over")
+        return
+    if latest:
+        state.scored.extend(latest.values())
+        state.say(f"reload: {len({k[:2] for k in latest})} design(s) measured on earlier passes rejoin the search")
 
 
 def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) -> None:

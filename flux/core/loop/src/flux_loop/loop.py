@@ -13,7 +13,7 @@ from .provenance import trace_dir
 from .objective import Objectives
 from .observe import _phase, _publish, _publish_mentor
 from .problem import Problem
-from .records import _record_trial, _reload
+from .records import _record_trial, _reload, _reload_measured
 from .types import (BuildError, Candidate, Improve, LoopRequest, LoopResult, LoopState,
                     Scored, SubLoop, Verdict)
 
@@ -131,6 +131,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     # batches, parts, or both. Only parts carry memory to re-verify, so the record is read
     # back only when there are parts.
     searching: Iterator[list[Candidate]] | None = problem.search(state)
+    if searching is not None:
+        _reload_measured(problem, state)     # D682: before the walk's first step reads what is measured
     with _phase("propose: decompose", why="the parts this pass works on") as out:
         goals: list[str] = _work(state, problem.decompose(state))
         out["parts"] = _describe_parts(goals, problem, state)
@@ -391,7 +393,8 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
                          searching=hunting)
                 _publish_mentor(problem, state)
         if (not state.improved and not state.pool and not todo and not live
-                and not (set(state.admitted) - admitted_before) and (state.rested or not state.sent_back)):
+                and not (set(state.admitted) - admitted_before) and (state.rested or not state.sent_back)
+                and not getattr(state, "search_done", False)):      # a finished search says so below
             # D506/D518: a pass where every design sent back stood and nothing was admitted, or
             # nothing was sent back at all, changed nothing -- the next would not either: a rest
             state.stopped = (("at rest: every ladder is spent (" + ", ".join(dict.fromkeys(state.rested)) + ")")
@@ -615,6 +618,11 @@ def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> 
     if not stages or not admitted:
         return []
     scored = measure_many(problem, state, admitted, stages[0])
+    if any(s.payload.get("recalled") for s in state.scored):
+        # a point measured again replaces its row from the record (D682), not a second one
+        again = {(s.candidate.name, s.candidate.key(), s.stage) for s in scored}
+        state.scored[:] = [s for s in state.scored if not (s.payload.get("recalled") and
+                           (s.candidate.name, s.candidate.key(), s.stage) in again)]
     state.scored.extend(scored)
     problem.review(stages[0], scored, state)
     _route(problem, state, stages[0], scored)

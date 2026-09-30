@@ -335,3 +335,25 @@ def test_the_trees_estimate_votes_with_the_nearest_measured_points():
     assert _estimate({"pht": 4096, "ft": 64}, measured, space) == (1.02, -4096.0)
     q = _estimate({"pht": 8192, "ft": 128}, measured, space)
     assert 1.02 < q[0] < 1.04
+
+
+def test_a_resumed_search_goes_on_from_the_record(tmp_path):
+    """D682: a search run again on its record starts from what the record measured -- a sweep
+    that measured every point proposes none, a sampler draws new points -- instead of walking
+    from the start, taking every number from the cache and calling the old answer rest."""
+    db = str(tmp_path / "c.db")
+    req = LoopRequest(steps=40, finalists=0, screen_only=True, db=db)
+    first = Bowl(MonteCarlo(samples=6, batch_size=3, seed=0))
+    run_loop(first, req, proposer=None, log=lambda _m: None)
+    again = Bowl(MonteCarlo(samples=6, batch_size=3, seed=0))
+    out = run_loop(again, req, proposer=None, log=lambda _m: None)
+    key = lambda ps: {tuple(sorted(p.items())) for p in ps}                 # noqa: E731
+    assert len(again.measured) == 6 and not key(again.measured) & key(first.measured)
+    assert len({s.candidate.key() for s in out.scored}) == 12, "the decision is over the whole record"
+
+    db = str(tmp_path / "s.db")
+    run_loop(Bowl(Sweep()), LoopRequest(steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
+    swept = Bowl(Sweep())
+    out = run_loop(swept, LoopRequest(steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
+    assert swept.measured == [], "every point is on the record: nothing is walked again"
+    assert out.decision is not None and out.decision.candidate.knobs == {"x": 3, "y": 2}
