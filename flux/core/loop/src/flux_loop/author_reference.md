@@ -66,7 +66,8 @@ Say only what is yours; the rest is inferred.
   `knobs`, `hold` and `keep` take globs (`bingo.*`, `"*.on"`).
 - `flow`: who fills each box of the loop -- `generate: model` (the default),
   `generate: {command: "..."}` (a script renders each candidate; with a `space`, once per
-  point, knobs as `{knob}`), `generate: {agent: opencode|claude|codex}`,
+  point, knobs as `{knob}`), `generate: {agent: opencode|claude|codex}` (or `{preset, bin, args}`: another executable, extra
+  arguments such as `[--agent, flux]`; per machine `FLUX_OPENCODE_BIN` / `FLUX_OPENCODE_ARGS`),
   `dse: sweep|montecarlo|anneal|gradient|genetic|pareto|llm` or a list of phases,
   `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
   and on any box but test and the stages, `{agent: opencode|claude|codex}`: a coding agent answers

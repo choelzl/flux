@@ -231,3 +231,41 @@ def test_a_session_out_of_context_continues_fresh(tmp_path):
     assert "B?" in two["text"] and "out-002.json" in two["text"]
     assert any("could not be resumed (out of context)" in m for m in st.said), st.said
     assert st.agent_sessions["critique"].id == two["sid"], "the fresh session is the pass's session now"
+
+
+def test_a_preset_s_executable_can_be_renamed_and_nothing_else(monkeypatch):
+    """`bin` (per document) or FLUX_<PRESET>_BIN (per machine) replaces only the executable; the
+    preset's arguments and resume command stay (D670)."""
+    import pytest
+
+    from flux_loop.agent import PRESETS, agent_spec
+
+    monkeypatch.delenv("FLUX_OPENCODE_BIN", raising=False)
+    assert agent_spec("opencode").argv == PRESETS["opencode"]["argv"]
+    monkeypatch.setenv("FLUX_OPENCODE_BIN", "oc")
+    spec = agent_spec("opencode")
+    assert spec.argv[0] == "oc" and spec.argv[1:] == PRESETS["opencode"]["argv"][1:]
+    assert spec.resume[0] == "oc" and spec.resume[1:] == PRESETS["opencode"]["resume"][1:]
+    assert agent_spec({"preset": "opencode", "bin": "~/bin/opencode-dev"}).argv[0].endswith("/bin/opencode-dev")
+    assert agent_spec({"preset": "claude", "bin": "claude-work"}).resume[0] == "claude-work"
+    with pytest.raises(ValueError, match="bin"):
+        agent_spec({"command": ["x"], "bin": "y"})
+
+
+def test_a_preset_takes_extra_arguments_before_its_prompt(monkeypatch):
+    """`args` (per document) or FLUX_<PRESET>_ARGS (per machine), e.g. OpenCode's `--agent flux`,
+    go before the prompt and before the answer on resume (D670)."""
+    import pytest
+
+    from flux_loop.agent import agent_spec
+
+    monkeypatch.delenv("FLUX_OPENCODE_BIN", raising=False)
+    monkeypatch.setenv("FLUX_OPENCODE_ARGS", "--agent flux")
+    spec = agent_spec("opencode")
+    assert spec.argv[-3:] == ("--agent", "flux", "{prompt}") and spec.resume[-3:] == ("--agent", "flux", "{answer}")
+    doc = agent_spec({"preset": "opencode", "args": ["--agent", "review"]})     # the document's wins
+    assert doc.argv[-3:] == ("--agent", "review", "{prompt}")
+    monkeypatch.delenv("FLUX_OPENCODE_ARGS")
+    assert "--agent" not in agent_spec("opencode").argv
+    with pytest.raises(ValueError, match="list of arguments"):
+        agent_spec({"preset": "opencode", "args": "--agent flux"})

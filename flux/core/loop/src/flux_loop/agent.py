@@ -33,6 +33,7 @@ command also `{session}` and `{answer}`.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -82,7 +83,7 @@ def agent_spec(spec: Any) -> AgentSpec:
         spec = {"preset": spec}
     if not isinstance(spec, dict):
         raise ValueError("agent: a preset's name or {preset|command, timeout_s, questions, ...}")
-    known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s",
+    known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args",
              "session"}
     unknown = sorted(set(spec) - known)
     if unknown:
@@ -96,6 +97,8 @@ def agent_spec(spec: Any) -> AgentSpec:
     common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
                   max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0),
                   session=session)
+    if spec.get("command") and (spec.get("bin") or spec.get("args")):
+        raise ValueError("agent: `bin` and `args` adjust a preset; with your own `command`, write them there")
     if spec.get("command"):
         argv = tuple(str(t) for t in spec["command"])
         output = str(spec.get("output") or "text")
@@ -108,7 +111,29 @@ def agent_spec(spec: Any) -> AgentSpec:
     if preset not in PRESETS:
         raise ValueError(f"agent {preset!r} is not a preset; presets: {', '.join(PRESETS)}; or give `command: [...]`")
     p = PRESETS[preset]
-    return AgentSpec(preset, p["argv"], p["resume"], p["output"], **common)
+    # the executable alone may differ per machine (an installed name, a path): the document's
+    # `bin`, else FLUX_<PRESET>_BIN, else the preset's own; the arguments stay the preset's (D670)
+    exe = str(spec.get("bin") or os.environ.get(f"FLUX_{preset.upper()}_BIN") or p["argv"][0])
+    exe = os.path.expanduser(exe)
+    # extra arguments, e.g. OpenCode's `--agent flux`: the document's `args`, else FLUX_<PRESET>_ARGS
+    extra = spec.get("args")
+    if extra is None:
+        import shlex
+
+        extra = shlex.split(os.environ.get(f"FLUX_{preset.upper()}_ARGS", ""))
+    if isinstance(extra, str) or not all(isinstance(a, (str, int, float)) for a in extra):
+        raise ValueError("agent.args is a list of arguments, e.g. [--agent, flux]")
+    extra = tuple(str(a) for a in extra)
+    argv = _with_args((exe, *p["argv"][1:]), extra)
+    resume = _with_args((exe, *p["resume"][1:]), extra) if p["resume"] else None
+    return AgentSpec(preset, argv, resume, p["output"], **common)
+
+
+def _with_args(argv: tuple[str, ...], extra: tuple[str, ...]) -> tuple[str, ...]:
+    """`extra` before the trailing `{prompt}` / `{answer}`, where the tools read their options."""
+    if extra and argv and argv[-1] in ("{prompt}", "{answer}"):
+        return (*argv[:-1], *extra, argv[-1])
+    return (*argv, *extra)
 
 
 #: What the brief says about questions, by policy.

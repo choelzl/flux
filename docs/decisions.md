@@ -485,3 +485,8 @@ the topics above.
 - **D669 (addendum): agents get the key.** OpenCode reads `{env:FLUX_REMOTE_API_KEY}`; when only
   `FLUX_REMOTE_API_KEY_FILE` is set, Flux loads the key into its own environment (memory only), so
   agents it starts are not refused with HTTP 401.
+
+- **D670: a preset's executable and extra arguments.** `bin` / `FLUX_<PRESET>_BIN` renames only
+  the executable (an installed name or a path; not a shell alias), `args` / `FLUX_<PRESET>_ARGS`
+  adds arguments before the prompt and before the answer on resume, e.g. OpenCode's `--agent
+  flux`. The document's wins over the machine's. Live: OpenCode run as `oc-alt --agent build`.

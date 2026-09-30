@@ -106,6 +106,17 @@ ends a turn without writing its file is nudged to write it, twice at most. An ag
 session outgrew the model's context window continues in a fresh session from the brief and its
 last file.
 
+**Another executable, extra arguments.** A preset's executable can be renamed, and arguments
+added before its prompt, per machine in `~/.config/flux/flux.env` or per document:
+
+```
+FLUX_OPENCODE_BIN=~/.local/bin/opencode-dev     # also FLUX_CLAUDE_BIN, FLUX_CODEX_BIN
+FLUX_OPENCODE_ARGS=--agent flux                 # an OpenCode agent defined in its config
+```
+
+`flow: {generate: {agent: {preset: opencode, bin: oc, args: [--agent, flux]}}}` does the same in a
+document (it wins). The executable must be a program on PATH or a path; a shell alias is not one.
+
 OpenCode pointed at a LocalAI server reads its key from the environment
 (`"apiKey": "{env:FLUX_REMOTE_API_KEY}"` in `~/.config/opencode/opencode.json`). With a thinking
 model served by LocalAI, tell OpenCode the model's limits and keep its reasoning short. Without
