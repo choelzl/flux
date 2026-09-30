@@ -22,34 +22,47 @@ def _task(tmp_path, **extra):
     return TaskSpec.from_dict(doc, base=tmp_path)
 
 
-def test_the_gate_and_a_stage_through_the_loop_and_the_budget(tmp_path):
-    stage = {"name": "count", "command": ["{python}", "-c", "import sys; print('lines=' + str(len(open(sys.argv[1]).read().split())))",
-                                          "{artifact}"], "metrics_re": {"lines": r"lines=(\d+)"}}
-    task = _task(tmp_path, stages=[stage], objectives=[{"metric": "lines", "direction": "minimize"}])
+def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
+    """D679: `measure` runs only the stages named, each on its own budget, concurrently, and says
+    whether each meets its limits; the gate runs alone (`gate`) or first (`--gate`)."""
+    stamps = tmp_path / "stamps"
+    stamps.mkdir()
+    slow = (f"import sys, time, pathlib; t0 = time.time(); time.sleep(1.0); "
+            f"pathlib.Path({str(stamps)!r}, str(t0)).write_text(str(time.time())); ")
+    count = {"name": "count", "command": ["{python}", "-c", slow + "print('lines=' + str(len(open(sys.argv[1]).read().split())))",
+                                          "{artifact}"], "metrics_re": {"lines": r"lines=(\d+)"}, "cutoff": {"metric": "lines", "below": 9}}
+    size = {"name": "size", "command": ["{python}", "-c", slow + "print('bytes=' + str(len(open(sys.argv[1]).read())))",
+                                        "{artifact}"], "metrics_re": {"bytes": r"bytes=(\d+)"}}
+    task = _task(tmp_path, stages=[count, size], objectives=[{"metric": "bytes", "direction": "minimize"}])
     work = tmp_path / "w"
     work.mkdir()
-    ctx = probe_context(task, work, "", {"gate": 2, "stages": 1})
+    ctx = probe_context(task, work, "", {"gate": 2, "stages": 2, "size": 1})
     good, bad = work / "good.txt", work / "bad.txt"
     good.write_text(GOOD)
     bad.write_text(GOOD.replace("3", "x"))
     code, out = probe("gate", str(bad), ctx_path=ctx)
-    assert code == 1 and "GATE: 1 failures" in out and "FAIL line 4" in out and "[probe 1 of 2]" in out
-    code, out = probe("measure", str(good), "count", ctx_path=ctx)
-    assert code == 0 and "GATE: passed" in out and "count: lines=10" in out and "least lines" in out
-    assert probe("measure", str(good), "count", ctx_path=ctx)[0] == 2, "the stage's budget is one"
-    assert probe("gate", str(good), ctx_path=ctx)[0] == 0
-    code, out = probe("gate", str(good), ctx_path=ctx)
-    assert code == 2 and "budget of this turn is spent" in out
+    assert code == 1 and "GATE: 1 failures" in out and "FAIL line 4" in out and "[gate probe 1 of 2]" in out
+    code, out = probe("measure", str(bad), ["count", "size"], ctx_path=ctx)      # no gate: a wrong file is measured
+    (a0, a1), (b0, b1) = sorted((float(f.name), float(f.read_text())) for f in stamps.iterdir())
+    assert b0 < a1, "side by side, not one after another"
+    assert "GATE" not in out and "count: lines=10" in out and "size: bytes=20" in out
+    assert "limits at count: lines <= 9 -- FAILS: lines 10 fails lines <= 9 (the cutoff)" in out and code == 1
+    assert "[count probe 1 of 2]" in out and "[size probe 1 of 1]" in out and "least bytes" in out
+    code, out = probe("measure", str(good), ["count", "size"], ctx_path=ctx, gate_first=True)
+    assert "GATE: passed" in out and "size probe budget of this turn is spent" in out and "[count probe 2 of 2]" in out
+    assert code == 2
     assert probe("measure", str(good), "place", ctx_path=ctx)[0] == 2
-    broken = {"name": "count", "command": ["{python}", "-c", "print('ERROR: no liberty file')"], "metrics_re": {"lines": r"lines=(\d+)"}}
-    task2 = _task(tmp_path, stages=[broken])
-    ctx2 = probe_context(task2, work, "", {"gate": 2, "stages": 1})
-    code, out = probe("measure", str(good), "count", ctx_path=ctx2)
-    assert code == 1 and "count: not measured" in out and "ERROR: no liberty file" in out, out
     done = probes_done(ctx)
-    assert [d["key"] for d in done] == ["gate", "count", "gate"] and done[1]["metrics"] == {"lines": 10.0}
+    assert [d["key"] for d in done] == ["gate", "count", "size", "gate", "count"]
+    assert done[2]["metrics"] == {"bytes": 20.0} and done[1]["ok"] is False
+    code, out = probe("gate", str(good), ctx_path=ctx)
+    assert code == 2 and "gate probe budget of this turn is spent" in out
     assert probe_context(task, work, "", {"gate": 2}) != ctx, "a new turn, a new log"
     assert probe("gate", str(good), ctx_path=str(tmp_path / "none.json"))[0] == 2
+    broken = {"name": "count", "command": ["{python}", "-c", "print('ERROR: no liberty file')"], "metrics_re": {"lines": r"lines=(\d+)"}}
+    ctx2 = probe_context(_task(tmp_path, stages=[broken]), work, "", {"gate": 2, "stages": 1})
+    code, out = probe("measure", str(good), "count", ctx_path=ctx2)
+    assert code == 1 and "count: not measured" in out and "ERROR: no liberty file" in out, out
 
 
 def test_the_agent_options_and_the_brief():
@@ -68,9 +81,10 @@ def test_the_agent_options_and_the_brief():
     assert "yosys" in DENIED
     line = probe_line(["screen", "place"], {"gate": 20, "stages": 3, "place": 1}, allowed=("verilator",))
     assert "`flux probe gate FILE`" in line and "`screen` 3, `place` 1" in line and "except verilator" in line
+    assert "each on its own" in line and "--gate" in line
     brief = agent_brief(body="b", prefix="", artifact=Path("/w/a.sv"), workdir=Path("/w"), language="sv", part="p",
                         prior=None, failure="", probes=line)
-    assert "raw tools: they are denied" in brief and "flux probe measure FILE --stage S" in brief
+    assert "raw tools: they are denied" in brief and "flux probe measure FILE --stage S [--stage T" in brief
     assert probe_line([], None) == ""
     free = agent_spec({"preset": "claude", "allow": "all"})              # the restriction lifted
     assert not any(a.startswith("Bash(") for a in free.argv) and free.argv[free.argv.index("--allowedTools") + 1] == "Bash"

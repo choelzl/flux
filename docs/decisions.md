@@ -596,3 +596,11 @@ the topics above.
 
   Also from D677, live: the second isq16 run drafted in its first turn, as its note said
   (999.4 MHz).
+
+- **D679: a probe measures stages independently.** Correctness belongs to the gate, and
+  measurement to the stages. `flux probe measure FILE --stage S [--stage T ...]` runs only the
+  stages named: each on its own budget, each in its own directory, side by side (threads), no
+  gate unless `--gate`. Each stage reports its metrics and whether they meet its limits (its
+  cutoffs, then each objective's limit at that stage), e.g. `limits at confirm: fmax_mhz >= 2000
+  -- met`. The exit code is 0 when all met, 1 for a miss or a failed measurement, 2 when
+  refused. Live, add8: synthesis and placement in one probe, 4,306 and 4,190 MHz, both met.

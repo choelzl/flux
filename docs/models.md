@@ -110,10 +110,12 @@ its own `bash` rules may override them. Codex has only the brief's word. A deny 
 effort: `python3` can still start a tool.
 
 **Checking mid-turn: `flux probe`.** A generate or prototype agent may run the loop's own tools
-on its file inside its turn (D678). `flux probe gate FILE` runs the document's gate (for a
-prototype, its check). `flux probe measure FILE --stage S` runs the gate, then stage S. Each
-uses the loop's exact commands and flags, prints what the loop would see, and is on the record
-with the agent's turn. A budget per turn bounds them: `probe: {gate: 20, stages: 3, place: 1}`
+on its file inside its turn (D678). `flux probe gate FILE` runs the document's gate, the
+correctness checks (for a prototype, its check). `flux probe measure FILE --stage S [--stage T
+...]` runs those measurements, each on its own and side by side, with no gate first unless
+`--gate`. It says whether each meets its limits (the stage's cutoffs and the objectives' limits
+at it, D679). Each probe uses the loop's exact commands and flags, prints what the loop would
+see, and is on the record with the agent's turn. A budget per turn bounds them: `probe: {gate: 20, stages: 3, place: 1}`
 (the defaults are 20 and 3; `probe: false` turns it off). `allow: [verilator, yosys]` gives
 denied commands back to one agent, and `allow: all` lifts the deny list for it. With
 `budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with

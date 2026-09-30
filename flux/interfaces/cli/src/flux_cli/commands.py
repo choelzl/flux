@@ -1072,7 +1072,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
     """`flux probe gate|measure FILE`: an agent's check through the loop's own tools (D678)."""
     from flux_loop.probe import probe
 
-    code, text = probe(args.what, args.file, args.stage)
+    code, text = probe(args.what, args.file, args.stage, gate_first=getattr(args, "gate", False))
     print(text)
     return code
 

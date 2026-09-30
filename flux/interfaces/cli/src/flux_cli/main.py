@@ -74,9 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     probe_p = subparsers.add_parser(
         "probe", help="Inside an agent's turn: check a file with the loop's own gate or stage (D678).")
-    probe_p.add_argument("what", choices=["gate", "measure"], help="gate: the gate; measure: the gate, then a stage.")
+    probe_p.add_argument("what", choices=["gate", "measure"], help="gate: the correctness checks; measure: stages.")
     probe_p.add_argument("file", help="The file to check.")
-    probe_p.add_argument("--stage", default=None, help="The stage to measure (default: the first).")
+    probe_p.add_argument("--stage", action="append", default=None,
+                         help="A stage to measure (repeat for several: each on its own, side by side; default: the first).")
+    probe_p.add_argument("--gate", action="store_true", help="measure: run the gate first.")
     probe_p.set_defaults(func=cmd_probe)
 
     st_p = subparsers.add_parser("selftest", help="Does Flux work on this machine: tools, a sweep, an RTL sweep, the model, a model-written problem.")
