@@ -296,9 +296,27 @@ def mine_observed_ratios(campaign_db_path: str) -> list[Fact]:
     return facts
 
 
+#: The head of a refusal message a fact quotes (D671).
+_HEAD = 160
+
+
+def _ends(message: str, keep: int = 2000) -> str:
+    """A long message kept by its start and its end, where tool and agent outputs differ."""
+    return message if len(message) <= 2 * keep else f"{message[:keep]} ... {message[-keep:]}"
+
+
+def _head(message: str) -> str:
+    """The first non-empty line of `message`, cut at `_HEAD` characters, marked when cut."""
+    first = next((ln.strip() for ln in str(message).splitlines() if ln.strip()), "")
+    cut = len(first) > _HEAD or len(str(message).strip()) > len(first)
+    return (first[:_HEAD] + " ...") if cut else first
+
+
 def mine_refusal_patterns(campaign_db_path: str) -> list[Fact]:
-    """Refusals, errors and constraint violations grouped by their exact stored message (no
-    normalization: a paraphrase is an interpretation). One fact per distinct (status, message)."""
+    """Refusals, errors and constraint violations grouped by the head of their stored message:
+    its first line, cut at `_HEAD` characters (a raw tool or agent output can run to pages; the
+    head is what it reported first, not a paraphrase). The full messages stay in the evidence
+    (D671). One fact per distinct (status, head)."""
     from flux_store import CampaignStore
 
     facts: list[Fact] = []
@@ -308,7 +326,7 @@ def mine_refusal_patterns(campaign_db_path: str) -> list[Fact]:
             groups: dict[tuple[str, str], list[Any]] = {}
             for t in store.trials(cid):
                 if t.status in ("refused", "error", "constraint_violated") and t.error:
-                    groups.setdefault((t.status, t.error), []).append(t)
+                    groups.setdefault((t.status, _head(t.error)), []).append(t)
             for (status, message), trials in sorted(groups.items()):
                 facts.append(Fact(
                     kind="refusal_pattern",
@@ -319,6 +337,7 @@ def mine_refusal_patterns(campaign_db_path: str) -> list[Fact]:
                     evidence={
                         "status": status,
                         "message": message,
+                        "full_messages": sorted({_ends(str(t.error)) for t in trials})[:3],
                         "candidates": [_slim(t.candidate) for t in trials],
                     },
                     scope=f"campaign {cid}, exactly the trials listed",

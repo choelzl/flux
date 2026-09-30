@@ -490,3 +490,10 @@ the topics above.
   the executable (an installed name or a path; not a shell alias), `args` / `FLUX_<PRESET>_ARGS`
   adds arguments before the prompt and before the answer on resume, e.g. OpenCode's `--agent
   flux`. The document's wins over the machine's. Live: OpenCode run as `oc-alt --agent build`.
+
+- **D671: size limits on what reaches an agent or a prompt.** Linux refuses one argument over
+  128 KiB (E2BIG): a `{prompt}` or `{answer}` over 100 KB is written to a file in the agent's work
+  directory and the argument asks it to read that file (short prompts stay inline). A mined
+  refusal fact quotes the first line of its message (160 chars) and groups on it -- raw agent
+  output and compiler logs had been quoted whole, each tail its own fact; the full messages stay
+  in the evidence by their start and end. The mined block carries 12 facts and 3,000 chars.

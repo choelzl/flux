@@ -32,6 +32,7 @@ command also `{session}` and `{answer}`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -291,6 +292,26 @@ class _Live:
         return out
 
 
+#: The largest prompt passed inline; Linux refuses one argument over 128 KiB (MAX_ARG_STRLEN)
+#: with E2BIG, so a longer one goes through a file the agent reads (D671).
+INLINE_MAX = 100_000
+
+
+def _inline(subs: dict[str, str], workdir: Path) -> dict[str, str]:
+    """`subs` with a `{prompt}` or `{answer}` too long for one argument written to a file in
+    `workdir`, and the argument replaced by an instruction to read that file."""
+    out = dict(subs)
+    for key in ("prompt", "answer"):
+        text = out.get(key)
+        if text is None or len(text.encode()) <= INLINE_MAX:
+            continue
+        path = workdir / f".flux-{key}-{hashlib.sha256(text.encode()).hexdigest()[:12]}.md"
+        path.write_text(text)
+        out[key] = (f"Your instructions are in the file {path} ({len(text):,} characters, too long to pass "
+                    f"here). Read that whole file first and follow it exactly.")
+    return out
+
+
 def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
     """The agent run once, its output streamed into the running task's row as it comes (D668).
     A missing binary or a timeout is a refusal with its own words, never a crash."""
@@ -303,7 +324,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
 
     from .observe import _phase
 
-    cmd = [t.format(**subs) for t in argv]
+    cmd = [t.format(**_inline(subs, workdir)) for t in argv]
     if shutil.which(cmd[0]) is None and not Path(cmd[0]).is_file():
         return Turn(False, 127, "", stderr=f"{cmd[0]} is not on PATH (the coding agent named by the document)")
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise

@@ -146,7 +146,8 @@ class Mined:
 
     db: str = ""
     calibration: tuple[str, ...] = ()
-    max_facts: int = 0            # 0 = every fact mined
+    max_facts: int = 12           # the facts a prompt carries (D671)
+    max_chars: int = 3000         # and at most this many characters of them
     key: str = "mined"
     title: str = "Mined from this project's own data"
     static: bool = True
@@ -163,7 +164,10 @@ class Mined:
         if mined.facts:
             # The statistical half: what the stored measurements THEMSELVES say, each with the
             # boundary of what it does not establish (D245).
-            blocks.append(render_facts_for_prompt(mined.facts, max_facts=int(self.max_facts) or len(mined.facts)))
+            text = render_facts_for_prompt(mined.facts, max_facts=int(self.max_facts) or 12)
+            if len(text) > self.max_chars:
+                text = text[:self.max_chars].rsplit("\n", 1)[0] + "\n(more facts not shown: the budget)"
+            blocks.append(text)
         # Where not to spend the next round: the refusals, grouped by message.
         digest = lessons_digest([f.to_dict() for f in mined.facts]).strip()
         if digest and not digest.startswith("(nothing yet"):
