@@ -13,7 +13,13 @@ the Docker socket are not there.
 
 Network: the host's (`FLUX_SANDBOX_NET=open`, the default), or only the hosts an allowlist names
 (`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): the container has no
-network, and a proxy on the host (a Unix socket) forwards to allowed hosts only.
+network, and a proxy on the host (a Unix socket) forwards to allowed hosts only -- through the
+host's own proxy when it has one (D722); the container's loopback is its own, never proxied.
+
+Certificates (D722): the host's trust store is the container's -- `/etc/ssl`, `/etc/pki`,
+`/usr/local/share/ca-certificates` (under `/usr`), the files the host's `SSL_CERT_FILE`,
+`NODE_EXTRA_CA_CERTS`, ... name -- and Node/Bun agents (OpenCode, Claude Code), which carry their own roots, are given the
+system bundle as `NODE_EXTRA_CA_CERTS`: a corporate proxy's root CA is trusted inside as outside.
 
 On by default; `--no-sandbox` or `FLUX_SANDBOX=0` runs on the host.
 """
@@ -36,7 +42,7 @@ __all__ = ["IMAGE", "app_dir", "container_argv", "enabled", "engine", "engine_cl
 IMAGE = os.environ.get("FLUX_SANDBOX_IMAGE", "debian:stable-slim")
 SYSTEM = ("/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/nix/store")
 #: From /etc, what the tools read; Docker manages resolv.conf, hosts and hostname itself.
-ETC = ("passwd", "group", "nsswitch.conf", "ssl", "ca-certificates", "ca-certificates.conf", "ld.so.cache",
+ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-certificates.conf", "ld.so.cache",
        "ld.so.conf", "ld.so.conf.d", "localtime", "timezone", "alternatives", "gai.conf", "mime.types",
        "protocols", "services", "os-release", "lsb-release")
 #: Environment the container never gets: the host's sessions and other services' secrets.
@@ -51,6 +57,12 @@ _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_",
 _HOME_RO = (".config/opencode", ".opencode")
 _HOME_COPY = (".claude/.credentials.json", ".claude.json", ".local/share/opencode/auth.json")
 PROXY_PORT = 18080
+#: D722: certificates the host's tools are told of, wherever they are (a corporate CA in a home)
+CA_VARS = ("SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+           "GIT_SSL_CAINFO", "NIX_SSL_CERT_FILE", "PIP_CERT")
+#: the system bundle, by distribution: Debian/Ubuntu/Arch, RHEL/Fedora, SUSE, Alpine
+BUNDLES = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/ca-bundle.pem",
+           "/etc/ssl/cert.pem")
 
 
 def in_sandbox() -> bool:
@@ -108,6 +120,10 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     ro: list[str] = ([p for p in SYSTEM if _exists(p) and not Path(p).is_symlink()]
                      + [f"/etc/{e}" for e in ETC if _exists(f"/etc/{e}")])
     rw: list[str] = []
+    for var in CA_VARS:                                       # D722: one the system mounts miss
+        v = os.environ.get(var, "")
+        if v and Path(v).is_absolute() and _exists(v) and not any(v == m or v.startswith(m + "/") for m in ro):
+            ro.append(v)
     root = os.environ.get("FLUX_ROOT")
     if root:
         ro.append(root)
@@ -295,7 +311,12 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     over = [c for c in copied if any(c.startswith(p + "/") for p in ro + keep_ro)]
     for p in ro + rw:                                         # mount points under HOME: made by us, not by the engine as root
         if p.startswith(str(home) + "/"):
-            (sh / Path(p).relative_to(home)).mkdir(parents=True, exist_ok=True)
+            mp = sh / Path(p).relative_to(home)
+            if Path(p).is_file():                             # a file (a certificate, D722): a file to mount on
+                mp.parent.mkdir(parents=True, exist_ok=True)
+                mp.touch(exist_ok=True)
+            else:
+                mp.mkdir(parents=True, exist_ok=True)
     cli = engine_cli(eng)
     # scratch on the container's own /tmp: with TMPDIR on any directory mounted from the host,
     # Yosys's abc step hangs (both engines, D682); the traces stay in the application's cache
@@ -339,6 +360,10 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home), FLUX_SANDBOX_CLI=json.dumps(cli))
     env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
+    if not env.get("NODE_EXTRA_CA_CERTS"):                    # D722: Node/Bun trust their own roots only; the host's too
+        bundle = next((b for b in (env.get("SSL_CERT_FILE", ""), *BUNDLES) if b and Path(b).is_file()), None)
+        if bundle:
+            env["NODE_EXTRA_CA_CERTS"] = bundle
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
                FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=str(app / "cache"))
     if proxy_dir:
@@ -346,7 +371,9 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))
         for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
             env[k] = f"http://127.0.0.1:{PROXY_PORT}"
-        env["NO_PROXY"] = env["no_proxy"] = ""
+        # D722: the container's loopback is its own (an agent's local server, its event stream);
+        # through the proxy it would be refused, or be the host's
+        env["NO_PROXY"] = env["no_proxy"] = "localhost,127.0.0.1,::1"
     for k, v in env.items():
         cmd += ["-e", f"{k}={v}"]
     if eng == "podman":

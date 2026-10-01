@@ -229,7 +229,7 @@ def test_a_name_looked_up_inside_is_asked_of_the_proxy(monkeypatch, tmp_path):
 
 
 def test_loopback_stays_inside_and_the_hosts_certificates_go_in(monkeypatch, tmp_path):
-    """D721: a Bun agent's own local server is not sent to the host proxy (403 there); the
+    """D722: a Bun agent's own local server is not sent to the host proxy (403 there); the
     host's trust store -- a corporate CA a variable names, the system bundle for Node/Bun -- is
     the container's."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
@@ -246,14 +246,17 @@ def test_loopback_stays_inside_and_the_hosts_certificates_go_in(monkeypatch, tmp
     boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
     env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(boxed[1:], boxed) if prev == "-e"}
     assert set(env["NO_PROXY"].split(",")) >= {"localhost", "127.0.0.1", "::1"} and env["no_proxy"] == env["NO_PROXY"]
-    assert env["NODE_EXTRA_CA_CERTS"] == str(bundle) and env["SSL_CERT_FILE"] == str(corp)
+    assert env["NODE_EXTRA_CA_CERTS"] == str(corp) and env["SSL_CERT_FILE"] == str(corp), "the bundle the host names"
+    monkeypatch.delenv("SSL_CERT_FILE")
+    plain = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
+    assert f"NODE_EXTRA_CA_CERTS={bundle}" in plain, "else the system's"
     monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(corp))
     own = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
     assert f"NODE_EXTRA_CA_CERTS={corp}" in own, "the host's own choice kept"
 
 
 def test_behind_a_corporate_proxy_allowed_hosts_go_through_it(tmp_path):
-    """D721: the allowlist proxy reaches an allowed host through the host's own proxy, with its
+    """D722: the allowlist proxy reaches an allowed host through the host's own proxy, with its
     credentials; a host the host's NO_PROXY names is reached directly; a refusal upstream is
     passed back."""
     seen: list[bytes] = []
@@ -304,7 +307,7 @@ def test_behind_a_corporate_proxy_allowed_hosts_go_through_it(tmp_path):
         _, refused = connect("evil-upstream.example")
         assert refused.startswith(b"HTTP/1.1 407"), "the host proxy's refusal, as it said it"
         _, direct = connect("direct.example")                              # NO_PROXY: tried directly (no such host)
-        assert direct.startswith(b"HTTP/1.1 502") and len(seen) == 2
+        assert direct.startswith(b"HTTP/1.1 502") and len(seen) == 2 and "direct.example" in proxy.unreached
         _, out = connect("example.com")
         assert out.startswith(b"HTTP/1.1 403") and len(seen) == 2, "the allowlist first: a refused host never goes upstream"
     finally:

@@ -1866,3 +1866,36 @@ the topics above.
     - Browser test (128 checks): the five tabs, and the Other tab showing only its own group.
     - The test-only sandbox assertion from `b5a8688` now names the stray `/usr` mount when it
       fails. It failed twice, then passed six runs in a row, and the path could not be caught.
+- **D722: the sandbox behind a corporate proxy -- the host's proxy chained, its certificates trusted, loopback kept inside.**
+  - Key insight: OpenCode's `stream error` (`AI_APICallError: Bad Gateway`, retried without
+    end) came from the allowlist proxy connecting out directly. On a network that only lets
+    its proxy out, every allowed host failed, and nothing said why. Bun says
+    `FailedToOpenSocket` when it cannot resolve a host it connects to itself (a proxy's
+    name), and `ConnectionRefused` when it resolves it but cannot connect.
+  - Rules:
+    - The allowlist proxy reaches an allowed host through the host's own proxy
+      (`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`, read when the run starts, its
+      `user:password` sent as `Proxy-Authorization`). A host the host's `NO_PROXY` names is
+      reached directly. A refusal from upstream (`407`) is passed back as it was said. The
+      allowlist is checked first, so a refused host never goes upstream.
+    - A host the proxy cannot reach is said on stderr, once per host:
+      `flux sandbox: could not reach <host> through the proxy <p>: <error>`.
+    - Under an allowlist the container's `NO_PROXY` is `localhost,127.0.0.1,::1`, not
+      empty. With it empty, Bun sent the container's own loopback (an agent's local server)
+      to the host proxy: refused with 403, or the host's loopback if `localhost` was allowed.
+    - Certificates: `/etc/pki` is mounted (RHEL/Fedora: `/etc/ssl/certs` links into it). So is
+      a file the host's `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`,
+      `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NIX_SSL_CERT_FILE` or
+      `PIP_CERT` names, when no system mount covers it. `/usr/local/share/ca-certificates`
+      was already there through `/usr`.
+    - Node and Bun (OpenCode, Claude Code) trust only their own built-in roots. Unless the host
+      sets `NODE_EXTRA_CA_CERTS`, the container's is the host's `SSL_CERT_FILE`, else the
+      system bundle, so a corporate root installed on the host is trusted inside.
+  - Live, in Podman, OpenCode 1.3.14:
+    - Behind a test proxy that requires credentials, under an allowlist of the model endpoint:
+      answered in 3 s, with the tunnel and its credentials seen upstream.
+    - With that proxy down: the `stream error ... Bad Gateway` loop, now with the reason on
+      stderr.
+    - A loopback server inside answered 200 (before: 403 from the host proxy).
+    - A TLS server signed by a private root: 200 when the host's `SSL_CERT_FILE` holds the
+      root, `UNABLE_TO_VERIFY_LEAF_SIGNATURE` without it.
