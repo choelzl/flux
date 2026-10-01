@@ -39,7 +39,7 @@ class Login(BaseModel):
 class NewUser(BaseModel):
     name: str
     password: str
-    role: str = "user"
+    role: str = "internal"
 
 
 class UserChange(BaseModel):
@@ -101,6 +101,11 @@ class AskIn(BaseModel):                   # D705
 class ExampleIn(BaseModel):            # D719: a new loop from `flux new`'s working problems
     name: str
     kind: str
+
+
+class LoginInput(BaseModel):             # D734: what the page types into an agent's login
+    text: str | None = None
+    key: str | None = None
 
 
 class ShareIn(BaseModel):                 # D701
@@ -263,7 +268,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def change_user(name: str, body: UserChange, a: User = Depends(admin_of)) -> dict[str, str]:
         if store.user(name=name) is None:
             raise HTTPException(404, "no such user")
-        if name == a.name and (body.disabled or body.role == "user"):
+        if name == a.name and (body.disabled or (body.role and body.role != "admin")):
             raise HTTPException(400, "an admin does not disable or demote themselves")
         try:
             store.set_user(name, password=body.password, disabled=body.disabled, role=body.role)
@@ -293,8 +298,66 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         only said to be set, never shown."""
         from .store import ADMIN_ONLY
 
-        return {"values": store.settings(user), "server": store.server_settings(), "groups": _groups(), "admin_only": list(ADMIN_ONLY),
-                "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+        # D734: an external user's runs fall back to nothing of the server's: no server value is offered
+        server = {k: v for k, v in store.server_settings().items() if k in ADMIN_ONLY} if user.external else store.server_settings()
+        return {"values": store.settings(user), "server": server, "groups": _groups(), "admin_only": list(ADMIN_ONLY),
+                "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS), "external": user.external}
+
+    # ---- an external user's agent logins (D734)
+    from .logins import LOGIN_DEFAULTS, Logins, logged_in
+
+    logins = Logins()
+
+    def _external(user: User) -> User:
+        if not user.external:
+            raise HTTPException(403, "agent logins are an external user's: an internal user's runs use the server's")
+        return user
+
+    @app.get("/api/logins")
+    def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
+        if not user.external:
+            return {"external": False}
+        have = logged_in(store.home_of(user))
+        cmds = store.server_settings(reveal=True)
+        from .authoring import AUTHORS
+
+        return {"external": True, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a],
+                                              "command": " ".join(logins.command(a, cmds))} for a in LOGIN_DEFAULTS],
+                "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
+
+    @app.post("/api/logins/{agent}")
+    def start_login(agent: str, user: User = Depends(user_of)) -> dict[str, str]:
+        _external(user)
+        try:
+            cmd = logins.command(agent, store.server_settings(reveal=True))
+            env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
+            sandbox_env(env, sandbox, {})
+            machine_env(env, store.server_get("sandbox") or {}, {}, [])       # the network rules apply to everyone
+            logins.start(user.name, agent, store.home_of(user), cmd, env)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        store.audit(user.name, "agent login", f"{agent}: {' '.join(cmd)}")
+        return {"ok": f"{agent}'s login started"}
+
+    @app.get("/api/logins/session")
+    def login_session(since: int = 0, user: User = Depends(user_of)) -> dict[str, Any]:
+        _external(user)
+        return logins.state(user.name, since)
+
+    @app.post("/api/logins/session/input")
+    def login_input(body: LoginInput, user: User = Depends(user_of)) -> dict[str, str]:
+        _external(user)
+        try:
+            logins.send(user.name, body.text, body.key)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"ok": "sent"}
+
+    @app.post("/api/logins/session/stop")
+    def login_stop(user: User = Depends(user_of)) -> dict[str, str]:
+        _external(user)
+        logins.stop(user.name)
+        return {"ok": "stopping"}
 
     @app.get("/api/admin/settings")
     def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -480,7 +543,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/env")
     def my_env(user: User = Depends(user_of)) -> dict[str, Any]:
         """The user's variables, and the server's they come after (names only for a secret)."""
-        return {"mine": _env_list(f"user:{user.id}"), "server": _env_list("global")}
+        return {"mine": _env_list(f"user:{user.id}"), "server": [] if user.external else _env_list("global")}   # D734
 
     @app.put("/api/env")
     def put_my_env(body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
@@ -491,7 +554,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         """A loop's variables, with the user's and the server's under them, and its advanced settings."""
         _w, whose, _d, _run = loop_of(name, user, owner)
         return {"loop": _env_list(f"loop:{whose.name}:{name}"), "user": _env_list(f"user:{whose.id}"),
-                "server": _env_list("global"), "advanced": advanced(store, whose.name, name), "advanced_said": ADVANCED,
+                "server": [] if whose.external else _env_list("global"),       # D734: not under an external owner's runs
+                "advanced": advanced(store, whose.name, name), "advanced_said": ADVANCED,
                 "sandboxed_server": sandbox, "can_advance": user.admin}
 
     @app.put("/api/apps/{name}/env")

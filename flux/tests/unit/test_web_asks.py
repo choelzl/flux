@@ -132,4 +132,5 @@ def test_an_agents_program_is_the_admins_for_every_run_and_mounted(server, tmp_p
     assert bob.put("/api/settings", json={"values": {"FLUX_OPENCODE_BIN": "/tmp/mine"}}, headers=H).status_code == 400, "the admin's only"
     env = run_env(store, store.user(name="bob"))
     assert env["FLUX_OPENCODE_BIN"] == str(tool / "opencode") and env["PATH"].split(":")[0] == str(tool), "its folder on PATH: mounted"
-    assert bob.get("/api/settings").json()["admin_only"] == ["FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"]
+    assert bob.get("/api/settings").json()["admin_only"] == ["FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN",
+                                                            "FLUX_OPENCODE_LOGIN", "FLUX_CLAUDE_LOGIN", "FLUX_CODEX_LOGIN"]   # D734

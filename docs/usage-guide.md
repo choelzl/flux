@@ -318,6 +318,17 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
+- **Kinds of user** (D734; the Users tab, or `flux user add NAME --role internal|external|admin`, `flux user role NAME --role ...`):
+  - **internal** (the default): their runs use the server's model, agent and environment settings, under their own.
+  - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
+    environment variables -- only their own (Account) and the admin's agent programs; the network rules apply to
+    everyone. Their home files (agent configs, credentials) come from a home of their own,
+    `<data>/users/<name>/home` (by default under `~/.local/share/flux/web`; no system account). On Account,
+    **Agent logins** runs each agent's login command (`FLUX_<AGENT>_LOGIN`, the admin's; defaults `opencode auth
+    login`, `claude setup-token`, `codex login`) in the sandbox, with that home writable, in a small terminal: its
+    output with links, a line to type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, and their runs
+    copy it in.
+  - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with
     what it asks and its size. **Use** makes one a loop of the admin's: its files hard linked

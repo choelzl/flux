@@ -2748,7 +2748,10 @@ async function adminSandbox(body) {
 async function adminUsers(body) {
   const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/resources").catch(() => null)]);
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
-  const admin = h("input", { type: "checkbox" });
+  // D734: the kinds -- internal users' runs inherit the server's settings, external ones bring their own
+  const KINDS = [["internal", "internal"], ["external", "external"], ["admin", "admin"]];
+  const kindSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, KINDS.map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
+  const newKind = kindSel("internal", null, "Kind of the new user");
   const useOf = (n) => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4;
   const limitCell = (u) => {
@@ -2764,7 +2767,12 @@ async function adminUsers(body) {
       h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Role"), h("th", { title: "Loops running at once; empty: the server's default" }, "Running limit"),
         h("th", { class: "num" }, "Loops"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Time"), h("th", { class: "num" }, "Tokens in → out"), h("th", { class: "num" }, "Cost"), h("th", {}, ""))),
       h("tbody", {}, users.map(u => { const x = useOf(u.name); return h("tr", {},
-        h("td", { class: "strong" }, u.name), h("td", {}, h("span", { class: "pill" }, u.role), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
+        h("td", { class: "strong" }, u.name), h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
+          : kindSel(u.role, async (e) => {
+              const to = e.target.value;
+              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { role: to } }); toast(`${u.name} is ${to} now`, "ok"); }
+              catch (_) { e.target.value = u.role; }
+            }, `${u.name}'s kind`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
         h("td", { class: "num mono" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
@@ -2778,11 +2786,13 @@ async function adminUsers(body) {
             if (p === null) return;
             await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { password: p } }); toast(`${u.name}'s password changed`, "ok");
           }, { cls: "small" })))); })))),
-    h("div", { class: "row add-user" }, name, pw, h("label", { class: "check" }, admin, "admin"),
+    h("div", { class: "row add-user" }, name, pw, newKind,
       act("Add user", async () => {
-        await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: admin.checked ? "admin" : "user" } });
+        await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: newKind.value } });
         toast(`${name.value} added`, "ok"); route();
-      }, { cls: "primary" }))]));
+      }, { cls: "primary" })),
+    h("p", { class: "muted small" }, "Internal: their runs use the server's model, agent and environment settings. External: they set their own on their Account page, ",
+      "and log their agents in there, into a home of their own. The network rules apply to everyone.")]));
 }
 
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
@@ -2792,7 +2802,8 @@ const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL
   FLUX_OPENCODE_BASE_URL: "Endpoint URL (OpenAI-compatible)", FLUX_OPENCODE_MODEL: "Model", FLUX_OPENCODE_API_KEY: "Key",
   ANTHROPIC_BASE_URL: "Endpoint URL", FLUX_CLAUDE_MODEL: "Model", ANTHROPIC_API_KEY: "Anthropic key",
   OPENAI_BASE_URL: "Endpoint URL", FLUX_CODEX_MODEL: "Model", OPENAI_API_KEY: "OpenAI key",
-  FLUX_OPENCODE_BIN: "Program (admins)", FLUX_CLAUDE_BIN: "Program (admins)", FLUX_CODEX_BIN: "Program (admins)", FLUX_DEFAULT_AGENT: "Agent" };
+  FLUX_OPENCODE_BIN: "Program (admins)", FLUX_CLAUDE_BIN: "Program (admins)", FLUX_CODEX_BIN: "Program (admins)", FLUX_DEFAULT_AGENT: "Agent",
+  FLUX_OPENCODE_LOGIN: "Login command (admins)", FLUX_CLAUDE_LOGIN: "Login command (admins)", FLUX_CODEX_LOGIN: "Login command (admins)" };
 function settingsForm(st, { server = null, save, scope }) {
   const inputs = {};
   const secret = new Set(st.secret);
@@ -2849,12 +2860,15 @@ async function accountPage() {
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
       mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} as the agents priced it` : "", ".")) : "",
-    card("My environment variables", [h("p", { class: "muted" }, "Every run of yours gets these, over the server's; a loop's own (its Settings tab) come over them."),
+    card("My environment variables", [h("p", { class: "muted" }, st.external ? "Every run of yours gets these (yours alone: nothing of the server's); a loop's own (its Settings tab) come over them."
+        : "Every run of yours gets these, over the server's; a loop's own (its Settings tab) come over them."),
       envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
       myEnv.server.length ? h("div", { class: "blk" }, h("h3", {}, "The server's"), envTable(myEnv.server.map(x => ({ ...x, from: "the server" })), new Set(myEnv.mine.map(x => x.name)))) : ""]),
     card("Models for my runs", [
-      h("p", { class: "muted" }, "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
+      h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Set an endpoint, model and key, or log an agent in below. Keys are stored encrypted and never shown again."
+        : "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
       ...settingsForm(st, { server: st.server, save, scope: "me" })]),
+    st.external ? await loginsCard() : "",
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
@@ -2862,6 +2876,59 @@ async function accountPage() {
         "Notification" in window ? (Notification.permission === "granted" ? h("p", {}, "Desktop notifications are on.")
           : Notification.permission === "denied" ? h("p", { class: "muted" }, "Desktop notifications are blocked in this browser's settings.")
           : act("Allow desktop notifications", async () => { await Notification.requestPermission(); route(); })) : ""])));
+}
+
+/** An external user's agent logins (D734): each agent, logged in or not, and its login run in a
+    small terminal -- its output (links clickable), a line to type, the keys a menu wants. */
+async function loginsCard() {
+  const box = h("div", {});
+  const out = h("pre", { class: "login-out", "aria-live": "polite" });
+  const line = h("input", { placeholder: "type here, then Send (or a key below)", class: "login-in", "aria-label": "Input to the login" });
+  let offset = 0, text = "", timer = null;
+  const linkify = (t) => {                                  // links as links, the rest as text nodes
+    const parts = [], re = /https?:\/\/[^\s"'<>]+/g; let at = 0, m;
+    while ((m = re.exec(t))) { parts.push(t.slice(at, m.index), h("a", { href: m[0], target: "_blank", rel: "noopener noreferrer" }, m[0])); at = m.index + m[0].length; }
+    parts.push(t.slice(at));
+    return parts;
+  };
+  const send = async (body) => { try { await api("/logins/session/input", { method: "POST", body }); } catch (_) { /* said by the toast */ } setTimeout(poll, 150); };
+  const keyBtn = (label, key, title) => h("button", { type: "button", class: "small", title, onclick: () => send({ key }) }, label);
+  const term = h("div", { class: "login-term", hidden: true },
+    h("div", { class: "login-head" }, h("strong", { class: "login-what" }), h("span", { class: "grow" }),
+      h("button", { type: "button", class: "small danger", onclick: async () => { await api("/logins/session/stop", { method: "POST" }); setTimeout(poll, 300); } }, "Stop")),
+    out,
+    h("div", { class: "row login-row" }, line, act("Send", async () => { await send({ text: line.value, key: "enter" }); line.value = ""; }, { cls: "primary small" })),
+    h("div", { class: "row login-keys" }, keyBtn("↑", "up", "Up"), keyBtn("↓", "down", "Down"), keyBtn("Enter", "enter", "Enter"),
+      keyBtn("Esc", "escape", "Escape"), keyBtn("Tab", "tab", "Tab"), keyBtn("Ctrl-C", "ctrl-c", "Interrupt")));
+  line.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send({ text: line.value, key: "enter" }); line.value = ""; } });
+  async function poll() {
+    clearTimeout(timer);
+    let st;
+    try { st = await api(`/logins/session?since=${offset}`); } catch (_) { return; }
+    if (!box.isConnected) return;
+    if (st.text) { text += st.text; offset = st.offset; out.replaceChildren(...linkify(text.slice(-60000))); out.scrollTop = out.scrollHeight; }
+    term.querySelector(".login-what").textContent = st.running ? `Logging ${st.agent} in…` : st.agent ? `${st.agent}: the login ended${st.rc ? ` (exit ${st.rc})` : ""}` : "";
+    for (const el of term.querySelectorAll(".login-row, .login-keys, .login-head button")) el.hidden = !st.running;
+    if (st.running) timer = setTimeout(poll, 700);
+    else drawList();
+  }
+  async function drawList() {
+    const lg = await api("/logins").catch(() => null);
+    if (!lg || !box.isConnected && box.parentNode) return;
+    box.replaceChildren(h("table", { class: "list compact" }, h("tbody", {}, lg.agents.map(a => h("tr", {},
+      h("td", { class: "strong" }, a.label),
+      h("td", {}, h("span", { class: `pill ${a.logged_in ? "ok" : ""}` }, a.logged_in ? "logged in" : "not logged in")),
+      h("td", { class: "mono muted small" }, a.command),
+      h("td", { class: "right" }, act(a.logged_in ? "Log in again" : "Log in", async () => {
+        await api(`/logins/${a.id}`, { method: "POST" });
+        text = ""; offset = 0; out.replaceChildren(); term.hidden = false; poll();
+      }, { cls: "small" })))))));
+    if (lg.session && lg.session.running && term.hidden) { term.hidden = false; poll(); }
+  }
+  cleanup.push(() => clearTimeout(timer));
+  await drawList();
+  return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs copy what the login writes. ",
+    "The login runs as a run does, in the sandbox, under the server's network rules."), box, term]);
 }
 
 // ================================================================ routing

@@ -90,9 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve_p.add_argument("--no-sandbox", action="store_true", help="Runs on the host, not sandboxed: a single trusted user only.")
     serve_p.set_defaults(func=_cmd_serve)
     user_p = subparsers.add_parser("user", help="The web interface's accounts, from the server's machine.")
-    user_p.add_argument("action", choices=["add", "list", "passwd", "disable", "enable"])
+    user_p.add_argument("action", choices=["add", "list", "passwd", "disable", "enable", "role"])
     user_p.add_argument("name", nargs="?", default=None)
-    user_p.add_argument("--admin", action="store_true", help="add: an admin.")
+    user_p.add_argument("--admin", action="store_true", help="add: an admin (as --role admin).")
+    user_p.add_argument("--role", choices=["admin", "internal", "external"], default=None,
+                        help="add or role: internal (the server's model and agent settings, the default), external (their own, "
+                             "their own home for the agents' logins) or admin (D734).")
     user_p.add_argument("--data", default=None, help="The server's data (default: $XDG_DATA_HOME/flux/web).")
     user_p.set_defaults(func=_cmd_user)
 
@@ -124,6 +127,13 @@ def build_parser() -> argparse.ArgumentParser:
     co_p.add_argument("--model", default=None, help="The model, when the model answers.")
     co_p.add_argument("--no-sandbox", action="store_true", help="Run on this machine, not in the sandbox (also FLUX_SANDBOX=0).")
     co_p.set_defaults(func=cmd_consult)
+
+    lo_p = subparsers.add_parser(
+        "login", help="A coding agent's login, its home a given folder (D734: an external user's agents in the web).")
+    lo_p.add_argument("--home", required=True, help="The folder the agent's login is written to: HOME, writable.")
+    lo_p.add_argument("--no-sandbox", action="store_true", help="Run on this machine, not in the sandbox (also FLUX_SANDBOX=0).")
+    lo_p.add_argument("cmd", nargs=argparse.REMAINDER, help="-- and the agent's login command, e.g. -- opencode auth login")
+    lo_p.set_defaults(func=_cmd_login)
 
     ask_p = subparsers.add_parser(
         "ask", help="The loop from a prompt and files: an author writes the problem, the loop runs it, the author steers.")
@@ -320,6 +330,60 @@ def _cmd_user(args):
     return user(args)
 
 
+def _cmd_login(args: argparse.Namespace) -> int:
+    """The agent's login command, run with HOME the given folder, under a terminal of its own
+    (D734): a login made for a person (a menu, a prompt) needs one, and the container is started
+    without one -- Podman's terminal mode fails here past a few dozen mounts. This relays the
+    terminal to stdin and stdout, so the web's pipes drive it. In the sandbox the container's HOME
+    is that folder already; on the host it is set here."""
+    import fcntl
+    import os
+    import pty
+    import select
+    import struct
+    import termios
+
+    cmd = args.cmd[1:] if args.cmd[:1] == ["--"] else list(args.cmd)
+    if not cmd:
+        print("flux login: which command? e.g. flux login --home DIR -- opencode auth login", file=sys.stderr)
+        return 2
+    os.makedirs(args.home, exist_ok=True)
+    if not os.environ.get("FLUX_SANDBOXED"):
+        os.environ["HOME"] = str(args.home)
+    os.environ.setdefault("TERM", "xterm-256color")
+    pid, fd = pty.fork()
+    if pid == 0:                                             # the agent, on its terminal, in HOME
+        try:
+            os.chdir(os.environ.get("HOME") or args.home)
+            os.execvp(cmd[0], cmd)
+        except OSError as exc:
+            os.write(2, f"flux login: {cmd[0]}: {exc.strerror or exc}\n".encode())
+        os._exit(127)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
+    ins = [sys.stdin.fileno()]
+    while True:
+        try:
+            ready, _, _ = select.select([fd, *ins], [], [])
+        except InterruptedError:
+            continue
+        if fd in ready:
+            try:
+                data = os.read(fd, 4096)
+            except OSError:
+                data = b""
+            if not data:
+                break
+            os.write(sys.stdout.fileno(), data)
+        if ins and ins[0] in ready:
+            data = os.read(ins[0], 4096)
+            if data:
+                os.write(fd, data)
+            else:
+                ins = []                                     # the page went away: the agent goes on until it ends
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status >> 8
+
+
 def main(argv: list[str] | None = None) -> int:
     """The CLI. An unexpected failure prints one line naming the error (D590); `FLUX_DEBUG=1`
     shows the traceback."""
@@ -346,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     # `task check` too: building the problem imports its world hooks and its golden model (D683)
     boxed = ("task run" if args.command == "task" and getattr(args, "task_command", None) == "run"
              else "task check" if args.command == "task" and getattr(args, "task_command", None) == "check"
-             else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "")
+             else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "login" if args.command == "login" else "")
     if boxed and enabled(args):              # D680: the run re-launched in its container
         return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)
     db = getattr(args, "db", None)

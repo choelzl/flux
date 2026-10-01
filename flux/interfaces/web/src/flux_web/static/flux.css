@@ -687,3 +687,11 @@ body:has(.composer) .toasts { bottom: 150px; }
 .rg-why.bad { color: var(--bad); }
 .rg-dur { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ln .at { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; display: inline-block; min-width: 8ch; }
+/* D734: an agent's login in a small terminal */
+.login-term { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--soft); display: grid; gap: 8px; }
+.login-head { display: flex; align-items: center; gap: 8px; }
+.login-out { margin: 0; max-height: 320px; min-height: 120px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px;
+  background: var(--bg); border-radius: 6px; padding: 8px 10px; }
+.login-out a { color: var(--accent); }
+.login-in { flex: 1; min-width: 180px; font-family: var(--mono); }
+.login-row, .login-keys { gap: 6px; align-items: center; }

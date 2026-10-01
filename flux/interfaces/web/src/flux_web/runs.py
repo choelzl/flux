@@ -25,6 +25,9 @@ __all__ = ["RunManager", "loop_files", "run_env"]
 
 #: The server's own model keys: never in the run of a user who brought their own endpoint.
 _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
+#: D734: the machine's model and agent variables an external user's run never gets.
+_MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC_", "OPENAI_", "FLUX_OPENCODE_",
+               "FLUX_CLAUDE_", "FLUX_CODEX_", "OPENCODE_", "CLAUDE_", "CODEX_", "FLUX_DEFAULT_AGENT")
 
 
 def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
@@ -37,6 +40,15 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
 
     env = {**os.environ, "FLUX_CONFIG": os.devnull}
     server, mine = store.server_settings(reveal=True), store.settings(user, reveal=True)
+    if user.external:
+        # D734: an external user brings their own: none of the machine's model and agent settings
+        # (the server's flux.env is in its environment) and none of the admin's -- only the
+        # agents' programs, which say what runs, not on whose account
+        from .store import ADMIN_ONLY
+
+        env = {k: v for k, v in env.items() if not k.startswith(_MODEL_VARS) or k in ADMIN_ONLY}
+        server = {k: v for k, v in server.items() if k in ADMIN_ONLY}
+        env["FLUX_SANDBOX_HOME_SRC"] = str(store.home_of(user))       # their home: what runs mount and copy
     web: dict[str, str] = {}
     for name, g in GROUPS.items():
         keys = (*g["public"], *g["secret"])
@@ -67,7 +79,7 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like
     names: list[str] = []
-    for scope in ("global", f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
+    for scope in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
         for name, x in store.env(scope, reveal=True).items():
             env[name] = x["value"]
             names.append(name)
@@ -177,9 +189,13 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
         env.pop(k, None)
     if not server_sandbox:
         env["FLUX_SANDBOX"] = "0"                    # D704: a --no-sandbox server says so (the command's own default is on)
+        if env.get("FLUX_SANDBOX_HOME_SRC"):
+            env["HOME"] = env["FLUX_SANDBOX_HOME_SRC"]    # D734: on the host, an external user's agents use their home
         return
     if adv.get("sandbox") is False:
         env["FLUX_SANDBOX"] = "0"                    # an admin's choice for this loop: on the host
+        if env.get("FLUX_SANDBOX_HOME_SRC"):
+            env["HOME"] = env["FLUX_SANDBOX_HOME_SRC"]    # D734
         return
     env["FLUX_SANDBOX"] = "1"                        # a shared server runs nothing on the host
     for key, var in (("memory", "FLUX_SANDBOX_MEMORY"), ("cpus", "FLUX_SANDBOX_CPUS"), ("pids", "FLUX_SANDBOX_PIDS"),

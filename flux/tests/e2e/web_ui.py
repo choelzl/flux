@@ -204,7 +204,7 @@ class Run:
         self.check(f"{where}: no error notice", not got["bad"], "; ".join(got["bad"])[:400])
 
     # ---- the browser as a user
-    def login(self, name):
+    def login(self, name, password=None):
         b = self.b
         b.go(f"{self.url}/#/login")
         b.wait("document.querySelector('form.login input')", what="the login form")
@@ -214,7 +214,7 @@ class Run:
         b.wait("document.querySelector('form.login input')")
         b.js(WATCH)
         b.type("form.login input:not([type=password])", name)
-        b.type("form.login input[type=password]", PASSWORDS[name])
+        b.type("form.login input[type=password]", password or PASSWORDS[name])
         b.click("form.login button[type=submit]")
         b.wait(f"document.querySelector('#who') && document.querySelector('#who').textContent.includes('{name}')", what=f"{name} logged in")
         b.js(WATCH)
@@ -412,7 +412,11 @@ def flows(r: Run) -> None:
         r.check("the diff shows the edited line", b.js("return [...document.querySelectorAll('dialog.dlg[open] .d-add')].some(d => d.textContent.includes('timeout_s: 90'))"))
         r.dialog_button("Save")
         b.wait("!document.querySelector('dialog.dlg[open]')")
-        got = r.api("/apps/sw/file?path=sw.problem.yaml")
+        for _ in range(50):                                              # the save may still be on its way
+            got = r.api("/apps/sw/file?path=sw.problem.yaml")
+            if "timeout_s: 90" in got["body"]:
+                break
+            time.sleep(0.2)
         r.check("saved", "timeout_s: 90" in got["body"])
         r.check("a document that loads: no refusal shown", not b.js("return !!document.querySelector('#main .callout.bad')"))
         # a document the loader refuses: said on saving, not first at Start
@@ -558,6 +562,21 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#main').innerText.includes('sw')", what="every loop listed")
         r.check("the admin sees bob's loop", "bob" in r.text())
     r.step("admin", admin)
+
+    def external_user():                                                   # D734
+        kind_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s kind\")"
+        r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s kind\"))", "the users and their kinds")
+        r.check("the admin sees each user's kind", b.js(f"const k = {kind_of}; return k && k.value", "bob") == "internal")
+        made = r.api("/users", "POST", {"name": "ex", "password": "ex has a long secret", "role": "external"})
+        r.check("an external user is added", made["status"] == 200, str(made))
+        r.login("ex", "ex has a long secret")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "an external user's account")
+        rows = b.js("return [...document.querySelectorAll('.card table.list tbody tr')].map(t => t.children[0].textContent)")
+        r.check("an external user logs their agents in from their account", rows[:3] == ["OpenCode", "Claude Code", "Codex"], str(rows))
+        offered = b.js("return [...document.querySelectorAll('#main input')].map(i => i.placeholder).filter(p => /the server's/.test(p))")
+        r.check("and is offered nothing of the server's", not offered and "the server's settings apply" not in r.text(), str(offered))
+        r.clean("external user")
+    r.step("an external user", external_user)
 
     def dark():
         r.page("#/", "document.querySelector('button.theme')", "the theme button")

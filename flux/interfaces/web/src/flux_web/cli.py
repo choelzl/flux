@@ -44,7 +44,7 @@ def user(args) -> int:
     store = Store(data_dir(args.data))
     if args.action == "list":
         for u in store.users():
-            print(f"{u.name:20} {u.role:6} {'disabled' if u.disabled else ''}")
+            print(f"{u.name:20} {u.role:8} {'disabled' if u.disabled else ''}")
         return 0
     if not args.name:
         print(f"flux user {args.action}: which user?", file=sys.stderr)
@@ -55,7 +55,12 @@ def user(args) -> int:
             if pw != getpass.getpass("again: "):
                 print("the two differ", file=sys.stderr)
                 return 2
-            store.add_user(args.name, pw, "admin" if args.admin else "user")
+            store.add_user(args.name, pw, "admin" if args.admin else (getattr(args, "role", None) or "internal"))
+        elif args.action == "role":
+            if not getattr(args, "role", None):
+                print("flux user role: which? --role admin|internal|external", file=sys.stderr)
+                return 2
+            store.set_user(args.name, role=args.role)
         elif args.action == "passwd":
             pw = getpass.getpass(f"new password for {args.name}: ")
             store.set_user(args.name, password=pw)

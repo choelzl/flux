@@ -79,6 +79,12 @@ def _home() -> Path:
     return Path(os.environ.get("HOME") or Path.home())
 
 
+def _home_src() -> Path:
+    """Where the home files mounted and copied come from (D734): an external user's own home
+    (`FLUX_SANDBOX_HOME_SRC`, set by `flux serve`), else this machine's user's."""
+    return Path(os.environ.get("FLUX_SANDBOX_HOME_SRC") or _home())
+
+
 def _cache() -> Path:
     return Path(os.environ.get("XDG_CACHE_HOME") or _home() / ".cache") / "flux"
 
@@ -101,6 +107,8 @@ def app_dir(args: Any, command: str) -> Path:
         except Exception:  # noqa: BLE001 -- a document the run itself will refuse: its file name
             ident = doc.name.split(".")[0]
         where = doc.parent
+    elif command == "login":
+        ident = "login"
     else:
         where = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
         ident = f"ask-{where.name}"
@@ -209,7 +217,7 @@ def _sandbox_home(app: Path) -> Path:
     """The container's HOME, the application's, kept across its runs: the agents' sessions."""
     sh = app / "home"
     sh.mkdir(parents=True, exist_ok=True)
-    home = _home()
+    home = _home_src()
     for rel in home_ro():
         if (home / rel).exists():
             mp = sh / rel                                     # the mount point, made by us, not by docker as root
@@ -322,16 +330,26 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     eng = eng or engine()
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
-    home, sh = _home(), _sandbox_home(app)
+    if command == "login":                                    # D734: HOME is the user's own, writable: what the login writes stays
+        home, src = _home(), None
+        sh = Path(args.home).resolve()
+        sh.mkdir(parents=True, exist_ok=True)
+        # at a path of its own inside: this machine's folders under its HOME (the source, PATH
+        # folders) are mounted at their own paths, which would make mount points in the user's home
+        home_in = Path("/home/flux-login")
+    else:
+        home, src, sh = _home(), _home_src(), _sandbox_home(app)
+        home_in = home
     # D706: a home path copied for each run is the run's copy. A read-only mount of it, or of a
     # folder inside it (a PATH directory, a link's target), would hide that copy: dropped. A
     # read-only folder above it would hide it too: the copy is mounted again on top of it.
-    copied = [str(home / rel) for rel in home_copy() if (sh / rel).exists()]
+    copied = [str(home / rel) for rel in home_copy() if (sh / rel).exists()] if src else []
     ro = [p for p in ro if not any(p == c or p.startswith(c + "/") for c in copied)]
-    keep_ro = [str(home / rel) for rel in home_ro() if (home / rel).exists()
-               and not any(str(home / rel) == c or str(home / rel).startswith(c + "/") for c in copied)]
-    over = [c for c in copied if any(c.startswith(p + "/") for p in ro + keep_ro)]
-    for p in ro + rw:                                         # mount points under HOME: made by us, not by the engine as root
+    # each read-only home path: its source (this machine's home, or an external user's) at its place in HOME
+    keep_ro = {str(home / rel): str(src / rel) for rel in home_ro() if src and (src / rel).exists()
+               and not any(str(home / rel) == c or str(home / rel).startswith(c + "/") for c in copied)}
+    over = [c for c in copied if any(c.startswith(p + "/") for p in [*ro, *keep_ro])]
+    for p in (ro + rw if home_in == home else []):           # mount points under HOME: made by us, not by the engine as root
         if p.startswith(str(home) + "/"):
             mp = sh / Path(p).relative_to(home)
             if Path(p).is_file():                             # a file (a certificate, D722): a file to mount on
@@ -370,17 +388,17 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
             cmd += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=53", "-v", f"{resolv}:/etc/resolv.conf:ro"]
         except OSError:
             pass                                              # no lookups seen; the proxy still filters
-    cmd += ["-v", f"{sh}:{home}"]                              # HOME: the application's
+    cmd += ["-v", f"{sh}:{home_in}"]                              # HOME: the application's
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
-    for p in keep_ro:
-        cmd += ["-v", f"{p}:{p}:ro"]
+    for p, from_ in keep_ro.items():
+        cmd += ["-v", f"{from_}:{p}:ro"]
     for c in over:
         cmd += ["-v", f"{sh / Path(c).relative_to(home)}:{c}"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
-    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home), FLUX_SANDBOX_CLI=json.dumps(cli))
+    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home_in), FLUX_SANDBOX_CLI=json.dumps(cli))
     env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
     if not env.get("NODE_EXTRA_CA_CERTS"):                    # D722: Node/Bun trust their own roots only; the host's too
         bundle = next((b for b in (env.get("SSL_CERT_FILE", ""), *BUNDLES) if b and Path(b).is_file()), None)

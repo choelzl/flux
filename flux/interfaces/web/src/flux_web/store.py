@@ -46,13 +46,13 @@ GROUPS: dict[str, dict[str, Any]] = {
     "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
               "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: opencode, claude, codex or model."},
     "opencode": {"label": "OpenCode", "tab": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
-                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
+                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN", "FLUX_OPENCODE_LOGIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
                  "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
     "claude": {"label": "Claude Code", "tab": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
-               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN"), "secret": ("ANTHROPIC_API_KEY",),
+               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN", "FLUX_CLAUDE_LOGIN"), "secret": ("ANTHROPIC_API_KEY",),
                "hint": "Empty: Claude Code's own login and model."},
     "codex": {"label": "Codex", "tab": "Codex", "endpoint": "OPENAI_BASE_URL",
-              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN"), "secret": ("OPENAI_API_KEY",),
+              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN", "FLUX_CODEX_LOGIN"), "secret": ("OPENAI_API_KEY",),
               "hint": "Empty: Codex's own login and model."},
     "other": {"label": "Other providers: Ollama, OpenRouter", "tab": "Other", "endpoint": "OLLAMA_BASE_URL",
               "public": ("OLLAMA_BASE_URL", "FLUX_LLM_MODEL"), "secret": ("OPENROUTER_API_KEY",),
@@ -62,7 +62,9 @@ GROUPS: dict[str, dict[str, Any]] = {
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
 #: D705: the program each agent is (a modified OpenCode, a Claude Code elsewhere): the admin's only,
 #: for every run -- a user shown it, never setting their own
-ADMIN_ONLY = ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN")
+ADMIN_ONLY = ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN",
+              # D734: how an external user logs each agent in, from their Account page
+              "FLUX_OPENCODE_LOGIN", "FLUX_CLAUDE_LOGIN", "FLUX_CODEX_LOGIN")
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 
 
@@ -84,6 +86,16 @@ def check_env_name(name: str) -> str:
     return name
 
 
+#: D734: the kinds of user. Internal users' runs inherit the server's (and the machine's) model,
+#: agent and environment settings; external users bring their own, and their agents' logins live
+#: in a home folder of their own. An admin is internal. The old "user" reads as internal.
+ROLES = ("admin", "internal", "external")
+
+
+def _role(r: str | None) -> str:
+    return "internal" if r in (None, "", "user") else str(r)
+
+
 @dataclass
 class User:
     id: int
@@ -91,9 +103,16 @@ class User:
     role: str
     disabled: bool
 
+    def __post_init__(self) -> None:
+        self.role = _role(self.role)
+
     @property
     def admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def external(self) -> bool:
+        return self.role == "external"
 
 
 class Store:
@@ -129,7 +148,7 @@ class Store:
         got = Store.hash_password(password, bytes.fromhex(salt)).split("$")[2]
         return hmac.compare_digest(got, want)
 
-    def add_user(self, name: str, password: str, role: str = "user") -> User:
+    def add_user(self, name: str, password: str, role: str = "internal") -> User:
         name = (name or "").strip()
         if self.user(name=name) is not None:              # D699: names are one whatever their case
             raise ValueError(f"user {name!r} exists")
@@ -137,8 +156,9 @@ class Store:
             raise ValueError("a user name is letters, digits, - and _ (at most 40)")
         if len(password) < 6:
             raise ValueError("a password has at least 6 characters")
-        if role not in ("user", "admin"):
-            raise ValueError("role is user or admin")
+        role = _role(role)
+        if role not in ROLES:
+            raise ValueError("a user is admin, internal or external")
         with self._db() as db:
             try:
                 cur = db.execute("INSERT INTO users(name, pw, role, created) VALUES (?, ?, ?, ?)",
@@ -146,6 +166,14 @@ class Store:
             except sqlite3.IntegrityError as exc:
                 raise ValueError(f"user {name!r} exists") from exc
             return User(cur.lastrowid, name, role, False)
+
+    def home_of(self, user: User) -> Path:
+        """An external user's own home (D734): what their runs mount and copy from, where their
+        agents' logins are written. `<data>/users/<name>/home`, theirs only (0700)."""
+        d = self.data / "users" / user.name / "home"
+        d.mkdir(parents=True, exist_ok=True)
+        os.chmod(d, 0o700)
+        return d
 
     def users(self) -> list[User]:
         with self._db() as db:
@@ -174,7 +202,9 @@ class Store:
                 if disabled:
                     db.execute("DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = ?)", (name,))
             if role is not None:
-                db.execute("UPDATE users SET role = ? WHERE name = ?", (role, name))
+                if _role(role) not in ROLES:
+                    raise ValueError("a user is admin, internal or external")
+                db.execute("UPDATE users SET role = ? WHERE name = ?", (_role(role), name))
 
     # ---- login and sessions
     #: D702: failures in ten minutes that lock a name from one address, and from everywhere
@@ -270,6 +300,15 @@ class Store:
             raise ValueError(f"{key}: an endpoint is an http(s) URL")
         if key == "FLUX_DEFAULT_AGENT" and value not in ("opencode", "claude", "codex", "model"):
             raise ValueError("the agent by default is opencode, claude, codex or model")
+        if key.endswith("_LOGIN"):
+            import shlex
+
+            try:
+                if not shlex.split(value):
+                    raise ValueError
+            except ValueError as exc:
+                raise ValueError(f"{key}: a command line, e.g. opencode auth login") from exc
+            return value
         if key in ADMIN_ONLY and not (value.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", value)):
             raise ValueError(f"{key}: an absolute path to the program, or its name on PATH")
         return value
