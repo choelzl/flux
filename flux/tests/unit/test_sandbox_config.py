@@ -192,3 +192,39 @@ def _no_ambient(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     yield
     os.environ.pop("FLUX_SANDBOX_APP", None)
+
+
+def test_a_copied_program_running_in_another_run_is_replaced_not_written_over(tmp_path, monkeypatch):
+    """D725: a loop and its asks share one home; the second run's copy of a program the first
+    is running (OpenCode) must not open it for writing (ETXTBSY, or on a newer kernel the
+    program changed under itself): a new file takes its place, and a file already the same is
+    left alone."""
+    import shutil as _sh
+    import subprocess as _sp
+
+    src = tmp_path / "host" / "bin" / "agent"
+    src.parent.mkdir(parents=True)
+    import sys as _sys
+
+    _sh.copyfile(os.path.realpath(_sys.executable), src)                # a real program, as OpenCode's binary is
+    src.chmod(0o755)
+    dst = tmp_path / "app" / "bin" / "agent"
+    sandbox._copy_over(src.parent, dst.parent)
+    running = _sp.Popen([str(dst), "-c", "import time; time.sleep(30)"])
+    import time as _t
+
+    _t.sleep(0.5)
+    try:
+        before = dst.stat().st_ino
+        src.write_bytes(src.read_bytes() + b"\0")                           # the host's program updated
+        sandbox._copy_over(src.parent, dst.parent)                         # was: OSError 26, text file busy
+        # (a kernel that no longer says ETXTBSY lets the write through instead: the running program's own file changes under it)
+        assert dst.stat().st_ino != before, "a new file in its place, the running one untouched"
+        assert dst.read_bytes() == src.read_bytes() and os.access(dst, os.X_OK)
+        assert running.poll() is None, "the running copy runs on"
+        ino = dst.stat().st_ino
+        sandbox._copy_over(src.parent, dst.parent)
+        assert dst.stat().st_ino == ino, "unchanged: not copied again"
+        assert sorted(p.name for p in dst.parent.iterdir()) == ["agent"], "no temporary left behind"
+    finally:
+        running.kill()

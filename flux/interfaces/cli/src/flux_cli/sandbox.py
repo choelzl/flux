@@ -228,19 +228,41 @@ def _sandbox_home(app: Path) -> Path:
 def _copy_over(src: Path, dst: Path) -> None:
     """`src` copied onto `dst`, each run: what is there is replaced entry by entry -- a link
     copied as a link, never written through (it may point at the host's own file) -- and what
-    only the copy has (an agent's sessions) is kept."""
+    only the copy has (an agent's sessions) is kept.
+
+    D725: a loop and its asks share this home, so another run may be executing a copied program
+    (OpenCode's binary) right now. A file is never opened for writing in place -- ETXTBSY, or on
+    a kernel that allows it, a program changed under itself -- but written beside and renamed
+    over; one already the same (size and time) is left alone."""
     if dst.is_symlink() or (dst.exists() and dst.is_dir() != (src.is_dir() and not src.is_symlink())):
-        shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+        if src.is_symlink() and dst.is_symlink() and os.readlink(dst) == os.readlink(src):
+            return
+        shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink(missing_ok=True)
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.is_symlink():
-        dst.symlink_to(os.readlink(src))
+        tmp = dst.with_name(f".{dst.name}.flux-{os.getpid()}-{uuid.uuid4().hex[:6]}")
+        tmp.symlink_to(os.readlink(src))
+        os.replace(tmp, dst)                                  # a run copying at once finds a link, never none
     elif src.is_dir():                                       # a folder of credentials: copied whole
         dst.mkdir(exist_ok=True)
         for p in src.iterdir():
             _copy_over(p, dst / p.name)
     elif src.is_file():
-        shutil.copyfile(src, dst)
-        dst.chmod(src.stat().st_mode & 0o7777)                # its own mode: a copied program stays one
+        st = src.stat()
+        try:
+            d = dst.stat()
+            if d.st_size == st.st_size and int(d.st_mtime) == int(st.st_mtime) and (d.st_mode & 0o7777) == (st.st_mode & 0o7777):
+                return
+        except FileNotFoundError:
+            pass
+        tmp = dst.with_name(f".{dst.name}.flux-{os.getpid()}-{uuid.uuid4().hex[:6]}")
+        try:
+            shutil.copyfile(src, tmp)
+            tmp.chmod(st.st_mode & 0o7777)                    # its own mode: a copied program stays one
+            os.utime(tmp, (st.st_atime, st.st_mtime))         # its own time: the next run sees it the same
+            os.replace(tmp, dst)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def _env() -> dict[str, str]:

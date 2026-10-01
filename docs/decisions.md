@@ -1929,3 +1929,18 @@ the topics above.
     hidden. The rows keep the exact kind.
   - Browser test (139 checks): the groups are listed, a group shows its kinds together, and one
     kind narrows to itself.
+- **D725: a home path is copied beside and renamed over, never written in place.**
+  - Key insight: a loop and its asks share one application folder (`FLUX_SANDBOX_APP` =
+    `<user>.<loop>`), so one home. Each run copies the home paths in again. With OpenCode's binary
+    among them (`.opencode` in the admin's home copies), an ask while the loop ran opened the
+    loop's running program for writing. Linux refused with `ETXTBSY` (OS error 26), so the ask
+    failed. Kernel 6.14 lets the write through instead, and the running agent's program changes
+    under it.
+  - Rules:
+    - A file is copied to a temporary name beside it, with its mode and time, then `os.replace`d
+      over the old one. A running program keeps its own inode.
+    - A file already the same (size, time, mode) is not copied again. A link is replaced the same
+      way, so a run copying at the same moment never finds it missing.
+  - Live, in Podman: the loop's OpenCode ran from the copy. The ask's re-copy put in a new file
+    (another inode), the ask answered (`opencode --version`), and the loop ran on its old one.
+    The unit test runs a copied program and checks it is replaced, not written over.
