@@ -776,8 +776,12 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
             err.append(ln)
             live.feed_err(ln)                         # shown live too (D676)
 
-    readers = [threading.Thread(target=lambda: [lines.put(ln) for ln in proc.stdout] and None, daemon=True),
-               threading.Thread(target=errors, daemon=True)]
+    def reads() -> None:
+        for ln in proc.stdout:
+            lines.put(ln)
+        lines.put(None)                               # its end: the turn is over when the agent exits, not a second later (D715)
+
+    readers = [threading.Thread(target=reads, daemon=True), threading.Thread(target=errors, daemon=True)]
     if feed is not None:
         readers.append(threading.Thread(target=write, daemon=True))
     for t in readers:
@@ -786,14 +790,24 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     timed_out = False
     shown = 0.0
     with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row:
+        ended = False
         while True:
-            try:
-                line = lines.get(timeout=1.0)
-                out.append(line)
-                live.feed(line, time.monotonic())
-            except queue.Empty:
-                if proc.poll() is not None and not readers[0].is_alive():
+            if ended:                                 # its output closed: wait for the exit itself
+                try:
+                    proc.wait(timeout=1.0)
                     break
+                except subprocess.TimeoutExpired:
+                    pass
+            else:
+                try:
+                    line = lines.get(timeout=1.0)
+                    if line is None:
+                        ended = True
+                        continue
+                    out.append(line)
+                    live.feed(line, time.monotonic())
+                except queue.Empty:
+                    pass
             now = time.monotonic()
             if now - t0 > spec.timeout_s and proc.poll() is None:
                 proc.kill()

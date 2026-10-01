@@ -66,6 +66,7 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
+    assert env["OPENCODE_SKIP_SAFE_CHECK"] == "1", "D714: OpenCode inside the sandbox"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     app = sandbox.app_dir(_args(tmp_path), "task run")
     assert f"{app / 'home'}:{Path.home()}" in vols, "HOME is the application's"
@@ -176,3 +177,25 @@ def test_a_path_asked_both_ways_is_writable(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     ro, rw = sandbox.mounts_for(types.SimpleNamespace(dir=str(tmp_path), file=[], skill=[]), "ask")
     assert str(tmp_path) in rw and str(tmp_path) not in ro
+
+
+def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
+    """D714: a `pip install` user's flux -- a venv, its interpreter, an editable install's source,
+    anywhere on the disk -- is visible inside, and the container runs this flux by its interpreter."""
+    import sys
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    venv, src = tmp_path / "venv", tmp_path / "checkout" / "src"
+    venv.mkdir()
+    src.mkdir(parents=True)
+    monkeypatch.setattr(sys, "prefix", str(venv))
+    monkeypatch.setattr(sys, "path", [*sys.path, str(src), str(tmp_path / "gone")])
+    ro, _ = sandbox.mounts_for(_args(tmp_path), "task run")
+    assert str(venv) in ro and str(src) in ro and str(tmp_path / "gone") not in ro
+    assert not any(p.startswith("/usr/") for p in ro), "the system mounts cover their own"
+    seen = {}
+    monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
+    monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd: seen.setdefault("cmd", cmd) and 0)
+    sandbox.launch(["task", "run", "x"], _args(tmp_path), "task run")
+    assert seen["cmd"][-6:] == [sys.executable, "-m", "flux_cli.main", "task", "run", "x"], \
+        "not sys.argv[0]: under `python -m` it is a source file, not a program"

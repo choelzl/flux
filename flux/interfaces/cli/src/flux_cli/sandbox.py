@@ -110,6 +110,11 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     if root:
         ro.append(root)
     ro.append(os.getcwd())
+    # D714: the Python running flux -- a pip venv, its interpreter, an editable install's source --
+    # wherever it lives; without it a `pip install` user's flux cannot import itself inside
+    for d in (sys.prefix, sys.base_prefix, *sys.path):
+        if d and _exists(d) and Path(d).is_dir() and not any(d == s or d.startswith(s + "/") for s in SYSTEM):
+            ro.append(str(Path(d).resolve()))
     for d in os.environ.get("PATH", "").split(os.pathsep):   # every executable directory the system mounts miss
         if d and _exists(d) and not any(d == s or d.startswith(s + "/") for s in SYSTEM) and d != "/usr/local/bin":
             ro.append(d)
@@ -322,6 +327,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home), FLUX_SANDBOX_CLI=json.dumps(cli))
+    env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
                FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=str(app / "cache"))
     if proxy_dir:
@@ -377,8 +383,9 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow, log=os.environ.get("FLUX_SANDBOX_REFUSALS"),
                            about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name})
         proxy.start()
-    exe = shutil.which("flux") or sys.argv[0]
-    cmd = container_argv([exe, *argv], args, command, name, proxy_dir, eng)
+    # D714: the flux that is running, by its own interpreter -- not whichever `flux` PATH finds
+    # first, nor `sys.argv[0]`, which under `python -m` is a source file, not a program
+    cmd = container_argv([sys.executable, "-m", "flux_cli.main", *argv], args, command, name, proxy_dir, eng)
     print(f"flux {command}: in the {eng} sandbox {name} (network: {('allowlist ' + ','.join(allow)) if allow else 'none (an empty allowlist)' if strict else 'open'}; "
           f"--no-sandbox to run on the host)", file=sys.stderr, flush=True)
     try:

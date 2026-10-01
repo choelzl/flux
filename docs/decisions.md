@@ -1693,3 +1693,29 @@ the topics above.
     - each old address opening its new place;
     - the Ask panel over Results, closed by Escape;
     - a watcher without Problem or Delete.
+- **D714: the sandbox runs the flux that is running, wherever pip put it.**
+  - Key insight: the sandbox mounted the system, `/nix/store` and PATH, so a `pip install` user's
+    venv and editable source were not inside; `flux task run` died on `No module named
+    'flux_cli'`. A GitHub runner has Podman, so CI's no-Nix job failed on every push.
+    `flux selftest` ran `sys.argv[0]`, under `python -m` a source file: `exec: Permission denied`.
+  - Rules:
+    - Mounted read-only: `sys.prefix`, `sys.base_prefix` and every `sys.path` folder outside the
+      system mounts.
+    - The container runs `sys.executable -m flux_cli.main`, not the first `flux` on PATH.
+    - `OPENCODE_SKIP_SAFE_CHECK=1` inside: the container is the safety.
+  - Live: a venv outside Nix, `flux task run` to a decision and `flux selftest --no-model` 5 of 5,
+    both in Podman; the dev shell's sandboxed run unchanged.
+  - Tests: `test_sandbox` (a venv and a source folder mounted, a missing one not; the command).
+- **D715: the unit core in 48 s, not 145 s.**
+  - Key insight: the time was SQLite's fsync, not the tests. A commit cost 20-70 ms on disk (one
+    test: 305 commits, 20 s) and the dev shell's scratch is `~/.cache`, on sshfs here. On tmpfs
+    the same test takes under 1 s.
+    - Each agent turn also waited out a 1 s queue poll after the agent had exited.
+  - Rules:
+    - The unit conftest puts pytest's folders and the TMPDIR of what tests run under
+      `/dev/shm` when it has 4 GB free, and deletes it at the end. `--basetemp` or
+      `FLUX_TEST_SHM=0` opts out.
+    - An agent turn ends when its output closes and the process exits.
+  - Measured, 64 cores: 145 s -> 47.5 s; the slowest test 80 s -> 12.5 s.
+  - The heavy test of D618 still had its agent run `flux rtl proto` itself, against D673's
+    "agents write, the loop runs": it failed every nightly. Its agent now only writes the file.

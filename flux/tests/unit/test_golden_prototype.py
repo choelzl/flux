@@ -315,20 +315,18 @@ def test_the_failures_are_shown_where_they_are_not_only_the_first_ones(tmp_path)
 
 
 AGENT = '''
-import re, subprocess, sys
+import sys
 brief = open(sys.argv[1]).read()
 out = sys.argv[2]
-assert "design(" in brief and "rtl proto" in brief, brief[-800:]
+assert "design(" in brief and "rtl proto" not in brief, brief[-800:]   # D673: it writes, the loop runs
 open(out, "w").write("def design(a):\\n    return {'y': (a * a) >> 4}\\n")
-cmd = re.search(r"^    (.* rtl proto .*)$", brief, re.M).group(1)      # the check it was given
-ran = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-open(out + ".checked", "w").write(ran.stdout + ran.stderr)
 print("written")
 '''
 
 
-def test_a_coding_agent_writes_the_prototype_and_runs_its_check(tmp_path, monkeypatch):
-    """With `flow.generate: {agent: ...}` and `prototype: true`, the agent writes the prototype and the loop spells the RTL (D618)."""
+def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, monkeypatch):
+    """With `flow.generate: {agent: ...}` and `prototype: true`, the agent writes the prototype, the loop
+    checks it (D673) and spells the RTL (D618)."""
     from flux_loop import PromptProblem, request_for, run_loop
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
@@ -344,8 +342,6 @@ def test_a_coding_agent_writes_the_prototype_and_runs_its_check(tmp_path, monkey
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
                    log=said.append)
     assert out.decision is not None and out.decision.candidate.knobs.get("generator") == "py2sv", (said[-12:], out.refused)
-    checked = list((tmp_path).rglob("prototype-*.py.checked"))
-    assert checked and "0 failing of 256" in checked[0].read_text(), [c.read_text() for c in checked]
 
 
 def test_the_documents_knowledge_reaches_the_prototype_stage(tmp_path):

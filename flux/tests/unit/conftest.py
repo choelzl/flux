@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -56,7 +57,7 @@ HEAVY_FILES = {
 HEAVY_TESTS = {
     "test_golden_prototype.py::test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype",
     "test_golden_prototype.py::test_the_prototype_is_proven_then_transcribed",
-    "test_golden_prototype.py::test_a_coding_agent_writes_the_prototype_and_runs_its_check",
+    "test_golden_prototype.py::test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it",
     "test_golden_prototype.py::test_the_prototype_agent_is_resumed_until_its_prototype_passes",
     "test_golden_prototype.py::test_a_spelled_design_on_record_is_not_synthesised_again_once_over_the_ceiling",
     "test_golden_prototype.py::test_a_prototype_over_the_ceiling_is_made_cheaper_before_anything_is_built",
@@ -71,6 +72,34 @@ HEAVY_TESTS = {
     "test_prefetcher_document.py::test_the_model_writes_the_file_and_it_is_measured_on_a_fake_champsim",
     "test_pareto_uct.py::test_the_pareto_phase_spends_the_same_budget_on_at_least_as_much_frontier",
 }
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Scratch in memory when the machine has room (D715): the tests' records are SQLite, and each
+    commit's fsync costs 20-70 ms on a disk (one test paid 20 s for 305 commits; on a home over
+    sshfs, more) and nothing on tmpfs. The tests' own directories and the TMPDIR of what they run.
+    `--basetemp` or FLUX_TEST_SHM=0 keeps pytest's default."""
+    if config.option.basetemp or hasattr(config, "workerinput") or os.environ.get("FLUX_TEST_SHM") == "0":
+        return
+    shm = Path("/dev/shm")
+    try:
+        roomy = shm.is_dir() and os.access(shm, os.W_OK) and shutil.disk_usage(shm).free > 4 << 30
+    except OSError:
+        roomy = False
+    if roomy:
+        base = tempfile.mkdtemp(prefix="flux-pytest-", dir=shm)
+        config.option.basetemp = str(Path(base) / "t")        # xdist hands each worker its own folder under it
+        (Path(base) / "tmp").mkdir()
+        for k in ("TMPDIR", "TMP", "TEMP"):                   # the workers start after this: they inherit it
+            os.environ[k] = str(Path(base) / "tmp")
+        tempfile.tempdir = None
+        config._flux_shm = base                               # type: ignore[attr-defined]
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    base = getattr(config, "_flux_shm", None)
+    if base:
+        shutil.rmtree(base, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
