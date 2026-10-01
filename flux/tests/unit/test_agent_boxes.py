@@ -265,3 +265,17 @@ def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):
     def st(on):
         return LoopState(request=LoopRequest(batch=WHOLE, prototype=on), say=lambda _m: None, proposer=None, feedback=None)
     assert _agent_writes_prototypes(prob, st(True)) and not _agent_writes_prototypes(prob, st(False))
+
+
+def test_codex_keeps_its_own_sandbox_on_the_host_and_flux_s_container_is_its_sandbox_inside(monkeypatch):
+    """D750: Codex's bubblewrap cannot start in the container (nor on a host whose AppArmor
+    refuses it user namespaces); inside Flux's sandbox the container is Codex's sandbox."""
+    from flux_loop.agent import agent_spec
+
+    monkeypatch.delenv("FLUX_SANDBOXED", raising=False)
+    host = agent_spec({"preset": "codex"}).argv
+    assert host[host.index("--sandbox") + 1] == "workspace-write" and "--skip-git-repo-check" in host
+    monkeypatch.setenv("FLUX_SANDBOXED", "1")
+    boxed = agent_spec({"preset": "codex"}).argv
+    assert boxed[boxed.index("--sandbox") + 1] == "danger-full-access" and boxed[-1] == "-"
+    assert "--sandbox" not in agent_spec({"preset": "claude"}).argv, "the others untouched"

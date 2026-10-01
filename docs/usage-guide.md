@@ -358,7 +358,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, where their runs use it. Claude Code's
     `claude setup-token` prints a year-long token instead of keeping it: the login saves it to the user's settings
     (`CLAUDE_CODE_OAUTH_TOKEN`, encrypted) and never shows it (D748). For Codex set `FLUX_CODEX_LOGIN` to
-    `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost).
+    `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost). Inside the
+    sandbox Codex runs without its own (bubblewrap cannot start there): the container is its sandbox (D750).
   - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with

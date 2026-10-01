@@ -160,11 +160,23 @@ def agent_spec(spec: Any) -> AgentSpec:
     if isinstance(extra, str) or not all(isinstance(a, (str, int, float)) for a in extra):
         raise ValueError("agent.args is a list of arguments, e.g. [--agent, flux]")
     extra = tuple(str(a) for a in extra)
-    argv = _with_args((exe, *_allowed(p["argv"][1:], allow)), extra)
-    resume = _with_args((exe, *_allowed(p["resume"][1:], allow)), extra) if p["resume"] else None
+    argv = _in_box(_with_args((exe, *_allowed(p["argv"][1:], allow)), extra))
+    resume = _in_box(_with_args((exe, *_allowed(p["resume"][1:], allow)), extra)) if p["resume"] else None
     config = tuple((k, json.dumps(_allowed_config(v, allow))) for k, v in (p.get("config") or {}).items())
     return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()),
                      allowed=tuple(allow))
+
+
+def _in_box(argv: tuple[str, ...]) -> tuple[str, ...]:
+    """D750 (the owner's decision): inside Flux's container an agent's own sandbox cannot start --
+    Codex's bubblewrap needs a user namespace, which this host's AppArmor refuses to it even
+    outside the container -- so every write failed. There the container is the sandbox (its
+    network rules, only the loop's folders writable), as it is for OpenCode and Claude Code:
+    Codex's `danger-full-access` mode, inside it only; on the host Codex keeps `workspace-write`."""
+    if os.environ.get("FLUX_SANDBOXED") != "1" or "--sandbox" not in argv:
+        return argv
+    i = argv.index("--sandbox")
+    return (*argv[:i + 1], "danger-full-access", *argv[i + 2:])
 
 
 def _probe(value: Any) -> tuple[tuple[str, int], ...] | None:
