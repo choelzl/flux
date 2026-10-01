@@ -115,6 +115,9 @@ class Store:
         return hmac.compare_digest(got, want)
 
     def add_user(self, name: str, password: str, role: str = "user") -> User:
+        name = (name or "").strip()
+        if self.user(name=name) is not None:              # D699: names are one whatever their case
+            raise ValueError(f"user {name!r} exists")
         if not name or not name.replace("-", "").replace("_", "").isalnum() or len(name) > 40:
             raise ValueError("a user name is letters, digits, - and _ (at most 40)")
         if len(password) < 6:
@@ -137,11 +140,15 @@ class Store:
     def user(self, user_id: int | None = None, name: str | None = None) -> User | None:
         with self._db() as db:
             r = (db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) if user_id is not None
-                 else db.execute("SELECT * FROM users WHERE name = ?", (name,))).fetchone()
+                 else db.execute("SELECT * FROM users WHERE name = ? COLLATE NOCASE", ((name or "").strip(),))).fetchone()
         return User(r["id"], r["name"], r["role"], bool(r["disabled"])) if r else None
 
     def set_user(self, name: str, *, password: str | None = None, disabled: bool | None = None,
                  role: str | None = None) -> None:
+        found = self.user(name=name)
+        if found is None:
+            raise ValueError(f"no user {name!r}")
+        name = found.name
         with self._db() as db:
             if password is not None:
                 if len(password) < 6:
@@ -156,12 +163,15 @@ class Store:
 
     # ---- login and sessions
     def login(self, name: str, password: str) -> str | None:
-        """A session token, or None; five failures in ten minutes lock the name for that long."""
+        """A session token, or None; five failures in ten minutes lock the name for that long.
+        D699: the name as typed on a phone -- capitalised, a space after it -- is the same name;
+        the password is as it is."""
         now = time.time()
+        name = (name or "").strip().lower()
         with self._db() as db:
             db.execute("DELETE FROM failures WHERE t < ?", (now - 600,))
             failed = db.execute("SELECT COUNT(*) FROM failures WHERE name = ?", (name,)).fetchone()[0]
-            r = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchone()
+            r = db.execute("SELECT * FROM users WHERE name = ? COLLATE NOCASE", (name,)).fetchone()
             ok = (failed < 5 and r is not None and not r["disabled"] and self.check_password(password, r["pw"]))
             if not ok:
                 db.execute("INSERT INTO failures(name, t) VALUES (?, ?)", (name, now))

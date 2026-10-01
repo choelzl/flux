@@ -169,7 +169,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
-    marked. Also the agent's open question, the latest notes and the newest workbench entries.
+    marked. Also the agent's open question, the latest notes and the newest workbench entries (under
+    the decision), and the last pass: when, its measurements, its conclusion.
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
@@ -182,13 +183,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
+    Only the lines in view are drawn, so a log of a hundred thousand lines scrolls as a short one
+    (with wrap on, the last 3000).
     Show one start or all; jump to the previous or next problem. It can follow (it pauses when
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in the lane of its kind: agent, model, gate, a
     stage, generation, re-verify, knowledge, the loop's own work. Per kind: phases, busy time (work
     side by side counted once), share of the wall clock, summed time, and how many ran at once.
-    Choose a start and a pass. It redraws every 10 s while the loop runs.
+    Choose a start and a pass. It redraws once a minute while the loop runs.
   - **Agent turns:** each prompt, reply and tool call, with its model and tool version, tokens,
     tool calls, session, exit and folder. Above them, what the
     turns cost: turns, time, tokens in (and from the cache), out, and USD where the agent prices
@@ -252,13 +255,17 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
     reason users see; running loops go on), **stop every loop** after its pass or at once.
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
-    and the sandbox storage). The sandbox's containers with CPU, memory and PIDs, each with its
+    and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
+    memory, disks, the containers' CPU and memory, loops running), kept a week, charted over the
+    last hour, 6 hours, day or week. The sandbox's containers with CPU, memory and PIDs, each with its
     loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no
     loop owns (a deleted loop's, or a `flux task run` of this machine's user).
   - **Users:** role, a running limit per user (empty: the server's `--max-running`), and usage.
-- **Accounts:** passwords are hashed with scrypt; five failures lock a name for ten minutes;
+- **Accounts:** a name is the same whatever its case and the spaces around it (as a phone types
+  it); a password is exactly as typed. `flux user add` says which data folder it wrote; `flux
+  serve` says its data folder and its accounts: the two must be the same folder. Passwords are hashed with scrypt; five failures lock a name for ten minutes;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
   A user sees only their own applications and runs. An admin manages users, sees every
   application (read only) and every run (and may stop it), and the audit trail.

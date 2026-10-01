@@ -486,3 +486,34 @@ table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
 .sb-allow { display: grid; gap: 8px; margin-top: 10px; }
 .sb-allow[hidden] { display: none; }
 textarea.mono { font-family: var(--mono); font-size: 12.5px; }
+
+/* D699: the Log tab draws only the lines in view, each one row high */
+.logview.virt { position: relative; height: 68vh; max-height: none; padding: 0; }
+.logview.virt .spacer { width: 1px; }
+.logview.virt .win { position: absolute; top: 0; left: 0; right: 0; will-change: transform; }
+.logview.virt:not(.wrap) .ln { height: 1.5em; overflow: hidden; }
+.logview.virt:not(.wrap) .ln.marker { border-top: none; margin-top: 0; padding-top: 0; box-shadow: inset 0 1px 0 var(--line); }
+.logview.virt.wrap .win { position: static; }
+.chips-kv { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.kvchip { background: var(--soft); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; }
+.kvchip small { color: var(--muted); }
+table.stand-t { margin-bottom: 10px; }
+.nested { display: grid; gap: 6px; }
+.grid-2.ov { align-items: start; }
+.grid-2.ov > .col { display: grid; gap: 16px; align-content: start; }
+.grid-2.ov > .col > .card { margin: 0; }
+pre.conclusion { max-height: 160px; overflow: auto; white-space: pre-wrap; }
+
+/* D699: the machine over time */
+.tcharts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px 18px; }
+figure.tchart { margin: 0; }
+figure.tchart figcaption { font-size: 12.5px; margin-bottom: 2px; }
+svg.tchart-svg .ln { fill: none; stroke-width: 1.6; }
+svg.tchart-svg .ln.s0 { stroke: var(--accent); }
+svg.tchart-svg .ln.s1 { stroke: var(--warn); }
+svg.tchart-svg .ln.s2 { stroke: var(--ok); }
+svg.tchart-svg .ln.s3 { stroke: var(--bad); }
+svg.tchart-svg .area.s0 { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: none; }
+figure.tchart .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin: 0 4px 2px 0; vertical-align: middle; }
+figure.tchart .sw.s0 { background: var(--accent); } figure.tchart .sw.s1 { background: var(--warn); }
+figure.tchart .sw.s2 { background: var(--ok); } figure.tchart .sw.s3 { background: var(--bad); }

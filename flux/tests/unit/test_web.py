@@ -359,3 +359,19 @@ def test_the_workbench_the_log_download_and_an_open_question(server):
     finally:
         proc.kill()
         proc.wait()
+
+
+def test_a_name_typed_on_a_phone_is_the_same_name(server):
+    """D699: a phone capitalises the first letter and puts a space after a word: the name is the
+    same; the password is as typed; a name differing only in case cannot be added."""
+    app, _ = server
+    for typed in ("bob", "Bob", " BOB ", "bob "):
+        c = TestClient(app)
+        r = c.post("/api/login", json={"name": typed, "password": "another long secret"}, headers=H)
+        assert r.status_code == 200 and r.json()["name"] == "bob", typed
+    c = TestClient(app)
+    assert c.post("/api/login", json={"name": "bob", "password": "another long secret "}, headers=H).status_code == 401
+    with pytest.raises(ValueError):
+        app.state.store.add_user("BOB", "yet another secret")
+    app.state.store.set_user("Bob", password="a changed secret")
+    assert app.state.store.login("bob", "a changed secret")

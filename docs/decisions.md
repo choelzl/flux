@@ -1225,3 +1225,53 @@ the topics above.
     - an empty allowlist giving no network and a proxy that allows nothing;
     - the admin's settings in a run's environment, including users not adding;
     - admin only, with bad entries refused.
+
+- **D699: the Live standings as tables, a fuller Overview, a log of any length, the machine over
+  time; a name logs in as a phone types it.**
+  - **Standings:**
+    - Plain values (problem, searching, gated, refused) are chips.
+    - A list of records is a table: a record's own numbers (`numbers: {time_ms: …}`) become
+      columns, and an artifact's text is left out.
+    - A record of plain values is chips; anything else is nested key and value.
+    - Before, everything past the counts printed as raw JSON.
+  - **Overview:** the left column stacks the decision, the latest notes and the workbench; the
+    right column has the charts and the last pass (when, its measurements, its conclusion, a link
+    to the Timeline).
+  - **The Log tab draws only the lines in view.**
+    - Each row is one height, so the scroll position says which lines show. A spacer gives the
+      box the whole log's height, and 60 rows are drawn above and below the view.
+    - Start markers draw their rule as an inset shadow, so they keep the row height.
+    - It keeps 200,000 lines (was 50,000; it drew 4,000).
+    - The problem jump searches the filtered lines, not the drawn ones.
+    - With wrap on, rows differ in height, and the last 3,000 are drawn as before.
+    - The Live tab's log keeps its own 80 lines.
+    - Checked in Firefox on a 120,002-line log: 151 rows drawn, the middle reached and drawn in
+      1 ms, "problem ▶" landing on line 60284.
+  - **The machine over time** (`history.py`):
+    - `flux serve` samples once a minute into `samples` in the server's database: load, CPUs,
+      memory, each disk's use, loops running, and, when any run, the containers' count, CPU and
+      memory.
+    - Samples are kept a week, pruned from now; pruning from the sample's own time kept stale
+      ones.
+    - `GET /api/admin/history?hours=` (admins) returns at most 360 points: each bucket's mean,
+      except load and CPU, which keep the bucket's highest so a burst survives.
+    - Resources charts them over 1 h, 6 h, 24 h or 7 d, each chart on its own scale.
+    - Tests and other processes do not sample.
+  - **Login:** a 401 "wrong name or password".
+    - Names now match whatever their case and the spaces around them; passwords stay exact. A
+      phone capitalises a name's first letter and autocomplete adds a space after it, so an exact
+      match refused "Cedric" for "cedric".
+    - Lookups use `COLLATE NOCASE`, and failures are counted per lowercased name.
+    - A name differing only in case cannot be added; `set_user` finds the name as stored.
+    - The name field neither capitalises nor corrects.
+  - **Data folders:** the other way to get this 401 is a `flux user add` and a `flux serve` on
+    different data folders (another user, `sudo`, a service's HOME).
+    - `flux user` now says which folder it wrote, and that `flux serve` must use the same.
+    - `flux serve` says its folder and its accounts.
+    - On this machine the default folder did not exist; the only server running was the test
+      one, which had no refused login. So the failing server was elsewhere.
+
+  Tests:
+  - The history: a week kept, thinning with a burst kept, admin only, a sample of the machine.
+  - Login: four ways of typing a name, a password with a trailing space refused, a case-variant
+    name refused at creation.

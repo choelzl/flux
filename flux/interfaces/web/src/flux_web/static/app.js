@@ -316,7 +316,8 @@ document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.co
 
 // ================================================================ pages
 async function loginPage() {
-  const name = h("input", { autocomplete: "username", required: true });
+  // D699: a phone's keyboard neither capitalises nor corrects a name
+  const name = h("input", { autocomplete: "username", autocapitalize: "none", autocorrect: "off", spellcheck: "false", required: true });
   const pw = h("input", { type: "password", autocomplete: "current-password", required: true });
   const err = h("p", { class: "err" });
   const form = h("form", { class: "card login", onsubmit: async (e) => {
@@ -1006,6 +1007,17 @@ async function loopPage(name, owner, tab = "Overview") {
       await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv }); toast("Advanced settings saved: they apply from the next start", "ok"); settingsView();
     }));
   }
+  /** The last pass in a line (D699): when it ended, what it concluded, how many measurements
+      it took, under the charts where the Overview had room. */
+  function lastPass(r) {
+    const ps = r.passes || [];
+    if (!ps.length) return "";
+    const p = ps[ps.length - 1], prev = ps.length > 1 ? ps[ps.length - 2].when : 0;
+    const took = (r.rows || []).filter(x => x.when > prev && x.when <= p.when).length;
+    return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} measurement(s)` : ""),
+      p.conclusion ? h("pre", { class: "val small conclusion" }, String(p.conclusion)) : "",
+      h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
+  }
   /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
       first, the deepest stage reached, then each objective without a limit in turn. */
   function topDesigns(r, n) {
@@ -1058,14 +1070,14 @@ async function loopPage(name, owner, tab = "Overview") {
         stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
       q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
-      h("div", { class: "grid-2" }, decisionCard,
-        card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart."))),
-      h("div", { class: "grid-2" },
+      h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
         card("Latest notes", notes.length ? h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
           h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text)))) : empty(st.running && mine ? "No note yet: send one from the Live tab." : "No note yet.")),
         card("Agents' workbench", bench.length ? h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
           h("a", { href: "javascript:void 0", onclick: () => goTab("Workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
-          b.first ? h("div", { class: "first" }, b.first) : ""))) : empty("Empty."))));
+          b.first ? h("div", { class: "first" }, b.first) : ""))) : empty("Empty."))),
+        h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart.")),
+          lastPass(r))));
   }
 
   async function drawBody() {
@@ -1172,8 +1184,14 @@ async function loopPage(name, owner, tab = "Overview") {
 function logView(base, qs) {
   const lines = []; let partial = "", seen = 0;
   const listeners = [];                                   // D697: the Live tab's log follows the same stream
-  const MAX = 50000, SHOWN = 4000;
-  const box = h("div", { class: "logview" });
+  const MAX = 200000, WRAPPED = 3000;                     // D699: lines kept; with wrap on, the last drawn
+  const box = h("div", { class: "logview virt" });
+  // D699: only the lines in view are drawn -- a row has one height, so the scroll position says
+  // which; a spacer gives the box the full log's height. Wrap on: lines differ in height, and the
+  // last WRAPPED are drawn instead.
+  const spacer = h("div", { class: "spacer" }), win = h("div", { class: "win" });
+  box.append(spacer, win);
+  let shown = [], ROW = 0, drawn = "";
   const follow = h("input", { type: "checkbox", checked: true });
   const wrap = h("input", { type: "checkbox" });
   const problems = h("input", { type: "checkbox" });
@@ -1210,42 +1228,81 @@ function logView(base, qs) {
       ...starts.map((st, i) => h("option", { value: String(i) }, MARK.exec(st.text)[1])));
     startSel.value = cur && Number(cur) < starts.length ? cur : String(startIdx);
   }
-  function render() {
-    const shown = lines.filter(keep);
-    box.replaceChildren(...(shown.length > SHOWN ? [h("div", { class: "ln more" }, `… ${shown.length - SHOWN} earlier line(s): download the log for all`)] : []),
-      ...shown.slice(-SHOWN).map(lineEl));
+  function rowHeight() {
+    if (!ROW && box.isConnected) {
+      const probe = lineEl({ n: 1, text: "x" });
+      win.append(probe); ROW = probe.getBoundingClientRect().height || 18; probe.remove();
+    }
+    return ROW || 18;
+  }
+  function counted() {
     count.textContent = `${shown.length === lines.length ? lines.length : shown.length + " of " + lines.length} line(s)`;
-    if (follow.checked) box.scrollTop = box.scrollHeight;
+  }
+  /** The lines in view, a screen above and below; the same window is not drawn twice. */
+  function paint() {
+    if (wrap.checked) {
+      const tail = shown.slice(-WRAPPED);
+      spacer.style.height = "0px"; win.style.transform = "";
+      win.replaceChildren(...(shown.length > WRAPPED ? [h("div", { class: "ln more" }, `… ${shown.length - WRAPPED} earlier line(s): turn wrap off to scroll through all, or download the log`)] : []),
+        ...tail.map(lineEl));
+      drawn = "";
+      return;
+    }
+    const r = rowHeight();
+    spacer.style.height = `${shown.length * r}px`;
+    const first = Math.max(0, Math.floor(box.scrollTop / r) - 60);
+    const last = Math.min(shown.length, Math.ceil((box.scrollTop + box.clientHeight) / r) + 60);
+    const key = `${first}:${last}:${shown.length}`;
+    if (key === drawn) return;
+    drawn = key;
+    win.style.transform = `translateY(${first * r}px)`;
+    win.replaceChildren(...shown.slice(first, last).map(lineEl));
+  }
+  let queued = false;
+  const later = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; paint(); if (follow.checked) toEnd(); }); } };
+  const toEnd = () => { box.scrollTop = box.scrollHeight; paint(); };
+  function render() {
+    shown = lines.filter(keep);
+    drawn = "";
+    counted();
+    later();
   }
   function add(chunk) {
     const parts = (partial + chunk).split("\n"); partial = parts.pop();
     const fresh = parts.map(t => { const l = { n: ++seen, text: t }; lines.push(l); if (MARK.test(t)) starts.push(l); return l; });
-    if (lines.length > MAX) lines.splice(0, lines.length - MAX);
+    if (lines.length > MAX) {
+      lines.splice(0, lines.length - MAX);
+      shown = shown.filter(l => l.n >= lines[0].n);
+    }
     if (fresh.some(l => MARK.test(l.text))) drawStarts();
     for (const f of listeners) f(fresh);
-    const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-    for (const l of fresh) if (keep(l)) box.append(lineEl(l));
-    while (box.childElementCount > SHOWN + 200) box.firstChild.remove();
-    count.textContent = `${lines.length} line(s)`;
-    if (follow.checked && (atEnd || fresh.length)) box.scrollTop = box.scrollHeight;
+    for (const l of fresh) if (keep(l)) shown.push(l);
+    counted();
+    later();
   }
   /** The previous (-1) or next (+1) problem line from the middle of the view: scrolled to, flashed. */
   function jump(dir) {
-    const rows = [...box.querySelectorAll(".ln.bad")];
-    if (!rows.length) { toast("No problem line in view.", "info", { timeout: 2500 }); return; }
+    const bad = (l) => PROBLEM.test(l.text);
     follow.checked = false;
-    const mid = box.scrollTop + box.clientHeight / 2;
-    const target = dir > 0 ? rows.find(r => r.offsetTop > mid + 4) : rows.reverse().find(r => r.offsetTop < mid - 4);
-    if (!target) { toast(dir > 0 ? "No later problem." : "No earlier problem.", "info", { timeout: 2500 }); return; }
-    box.scrollTop = target.offsetTop - box.clientHeight / 2;
-    target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+    const r = wrap.checked ? 0 : rowHeight();
+    if (!r) { toast("Turn wrap off to jump through the whole log.", "info", { timeout: 3000 }); return; }
+    const mid = Math.floor((box.scrollTop + box.clientHeight / 2) / r);
+    let at = -1;
+    if (dir > 0) { for (let i = mid + 1; i < shown.length; i++) if (bad(shown[i])) { at = i; break; } }
+    else { for (let i = Math.min(mid - 1, shown.length - 1); i >= 0; i--) if (bad(shown[i])) { at = i; break; } }
+    if (at < 0) { toast(dir > 0 ? "No later problem." : "No earlier problem.", "info", { timeout: 2500 }); return; }
+    box.scrollTop = at * r - box.clientHeight / 2;
+    paint();
+    const el = win.querySelector(`[data-n="${shown[at].n}"]`);
+    if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
   }
   box.addEventListener("scroll", () => {                       // scrolling up pauses the follow
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     if (!atEnd && follow.checked) follow.checked = false;
+    if (!wrap.checked) paint();
   });
-  follow.addEventListener("change", () => { if (follow.checked) box.scrollTop = box.scrollHeight; });
-  wrap.addEventListener("change", () => box.classList.toggle("wrap", wrap.checked));
+  follow.addEventListener("change", () => { if (follow.checked) toEnd(); });
+  wrap.addEventListener("change", () => { box.classList.toggle("wrap", wrap.checked); drawn = ""; later(); });
   problems.addEventListener("change", render);
   startSel.addEventListener("change", () => { startIdx = Number(startSel.value); render(); });
   let t; filter.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { makeMatcher(); render(); }, 150); });
@@ -1259,7 +1316,7 @@ function logView(base, qs) {
   const pill = streamPill();
   bar.append(pill.el);
   const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
-  return { el: h("div", {}, bar, box), close: () => es.close(), render, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
+  return { el: h("div", {}, bar, box), close: () => es.close(), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
            problem: (t) => PROBLEM.test(t) };
 }
 
@@ -1357,11 +1414,42 @@ function liveTree(base, qs, onQuestion) {
         h("tbody", {}, v.parts.slice(0, 20).map(p => h("tr", {}, h("td", { class: "mono" }, p.part || ""),
           h("td", {}, h("span", { class: `pill ${p.state === "proven" ? "ok" : p.state === "refused" ? "bad" : ""}` }, p.state || "")),
           h("td", { class: "mono muted" }, p.name || ""))))));
+      // D699: the rest as a reader wants it -- plain values as chips, lists of records as tables
       const shown = new Set(["step", "steps", "judged", "proven", "parts_total", "measured", "at", "axes", "front", "parts"]);
       const rest = Object.entries(v).filter(([k]) => !shown.has(k));
-      if (rest.length) out.push(h("div", { class: "rest" }, rest.map(([k, x]) => h("div", { class: "kv row-kv" }, h("span", { class: "k" }, k), h("span", { class: "mono" }, short(x))))));
+      const plain = rest.filter(([, x]) => x == null || typeof x !== "object");
+      if (plain.length) out.push(h("div", { class: "chips-kv" }, plain.map(([k, x]) => h("span", { class: "kvchip" }, h("small", {}, k.replace(/_/g, " ")), " ",
+        h("strong", { class: "mono" }, x === true ? "yes" : x === false ? "no" : x == null ? "—" : num(x))))));
+      for (const [k, x] of rest.filter(([, x]) => x != null && typeof x === "object")) out.push(h("h3", {}, k.replace(/_/g, " ")), valueView(x));
     }
     stand.replaceChildren(...(out.length ? [h("h2", {}, "Standings"), ...out] : [h("p", { class: "muted" }, "No standings yet.")]));
+  }
+  /** Any value of the standings, readable (D699): a list of records is a table (a record's own
+      numbers become columns), a record of plain values is chips, a list of plain values a line. */
+  function valueView(x) {
+    const short = (v) => { const t = typeof v === "string" ? v : JSON.stringify(v); return t.length > 70 ? t.slice(0, 70) + "…" : t; };
+    const cell = (v) => v == null ? "" : typeof v === "number" ? (Number.isInteger(v) ? String(v) : Number(v.toPrecision(5)).toString()) : typeof v === "boolean" ? (v ? "yes" : "no") : short(v);
+    const isRec = (v) => v && typeof v === "object" && !Array.isArray(v);
+    if (Array.isArray(x)) {
+      if (!x.length) return h("p", { class: "muted small" }, "none");
+      if (!x.every(isRec)) return h("p", { class: "mono small" }, x.map(cell).join(", "));
+      const flat = x.map(r => { const o = {}; for (const [k, v] of Object.entries(r)) {
+        if (isRec(v) && Object.values(v).every(y => y == null || typeof y !== "object")) Object.assign(o, v);   // numbers: {time_ms: …} -> columns
+        else if (!(typeof v === "string" && v.length > 160)) o[k] = v;                                             // an artifact's text: not here
+      } return o; });
+      const cols = [...new Set(flat.flatMap(Object.keys))].slice(0, 8);
+      return h("div", { class: "scroll-x" }, h("table", { class: "list compact stand-t" },
+        h("thead", {}, h("tr", {}, cols.map(c => h("th", { class: flat.some(r => typeof r[c] === "number") ? "num" : "" }, c.replace(/_/g, " "))))),
+        h("tbody", {}, flat.slice(0, 15).map(r => h("tr", {}, cols.map(c => h("td", { class: typeof r[c] === "number" ? "num mono" : "mono", title: typeof r[c] === "string" && r[c].length > 70 ? r[c] : null }, cell(r[c])))))),
+        x.length > 15 ? h("tfoot", {}, h("tr", {}, h("td", { colspan: cols.length, class: "muted" }, `and ${x.length - 15} more`))) : ""));
+    }
+    if (isRec(x)) {
+      const entries = Object.entries(x);
+      if (entries.every(([, v]) => v == null || typeof v !== "object"))
+        return h("div", { class: "chips-kv" }, entries.map(([k, v]) => h("span", { class: "kvchip" }, h("small", {}, k.replace(/_/g, " ")), " ", h("span", { class: "mono" }, cell(v)))));
+      return h("div", { class: "nested" }, entries.map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k.replace(/_/g, " ")), valueView(v))));
+    }
+    return h("span", { class: "mono" }, cell(x));
   }
   function drawDetail(now) {
     if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
@@ -1621,6 +1709,34 @@ async function adminLoops(body) {
   pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); };
 }
 
+/** A small time chart (D699): each series a line (the first filled), over the samples' times;
+    `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */
+function timeChart(samples, series, { title, top = null, ref = null, refLabel = "", fmt = (v) => num4(v) } = {}) {
+  const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;
+  const pts = samples.filter(s => series.some(se => se.get(s) != null));
+  if (pts.length < 2) return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title)), h("p", { class: "muted small" }, "Not enough samples yet: one a minute."));
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const vals = pts.flatMap(s => series.map(se => se.get(s)).filter(v => v != null));
+  const hi = top != null ? top : Math.max(...vals, ref || 0) * 1.1 || 1;
+  const X = (t) => L + (W - L - R) * (t - t0) / Math.max(1, t1 - t0), Y = (v) => T + (H - T - B) * (1 - Math.min(v, hi) / hi);
+  const span = t1 - t0, stamp = (t) => new Date(t * 1000).toLocaleString(undefined, span > 86400 ? { weekday: "short", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  const last = pts[pts.length - 1];
+  return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title), " ",
+      series.map((se, i) => h("span", { class: "muted" }, i ? " · " : "", h("i", { class: `sw s${i}` }), se.label, " ", h("strong", {}, last && se.get(last) != null ? fmt(se.get(last)) : "—")))),
+    sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart tchart-svg", role: "img", "aria-label": title },
+      [0, 0.5, 1].map(f => [sv("line", { x1: L, x2: W - R, y1: Y(hi * f), y2: Y(hi * f), class: "grid" }),
+        sv("text", { x: L - 5, y: Y(hi * f) + 4, class: "tick", "text-anchor": "end" }, fmt(hi * f))]),
+      ref != null ? [sv("line", { x1: L, x2: W - R, y1: Y(ref), y2: Y(ref), class: "limit" }), sv("text", { x: W - R, y: Y(ref) - 3, class: "tick limit-t", "text-anchor": "end" }, refLabel)] : "",
+      series.map((se, i) => {
+        const p = pts.filter(s => se.get(s) != null);
+        const d = p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
+        return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
+          sv("path", { d, class: `ln s${i}` })];
+      }),
+      sv("text", { x: L, y: H - 5, class: "tick" }, stamp(t0)), sv("text", { x: W - R, y: H - 5, class: "tick", "text-anchor": "end" }, stamp(t1))));
+}
+
+let historyHours = 24;
 async function adminResources(body) {
   body.replaceChildren(h("p", { class: "muted" }, "Measuring…"));
   let r;
@@ -1676,7 +1792,31 @@ async function adminResources(body) {
             const x = await api(`/admin/caches/${enc(c.key)}/clean`, { method: "POST", body: { what: "all" } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
           }, { cls: "small danger" }))))))]) : "";
     body.replaceChildren(h("div", { class: "row end" }, h("span", { class: "muted" }, "measured ", ago(Date.now() / 1000)),
-        act("Measure again", load, { cls: "small" })), machineCard, contCard, diskCard, cacheCard);
+        act("Measure again", load, { cls: "small" })), machineCard, overTime, contCard, diskCard, cacheCard);
+    drawHistory();
+  }
+  // D699: the machine over time, a sample a minute while `flux serve` runs
+  const overTime = card("Over time", h("div", {}, h("p", { class: "muted" }, "Loading…")));
+  async function drawHistory() {
+    const hx = await api(`/admin/history?hours=${historyHours}`).catch(() => null);
+    if (!hx) return;
+    const ss = hx.samples, cpus = ss.length ? ss[ss.length - 1].cpus : null;
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const disks = ss.length ? Object.keys(ss[ss.length - 1].disks || {}) : [];
+    const ranges = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"]];
+    overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
+        h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
+      hx.sampling ? "" : h("p", { class: "muted small" }, "This server process does not sample (only `flux serve` does): what is shown was sampled before."),
+      h("div", { class: "tcharts" },
+        timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
+        timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
+        timeChart(ss, disks.map(k => ({ label: k, get: (s) => (s.disks || {})[k] })), { title: "Disks", top: 1, fmt: pct }),
+        timeChart(ss, [{ label: "CPU", get: (s) => s.cpu }], { title: "The containers' CPU (100% = one core)",
+          top: Math.max(100, ...ss.map(s => s.cpu || 0)) * 1.05, fmt: (v) => `${Math.round(v)}%` }),
+        timeChart(ss, [{ label: "memory", get: (s) => s.cmem }], { title: "The containers' memory", fmt: (v) => bytes(Math.round(v)) }),
+        timeChart(ss, [{ label: "loops", get: (s) => s.loops }, { label: "containers", get: (s) => s.containers }],
+          { title: "Running", top: 2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2), fmt: (v) => String(Math.round(v)) })),
+      h("p", { class: "muted small" }, "Load and CPU: the highest in each step; the rest: the mean."));
   }
   await load();
   const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);

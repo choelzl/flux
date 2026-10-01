@@ -128,6 +128,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     runs = RunManager(store, sandbox=sandbox, max_running=max_running)
     app = FastAPI(title="Flux", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.store, app.state.runs = store, runs
+    from .history import History
+
+    history = History(store.path)                    # D699: the machine over time, in the server's database
+    app.state.history = history
+    app.state.sample = lambda: _sample()
 
     # ---- guards
     @app.middleware("http")
@@ -175,13 +180,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def login(body: Login, response: Response) -> dict[str, Any]:
         token = store.login(body.name, body.password)
         if token is None:
-            store.audit(body.name, "login refused")
+            store.audit(body.name.strip(), "login refused")
             time.sleep(0.5)
             raise HTTPException(401, "wrong name or password (five failures lock the name for ten minutes)")
         response.set_cookie(COOKIE, token, httponly=True, samesite="strict", secure=secure_cookie,
                             max_age=SESSION_DAYS * 86400, path="/")
-        store.audit(body.name, "login")
         u = store.user(name=body.name)
+        store.audit(u.name, "login")
         return {"name": u.name, "role": u.role}
 
     @app.post("/api/logout")
@@ -286,6 +291,32 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 if (u.name, r["app"]) not in out and runs.live(r):
                     out[(u.name, r["app"])] = r
         return out
+
+    def _sample() -> dict[str, Any]:
+        """One minute's sample of the machine (D699)."""
+        from flux_cli.sandbox import _local
+
+        from . import admin as adm
+
+        m = adm.machine({k: v for k, v in {"server data": str(store.data), "sandbox caches": str(adm.cache_root().parent),
+                                               "sandbox storage": str(_local())}.items() if os.path.exists(v)})
+        live = _live_loops()
+        out: dict[str, Any] = {"load1": (m["load"] or [0])[0], "cpus": m["cpus"],
+                               "mem_used": (m["memory"]["total"] or 0) - (m["memory"]["available"] or 0), "mem_total": m["memory"]["total"] or 0,
+                               "disks": {d["label"]: d["used"] / d["total"] for d in m["disks"] if not d.get("same_as") and d["total"]},
+                               "loops": len(live)}
+        if live:                                     # the containers' own use, when there are any
+            cs = [c for c in adm.containers()["containers"] if c.get("state") == "running"]
+            out.update(containers=len(cs), cpu=sum(c.get("cpu") or 0 for c in cs), cmem=sum(c.get("mem") or 0 for c in cs))
+        else:
+            out.update(containers=0, cpu=0.0, cmem=0.0)
+        return out
+
+    @app.get("/api/admin/history")
+    def resource_history(hours: float = 24, _a: User = Depends(admin_of)) -> dict[str, Any]:
+        """The machine over the last `hours` (D699), thinned for a chart."""
+        hours = max(0.25, min(hours, 168))
+        return {"hours": hours, "samples": history.read(hours), "sampling": history._thread is not None}
 
     @app.get("/api/admin/resources")
     def resources(_a: User = Depends(admin_of)) -> dict[str, Any]:

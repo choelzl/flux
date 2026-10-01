@@ -21,7 +21,7 @@ def serve(args) -> int:
 
     data = data_dir(args.data)
     if not Store(data).users():
-        print(f"flux serve: no account yet; make one with `flux user add NAME --admin --data {data}`", file=sys.stderr)
+        print(f"flux serve: no account in {data} yet; make one with `flux user add NAME --admin --data {data}`", file=sys.stderr)
         return 2
     if args.no_sandbox:
         print("flux serve: runs go on this machine unsandboxed (--no-sandbox): for one trusted user only", file=sys.stderr)
@@ -29,6 +29,8 @@ def serve(args) -> int:
         print("flux serve: listening beyond this machine without --secure-cookie: put a TLS proxy in front "
               "and pass --secure-cookie", file=sys.stderr)
     app = create_app(data, sandbox=not args.no_sandbox, secure_cookie=args.secure_cookie, max_running=args.max_running)
+    print(f"flux serve: accounts: {', '.join(u.name for u in Store(data).users())}", file=sys.stderr)
+    app.state.history.start(app.state.sample)        # D699: a sample of the machine a minute, for the admin
     print(f"flux serve: http://{args.host}:{args.port}/ (data {data})", file=sys.stderr, flush=True)
     # a live stream never ends by itself: a stopped server waits 3 s for it, not for every
     # open page to close (D694); the page reconnects to the next server where it left off
@@ -63,5 +65,6 @@ def user(args) -> int:
         print(f"flux user {args.action}: {exc}", file=sys.stderr)
         return 2
     store.audit(None, f"cli {args.action}", args.name)
-    print(f"{args.action}: {args.name}")
+    print(f"{args.action}: {args.name} (the server's data: {store.data}; `flux serve` must use the same, "
+          f"or `--data {store.data}`)")
     return 0
