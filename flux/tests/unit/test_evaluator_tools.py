@@ -96,3 +96,55 @@ def test_clone_and_build_step_name_the_failure():
                    expect=Path("/tmp/flux-no-such-artifact-xyz"))
     run = build_step([sys.executable, "-c", "print('ok')"], cwd=Path("/tmp"), what="Demo build", timeout_s=30)
     assert run.ok and run.stdout.strip() == "ok"
+
+
+class _Seen:
+    """A profile listener: the tool task's start, its live updates, its end."""
+
+    def __init__(self):
+        self.starts, self.updates, self.ends = [], [], []
+
+    def phase_start(self, name, why, params):
+        self.starts.append((name, why, params))
+        return len(self.starts)
+
+    def phase_update(self, token, name, output):
+        self.updates.append(dict(output))
+
+    def phase_end(self, token, name, seconds, failed, output):
+        self.ends.append((name, failed, dict(output)))
+
+
+@pytest.fixture()
+def seen():
+    import flux_profile
+
+    s = _Seen()
+    flux_profile.add_listener(s)
+    yield s
+    flux_profile.remove_listener(s)
+
+
+def test_a_tool_task_says_what_ran_and_how_it_went(tmp_path, seen):
+    """D709: the command and folder, the ends of stdout and stderr live while it runs and at
+    its end, the exit; stdin still reaches it."""
+    code = ("import sys, time\nprint(sys.stdin.read().upper(), flush=True)\ntime.sleep(2.5)\n"
+            "print('done', flush=True)\nprint('warned', file=sys.stderr)\nraise SystemExit(4)")
+    run = run_tool([sys.executable, "-c", code], cwd=tmp_path, timeout_s=30, what="stage bench x-1", stdin="hello")
+    assert run.returncode == 4 and run.stdout == "HELLO\ndone\n"
+    name, why, params = seen.starts[-1]
+    assert name == "tool:" + sys.executable.rsplit("/", 1)[-1] and why == "stage bench x-1"
+    assert params["command"].startswith(sys.executable) and "SystemExit(4)" in params["command"]
+    assert params["folder"] == str(tmp_path)
+    assert any(u.get("stdout (live tail)") == "HELLO\n" for u in seen.updates), "what it printed, while it runs"
+    _n, failed, out = seen.ends[-1]
+    assert not failed and out == {"exit": 4, "stdout": "HELLO\ndone\n", "stderr": "warned\n"}
+
+
+def test_a_timed_out_tool_keeps_what_it_printed_and_odd_bytes_are_replaced(seen):
+    with pytest.raises(RuntimeError, match="timed out"):
+        run_tool([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(30)"], timeout_s=1.5)
+    _n, failed, out = seen.ends[-1]
+    assert failed and out["exit"] == "timed out" and out["stdout"] == "started\n"
+    run = run_tool([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'a\\xffb\\r\\nc')"], timeout_s=30)
+    assert run.stdout == "a�b\nc", "never an exception for a byte that is not UTF-8; newlines as text mode reads them"

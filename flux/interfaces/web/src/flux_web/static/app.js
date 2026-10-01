@@ -1698,6 +1698,7 @@ function liveTree(base, qs, onQuestion) {
           h("span", { class: "caret", onclick: (e) => { if (!hasKids) return; e.stopPropagation(); open.set(n.id, !opened); draw(); } }, hasKids ? (opened ? "▾" : "▸") : ""),
           h("span", { class: "st" }, running(n) ? "●" : n.failed ? "✗" : "✓"),
           h("span", { class: "nm" }, n.name), n.why ? h("span", { class: "why" }, n.why) : "",
+          !running(n) && n.output && n.output.exit != null && n.output.exit !== 0 ? h("span", { class: "exitn" }, `exit ${n.output.exit}`) : "",
           hasKids && !opened ? h("span", { class: "kidsn" }, String(n.kids.length)) : "",
           h("span", { class: "dur" }, dur(running(n) ? now - n.t0 : n.seconds))),
         hasKids && opened ? h("div", { class: "kids" }, n.kids.slice(-300).map(row)) : "");
@@ -1786,6 +1787,23 @@ function liveTree(base, qs, onQuestion) {
       stream("stderr", "stderr", f.stderr, "err"),
       !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing from the agent yet: it is starting, or thinking without saying." : "The agent said nothing the page could show.") : "");
   }
+  /** A tool at work (D709): its command, folder and exit, and the ends of its stdout and
+      stderr -- live while it runs, kept when it ends. */
+  function toolView(n, now) {
+    const f = { ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) }, p = n.params || {};
+    const out = f.stdout ?? f["stdout (live tail)"] ?? "", err = f.stderr ?? f["stderr (live tail)"] ?? "";
+    const exit = running(n) ? null : f.exit;
+    const facts = [["exit", exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)], ["folder", p.folder]]
+      .filter(([, v]) => v != null && v !== "");
+    const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
+      h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
+    return h("div", { class: "agent-view" },
+      h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? " bad" : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
+      p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono" }, p.command)) : "",
+      stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
+      stream("stderr", running(n) ? "stderr, so far" : "stderr", err, "err"),
+      !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "This run of the tool was recorded without its command and output.") : "");
+  }
   function drawDetail(now) {
     if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
     const n = selected;
@@ -1805,7 +1823,8 @@ function liveTree(base, qs, onQuestion) {
         h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
-      ...(String(n.name).startsWith("agent:") ? [agentView(n, now), h("details", { class: "blk" }, h("summary", { class: "muted" }, "Parameters and every field"),
+      ...(String(n.name).startsWith("agent:") || String(n.name).startsWith("tool:")
+        ? [(String(n.name).startsWith("agent:") ? agentView : toolView)(n, now), h("details", { class: "blk" }, h("summary", { class: "muted" }, "Parameters and every field"),
           block("Parameters", n.params), block("Fields", n.fields), block("Output", n.output))]
         : [block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output)]));
     for (const pre of detail.querySelectorAll("pre.val")) {

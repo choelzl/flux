@@ -1561,3 +1561,36 @@ the topics above.
   a copied folder lost its execute bit and stopped running. Now `chmod(src.stat().st_mode &
   0o7777)`: a credentials file at 600 stays 600, and a 755 program stays 755. Test:
   `test_sandbox_config`.
+- **D709: a tool's task says what ran and how it went.**
+  - Key insight: every document command (generate, gate test, stage, estimate) and every
+    adapter's tool goes through one launcher, `run_tool`. Its `tool:<program>` phase carried
+    nothing: no command, no candidate, no exit, no output. The Live tab showed rows of
+    `tool:python3` with empty panels, and a long tool printed nothing until it ended.
+  - Rules (`flux_evaluator_abi.tools.run_tool`):
+    - The phase's parameters are the command (shell-quoted, cut at 2000 characters) and the
+      folder.
+    - The phase's output is the exit and the last 4000 characters of stdout and stderr. A
+      timeout says "timed out" and keeps what was printed.
+    - It uses `Popen` with a reader thread per stream. Each second while the tool runs, if it
+      printed something new, the ends of its output are sent live (`stdout (live tail)`,
+      `stderr (live tail)`).
+    - A byte that is not UTF-8 is replaced, never an exception; newlines are read as text mode
+      reads them.
+    - The document's commands name their candidate in `why` (`stage bench list_sieve-0`).
+  - Web: a tool's task gets its own view on Live:
+    - Facts: exit (red when non-zero), time and folder.
+    - The command.
+    - stdout and stderr as streams that follow their end.
+    - "It printed nothing." when there is nothing, and every field still behind a fold.
+    - A non-zero exit is shown as `exit N` on its row in the tree.
+  - Live: a sweep from the web, in Firefox. The rows read `generate`, `test` and `stage bench`
+    with their candidates. A stage's panel shows its exit, time, folder, full command and
+    `time_ms=145.501`, with no page errors.
+  - Open: a task started in a worker thread (a stage's parallel measurements) has no parent in
+    the journal, so it shows at the top of the tree, not under its stage.
+  - Tests: `test_evaluator_tools`:
+    - command, folder and stdin;
+    - live output while it runs;
+    - the exit and the ends at its end;
+    - a timeout keeping what was printed;
+    - a byte that is not UTF-8.

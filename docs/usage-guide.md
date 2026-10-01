@@ -192,7 +192,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output; following, it shows the running task, and at rest the one that ended
-    last. A coding agent's task shows the agent at work: its model and version, status, output and
+    last. A tool's task (`tool:<program>`, named by its step and candidate, e.g. `stage bench
+    list_sieve-0`) shows its exit, time, folder and command, and the ends of its stdout and
+    stderr, live while it runs; a non-zero exit is marked in the tree. A coding agent's task shows the agent at work: its model and version, status, output and
     exit; its thinking, the commands it ran, the last command's output and its words, each a stream
     that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand. A line
     docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when

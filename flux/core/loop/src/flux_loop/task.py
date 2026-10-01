@@ -896,7 +896,9 @@ class PromptProblem(Problem):
     def _run(self, cmd: tuple[str, ...], subs: dict[str, str], timeout_s: float, what: str):
         from flux_evaluator_abi.tools import run_tool
 
-        return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s, what=what)
+        who = subs.get("name") or ""                   # D709: the task says which candidate
+        return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
+                        what=f"{what} {who}" if who and who not in what else what)
 
     def _gate_run(self, subs: dict[str, str]) -> tuple[int, str]:
         """The gate's checks in order (D652): (score, report) of the first that fails, the checks
