@@ -154,6 +154,7 @@
     if (box === "orchestrate" && state.flow && state.flow.dse && state.flow.dse !== "none") return "off";
     if (!BOXES[box] || isFixed(box)) return "fixed";
     var c = choiceOf(box, v);
+    if (!c && typeof v === "string" && v.indexOf("agent:") === 0) return "agent";          // a custom agent (D728)
     return c ? c.half : "rules";
   }
 
@@ -522,6 +523,8 @@
 
   function flowValue(state, box) {
     var v = state.flow[box];
+    var raw = state.agentRaw && state.agentRaw[box];
+    if (raw && typeof v === "string" && v.indexOf("agent:") === 0) return JSON.stringify(raw);   // D728: as written
     if (typeof v === "string" && v.indexOf("agent:") === 0) return "{agent: " + v.slice(6) + "}";
     if (box === "generate" && v === "command") return "{command: " + JSON.stringify(String(state.generateCommand || "").trim()) + "}";
 
@@ -537,6 +540,7 @@
       if (v === undefined || v === BOXES[b].choices[0].value) return false;
       if (b === "orchestrate" && flow.dse && flow.dse !== "none") return false;
       if (NEVER.indexOf(b) >= 0 && String(v).indexOf("agent:") === 0) return false;
+      if (state.agentRaw && state.agentRaw[b] && String(v).indexOf("agent:") === 0) return true;   // its own settings (D728)
       return !!choiceOf(b, v);
     });
   }
@@ -804,7 +808,7 @@
     });
 
     var agents = {};
-    flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0) agents[flow[b].slice(6)] = 1; });
+    flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== "agent:custom") agents[flow[b].slice(6)] = 1; });
     if (Object.keys(agents).length) note("The coding agent " + Object.keys(agents).join(", ") + " must be installed where it runs.");
     var files = {};
     cmds.forEach(function (c) {
@@ -915,6 +919,13 @@
       }
       if (typeof v === "string" && choiceOf(box, v)) { s.flow[box] = v; return; }
       if (v && typeof v === "object" && typeof v.agent === "string" && choiceOf(box, "agent:" + v.agent)) { s.flow[box] = "agent:" + v.agent; return; }
+      if (v && typeof v === "object" && v.agent && typeof v.agent === "object") {      // D728: its own settings, kept as written
+        var pre = typeof v.agent.preset === "string" && choiceOf(box, "agent:" + v.agent.preset) ? v.agent.preset : null;
+        if (!pre && DELEGABLE.indexOf(box) < 0 && box !== "generate") { flowOk = false; return; }
+        s.flow[box] = "agent:" + (pre || "custom");
+        (s.agentRaw = s.agentRaw || {})[box] = v;
+        return;
+      }
       if (box === "generate" && v && typeof v === "object" && v.command !== undefined) {
         s.flow.generate = "command"; s.generateCommand = argvOf(v.command).map(shellWord).join(" "); return;
       }
@@ -1517,6 +1528,9 @@
       p.appendChild(h("p", { text: box.says }));
       var now = explain(openBox, state);
       if (now) p.appendChild(h("p", { class: "fc-hint fc-now", text: "As set: " + now + "." }));
+      var raw = state.agentRaw && state.agentRaw[openBox];
+      if (raw) p.appendChild(h("p", { class: "fc-hint fc-now", text: "A coding agent with its own settings, kept as written: " + JSON.stringify(raw.agent) +
+        ". Choosing another replaces them." }));
       if (openBox === "orchestrate" && state.flow.dse !== "none") {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
       } else if (box.choices.length === 1) {
@@ -1530,6 +1544,7 @@
           input.addEventListener("change", function () {
             var name = openBox;
             state.flow[name] = c.value;
+            if (state.agentRaw) delete state.agentRaw[name];          // another choice: its own settings go
             changed(name === "dse" || name === "generate");
             fillPopover(); placePopover();
             var again = document.getElementById(id); if (again) again.focus();
