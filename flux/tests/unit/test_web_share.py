@@ -50,6 +50,14 @@ def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
     assert cy.put("/api/apps/x/env", params=O, json={"name": "A", "value": "1"}, headers=H).status_code == 403
     assert cy.put("/api/apps/x/shares", json={"user": "cy", "perm": "edit"}, headers=H).status_code == 404, "cy has no x of their own"
     assert cy.get("/api/apps/x/preflight", params=O).status_code == 403
+    for method, path, kw in (("post", "/api/apps/x/files", {"files": [("files", ("y.txt", b"1"))]}),
+                             ("put", "/api/apps/x/part", {"params": {**O, "path": "y.bin", "offset": 0, "final": True}, "content": b"1"}),
+                             ("put", "/api/apps/x/document", {"json": {"text": "id: x\nstatement: t\n"}}),
+                             ("post", "/api/apps/x/document/preview", {"json": {"text": "id: x\nstatement: t\n"}}),
+                             ("post", "/api/apps/x/check", {}),
+                             ("delete", "/api/apps/x/file", {"params": {**O, "path": "check.py"}})):
+        kw = {"params": O, **kw}
+        assert getattr(cy, method)(path, headers=H, **kw).status_code == 403, (method, path)
     # edit: changes it; its variables are the owner's loop's
     assert dee.put("/api/apps/x/file", params={**O, "path": "check.py"}, json={"text": "print(2)\n"}, headers=H).status_code == 200
     assert (tmp / "data/users/bob/apps/x/check.py").read_text() == "print(2)\n"
