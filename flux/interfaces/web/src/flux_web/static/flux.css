@@ -663,3 +663,7 @@ body:has(.composer) .toasts { bottom: 150px; }
 .set-tabs { margin-bottom: 10px; }
 .set-dot { color: var(--accent); font-weight: 700; }
 [hidden] { display: none !important; }   /* D721: hidden wins over a class that sets display */
+/* D727: the step bar over the loop's drawing */
+.step-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.step-bar .step-range { flex: 1 1 160px; min-width: 120px; }
+.step-bar .step-said { flex: 1 1 100%; overflow-wrap: anywhere; }

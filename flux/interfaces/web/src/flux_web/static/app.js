@@ -1832,13 +1832,37 @@ function liveTree(base, qs, onQuestion) {
     if (name.startsWith("critique")) b = /decision/.test(name + why) ? "crit-decision" : /division|decompos/.test(name + why) ? "crit-division" : "crit-part";
     else if (name.startsWith("tool:")) b = /^generate/.test(why) ? "generate" : /^(stage|estimate)/.test(why) ? "measure" : /^(test|lint|golden|build|compile)/.test(why) ? "test" : null;
     else if (/^generation: build\b/.test(name)) b = "test";                  // the gate's build of a draft
-    else if (/^evaluation\b|compose/.test(name)) b = "parts";                  // proven parts composed (drawn when it has parts)
+    else if (/^evaluation\b|: compose\b/.test(name)) b = "parts";                  // proven parts composed (drawn when it has parts)
     else if (!name.startsWith("agent:")) b = BOX_BY_WORD[name.split(/[\s:]/)[0]] || null;
     if (!b) b = n.parent ? boxOfTask(n.parent) : name.startsWith("agent:") ? "generate" : null;   // an agent or a tool: its step's box
     boxCache.set(n, b);
     return b;
   }
-  let drawingHandle = null, drawingTried = false, latestOf = {};
+  let drawingHandle = null, drawingTried = false, latestOf = {}, visits = [];
+  // D727: a bar to go through the boxes' visits in order -- the drawing says which box, the
+  // detail panel what it did; following keeps it on the newest
+  const stepRange = h("input", { type: "range", min: "0", max: "0", value: "0", class: "step-range", "aria-label": "Step" });
+  const stepSaid = h("span", { class: "step-said muted small" });
+  const goStep = (k) => {
+    if (!visits.length) return;
+    k = Math.max(0, Math.min(visits.length - 1, k));
+    selected = visits[k]; follow.checked = false; draw();
+  };
+  const stepAt = () => { const k = visits.indexOf(visitOf(selected)); return k < 0 ? visits.length - 1 : k; };
+  const stepBtn = (label, title, to) => h("button", { type: "button", class: "small", title, "aria-label": title, onclick: () => goStep(to()) }, label);
+  const stepBar = h("div", { class: "step-bar" },
+    stepBtn("⏮", "The first step", () => 0), stepBtn("◀", "The step before", () => stepAt() - 1),
+    stepRange, stepBtn("▶", "The step after", () => stepAt() + 1), stepBtn("⏭", "The newest step", () => visits.length - 1), stepSaid);
+  stepRange.addEventListener("input", () => goStep(Number(stepRange.value)));
+  stepBar.addEventListener("keydown", (e) => {
+    if (e.target === stepRange) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); goStep(stepAt() - 1); } else if (e.key === "ArrowRight") { e.preventDefault(); goStep(stepAt() + 1); }
+  });
+  /** The visit a task belongs to: itself or the ancestor that began its box's stretch. */
+  function visitOf(n) {
+    for (let p = n; p; p = p.parent) { const b = boxOfTask(p); if (b && !(p.parent && boxOfTask(p.parent) === b)) return p; }
+    return null;
+  }
   async function loadDrawing() {
     drawingTried = true;
     const C = window.FluxCrafter;
@@ -1848,7 +1872,7 @@ function liveTree(base, qs, onQuestion) {
       const v = await fetch(`${base}/document${qs}`, { credentials: "same-origin" }).then(r => r.json());
       if (!v.raw) { graphBox.replaceChildren(empty("The loop's document cannot be drawn: " + (v.error || "there is none."))); return; }
       const host = h("div", { class: "flux-crafter tasks-drawing" });
-      graphBox.replaceChildren(h("p", { class: "muted small" }, "The loop as its document draws it: a box shows how often it ran and for how long; click one for its latest task."), host);
+      graphBox.replaceChildren(stepBar, host);
       drawingHandle = C.mount(host, true, { state: C.fromDoc(v.raw, v.normal || v.raw).state, activity: {},
         onBox: (id) => { if (latestOf[id]) { selected = latestOf[id]; follow.checked = false; draw(); } } });
       draw();
@@ -1857,28 +1881,33 @@ function liveTree(base, qs, onQuestion) {
   function drawGraph(now) {
     if (!drawingHandle) { if (!drawingTried) { graphBox.replaceChildren(skeleton(6)); loadDrawing(); } return; }
     boxCache.clear();
-    const acc = {};
     latestOf = {};
+    visits = [];
+    const used = {};
     for (const n of nodes.values()) {
       const b = boxOfTask(n);
-      if (!b || (n.parent && boxOfTask(n.parent) === b)) continue;      // one count per stretch of a box, not per sub-task
-      const a = acc[b] || (acc[b] = { count: 0, secs: 0, running: false, failed: 0, last: null });
-      a.count++;
-      a.secs += running(n) ? now - n.t0 : (n.seconds || 0);
-      if (running(n)) a.running = true;
-      if (n.failed) a.failed++;
-      if (!a.last || n.t0 >= a.last.t0) a.last = n;
+      if (!b || (n.parent && boxOfTask(n.parent) === b)) continue;      // one visit per stretch of a box, not per sub-task
+      visits.push(n);
+      (used[b] || (used[b] = [])).push(n);
+      if (!latestOf[b] || n.t0 >= latestOf[b].t0) latestOf[b] = n;
     }
-    let selBox = null;
-    for (let p = selected; p && !selBox; p = p.parent) { const b = boxOfTask(p); if (b && acc[b]) selBox = b; }
+    visits.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
+    const cur = visitOf(selected);
+    const k = cur ? visits.indexOf(cur) : -1;
+    const curBox = cur ? boxOfTask(cur) : null;
     const activity = {};
-    for (const [b, a] of Object.entries(acc)) {
-      latestOf[b] = a.last;
-      activity[b] = { state: a.running ? "running" : a.last && a.last.failed ? "failed" : "done", sel: b === selBox,
-        label: a.running ? `running · ${dur(a.secs)}` : `${a.count}× · ${dur(a.secs)}${a.failed ? ` · ${a.failed} failed` : ""}`,
-        title: `${a.count} time(s), ${dur(a.secs)}; latest: ${a.last.name}${a.last.why ? " — " + a.last.why : ""}` };
+    for (const [b, list] of Object.entries(used)) {                      // a box this start used; its state only where it is now
+      const live = list.some(running);
+      activity[b] = { state: live ? "running" : b === curBox && cur.failed ? "failed" : "done", sel: b === curBox,
+        title: `latest: ${latestOf[b].name}${latestOf[b].why ? " — " + latestOf[b].why : ""}` };
     }
     drawingHandle.setActivity(activity);
+    stepRange.max = String(Math.max(visits.length - 1, 0));
+    if (document.activeElement !== stepRange) stepRange.value = String(k < 0 ? Math.max(visits.length - 1, 0) : k);
+    stepRange.disabled = visits.length < 2;
+    const box = curBox && ((window.FluxCrafter && window.FluxCrafter.boxTitle && window.FluxCrafter.boxTitle(curBox)) || curBox);
+    stepSaid.textContent = !visits.length ? "No step yet." : k < 0 ? `${visits.length} steps` :
+      `Step ${k + 1} of ${visits.length} · ${box} · ${cur.name}${cur.why ? " — " + cur.why : ""} · ${running(cur) ? "running" : cur.failed ? "failed" : dur(cur.seconds)}`;
   }
   /** The loop's standings (D418l) as a reader wants them: a line of counts, the frontier and the
       parts as small tables, anything else as short key/value lines. */

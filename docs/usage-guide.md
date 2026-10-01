@@ -200,8 +200,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     before failed, the deepest stage, then each objective without a limit.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`, or as a
     graph (**Tree | Graph**, remembered per browser; D726: the graph is the loop's own drawing, as
-    the configurator draws its document, each box saying how often it ran and for how long,
-    running or failed, unused boxes dimmed; a box selects its latest task). By
+    the configurator draws its document, unused boxes dimmed, a running one pulsing; D727: a step
+    bar -- ⏮ ◀ slider ▶ ⏭ -- goes through the boxes' visits in order, outlining the step's box and
+    opening its task; a box jumps to its latest visit). By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output; following, it shows the running task, and at rest the one that ended

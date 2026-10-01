@@ -1011,7 +1011,13 @@
     return { state: s, kept: kept, notes: notes };
   }
 
-  var api = { buildYaml: buildYaml, check: check, fromDoc: fromDoc, argvOf: argvOf, resolve: resolve, setCatalog: setCatalog, toolOf: toolOf,
+  /** A drawing node's title, as the box shows it (D727: the web's step bar names its box). */
+  function boxTitle(id) {
+    return { "crit-division": "Critic: division", "crit-part": "Critic: each part", "crit-decision": "Critic: decision",
+             parts: "Parts" }[id] || (BOXES[id] || {}).title || id;
+  }
+
+  var api = { boxTitle: boxTitle, buildYaml: buildYaml, check: check, fromDoc: fromDoc, argvOf: argvOf, resolve: resolve, setCatalog: setCatalog, toolOf: toolOf,
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
