@@ -100,7 +100,7 @@ def test_task_check_says_what_the_library_holds(lib, tmp_path, capsys, monkeypat
     assert "library: 2 documents (0 PDFs, pdftotext " in capsys.readouterr().out
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "empty"))
     main(["task", "check", str(doc)])
-    assert f"library: empty -- drop papers in library/ beside the document, or in {tmp_path / 'empty'}" in capsys.readouterr().out
+    assert f"library: empty -- drop papers in library/ or inputs/ beside the document, or in {tmp_path / 'empty'}" in capsys.readouterr().out
 
 
 def test_a_draft_s_row_names_the_papers_its_prompt_carried(lib, tmp_path):

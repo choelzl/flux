@@ -1,4 +1,4 @@
-"""D735, D736: a loop's own references -- one folder, `library/` beside its document -- join its
+"""D735-D737: a loop's own references -- `library/` and `inputs/` beside its document -- join its
 library without a word in the document, and the sandbox mounts the libraries a run reads."""
 
 from __future__ import annotations
@@ -15,13 +15,14 @@ DOC = "id: kp\nstatement: the fastest\nlanguage: python\ngate: 'python3 check.py
 
 def test_the_loops_library_folder_is_its_library(tmp_path, monkeypatch):
     (tmp_path / "kp.problem.yaml").write_text(DOC)
-    for f in ("library/papers", "research", "out"):
+    for f in ("library/papers", "inputs", "research", "out"):
         (tmp_path / f).mkdir(parents=True)
     (tmp_path / "library/papers/sqrt.md").write_text("# Fast inverse square root\n\nA Newton step after a magic-constant guess halves the error.\n")
-    (tmp_path / "library/notes.txt").write_text("Booth recoding halves the partial products of a multiplier in hardware.\n")
+    (tmp_path / "inputs/notes.txt").write_text("Booth recoding halves the partial products of a multiplier in hardware.\n")
     (tmp_path / "research/a.pdf").write_bytes(b"%PDF-1.4 elsewhere")
     task = load_task(str(tmp_path / "kp.problem.yaml"))
-    assert library_folders(task) == (str((tmp_path / "library").resolve()),), "one folder: library/, not research/ or out/"
+    assert library_folders(task) == (str((tmp_path / "library").resolve()), str((tmp_path / "inputs").resolve())), \
+        "library/ and inputs/, not research/ or out/"
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "no-shared-library"))
     from flux_loop.task import PromptProblem
 

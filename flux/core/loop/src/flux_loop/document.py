@@ -1185,17 +1185,17 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     return flow, doc
 
 
-#: D735, D736: a loop's own papers, references and specs: one folder beside its document, read
-#: without a word in the document (`flux ask` puts what it was given there).
-LIBRARY_FOLDER = "library"
+#: D735-D737: a loop's own references, read without a word in the document: `library/` (papers and
+#: references) and `inputs/` (what it was given: `flux ask` puts its attachments there).
+LIBRARY_FOLDERS = ("library", "inputs")
 
 
 def library_folders(task: "TaskSpec") -> tuple[str, ...]:
-    """The folders a document's library adds to the shared one (D648, D736): the one its
-    `knowledge: {library: ...}` names, and its own `library/` beside it."""
+    """The folders a document's library adds to the shared one (D648, D737): the one its
+    `knowledge: {library: ...}` names, and its own `library/` and `inputs/` beside it."""
     out = [task.library] if task.library else []
-    if task.home and (Path(task.home) / LIBRARY_FOLDER).is_dir():
-        out.append(str((Path(task.home) / LIBRARY_FOLDER).resolve()))
+    if task.home:
+        out += [str((Path(task.home) / f).resolve()) for f in LIBRARY_FOLDERS if (Path(task.home) / f).is_dir()]
     return tuple(dict.fromkeys(out))
 
 

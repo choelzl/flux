@@ -95,9 +95,9 @@ flux knowledge digest --db DB     # the library's key points, digested once by t
 ```
 
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
-its own, one folder (D736): `library/` beside its document -- papers, references, specs, in any subfolders
-(`flux ask`, and New loop › Agent, put what they were given there) -- and a folder `knowledge: {library: DIR}`
-names. Every prompt gets the excerpts nearest the problem and a line per paper,
+its own (D737): `library/` beside its document (papers and references, in any subfolders) and `inputs/`
+(what it was given: `flux ask`, and New loop › Agent, put their attachments there), and a folder
+`knowledge: {library: DIR}` names. Every prompt gets the excerpts nearest the problem and a line per paper,
 each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
 `pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
 The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a

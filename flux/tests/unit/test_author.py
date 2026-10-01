@@ -21,7 +21,7 @@ bad = sum(1 for i, w in enumerate(want) if i >= len(got) or got[i] != w)
 print(f"{bad} failing")
 """
 
-DOC = {"id": "digits", "statement": "The digits 0 to 9, one per line, as the spec in library/spec.md says.",
+DOC = {"id": "digits", "statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
        "language": "text", 
        "gate": {"test": "{python} {home}/check.py {artifact}", "count_re": "(\\d+) failing"},
        "budget": {"steps": 1, "repair_attempts": 2, "prototype": False}}
@@ -60,7 +60,7 @@ def test_a_model_author_writes_the_problem_the_loop_runs_it_and_the_author_settl
     spec.write_text("# Digits\nEvery line one decimal digit, ascending from 0 to 9.\n")
     work = tmp_path / "work"
     inputs = workspace([spec], work)
-    assert inputs == [Path("library/spec.md")] and (work / "library/spec.md").is_file()
+    assert inputs == [Path("inputs/spec.md")] and (work / "inputs/spec.md").is_file()
     author = ScriptedProposer([_reply({"problem.yaml": yaml.safe_dump(DOC), "check.py": CHECK}, why="a checker script"),
                                _reply({}, done=True, why="the digits pass the gate")])
     said: list[str] = []
@@ -69,7 +69,7 @@ def test_a_model_author_writes_the_problem_the_loop_runs_it_and_the_author_settl
                 run_pass=_run(None, [loop_digits]), say=said.append)
     assert not got["error"] and got["result"].decision is not None
     doc = yaml.safe_load((work / "problem.yaml").read_text())
-    assert doc["knowledge"]["files"] == ["library/spec.md"], "the input the author forgot is added"
+    assert doc["knowledge"]["files"] == ["inputs/spec.md"], "the input the author forgot is added"
     # D593: DONE settles the document, it does not end the run -- the loop runs it again, and
     # the run ends here only because the scripted author has nothing more to say
     assert [h["turn"] for h in got["history"]] == ["write", "run", "revise", "run"]

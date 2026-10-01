@@ -8,7 +8,7 @@ hands the author the report; the author revises it for another pass, or says it 
 The author writes the problem, never the design. The document is checked before anything runs
 (it loads, uses only document keys, every tool is on PATH, every named file exists); a refused
 document goes back to the author with the reason, up to `checks` times. Input files are copied
-under `<workdir>/library/` (D736: the loop's one folder of references, its library) and read through the document's `knowledge: {files: [...]}` (added
+under `<workdir>/inputs/` (D737: part of the loop's library, beside `library/`) and read through the document's `knowledge: {files: [...]}` (added
 when the author forgot them).
 """
 
@@ -73,9 +73,9 @@ def workspace_skills(paths: list[str | Path], workdir: Path) -> list[Any]:
 
 
 def workspace(files: list[str | Path], workdir: Path) -> list[Path]:
-    """The input files copied under `<workdir>/library/` (a folder is copied whole; D736); the
+    """The input files copied under `<workdir>/inputs/` (a folder is copied whole); the
     paths the document will name, relative to the workdir."""
-    inputs = workdir / "library"
+    inputs = workdir / "inputs"
     inputs.mkdir(parents=True, exist_ok=True)
     out: list[Path] = []
     for f in files:
