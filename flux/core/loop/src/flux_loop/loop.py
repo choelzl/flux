@@ -184,7 +184,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     cap = parallel_cap()
     asked = max(int(request.workers or 0), int(request.parallel_parts or 1))
     if cap is not None and asked > cap:          # D740: the server's cap, said where the run is read
-        state.say(f"  at once: {cap} (the document asks {asked}; an admin raises it in the loop's Advanced settings)")
+        state.say(f"  one at a time: the document asks {asked} at once; an admin allows parallel work in the loop's Advanced settings")
     if request.ahead and problem.stages() and problem.subgoals() and lad is not None and getattr(lad, "alone", None):
         # D563: the tools work while the model thinks -- only where the ladder declares the
         # stage a part is measured on alone; otherwise it would be a tool run for nothing

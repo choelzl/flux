@@ -21,8 +21,8 @@ T = TypeVar("T")
 
 def parallel_cap() -> int | None:
     """What may run at once, at most, whatever the document asks (D740): `FLUX_PARALLEL_MAX`,
-    which `flux serve` sets for every run -- 1 unless an admin raised it for the loop. None
-    (no cap) when unset, as on one's own machine."""
+    which `flux serve` sets to 1 for a run unless an admin allows the loop parallel work (D741:
+    then unset, and the document says how much). None (no cap) when unset."""
     raw = os.environ.get("FLUX_PARALLEL_MAX", "").strip()
     try:
         return max(1, int(raw)) if raw else None

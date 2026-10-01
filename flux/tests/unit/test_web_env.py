@@ -80,12 +80,11 @@ def test_only_an_admin_takes_a_loop_out_of_the_sandbox_or_limits_it(server):
         store.set_env("global", "FLUX_SANDBOX_MEMORY", "999g")
 
 
-def test_a_loop_works_one_thing_at_a_time_unless_an_admin_raises_it(server):
-    """D740: `parallel` is an admin's per-loop setting; 1 (unset) is the default."""
+def test_a_loop_works_one_thing_at_a_time_unless_an_admin_allows_parallel_work(server):
+    """D741: an admin allows parallel work per loop; how much is the document's."""
     app, _store = server
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
     bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
-    assert bob.put("/api/apps/x/advanced", json={"parallel": 4}, headers=H).status_code == 403
-    assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": 4}, headers=H).json()["advanced"] == {"parallel": 4}
-    assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": 0}, headers=H).status_code == 422
-    assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": 1}, headers=H).json()["advanced"] == {}
+    assert bob.put("/api/apps/x/advanced", json={"parallel": True}, headers=H).status_code == 403
+    assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": True}, headers=H).json()["advanced"] == {"parallel": True}
+    assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": False}, headers=H).json()["advanced"] == {}

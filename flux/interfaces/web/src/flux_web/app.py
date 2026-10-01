@@ -126,7 +126,7 @@ class Advanced(BaseModel):
     pids: int | None = None
     tmp_size: str | None = Field(default=None, max_length=16)
     allow: list[str] | None = None
-    parallel: int | None = Field(default=None, ge=1, le=64)     # D740: work at once; unset is 1
+    parallel: bool = False                  # D741: parallel work allowed; how much is the document's
 
 
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
@@ -577,7 +577,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(400, "pids: from 64 to 1000000")
         body.allow = _rules(body.allow or []) or None
         got = {k: v for k, v in body.model_dump().items() if v not in (None, "") and not (k == "sandbox" and v is True)
-               and not (k == "parallel" and v == 1)}
+               and not (k == "parallel" and v is False)}
         store.server_set(f"adv:{whose.name}:{name}", got or None)
         store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
         return {"advanced": got}
