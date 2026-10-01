@@ -1,8 +1,8 @@
-"""An external user's agent logins from the web (D734): `flux login --home <their home> -- <the
+"""A user's agent logins from the web (D734; every user's since D744/D747): `flux login --home <their home> -- <the
 agent's login command>`, sandboxed as a run is (their network rules, the admin's programs). `flux
 login` gives the agent a terminal of its own, so a login made for a person -- a menu, a prompt, a
 link to open -- works as in a terminal; the server drives it through plain pipes. What it writes
-stays in their home; their runs copy it in. One session per user at a time, ended after 15
+stays in their home, where their runs use it. One session per user at a time, ended after 15
 minutes; the page reads its output from an offset and types into it."""
 
 from __future__ import annotations

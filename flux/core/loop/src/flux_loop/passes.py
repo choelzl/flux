@@ -122,21 +122,77 @@ def between_passes(out: Any, n: int, *, passes: int = 0, rests: int = 0, feedbac
     return True, rests, feedback
 
 
+def _wave(run: Callable[[Any, Any], Any], request: Any, feedback: Any, nums: list[int], run_mark: object) -> list[Any]:
+    """D747: passes `nums` at once, each on a thread of its own, sharing the run's search; each
+    phase of a pass carries its number (`tagged(pass=…)`), so the tree keeps them apart."""
+    import contextvars
+    import threading
+
+    from flux_profile import tagged
+
+    outs: list[Any] = [None] * len(nums)
+    errs: list[BaseException | None] = [None] * len(nums)
+
+    def one(j: int, i: int) -> None:
+        with carrying(run_mark), tagged(**{"pass": i}):
+            try:
+                outs[j] = run(request, feedback)
+            except BaseException as exc:  # noqa: BLE001 -- said on the caller's thread
+                errs[j] = exc
+
+    threads = [threading.Thread(target=contextvars.copy_context().run, args=(one, j, i), name=f"flux-pass-{i}", daemon=True)
+               for j, i in enumerate(nums)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    bad = next((e for e in errs if e is not None), None)
+    if bad is not None:
+        raise bad
+    return outs
+
+
 def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | None = None, feedback: Any = None,
                proposer: Any = None, say: Callable[[str], None] = print, notes: bool = True) -> Any:
     """`run(request, feedback)` pass after pass, as `between_passes` says; the last result.
     `passes` None: the request's (the document's `budget.passes`; 0 = until stopped).
-    `notes` False (`feedback: none`, D666): no channel, so a note never wakes a waiting run."""
+    `notes` False (`feedback: none`, D666): no channel, so a note never wakes a waiting run.
+    D747: `request.parallel` passes at once (a wave), the next wave once all of them ended; on a
+    server one at a time unless an admin allows parallel work. Passes at once do not see each
+    other's designs, so the run ends with a short pass that decides over everything recorded."""
+    from .pool import capped
+
     feedback = feedback if notes else None
     cap = int(request.passes if passes is None else passes)
+    asked = max(1, int(getattr(request, "parallel", 1) or 1))
+    width = capped(asked)
+    if width < asked:
+        say(f"  one pass at a time: the document asks {asked} at once; an admin allows parallel work in the loop's Advanced settings")
     n = rests = 0
-    with carrying():
+    together = False
+    with carrying() as run_mark:
         while True:
-            mark("pass", n=n + 1, explore=rests)
-            out = run(dataclasses.replace(request, explore=rests), feedback)
-            n += 1
+            k = min(width, cap - n) if cap else width
+            if k <= 1:
+                mark("pass", n=n + 1, explore=rests)
+                out = run(dataclasses.replace(request, explore=rests), feedback)
+            else:
+                nums = list(range(n + 1, n + k + 1))
+                for i in nums:
+                    mark("pass", n=i, explore=rests, together=nums)
+                outs = _wave(run, dataclasses.replace(request, explore=rests), feedback, nums, run_mark)
+                together = True
+                out = dataclasses.replace(outs[-1], at_rest=all(o.at_rest for o in outs),
+                                          explorable=any(o.explorable for o in outs))
+            n += max(1, k)
             go, rests, feedback = between_passes(out, n, passes=cap, rests=rests, feedback=feedback,
                                                  proposer=proposer, say=say)
             if not go:
+                if together:                        # D747: one decision over what every pass recorded
+                    mark("pass", n=n + 1, conclude=True)
+                    say("\n── the decision, over every pass ──")
+                    out = run(dataclasses.replace(request, explore=0, steps=0), feedback)
                 return out
-            say(f"\n── pass {n + 1}" + (f": at rest, exploring for a better design ({rests} in a row)" if rests else "") + " ──")
+            nxt = min(width, cap - n) if cap else width
+            said = f"passes {n + 1}–{n + nxt} at once" if nxt > 1 else f"pass {n + 1}"
+            say(f"\n── {said}" + (f": at rest, exploring for a better design ({rests} in a row)" if rests else "") + " ──")

@@ -303,31 +303,23 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"values": store.settings(user), "server": server, "groups": _groups(), "admin_only": list(ADMIN_ONLY),
                 "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS), "external": user.external}
 
-    # ---- an external user's agent logins (D734)
+    # ---- every user's agent logins (D734, D747: internal users too, since each has a home of their own)
     from .logins import LOGIN_DEFAULTS, Logins, logged_in
 
     logins = Logins()
 
-    def _external(user: User) -> User:
-        if not user.external:
-            raise HTTPException(403, "agent logins are an external user's: an internal user's runs use the server's")
-        return user
-
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
-        if not user.external:
-            return {"external": False}
         have = logged_in(store.home_of(user))
         cmds = store.server_settings(reveal=True)
         from .authoring import AUTHORS
 
-        return {"external": True, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a],
+        return {"external": user.external, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a],
                                               "command": " ".join(logins.command(a, cmds))} for a in LOGIN_DEFAULTS],
                 "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
 
     @app.post("/api/logins/{agent}")
     def start_login(agent: str, user: User = Depends(user_of)) -> dict[str, str]:
-        _external(user)
         try:
             cmd = logins.command(agent, store.server_settings(reveal=True))
             home_ready(store, user)
@@ -342,12 +334,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/logins/session")
     def login_session(since: int = 0, user: User = Depends(user_of)) -> dict[str, Any]:
-        _external(user)
         return logins.state(user.name, since)
 
     @app.post("/api/logins/session/input")
     def login_input(body: LoginInput, user: User = Depends(user_of)) -> dict[str, str]:
-        _external(user)
         try:
             logins.send(user.name, body.text, body.key)
         except ValueError as exc:
@@ -356,7 +346,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.post("/api/logins/session/stop")
     def login_stop(user: User = Depends(user_of)) -> dict[str, str]:
-        _external(user)
         logins.stop(user.name)
         return {"ok": "stopping"}
 

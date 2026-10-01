@@ -578,6 +578,8 @@ def flows(r: Run) -> None:
         kind_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s kind\")"
         r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s kind\"))", "the users and their kinds")
         r.check("the admin sees each user's kind", b.js(f"const k = {kind_of}; return k && k.value", "bob") == "internal")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "an admin's account")
+        r.check("every user logs their agents in, not only an external one (D747)", True)
         made = r.api("/users", "POST", {"name": "ex", "password": "ex has a long secret", "role": "external"})
         r.check("an external user is added", made["status"] == 200, str(made))
         r.login("ex", "ex has a long secret")

@@ -20,6 +20,7 @@ __all__ = ["Journal", "TAIL", "attach", "read_events"]
 
 TAIL = 4000
 _ATTACHED: dict[str, "Journal"] = {}
+_ATTACHING = threading.Lock()
 
 
 def _cut(value: Any) -> Any:
@@ -102,14 +103,15 @@ def attach(run_dir: str) -> Journal:
     """This process's journal into `run_dir` (once per directory), beside any TUI listener."""
     from flux_profile import add_listener, remove_listener
 
-    j = _ATTACHED.get(run_dir)
-    if j is None:
-        for old in list(_ATTACHED):                  # one run per process: a new one replaces it
-            remove_listener(_ATTACHED.pop(old))
-        os.makedirs(run_dir, exist_ok=True)
-        j = _ATTACHED[run_dir] = Journal(os.path.join(run_dir, "events.jsonl"))
-        j._write({"ev": "hello", "pid": os.getpid()})
-        add_listener(j)
+    with _ATTACHING:                                 # D747: passes starting at once attach one journal
+        j = _ATTACHED.get(run_dir)
+        if j is None:
+            for old in list(_ATTACHED):              # one run per process: a new one replaces it
+                remove_listener(_ATTACHED.pop(old))
+            os.makedirs(run_dir, exist_ok=True)
+            j = _ATTACHED[run_dir] = Journal(os.path.join(run_dir, "events.jsonl"))
+            j._write({"ev": "hello", "pid": os.getpid()})
+            add_listener(j)
     return j
 
 

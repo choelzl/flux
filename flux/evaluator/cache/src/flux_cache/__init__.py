@@ -9,10 +9,15 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
 __all__ = ["CachedBatch", "MeasurementCache", "SingleFlightMemo", "ToolchainBaseline", "sidecar_path"]
+
+#: One writer at a time for every cache file in this process (D747: passes running at once).
+_WRITING = threading.RLock()
 
 
 def sidecar_path(db: str | Path, suffix: str) -> Path:
@@ -104,12 +109,20 @@ class MeasurementCache:
 
     def put(self, identity: str, value: Any) -> None:
         """Store `value` for `identity`; an unwritable cache costs time, never correctness."""
-        held = self._load()
-        held[self._key(identity)] = value
+        with _WRITING:
+            held = self._load()
+            held[self._key(identity)] = value
+            self._write(held)
+
+    def _write(self, held: dict[str, Any]) -> None:
+        """The whole file, written beside and renamed over (D747): passes running at once never
+        read half of it, and each writes what it read with its own entry added, under one lock."""
+        tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.{threading.get_ident()}")
         try:
-            self.path.write_text(json.dumps(held, indent=2, sort_keys=True))
+            tmp.write_text(json.dumps(held, indent=2, sort_keys=True))
+            os.replace(tmp, self.path)
         except OSError:
-            pass
+            tmp.unlink(missing_ok=True)
 
     def get_or_measure(self, identity: str, measure: Callable[[], Any]) -> Any:
         """The cached result for `identity`, or `measure()` — stored before it is returned."""
@@ -118,11 +131,10 @@ class MeasurementCache:
         if key in held:
             return held[key]
         value = measure()
-        held[key] = value
-        try:
-            self.path.write_text(json.dumps(held, indent=2, sort_keys=True))
-        except OSError:
-            pass          # an unwritable cache costs time, never correctness
+        with _WRITING:
+            held = self._load()
+            held[key] = value
+            self._write(held)          # an unwritable cache costs time, never correctness
         return value
 
 

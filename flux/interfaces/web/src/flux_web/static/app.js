@@ -1827,6 +1827,7 @@ function liveTree(base, qs, onQuestion) {
   const isDivide = (n) => /^propose: decompose/.test(String(n.name));
   const isSetup = (n) => SETUP_BOXES.has(boxOfTask(n)) || isDivide(n);
   const partOf = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.part; if (v) return String(v); } return ""; };
+  const passTag = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.pass; if (v != null && v !== "") return Number(v); } return null; };   // D747
   const rootOf = (n) => { let p = n; while (p.parent) p = p.parent; return p; };
   const within = (v, n) => { for (let p = n; p; p = p.parent) if (p === v) return true; return false; };
   // D742: a leaf's name is a word; the crafter's box name is its tooltip
@@ -1879,14 +1880,18 @@ function liveTree(base, qs, onQuestion) {
     // the pick of the next part belongs to the part it picked
     const partOfVisit = (v) => partOf(v) || (/^propose: what next/.test(String(v.name)) && v.output && named.has(String(v.output.picked)) ? String(v.output.picked) : "");
     const passes = new Map();
-    for (const m of passMarks) if (!passes.has(Number(m.n))) passes.set(Number(m.n), { n: Number(m.n), explore: Number(m.explore || 0), visits: [] });
+    for (const m of passMarks) if (!passes.has(Number(m.n))) passes.set(Number(m.n), { n: Number(m.n), explore: Number(m.explore || 0), conclude: !!m.conclude, visits: [] });
     for (const v of visits) {
       if (!hasParts && boxOfTask(v) === "parts") continue;              // nothing to put together
-      const k = passAt(rootOf(v).t0);
+      const k = passTag(v) ?? passAt(rootOf(v).t0);                       // D747: passes at once say whose they are
       if (!passes.has(k)) passes.set(k, { n: k, explore: 0, visits: [] });
       passes.get(k).visits.push(v);
     }
     const order = [...passes.values()].filter(p => p.visits.length).sort((a, b) => a.n - b.n);
+    // D747: the passes that ran at the same time as each, from their own times
+    const span = (p) => { const ts = subtree(p.visits); return [Math.min(...ts.map(t => t.t0)), Math.max(...ts.map(t => t.t1 ?? Infinity))]; };
+    for (const p of order) p.span = span(p);
+    for (const p of order) p.with = order.filter(q => q !== p && q.span[0] < p.span[1] && p.span[0] < q.span[1]).map(q => q.n);
     const out = [];
     const setupLeaves = [];
     const passBody = (p, vs, key) => {            // a pass's leaves: its own setup as one leaf, then the boxes
@@ -1899,10 +1904,11 @@ function liveTree(base, qs, onQuestion) {
     };
     const passWhy = (p, vs) => {
       const made = designsOf(vs);
-      return [made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : "", p.explore ? "exploring" : ""].filter(Boolean).join(" · ");
+      return [made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : "", p.explore ? "exploring" : "",
+        p.with && p.with.length ? `with ${p.with.join(", ")}` : ""].filter(Boolean).join(" · ");
     };
     if (!hasParts) {
-      for (const p of order) out.push(branch(`pass:${p.n}`, `Pass ${p.n}`, passWhy(p, p.visits), passBody(p, p.visits, `pass:${p.n}`)));
+      for (const p of order) out.push(branch(`pass:${p.n}`, p.conclude ? "Conclusion" : `Pass ${p.n}`, p.conclude ? "over every pass" : passWhy(p, p.visits), passBody(p, p.visits, `pass:${p.n}`)));
     } else {
       const byPart = new Map(), whole = [];
       for (const p of order) {
@@ -3119,7 +3125,7 @@ async function accountPage() {
       h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Set an endpoint, model and key, or log an agent in below. Keys are stored encrypted and never shown again."
         : "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
       ...settingsForm(st, { server: st.server, save, scope: "me" })]),
-    st.external ? await loginsCard() : "",
+    await loginsCard(),
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
@@ -3129,7 +3135,7 @@ async function accountPage() {
           : act("Allow desktop notifications", async () => { await Notification.requestPermission(); route(); })) : ""])));
 }
 
-/** An external user's agent logins (D734): each agent, logged in or not, and its login run in a
+/** A user's agent logins (D734; every user's, D747): each agent, logged in or not, and its login run in a
     small terminal -- its output (links clickable), a line to type, the keys a menu wants. */
 async function loginsCard() {
   const box = h("div", {});
@@ -3178,7 +3184,7 @@ async function loginsCard() {
   }
   cleanup.push(() => clearTimeout(timer));
   await drawList();
-  return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs copy what the login writes. ",
+  return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs use what the login writes. ",
     "The login runs as a run does, in the sandbox, under the server's network rules."), box, term]);
 }
 

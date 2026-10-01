@@ -291,24 +291,23 @@ class CampaignStore:
     ) -> int:
         """The intent record, committed before evaluation starts so a crash shows as an
         interrupted trial. Returns the trial seq."""
+        # D747: the next seq taken in the insert itself -- one statement holds the write lock, so
+        # passes at once on their own connections never take the same one (a row was lost)
         row = self._conn.execute(
-            "SELECT COALESCE(MAX(seq), 0) + 1 FROM trials WHERE campaign_id = ?", (campaign_id,)
-        ).fetchone()
-        seq = int(row[0])
-        self._conn.execute(
             "INSERT INTO trials (campaign_id, seq, phase, stage, candidate_json, "
             "candidate_key, workload_hash, arch_hash, status, strategy_kind, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+            "VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM trials WHERE campaign_id = ?), "
+            "?, ?, ?, ?, ?, ?, 'running', ?, ?) RETURNING seq",
             (
                 # default=str: a non-JSON object in the candidate is recorded as text rather
                 # than failing the whole trial write.
-                campaign_id, seq, phase, stage,
+                campaign_id, campaign_id, phase, stage,
                 json.dumps(candidate, default=str), candidate_key,
                 workload_hash, arch_hash, strategy_kind, _now(),
             ),
-        )
+        ).fetchone()
         self._conn.commit()
-        return seq
+        return int(row[0])
 
     def complete_trial(
         self,

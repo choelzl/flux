@@ -116,7 +116,7 @@ def test_a_login_runs_in_a_terminal_its_link_shown_its_answer_typed(tmp_path, mo
     assert (home / ".codex/auth.json").read_text() == "the-code" and logged_in(home)["codex"]
 
 
-def test_logins_are_an_external_users_and_the_server_is_not_offered_to_them(tmp_path, monkeypatch):
+def test_every_user_logs_in_and_the_server_is_not_offered_to_an_external_one(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
     store = _store(tmp_path)
     store.set_server_setting("FLUX_REMOTE_MODEL", "server-model")
@@ -127,7 +127,7 @@ def test_logins_are_an_external_users_and_the_server_is_not_offered_to_them(tmp_
         assert c.post("/api/login", json={"name": n, "password": pw}, headers=H).status_code == 200
         return c
     eve, ian = client("eve", "eve has a long secret"), client("ian", "ian has a long secret")
-    assert ian.get("/api/logins").json() == {"external": False} and ian.post("/api/logins/codex", headers=H).status_code == 403
+    assert [a["id"] for a in ian.get("/api/logins").json()["agents"]] == ["opencode", "claude", "codex"], "an internal user logs in too"
     lg = eve.get("/api/logins").json()
     assert [a["id"] for a in lg["agents"]] == ["opencode", "claude", "codex"]
     assert {a["id"]: a["command"] for a in lg["agents"]}["codex"] == "codex login --device-auth", "the admin's command"

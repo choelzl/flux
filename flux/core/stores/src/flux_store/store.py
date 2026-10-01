@@ -108,7 +108,7 @@ class ResultStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = str(db_path)
         # usable from any thread, one statement at a time, every result fetched whole (D569)
-        self._conn = _LockedConnection(sqlite3.connect(self.db_path, check_same_thread=False))
+        self._conn = _LockedConnection(sqlite3.connect(self.db_path, check_same_thread=False, timeout=60))
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()

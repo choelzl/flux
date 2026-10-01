@@ -87,6 +87,9 @@ search's next pick from what the passes before it measured: a 6-point sweep is 6
 (`--passes 6`), an anneal or a genetic population carries on from pass to pass. `budget.batch: N`
 lets one pass make, check and measure N of the search's picks side by side (worth it when the tools
 take many designs at once). A new run starts the search again from its record.
+`budget.parallel: N` (D747) runs N passes at once, each with its own design and its own branch in the tree;
+the next N start once all of them ended, and the run ends with one decision over every pass. On a server
+an admin allows it per loop (Advanced › Allow parallel work); otherwise passes run one at a time.
 
 ## Long runs and records
 

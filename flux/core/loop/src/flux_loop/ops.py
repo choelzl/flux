@@ -211,8 +211,11 @@ def _read(p: str) -> dict[str, Any] | None:
 
 
 def _write(p: str, doc: dict[str, Any]) -> None:
-    # a per-process temporary, so concurrent registrations do not race; the replace is atomic
-    tmp = f"{p}.{os.getpid()}.tmp"
+    # a per-process and per-thread temporary (D747: passes at once), so concurrent registrations
+    # do not race; the replace is atomic
+    import threading
+
+    tmp = f"{p}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w") as f:
         json.dump(doc, f, indent=1)
     os.replace(tmp, p)

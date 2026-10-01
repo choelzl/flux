@@ -382,7 +382,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                 with _phase("DSE: batch", why="the search policy proposes, the gate and the first stage measure") as out:
                     # D738: one pass, one design (or `budget.batch` of them): the search picks
                     # between passes, from what the last ones measured
-                    batch = searching.take(max(1, int(request.batch or 1) - carried))
+                    batch = searching.take(max(1, int(request.batch or 1) - carried), state)
                     if not batch and searching.done:   # the search is done; any parts left are not
                         out["candidates"] = "none: the search is done"
                         live = False
@@ -390,8 +390,11 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                         continue           # and this step was not spent
                     out["candidates"] = len(batch)
                     state.step = step + 1
-                    got = _search_step(problem, state, batch) if batch else []   # an empty round is a spent step
-                    searching.measured(got, len(batch))
+                    got = []
+                    try:
+                        got = _search_step(problem, state, batch) if batch else []   # an empty round is a spent step
+                    finally:
+                        searching.measured(got, len(batch))   # D747: also when it failed, or a sibling would wait
                     state.search_done = searching.done
                     carried += len(batch)
                     if carried >= max(1, int(request.batch or 1)) or searching.done:
@@ -616,6 +619,9 @@ class _StateProxy:
         setattr(object.__getattribute__(self, "_state"), name, value)
 
 
+_SESSIONS = __import__("threading").Lock()
+
+
 class _SearchSession:
     """The search across passes (D738). The policy proposes batches as it always did; each pass
     takes the next `n` points of the current one, and the policy hears the batch's results once
@@ -623,7 +629,12 @@ class _SearchSession:
     genetic population carry on, and the decision at each pass's end sees every design so far."""
 
     def __init__(self, gen: Iterator[list[Candidate]], proxy: _StateProxy, problem: Problem | None = None) -> None:
+        import threading
+
         self.gen, self.proxy, self.problem = gen, proxy, problem
+        # D747: passes running at once share it -- one takes at a time, and one whose policy
+        # waits for a batch's numbers waits until a sibling has measured its share of it
+        self.lock = threading.Condition()
         self.queue: list[Candidate] = []
         self.got: list[Scored] = []
         self.asked = False
@@ -632,7 +643,15 @@ class _SearchSession:
         self.last = False                        # the policy said this batch is its last
         self.run: object | None = None           # the run whose passes share it (passes.carrying)
 
-    def take(self, n: int) -> list[Candidate]:
+    def take(self, n: int, state: LoopState | None = None) -> list[Candidate]:
+        with self.lock:
+            while not self.queue and self.pending > 0 and not self.ended:
+                self.lock.wait(timeout=5)                  # a sibling pass is measuring the batch
+            if state is not None:
+                self.proxy.bind(state)                     # the policy speaks to the pass that asks
+            return self._take(n)
+
+    def _take(self, n: int) -> list[Candidate]:
         if not self.queue and self.pending <= 0 and not self.ended:
             self.proxy.search_done = False
             batch = _next_batch(self.gen, self.got, self.asked)
@@ -652,8 +671,10 @@ class _SearchSession:
         return out
 
     def measured(self, got: list[Scored], n: int) -> None:
-        self.got.extend(got)
-        self.pending -= n
+        with self.lock:
+            self.got.extend(got)
+            self.pending -= n
+            self.lock.notify_all()
 
     @property
     def done(self) -> bool:
@@ -672,7 +693,11 @@ def _search_session(problem: Problem, state: LoopState) -> _SearchSession | None
     record, D682)."""
     from .passes import this_run
 
-    run = this_run()
+    with _SESSIONS:                                     # D747: passes starting at once make one
+        return _search_session_locked(problem, state, this_run())
+
+
+def _search_session_locked(problem: Problem, state: LoopState, run: object | None) -> _SearchSession | None:
     session = problem.__dict__.get("_flux_search") if hasattr(problem, "__dict__") else None
     if session is not None and not session.done and run is not None and session.run is run:
         session.proxy.bind(state)
