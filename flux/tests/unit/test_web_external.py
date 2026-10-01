@@ -116,6 +116,28 @@ def test_a_login_runs_in_a_terminal_its_link_shown_its_answer_typed(tmp_path, mo
     assert (home / ".codex/auth.json").read_text() == "the-code" and logged_in(home)["codex"]
 
 
+def test_a_printed_token_is_kept_as_a_setting_and_never_shown(tmp_path):
+    """D748: `claude setup-token` prints its year-long token and keeps nothing; the login takes
+    it from the output into the user's settings and masks it -- also when it arrives in pieces."""
+    home = tmp_path / "ian-home"
+    fake = tmp_path / "fake-setup-token.py"
+    fake.write_text("import sys, time\nsys.stdout.write('Your token:\\nsk-ant-oat01-abcdefghij'); sys.stdout.flush()\n"
+                    "time.sleep(0.3)\nprint('KLMNOPQRSTUVWXYZ_0123-xyz')\nprint('Store this token securely.')\n")
+    kept = {}
+    lg = Logins()
+    lg.start("ian", "claude", home, [sys.executable, str(fake)], {**os.environ, "FLUX_SANDBOX": "0"},
+             on_secret=lambda name, value: kept.__setitem__(name, value))
+    for _ in range(100):
+        if not lg.state("ian")["running"]:
+            break
+        time.sleep(0.05)
+    text = lg.state("ian")["text"]
+    assert kept == {"CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oat01-abcdefghijKLMNOPQRSTUVWXYZ_0123-xyz"}
+    assert "sk-ant" not in text and "abcdefghij" not in text, "never shown, not even its first piece"
+    assert "saved to your settings as CLAUDE_CODE_OAUTH_TOKEN" in text and "Store this token securely." in text
+    assert not logged_in(home)["claude"], "Claude Code's settings file alone is not a login"
+
+
 def test_every_user_logs_in_and_the_server_is_not_offered_to_an_external_one(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
     store = _store(tmp_path)

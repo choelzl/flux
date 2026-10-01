@@ -311,6 +311,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
         have = logged_in(store.home_of(user))
+        mine = store.settings(user)
+        have["claude"] = have["claude"] or bool(mine.get("CLAUDE_CODE_OAUTH_TOKEN"))      # D748: a printed token, kept
         cmds = store.server_settings(reveal=True)
         from .authoring import AUTHORS
 
@@ -326,7 +328,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
             sandbox_env(env, sandbox, {})
             machine_env(env, store.server_get("sandbox") or {}, {}, [])       # the network rules apply to everyone
-            logins.start(user.name, agent, store.home_of(user), cmd, env)
+            logins.start(user.name, agent, store.home_of(user), cmd, env,
+                         on_secret=lambda name, value: store.set_setting(user, name, value))   # D748
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "agent login", f"{agent}: {' '.join(cmd)}")

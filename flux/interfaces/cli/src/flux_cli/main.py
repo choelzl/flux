@@ -359,7 +359,7 @@ def _cmd_login(args: argparse.Namespace) -> int:
         except OSError as exc:
             os.write(2, f"flux login: {cmd[0]}: {exc.strerror or exc}\n".encode())
         os._exit(127)
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 400, 0, 0))   # D748: wide, so a sign-in link is one line
     ins = [sys.stdin.fileno()]
     while True:
         try:

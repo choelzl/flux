@@ -355,7 +355,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     everyone. Every user (D744) has a home of their own (see Homes); on Account, **Agent logins** runs each
     agent's login command (`FLUX_<AGENT>_LOGIN`, the admin's; defaults `opencode auth login`, `claude setup-token`,
     `codex login`) in the sandbox, with that home writable, in a small terminal: its output with links, a line to
-    type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, where their runs use it.
+    type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, where their runs use it. Claude Code's
+    `claude setup-token` prints a year-long token instead of keeping it: the login saves it to the user's settings
+    (`CLAUDE_CODE_OAUTH_TOKEN`, encrypted) and never shows it (D748). For Codex set `FLUX_CODEX_LOGIN` to
+    `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost).
   - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with

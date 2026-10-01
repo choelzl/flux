@@ -30,6 +30,12 @@ _MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC
                "FLUX_CLAUDE_", "FLUX_CODEX_", "OPENCODE_", "CLAUDE_", "CODEX_", "FLUX_DEFAULT_AGENT")
 
 
+#: The logins kept as settings (D748): a person's, so whoever starts a run lends theirs.
+_LOGIN_SETTINGS = ("CLAUDE_CODE_OAUTH_TOKEN",)
+#: The agents' folders in the server account's environment, never a run's (D748): each user's are in their home.
+_OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
+
+
 def home_ready(store: Store, user: User) -> Path:
     """`user`'s Flux home (D744), started from the admin's list of home files where it lacks
     them -- copied from this server account's home, never over what the user has."""
@@ -55,6 +61,10 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     from .store import GROUPS
 
     env = {**os.environ, "FLUX_CONFIG": os.devnull}
+    # D748: an agent's own folder set for the server account (CODEX_HOME=~/.codex) points away from
+    # the user's home: their login and sessions would land in the scratch of the server's HOME path
+    for k in _OWN_FOLDERS:
+        env.pop(k, None)
     server, mine = store.server_settings(reveal=True), store.settings(user, reveal=True)
     if user.external:
         # D734: an external user brings their own: none of the machine's model and agent settings
@@ -93,7 +103,15 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     _agents(env, web)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like
-    names: list[str] = []
+    # D748: an agent's login kept as a setting is a person's, like the files in their home -- whoever
+    # starts the run lends theirs; and the settings' names pass into the sandbox whatever they look like
+    starter = home_for or user
+    for k in _LOGIN_SETTINGS:
+        env.pop(k, None)
+        own = store.settings(starter, reveal=True).get(k)
+        if own:
+            env[k] = own
+    names: list[str] = [k for k in (*web, *_LOGIN_SETTINGS) if k in env]
     for scope in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
         for name, x in store.env(scope, reveal=True).items():
             env[name] = x["value"]

@@ -49,7 +49,7 @@ GROUPS: dict[str, dict[str, Any]] = {
                  "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN", "FLUX_OPENCODE_LOGIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
                  "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
     "claude": {"label": "Claude Code", "tab": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
-               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN", "FLUX_CLAUDE_LOGIN"), "secret": ("ANTHROPIC_API_KEY",),
+               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN", "FLUX_CLAUDE_LOGIN"), "secret": ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"),
                "hint": "Empty: Claude Code's own login and model."},
     "codex": {"label": "Codex", "tab": "Codex", "endpoint": "OPENAI_BASE_URL",
               "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN", "FLUX_CODEX_LOGIN"), "secret": ("OPENAI_API_KEY",),

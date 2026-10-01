@@ -23,11 +23,17 @@ __all__ = ["CREDENTIALS", "LOGIN_DEFAULTS", "Logins", "logged_in"]
 
 #: The login command each agent runs unless the admin sets another (`FLUX_<AGENT>_LOGIN`).
 LOGIN_DEFAULTS = {"opencode": "opencode auth login", "claude": "claude setup-token", "codex": "codex login"}
-#: Where each agent keeps what a login gives it, under HOME: present means logged in.
-CREDENTIALS = {"opencode": (".local/share/opencode/auth.json",), "claude": (".claude/.credentials.json", ".claude.json"),
+#: Where each agent keeps what a login gives it, under HOME: present means logged in. (Not
+#: `.claude.json`: Claude Code writes it on any start, logged in or not -- D748.)
+CREDENTIALS = {"opencode": (".local/share/opencode/auth.json",), "claude": (".claude/.credentials.json",),
                "codex": (".codex/auth.json",)}
+#: D748: a login that prints its secret instead of keeping it -- `claude setup-token` prints a
+#: year-long token for CLAUDE_CODE_OAUTH_TOKEN. Taken from the output into the user's own
+#: settings (encrypted), and never shown again: the transcript has it masked.
+PRINTED = {"claude": (re.compile(r"sk-ant-oat\d+-[A-Za-z0-9_\-]{20,}"), "CLAUDE_CODE_OAUTH_TOKEN")}
 KEYS = {"enter": "\r", "up": "\x1b[A", "down": "\x1b[B", "left": "\x1b[D", "right": "\x1b[C", "tab": "\t", "escape": "\x1b",
         "ctrl-c": "\x03", "backspace": "\x7f", "space": " "}
+_RIGHT = re.compile(r"\x1b\[(\d*)C")
 _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]|\r(?!\n)")
 LIMIT_S = 15 * 60
 
@@ -42,6 +48,8 @@ class _Session:
         self.started, self.ended, self.rc = time.time(), None, None
         self.out: list[str] = []
         self.size = 0
+        self.pending = ""                       # D748: a line that may still be a secret being printed
+        self.on_secret: Any = None
         self.lock = threading.Lock()
 
     def text(self) -> str:
@@ -64,7 +72,7 @@ class Logins:
             cmd[0] = program
         return cmd
 
-    def start(self, user: str, agent: str, home: Path, cmd: list[str], env: dict[str, str]) -> None:
+    def start(self, user: str, agent: str, home: Path, cmd: list[str], env: dict[str, str], on_secret: Any = None) -> None:
         with self._lock:
             old = self._by.get(user)
             if old and old.ended is None:
@@ -76,6 +84,7 @@ class Logins:
             proc = subprocess.Popen(argv, cwd=str(home), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     env={**env, "TERM": "xterm-256color"}, start_new_session=True, close_fds=True)
             sess = self._by[user] = _Session(agent, proc, proc.stdout.fileno())
+            sess.on_secret = on_secret
         threading.Thread(target=self._read, args=(sess,), daemon=True).start()
         threading.Thread(target=self._limit, args=(sess,), daemon=True).start()
 
@@ -87,15 +96,51 @@ class Logins:
                 break
             if not data:
                 break
-            text = _ANSI.sub("", data.decode("utf-8", "replace"))
+            text = data.decode("utf-8", "replace")
+            # D748: a cursor moved right is the spaces it skipped (Claude Code writes its words so)
+            text = _RIGHT.sub(lambda m: " " * int(m.group(1) or 1), text)
+            text = _ANSI.sub("", text)
+            text = self._kept(sess, text)
+            if not text:
+                continue
             with sess.lock:
                 sess.out.append(text)
                 sess.size += len(text)
                 if sess.size > 400_000:                          # a long session: its end kept
                     keep = "".join(sess.out)[-200_000:]
                     sess.out, sess.size = [keep], len(keep)
+        rest = self._kept(sess, "", end=True)
+        if rest:
+            with sess.lock:
+                sess.out.append(rest)
+                sess.size += len(rest)
         sess.rc = sess.proc.wait()
         sess.ended = time.time()
+
+    @staticmethod
+    def _kept(sess: _Session, text: str, end: bool = False) -> str:
+        """What the transcript shows of `text` (D748): a secret the agent printed, saved through
+        `on_secret` and masked; a line that may still be one held back until it ends."""
+        found = PRINTED.get(sess.agent)
+        if found is None:
+            return text
+        text = sess.pending + text
+        sess.pending = ""
+        cut = text.rfind("\n") + 1
+        if not end and "sk-" in text[cut:]:
+            text, sess.pending = text[:cut], text[cut:]
+        pattern, name = found
+        for secret in set(pattern.findall(text)):
+            if sess.on_secret is not None:
+                try:
+                    sess.on_secret(name, secret)
+                    said = f"(saved to your settings as {name}; not shown)"
+                except Exception:  # noqa: BLE001 -- not saved: still never shown
+                    said = "(a token was printed here; it could not be saved)"
+            else:
+                said = "(a token; not shown)"
+            text = text.replace(secret, said)
+        return text
 
     def _limit(self, sess: _Session) -> None:
         while sess.ended is None and time.time() - sess.started < LIMIT_S:
