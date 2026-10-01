@@ -53,6 +53,14 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
                 env.pop("FLUX_REMOTE_API_KEY_FILE", None)             # a key set here wins over the server's file
         web.update(vals)
     env.update(web)
+    # D705: an agent's program set by the admin -- its folder on PATH, so the sandbox mounts it
+    for k in ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"):
+        exe = server.get(k)
+        if exe:
+            env[k] = exe
+            folder = os.path.dirname(exe)
+            if folder and folder not in env.get("PATH", "").split(os.pathsep):
+                env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
     _agents(env, web)

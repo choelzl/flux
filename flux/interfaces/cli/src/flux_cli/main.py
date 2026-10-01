@@ -16,7 +16,7 @@ from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_new, cmd_log, cmd_probe)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
 from flux_evaluator_abi import available_evaluators
 
 
@@ -114,6 +114,16 @@ def build_parser() -> argparse.ArgumentParser:
                             "rtl-sweep: a script spells a module per knob point, Verilator and Yosys judge them, no model.")
     new_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
     new_p.set_defaults(func=cmd_new)
+
+    co_p = subparsers.add_parser(
+        "consult", help="A question about a loop, answered by an agent that reads it and changes nothing (D705).")
+    co_p.add_argument("question", help="What you want to know, in words.")
+    co_p.add_argument("--loop", required=True, help="The loop's folder (its document, files, out/<id>.db, runs/loop.log).")
+    co_p.add_argument("--out", required=True, help="Where the answer goes (answer.md); the agent's working folder.")
+    co_p.add_argument("--author", default="model", help="Who answers: model (default), or a coding agent preset (opencode, claude, codex).")
+    co_p.add_argument("--model", default=None, help="The model, when the model answers.")
+    co_p.add_argument("--no-sandbox", action="store_true", help="Run on this machine, not in the sandbox (also FLUX_SANDBOX=0).")
+    co_p.set_defaults(func=cmd_consult)
 
     ask_p = subparsers.add_parser(
         "ask", help="The loop from a prompt and files: an author writes the problem, the loop runs it, the author steers.")
@@ -336,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     # `task check` too: building the problem imports its world hooks and its golden model (D683)
     boxed = ("task run" if args.command == "task" and getattr(args, "task_command", None) == "run"
              else "task check" if args.command == "task" and getattr(args, "task_command", None) == "check"
-             else "ask" if args.command == "ask" else "")
+             else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "")
     if boxed and enabled(args):              # D680: the run re-launched in its container
         return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)
     db = getattr(args, "db", None)

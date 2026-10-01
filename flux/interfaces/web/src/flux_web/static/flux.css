@@ -548,3 +548,13 @@ ul.files li.ignored a { opacity: .55; }
 /* D704 */
 pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .attach { display: grid; gap: 8px; }
+
+/* D705: answers */
+.md { line-height: 1.6; }
+.md h3 { font-size: 15px; margin: 14px 0 6px; } .md h4 { font-size: 14px; margin: 12px 0 4px; }
+.md p { margin: 6px 0; } .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
+.md code { font-family: var(--mono); font-size: 12.5px; background: var(--soft); padding: 0 4px; border-radius: 4px; }
+.md blockquote { margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.md table.md { margin: 6px 0; }
+.ask-head { display: grid; gap: 2px; margin-bottom: 8px; }
+.ask-card .md { border-top: 1px solid var(--line); padding-top: 6px; }

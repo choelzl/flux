@@ -142,6 +142,11 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
         for sub in ("out", "workbench"):                     # the run's own, under the problem
             (doc.parent / sub).mkdir(exist_ok=True)
             rw.append(str(doc.parent / sub))
+    if command == "consult":                                 # D705: the loop read-only, the answer's folder writable
+        ro.append(str(Path(args.loop).resolve()))
+        out = Path(args.out).resolve()
+        out.mkdir(parents=True, exist_ok=True)
+        rw.append(str(out))
     if command == "ask":
         d = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
         d.mkdir(parents=True, exist_ok=True)

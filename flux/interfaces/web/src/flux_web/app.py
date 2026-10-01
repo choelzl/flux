@@ -93,6 +93,11 @@ class StopAll(BaseModel):
     now: bool = False
 
 
+class AskIn(BaseModel):                   # D705
+    question: str = Field(max_length=20000)
+    author: str = "opencode"
+
+
 class ShareIn(BaseModel):                 # D701
     user: str
     perm: str | None = None
@@ -137,6 +142,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     authoring = Authoring()                         # D704: problems written by an agent
     app.state.authoring = authoring
+    from .asks import Asks
+
+    asks = Asks()                                   # D705: questions about a loop, answered by an agent
+    app.state.asks = asks
     from .history import History
 
     history = History(store.path)                    # D699: the machine over time, in the server's database
@@ -273,7 +282,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
         """The user's model settings, and the server's they fall back to (D696): a server key is
         only said to be set, never shown."""
-        return {"values": store.settings(user), "server": store.server_settings(), "groups": _groups(),
+        from .store import ADMIN_ONLY
+
+        return {"values": store.settings(user), "server": store.server_settings(), "groups": _groups(), "admin_only": list(ADMIN_ONLY),
                 "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
 
     @app.get("/api/admin/settings")
@@ -700,7 +711,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         """Who can write a problem on this server for this user (D704)."""
         from .authoring import available
 
-        return available(run_env(store, user))
+        env = run_env(store, user)
+        got = available(env)
+        default = env.get("FLUX_DEFAULT_AGENT")     # D705: the admin's, or the user's own
+        for a in got:
+            a["default"] = a["id"] == default
+        return got
 
     @app.post("/api/apps/new-by-agent")
     async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"),
@@ -751,6 +767,48 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def author_stop(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
         return {"ok": authoring.stop(d)}
+
+    # ---- questions about a loop, answered by an agent (D705)
+    def _ask_id(ident: str) -> str:
+        if not re.fullmatch(r"\d{8}-\d{6}(-\d+)?", ident):
+            raise HTTPException(404, "no such question")
+        return ident
+
+    @app.get("/api/apps/{name}/asks")
+    def list_asks(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        return asks.list(d)
+
+    @app.post("/api/apps/{name}/asks")
+    def ask_about(name: str, body: AskIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """An agent reads the loop (its files, its record, its log) and answers; it changes nothing."""
+        from .authoring import AUTHORS
+
+        _w, whose, d, _run = loop_of(name, user, owner, edit=True)
+        if not body.question.strip():
+            raise HTTPException(400, "ask something")
+        if body.author not in AUTHORS:
+            raise HTTPException(400, f"who answers is one of {', '.join(AUTHORS)}")
+        try:
+            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name), by=user.name)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")
+        return {"id": ident, "ok": "the agent is reading the loop"}
+
+    @app.post("/api/apps/{name}/asks/{ident}/stop")
+    def stop_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        return {"ok": asks.stop(d, _ask_id(ident))}
+
+    @app.delete("/api/apps/{name}/asks/{ident}")
+    def forget_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        try:
+            asks.forget(d, _ask_id(ident))
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"ok": "forgotten"}
 
     # ---- the applications folder of this Flux (D700): an admin sees them and makes one a loop
     def _apps_root() -> Path | None:

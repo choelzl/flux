@@ -625,12 +625,59 @@ function uploadForm() {
     h("div", { class: "form-actions" }, go)));
 }
 
+/** An answer's Markdown (D705), built node by node -- never HTML: headings, lists, tables, code
+    blocks, quotes, paragraphs with **bold**, *italics* and `code`. */
+function markdown(text) {
+  const inline = (t) => {
+    const out = [];
+    const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g;
+    let at = 0, m;
+    while ((m = re.exec(t))) {
+      if (m.index > at) out.push(t.slice(at, m.index));
+      const x = m[0];
+      out.push(x.startsWith("`") ? h("code", {}, x.slice(1, -1)) : x.startsWith("**") ? h("strong", {}, x.slice(2, -2)) : h("em", {}, x.slice(1, -1)));
+      at = m.index + x.length;
+    }
+    if (at < t.length) out.push(t.slice(at));
+    return out;
+  };
+  const lines = String(text || "").split("\n"), out = [];
+  for (let i = 0; i < lines.length;) {
+    const l = lines[i];
+    if (/^```/.test(l)) {
+      const lang = l.slice(3).trim(), body = [];
+      for (i++; i < lines.length && !/^```/.test(lines[i]); i++) body.push(lines[i]);
+      i++; out.push(codeBlock(body.join("\n"), lang === "systemverilog" || lang === "verilog" ? "sv" : lang, "val code"));
+    } else if (/^#{1,6}\s/.test(l)) {
+      const n = l.match(/^#+/)[0].length; out.push(h(n <= 2 ? "h3" : "h4", {}, inline(l.replace(/^#+\s*/, "")))); i++;
+    } else if (/^\s*\|.*\|\s*$/.test(l)) {
+      const rows = [];
+      for (; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) rows.push(lines[i].trim().slice(1, -1).split("|").map(c => c.trim()));
+      const body = rows.filter(r => !r.every(c => /^:?-{2,}:?$/.test(c)));
+      out.push(h("div", { class: "scroll-x" }, h("table", { class: "list compact md" }, h("thead", {}, h("tr", {}, body[0].map(c => h("th", {}, inline(c))))),
+        h("tbody", {}, body.slice(1).map(r => h("tr", {}, r.map(c => h("td", {}, inline(c)))))))));
+    } else if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
+      const ordered = /^\s*\d+\./.test(l), items = [];
+      for (; i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i]); i++) items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, ""));
+      out.push(h(ordered ? "ol" : "ul", {}, items.map(x => h("li", {}, inline(x)))));
+    } else if (/^>\s?/.test(l)) {
+      const q = [];
+      for (; i < lines.length && /^>\s?/.test(lines[i]); i++) q.push(lines[i].replace(/^>\s?/, ""));
+      out.push(h("blockquote", {}, inline(q.join(" "))));
+    } else if (!l.trim()) { i++; } else {
+      const para = [];
+      for (; i < lines.length && lines[i].trim() && !/^(```|#{1,6}\s|\s*\||\s*([-*+]|\d+\.)\s|>)/.test(lines[i]); i++) para.push(lines[i]);
+      out.push(h("p", {}, inline(para.join(" "))));
+    }
+  }
+  return h("div", { class: "md" }, out);
+}
+
 /** The agents that can write a problem here (D704), as a select; the unavailable say why. */
 async function agentSelect(id) {
   const list = await api("/agents").catch(() => []);
-  let pick = null;
-  try { pick = localStorage.getItem("flux-author"); } catch (_) { /* per viewer */ }
-  const first = list.find(a => a.available && a.id === pick) || list.find(a => a.available);
+  // D705: the agent by default -- the user's (Account), else the admin's (Models) -- else the first that works here
+  const first = list.find(a => a.available && a.default) || list.find(a => a.available);
   return h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
     a.label + (a.available ? "" : ` (${a.why})`))));
 }
@@ -789,7 +836,7 @@ async function loopPage(name, owner, tab = "Overview") {
   const mine = perm === "owner" || perm === "edit", isOwner = perm === "owner";
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
-  const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench", "Settings"];
+  const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench", "Ask", "Settings"];
   const tabBar = h("div", { class: "tabs", role: "tablist" });
   let question = st.question || null;
   const log = logView(base, qs);
@@ -1193,6 +1240,40 @@ async function loopPage(name, owner, tab = "Overview") {
   }
 
   const goTab = (t) => { tab = t; drawTabs(); drawBody(); };
+  /** Questions about the loop (D705): an agent reads it -- its files, its record, its log -- and
+      answers; nothing changes. Kept with the loop, newest first; one answered at a time. */
+  let askTimer = null;
+  cleanup.push(() => clearTimeout(askTimer));
+  async function askView() {
+    const list = await api(`/apps/${enc(name)}/asks${qs}`).catch(() => []);
+    if (tab !== "Ask") return;
+    const busy = list.some(a => a.running);
+    clearTimeout(askTimer);
+    if (busy) askTimer = setTimeout(() => { if (tab === "Ask" && !body.contains(document.activeElement)) askView(); else if (tab === "Ask") askTimer = setTimeout(askView, 3000); }, 3000);
+    let form = "";
+    if (mine) {
+      const q = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
+      const who = await agentSelect("ask-who");
+      form = card(null, [h("p", { class: "muted" }, "The agent reads the loop -- its document and files, a copy of its record, its log -- in the sandbox, and answers. It changes nothing."),
+        h("label", { class: "stack" }, "Your question", q),
+        h("div", { class: "row" }, h("label", { class: "stack" }, "Who answers", who), h("span", { class: "grow" }),
+          act("Ask", async () => {
+            if (!q.value.trim()) { toast("Ask something.", "warn"); q.focus(); return; }
+            toast((await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: q.value, author: who.value } })).ok, "ok");
+            askView();
+          }, { cls: "primary", title: busy ? "Another question is being answered" : null }))]);
+    }
+    const one = (a) => card(null, [
+      h("div", { class: "ask-head" }, h("strong", {}, a.question), h("div", { class: "muted small" }, `${a.author} · asked by ${a.by} `, ago(a.started),
+        a.ended ? [" · took ", dur(a.ended - a.started)] : "")),
+      a.running ? [h("div", { class: "row" }, h("span", { class: "pill live" }, h("i", { class: "dot" }), "reading the loop"),
+          mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : ""),
+          h("pre", { class: "log small author-log" }, (a.log || []).join("\n") || "…")]
+        : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))],
+      mine && !a.running ? h("div", { class: "form-actions" }, act("Forget", async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); askView(); }, { cls: "small" })) : ""],
+      { cls: "ask-card" });
+    body.replaceChildren(form, ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
+  }
   /** The loop's settings (D697): its environment variables over the user's and the server's, and
       what only an admin sets -- the sandbox and its limits. */
   async function settingsView() {
@@ -1313,6 +1394,7 @@ async function loopPage(name, owner, tab = "Overview") {
   async function drawBody() {
     drawBanner();
     if (tab === "Settings") return settingsView();
+    if (tab === "Ask") return askView();
     if (tab === "Overview") {
       if (!st.running && !st.last_active) {
         const ab = await authorBox();
@@ -1973,7 +2055,6 @@ async function newByAgent(body) {
   const go = act("Write the problem", async () => {
     if (!name.value.trim()) { toast("Name the loop.", "warn"); name.focus(); return; }
     if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
-    try { localStorage.setItem("flux-author", who.value); } catch (_) { /* per viewer */ }
     const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
     const r = await api("/apps/new-by-agent", { method: "POST", form: fd });
     toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
@@ -2001,7 +2082,6 @@ async function reviseByAgent(body, name, owner) {
   }
   const go = act("Revise the problem", async () => {
     if (!ask.value.trim()) { toast("Say what should change.", "warn"); ask.focus(); return; }
-    try { localStorage.setItem("flux-author", who.value); } catch (_) { /* per viewer */ }
     const fd = new FormData(); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
     toast((await api(`/apps/${enc(name)}/author`, { method: "POST", form: fd })).ok, "ok");
     poll();
@@ -2300,14 +2380,16 @@ const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL
   FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_REMOTE_API_KEY: "Key", OPENROUTER_API_KEY: "OpenRouter key",
   FLUX_OPENCODE_BASE_URL: "Endpoint URL (OpenAI-compatible)", FLUX_OPENCODE_MODEL: "Model", FLUX_OPENCODE_API_KEY: "Key",
   ANTHROPIC_BASE_URL: "Endpoint URL", FLUX_CLAUDE_MODEL: "Model", ANTHROPIC_API_KEY: "Anthropic key",
-  OPENAI_BASE_URL: "Endpoint URL", FLUX_CODEX_MODEL: "Model", OPENAI_API_KEY: "OpenAI key" };
+  OPENAI_BASE_URL: "Endpoint URL", FLUX_CODEX_MODEL: "Model", OPENAI_API_KEY: "OpenAI key",
+  FLUX_OPENCODE_BIN: "Program (admins)", FLUX_CLAUDE_BIN: "Program (admins)", FLUX_CODEX_BIN: "Program (admins)", FLUX_DEFAULT_AGENT: "Agent" };
 function settingsForm(st, { server = null, save, scope }) {
   const inputs = {};
   const secret = new Set(st.secret);
   const row = (k) => {
     const cur = st.values[k], fall = server ? server[k] : null, sec = secret.has(k);
-    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""),
-      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set") });
+    const locked = server && (st.admin_only || []).includes(k);      // D705: the admin's, for every run
+    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""), disabled: locked || null,
+      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : locked ? "the agent's own (an admin sets this)" : "not set") });
     return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, SETTING_LABELS[k] || k),
       h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }),
         cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : ""),
@@ -2322,7 +2404,7 @@ function settingsForm(st, { server = null, save, scope }) {
   });
   return [h("div", { class: "set-groups" }, groups), h("div", { class: "form-actions" }, act("Save", () => {
     const values = {};
-    for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
+    for (const k of st.public) if (!inputs[k].disabled && (inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
     for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
     return save(values);
   }, { cls: "primary" }))];
@@ -2361,7 +2443,7 @@ async function route() {
   if (hash === "#/login") { drawNav(); return loginPage(); }
   if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
-  const TABS = { "": "Overview", live: "Live", log: "Log", timeline: "Timeline", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench", settings: "Settings" };
+  const TABS = { "": "Overview", live: "Live", log: "Log", timeline: "Timeline", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench", ask: "Ask", settings: "Settings" };
   try {
     let m;
     pageOwner = null;

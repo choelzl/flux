@@ -1457,3 +1457,50 @@ the topics above.
   - start and a second job refused while it writes;
   - a `--no-sandbox` server telling its runs;
   - a path asked both ways mounted writable.
+
+- **D705: ask an agent about a loop; the agent by default; the agents' programs the admin's.**
+  - **`flux consult "<question>" --loop <folder> --out <folder> --author <who>`**
+    (`flux_loop.consult`):
+    - The answerer reads the loop: its document and files, its log, its last answer.
+    - It gets a snapshot of the record: SQLite's backup into `out/record.db`, opened
+      `mode=ro&immutable=1` so a read-only mount does it no harm, and queryable as it likes.
+    - It gets a summary: the objective, passes, measurements, the last conclusion, the best per
+      objective.
+    - An agent writes `answer.md` in its working folder; Flux's own model gets the document and
+      the log's end inline and answers in text.
+    - It is sandboxed (`consult` is boxed like `ask`): the loop's folder read-only, only `--out`
+      writable, the run's network.
+    - The agent's printed output is kept (`agent.out`). A failure says its error in the answer.
+  - **Web** (`asks.py`, the loop's Ask tab):
+    - `POST /api/apps/{name}/asks` (edit) runs it into `runs/asks/<id>/` with the owner's settings
+      and sandbox; `GET` lists questions and answers (watchers too); stop, forget.
+    - One at a time per loop. The record's snapshot is deleted once answered.
+    - Answers are rendered from Markdown node by node: headings, lists, tables, code, quotes,
+      inline marks; never as HTML.
+  - **The agent by default:** a settings group (`FLUX_DEFAULT_AGENT`: opencode, claude, codex,
+    model), the admin's for the server and a user's own over it. `/api/agents` marks it, and every
+    agent picker starts on it. The per-browser memory of the last pick is gone.
+  - **The agents' programs:** `FLUX_OPENCODE_BIN`, `FLUX_CLAUDE_BIN`, `FLUX_CODEX_BIN` under
+    Models.
+    - Admin only: a user sees them and cannot set their own.
+    - A path or a name on PATH; anything else is refused.
+    - An absolute path's folder goes first on the run's PATH, which the sandbox mounts read-only,
+      so a modified OpenCode outside PATH is found in the container.
+  - **Live, OpenCode on LocalAI:**
+    - From the command line on add8, in Podman: an answer with the two designs' numbers and the
+      decision's history.
+    - From the web's Ask tab: the first try ended with exit 1 and no output kept, hence
+      `agent.out` and the error in the answer. The second answered in 43 s.
+    - That answer raised a finding to look into in the loop itself: by add8's objective (fmax at
+      least 2000, then least area) add8#1 (area 3.0, 4242 MHz) beats the decided add8#2 (area
+      4.0, 5514 MHz) at confirm.
+  - **Tests:**
+    - `test_web_asks.py`:
+      - the core with a scripted model: a whole snapshot of a WAL record, the brief for a model
+        and for an agent, the answer written;
+      - the web (with a stand-in held by a handshake, not a clock): answered and kept, a second
+        refused while one runs, the snapshot gone, a watcher reading and not asking, bad ids
+        refused, forgotten;
+      - the agent by default (admin, user, refused value);
+      - the programs (admin only, refused value, folder on PATH).
+    - `test_web_models` lists the new group.

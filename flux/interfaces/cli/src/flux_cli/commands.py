@@ -1132,3 +1132,29 @@ def cmd_log(args: argparse.Namespace) -> int:
                 print(f"  tool: {h[:160]}")
             print(f"  reply ({len(reply)} chars): {flat(reply)[:200]}")
     return 0
+
+
+def cmd_consult(args: argparse.Namespace) -> int:
+    """`flux consult "<question>" --loop <folder> --out <folder>`: an agent (or the model) reads the
+    loop -- its files, a snapshot of its record, its log -- and answers in `<out>/answer.md` (D705)."""
+    from pathlib import Path
+
+    from flux_loop.consult import consult
+
+    loop, out = Path(args.loop).resolve(), Path(args.out).resolve()
+    if not loop.is_dir():
+        print(f"flux consult: no loop folder {loop}")
+        return 2
+    proposer = None
+    if args.author in (None, "", "model"):
+        from flux_llm import OpenAIChatProposer
+
+        proposer = OpenAIChatProposer(args.model, num_predict=6000)
+        down = proposer.preflight()
+        if down:
+            print(f"cannot answer: {down}")
+            return 1
+    print(f"consult: {args.question}\nthe loop: {loop}\nthe answer: {out / 'answer.md'}\nwho answers: {args.author}", flush=True)
+    got = consult(args.question, loop, out, author=args.author, proposer=proposer)
+    print("\n" + got["answer"])
+    return 0 if got["ok"] else 1

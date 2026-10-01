@@ -237,6 +237,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     me**, with what you may do; you are told in the bell when a loop is shared with you or no longer
     is, and **Leave** takes one off your list (its owner is told). The bell watches shared loops too,
     and is each user's own.
+  - **Ask:** a question about the loop -- why it stalls, which design is best and by how much, what
+    to try next -- answered by an agent (or Flux's own model) that reads it: its document and
+    files, a copy of its record (to query as it likes), its log. It runs in the sandbox with the
+    loop's folder read-only and the run's network; it changes nothing. Answers are kept with the
+    loop, newest first, in Markdown; one is answered at a time. Anyone who may edit the loop asks;
+    a watcher reads. From the command line: `flux consult "<question>" --loop <folder> --out
+    <folder> --author opencode`.
   - **Settings:** the loop's environment variables (over the user's and the server's, which are
     listed under them), and its advanced settings: run in the sandbox or on the host, memory,
     CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
@@ -268,6 +275,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   again where it left off (no line twice, none lost), waiting up to 30 s between tries, and a
   banner says when the server cannot be reached. A stopped server waits at most 3 s for open
   streams; a restarted one finds its running loops again.
+- **The agent by default** (Admin › Models and variables, Account): who writes problems and answers
+  questions unless chosen otherwise (opencode, claude, codex or model); a user's own over the
+  admin's. **Program (admins):** the program each agent is (`FLUX_OPENCODE_BIN`, `FLUX_CLAUDE_BIN`,
+  `FLUX_CODEX_BIN`), for every run; its folder goes on the run's PATH, so the sandbox mounts it.
 - **Models (Admin › Models, Account):** endpoint, model and key for Flux's own model calls and for
   each coding agent: OpenCode (its own, else Flux's model's), Claude Code and Codex (a `--model`,
   their endpoint and key). The admin sets them for the server; on their Account a user sees the

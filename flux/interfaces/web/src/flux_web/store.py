@@ -41,16 +41,21 @@ GROUPS: dict[str, dict[str, Any]] = {
               "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_LLM_MODEL", "OLLAMA_BASE_URL"),
               "secret": ("FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY")},
     "opencode": {"label": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
-                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL"), "secret": ("FLUX_OPENCODE_API_KEY",),
+                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
                  "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
     "claude": {"label": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
-               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL"), "secret": ("ANTHROPIC_API_KEY",),
+               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN"), "secret": ("ANTHROPIC_API_KEY",),
                "hint": "Empty: Claude Code's own login and model."},
     "codex": {"label": "Codex", "endpoint": "OPENAI_BASE_URL",
-              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL"), "secret": ("OPENAI_API_KEY",),
+              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN"), "secret": ("OPENAI_API_KEY",),
               "hint": "Empty: Codex's own login and model."},
+    "agent": {"label": "The agent by default", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
+              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: opencode, claude, codex or model."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
+#: D705: the program each agent is (a modified OpenCode, a Claude Code elsewhere): the admin's only,
+#: for every run -- a user shown it, never setting their own
+ADMIN_ONLY = ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN")
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 
 
@@ -256,9 +261,15 @@ class Store:
         value = str(value).strip()
         if key.endswith("_BASE_URL") and not value.startswith(("http://", "https://")):
             raise ValueError(f"{key}: an endpoint is an http(s) URL")
+        if key == "FLUX_DEFAULT_AGENT" and value not in ("opencode", "claude", "codex", "model"):
+            raise ValueError("the agent by default is opencode, claude, codex or model")
+        if key in ADMIN_ONLY and not (value.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", value)):
+            raise ValueError(f"{key}: an absolute path to the program, or its name on PATH")
         return value
 
     def set_setting(self, user: User, key: str, value: str | None) -> None:
+        if key in ADMIN_ONLY:
+            raise ValueError(f"{key} is set by an admin, for every run")
         value = self._checked(key, value)
         with self._db() as db:
             if value is None:
