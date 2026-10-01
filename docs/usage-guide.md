@@ -342,7 +342,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   application (read only) and every run (and may stop it), and the audit trail. The audit also
   lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
   host and port per run. The audit narrows by what happened and by whom (D723), and searches
-  the details.
+  the details. What happened comes in groups (D724): users and sign-in, runs, loops and their
+  files, sharing and loop settings, server, network, and other; a group as a whole or one kind of it.
 - **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
   `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
   loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and

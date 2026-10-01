@@ -1919,3 +1919,13 @@ the topics above.
     tree; the log has no problem arrows; the audit narrows to one kind and to one user; the
     configurator has no examples, and the Example tab makes a loop. Checked by eye on a fed tree
     of 25 tasks, three levels deep, in light and dark.
+- **D724: the audit's kinds in groups.**
+  - The What select is grouped: a whole group, or one kind within it. The groups are users and
+    sign-in (login, login refused, add/change user, change password, and every `cli …` of
+    `flux users`), runs (start, stop, note, stop all, starts paused, running limit, kill
+    container), loops and their files, sharing and loop settings, server, network (refused
+    hosts), and Other.
+  - Grouping is the page's: a kind the server records that no group names lands in Other, never
+    hidden. The rows keep the exact kind.
+  - Browser test (139 checks): the groups are listed, a group shows its kinds together, and one
+    kind narrows to itself.

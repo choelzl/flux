@@ -515,9 +515,14 @@ def flows(r: Run) -> None:
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Other providers: Ollama, OpenRouter"], str(shown))
         r.page("#/admin/audit", "document.querySelector('#main select[aria-label=What]')", "the audit")   # D723
-        kind = b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change')); return s.value;")
-        whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent)")
-        r.check("the audit narrows to one kind", kind and whats and set(whats) == {kind}, f"{kind}: {whats}")
+        groups = b.js("return [...document.querySelectorAll('#main select[aria-label=What] optgroup')].map(g => g.label)")
+        r.check("the audit's kinds are grouped (D724)", "Users and sign-in" in groups and "Runs" in groups, str(groups))
+        b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'g:Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
+        whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
+        r.check("a group shows its kinds together", "login" in whats and set(whats) <= {"login", "login refused", "add user", "change user", "change password"}, str(whats))
+        kind = b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'k:login'; s.dispatchEvent(new Event('change')); return 'login';")
+        whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
+        r.check("the audit narrows to one kind", whats and set(whats) == {kind}, f"{kind}: {whats}")
         b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
              "const w = document.querySelector('#main select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
         whos = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[1].textContent)")

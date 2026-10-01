@@ -2371,17 +2371,36 @@ async function adminPage(sub = "") {
   const tally = (key) => { const m = new Map(); for (const x of audit) m.set(key(x), (m.get(key(x)) || 0) + 1); return [...m].sort((a, b) => a[0] < b[0] ? -1 : 1); };
   const pick = (label, all, entries, name) => h("select", { "aria-label": label },
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
-  const what = pick("What", "Every kind", tally(x => x.action), v => v);
+  // D724: the kinds in groups -- a group as a whole, or one kind of it; a kind not listed is Other
+  const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password"]],
+    ["Runs", ["start", "stop", "note", "stop all", "starts paused", "running limit", "kill container"]],
+    ["Loops and their files", ["new loop from an example", "loop by an agent", "configure", "write document", "problem revised by an agent",
+      "edit", "upload", "add files", "delete file", "delete app", "asked about a loop"]],
+    ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings"]],
+    ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed"]],
+    ["Network", ["network refused"]]];
+  const groupOf = (a) => a.startsWith("cli ") ? "Users and sign-in" : (GROUPS.find(([, ks]) => ks.includes(a)) || ["Other"])[0];
+  const kinds = new Map(tally(x => x.action));
+  const what = h("select", { "aria-label": "What" }, h("option", { value: "" }, `Every kind (${audit.length})`),
+    [...GROUPS.map(([g]) => g), "Other"].map(g => {
+      const mine = [...kinds].filter(([k]) => groupOf(k) === g);
+      if (!mine.length) return "";
+      const n = mine.reduce((t, [, c]) => t + c, 0);
+      return h("optgroup", { label: g }, h("option", { value: `g:${g}` }, `All ${g.toLowerCase()} (${n})`),
+        mine.map(([k, c]) => h("option", { value: `k:${k}` }, `${k} (${c})`)));
+    }));
+  const isWhat = (x) => !what.value || (what.value.startsWith("g:") ? groupOf(x.action) === what.value.slice(2) : x.action === what.value.slice(2));
   const who = pick("Who", "Everyone", tally(x => x.user || NOONE), v => v === NOONE ? "no user" : v);
   const find = h("input", { placeholder: "search the details", class: "filter" });
   const count = h("span", { class: "muted" }), rows = h("tbody", {});
   const draw = () => {
     const f = find.value.trim().toLowerCase();
-    const got = audit.filter(x => (!what.value || x.action === what.value) && (!who.value || (x.user || NOONE) === who.value)
+    const got = audit.filter(x => isWhat(x) && (!who.value || (x.user || NOONE) === who.value)
       && (!f || String(x.detail || "").toLowerCase().includes(f)));
     count.textContent = got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`;
     rows.replaceChildren(...(got.length ? got.map(x => h("tr", {},
-      h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", { class: x.action === "network refused" ? "bad" : "" }, x.action),
+      h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""),
+      h("td", { class: x.action === "network refused" || x.action === "login refused" ? "bad" : "" }, x.action),
       h("td", { class: "mono muted" }, x.detail))) : [h("tr", {}, h("td", { colspan: 4 }, empty("Nothing matches.")))]));
   };
   what.onchange = who.onchange = draw; find.oninput = draw; draw();
