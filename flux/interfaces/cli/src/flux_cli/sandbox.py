@@ -146,9 +146,10 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
         d = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
         d.mkdir(parents=True, exist_ok=True)
         rw.append(str(d))
+    # D704: a path asked both ways is writable -- `flux ask --dir .` writes where it runs
     seen: set[str] = set()
-    ro = [p for p in ro if not (p in seen or seen.add(p))]
     rw = [p for p in rw if not (p in seen or seen.add(p))]
+    ro = [p for p in ro if not (p in seen or seen.add(p))]
     return ro, rw
 
 

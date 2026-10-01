@@ -1411,3 +1411,49 @@ the topics above.
   - **The configurator's files** leave out the ignored.
   - **Not changed:** what the loop runs. A run, its digest, uploads and the applications' import
     are unchanged; prefetcher's ignored `traces/*` are its inputs.
+
+- **D704: New loop and Configure, three ways each; an agent writes or revises a problem from the
+  web.**
+  - **New loop:** Configurator | Upload | Agent. **Configure:** Configurator | Direct edit | Agent.
+    - Each tab has its address (`#/configure/agent`, `#/app/x/configure/edit`).
+    - The Loops page has one New loop button; the upload dialog became the Upload tab.
+  - **Agent** (`authoring.py`): `flux ask <ask> --dir <work> --no-run --author <who> --file …`,
+    started with the loop owner's environment, sandbox, limits and network, as a run is.
+    - The author is OpenCode, Claude Code, Codex, or Flux's own model. `/api/agents` says which
+      can work here; one not installed is listed and disabled, with why.
+    - **A new loop** (`POST /api/apps/new-by-agent`, with attachments): an empty loop, then the
+      job.
+    - **A revision** (`POST /api/apps/{name}/author`): the ask carries the instruction and the
+      current document. The author is told to edit it in place; a `problem.yaml` it writes instead
+      is moved onto the loop's document name.
+    - The job has the loop's `runs/author.log` and `author.json`, and outlives the server.
+      `GET …/author` gives its state, log tail, and before and after; `…/author/stop` stops it.
+    - One job at a time. Not while the loop runs, and no start while it writes.
+    - Its finish is locked and done once: the waiting thread and a status read both saw it end,
+      and both moved the document.
+  - **The agent works on a copy:** the loop's own files are copied into `.author-work/`, the only
+    writable folder in the sandbox, and copied back after (a linked file replaced, never written
+    through).
+    - Found live: the job ran with its cwd at the loop's folder, which the sandbox mounts
+      read-only, and `--dir` was the same path. The read-only mount won, so the agent could not
+      write. In `mounts_for`, a path asked both ways is now writable.
+    - With the whole loop writable, the agent could also have reached the record and the log.
+      Hence the copy.
+  - **A `--no-sandbox` server** never told its runs so: a run's own default is the sandbox, so
+    they went into the container anyway (the tests set `FLUX_SANDBOX=0` themselves). `sandbox_env`
+    now sets `FLUX_SANDBOX=0` for such a server.
+  - **Live, OpenCode on LocalAI through the web, in Podman:**
+    - It wrote `add4agent` from one sentence and an attached spec in about 45 s: `problem.yaml`,
+      `golden.py`, `gen.py`, `inputs/spec4.md`.
+    - The loop's own check passes: a sweep over the architectures `gen.py` spells, Yosys and
+      OpenROAD stages, objectives at least 2000 MHz then least area.
+    - It then revised it to 2500 MHz in 40 s: exactly the statement, both clocks (500 → 400 ps)
+      and the goal. A test file in `out/` was untouched, and the work copy was gone.
+
+  Tests (`test_web_author.py`, with a stand-in for `flux ask`):
+  - a new loop written with its attachment read and gone;
+  - a name taken or an unknown author refused, with no loop left;
+  - a revision keeping the document's name and showing before and after;
+  - start and a second job refused while it writes;
+  - a `--no-sandbox` server telling its runs;
+  - a path asked both ways mounted writable.

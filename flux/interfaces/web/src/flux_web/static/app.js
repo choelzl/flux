@@ -588,9 +588,10 @@ function loopsBrowser(loops, { who = false } = {}) {
   return box;
 }
 
-/** Upload a loop (D696): a folder or files dropped or chosen, a `.zip`, under a name. */
-async function uploadDialog() {
-  const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%" });
+/** Upload a loop (D696, D704: a tab of New loop): a folder or files dropped or chosen, a `.zip`,
+    under a name. */
+function uploadForm() {
+  const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%", id: "up-name" });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
   let dropped = [];
@@ -600,29 +601,66 @@ async function uploadDialog() {
     if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^[^A-Za-z0-9]+/, "");
     said.replaceChildren(`${got.length} file(s) ready`, dir ? ` from ${dir}/` : "");
   });
-  const body = h("div", { class: "upload" }, h("label", { class: "stack" }, "Name", name), dz, said,
-    h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)));
-  while (true) {
-    const go = await dialog("Upload a loop", body, [["Cancel", false], ["Upload", true, "primary"]]);
-    if (!go) return;
+  const go = act("Upload", async () => {
     // a chosen folder names every file under its own name: that name goes (D702: once, here)
     const picked = [...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
     const top = new Set(picked.map(e => e.path.split("/")[0]));
     const fromFolder = top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
     const chosen = [...[...files.files].map(f => ({ file: f, path: f.name })), ...fromFolder, ...dropped];
-    if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); continue; }
-    if (!name.value.trim()) { toast("Name the loop first.", "warn"); continue; }
+    if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); return; }
+    if (!name.value.trim()) { toast("Name the loop first.", "warn"); name.focus(); return; }
     const pd = progressDialog("Uploading", `${chosen.length} file(s) to ${name.value.trim()}`);
     try {
       const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: pd.set, signal: pd.signal });
       pd.close();
-      toast(`${name.value} uploaded: ${n} file(s)`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`; return;
+      toast(`${name.value} uploaded: ${n} file(s)`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
     } catch (x) {
       pd.close();
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
-      if (pd.signal.aborted) return;
     }
-  }
+  }, { cls: "primary" });
+  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A loop you already have: its problem document (a *.problem.yaml) and the files it runs, as a folder, files or a .zip."),
+    h("label", { class: "stack" }, "Name", name), dz, said,
+    h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)),
+    h("div", { class: "form-actions" }, go)));
+}
+
+/** The agents that can write a problem here (D704), as a select; the unavailable say why. */
+async function agentSelect(id) {
+  const list = await api("/agents").catch(() => []);
+  let pick = null;
+  try { pick = localStorage.getItem("flux-author"); } catch (_) { /* per viewer */ }
+  const first = list.find(a => a.available && a.id === pick) || list.find(a => a.available);
+  return h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
+    a.label + (a.available ? "" : ` (${a.why})`))));
+}
+/** Files for an agent to read (D704): dropped or chosen, listed, removable. */
+function attachBox() {
+  let got = [];
+  const listEl = h("ul", { class: "files flist" });
+  const draw = () => listEl.replaceChildren(...got.map((g, i) => h("li", {}, h("span", { class: "mono" }, g.path), h("small", { class: "muted" }, bytes(g.file.size)),
+    h("button", { class: "link danger-link", type: "button", onclick: () => { got.splice(i, 1); draw(); } }, "×"))));
+  const pickIn = h("input", { type: "file", multiple: true, onchange: (e) => { got.push(...[...e.target.files].map(f => ({ file: f, path: f.name }))); e.target.value = ""; draw(); } });
+  const dz = dropZone("Drop a spec, a reference model, tests, papers: the agent reads them", (g) => { got.push(...g); draw(); });
+  return { el: h("div", { class: "attach" }, dz, h("label", { class: "stack" }, "or choose files", pickIn), listEl),
+    form(fd) { for (const g of got) fd.append("files", g.file, g.path); }, count: () => got.length };
+}
+/** The agent writing a loop's problem (D704): its state, its log's tail, Stop; a revision's diff. */
+function authoringCard(name, st, { onStop } = {}) {
+  if (!st || !st.ever) return "";
+  const running = st.running;
+  const head = running ? h("span", { class: "pill live" }, h("i", { class: "dot" }), "writing")
+    : st.ok ? h("span", { class: "pill ok" }, "done") : h("span", { class: "pill bad" }, "failed");
+  const diff = !running && st.revise && st.before && st.after && st.before !== st.after ? h("details", { class: "blk", open: true },
+    h("summary", {}, `What it changed in ${st.revise}`), diffView(lineDiff(st.before, st.after))) : "";
+  return card(`The agent ${st.revise ? "revising" : "writing"} the problem`, [
+    h("div", { class: "row" }, head, h("span", { class: "muted" }, `${st.author} · by ${st.by} · started `, ago(st.started),
+      st.ended ? [" · ended ", ago(st.ended)] : "")),
+    st.prompt ? h("details", {}, h("summary", { class: "muted" }, "What it was asked"), h("pre", { class: "val small" }, st.prompt)) : "",
+    h("pre", { class: "log small author-log" }, (st.log || []).join("\n") || "…"),
+    diff,
+    !running && !st.ok ? h("p", { class: "callout bad" }, "The agent did not leave a document that passes its checks: read its log above, then try again or write the document yourself.") : "",
+    running && onStop ? h("div", { class: "form-actions" }, act("Stop the agent", onStop, { cls: "danger" })) : ""], { cls: "authoring" });
 }
 
 async function appsPage() {
@@ -631,7 +669,6 @@ async function appsPage() {
   const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true }) : "");
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
-      h("button", { class: "", type: "button", onclick: () => uploadDialog() }, "Upload a loop"),
       h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
     card(null, box), shared.length ? card("Shared with me", sharedBox) : "");
   pageRefresh = async () => {
@@ -777,7 +814,7 @@ async function loopPage(name, owner, tab = "Overview") {
     const acts = [];
     if (st.running && perm !== "watch") {
       acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
-    } else if (!st.running && mine) {
+    } else if (!st.running && mine && info.document) {
       acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); tab = "Live"; drawTabs(); drawBody(); } }, { cls: "primary" }));
     }
     if (mine) {
@@ -1255,12 +1292,32 @@ async function loopPage(name, owner, tab = "Overview") {
           lastPass(r))));
   }
 
+  // D704: an agent writing (or revising) the problem shows on the Overview, followed every 3 s
+  let authorTimer = null;
+  cleanup.push(() => clearTimeout(authorTimer));
+  async function authorBox() {
+    const st = await api(`/apps/${enc(name)}/author${qs}`).catch(() => null);
+    if (!st || !st.ever) return "";
+    clearTimeout(authorTimer);
+    if (st.running) authorTimer = setTimeout(async () => {
+      if (tab !== "Overview") return;
+      const was = body.querySelector(".card.authoring");
+      const now = await authorBox();
+      if (was && now) was.replaceWith(now);
+      if (now && !now.querySelector(".pill.live")) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (fresh && fresh.document) location.reload(); }
+    }, 3000);
+    // a document written long ago: no card
+    if (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6) return "";
+    return authoringCard(name, st, { onStop: mine ? async () => { toast((await api(`/apps/${enc(name)}/author/stop${qs}`, { method: "POST" })).ok, "ok"); } : null });
+  }
   async function drawBody() {
     drawBanner();
     if (tab === "Settings") return settingsView();
     if (tab === "Overview") {
       if (!st.running && !st.last_active) {
-        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")));
+        const ab = await authorBox();
+        body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
+          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/configure/agent` }, "Have an agent write it") : "")));
         return;
       }
       body.replaceChildren(card(null, skeleton(7)));
@@ -1792,23 +1849,53 @@ function filesPanel(name, yamlOf) {
     } };
 }
 
-async function configurePage(name, owner) {
+/** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
+    agent that writes it from a description and files. Existing: the configurator, the document
+    and its files edited directly, or an agent that revises it as told. */
+const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
+async function configurePage(name, owner, mode = "configurator") {
+  const isNew = !name;
+  const modes = isNew ? ["configurator", "upload", "agent"] : ["configurator", "edit", "agent"];
+  if (!modes.includes(mode)) mode = "configurator";
+  const body = h("div", {}), tabBar = h("div", { class: "tabs", role: "tablist" });
+  const base = isNew ? "#/configure" : `${appHref(owner, name)}/configure`;
+  function drawTabs() {
+    tabBar.replaceChildren(...modes.map(k => h("button", { role: "tab", class: k === mode ? "on" : "", "aria-selected": k === mode ? "true" : "false",
+      onclick: () => { mode = k; history.replaceState(null, "", base + (k === "configurator" ? "" : "/" + k)); drawTabs(); draw(); } }, CONFIG_MODES[k])));
+  }
+  async function draw() {
+    body.replaceChildren(card(null, skeleton(6)));
+    try {
+      if (mode === "configurator") await crafterView(body, name, owner);
+      else if (mode === "upload") body.replaceChildren(uploadForm());
+      else if (mode === "edit") await directEdit(body, name);
+      else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
+    } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
+  }
+  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
+    : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
+  show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
+    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), tabBar, body);
+  drawTabs(); draw();
+}
+
+/** The configurator (D686): the crafter, the loop's files beside it. */
+async function crafterView(body, name, owner) {
   const C = window.FluxCrafter;
-  if (!C) { show(card(null, empty("The configurator's script did not load."))); return; }
+  if (!C) { body.replaceChildren(card(null, empty("The configurator's script did not load."))); return; }
   if (!crafterCatalog) {
     crafterCatalog = await fetch("/crafter-assets/tools.json").then(r => r.json()).catch(() => []);
     C.setCatalog(crafterCatalog);
   }
   const host = h("div", { class: "flux-crafter" });
+  const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
   if (name) {                                           // an existing loop, read back
     const v = await api(`/apps/${enc(name)}/document`);
+    if (!v.document) { body.replaceChildren(card(null, empty("This loop has no problem document yet: an agent may be writing it (the loop's Overview), or use Direct edit."))); return; }
     const got = C.fromDoc(v.raw, v.normal || v.raw);
-    const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
     const panel = filesPanel(name, yamlOf);
-    show(crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
-      head(h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)),
-        h("span", {}, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
-          got.kept.length ? "; what the form does not edit is kept as written" : "")),
+    body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
+        got.kept.length ? "; what the form does not edit is kept as written" : ""),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
       host, panel.el);
     host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
@@ -1817,11 +1904,7 @@ async function configurePage(name, owner) {
         // D693: what the save changes, line by line, before it writes
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
         if (p.before === p.after) { toast("Nothing changes: the document already says this.", "info"); return "No change."; }
-        const ops = lineDiff(p.before, p.after);
-        const plus = ops.filter(o => o[0] === "+").length, minus = ops.filter(o => o[0] === "-").length;
-        const ok = await dialog(`Save ${p.document}?`, h("div", {}, h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
-          [["Cancel", false], ["Save", true, "primary"]]);
-        if (!ok) return "Not saved.";
+        if (!await confirmDiff(p.document, p.before, p.after)) return "Not saved.";
         const r = await api(`/apps/${enc(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
         toast(r.ok, r.error ? "warn" : "ok"); panel.draw(); return r.ok;
       } });
@@ -1829,15 +1912,11 @@ async function configurePage(name, owner) {
     return;
   }
   const appName = h("input", { placeholder: "application name", required: true });
-  const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
   const panel = filesPanel(null, yamlOf);
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
     can_advance: true, sandboxed_server: true }, async (a) => { adv = a; toast("Kept: applied when the loop is created", "ok"); }) : "";
-  show(head("New loop", h("span", {}, "Build the document and give it the files it runs (golden model, scripts), then create the loop. ",
-      h("a", { href: "#/new" }, "Or write the YAML yourself.")),
-      h("button", { type: "button", onclick: () => uploadDialog() }, "Upload a loop instead")),
-    card(null, h("label", { class: "stack narrow" }, "Application name", appName)), host, panel.el, advBox);
+  body.replaceChildren(card(null, h("label", { class: "stack narrow" }, "Application name", appName)), host, panel.el, advBox);
   host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
   setTimeout(panel.draw, 300);
   C.mount(host, false, { saveLabel: "Create the application", save: async (yaml, state) => {
@@ -1850,6 +1929,90 @@ async function configurePage(name, owner) {
     setTimeout(() => { location.hash = `#/app/${enc(appName.value.trim())}`; }, 400);
     return "Created.";
   } });
+}
+
+/** The changes of a save, shown before it writes (D693): true to write. */
+async function confirmDiff(file, before, after) {
+  const ops = lineDiff(before, after);
+  const plus = ops.filter(o => o[0] === "+").length, minus = ops.filter(o => o[0] === "-").length;
+  return dialog(`Save ${file}?`, h("div", {}, h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
+    [["Cancel", false], ["Save", true, "primary"]]);
+}
+
+/** Direct edit (D704): the document's YAML as written, saved with its diff shown; its files beside. */
+async function directEdit(body, name) {
+  const info = await api(`/apps/${enc(name)}`);
+  const doc = info.document;
+  const panel = filesPanel(name, () => ed.textarea.value);
+  let before = "";
+  if (doc) {
+    const r = await fetch(`/api${owned(`/apps/${enc(name)}/file?path=${enc(doc)}`)}`, { credentials: "same-origin" });
+    before = r.ok ? await r.text() : "";
+  }
+  const fileIn = h("input", { value: doc || "problem.problem.yaml", class: "mono", style: "width:280px", readonly: doc ? true : null });
+  var ed = codeEditor(before, "yaml");
+  const save = act("Save", async () => {
+    const text = ed.textarea.value, file = fileIn.value.trim();
+    if (text === before) { toast("Nothing changes.", "info"); return; }
+    if (!await confirmDiff(file, before, text)) return;
+    await api(`/apps/${enc(name)}/file?path=${enc(file)}`, { method: "PUT", body: { text } });
+    before = text; toast(`${file} saved`, "ok"); panel.draw();
+  }, { cls: "primary" });
+  body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "The document", fileIn),
+      h("span", { class: "muted" }, "As written: comments and everything kept. Check before starting: Start runs the check on what you saved.")),
+    ed.el, h("div", { class: "form-actions" }, save)]), panel.el);
+  setTimeout(panel.draw, 200);
+}
+
+/** A new loop whose problem an agent writes (D704): a name, what it should do, the files to read. */
+async function newByAgent(body) {
+  const name = h("input", { placeholder: "my_adder", style: "width:100%", id: "ag-name" });
+  const ask = h("textarea", { rows: 6, id: "ag-ask", placeholder: "What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." });
+  const who = await agentSelect("ag-who");
+  const files = attachBox();
+  const go = act("Write the problem", async () => {
+    if (!name.value.trim()) { toast("Name the loop.", "warn"); name.focus(); return; }
+    if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
+    try { localStorage.setItem("flux-author", who.value); } catch (_) { /* per viewer */ }
+    const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
+    const r = await api("/apps/new-by-agent", { method: "POST", form: fd });
+    toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
+  }, { cls: "primary" });
+  body.replaceChildren(card(null, [
+    h("p", { class: "muted" }, "The agent writes the problem document and the files it names (a golden model, a generator, checks) in the loop's folder, in the sandbox, and the document is checked. Nothing runs: you review it (Configure), then start it."),
+    h("div", { class: "row" }, h("label", { class: "stack", style: "flex:1" }, "Name", name), h("label", { class: "stack" }, "Agent", who)),
+    h("label", { class: "stack" }, "What should the loop do?", ask),
+    h("h3", {}, "Files it should read"), files.el,
+    h("div", { class: "form-actions" }, go)]));
+}
+
+/** An agent revising an existing loop's problem as told (D704); its progress, then the diff. */
+async function reviseByAgent(body, name, owner) {
+  const ask = h("textarea", { rows: 5, id: "ag-ask", placeholder: "What should change: e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." });
+  const who = await agentSelect("ag-who");
+  const files = attachBox();
+  const status = h("div", {});
+  let timer = null;
+  cleanup.push(() => clearTimeout(timer));
+  async function poll() {
+    const st = await api(`/apps/${enc(name)}/author`).catch(() => null);
+    status.replaceChildren(authoringCard(name, st, { onStop: async () => { toast((await api(`/apps/${enc(name)}/author/stop`, { method: "POST" })).ok, "ok"); } }));
+    if (st && st.running) timer = setTimeout(poll, 3000);
+  }
+  const go = act("Revise the problem", async () => {
+    if (!ask.value.trim()) { toast("Say what should change.", "warn"); ask.focus(); return; }
+    try { localStorage.setItem("flux-author", who.value); } catch (_) { /* per viewer */ }
+    const fd = new FormData(); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
+    toast((await api(`/apps/${enc(name)}/author`, { method: "POST", form: fd })).ok, "ok");
+    poll();
+  }, { cls: "primary" });
+  body.replaceChildren(card(null, [
+    h("p", { class: "muted" }, "The agent edits the document (and its files) in the loop's folder as you say, in the sandbox, and the document is checked; the loop's record stays. You see what changed below."),
+    h("div", { class: "row" }, h("label", { class: "stack" }, "Agent", who)),
+    h("label", { class: "stack" }, "What should change?", ask),
+    h("h3", {}, "Files it should read"), files.el,
+    h("div", { class: "form-actions" }, go)]), status);
+  poll();
 }
 
 // ================================================================ admin and account
@@ -2202,13 +2365,13 @@ async function route() {
   try {
     let m;
     pageOwner = null;
-    if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)\/configure$/))) { pageOwner = decodeURIComponent(m[1]); return await configurePage(decodeURIComponent(m[2]), pageOwner); }
+    if ((m = hash.match(/^#\/app\/([^/]+)\/configure(?:\/([a-z]+))?$/))) return await configurePage(decodeURIComponent(m[1]), null, m[2]);
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)\/configure(?:\/([a-z]+))?$/))) { pageOwner = decodeURIComponent(m[1]); return await configurePage(decodeURIComponent(m[2]), pageOwner, m[3]); }
     if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Overview");
     if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) { pageOwner = decodeURIComponent(m[1]); } else pageOwner = null;
     if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Overview");
     if (hash === "#/new") return await newPage();
-    if (hash === "#/configure") return await configurePage(null);
+    if ((m = hash.match(/^#\/configure(?:\/([a-z]+))?$/))) return await configurePage(null, null, m[1]);
     if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");
     if (hash === "#/account") return await accountPage();
     return await appsPage();
@@ -2233,7 +2396,7 @@ function drawNav() {
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
   document.getElementById("nav").replaceChildren(...(me ? [
     link("#/", "Loops", here === "#/" || (here.startsWith("#/app") && !here.endsWith("/configure")) || here.startsWith("#/u/")),
-    link("#/configure", "New loop", here === "#/configure" || here === "#/new"),
+    link("#/configure", "New loop", here.startsWith("#/configure") || here === "#/new"),
     me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""] : []));
   drawBell();
   document.getElementById("who").replaceChildren(themeBtn, ...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu), h("a", { href: "#/account", class: "me" }, me.name),

@@ -161,6 +161,7 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
     for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE"):
         env.pop(k, None)
     if not server_sandbox:
+        env["FLUX_SANDBOX"] = "0"                    # D704: a --no-sandbox server says so (the command's own default is on)
         return
     if adv.get("sandbox") is False:
         env["FLUX_SANDBOX"] = "0"                    # an admin's choice for this loop: on the host

@@ -158,3 +158,14 @@ def test_podman_rootless_from_a_bare_root_directory(monkeypatch, tmp_path):
     assert _json.loads(env["FLUX_SANDBOX_CLI"]) == cli
     monkeypatch.setenv("FLUX_SANDBOX_ENGINE", "docker")
     assert sandbox.engine() == "docker"
+
+
+def test_a_path_asked_both_ways_is_writable(monkeypatch, tmp_path):
+    """D704: `flux ask --dir <here>` run from <here> -- the working folder (read) and the
+    document's folder (write) are the same: it is mounted writable, once."""
+    import types
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.chdir(tmp_path)
+    ro, rw = sandbox.mounts_for(types.SimpleNamespace(dir=str(tmp_path), file=[], skill=[]), "ask")
+    assert str(tmp_path) in rw and str(tmp_path) not in ro

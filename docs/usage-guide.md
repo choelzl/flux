@@ -135,6 +135,17 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
+- **New loop**, three ways (D704): **Configurator** (below), **Upload** (a folder, files or a
+  `.zip`), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
+  a reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex or Flux's own
+  model; one not installed says so). The agent writes the problem document and the files it names
+  -- `flux ask --no-run` in the sandbox, with your model settings -- and the document is checked;
+  nothing runs. The loop's Overview follows it (its log, Stop), and you review it before starting.
+- **Configure**, three ways: **Configurator**; **Direct edit** (the document's YAML as written,
+  saved with its diff shown, its files beside); **Agent**: say what should change, and the agent
+  revises the document and its files in place, keeping its name; its diff is shown when done. It
+  works on a copy of the loop's own files: the record, the log and the workbench stay out of its
+  reach. Not while the loop runs, and a loop does not start while an agent writes its problem.
 - **The configurator:** the loop crafter inside the app (D686). **New loop** builds a document and
   creates the application from it, with the files it runs. Beside the form, **Files that go with
   it** lists the loop's own files (scripts, golden models, specs): open one to edit it, write a new
@@ -145,8 +156,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
-  accepted designs or decision. **Upload a loop** (beside New loop) takes a dropped folder, files
-  or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
+  accepted designs or decision. **New loop › Upload** takes a dropped folder, files or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
   cut midway is discarded): the page sends it in batches (300 files, 40 MB) and a file over 40 MB in
   parts of 32 MB, with a progress bar. A loop holds up to 100,000 files and 8 GB of its own; one
   request from elsewhere, 900 files and 256 MB (a zip, up to the loop's limits). A failure is said

@@ -133,6 +133,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     runs = RunManager(store, sandbox=sandbox, max_running=max_running)
     app = FastAPI(title="Flux", docs_url="/api/docs", openapi_url="/api/openapi.json")
     app.state.store, app.state.runs = store, runs
+    from .authoring import Authoring
+
+    authoring = Authoring()                         # D704: problems written by an agent
+    app.state.authoring = authoring
     from .history import History
 
     history = History(store.path)                    # D699: the machine over time, in the server's database
@@ -666,6 +670,88 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         return {"ok": f"{path}: the part sent is gone"}
 
+    # ---- a problem written or revised by an agent (D704)
+    def _author_env(whose: User, name: str) -> dict[str, str]:
+        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
+        adv = advanced(store, whose.name, name)
+        sandbox_env(env, sandbox, adv)
+        machine_env(env, store.server_get("sandbox") or {}, adv, [])
+        return env
+
+    async def _attach(d: Path, files: list[UploadFile] | None) -> list[Path]:
+        from .authoring import ATTACHED
+        from .workspace import safe_rel
+
+        out = []
+        for f in files or []:
+            data = await f.read()
+            if not f.filename or not data:
+                continue
+            target = d / ATTACHED / safe_rel(f.filename)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            out.append(target)
+        if sum(p.stat().st_size for p in out) > 256 * 2 ** 20:
+            raise HTTPException(400, "at most 256 MB of files for the agent to read")
+        return out
+
+    @app.get("/api/agents")
+    def agents(user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """Who can write a problem on this server for this user (D704)."""
+        from .authoring import available
+
+        return available(run_env(store, user))
+
+    @app.post("/api/apps/new-by-agent")
+    async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"),
+                           files: list[UploadFile] | None = File(None), user: User = Depends(user_of)) -> dict[str, Any]:
+        """A new loop whose problem an agent writes from a description and files (D704)."""
+        if not prompt.strip():
+            raise HTTPException(400, "say what the loop should do")
+        w = ws(user)
+        try:
+            d = w.create_empty(name)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        try:
+            got = await _attach(d, files)
+            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(user, name),
+                            attachments=got, revise=None, by=user.name)
+        except (ValueError, HTTPException) as exc:
+            shutil.rmtree(d, ignore_errors=True)
+            raise exc if isinstance(exc, HTTPException) else fail(exc) from exc
+        store.audit(user.name, "loop by an agent", f"{name}: {author}")
+        return {"name": name, "ok": f"{name}: the agent is writing its problem"}
+
+    @app.post("/api/apps/{name}/author")
+    async def revise_by_agent(name: str, prompt: str = Form(...), author: str = Form("opencode"),
+                              files: list[UploadFile] | None = File(None), owner: str | None = None,
+                              user: User = Depends(user_of)) -> dict[str, Any]:
+        """An agent revises the loop's problem as told (D704); not while the loop runs."""
+        w, whose, d, run = loop_of(name, user, owner, edit=True)
+        if run and runs.live(run):
+            raise HTTPException(409, "stop the loop first: its problem is in use")
+        if not prompt.strip():
+            raise HTTPException(400, "say what to change")
+        try:
+            got = await _attach(d, files)
+            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name),
+                            attachments=got, revise=w.meta(name).get("document"), by=user.name)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        store.audit(user.name, "problem revised by an agent", f"{whose.name}/{name}: {author}")
+        return {"ok": "the agent is revising the problem"}
+
+    @app.get("/api/apps/{name}/author")
+    def author_state(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        w, _whose, d, _run = loop_of(name, user, owner)
+        return authoring.state(d, w, name)
+
+    @app.post("/api/apps/{name}/author/stop")
+    def author_stop(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        return {"ok": authoring.stop(d)}
+
     # ---- the applications folder of this Flux (D700): an admin sees them and makes one a loop
     def _apps_root() -> Path | None:
         given = os.environ.get("FLUX_APPLICATIONS")
@@ -925,6 +1011,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         w, whose, d, _run = loop_of(name, user, owner, edit=True)
         meta = w.meta(name)
+        if authoring.state(d).get("running"):
+            raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
+        if not meta.get("document"):
+            raise HTTPException(409, "this loop has no problem document yet")
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             runs.start(whose, name, d, meta["document"], str(meta.get("id") or name), body.model_dump(), by=user)
         except ValueError as exc:

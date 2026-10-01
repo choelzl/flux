@@ -212,6 +212,15 @@ class Workspace:
         (d / ".flux-app.json").write_text(json.dumps(meta))
         return {**meta, "linked": linked, "copied": copied}
 
+    def create_empty(self, name: str) -> Path:
+        """A loop with no document yet (D704): an agent is about to write it."""
+        d = self.root / check_name(name)
+        if d.exists():
+            raise WorkspaceError(f"application {name!r} exists")
+        d.mkdir(parents=True)
+        (d / ".flux-app.json").write_text(json.dumps({"document": None, "id": name}))
+        return d
+
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
         rel = safe_rel(filename)
         if not rel.endswith(DOC_SUFFIXES):
