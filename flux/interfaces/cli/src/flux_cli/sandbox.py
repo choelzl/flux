@@ -217,7 +217,7 @@ def _copy_over(src: Path, dst: Path) -> None:
             _copy_over(p, dst / p.name)
     elif src.is_file():
         shutil.copyfile(src, dst)
-        dst.chmod(0o600)
+        dst.chmod(src.stat().st_mode & 0o7777)                # its own mode: a copied program stays one
 
 
 def _env() -> dict[str, str]:

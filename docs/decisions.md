@@ -1557,3 +1557,7 @@ the topics above.
   - Tests: `test_sandbox` (one line per host and port, with the loop and command) and
     `test_web_refusals` (read once, a half line waits, a new file read from its start, every run
     names the file, the admin's only).
+- **D707a: a copied home file keeps its own mode.** Copies were all made 0o600, so a program in
+  a copied folder lost its execute bit and stopped running. Now `chmod(src.stat().st_mode &
+  0o7777)`: a credentials file at 600 stays 600, and a 755 program stays 755. Test:
+  `test_sandbox_config`.

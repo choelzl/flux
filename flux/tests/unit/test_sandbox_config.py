@@ -101,6 +101,13 @@ def test_a_copied_folder_with_links_is_copied_again_every_run(tmp_path, monkeypa
     assert outside.read_text() == "host", "never written through a link"
     assert os.readlink(c / "current") == "token" and (c / "sub").read_text() == "now a file"
     assert (c / "session.json").is_file() and (c / "was-sub/x").read_text() == "x"
+    tool, key = home / ".mycode/creds/tool", home / ".mycode/creds/key"
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    key.write_text("k")
+    key.chmod(0o600)
+    sandbox._sandbox_home(app)
+    assert (c / "tool").stat().st_mode & 0o7777 == 0o755 and (c / "key").stat().st_mode & 0o7777 == 0o600, "each its own mode"
 
 
 def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monkeypatch):
