@@ -695,3 +695,16 @@ body:has(.composer) .toasts { bottom: 150px; }
 .login-out a { color: var(--accent); }
 .login-in { flex: 1; min-width: 180px; font-family: var(--mono); }
 .login-row, .login-keys { gap: 6px; align-items: center; }
+
+/* D739: the loop tree -- a start's branches (setup, passes or parts, the end) and the crafter's boxes as leaves */
+.tree .node.branch .nm { font-family: var(--sans, inherit); font-weight: 600; }
+.tree .node.branch { cursor: pointer; }
+.tree .node.leaf { cursor: pointer; }
+.tree .node.leaf:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tree .node.leaf .nm { font-family: var(--sans, inherit); }
+.tree .node.box-end .st { color: var(--muted); }
+.dtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.dtabs button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
+.leaf-tasks { margin: 6px 0 4px; }
+.leaf-tasks h3 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.leaf-tasks .run-graph-rows { max-height: 180px; }

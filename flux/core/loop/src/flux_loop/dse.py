@@ -54,6 +54,29 @@ from fnmatch import fnmatchcase
 from typing import Any, Iterator
 
 from .roles import Rules, register
+
+#: A proposed point not yet made into a design (D739): `instantiate_taken` makes it.
+POINT = "_point"
+
+
+def instantiate_taken(problem: Any, state: Any, cands: list[Candidate]) -> list[Candidate]:
+    """The designs for the candidates a pass takes: proposed points made by the problem's
+    `instantiate` (all at once, so a world that generates a batch still does), the rest as
+    they are. A point the problem could not make is dropped, as before."""
+    points = [c for c in cands if c.meta.get(POINT)]
+    if not points:
+        return list(cands)
+    made = {_key(c.knobs): c for c in problem.instantiate([dict(c.knobs) for c in points], state)}
+    out = []
+    for c in cands:
+        if not c.meta.get(POINT):
+            out.append(c)
+            continue
+        m = made.get(_key(c.knobs))
+        if m is not None:
+            m.meta.setdefault("strategy", c.meta.get("strategy"))
+            out.append(m)
+    return out
 from .types import Candidate, Scored
 
 __all__ = ["Anneal", "Control", "Genetic", "Gradient", "ModelSearch", "MonteCarlo", "Pareto", "Phases", "Policy",
@@ -220,10 +243,10 @@ class Policy(Rules):
                 continue
             seen.add(k)
             fresh.append(p)
-        cands = list(problem.instantiate(fresh, state)) if fresh else []
-        for c in cands:
-            c.meta.setdefault("strategy", label or self.tag)
-        return cands
+        # D739: points, not designs -- a pass makes the ones it takes (`instantiate_taken`), so a
+        # sweep's 6 designs are written over its 6 passes, not all in the first
+        return [Candidate(name="-".join(str(v) for v in p.values()), knobs=dict(p),
+                          meta={"strategy": label or self.tag, POINT: True}) for p in fresh]
 
     def objective(self, problem: Any, state: Any) -> tuple[str, float] | None:
         """(metric, sign): the value times sign is what a policy MINIMISES."""

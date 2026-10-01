@@ -474,6 +474,9 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         out = demo_run(_passes, tui=tui, title=f"flux · {task.id}", subtitle=db,
                        print_report=_print, info=info)
     except KeyboardInterrupt:
+        from flux_loop.passes import mark
+
+        mark("ended", why="stopped now (interrupted)")
         print("run abandoned; the campaign record holds what was judged")
         return 130
     _print(out)
@@ -485,7 +488,23 @@ def cmd_task_run(args: argparse.Namespace) -> int:
     if getattr(args, "json", None):
         Path(args.json).write_text(json.dumps(_answer(task, db, out, problem, target), indent=2, default=str))
         print(f"answer written to {args.json}")
+    _mark_outputs(task, out, problem, target, getattr(args, "json", None))
     return 0 if out.decision is not None else 1
+
+
+def _mark_outputs(task, out, problem, target: Any, answer: str | None) -> None:
+    """The run's end in its journal (D739): the decision, what it established, the files written."""
+    from flux_loop.passes import mark
+    from flux_loop.task import task_report_lines
+
+    lines = task_report_lines(task, out, problem)
+    head = next((i for i, ln in enumerate(lines) if ln.strip().startswith("WHAT THIS RUN ESTABLISHED")), None)
+    established = [ln.strip() for ln in lines[head + 1:] if ln.strip()][:20] if head is not None else []
+    dec = out.decision
+    mark("outputs", stopped=out.stopped, decided_by=out.decided_by,
+         decision=({"name": dec.candidate.name, "stage": dec.stage, "metrics": dec.metrics} if dec is not None else None),
+         front=len(out.frontier), refused=len(out.refused), lessons=list(out.lessons)[-12:], established=established,
+         not_established=list(out.not_established)[:12], design=str(target) if target else None, answer=answer)
 
 
 def _answer(task, db: str, out, problem, artifact: Any) -> dict[str, Any]:

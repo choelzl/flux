@@ -23,7 +23,7 @@ from typing import Any, Callable, Iterator
 
 from . import ops
 
-__all__ = ["between_passes", "carrying", "run_passes", "this_run"]
+__all__ = ["between_passes", "carrying", "mark", "run_passes", "this_run"]
 
 #: The run whose passes share one search (D738): a policy's place carries from pass to pass of
 #: a run, and a `run_loop` outside one (or a new run) starts the search afresh from the record.
@@ -70,34 +70,50 @@ def _scripted_spent(proposer: Any) -> bool:
     return isinstance(replies, list) and isinstance(prompts, list) and len(prompts) >= len(replies)
 
 
+def mark(name: str, **what: Any) -> None:
+    """A run's milestone in its journal (D739): `pass` as each pass starts, `ended` with why the
+    run ended, `waiting` while it waits for a note -- what the live tree hangs its branches on."""
+    import json
+
+    from flux_profile import mark as _mark
+
+    _mark(name, json.dumps(what, default=str))
+
+
+def _ended(why: str, rests: int, feedback: Any) -> tuple[bool, int, Any]:
+    mark("ended", why=why)
+    return False, rests, feedback
+
+
 def between_passes(out: Any, n: int, *, passes: int = 0, rests: int = 0, feedback: Any = None,
                    proposer: Any = None, say: Callable[[str], None] = print,
                    poll_s: float = 2.0, sleep: Callable[[float], None] = time.sleep) -> tuple[bool, int, Any]:
     """After pass `n` (1-based) ended with `out`: (go on?, rests in a row, the feedback channel
     for the next pass). Stops only for a cap, a stop asked for, or a script that is spent."""
     if passes and n >= passes:
-        return False, rests, feedback
+        return _ended(f"{passes} pass(es) done, as asked", rests, feedback)
     asked = ops.stop_requested()
     if asked:
         ops.clear_stop()
         say(f"stopping at the pass boundary: {asked}")
-        return False, rests, feedback
+        return _ended(f"stopped at the pass boundary: {asked}", rests, feedback)
     if proposer is not None and _scripted_spent(proposer):   # one proposer, or a tuple of them
         say("the scripted replies are spent; a script has nothing more to try")
-        return False, rests, feedback
+        return _ended("the scripted replies are spent", rests, feedback)
     rests = rests + 1 if getattr(out, "at_rest", False) else 0
     if rests and not getattr(out, "explorable", True) and passes:
         say("at rest, and nothing here drafts a new design; the remaining passes would change nothing")
-        return False, rests, feedback
+        return _ended("at rest, and nothing here drafts a new design", rests, feedback)
     if rests and not getattr(out, "explorable", True):
         say("at rest, and nothing here drafts a new design (no model or coding agent generates for this "
             "campaign): waiting for a note, or `flux stop` / Ctrl-C to end")
+        mark("waiting", why="at rest, and nothing here drafts a new design: waiting for a note or a stop")
         while True:
             asked = ops.stop_requested()
             if asked:
                 ops.clear_stop()
                 say(f"stopping: {asked}")
-                return False, rests, feedback
+                return _ended(f"stopped while waiting: {asked}", rests, feedback)
             notes = list(feedback.drain()) if feedback is not None else []
             if notes:
                 say(f"a note arrived: {getattr(notes[-1], 'text', notes[-1])!s:.120}; another pass")
@@ -116,6 +132,7 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
     n = rests = 0
     with carrying():
         while True:
+            mark("pass", n=n + 1, explore=rests)
             out = run(dataclasses.replace(request, explore=rests), feedback)
             n += 1
             go, rests, feedback = between_passes(out, n, passes=cap, rests=rests, feedback=feedback,

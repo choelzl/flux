@@ -25,6 +25,7 @@ _STARTED = time.perf_counter()
 _LISTENER = None
 _PRIMARY = None                        # the TUI's (set_listener)
 _EXTRA: list = []                      # others beside it: the run's journal (D683)
+_TAGS = threading.local()              # D739: what this thread works on (a part), on every phase it starts
 
 
 class _Tee:
@@ -43,6 +44,10 @@ class _Tee:
     def phase_end(self, token, name, seconds, failed, output):
         for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
             _call(lis, "phase_end", tok, name, seconds, failed, output)
+
+    def adopt(self, token):
+        for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
+            _call(lis, "adopt", tok)
 
     def mark(self, name, why):
         for lis in self.listeners:
@@ -115,6 +120,47 @@ def progress(**fields) -> None:
         lis.phase_update(top[2], top[0], dict(fields))
     except Exception:  # noqa: BLE001 -- the instrument never fails the run
         pass
+
+
+def _tags() -> dict:
+    return dict(getattr(_TAGS, "tags", None) or {})
+
+
+@contextmanager
+def tagged(**tags):
+    """Every phase started inside, on this thread or one it hands work to (`carried`), carries
+    `tags` among its params (D739): `with tagged(part="exp"):` puts a part's work under its part."""
+    before = getattr(_TAGS, "tags", None)
+    _TAGS.tags = {**(before or {}), **{k: v for k, v in tags.items() if v not in (None, "")}}
+    try:
+        yield
+    finally:
+        _TAGS.tags = before
+
+
+def carried(fn):
+    """`fn` for another thread, its phases under the phase open here (D739): a stage's
+    measurements on the pool's threads sit under their stage, not at the top. A listener
+    with `adopt(token)` hears the caller's token on the worker, then None."""
+    lis = _LISTENER
+    with _LOCK:
+        stack = _stack()
+        top = stack[-1][2] if stack else None
+    tags = _tags()
+    if lis is None or (top is None and not tags):
+        return fn
+
+    def run(*args, **kw):
+        if top is not None:
+            _call(lis, "adopt", top)
+        with tagged(**tags):
+            try:
+                return fn(*args, **kw)
+            finally:
+                if top is not None:
+                    _call(lis, "adopt", None)
+
+    return run
 
 
 def mark(name: str, why: str = "") -> None:
@@ -213,6 +259,9 @@ def phase(name: str, why: str = "", **params):
     lis = _LISTENER
     token = None
     if lis is not None:
+        tags = _tags()
+        if tags:
+            params = {**tags, **params}
         try:
             token = lis.phase_start(name, why, params)
         except Exception:  # noqa: BLE001

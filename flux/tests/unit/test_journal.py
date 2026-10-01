@@ -69,3 +69,54 @@ def test_attach_once_per_run_and_a_new_run_replaces_it(tmp_path):
     lines = [json.loads(ln) for ln in (Path(tmp_path) / "b" / "events.jsonl").read_text().splitlines()]
     assert lines[0]["ev"] == "hello" and [ln["ev"] for ln in lines[1:]] == ["start", "end"]
     assert [json.loads(ln)["ev"] for ln in (Path(tmp_path) / "a" / "events.jsonl").read_text().splitlines()] == ["hello"]
+
+
+def test_a_workers_phases_sit_under_the_phase_that_handed_them_out_with_its_part(tmp_path):
+    """D739: a stage's measurements on the pool's threads were roots with no parent; carried,
+    they sit under the stage, and a part's tag reaches every phase of its work, threads too."""
+    from flux_loop.pool import run_parallel
+
+    j = Journal(str(tmp_path / "events.jsonl"))
+    flux_profile.add_listener(j)
+    try:
+        with flux_profile.tagged(part="exp"), flux_profile.phase("simulation: bench"):
+            def one(i):
+                with flux_profile.phase("tool:python3", why=f"stage bench d{i}"):
+                    return i
+
+            assert [r for r, _e in run_parallel(range(3), one, 3)] == [0, 1, 2]
+        with flux_profile.phase("decide"):
+            pass
+        t = threading.Thread(target=lambda: flux_profile.phase("alone").__enter__())   # nothing handed: no parent
+        t.start()
+        t.join()
+    finally:
+        flux_profile.remove_listener(j)
+    starts = [e for e in read_events(str(tmp_path / "events.jsonl"))[0] if e["ev"] == "start"]
+    stage = starts[0]
+    tools = [e for e in starts if e["name"] == "tool:python3"]
+    assert len(tools) == 3 and all(e["parent"] == stage["id"] for e in tools)
+    assert stage["params"]["part"] == "exp" and all(e["params"]["part"] == "exp" for e in tools)
+    decide = next(e for e in starts if e["name"] == "decide")
+    assert decide["parent"] is None and "part" not in decide["params"], "the tag ends with its block"
+    assert next(e for e in starts if e["name"] == "alone")["parent"] is None
+
+
+def test_passes_mark_each_pass_and_why_the_run_ended(tmp_path):
+    """D739: the live tree hangs its branches on `pass` marks and its end on `ended`."""
+    from dataclasses import make_dataclass
+    from types import SimpleNamespace
+
+    from flux_loop.passes import run_passes
+
+    request = make_dataclass("Request", [("passes", int, 0), ("explore", int, 0)])()
+    j = Journal(str(tmp_path / "events.jsonl"))
+    flux_profile.add_listener(j)
+    try:
+        run_passes(lambda _r, _f: SimpleNamespace(at_rest=False, explorable=True), request, passes=3, say=lambda _m: None)
+    finally:
+        flux_profile.remove_listener(j)
+    marks = [(e["name"], json.loads(e["why"])) for e in read_events(str(tmp_path / "events.jsonl"))[0] if e["ev"] == "mark"]
+    assert [m for m in marks if m[0] == "pass"] == [("pass", {"n": 1, "explore": 0}), ("pass", {"n": 2, "explore": 0}),
+                                                   ("pass", {"n": 3, "explore": 0})]
+    assert marks[-1] == ("ended", {"why": "3 pass(es) done, as asked"})

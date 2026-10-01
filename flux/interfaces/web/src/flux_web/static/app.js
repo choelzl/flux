@@ -1746,11 +1746,14 @@ function logView(base, qs) {
            problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
 
+/** The journal's marks the loop tree hangs on (D739). */
+const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
+
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
 function liveTree(base, qs, onQuestion) {
-  const nodes = new Map(), roots = [], standings = new Map();
-  let selected = null, dirty = true;
+  const nodes = new Map(), roots = [], standings = new Map(), marks = [];
+  let selected = null, selLeafKey = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
   const follow = h("input", { type: "checkbox", checked: true });
   const collapse = h("input", { type: "checkbox", checked: true });
@@ -1758,7 +1761,7 @@ function liveTree(base, qs, onQuestion) {
   const treeBox = h("div", { class: "tree" }), graphBox = h("div", { class: "tgraph" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
   function onEvent(e) {
     if (e.ev === "hello") {                        // a new start: its tree begins afresh (D689)
-      nodes.clear(); roots.length = 0; standings.clear(); open.clear(); selected = null; dirty = true;
+      nodes.clear(); roots.length = 0; standings.clear(); open.clear(); marks.length = 0; selected = null; selLeafKey = null; dirty = true;
       return;
     }
     if (e.ev === "start") {
@@ -1770,6 +1773,10 @@ function liveTree(base, qs, onQuestion) {
     else if (e.ev === "end") { const n = nodes.get(e.id); if (n) { n.t1 = e.t; n.seconds = e.seconds; n.failed = e.failed; n.output = e.output; } }
     else if (e.ev === "publish") standings.set(e.key, e.payload);
     else if (e.ev === "mark" && e.name === "question") { try { onQuestion(JSON.parse(e.why)); } catch (_) {} }
+    else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {            // D739: passes, the end, what was written
+      let d = {}; try { d = JSON.parse(e.why || "{}") || {}; } catch (_) {}
+      marks.push({ ...d, name: e.name, t: e.t });
+    }
     dirty = true;
   }
   const running = (n) => n.t1 == null;
@@ -1809,30 +1816,199 @@ function liveTree(base, qs, onQuestion) {
   for (const [k, b] of Object.entries(modeBtns)) b.addEventListener("click", () => setMode(k));
   function matches(n, q) { return (n.name + " " + (n.why || "")).toLowerCase().includes(q); }
   function visibleUnder(n, q) { return matches(n, q) || n.kids.some(k => visibleUnder(k, q)); }
+  /** The loop as it ran (D739): this start is one branch -- its setup, a branch per pass whose
+      leaves are the loop crafter's boxes in the order they ran, then its end. A loop split into
+      parts has a branch per part (its passes inside) and one for the whole. A leaf is a box's
+      stretch of work: ×N when it ran several times in a row; its tasks open in the detail. */
+  const SETUP_BOXES = new Set(["validate", "knowledge", "records", "feedback"]);
+  const isDivide = (n) => /^propose: decompose/.test(String(n.name));
+  const isSetup = (n) => SETUP_BOXES.has(boxOfTask(n)) || isDivide(n);
+  const partOf = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.part; if (v) return String(v); } return ""; };
+  const rootOf = (n) => { let p = n; while (p.parent) p = p.parent; return p; };
+  const within = (v, n) => { for (let p = n; p; p = p.parent) if (p === v) return true; return false; };
+  function leafTitle(b, v) {
+    if (isDivide(v)) return "Divide into parts";
+    if (/^propose: finalists/.test(String(v.name))) return "Choose the finalists";
+    if (b === "parts") return "Put the parts together";
+    const C = window.FluxCrafter;
+    return (C && C.boxTitle ? C.boxTitle(b) : null) || b;
+  }
+  function leavesOf(vs, key) {
+    const out = [];
+    for (const v of vs) {
+      const b = boxOfTask(v), title = leafTitle(b, v), last = out[out.length - 1];
+      if (last && last.title === title) last.tasks.push(v);
+      else out.push({ leaf: true, box: b, title, tasks: [v], key: `${key}/${out.length}` });
+    }
+    return out;
+  }
+  const designsOf = (vs) => {                    // what a pass worked on: the designs its tools made or built
+    const names = [];
+    const walk = (n) => {
+      const m = /^generate (.+)$/.exec(String(n.why || "")) || /^generation: build (.+)$/.exec(String(n.name));
+      if (m && String(n.name).match(/^(tool:|generation: build)/) && !names.includes(m[1])) names.push(m[1]);
+      n.kids.forEach(walk);
+    };
+    vs.forEach(walk);
+    return names;
+  };
+  function branch(key, title, why, kids) { return { key, title, why, kids }; }
+  function loopTree() {
+    boxCache.clear();
+    const passMarks = marks.filter(m => m.name === "pass");
+    const passAt = (t) => { let k = 1; for (const m of passMarks) if (m.t <= t + 1e-3) k = Number(m.n) || k; return k; };
+    const visits = [];
+    for (const n of nodes.values()) {
+      const b = boxOfTask(n);
+      if (!b || (n.parent && boxOfTask(n.parent) === b)) continue;
+      visits.push(n);
+    }
+    visits.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
+    const named = new Set(visits.map(partOf).filter(Boolean));
+    const hasParts = named.size > 0;
+    // the pick of the next part belongs to the part it picked
+    const partOfVisit = (v) => partOf(v) || (/^propose: what next/.test(String(v.name)) && v.output && named.has(String(v.output.picked)) ? String(v.output.picked) : "");
+    const passes = new Map();
+    for (const m of passMarks) if (!passes.has(Number(m.n))) passes.set(Number(m.n), { n: Number(m.n), explore: Number(m.explore || 0), visits: [] });
+    for (const v of visits) {
+      if (!hasParts && boxOfTask(v) === "parts") continue;              // nothing to put together
+      const k = passAt(rootOf(v).t0);
+      if (!passes.has(k)) passes.set(k, { n: k, explore: 0, visits: [] });
+      passes.get(k).visits.push(v);
+    }
+    const order = [...passes.values()].filter(p => p.visits.length).sort((a, b) => a.n - b.n);
+    const out = [];
+    const setupLeaves = [];
+    const passBody = (p, vs, key) => {            // a pass's leaves: its own setup as one leaf, then the boxes
+      let i = 0;
+      while (i < vs.length && isSetup(vs[i])) i++;
+      const lead = vs.slice(0, i), rest = vs.slice(i);
+      if (p === order[0]) { setupLeaves.push(...leavesOf(lead, "setup")); return leavesOf(rest, key); }
+      const pre = lead.length ? [{ leaf: true, box: "validate", title: "Set up the pass", tasks: lead, key: `${key}/setup` }] : [];
+      return [...pre, ...leavesOf(rest, key)];
+    };
+    const passWhy = (p, vs) => {
+      const made = designsOf(vs);
+      return [p.explore ? "exploring" : "", made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : ""].filter(Boolean).join(" · ");
+    };
+    if (!hasParts) {
+      for (const p of order) out.push(branch(`pass:${p.n}`, `Pass ${p.n}`, passWhy(p, p.visits), passBody(p, p.visits, `pass:${p.n}`)));
+    } else {
+      const byPart = new Map(), whole = [];
+      for (const p of order) {
+        const own = new Map();
+        for (const v of p.visits) { const k = partOfVisit(v); if (!own.has(k)) own.set(k, []); own.get(k).push(v); }
+        for (const [k, vs] of own) {
+          if (!k) { const kids = passBody(p, vs, `whole/pass:${p.n}`); if (kids.length) whole.push(branch(`whole/pass:${p.n}`, `Pass ${p.n}`, passWhy(p, vs), kids)); continue; }
+          if (!byPart.has(k)) byPart.set(k, []);
+          byPart.get(k).push(branch(`part:${k}/pass:${p.n}`, `Pass ${p.n}`, passWhy(p, vs), leavesOf(vs, `part:${k}/pass:${p.n}`)));
+        }
+      }
+      const st = standings.get("standings") || {};
+      const partState = new Map((Array.isArray(st.parts) ? st.parts : []).map(x => [String(x.part), x.state]));
+      for (const [k, kids] of byPart) out.push(branch(`part:${k}`, `Part ${k}`, partState.get(k) || "its own loop", kids));
+      if (whole.length) out.push(branch("whole", "The whole", "the division, the parts put together, the decision", whole));
+    }
+    if (setupLeaves.length) out.unshift(branch("setup", "Setup", "", setupLeaves));
+    const end = endLeaves();
+    if (end.length) out.push(branch("end", "End", (end[0].tasks[0].why || ""), end));
+    return out;
+  }
+  function endLeaves() {
+    const last = (name) => [...marks].reverse().find(m => m.name === name);
+    const ended = last("ended"), outs = last("outputs"), waiting = last("waiting");
+    const lastPass = [...marks].reverse().find(m => m.name === "pass");
+    const at = (m) => m && (!lastPass || m.t >= lastPass.t);
+    const leaves = [];
+    const pseudo = (key, title, why, output, t, live = false) => leaves.push({ leaf: true, box: "end", title, key: `end/${key}`,
+      tasks: [{ id: `end:${key}`, name: title, why, params: {}, fields: {}, output, kids: [], parent: null, t0: t, t1: live ? null : t, seconds: 0, pseudo: true }] });
+    if (at(waiting) && !ended) pseudo("waiting", "Waiting", waiting.why || "at rest: waiting for a note or a stop", {}, waiting.t, true);
+    if (ended) pseudo("why", "Why it ended", ended.why || "", { why: ended.why }, ended.t);
+    if (outs) {
+      const d = outs.decision;
+      const nums = d && d.metrics ? Object.entries(d.metrics).map(([k, v]) => `${k}=${typeof v === "number" ? Number(v.toPrecision(5)) : v}`).join(", ") : "";
+      pseudo("decision", "The decision", d ? `${d.name}${nums ? " · " + nums : ""}` : "none: nothing was admitted",
+        { decision: d, "decided by": outs.decided_by, "the front": outs.front, refused: outs.refused, stopped: outs.stopped }, outs.t);
+      if (outs.lessons && outs.lessons.length) pseudo("lessons", "Learn from results", `${outs.lessons.length} lesson(s)`, { lessons: outs.lessons }, outs.t);
+      if ((outs.established || []).length || (outs.not_established || []).length)
+        pseudo("established", "What this run established", (outs.established || [])[0] || "",
+          { established: outs.established, "not established": outs.not_established }, outs.t);
+      if (outs.design) pseudo("design", "Design written", outs.design, { file: outs.design }, outs.t);
+      if (outs.answer) pseudo("answer", "Answer written", outs.answer, { file: outs.answer }, outs.t);
+    }
+    return leaves;
+  }
+  const itemTasks = (it) => it.leaf ? it.tasks : it.kids.flatMap(itemTasks);
+  const itemRunning = (it) => itemTasks(it).some(running);
+  const itemFailed = (it) => itemTasks(it).some(failedBelow);
+  const itemHas = (it, n) => n && itemTasks(it).some(v => within(v, n));
+  function itemMatches(it, q) {
+    if (it.title.toLowerCase().includes(q)) return true;
+    return it.leaf ? it.tasks.some(v => visibleUnder(v, q)) : it.kids.some(k => itemMatches(k, q));
+  }
+  function itemSpan(it, now) {
+    const ts = itemTasks(it);
+    if (!ts.length) return 0;
+    const t0 = Math.min(...ts.map(t => t.t0)), t1 = Math.max(...ts.map(t => (t.t1 == null ? now : t.t1)));
+    return it.leaf && ts.length > 1 ? ts.reduce((a, t) => a + (t.t1 == null ? now - t.t0 : t.seconds || 0), 0) : t1 - t0;
+  }
+  let shownItems = [];
   function draw() {
     const now = Date.now() / 1000;
     if (follow.checked) { const t = followTarget() || lastEnded(); if (t) selected = t; }
     const q = search.value.trim().toLowerCase();
-    const row = (n) => {
-      if (q && !visibleUnder(n, q)) return "";
-      const hasKids = n.kids.length > 0, opened = q ? true : isOpen(n);
-      const state = running(n) ? "running" : n.failed ? "failed" : "done";
-      return h("div", { class: "tnode" },
-        h("div", { class: `node ${state}${n === selected ? " sel" : ""}${q && matches(n, q) ? " hit" : ""}`,
-            onclick: () => { selected = n; follow.checked = false; draw(); } },
-          h("span", { class: "caret", onclick: (e) => { if (!hasKids) return; e.stopPropagation(); open.set(n.id, !opened); draw(); } }, hasKids ? (opened ? "▾" : "▸") : ""),
-          h("span", { class: "st" }, running(n) ? "●" : n.failed ? "✗" : "✓"),
-          h("span", { class: "nm" }, n.name), n.why ? h("span", { class: "why" }, n.why) : "",
-          !running(n) && n.output && n.output.exit != null && n.output.exit !== 0 ? h("span", { class: "exitn" }, `exit ${n.output.exit}`) : "",
-          hasKids && !opened ? h("span", { class: "kidsn" }, String(n.kids.length)) : "",
-          h("span", { class: "dur" }, dur(running(n) ? now - n.t0 : n.seconds))),
-        hasKids && opened ? h("div", { class: "kids" }, n.kids.slice(-300).map(row)) : "");
-    };
     if (mode === "graph") drawGraph(now);
-    else treeBox.replaceChildren(...(roots.length ? roots.slice(-150).map(row) : [empty("Waiting for the run's first events…")]));
+    else drawLoopTree(now, q);
     drawDetail(now);
     drawStandings();
     dirty = false;
+  }
+  /** A leaf's line: what its latest work was about -- a tool or an agent by name and purpose, any other task by its purpose. */
+  const leafWhy = (n) => /^(tool|agent):/.test(String(n.name)) ? [String(n.name).replace(/^[^:]+:\s*/, ""), n.why].filter(Boolean).join(" · ") : String(n.why || "");
+  function drawLoopTree(now, q) {
+    const items = loopTree();
+    shownItems = items;
+    const leafSel = (() => {                                  // the leaf the selection is in
+      let hit = null;
+      const walk = (it) => { if (it.leaf) { if ((selLeafKey && it.key === selLeafKey && (itemHas(it, selected) || (selected && selected.pseudo))) || (!hit && itemHas(it, selected))) hit = it; } else it.kids.forEach(walk); };
+      items.forEach(walk);
+      return hit;
+    })();
+    const row = (it) => {
+      if (q && !itemMatches(it, q)) return "";
+      const live = itemRunning(it), bad = !live && itemFailed(it);
+      const state = live ? "running" : bad ? "failed" : "done";
+      const took = itemSpan(it, now);
+      if (it.leaf) {
+        const latest = it.tasks.reduce((a, x) => (x.t0 >= a.t0 ? x : a));
+        const pick = () => { selected = focusOf(latest); selLeafKey = it.key; follow.checked = false; draw(); };
+        return h("div", { class: "tnode" },
+          h("div", { class: `node leaf ${state} box-${it.box}${it === leafSel ? " sel" : ""}${q && itemMatches(it, q) ? " hit" : ""}`, tabindex: "0", role: "button",
+              onclick: pick, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } },
+            h("span", { class: "caret" }, ""),
+            h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
+            h("span", { class: "nm" }, it.title), it.tasks.length > 1 ? h("span", { class: "kidsn" }, `×${it.tasks.length}`) : "",
+            leafWhy(focusOf(latest)) ? h("span", { class: "why" }, leafWhy(focusOf(latest))) : "",
+            latest.pseudo ? "" : h("span", { class: "dur" }, dur(took))));
+      }
+      const opened = q ? true : open.has(it.key) ? open.get(it.key) : (!collapse.checked || live || bad || itemHas(it, selected));
+      return h("div", { class: "tnode" },
+        h("div", { class: `node branch ${state}`, onclick: () => { open.set(it.key, !opened); draw(); } },
+          h("span", { class: "caret" }, opened ? "▾" : "▸"),
+          h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
+          h("span", { class: "nm" }, it.title), it.why ? h("span", { class: "why" }, it.why) : "",
+          !opened ? h("span", { class: "kidsn" }, String(it.kids.length)) : "",
+          it.key === "end" ? "" : h("span", { class: "dur" }, dur(took))),
+        opened ? h("div", { class: "kids" }, it.kids.map(row)) : "");
+    };
+    treeBox.replaceChildren(...(items.length ? items.map(row) : [empty("Waiting for the run's first events…")]));
+  }
+  /** The leaf the detail belongs to, when it has several tasks (D739): each a line to open. */
+  function leafOf(n) {
+    let hit = null;
+    const walk = (it) => { if (it.leaf) { if (!hit && it.tasks.length > 1 && itemHas(it, n) && (!selLeafKey || it.key === selLeafKey)) hit = it; } else it.kids.forEach(walk); };
+    shownItems.forEach(walk);
+    return hit;
   }
   /** The tasks as the loop's own drawing (D726, after D723): the configurator's diagram of this
       loop's document, read-only, each task placed on its box by its name -- how often the box
@@ -1851,6 +2027,7 @@ function liveTree(base, qs, onQuestion) {
     let b = null;
     if (name.startsWith("critique")) b = /decision/.test(name + why) ? "crit-decision" : /division|decompos/.test(name + why) ? "crit-division" : "crit-part";
     else if (name.startsWith("tool:")) b = /^generate/.test(why) ? "generate" : /^(stage|estimate)/.test(why) ? "measure" : /^(test|lint|golden|build|compile)/.test(why) ? "test" : null;
+    else if (/^gate: (tools|the problem)\b/.test(name)) b = "validate";        // D739: the document's own checks
     else if (/^generation: build\b/.test(name)) b = "test";                  // the gate's build of a draft
     else if (/^evaluation\b|: compose\b/.test(name)) b = "parts";                  // proven parts composed (drawn when it has parts)
     else if (!name.startsWith("agent:")) b = BOX_BY_WORD[name.split(/[\s:]/)[0]] || null;
@@ -2095,6 +2272,7 @@ function liveTree(base, qs, onQuestion) {
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, "err"),
       !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "This run of the tool was recorded without its command and output.") : "");
   }
+  let detailTab = "";
   function drawDetail(now) {
     if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
     const n = selected;
@@ -2109,16 +2287,43 @@ function liveTree(base, qs, onQuestion) {
       return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val" }, text) : h("div", { class: "val mono" }, text));
     })) : "";
     const path = []; for (let p = n.parent; p; p = p.parent) path.unshift(p.name);
+    // D739: what a task was given, what it gave, its log, and what it does now -- each a tab,
+    // the tabs it has; the one chosen stays chosen from task to task
+    const isAgent = String(n.name).startsWith("agent:"), isTool = String(n.name).startsWith("tool:");
+    const has = (o) => o && Object.keys(o).length;
+    const f = { ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) };
+    const logText = [f.stdout ?? f["stdout (live tail)"], f.stderr ?? f["stderr (live tail)"]].filter(Boolean).join("\n");
+    const tabs = [];
+    if (isAgent) tabs.push([running(n) ? "Live" : "Conversation", () => agentView(n, now)]);
+    else if (isTool) tabs.push([running(n) ? "Live" : "Output", () => toolView(n, now)]);
+    else {
+      if (running(n) && has(n.fields)) tabs.push(["Live", () => block("So far", n.fields)]);
+      if (has(n.output)) tabs.push(["Output", () => block("Output", n.output)]);
+    }
+    if (has(n.params)) tabs.push(["Input", () => block("Given", n.params)]);
+    if (isAgent && logText) tabs.push(["Log", () => h("pre", { class: "val astream-body", "data-k": "log" }, logText)]);
+    if ((isAgent || isTool) && (has(n.fields) || has(n.output))) tabs.push(["Every field", () => h("div", {}, block("Fields", n.fields), block("Output", n.output))]);
+    const want = tabs.find(([t]) => t === detailTab) || tabs.find(([t]) => (detailTab === "Live" && t === "Output") || (detailTab === "Output" && t === "Live") || (detailTab === "Conversation" && t === "Live")) || tabs[0];
+    const tabBar = tabs.length > 1 ? h("div", { class: "dtabs", role: "tablist" }, tabs.map(([t]) => h("button", { type: "button", class: `small${want && t === want[0] ? " on" : ""}`, role: "tab",
+      "aria-selected": String(!!want && t === want[0]), onclick: () => { detailTab = t; drawDetail(Date.now() / 1000); } }, t))) : "";
+    const leaf = n.pseudo ? null : leafOf(n);
+    const leafRows = leaf ? h("div", { class: "leaf-tasks" }, h("h3", {}, `${leaf.title} ×${leaf.tasks.length}`),
+      h("div", { class: "run-graph-rows" }, leaf.tasks.map(v => {
+        const fo = focusOf(v), on = within(v, n);
+        return h("div", { class: `rg-row ${running(v) ? "running" : failedBelow(v) ? "failed" : "done"}${on ? " sel" : ""}`, tabindex: "0", role: "button",
+          onclick: () => { selected = fo; follow.checked = false; draw(); },
+          onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selected = fo; follow.checked = false; draw(); } } },
+          h("span", { class: "rg-st" }, running(v) ? "●" : failedBelow(v) ? "✗" : "✓"),
+          h("span", { class: "rg-nm" }, String(fo.name)), fo.why ? h("span", { class: "rg-why" }, fo.why) : "",
+          h("span", { class: "rg-dur" }, running(v) ? `running · ${dur(now - v.t0)}` : dur(v.seconds)));
+      }))) : "";
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, n.name),
-        h("span", { class: `pill ${running(n) ? "live" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.failed ? "failed" : "done"),
-        h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
+        n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.failed ? "failed" : "done"),
+        n.pseudo ? "" : h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
-      ...(String(n.name).startsWith("agent:") || String(n.name).startsWith("tool:")
-        ? [(String(n.name).startsWith("agent:") ? agentView : toolView)(n, now), h("details", { class: "blk" }, h("summary", { class: "muted" }, "Parameters and every field"),
-          block("Parameters", n.params), block("Fields", n.fields), block("Output", n.output))]
-        : [block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output)]));
+      leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more."));
     for (const pre of detail.querySelectorAll("pre.val, .cv[data-k]")) {
       const k = pre.dataset.k, at = sameTask && k ? kept.get(k) : undefined;
       pre.scrollTop = at === undefined || at === -1 ? pre.scrollHeight : at;   // a live tail shows its end, unless read upward

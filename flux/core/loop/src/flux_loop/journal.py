@@ -3,7 +3,7 @@
 
 One line per event: `{"t", "ev": start|update|end|mark|publish, "id", "parent", "name", ...}`.
 A phase's `id` is its order of start in this process; `parent` is the phase open around it on
-the same thread (null at the top, or in a worker thread). Updates are at most one a second per
+the same thread, or the phase a worker thread was handed its work under (D739); null at the top. Updates are at most one a second per
 phase; every text value is cut to its last TAIL characters. It never fails the run: a write
 that fails is dropped.
 """
@@ -42,6 +42,7 @@ class Journal:
         self._stacks: dict[int, list[int]] = {}
         self._last_update: dict[int, float] = {}
         self._pending: dict[int, tuple[str, dict]] = {}
+        self._adopted: dict[int, int] = {}     # a worker thread -> the phase it works under (D739)
 
     def _write(self, row: dict[str, Any]) -> None:
         row = {"t": round(time.time(), 3), **row}
@@ -57,7 +58,7 @@ class Journal:
             self._n += 1
             pid = self._n
             stack = self._stacks.setdefault(threading.get_ident(), [])
-            parent = stack[-1] if stack else None
+            parent = stack[-1] if stack else self._adopted.get(threading.get_ident())
             stack.append(pid)
         self._write({"ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why),
                      "params": _cut(params or {})})
@@ -81,6 +82,14 @@ class Journal:
         self._last_update.pop(token, None)
         self._write({"ev": "end", "id": token, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
                      "output": _cut(output or {})})
+
+    def adopt(self, token: int | None) -> None:
+        """This thread's phases go under `token` (flux_profile.carried), or nowhere again."""
+        with self._lock:
+            if token is None:
+                self._adopted.pop(threading.get_ident(), None)
+            else:
+                self._adopted[threading.get_ident()] = token
 
     def mark(self, name: str, why: str) -> None:
         self._write({"ev": "mark", "name": name, "why": _cut(why)})

@@ -366,7 +366,10 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             if kind == "improve":
                 item = state.improve.pop(0)
                 state.step = step + 1
-                got = _improve_step(problem, state, item)           # its own headline: generation: improve
+                from flux_profile import tagged
+
+                with tagged(part=item.candidate.subgoal):        # D739: under its part
+                    got = _improve_step(problem, state, item)       # its own headline: generation: improve
             elif kind == "batch":
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
@@ -611,8 +614,8 @@ class _SearchSession:
     all of it is measured -- so a sweep's 6 points are 6 passes, an anneal's temperature and a
     genetic population carry on, and the decision at each pass's end sees every design so far."""
 
-    def __init__(self, gen: Iterator[list[Candidate]], proxy: _StateProxy) -> None:
-        self.gen, self.proxy = gen, proxy
+    def __init__(self, gen: Iterator[list[Candidate]], proxy: _StateProxy, problem: Problem | None = None) -> None:
+        self.gen, self.proxy, self.problem = gen, proxy, problem
         self.queue: list[Candidate] = []
         self.got: list[Scored] = []
         self.asked = False
@@ -632,6 +635,12 @@ class _SearchSession:
             self.last = bool(getattr(self.proxy, "search_done", False))
             self.queue, self.pending = list(batch), len(batch)
         out, self.queue = self.queue[:n], self.queue[n:]
+        if self.problem is not None and out:
+            from .dse import instantiate_taken
+
+            made = instantiate_taken(self.problem, self.proxy, out)   # D739: made when taken
+            self.pending -= len(out) - len(made)                      # a point that could not be made
+            out = made
         return out
 
     def measured(self, got: list[Scored], n: int) -> None:
@@ -664,7 +673,7 @@ def _search_session(problem: Problem, state: LoopState) -> _SearchSession | None
     gen = problem.search(proxy)
     if gen is None:
         return None
-    session = _SearchSession(gen, proxy)
+    session = _SearchSession(gen, proxy, problem)
     session.run = run
     try:
         problem.__dict__["_flux_search"] = session
@@ -792,12 +801,15 @@ def _pick(problem: Problem, state: LoopState, todo: list, goals: list[str], huma
     tag = sg or problem.name
     sub = state.subloops.get(key)
     if sub is not None:
-        _run_child(problem, state, sub, todo)
+        from flux_profile import tagged
+
+        with tagged(part=sg):                     # D739: a child loop is its part's branch
+            _run_child(problem, state, sub, todo)
         return None
     say(f"plan: attempt {tag}" + (f" via {method}" if method else "")
         + (f" ({len(state.admitted)}/{len(goals)} proven)" if goals else ""))
     if key not in state.plans:
-        with _phase(f"propose: brief {tag}", why="once per part") as out:
+        with _phase(f"propose: brief {tag}", why="once per part", part=sg or "") as out:
             try:
                 state.plans[key] = dict(problem.plan_part(sg, state) or {})
                 for k, v in state.plans[key].items():
@@ -901,9 +913,12 @@ def _one_step(problem: Problem, state: LoopState, todo: list, goals: list[str]) 
     if picked is None:
         return
     sg, method = picked
-    cand, built, reason = _draft(problem, state, sg, method, human)
-    state.trying = None
-    _admit(problem, state, todo, goals, sg, cand, built, reason)
+    from flux_profile import tagged
+
+    with tagged(part=sg):                         # D739: the part's work, under its part in the tree
+        cand, built, reason = _draft(problem, state, sg, method, human)
+        state.trying = None
+        _admit(problem, state, todo, goals, sg, cand, built, reason)
 
 
 def _parts_step(problem: Problem, state: LoopState, todo: list, goals: list[str], n: int) -> int:
@@ -924,13 +939,20 @@ def _parts_step(problem: Problem, state: LoopState, todo: list, goals: list[str]
         return 0
     if len(picks) > 1:
         state.say(f"  drafting {len(picks)} parts at once: {', '.join(str(sg or problem.name) for sg, _m in picks)}")
-    drafted = run_parallel(picks, lambda pm: _draft(problem, state, pm[0], pm[1], human), len(picks))
+    from flux_profile import tagged
+
+    def drafted_one(pm: tuple) -> tuple:
+        with tagged(part=pm[0]):                  # D739: each part's work under its part
+            return _draft(problem, state, pm[0], pm[1], human)
+
+    drafted = run_parallel(picks, drafted_one, len(picks))
     state.trying = None
     for (sg, _method), (got, exc) in zip(picks, drafted):
         if exc is not None:
             got = (None, None, f"generator did not run ({exc!s:.160})")
         cand, built, reason = got
-        _admit(problem, state, todo, goals, sg, cand, built, reason)
+        with tagged(part=sg):
+            _admit(problem, state, todo, goals, sg, cand, built, reason)
     return len(picks)
 
 def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:

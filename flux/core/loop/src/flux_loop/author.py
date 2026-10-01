@@ -388,7 +388,7 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
     every checked document before it runs: None runs it; a note sends it back to the author."""
     import inspect
 
-    from .passes import between_passes, carrying
+    from .passes import between_passes, carrying, mark
     from .task import task_report_lines
 
     takes_explore = len(inspect.signature(run_pass).parameters) >= 3
@@ -457,6 +457,7 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
         digest = hashlib.sha256(document_path(ask.workdir).read_bytes()).hexdigest()[:12]
         if not ask.no_run:
             say(f"pass {n + 1}: running {task.id} (document {digest})")
+        mark("pass", n=n + 1, explore=rests)
         with carrying(run_mark):
             out = run_pass(task, problem, rests) if takes_explore else run_pass(task, problem)
         report = task_report_lines(task, out, problem)

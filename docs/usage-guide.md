@@ -213,7 +213,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
-  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`, or as a
+  - **Live:** the loop as it ran (D739): this start's **Setup**, a branch per **Pass** (named by the
+    design it made) whose leaves are the configurator's boxes in the order they ran (×N when a box
+    ran several times in a row), and an **End** (why it ended, the decision, the lessons, what it
+    established, the design and answer written); a loop in parts has a branch per **Part** (its passes
+    inside) and **The whole**. A leaf opens its work in tabs -- Live or Output, Input, Log, Every
+    field -- and lists its tasks when it has several. From the run's journal `events.jsonl`, or as a
     graph (**Tree | Graph**, remembered per browser; D726: the graph is the loop's own drawing, as
     the configurator draws its document, unused boxes dimmed, a running one pulsing; D727: a step
     bar -- ⏮ ◀ slider ▶ ⏭ -- goes through the selected box's runs (D729; every visit when none is),

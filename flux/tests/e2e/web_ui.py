@@ -510,6 +510,17 @@ def flows(r: Run) -> None:
         r.button("Tree", ".tree-card .seg")
         b.wait("!document.querySelector('.tree').hidden && document.querySelector('.tree .node')", timeout=10, what="the tree again")
         r.check("and back to the tree", True)
+        # D739: the tree is the loop's -- setup, a branch per pass, the crafter's boxes as leaves
+        branches = b.js("return [...document.querySelectorAll('.tree .node.branch .nm')].map(x => x.textContent)")
+        r.check("the tree has a branch per pass, not the code's phases (D739)", "Pass 1" in branches
+                and not any(x.startswith(("propose:", "DSE:", "tool:")) for x in branches), str(branches))
+        b.js("for (const x of document.querySelectorAll('.tree .node.branch')) if (/Pass 1/.test(x.innerText) && x.querySelector('.caret').textContent === '▸') x.click(); return 1")
+        leaves = b.wait("[...document.querySelectorAll('.tree .node.leaf .nm')].map(x => x.textContent).filter(Boolean)", timeout=10, what="the pass's leaves")
+        r.check("a pass's leaves are the crafter's boxes", "Check it works" in leaves and "Search the settings" in leaves, str(leaves))
+        b.js("[...document.querySelectorAll('.tree .node.leaf')].find(x => x.querySelector('.nm').textContent === 'Check it works').click(); return 1")
+        b.wait("document.querySelector('.tree .node.leaf.sel') && document.querySelector('.detail-card .dtabs')", timeout=10, what="the leaf's work, in tabs")
+        tabs = b.js("return [...document.querySelectorAll('.detail-card .dtabs button')].map(x => x.textContent)")
+        r.check("a leaf opens its work: output, input and every field as tabs", {"Output", "Input"} <= set(tabs), str(tabs))
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
         r.clean("start, live, stop, results")

@@ -44,6 +44,9 @@ def run_parallel(items: Iterable[T], fn: Callable[[T], Any], n: int) -> list[tup
     todo = list(items)
     if n <= 1 or len(todo) <= 1:
         return [_call(fn, it) for it in todo]
+    from flux_profile import carried
+
+    fn = carried(fn)                     # D739: the workers' phases under the caller's
     with ThreadPoolExecutor(max_workers=min(n, len(todo)), thread_name_prefix="flux-measure") as pool:
         futures = [pool.submit(_call, fn, it) for it in todo]
         return [f.result() for f in futures]

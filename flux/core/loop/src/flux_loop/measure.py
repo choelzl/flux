@@ -279,7 +279,9 @@ class Ahead:
             with _phase(f"{kind}: {stage} (ahead: {part} alone)", why="while the model writes the next part"):
                 return problem.measure(cand, stage, state)
 
-        self.futures[key] = self.pool.submit(work)
+        from flux_profile import carried
+
+        self.futures[key] = self.pool.submit(carried(work))      # D739: under the phase that started it
         self.started += 1
         return True
 
