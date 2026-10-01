@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -398,9 +399,52 @@ class Store:
         with self._db() as db:
             db.execute("INSERT INTO audit(t, user, action, detail) VALUES (?, ?, ?, ?)", (time.time(), user, action, detail))
 
+    @property
+    def refusals_file(self) -> Path:
+        """Where the sandboxes' proxies write the hosts they refused (D708)."""
+        return self.data / "network-refused.jsonl"
+
+    def take_refusals(self) -> int:
+        """The hosts refused since the last read, into the audit: who (the loop's owner), "network
+        refused", the loop, the host and port, the command. Returns how many."""
+        with _REFUSALS:                                 # the sampler and an admin's page: one reader at a time
+            return self._take_refusals()
+
+    def _take_refusals(self) -> int:
+        import json
+
+        f = self.refusals_file
+        try:
+            st = f.stat()
+        except OSError:
+            return 0
+        seen = self.server_get("refusals_read") or {}
+        offset = seen.get("offset", 0) if seen.get("ino") == st.st_ino and seen.get("offset", 0) <= st.st_size else 0
+        with open(f, "rb") as fh:
+            fh.seek(offset)
+            data = fh.read()
+        end = data.rfind(b"\n") + 1                    # a line being written: read next time
+        n = 0
+        with self._db() as db:
+            for raw in data[:end].splitlines():
+                try:
+                    x = json.loads(raw)
+                except ValueError:
+                    continue
+                owner, _, app = str(x.get("app") or "").rpartition(".")
+                db.execute("INSERT INTO audit(t, user, action, detail) VALUES (?, ?, ?, ?)",
+                           (float(x.get("t") or time.time()), owner or None, "network refused",
+                            f"{app or '?'}: {x.get('host')}:{x.get('port')} ({x.get('command') or 'run'})"))
+                n += 1
+        self.server_set("refusals_read", {"ino": st.st_ino, "offset": offset + end})
+        return n
+
     def audit_log(self, limit: int = 200) -> list[dict[str, Any]]:
         with self._db() as db:
             return [dict(r) for r in db.execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))]
+
+
+_REFUSALS = threading.Lock()
 
 
 def _digest(token: str) -> str:

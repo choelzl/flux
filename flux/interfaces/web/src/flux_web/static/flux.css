@@ -558,3 +558,4 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .md table.md { margin: 6px 0; }
 .ask-head { display: grid; gap: 2px; margin-bottom: 8px; }
 .ask-card .md { border-top: 1px solid var(--line); padding-top: 6px; }
+td.bad { color: var(--bad); }

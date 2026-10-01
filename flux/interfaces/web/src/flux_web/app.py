@@ -332,7 +332,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return out
 
     def _sample() -> dict[str, Any]:
-        """One minute's sample of the machine (D699)."""
+        """One minute's sample of the machine (D699); the sandboxes' refusals into the audit (D708)."""
+        try:
+            store.take_refusals()
+        except Exception:  # noqa: BLE001 -- the sample goes on
+            pass
         from flux_cli.sandbox import _local
 
         from . import admin as adm
@@ -597,6 +601,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        store.take_refusals()                       # D708: what the sandboxes refused, up to now
         return store.audit_log()
 
     # ---- applications

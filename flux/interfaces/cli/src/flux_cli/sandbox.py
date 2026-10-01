@@ -374,7 +374,8 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
         proxy_dir = str(Path(runtime) / f"flux-sandbox-{os.getuid()}" / name)
         Path(proxy_dir).mkdir(parents=True, exist_ok=True, mode=0o700)
-        proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow)
+        proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow, log=os.environ.get("FLUX_SANDBOX_REFUSALS"),
+                           about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name})
         proxy.start()
     exe = shutil.which("flux") or sys.argv[0]
     cmd = container_argv([exe, *argv], args, command, name, proxy_dir, eng)

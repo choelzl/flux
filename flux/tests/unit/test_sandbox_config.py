@@ -114,7 +114,7 @@ def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monk
     import flux_cli.sandbox_proxy as sp
 
     class Proxy:                                        # no socket: what it would be told is enough
-        def __init__(self, path, allow):
+        def __init__(self, path, allow, log=None, about=None):
             seen["allow"] = list(allow)
 
         def start(self):

@@ -73,6 +73,7 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
             names.append(name)
     if names:
         env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
+    env["FLUX_SANDBOX_REFUSALS"] = str(store.refusals_file)      # D708: hosts its sandbox refused, for the audit
     return env
 
 

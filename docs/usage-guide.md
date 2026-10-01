@@ -314,7 +314,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   from all addresses lock it everywhere;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
   A user sees only their own loops and those shared with them. An admin manages users, sees every
-  application (read only) and every run (and may stop it), and the audit trail.
+  application (read only) and every run (and may stop it), and the audit trail. The audit also
+  lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
+  host and port per run; a checkbox shows only those.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
 - **Limits:** `--max-running` runs at once per user (4).

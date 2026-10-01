@@ -1534,3 +1534,26 @@ the topics above.
   - Tests: `test_sandbox_config` (a second run over a link, a link where the host has a file, a
     folder become a file, the copy's own files kept, the host file untouched). Three runs in a
     row with the server's own copy list.
+- **D708: the hosts a sandbox refused, in the admin's audit.**
+  - Key insight: the allowlist proxy runs on the host, in the `flux` process that starts the
+    container, not in the server. It said a refusal only on the run's stderr. The server names a
+    file for it, and the proxy appends there; nothing in the container can write it.
+  - Rules:
+    - `run_env` sets `FLUX_SANDBOX_REFUSALS` = `<data>/network-refused.jsonl` for every run,
+      authoring and ask.
+    - The proxy (`AllowProxy(log=, about=)`) appends one JSON line per refused host and port per
+      run, with one `O_APPEND` write each: the time, host, port, loop (`FLUX_SANDBOX_APP`),
+      command and container. The stderr line is unchanged.
+    - `Store.take_refusals` reads what is new into the audit:
+      - user: the loop's owner; action: "network refused"; detail: `loop: host:port (command)`.
+      - The offset and inode are kept in the server table. A half-written last line waits for
+        the next read. Another file is read from its start.
+      - It runs under a lock, on each `GET /api/audit` and on the History sampler's minute.
+    - Audit page: refusals shown in red, and a checkbox shows only them.
+  - Live, in Podman: an allowlist of `127.0.0.1` and a loop whose generator fetches
+    `http://example.com/` and `https://example.org/`. The admin's audit listed both under the
+    owner, and also the loop's own model host, which the allowlist left out. Firefox: the
+    checkbox keeps the two refusals, in red, with no page errors.
+  - Tests: `test_sandbox` (one line per host and port, with the loop and command) and
+    `test_web_refusals` (read once, a half line waits, a new file read from its start, every run
+    names the file, the admin's only).

@@ -1,16 +1,19 @@
 """The allowlist proxy of a sandboxed run (D680), on the host: the container has no network, and
 its HTTP(S)_PROXY reaches this proxy through a Unix socket. It forwards to the hosts the
 allowlist names -- a domain (and its subdomains), an IP, a CIDR, `localhost` -- and refuses the
-rest with 403, said on stderr once per host. HTTPS goes through CONNECT; plain HTTP is forwarded
+rest with 403, said on stderr once per host and, when `flux serve` names a file for it
+(`FLUX_SANDBOX_REFUSALS`), written there as a JSON line for the admin's audit (D708). HTTPS goes through CONNECT; plain HTTP is forwarded
 with its absolute URL made relative."""
 
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import socket
 import sys
 import threading
+import time
 from urllib.parse import urlsplit
 
 __all__ = ["AllowProxy", "allowed", "permitted"]
@@ -88,9 +91,13 @@ def _pipe(a: socket.socket, b: socket.socket) -> None:
 
 
 class AllowProxy:
-    def __init__(self, path: str, allow: list[str]) -> None:
+    def __init__(self, path: str, allow: list[str], log: str | None = None, about: dict[str, str] | None = None) -> None:
+        """`log`: a file each refused host is appended to, once per host and port, as JSON with
+        `about` (the loop, the command, the container)."""
         self.path, self.allow = path, list(allow)
         self.refused: set[str] = set()
+        self.log, self.about = log, dict(about or {})
+        self._logged: set[tuple[str, int]] = set()
         self._srv: socket.socket | None = None
 
     def start(self) -> None:
@@ -120,6 +127,20 @@ class AllowProxy:
                 return
             threading.Thread(target=self._handle, args=(client,), daemon=True).start()
 
+    def _record(self, host: str, port: int) -> None:
+        if not self.log or (host, port) in self._logged:
+            return
+        self._logged.add((host, port))
+        line = json.dumps({"t": time.time(), "host": host, "port": port, **self.about}) + "\n"
+        try:                                              # one write, appended: lines of runs at once do not mix
+            fd = os.open(self.log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            try:
+                os.write(fd, line.encode())
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
+
     def _handle(self, client: socket.socket) -> None:
         try:
             head = b""
@@ -142,6 +163,7 @@ class AllowProxy:
                 if host not in self.refused:
                     self.refused.add(host)
                     print(f"flux sandbox: refused {host} (not in FLUX_SANDBOX_ALLOW)", file=sys.stderr, flush=True)
+                self._record(host, port_n)
                 client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 client.close()
                 return

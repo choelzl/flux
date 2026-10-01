@@ -4,6 +4,7 @@ the allowlist proxy. Docker itself is exercised live (docs/decisions.md D680).""
 from __future__ import annotations
 
 import http.server
+import json
 import os
 import socket
 import tempfile
@@ -115,7 +116,8 @@ def test_the_proxy_forwards_to_allowed_hosts_and_refuses_the_rest(tmp_path):
     port = srv.server_address[1]
     d = tempfile.mkdtemp(dir=os.environ.get("XDG_RUNTIME_DIR") or "/tmp")    # a filesystem that holds sockets
     path = os.path.join(d, "p.sock")
-    proxy = AllowProxy(path, ["127.0.0.1"])
+    log = tmp_path / "refused.jsonl"
+    proxy = AllowProxy(path, ["127.0.0.1"], log=str(log), about={"app": "bob.add8", "command": "task run"})
     try:
         proxy.start()
     except PermissionError:
@@ -133,6 +135,11 @@ def test_the_proxy_forwards_to_allowed_hosts_and_refuses_the_rest(tmp_path):
     try:
         assert ask("127.0.0.1").endswith(b"hello")
         assert b"403" in ask("example.com").split(b"\r\n")[0] and "example.com" in proxy.refused
+        ask("example.com")
+        ask("evil.example")
+        lines = [json.loads(x) for x in log.read_text().splitlines()]       # D708: for the admin's audit
+        assert [(x["host"], x["port"], x["app"], x["command"]) for x in lines] == [
+            ("example.com", port, "bob.add8", "task run"), ("evil.example", port, "bob.add8", "task run")], "once per host and port"
     finally:
         proxy.stop()
         srv.shutdown()

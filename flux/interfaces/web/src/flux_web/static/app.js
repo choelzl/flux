@@ -2127,8 +2127,14 @@ async function adminPage(sub = "") {
     return;
   }
   const audit = await api("/audit");
-  body.replaceChildren(card(null, h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))),
-    h("tbody", {}, audit.map(x => h("tr", {}, h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", {}, x.action), h("td", { class: "mono muted" }, x.detail)))))));
+  // D708: the hosts a loop's sandbox refused are here too, once per host and run
+  const only = h("input", { type: "checkbox" }), rows = h("tbody", {});
+  const draw = () => rows.replaceChildren(...audit.filter(x => !only.checked || x.action === "network refused").map(x => h("tr", {},
+    h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", { class: x.action === "network refused" ? "bad" : "" }, x.action),
+    h("td", { class: "mono muted" }, x.detail))));
+  only.onchange = draw; draw();
+  body.replaceChildren(card(null, [h("label", { class: "muted" }, only, " only the hosts a sandbox refused"),
+    h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 
 async function adminLoops(body) {
