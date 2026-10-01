@@ -146,7 +146,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
   accepted designs or decision. **Upload a loop** (beside New loop) takes a dropped folder, files
-  or a `.zip`, of any size: the page sends it in batches (300 files, 40 MB) and a file over 40 MB in
+  or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
+  cut midway is discarded): the page sends it in batches (300 files, 40 MB) and a file over 40 MB in
   parts of 32 MB, with a progress bar. A loop holds up to 100,000 files and 8 GB of its own; one
   request from elsewhere, 900 files and 256 MB (a zip, up to the loop's limits). A failure is said
   above the dialog, as is any error the page did not expect. Each loop shows its accepted and measured designs and the
@@ -181,7 +182,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output; following, it shows the running task, and at rest the one that ended
-    last. Under it, the log as it grows, coloured as the Log tab, problems only on demand. A line
+    last. A coding agent's task shows the agent at work: its model and version, status, output and
+    exit; its thinking, the commands it ran, the last command's output and its words, each a stream
+    that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand. A line
     docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when
     the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
@@ -221,7 +224,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     and variables, start, stop and send it notes). An editor's runs are the owner's loop: its record,
     the owner's model settings, keys and limits; the log line of each start says who started it.
     Deleting and sharing stay the owner's. Loops shared with you are listed under **Shared with
-    me**, with what you may do.
+    me**, with what you may do; you are told in the bell when a loop is shared with you or no longer
+    is, and **Leave** takes one off your list (its owner is told). The bell watches shared loops too,
+    and is each user's own.
   - **Settings:** the loop's environment variables (over the user's and the server's, which are
     listed under them), and its advanced settings: run in the sandbox or on the host, memory,
     CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
@@ -277,9 +282,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no
     loop owns (a deleted loop's, or a `flux task run` of this machine's user).
   - **Users:** role, a running limit per user (empty: the server's `--max-running`), and usage.
+- **Files and the configurator follow `.gitignore`:** the loop's `.gitignore` files, read as git
+  reads them, hide what they ignore; **show ignored files** on the Files tab lists it greyed. `.git`
+  is never listed nor read.
+- **Pages** carry breadcrumbs (Loops › owner › loop › tab) and grey placeholders while they load.
 - **Accounts:** a name is the same whatever its case and the spaces around it (as a phone types
   it); a password is exactly as typed. `flux user add` says which data folder it wrote; `flux
-  serve` says its data folder and its accounts: the two must be the same folder. Passwords are hashed with scrypt; five failures lock a name for ten minutes;
+  serve` says its data folder and its accounts: the two must be the same folder. Passwords are hashed with scrypt; five failures from one address lock the name there for ten minutes, fifty
+  from all addresses lock it everywhere;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
   A user sees only their own loops and those shared with them. An admin manages users, sees every
   application (read only) and every run (and may stop it), and the audit trail.

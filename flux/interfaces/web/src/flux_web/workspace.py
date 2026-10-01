@@ -162,6 +162,16 @@ class Workspace:
             part.replace(target)
         return size
 
+    def drop_part(self, name: str, rel: str) -> None:
+        """A file sent in parts, given up (D702): its partial file goes, and the folders it leaves empty."""
+        target = self.path(name, safe_rel(rel))
+        part = target.with_name(f".{target.name}.part-upload")
+        part.unlink(missing_ok=True)
+        root, d = self.app(name).resolve(), part.parent
+        while d != root and d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+            d = d.parent
+
     def import_dir(self, name: str, src: Path, replace: bool = False) -> dict[str, Any]:
         """A folder of this machine as a loop (D700: the admin's applications): its files hard
         linked where the disk allows (copied otherwise) -- a run never writes its inputs, and an
@@ -219,18 +229,29 @@ class Workspace:
             raise WorkspaceError(f"{rel!r} is outside the application")
         return p
 
-    def files(self, name: str, sub: str = "") -> list[dict[str, Any]]:
+    def files(self, name: str, sub: str = "", show_ignored: bool = False) -> list[dict[str, Any]]:
+        """A folder of the loop as the Files tab lists it (D703): what its `.gitignore` files ignore
+        left out, or marked with `show_ignored`; `.git` never."""
+        from .gitignore import Ignores
+
+        if Ignores.hidden(sub):
+            raise WorkspaceError("a repository's own folder is not shown")
         base = self.path(name, sub) if sub else self.app(name).resolve()
         if not base.is_dir():
             raise WorkspaceError(f"{sub!r} is not a folder")
         root = self.app(name).resolve()
+        ig = Ignores(root)
         out = []
         for p in sorted(base.iterdir(), key=lambda q: (not q.is_dir(), q.name)):
-            if p.name == ".flux-app.json":
+            if p.name in (".flux-app.json", ".git") or p.name.endswith(".part-upload"):
+                continue
+            rel = str(p.relative_to(root))
+            is_dir = p.is_dir() and not p.is_symlink()
+            ignored = ig.ignored(rel, is_dir)
+            if ignored and not show_ignored:
                 continue
             st = p.lstat()
-            out.append({"path": str(p.relative_to(root)), "dir": p.is_dir() and not p.is_symlink(),
-                        "size": st.st_size, "mtime": st.st_mtime})
+            out.append({"path": rel, "dir": is_dir, "size": st.st_size, "mtime": st.st_mtime, "ignored": ignored})
         return out
 
     def workbench(self, name: str) -> list[dict[str, Any]]:
@@ -286,15 +307,19 @@ class Workspace:
     def inputs(self, name: str) -> list[dict[str, Any]]:
         """The loop's own files (D696): the document and what it runs -- scripts, golden models,
         specs -- not what its runs write (out/, runs/, the workbench)."""
+        from .gitignore import Ignores
+
         root = self.app(name).resolve()
         doc = self.meta(name).get("document")
+        ig = Ignores(root)
         out = []
         for p in sorted(root.rglob("*")):
             rel = p.relative_to(root)
             if not p.is_file() or rel.parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json" \
-                    or "__pycache__" in rel.parts:
+                    or "__pycache__" in rel.parts or ".git" in rel.parts or p.name.endswith(".part-upload"):
                 continue
-            out.append({"path": str(rel), "size": p.lstat().st_size, "document": str(rel) == doc})
+            ignored = ig.ignored(str(rel))                  # D703: what .gitignore ignores, marked
+            out.append({"path": str(rel), "size": p.lstat().st_size, "document": str(rel) == doc, "ignored": ignored})
         return out
 
     def remove(self, name: str, rel: str) -> None:
@@ -315,7 +340,11 @@ class Workspace:
             d = d.parent
 
     def read(self, name: str, rel: str) -> tuple[bytes, bool]:
-        """(content, whether it is text) of a file, at most TEXT_MAX for text."""
+        """(content, whether it is text) of a file, at most TEXT_MAX for text; never under `.git` (D703)."""
+        from .gitignore import Ignores
+
+        if Ignores.hidden(rel):
+            raise WorkspaceError("a repository's own folder is not shown")
         p = self.path(name, rel)
         if not p.is_file():
             raise WorkspaceError(f"no file {rel!r}")

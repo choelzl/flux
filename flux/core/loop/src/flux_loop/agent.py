@@ -677,6 +677,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
             pass
 
     live, out = _Live(spec.output), []
+    live.agent = _about(cmd[0], env)                  # D702: the model and version from the start (Claude Code says its own)
 
     def errors() -> None:
         for ln in proc.stderr:
@@ -714,7 +715,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         row["exit"] = proc.returncode
     stdout = "".join(out)
     text, session = _parse(spec.output, stdout)
-    about = live.agent or _about(cmd[0], env)
+    about = live.agent
     if timed_out:                                     # its session kept: a later turn may resume it
         return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
                     about=about, tools=len(live.tools))

@@ -77,10 +77,9 @@ def test_a_stages_candidates_are_measured_workers_at_a_time_through_the_cache():
     prob = Slow(0.25)
     cands = [Candidate(f"c{i}", "x" * (i + 1), subgoal="p") for i in range(6)] + [Candidate("boom", "y", subgoal="p")]
     st = _state(workers=7)
-    t0 = time.monotonic()
     got = measure_pool(prob, st, cands, "screen")
-    took = time.monotonic() - t0
-    assert prob.count.peak >= 4 and took < 0.25 * 3, f"seven measurements took {took:.2f}s at peak {prob.count.peak}"
+    # side by side is proved by the peak, not by the clock: a loaded machine misses any time bound
+    assert prob.count.peak >= 4, f"seven measurements at a peak of {prob.count.peak} at once"
     assert [m["fmax_mhz"] for m in got[:6]] == [100.0, 200.0, 300.0, 400.0, 500.0, 600.0]
     assert got[6] == {"error": "RuntimeError: the tool died"}
     assert workers(LoopRequest(workers=0)) >= 1 and workers(LoopRequest(workers=3)) == 3

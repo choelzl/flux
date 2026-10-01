@@ -522,3 +522,25 @@ figure.tchart .sw.s2 { background: var(--ok); } figure.tchart .sw.s3 { backgroun
 progress.upload-bar { width: 100%; height: 10px; }
 td.app-what { max-width: 520px; }
 dialog.dlg .toasts { position: fixed; }
+
+/* D702: breadcrumbs, placeholders, the agent at work */
+.crumbs-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin: -6px 0 8px; }
+.crumbs-bar a { color: var(--muted); }
+.crumbs-bar a:hover { color: var(--accent); }
+.crumbs-bar [aria-current] { color: var(--ink); }
+.crumbs-bar .sep { opacity: .6; }
+.skeleton { display: grid; gap: 10px; padding: 6px 0; }
+.sk-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--soft) 0%, color-mix(in srgb, var(--line) 70%, var(--soft)) 50%, var(--soft) 100%);
+  background-size: 200% 100%; }
+@media (prefers-reduced-motion: no-preference) { .sk-line { animation: sk 1.4s ease-in-out infinite; } }
+@keyframes sk { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.agent-view { display: grid; gap: 10px; }
+.astream h3 { margin: 4px 0; }
+.astream .astream-body { max-height: 260px; overflow: auto; white-space: pre-wrap; }
+.astream.think .astream-body { font-style: italic; color: var(--muted); max-height: 320px; }
+.astream.reply .astream-body { border-left: 3px solid var(--accent); }
+.astream.err .astream-body { color: var(--bad); }
+ol.acmds { margin: 0; padding-left: 28px; display: grid; gap: 3px; max-height: 220px; overflow: auto; }
+ol.acmds code { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+ul.files li.ignored a { opacity: .55; }
+.ignored-toggle { font-size: 12.5px; color: var(--muted); }

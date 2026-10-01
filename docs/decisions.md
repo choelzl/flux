@@ -1352,3 +1352,62 @@ the topics above.
     - dee's list showed both.
     - On sw: no Stop, no note line.
     - On probe2: Start, Check, Configure; no Delete; cedric's variables named as his.
+
+- **D702: the loose ends of sharing and uploads, the lockout, breadcrumbs, placeholders, the agent
+  at work.**
+  - **The bell:**
+    - It watches shared loops too: `/api/loops` adds them with their `owner`, and a notice names
+      them as "cedric's sw".
+    - It is each user's own (`flux-notes:<user>`). It was kept per browser, so the next user
+      logged in on it saw the last one's notices.
+  - **Notices** (`notices:<user>` in the `server` table, taken once by `/api/notices`):
+    - a loop shared with you, or a share changed;
+    - a share stopped;
+    - for the owner, a guest who left.
+  - **Leave:** `DELETE /api/apps/{name}/shares/me?owner=` takes a shared loop off a guest's list;
+    a Leave button on watched and edited loops.
+  - **Lockout:**
+    - Five failures in ten minutes lock a name from that address only; fifty from all addresses
+      lock it everywhere. Before, anyone could lock a user out with five wrong passwords.
+    - The address is the client's. Behind the TLS proxy (`--secure-cookie`) it is the first
+      `X-Forwarded-For`.
+    - `failures` gains an `ip` column, added to an existing database.
+  - **Uploads:**
+    - Progress shows in a dialog that Escape does not close, with Cancel. Cancel stops between
+      batches and parts and discards a file cut midway (`DELETE /api/apps/{name}/part`), with the
+      folders it leaves empty.
+    - The Files tab and the configurator use the same dialog; before, progress came as toasts.
+    - Found while checking: the batching added in D700 took the top folder off paths whose drop
+      had already lost it, so `more/huge.bin` landed as `huge.bin`. A chosen folder's name is now
+      taken off once, by the upload dialog only.
+  - **Breadcrumbs:** Loops › owner › loop › tab, Loops › loop › Configure, Admin › tab.
+  - **Placeholders:** grey lines of the shape to come replace "Loading…"; they move only without
+    reduced motion.
+  - **The agent at work (Live):**
+    - A task `agent: …` shows facts: model and version, status, output lines, rate limit, exit,
+      time.
+    - Then streams: its thinking, its numbered commands, the last command's output, its words,
+      stderr.
+    - A stream follows its end unless read upward: the place is kept across the redraw each second.
+    - The parameters and raw fields fold below.
+    - OpenCode does not say its model, so the live facts carry the model its configuration names
+      and its version from the start; Claude Code's own report replaces them.
+    - Checked on a real OpenCode turn: its thinking about `assign s = a + b` and its one command,
+      writing `draft-add8.sv`.
+  - **Claude Code and Codex:** neither is installed on this machine. A test checks the launched
+    argv: `--model` from the web's settings, before Codex's stdin prompt.
+
+- **D703: Files and the configurator follow `.gitignore`; `.git` is never shown.**
+  - **`gitignore.py`** reads a loop's `.gitignore` files as git does (no library on hand):
+    - the patterns of each apply below its folder, a deeper file after a shallower;
+    - the last matching pattern decides; `!` re-includes;
+    - a trailing `/` is for folders only, and a `/` elsewhere anchors the pattern to its folder;
+    - `*` and `?` stay within a name, `**` crosses folders, `[…]` is a class;
+    - nothing under an ignored folder comes back.
+    - On a 22-file tree with two `.gitignore` files it answers as `git check-ignore` on every file.
+  - **Files tab:** the ignored are left out; "show ignored files", kept per browser, lists them
+    greyed and marked. `.git` is not listed even then, its files are not read, and its folder is
+    not opened.
+  - **The configurator's files** leave out the ignored.
+  - **Not changed:** what the loop runs. A run, its digest, uploads and the applications' import
+    are unchanged; prefetcher's ignored `traces/*` are its inputs.

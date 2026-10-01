@@ -92,6 +92,9 @@ class Store:
         self.path = self.data / "flux-web.db"
         with self._db() as db:
             db.executescript(_SCHEMA)
+            cols = [r[1] for r in db.execute("PRAGMA table_info(failures)")]
+            if "ip" not in cols:                      # D702: failures by name and address
+                db.execute("ALTER TABLE failures ADD COLUMN ip TEXT NOT NULL DEFAULT ''")
 
     def _db(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30)
@@ -162,19 +165,25 @@ class Store:
                 db.execute("UPDATE users SET role = ? WHERE name = ?", (role, name))
 
     # ---- login and sessions
-    def login(self, name: str, password: str) -> str | None:
-        """A session token, or None; five failures in ten minutes lock the name for that long.
-        D699: the name as typed on a phone -- capitalised, a space after it -- is the same name;
-        the password is as it is."""
+    #: D702: failures in ten minutes that lock a name from one address, and from everywhere
+    LOCK_FROM_ONE, LOCK_FROM_ALL = 5, 50
+
+    def login(self, name: str, password: str, address: str = "") -> str | None:
+        """A session token, or None. Five failures in ten minutes lock the name from that address
+        for that long, fifty from all addresses together lock it everywhere (D702: before, five
+        from anyone locked a user out). D699: the name as typed on a phone -- capitalised, a
+        space after it -- is the same name; the password is as it is."""
         now = time.time()
         name = (name or "").strip().lower()
         with self._db() as db:
             db.execute("DELETE FROM failures WHERE t < ?", (now - 600,))
-            failed = db.execute("SELECT COUNT(*) FROM failures WHERE name = ?", (name,)).fetchone()[0]
+            here = db.execute("SELECT COUNT(*) FROM failures WHERE name = ? AND ip = ?", (name, address)).fetchone()[0]
+            anywhere = db.execute("SELECT COUNT(*) FROM failures WHERE name = ?", (name,)).fetchone()[0]
             r = db.execute("SELECT * FROM users WHERE name = ? COLLATE NOCASE", (name,)).fetchone()
-            ok = (failed < 5 and r is not None and not r["disabled"] and self.check_password(password, r["pw"]))
+            ok = (here < self.LOCK_FROM_ONE and anywhere < self.LOCK_FROM_ALL and r is not None and not r["disabled"]
+                  and self.check_password(password, r["pw"]))
             if not ok:
-                db.execute("INSERT INTO failures(name, t) VALUES (?, ?)", (name, now))
+                db.execute("INSERT INTO failures(name, t, ip) VALUES (?, ?, ?)", (name, now, address))
                 return None
             token = secrets.token_urlsafe(32)
             db.execute("INSERT INTO sessions VALUES (?, ?, ?, ?)",
@@ -345,6 +354,18 @@ class Store:
         else:
             got[user] = perm
         self.server_set(f"share:{owner}:{app}", got or None)
+        return got
+
+    # ---- notices for a user (D702): told at their next look, then gone
+    def notify(self, user: str, text: str, href: str = "", kind: str = "info") -> None:
+        got = list(self.server_get(f"notices:{user}") or [])
+        got.append({"text": text, "href": href, "kind": kind, "t": time.time()})
+        self.server_set(f"notices:{user}", got[-50:])
+
+    def take_notices(self, user: str) -> list[dict[str, Any]]:
+        got = list(self.server_get(f"notices:{user}") or [])
+        if got:
+            self.server_set(f"notices:{user}", None)
         return got
 
     def shared_with(self, user: str) -> list[tuple[str, str, str]]:

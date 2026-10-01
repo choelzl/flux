@@ -112,9 +112,19 @@ function statePill(st) {
   return h("span", { class: "pill" }, st.last_active ? "idle" : "never run");
 }
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
+/** Where this page is (D702): [label, href] from Loops down; the last is the page itself. */
+function crumbs(...parts) {
+  return h("nav", { class: "crumbs-bar", "aria-label": "Where you are" }, parts.filter(Boolean).map(([label, href], i, all) =>
+    [i ? h("span", { class: "sep", "aria-hidden": "true" }, "›") : "", i < all.length - 1 && href ? h("a", { href }, label) : h("span", { "aria-current": i === all.length - 1 ? "page" : null }, label)]));
+}
 function head(title, sub, ...actions) {
   return h("div", { class: "page-head" }, h("div", {}, h("h1", {}, title), sub ? h("p", { class: "sub" }, sub) : ""),
     actions.length ? h("div", { class: "actions" }, actions) : "");
+}
+/** A placeholder while a page loads (D702): grey lines of the shape to come, not a word. */
+function skeleton(lines = 5) {
+  return h("div", { class: "skeleton", "aria-busy": "true", "aria-label": "Loading" },
+    Array.from({ length: lines }, (_, i) => h("div", { class: "sk-line", style: `width:${[92, 76, 84, 60, 70, 88, 54][i % 7]}%` })));
 }
 function card(title, kids, { actions, cls } = {}) {
   return h("section", { class: "card " + (cls || "") },
@@ -289,12 +299,19 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick) {
 }
 
 // ================================================================ notifications (D688, D689)
-const bell = { list: [], seen: new Map(), unread: 0, primed: false };
-try { bell.list = JSON.parse(localStorage.getItem("flux-notes") || "[]"); } catch (_) { bell.list = []; }
+const bell = { list: [], seen: new Map(), unread: 0, primed: false, user: null };
+// D702: the bell is each user's -- kept under their name, started afresh when another logs in here
+const bellKey = () => `flux-notes:${bell.user}`;
+function bellFor(user) {
+  if (bell.user === user) return;
+  bell.user = user; bell.seen = new Map(); bell.unread = 0; bell.primed = false;
+  try { bell.list = user ? JSON.parse(localStorage.getItem(bellKey()) || "[]") : []; } catch (_) { bell.list = []; }
+  try { localStorage.removeItem("flux-notes"); } catch (_) { /* the old, shared key */ }
+}
 function notify(text, kind, href) {
   bell.list.unshift({ text, kind, href, t: Date.now() / 1000 });
   bell.list = bell.list.slice(0, 30); bell.unread++;
-  try { localStorage.setItem("flux-notes", JSON.stringify(bell.list)); } catch (_) {}
+  try { localStorage.setItem(bellKey(), JSON.stringify(bell.list)); } catch (_) {}
   toast(text, kind, { timeout: 9000, href });
   if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
     try { new Notification("Flux", { body: text, tag: href }); } catch (_) {}
@@ -304,23 +321,26 @@ function notify(text, kind, href) {
 /** Every 10 s: a loop that stopped (finished, failed, stopped) or whose agent asks. */
 async function pollLoops() {
   if (!me) return;
+  bellFor(me.name);
   let loops;
   try { loops = await api("/loops"); } catch (_) { return; }
   let changed = false;
+  try { for (const n of await api("/notices")) notify(n.text, n.kind || "info", n.href || ""); } catch (_) { /* the next poll */ }
   for (const l of loops) {
-    const was = bell.seen.get(l.app);
+    const id = `${l.owner || ""}/${l.app}`, label = l.owner ? `${l.owner}'s ${l.app}` : l.app;   // D702: shared loops too
+    const was = bell.seen.get(id);
     const key = l.question ? `q:${l.question.asked}` : "";
     if (!was || was.running !== l.running) changed = true;
     if (bell.primed && was) {
-      const href = `#/app/${enc(l.app)}`;
+      const href = appHref(l.owner, l.app);
       if (was.running && !l.running) {
-        if (l.failed) notify(`${l.app} failed`, "bad", href);
-        else if (l.stopped) notify(`${l.app} stopped`, "warn", href);
-        else notify(`${l.app} finished its passes`, "ok", href);
+        if (l.failed) notify(`${label} failed`, "bad", href);
+        else if (l.stopped) notify(`${label} stopped`, "warn", href);
+        else notify(`${label} finished its passes`, "ok", href);
       }
-      if (key && key !== was.key) notify(`${l.app}: the agent asks a question`, "warn", href);
+      if (key && key !== was.key) notify(`${label}: the agent asks a question`, "warn", href);
     }
-    bell.seen.set(l.app, { running: l.running, key });
+    bell.seen.set(id, { running: l.running, key });
   }
   if (changed && bell.primed && pageRefresh) pageRefresh().catch(() => {});
   bell.primed = true;
@@ -334,7 +354,7 @@ function drawBell() {
   bellMenu.replaceChildren(
     h("div", { class: "bell-head" }, h("strong", {}, "Notifications"),
       canAsk ? h("button", { class: "link", onclick: async () => { await Notification.requestPermission(); drawBell(); } }, "Allow desktop notifications") : "",
-      bell.list.length ? h("button", { class: "link", onclick: () => { bell.list = []; bell.unread = 0; localStorage.removeItem("flux-notes"); drawBell(); } }, "Clear") : ""),
+      bell.list.length ? h("button", { class: "link", onclick: () => { bell.list = []; bell.unread = 0; localStorage.removeItem(bellKey()); drawBell(); } }, "Clear") : ""),
     ...(bell.list.length ? bell.list.map(n => h("a", { class: `bell-item ${n.kind}`, href: n.href || "#/", onclick: () => { bellMenu.hidden = true; } },
       h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "Nothing yet: you are told here when a loop stops, fails, or its agent asks.")]));
 }
@@ -422,14 +442,27 @@ function lastSaid(st) {
   return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
 }
 
+/** An upload's progress (D702): a dialog Escape does not close -- a Cancel stops the upload
+    between batches and parts, and says what was already written. */
+function progressDialog(title, said) {
+  const ctl = new AbortController();
+  const bar = h("progress", { max: 1, value: 0, class: "upload-bar" }), line = h("span", { class: "muted small" });
+  const cancel = h("button", { type: "button", onclick: () => { ctl.abort(); cancel.disabled = true; cancel.textContent = "Stopping…"; } }, "Cancel");
+  const d = h("dialog", { class: "dlg" }, h("h2", {}, title), h("p", {}, said), bar, line, h("div", { class: "dlg-actions" }, cancel));
+  d.addEventListener("cancel", (e) => e.preventDefault());            // Escape: the upload goes on, the dialog stays
+  document.body.append(d); d.showModal();
+  return { signal: ctl.signal, set: (a, b) => { bar.value = b ? a / b : 1; line.textContent = ` ${bytes(a)} of ${bytes(b)}`; },
+    close: () => { d.close(); if (toasts.parentNode === d) document.body.append(toasts); d.remove(); } };
+}
+
 /** Files to a loop (D700): in batches of at most 300 files and 40 MB, a file over 40 MB in
     parts of 32 MB, the document first when the loop is created. `entries`: [{file, path}];
     `onProgress(sentBytes, totalBytes)`. A folder dropped whole loses its top folder first. */
-async function sendFiles(name, entries, { create = false, folder = "", onProgress = () => {} } = {}) {
+async function sendFiles(name, entries, { create = false, folder = "", onProgress = () => {}, signal = null } = {}) {
+  const stopped = () => { if (signal && signal.aborted) throw new Error("the files sent before the cancel stay"); };
   const BATCH_FILES = 300, BATCH_BYTES = 40 * 2 ** 20, PART = 32 * 2 ** 20;
+  // the paths as given: a dropped folder's name is gone already (dropZone), a chosen folder's is taken off by its caller
   let list = entries.map(e => ({ file: e.file, path: String(e.path || e.file.name).replace(/^\/+/, "") }));
-  const firsts = new Set(list.map(e => e.path.split("/")[0]));
-  if (firsts.size === 1 && list.every(e => e.path.includes("/"))) list = list.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") }));
   if (folder) list = list.map(e => ({ ...e, path: `${folder.replace(/^\/+|\/+$/g, "")}/${e.path}` }));
   const isDoc = (e) => !e.path.includes("/") && /\.(problem\.ya?ml|task\.(json|ya?ml))$/i.test(e.path);
   list.sort((a, b) => (isDoc(b) ? 1 : 0) - (isDoc(a) ? 1 : 0));
@@ -441,6 +474,7 @@ async function sendFiles(name, entries, { create = false, folder = "", onProgres
     const batch = [];
     let bytes = 0;
     while (i < small.length && batch.length < BATCH_FILES && (bytes + small[i].file.size <= BATCH_BYTES || !batch.length)) { bytes += small[i].file.size; batch.push(small[i++]); }
+    stopped();
     const form = new FormData();
     if (!made) form.append("name", name); else form.append("folder", "");
     for (const e of batch) form.append("files", e.file, e.path);
@@ -450,6 +484,8 @@ async function sendFiles(name, entries, { create = false, folder = "", onProgres
   }
   for (const e of big) {
     for (let off = 0; off < e.file.size; off += PART) {
+      if (signal && signal.aborted && off) await api(`/apps/${enc(name)}/part?path=${enc(e.path)}`, { method: "DELETE" }).catch(() => {});   // its parts go
+      stopped();
       const chunk = e.file.slice(off, off + PART);
       const final = off + PART >= e.file.size;
       const r = await fetch("/api" + owned(`/apps/${enc(name)}/part?path=${enc(e.path)}&offset=${off}&final=${final}`),
@@ -569,20 +605,22 @@ async function uploadDialog() {
   while (true) {
     const go = await dialog("Upload a loop", body, [["Cancel", false], ["Upload", true, "primary"]]);
     if (!go) return;
-    const chosen = [...[...files.files, ...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), ...dropped];
+    // a chosen folder names every file under its own name: that name goes (D702: once, here)
+    const picked = [...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
+    const top = new Set(picked.map(e => e.path.split("/")[0]));
+    const fromFolder = top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
+    const chosen = [...[...files.files].map(f => ({ file: f, path: f.name })), ...fromFolder, ...dropped];
     if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); continue; }
     if (!name.value.trim()) { toast("Name the loop first.", "warn"); continue; }
-    const bar = h("progress", { max: 1, value: 0, class: "upload-bar" }), barSaid = h("span", { class: "muted small" });
-    const wait = h("div", {}, h("p", {}, `Uploading ${chosen.length} file(s) to ${name.value.trim()}…`), bar, barSaid);
-    const shown = dialog("Uploading", wait, []);
-    void shown;
+    const pd = progressDialog("Uploading", `${chosen.length} file(s) to ${name.value.trim()}`);
     try {
-      const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: (a, b) => { bar.value = b ? a / b : 1; barSaid.textContent = ` ${bytes(a)} of ${bytes(b)}`; } });
-      [...document.querySelectorAll("dialog.dlg[open]")].pop().dispatchEvent(new Event("cancel"));
+      const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: pd.set, signal: pd.signal });
+      pd.close();
       toast(`${name.value} uploaded: ${n} file(s)`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`; return;
     } catch (x) {
-      [...document.querySelectorAll("dialog.dlg[open]")].pop().dispatchEvent(new Event("cancel"));
-      toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 });
+      pd.close();
+      toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
+      if (pd.signal.aborted) return;
     }
   }
 }
@@ -721,7 +759,17 @@ async function loopPage(name, owner, tab = "Overview") {
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
   cleanup.push(() => { live.close(); log.close(); });
 
+  const crumbBar = h("div", {});
+  const leaveBtn = () => act("Leave", async () => {           // D702: a shared loop, left by its guest
+    if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `It goes from your list; ${info.owner} is told and may share it again.`, { ok: "Leave" })) return;
+    toast((await api(`/apps/${enc(name)}/shares/me?owner=${enc(info.owner)}`, { method: "DELETE" })).ok, "ok"); location.hash = "#/";
+  });
+  function drawCrumbs() {
+    crumbBar.replaceChildren(crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null,
+      [name, appHref(owner, name)], tab !== "Overview" ? [tab, null] : null));
+  }
   function drawTabs() {
+    drawCrumbs();
     tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
       onclick: () => { tab = t; history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${t === "Overview" ? "" : "/" + t.toLowerCase().replace(" ", "-")}`); drawTabs(); drawBody(); } }, t)));
   }
@@ -741,11 +789,13 @@ async function loopPage(name, owner, tab = "Overview") {
         await d;
       }));
       if (info.document) acts.push(h("a", { class: "btn", href: `${appHref(info.owner, name)}/configure` }, "Configure"));
+      if (perm === "edit") acts.push(leaveBtn());
       if (!st.running && isOwner) acts.push(act("Delete", async () => {
         if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
         await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
       }, { cls: "danger" }));
     }
+    if (perm === "watch") acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
       : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin's look: read only" },
       `${info.owner}'s · ${perm === "edit" ? "you may edit" : perm === "watch" ? "watching" : "read only"}`);
@@ -837,9 +887,9 @@ async function loopPage(name, owner, tab = "Overview") {
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
   const size = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
   async function openFile(path, dir) {
-    viewer.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+    viewer.replaceChildren(skeleton(8));
     if (dir) {
-      const list = await api(`/apps/${enc(name)}/files?path=${enc(path)}${q}`);
+      const list = await api(`/apps/${enc(name)}/files?path=${enc(path)}${showIgnored() ? "&ignored=true" : ""}${q}`);
       viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path + "/")), fileList(list));
       return;
     }
@@ -855,19 +905,28 @@ async function loopPage(name, owner, tab = "Overview") {
         empty("A binary file.", h("a", { class: "btn", href: fileUrl(path, true) }, "Download")));
     }
   }
+  // D703: what .gitignore ignores is left out, unless asked for (remembered in this browser)
+  const showIgnored = () => { try { return localStorage.getItem("flux-show-ignored") === "1"; } catch (_) { return false; } };
+  function ignoredToggle() {
+    const box = h("input", { type: "checkbox", checked: showIgnored(), id: "show-ignored" });
+    box.addEventListener("change", () => { try { localStorage.setItem("flux-show-ignored", box.checked ? "1" : "0"); } catch (_) { /* per viewer */ } drawBody(); });
+    return h("label", { class: "check small ignored-toggle", title: "Files the loop's .gitignore ignores; .git is never shown" }, box, "show ignored files");
+  }
   function fileList(list) {
-    return h("ul", { class: "files" }, list.map(f => h("li", {},
+    return h("ul", { class: "files" }, list.map(f => h("li", { class: f.ignored ? "ignored" : "" },
       h("a", { href: "javascript:void 0", onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
-      f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
+      f.ignored ? h("span", { class: "pill small" }, "ignored") : "", f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
   function adder() {
     const addFiles = h("input", { type: "file", multiple: true });
     const addFolder = h("input", { placeholder: "folder (optional)" });
     const dz = dropZone("Drop files or folders to add them", async (got) => {
+      const pd = progressDialog("Adding files", `${got.length} file(s)${addFolder.value ? " into " + addFolder.value : ""}`);
       try {
-        const n = await sendFiles(name, got, { folder: addFolder.value.trim(), onProgress: (a, b) => { if (b > 40 * 2 ** 20) toast(`Uploading: ${bytes(a)} of ${bytes(b)}`, "info", { timeout: 1500 }); } });
-        toast(`Added ${n} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok"); drawBody();
-      } catch (x) { toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 }); }
+        const n = await sendFiles(name, got, { folder: addFolder.value.trim(), onProgress: pd.set, signal: pd.signal });
+        toast(`Added ${n} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok");
+      } catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
+      finally { pd.close(); drawBody(); }
     });
     return h("div", {}, dz, h("details", { class: "adder" }, h("summary", {}, "Add files"),
       h("label", { class: "stack" }, "Files or a .zip", addFiles), h("label", { class: "stack" }, "Into folder", addFolder),
@@ -945,7 +1004,7 @@ async function loopPage(name, owner, tab = "Overview") {
     async function open(d, tr) {
       if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
       tr.classList.add("sel");
-      detail.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      detail.replaceChildren(skeleton(6));
       const full = await api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`);
       const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
       const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
@@ -1100,7 +1159,7 @@ async function loopPage(name, owner, tab = "Overview") {
   /** The loop's settings (D697): its environment variables over the user's and the server's, and
       what only an admin sets -- the sandbox and its limits. */
   async function settingsView() {
-    body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+    body.replaceChildren(card(null, skeleton(7)));
     const e = await api(`/apps/${enc(name)}/env${qs}`);
     if (tab !== "Settings") return;
     const varsCard = card("Environment variables", [
@@ -1204,7 +1263,7 @@ async function loopPage(name, owner, tab = "Overview") {
         body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")));
         return;
       }
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      body.replaceChildren(card(null, skeleton(7)));
       await overview();
       return;
     }
@@ -1219,13 +1278,13 @@ async function loopPage(name, owner, tab = "Overview") {
         st.running && mine ? composer.el : ""));
       live.draw(); liveLog.fill(); composer.update();
     } else if (tab === "Timeline") {
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      body.replaceChildren(card(null, skeleton(7)));
       await timelineView();
     } else if (tab === "Log") {
       body.replaceChildren(card(null, log.el, { cls: "log-card" }));
       log.render();
     } else if (tab === "Agent turns") {
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      body.replaceChildren(card(null, skeleton(7)));
       const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
       const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
       const pick = async (t, tr) => {
@@ -1258,13 +1317,13 @@ async function loopPage(name, owner, tab = "Overview") {
           : empty("No model or agent turn yet.")),
         card(null, one, { cls: "detail-card" })));
     } else if (tab === "Results") {
-      body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
+      body.replaceChildren(card(null, skeleton(7)));
       const r = await api(`/apps/${enc(name)}/results${qs}`);
       if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No result yet: a design is a result once a stage measured it."))); return; }
       body.replaceChildren(resultsView(r));
     } else if (tab === "Files") {
-      const files = await api(`/apps/${enc(name)}/files${qs}`);
-      body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [fileList(files), mine ? adder() : ""], { cls: "files-card" }), card(null, viewer, { cls: "viewer-card" })));
+      const files = await api(`/apps/${enc(name)}/files${qs}${showIgnored() ? (qs ? "&" : "?") + "ignored=true" : ""}`);
+      body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [fileList(files), mine ? adder() : ""], { cls: "files-card", actions: [ignoredToggle()] }), card(null, viewer, { cls: "viewer-card" })));
       if (info.document) openFile(info.document, false);
     } else if (tab === "Workbench") {
       const bench = await api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []);
@@ -1292,7 +1351,7 @@ async function loopPage(name, owner, tab = "Overview") {
   cleanup.push(() => clearInterval(tick));
   pageRefresh = () => refresh();
   drawHead(); drawTabs(); drawBanner(); drawBody();
-  show(header, banner, tabBar, body);
+  show(crumbBar, header, banner, tabBar, body);
 }
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
@@ -1567,9 +1626,34 @@ function liveTree(base, qs, onQuestion) {
     }
     return h("span", { class: "mono" }, cell(x));
   }
+  /** A coding agent at work (D702): its model, status and output as facts; its thinking, its
+      commands, the last command's output and its words, each a stream that keeps its place
+      when read upward and follows its end otherwise. */
+  function agentView(n, now) {
+    const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) };
+    const facts = [["model", f.agent], ["status", f.status], ["output", f.output], ["rate limit", f["rate limit"]],
+      ["exit", f.exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)]].filter(([, v]) => v != null && v !== "");
+    const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
+      h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
+    const tools = String(f["tool calls"] || "").split("\n").filter(Boolean);
+    const thinking = f["thinking (live tail)"] || f.thinking || "";
+    return h("div", { class: "agent-view" },
+      h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
+      stream("thinking", "Thinking", thinking, "think"),
+      tools.length ? h("section", { class: "astream" }, h("h3", {}, `Commands (${tools.length >= 8 ? "the last 8" : tools.length})`),
+        h("ol", { class: "acmds" }, tools.map(t => { const m = /^(\d+)\.\s*(.*)$/.exec(t); return h("li", { value: m ? m[1] : null }, h("code", {}, m ? m[2] : t)); }))) : "",
+      stream("result", "The last command's output", f["last tool output"]),
+      stream("reply", "Its words", f["reply (live tail)"], "reply"),
+      stream("stderr", "stderr", f.stderr, "err"),
+      !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing from the agent yet: it is starting, or thinking without saying." : "The agent said nothing the page could show.") : "");
+  }
   function drawDetail(now) {
     if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
     const n = selected;
+    // D702: a stream read upward keeps its place across the redraw each second
+    const kept = new Map([...detail.querySelectorAll("pre[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
+    const sameTask = detail.dataset.task === String(n.id);
+    detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
       const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
       const long = text.length > 120 || text.includes("\n");
@@ -1582,8 +1666,13 @@ function liveTree(base, qs, onQuestion) {
         h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
-      block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output));
-    for (const pre of detail.querySelectorAll("pre.val")) pre.scrollTop = pre.scrollHeight;   // a live tail shows its end
+      ...(String(n.name).startsWith("agent:") ? [agentView(n, now), h("details", { class: "blk" }, h("summary", { class: "muted" }, "Parameters and every field"),
+          block("Parameters", n.params), block("Fields", n.fields), block("Output", n.output))]
+        : [block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output)]));
+    for (const pre of detail.querySelectorAll("pre.val")) {
+      const k = pre.dataset.k, at = sameTask && k ? kept.get(k) : undefined;
+      pre.scrollTop = at === undefined || at === -1 ? pre.scrollHeight : at;   // a live tail shows its end, unless read upward
+    }
   }
   search.addEventListener("input", draw);
   follow.addEventListener("change", draw);
@@ -1646,7 +1735,7 @@ function filesPanel(name, yamlOf) {
   const named = () => [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
   async function list() {
     if (!name) return [...staged.entries()].map(([path, x]) => ({ path, size: x.text != null ? x.text.length : x.file.size, staged: true }));
-    return (await api(`/apps/${enc(name)}/inputs`)).filter(f => !f.document);
+    return (await api(`/apps/${enc(name)}/inputs`)).filter(f => !f.document && !f.ignored);   // D703: .gitignore followed
   }
   async function editor(path, text) {
     const pathIn = h("input", { value: path || "", placeholder: "check.py, scripts/bench.sh", style: "width:100%", readonly: path ? true : null });
@@ -1675,8 +1764,10 @@ function filesPanel(name, yamlOf) {
   const dz = dropZone("Drop scripts, models or folders here", async (got) => {
     const pre = into.value.trim().replace(/^\/+|\/+$/g, "");
     if (!name) { for (const g of got) staged.set(pre ? `${pre}/${g.path}` : g.path, { file: g.file }); draw(); return; }
-    try { const n = await sendFiles(name, got, { folder: pre }); toast(`Added ${n} file(s)`, "ok"); draw(); }
-    catch (x) { toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 }); }
+    const pd = progressDialog("Adding files", `${got.length} file(s)`);
+    try { const n = await sendFiles(name, got, { folder: pre, onProgress: pd.set, signal: pd.signal }); toast(`Added ${n} file(s)`, "ok"); }
+    catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
+    finally { pd.close(); draw(); }
   });
   async function draw() {
     const files = await list().catch(() => []);
@@ -1714,7 +1805,8 @@ async function configurePage(name, owner) {
     const got = C.fromDoc(v.raw, v.normal || v.raw);
     const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
     const panel = filesPanel(name, yamlOf);
-    show(head(h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)),
+    show(crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
+      head(h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)),
         h("span", {}, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
           got.kept.length ? "; what the form does not edit is kept as written" : "")),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
@@ -1774,7 +1866,8 @@ async function adminPage(sub = "") {
   const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
   const body = h("div", {});
-  show(head("Admin", "Every loop and the controls over them, what the machine holds up, users and their limits, the audit trail."), tabBar, body);
+  show(crumbs(["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null),
+    head("Admin", "Every loop and the controls over them, what the machine holds up, users and their limits, the audit trail."), tabBar, body);
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
@@ -1908,7 +2001,7 @@ async function adminResources(body) {
     drawHistory();
   }
   // D699: the machine over time, a sample a minute while `flux serve` runs
-  const overTime = card("Over time", h("div", {}, h("p", { class: "muted" }, "Loading…")));
+  const overTime = card("Over time", skeleton(4));
   async function drawHistory() {
     const hx = await api(`/admin/history?hours=${historyHours}`).catch(() => null);
     if (!hx) return;
@@ -2135,6 +2228,7 @@ themeBtn.addEventListener("click", () => { const order = ["system", "light", "da
 themeBtn.textContent = THEMES[theme()];
 
 function drawNav() {
+  bellFor(me ? me.name : null);
   const here = location.hash || "#/";
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
   document.getElementById("nav").replaceChildren(...(me ? [

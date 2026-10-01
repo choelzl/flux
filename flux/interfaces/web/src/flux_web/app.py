@@ -198,12 +198,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     # ---- accounts
     @app.post("/api/login")
-    def login(body: Login, response: Response) -> dict[str, Any]:
-        token = store.login(body.name, body.password)
+    def login(body: Login, response: Response, request: Request) -> dict[str, Any]:
+        # D702: the address a failure counts against -- behind the TLS proxy (--secure-cookie), its forward
+        address = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() if secure_cookie else "") \
+            or (request.client.host if request.client else "")
+        token = store.login(body.name, body.password, address)
         if token is None:
             store.audit(body.name.strip(), "login refused")
             time.sleep(0.5)
-            raise HTTPException(401, "wrong name or password (five failures lock the name for ten minutes)")
+            raise HTTPException(401, "wrong name or password (five failures from one place lock the name there for ten minutes)")
         response.set_cookie(COOKIE, token, httponly=True, samesite="strict", secure=secure_cookie,
                             max_age=SESSION_DAYS * 86400, path="/")
         u = store.user(name=body.name)
@@ -539,12 +542,29 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         other = store.user(name=body.user)
         if other is None or other.id == user.id:
             raise HTTPException(400, "share with another user of this server")
+        before = store.shares(user.name, name).get(other.name)
         try:
             got = store.set_share(user.name, name, other.name, body.perm)
         except ValueError as exc:
             raise fail(exc) from exc
+        href = f"#/u/{user.name}/app/{name}"
+        if body.perm and body.perm != before:             # D702: the user is told
+            store.notify(other.name, f"{user.name} shared {name} with you to {body.perm}", href, "ok")
+        elif not body.perm and before:
+            store.notify(other.name, f"{user.name} stopped sharing {name} with you", "", "warn")
         store.audit(user.name, "share" if body.perm else "unshare", f"{name} with {other.name}: {body.perm or '-'}")
         return {"shares": [{"user": u, "perm": p} for u, p in sorted(got.items())]}
+
+    @app.delete("/api/apps/{name}/shares/me")
+    def leave_share(name: str, owner: str, user: User = Depends(user_of)) -> dict[str, str]:
+        """A loop shared with this user, left by them (D702); its owner is told."""
+        o = store.user(name=owner)
+        if o is None or user.name not in store.shares(o.name, name):
+            raise HTTPException(404, "this loop is not shared with you")
+        store.set_share(o.name, name, user.name, None)
+        store.notify(o.name, f"{user.name} left {name}", f"#/app/{name}/settings", "info")
+        store.audit(user.name, "left a share", f"{o.name}/{name}")
+        return {"ok": f"you left {o.name}'s {name}"}
 
     @app.get("/api/shared")
     def shared(user: User = Depends(user_of)) -> list[dict[str, Any]]:
@@ -636,6 +656,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if final:
             store.audit(user.name, "add files", f"{name}: {path} ({size} bytes, in parts)")
         return {"size": size}
+
+    @app.delete("/api/apps/{name}/part")
+    def drop_part(name: str, path: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """A file sent in parts, cancelled (D702): its partial file goes."""
+        try:
+            editor(user, owner, name)[0].drop_part(name, path)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        return {"ok": f"{path}: the part sent is gone"}
 
     # ---- the applications folder of this Flux (D700): an admin sees them and makes one a loop
     def _apps_root() -> Path | None:
@@ -769,9 +798,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "state": runs.state(whose, name)}
 
     @app.get("/api/apps/{name}/files")
-    def app_files(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+    def app_files(name: str, path: str = "", ignored: bool = False, owner: str | None = None,
+                  user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """A folder of the loop; `ignored`: also what its .gitignore ignores, marked (D703)."""
         try:
-            return reader(user, owner, name)[0].files(name, path)
+            return reader(user, owner, name)[0].files(name, path, show_ignored=ignored)
         except WorkspaceError as exc:
             raise fail(exc) from exc
 
@@ -876,8 +907,19 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/loops")
     def loops_state(user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        """Every loop of the user with its state: what the page's notifications watch."""
-        return [runs.state(user, a["name"]) for a in ws(user).apps()]
+        """Every loop of the user with its state, and those shared with them (D702: `owner` set):
+        what the page's notifications watch."""
+        out = [runs.state(user, a["name"]) for a in ws(user).apps()]
+        for owner, app_name, _perm in store.shared_with(user.name):
+            o = store.user(name=owner)
+            if o is not None and (Workspace(store.data, owner).root / app_name).is_dir():
+                out.append({**runs.state(o, app_name), "owner": owner})
+        return out
+
+    @app.get("/api/notices")
+    def notices(user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """What happened for this user since they last looked (D702): a loop shared, unshared, left."""
+        return store.take_notices(user.name)
 
     @app.post("/api/apps/{name}/start")
     def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
