@@ -97,7 +97,7 @@ class AllowProxy:
         self.path, self.allow = path, list(allow)
         self.refused: set[str] = set()
         self.log, self.about = log, dict(about or {})
-        self._logged: set[tuple[str, int]] = set()
+        self._logged: set[tuple[str, int, str]] = set()
         self._srv: socket.socket | None = None
 
     def start(self) -> None:
@@ -127,11 +127,12 @@ class AllowProxy:
                 return
             threading.Thread(target=self._handle, args=(client,), daemon=True).start()
 
-    def _record(self, host: str, port: int) -> None:
-        if not self.log or (host, port) in self._logged:
+    def _record(self, host: str, port: int, how: str = "proxy") -> None:
+        """`how`: "proxy" (a connection asked of the proxy) or "lookup" (a name looked up, D717)."""
+        if not self.log or (host, port, how) in self._logged:
             return
-        self._logged.add((host, port))
-        line = json.dumps({"t": time.time(), "host": host, "port": port, **self.about}) + "\n"
+        self._logged.add((host, port, how))
+        line = json.dumps({"t": time.time(), "host": host, "port": port, "how": how, **self.about}) + "\n"
         try:                                              # one write, appended: lines of runs at once do not mix
             fd = os.open(self.log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
             try:
@@ -152,6 +153,18 @@ class AllowProxy:
                 head += chunk
             line, _, rest = head.partition(b"\r\n")
             method, target, version = line.decode("latin-1").split(" ", 2)
+            if method.upper() == "FLUX-LOOKUP":             # D717: a name looked up inside, asked by the relay
+                name = target.strip().lower().rstrip(".")
+                if permitted(name, 443, self.allow) is None:
+                    if name not in self.refused:
+                        self.refused.add(name)
+                        print(f"flux sandbox: refused {name} (a name lookup; not on the network allowlist)", file=sys.stderr, flush=True)
+                    self._record(name, 0, "lookup")
+                    client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+                else:
+                    client.sendall(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
+                client.close()
+                return
             if method.upper() == "CONNECT":
                 host, _, port = target.rpartition(":")
                 port_n = int(port or 443)

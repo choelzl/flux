@@ -432,9 +432,10 @@ class Store:
                 except ValueError:
                     continue
                 owner, _, app = str(x.get("app") or "").rpartition(".")
+                where = f"{x.get('host')} (a name lookup" if x.get("how") == "lookup" else f"{x.get('host')}:{x.get('port')} ("
                 db.execute("INSERT INTO audit(t, user, action, detail) VALUES (?, ?, ?, ?)",
                            (float(x.get("t") or time.time()), owner or None, "network refused",
-                            f"{app or '?'}: {x.get('host')}:{x.get('port')} ({x.get('command') or 'run'})"))
+                            f"{app or '?'}: {where}{', ' if x.get('how') == 'lookup' else ''}{x.get('command') or 'run'})"))
                 n += 1
         self.server_set("refusals_read", {"ino": st.st_ino, "offset": offset + end})
         return n

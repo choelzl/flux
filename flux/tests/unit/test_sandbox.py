@@ -141,9 +141,18 @@ def test_the_proxy_forwards_to_allowed_hosts_and_refuses_the_rest(tmp_path):
         assert b"403" in ask("example.com").split(b"\r\n")[0] and "example.com" in proxy.refused
         ask("example.com")
         ask("evil.example")
-        lines = [json.loads(x) for x in log.read_text().splitlines()]       # D708: for the admin's audit
+        def lookup(name: str) -> bytes:                                     # D717: as the relay inside asks
+            s = socket.socket(socket.AF_UNIX)
+            s.connect(path)
+            s.sendall(f"FLUX-LOOKUP {name} HTTP/1.1\r\n\r\n".encode())
+            return s.recv(256)
+
+        assert b" 403 " in lookup("direct.blocked.example") and b" 204 " in lookup("localhost"), "refused, and allowed by its address"
+        lines = [json.loads(x) for x in log.read_text().splitlines() if '"lookup"' not in x]       # D708: for the admin's audit
         assert [(x["host"], x["port"], x["app"], x["command"]) for x in lines] == [
             ("example.com", port, "bob.add8", "task run"), ("evil.example", port, "bob.add8", "task run")], "once per host and port"
+        looked = [json.loads(x) for x in log.read_text().splitlines() if '"lookup"' in x]
+        assert [(x["host"], x["how"]) for x in looked] == [("direct.blocked.example", "lookup")]
     finally:
         proxy.stop()
         srv.shutdown()
@@ -202,3 +211,18 @@ def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
     sandbox.launch(["task", "run", "x"], _args(tmp_path), "task run")
     assert seen["cmd"][-6:] == [sys.executable, "-m", "flux_cli", "task", "run", "x"], \
         "not sys.argv[0]: under `python -m` it is a source file, not a program"
+
+
+def test_a_name_looked_up_inside_is_asked_of_the_proxy(monkeypatch, tmp_path):
+    """D717: under an allowlist the container resolves through the relay at 127.0.0.1:53, which
+    reads the name a query asks for."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    proxy_dir = tmp_path / "px"
+    proxy_dir.mkdir()
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", str(proxy_dir), "podman")
+    assert f"{proxy_dir}/resolv.conf:/etc/resolv.conf:ro" in cmd and "net.ipv4.ip_unprivileged_port_start=53" in cmd
+    assert (proxy_dir / "resolv.conf").read_text().startswith("nameserver 127.0.0.1")
+    open_cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "podman")
+    assert not any("resolv.conf" in c for c in open_cmd), "an open network keeps the engine's resolver"
+    q = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x04evil\x07Example\x03com\x00" + b"\x00\x01\x00\x01"
+    assert sandbox._dns_name(q) == "evil.example.com" and sandbox._dns_name(b"\x00" * 5) is None

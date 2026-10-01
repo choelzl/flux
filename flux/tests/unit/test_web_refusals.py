@@ -22,8 +22,10 @@ def _line(app, host, port=443, command="task run"):
 def test_refusals_reach_the_audit_once_each_a_half_line_waits(tmp_path):
     store = Store(tmp_path / "data")
     f = store.refusals_file
-    f.write_text(_line("bob.add8", "evil.example") + _line("dee.sw", "10.0.0.9", 80, "ask") + '{"t": 2, "host": "pa')
-    assert store.take_refusals() == 2
+    looked = json.dumps({"t": 1.0, "host": "direct.example", "port": 0, "how": "lookup", "app": "bob.add8", "command": "task run"}) + "\n"
+    f.write_text(_line("bob.add8", "evil.example") + _line("dee.sw", "10.0.0.9", 80, "ask") + looked + '{"t": 2, "host": "pa')
+    assert store.take_refusals() == 3
+    assert ("bob", "network refused", "add8: direct.example (a name lookup, task run)") in [(r["user"], r["action"], r["detail"]) for r in store.audit_log()]
     rows = [(r["user"], r["action"], r["detail"]) for r in store.audit_log()]
     assert ("bob", "network refused", "add8: evil.example:443 (task run)") in rows
     assert ("dee", "network refused", "sw: 10.0.0.9:80 (ask)") in rows

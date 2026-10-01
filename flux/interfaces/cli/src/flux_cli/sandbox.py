@@ -318,6 +318,15 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         if os.environ.get(lim):
             cmd += [flag, os.environ[lim]]
     cmd += ["--network", "none" if proxy_dir else "host"]
+    if proxy_dir:
+        # D717: a name lookup is asked of the relay inside (127.0.0.1:53), which asks the proxy --
+        # a program that ignores HTTP(S)_PROXY still looks its host up, and that is seen and audited
+        resolv = Path(proxy_dir) / "resolv.conf"
+        try:
+            resolv.write_text("nameserver 127.0.0.1\noptions attempts:1 timeout:2\n")
+            cmd += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=53", "-v", f"{resolv}:/etc/resolv.conf:ro"]
+        except OSError:
+            pass                                              # no lookups seen; the proxy still filters
     cmd += ["-v", f"{sh}:{home}"]                              # HOME: the application's
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
@@ -443,3 +452,61 @@ def relay_proxy() -> None:
                 threading.Thread(target=pipe, args=(a, b), daemon=True).start()
 
     threading.Thread(target=serve, daemon=True, name="flux-sandbox-relay").start()
+    threading.Thread(target=_dns_relay, args=(sock_path,), daemon=True, name="flux-sandbox-dns").start()
+
+
+def _dns_name(q: bytes) -> str | None:
+    """The name a DNS query asks for (its first question), or None."""
+    at, labels = 12, []
+    try:
+        while q[at]:
+            n = q[at]
+            if n & 0xC0:
+                return None
+            labels.append(q[at + 1:at + 1 + n].decode("ascii", "replace"))
+            at += 1 + n
+    except IndexError:
+        return None
+    return ".".join(labels).lower() or None
+
+
+def _dns_relay(sock_path: str) -> None:
+    """127.0.0.1:53 inside (D717): each name looked up is asked of the proxy -- refused and
+    recorded when the allowlist does not name it -- and answered with no address: a direct
+    connection cannot leave anyway, only the proxy's can. REFUSED for a refused name, SERVFAIL
+    for an allowed one (go through the proxy)."""
+    import socket
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        srv.bind(("127.0.0.1", 53))
+    except OSError:
+        return                                              # another flux relays, or the port is not ours
+    said: dict[str, bool] = {}
+    while True:
+        try:
+            q, addr = srv.recvfrom(1500)
+        except OSError:
+            return
+        if len(q) < 12:
+            continue
+        name = _dns_name(q)
+        ok = said.get(name or "")
+        if name and ok is None:
+            ok = False
+            try:
+                up = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                up.settimeout(10)
+                up.connect(sock_path)
+                up.sendall(f"FLUX-LOOKUP {name} HTTP/1.1\r\n\r\n".encode())
+                ok = b" 204 " in up.recv(256)
+                up.close()
+            except OSError:
+                pass
+            said[name] = ok
+        rcode = 2 if ok else 5
+        flags = 0x8000 | (q[2] & 0x01) << 8 | 0x0080 | rcode       # a response, RD echoed, RA, the code
+        try:
+            srv.sendto(q[:2] + flags.to_bytes(2, "big") + q[4:6] + b"\x00\x00\x00\x00\x00\x00" + q[12:], addr)
+        except OSError:
+            pass

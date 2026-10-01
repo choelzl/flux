@@ -1745,3 +1745,37 @@ the topics above.
   - Tests: `test_sandbox` (none of the three in the container; the command is
     `-m flux_cli`), `test_sandbox_config` (the log line says how many, never which; a user's
     pre-start check has no `allow`), `test_web_refusals` (an admin's has it).
+- **D717: a name looked up inside the sandbox is checked and audited, not only a proxied connection.**
+  - Key insight: the allowlist proxy sees only clients that honor HTTP(S)_PROXY. Many don't:
+    `ping`, `ssh`, `nc`, Python's `socket` and `aiohttp`, Node's `fetch`. Their attempts failed
+    inside the container (`--network none`) and never reached the audit, so a blocked host
+    looked like no attempt at all. Such a client still resolves its host's name first, and the
+    container's resolver is ours to set.
+  - Rules:
+    - Under an allowlist, the container's `/etc/resolv.conf` is `nameserver 127.0.0.1`, with
+      `--sysctl net.ipv4.ip_unprivileged_port_start=53`: binding port 53 needs no capability,
+      and every capability stays dropped.
+    - The in-container relay (`relay_proxy`, now also `_dns_relay`) answers UDP 53. It reads the
+      query's name and asks the host proxy (`FLUX-LOOKUP <name>` over the Unix socket).
+    - The proxy checks the name as it checks a connection (`permitted`). A refused name is
+      written to the refusals file once per run with `how: lookup`, and said on stderr.
+    - The relay answers with no address: REFUSED for a refused name, SERVFAIL for an allowed
+      one, since only the proxy's connections leave and an allowed host is reached through it.
+      Answers are cached per name for the run.
+    - The audit shows a refused lookup as `loop: host (a name lookup, command)`.
+    - An open network keeps the engine's resolver. If the resolver file cannot be written,
+      lookups go unseen and the proxy still filters.
+  - Not seen: a direct connection to a bare IP. It fails at once ("Network is unreachable") and
+    never leaves the container. Seeing it would need a route inside, so network-admin rights
+    for the run. An IP asked through the proxy is still seen.
+  - Live, in Podman:
+    - A script's direct `socket.create_connection(("direct.blocked.example", 443))` was audited
+      as a name lookup, beside the proxied refusals. The direct IP attempt failed unseen.
+    - An OpenCode loop under an allowlist of only the model endpoint still answered (its turn
+      ok, 38k tokens in): agents reach their model through the proxy.
+    - The audit showed OpenCode reaching for `models.opencode.ai` (its model catalogue),
+      refused.
+  - Tests:
+    - `test_sandbox`: a lookup refused and recorded; one allowed by its address answered 204;
+      the resolver mounted only under an allowlist; the query's name parsed.
+    - `test_web_refusals`: a lookup's audit line.

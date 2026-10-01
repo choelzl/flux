@@ -269,6 +269,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     allowlist reaches nothing. Users never see the admin's hosts (D716): a run's log and the Start dialog
     say the network is limited and by how many entries, and the container's environment does not carry
     the list. Admins see it in the Sandbox tab and the Start dialog.
+    A program that ignores the proxy settings still looks its host up: under an allowlist the
+    container resolves through Flux (D717), and a name the list does not allow is refused and
+    shows in the admin's audit as "a name lookup". A direct connection to a bare IP fails
+    (no network) and is not seen.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
   - **Home files:** paths inside the home folder mounted read-only (an agent's configuration) or
