@@ -1843,21 +1843,35 @@ function liveTree(base, qs, onQuestion) {
   // detail panel what it did; following keeps it on the newest
   const stepRange = h("input", { type: "range", min: "0", max: "0", value: "0", class: "step-range", "aria-label": "Step" });
   const stepSaid = h("span", { class: "step-said muted small" });
+  let runs = [];                                   // D728: the selected box's runs (every visit when none is)
   const goStep = (k) => {
-    if (!visits.length) return;
-    k = Math.max(0, Math.min(visits.length - 1, k));
-    selected = visits[k]; follow.checked = false; draw();
+    if (!runs.length) return;
+    k = Math.max(0, Math.min(runs.length - 1, k));
+    selected = focusOf(runs[k]); follow.checked = false; draw();
   };
-  const stepAt = () => { const k = visits.indexOf(visitOf(selected)); return k < 0 ? visits.length - 1 : k; };
+  const stepAt = () => { const k = runs.indexOf(visitOf(selected)); return k < 0 ? runs.length - 1 : k; };
   const stepBtn = (label, title, to) => h("button", { type: "button", class: "small", title, "aria-label": title, onclick: () => goStep(to()) }, label);
   const stepBar = h("div", { class: "step-bar" },
     stepBtn("⏮", "The first step", () => 0), stepBtn("◀", "The step before", () => stepAt() - 1),
-    stepRange, stepBtn("▶", "The step after", () => stepAt() + 1), stepBtn("⏭", "The newest step", () => visits.length - 1), stepSaid);
+    stepRange, stepBtn("▶", "The step after", () => stepAt() + 1), stepBtn("⏭", "The newest step", () => runs.length - 1), stepSaid);
   stepRange.addEventListener("input", () => goStep(Number(stepRange.value)));
   stepBar.addEventListener("keydown", (e) => {
     if (e.target === stepRange) return;
     if (e.key === "ArrowLeft") { e.preventDefault(); goStep(stepAt() - 1); } else if (e.key === "ArrowRight") { e.preventDefault(); goStep(stepAt() + 1); }
   });
+  /** What worked in a visit, for the detail (D728): what runs now, else the agent's or the model's
+      turn, else a tool, else the visit itself -- "Make a design" opens the agent at work, not
+      the generation around it. Only tasks of the visit's own box. */
+  function focusOf(v) {
+    const b = boxOfTask(v), all = [];
+    const walk = (n) => { for (const k of n.kids) if (boxOfTask(k) === b) { all.push(k); walk(k); } };
+    walk(v);
+    const latest = (xs) => xs.reduce((a, x) => (!a || x.t0 >= a.t0 ? x : a), null);
+    const live = all.filter(running);
+    const worker = (n) => /^(agent:|llm|model|tool:)/.test(String(n.name));
+    return latest(live.filter(worker)) || latest(live) || latest(all.filter(n => String(n.name).startsWith("agent:")))
+      || latest(all.filter(n => /^(llm|model)/.test(String(n.name)))) || latest(all.filter(worker)) || v;
+  }
   /** The visit a task belongs to: itself or the ancestor that began its box's stretch. */
   function visitOf(n) {
     for (let p = n; p; p = p.parent) { const b = boxOfTask(p); if (b && !(p.parent && boxOfTask(p.parent) === b)) return p; }
@@ -1874,7 +1888,7 @@ function liveTree(base, qs, onQuestion) {
       const host = h("div", { class: "flux-crafter tasks-drawing" });
       graphBox.replaceChildren(stepBar, host);
       drawingHandle = C.mount(host, true, { state: C.fromDoc(v.raw, v.normal || v.raw).state, activity: {},
-        onBox: (id) => { if (latestOf[id]) { selected = latestOf[id]; follow.checked = false; draw(); } } });
+        onBox: (id) => { if (latestOf[id]) { selected = focusOf(latestOf[id]); follow.checked = false; draw(); } } });
       draw();
     } catch (x) { graphBox.replaceChildren(empty("The loop's drawing could not be made: " + x.message)); }
   }
@@ -1893,7 +1907,6 @@ function liveTree(base, qs, onQuestion) {
     }
     visits.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
     const cur = visitOf(selected);
-    const k = cur ? visits.indexOf(cur) : -1;
     const curBox = cur ? boxOfTask(cur) : null;
     const activity = {};
     for (const [b, list] of Object.entries(used)) {                      // a box this start used; its state only where it is now
@@ -1902,12 +1915,16 @@ function liveTree(base, qs, onQuestion) {
         title: `latest: ${latestOf[b].name}${latestOf[b].why ? " — " + latestOf[b].why : ""}` };
     }
     drawingHandle.setActivity(activity);
-    stepRange.max = String(Math.max(visits.length - 1, 0));
-    if (document.activeElement !== stepRange) stepRange.value = String(k < 0 ? Math.max(visits.length - 1, 0) : k);
-    stepRange.disabled = visits.length < 2;
+    runs = curBox ? used[curBox] || [] : visits;
+    runs.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
+    const r = cur ? runs.indexOf(cur) : -1;
+    stepRange.max = String(Math.max(runs.length - 1, 0));
+    if (document.activeElement !== stepRange) stepRange.value = String(r < 0 ? Math.max(runs.length - 1, 0) : r);
+    stepRange.disabled = runs.length < 2;
     const box = curBox && ((window.FluxCrafter && window.FluxCrafter.boxTitle && window.FluxCrafter.boxTitle(curBox)) || curBox);
-    stepSaid.textContent = !visits.length ? "No step yet." : k < 0 ? `${visits.length} steps` :
-      `Step ${k + 1} of ${visits.length} · ${box} · ${cur.name}${cur.why ? " — " + cur.why : ""} · ${running(cur) ? "running" : cur.failed ? "failed" : dur(cur.seconds)}`;
+    const shown = selected && cur ? selected : cur;                      // the task the detail shows, inside the run
+    stepSaid.textContent = !visits.length ? "No step yet." : !curBox ? `${visits.length} steps: select a box, or step through them all` :
+      `${box} · run ${r + 1} of ${runs.length} · ${shown.name}${shown.why ? " — " + shown.why : ""} · ${running(shown) ? "running" : shown.failed ? "failed" : dur(shown.seconds)}`;
   }
   /** The loop's standings (D418l) as a reader wants them: a line of counts, the frontier and the
       parts as small tables, anything else as short key/value lines. */

@@ -478,11 +478,21 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('.tasks-drawing .fc-box.fc-sel[data-node=test]')", timeout=10, what="the box selected")
         r.check("a box selects its latest task", bool(b.js("return document.querySelector('.detail-card .detail-head h2')?.textContent")))
         r.check("a box says its own setting, not counts (D727)", not any("×" in t for t in b.js("return [...document.querySelectorAll('.tasks-drawing .fc-box-half')].map(t => t.textContent)")))
-        r.button("⏮", ".step-bar")
-        first = b.wait("/^Step 1 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="the first step")
-        r.button("▶", ".step-bar")
-        second = b.wait("/^Step 2 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="the second step")
-        r.check("the step bar goes through the boxes' visits, the detail with it", first != second and bool(b.js("return document.querySelector('.tasks-drawing .fc-sel')")), second)
+        # D728: the bar goes through the selected box's runs; a box opens what worked in it
+        multi = b.js("""for (const g of document.querySelectorAll('.tasks-drawing .fc-box.fc-pick')) {
+              g.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+              const m = /run \\d+ of (\\d+)/.exec(document.querySelector('.step-said').textContent);
+              if (m && Number(m[1]) >= 2) return g.dataset.node; }
+            return null;""")
+        if multi:
+            r.button("⏮", ".step-bar")
+            first = b.wait("/· run 1 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="the box's first run")
+            r.button("▶", ".step-bar")
+            second = b.wait("/· run 2 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="its second run")
+            r.check("the step bar goes through the selected box's runs", first != second and first.split(" · ")[0] == second.split(" · ")[0]
+                    and b.js(f"return !!document.querySelector('.tasks-drawing .fc-sel[data-node={multi}]')"), second)
+        else:
+            r.check("the step bar goes through the selected box's runs (no box ran twice: one run each)", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
         r.check("the graph view is remembered", b.js("return !!document.querySelector('.seg button.on') && document.querySelector('.seg button.on').textContent") == "Graph")
