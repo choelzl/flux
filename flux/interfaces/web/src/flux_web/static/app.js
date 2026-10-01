@@ -394,8 +394,9 @@ async function startLoopOwned(name) {
   const net = pre.network || {};
   const allow = h("input", { placeholder: net.network === "allowlist" ? "more hosts for this start" : "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
   if (net.network === "allowlist" && !net.users_add) allow.disabled = true;
-  const netSaid = net.network === "allowlist" ? h("p", { class: "muted small" }, `The server allows only: ${(net.allow || []).join(", ") || "nothing"}`,
-    net.users_add ? "; hosts added here join them for this start." : "; an admin sets the list.") : "";
+  const netSaid = net.network === "allowlist" ? h("p", { class: "muted small" },
+    net.allow ? `The server allows only: ${net.allow.join(", ") || "nothing"}` : "The network is limited to the hosts an admin allows",
+    net.users_add ? "; hosts added here join them for this start." : ".") : "";
   passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
   const checkBox = h("div", { class: "preflight" });

@@ -148,7 +148,8 @@ def test_the_admins_sandbox_settings_reach_each_run(tmp_path, monkeypatch):
     assert env["PATH"] == f"{extra}:/usr/bin", "a directory that does not exist is left out"
     assert env["FLUX_SANDBOX_HOME_RO"] == ".config/mycode" and env["FLUX_SANDBOX_HOME_COPY"] == ".mycode/creds"
     assert env["FLUX_SANDBOX_NET"] == "allowlist" and env["FLUX_SANDBOX_ALLOW"] == "10.0.0.0/8,huggingface.co,llm.example"
-    assert "asked.example" in said or "asked.example" not in env["FLUX_SANDBOX_ALLOW"], "a user may not add: their hosts are not taken"
+    assert "asked.example" not in env["FLUX_SANDBOX_ALLOW"], "a user may not add: their hosts are not taken"
+    assert said == "network: an allowlist of 3 entries" and "10.0.0" not in said, "D716: the log says how many, never which"
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
     machine_env(env, {"network": "allowlist", "allow": ["a.example"], "users_add": True}, {}, ["b.example"])
     assert env["FLUX_SANDBOX_ALLOW"] == "a.example,b.example"
@@ -179,7 +180,8 @@ def test_only_an_admin_sets_the_sandbox_and_bad_entries_are_refused(tmp_path):
     got = ada.get("/api/admin/sandbox").json()
     assert got["config"]["network"] == "allowlist" and isinstance(got["login_path"], list)
     bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
-    assert bob.get("/api/apps/x/preflight").json()["network"]["allow"] == ["*.example.org", "10.0.0.0/8", "localhost"]
+    net = bob.get("/api/apps/x/preflight").json()["network"]
+    assert net["network"] == "allowlist" and "allow" not in net, "D716: a user learns it is limited, not by which hosts"
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"allow": ["hf.co", "nope nope"]}, headers=H).status_code == 400
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"allow": ["hf.co"]}, headers=H).json()["advanced"]["allow"] == ["hf.co"]
 

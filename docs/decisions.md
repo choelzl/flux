@@ -1719,3 +1719,29 @@ the topics above.
   - Measured, 64 cores: 145 s -> 47.5 s; the slowest test 80 s -> 12.5 s.
   - The heavy test of D618 still had its agent run `flux rtl proto` itself, against D673's
     "agents write, the loop runs": it failed every nightly. Its agent now only writes the file.
+- **D716: the admin's network allowlist is not shown to users; `python -m flux_cli`.**
+  - Key insight: the list leaked in three places a user reads:
+    - the run log's start line (`network allowlist <hosts>`);
+    - the sandbox's own line (`network: allowlist <hosts>`);
+    - the Start dialog, because the pre-start check sent the server's list to anyone who may
+      start the loop.
+    The container also carried `FLUX_SANDBOX_ALLOW`, readable by the loop's own code. Only the
+    proxy, on the host, needs the list.
+  - Rules:
+    - The log lines say "network: an allowlist of N entries" (or "none (an empty
+      allowlist)").
+    - The pre-start check sends `allow` to an admin only. A user reads that the network is
+      limited to the hosts an admin allows, and whether they may add hosts for a start.
+    - `FLUX_SANDBOX_ALLOW`, `FLUX_SANDBOX_NET` and `FLUX_SANDBOX_REFUSALS` are dropped from the
+      container's environment. `launch` reads them on the host, before the container starts.
+    - A refusal on the run's stderr names the refused host ("not on the network allowlist"),
+      never the list. The admin's audit still records it (D708).
+  - `python -m flux_cli` (a new `flux_cli/__main__.py`) starts the sandbox's flux.
+    `-m flux_cli.main` warned (RuntimeWarning: found in sys.modules), since the package's
+    `__init__` imports `main`.
+  - Live, in Podman with an allowlist of 2 entries: both log lines said "an allowlist of 2
+    entries", the run's script saw `FLUX_SANDBOX_ALLOW=None` in all six runs, the audit listed
+    the refused hosts, and there was no RuntimeWarning.
+  - Tests: `test_sandbox` (none of the three in the container; the command is
+    `-m flux_cli`), `test_sandbox_config` (the log line says how many, never which; a user's
+    pre-start check has no `allow`), `test_web_refusals` (an admin's has it).

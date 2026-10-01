@@ -52,3 +52,22 @@ def test_every_run_names_the_file_and_the_admins_audit_reads_it(tmp_path, monkey
     assert c2.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H).status_code == 200
     assert c2.get("/api/audit").status_code == 403, "the admin's only"
     assert os.stat(store.refusals_file).st_size > 0
+
+
+def test_the_start_dialog_names_the_admins_hosts_to_an_admin_only(tmp_path, monkeypatch):
+    """D716: a user learns the network is limited, not by which hosts."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    store = Store(tmp_path / "data")
+    store.add_user("ada", "correct horse battery", "admin")
+    store.add_user("bob", "another long secret")
+    store.server_set("sandbox", {"network": "allowlist", "allow": ["llm.internal.example", "10.0.0.0/8"], "users_add": False})
+    app = create_app(tmp_path / "data", sandbox=False)
+    got = {}
+    for who, pw in (("ada", "correct horse battery"), ("bob", "another long secret")):
+        c = TestClient(app)
+        assert c.post("/api/login", json={"name": who, "password": pw}, headers=H).status_code == 200
+        files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))]
+        assert c.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
+        got[who] = c.get("/api/apps/x/preflight").json()["network"]
+    assert got["ada"]["allow"] == ["llm.internal.example", "10.0.0.0/8"]
+    assert "allow" not in got["bob"] and got["bob"]["network"] == "allowlist"

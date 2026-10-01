@@ -41,7 +41,9 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "ca-certificates", "ca-certifi
        "protocols", "services", "os-release", "lsb-release")
 #: Environment the container never gets: the host's sessions and other services' secrets.
 _DROP = ("HOME", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
-         "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI")
+         "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
+         # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
+         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS")
 _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_", "GOOGLE_APPLICATION")
 #: The agents' configuration, read-only, and their credentials, copied (a refresh inside stays inside).
 #: Not `~/.config/flux`: the host has read flux.env already and passes its settings in, so the
@@ -385,8 +387,8 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         proxy.start()
     # D714: the flux that is running, by its own interpreter -- not whichever `flux` PATH finds
     # first, nor `sys.argv[0]`, which under `python -m` is a source file, not a program
-    cmd = container_argv([sys.executable, "-m", "flux_cli.main", *argv], args, command, name, proxy_dir, eng)
-    print(f"flux {command}: in the {eng} sandbox {name} (network: {('allowlist ' + ','.join(allow)) if allow else 'none (an empty allowlist)' if strict else 'open'}; "
+    cmd = container_argv([sys.executable, "-m", "flux_cli", *argv], args, command, name, proxy_dir, eng)
+    print(f"flux {command}: in the {eng} sandbox {name} (network: {f'an allowlist of {len(allow)} entr' + ('y' if len(allow) == 1 else 'ies') if allow else 'none (an empty allowlist)' if strict else 'open'}; "
           f"--no-sandbox to run on the host)", file=sys.stderr, flush=True)
     try:
         return subprocess.call(cmd)

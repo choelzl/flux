@@ -61,11 +61,14 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     monkeypatch.setenv("SSH_AUTH_SOCK", "/run/ssh.sock")
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_x")
     monkeypatch.setenv("FLUX_REMOTE_API_KEY", "k")
-    monkeypatch.delenv("FLUX_SANDBOX_ALLOW", raising=False)
+    monkeypatch.setenv("FLUX_SANDBOX_ALLOW", "secret-host.example")
+    monkeypatch.setenv("FLUX_SANDBOX_NET", "allowlist")
+    monkeypatch.setenv("FLUX_SANDBOX_REFUSALS", "/data/network-refused.jsonl")
     cmd = sandbox.container_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-t", None, "docker")
     env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
+    assert not {"FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS"} & set(env), "D716: the proxy's, outside"
     assert env["OPENCODE_SKIP_SAFE_CHECK"] == "1", "D714: OpenCode inside the sandbox"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     app = sandbox.app_dir(_args(tmp_path), "task run")
@@ -197,5 +200,5 @@ def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
     monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
     monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd: seen.setdefault("cmd", cmd) and 0)
     sandbox.launch(["task", "run", "x"], _args(tmp_path), "task run")
-    assert seen["cmd"][-6:] == [sys.executable, "-m", "flux_cli.main", "task", "run", "x"], \
+    assert seen["cmd"][-6:] == [sys.executable, "-m", "flux_cli", "task", "run", "x"], \
         "not sys.argv[0]: under `python -m` it is a source file, not a program"

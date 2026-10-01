@@ -266,7 +266,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     only. A name is resolved and passes when one of its addresses is in an allowed IP or CIDR,
     and is reached at that address. Optionally the model endpoints' hosts join the list, and users
     may add hosts when starting. A loop's Settings (admins) may add hosts for that loop. An empty
-    allowlist reaches nothing.
+    allowlist reaches nothing. Users never see the admin's hosts (D716): a run's log and the Start dialog
+    say the network is limited and by how many entries, and the container's environment does not carry
+    the list. Admins see it in the Sandbox tab and the Start dialog.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
   - **Home files:** paths inside the home folder mounted read-only (an agent's configuration) or

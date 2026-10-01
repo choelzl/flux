@@ -147,12 +147,18 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
         allow = [a for a in dict.fromkeys(a.strip() for a in allow) if a]
         env["FLUX_SANDBOX_NET"] = "allowlist"
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
-        return f"network allowlist {', '.join(allow) or '(nothing)'}"
+        return _net_said(allow)
     allow = [a for a in dict.fromkeys(str(x).strip() for x in [*loop, *asked]) if a]
     if allow:
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
-        return f"network {', '.join(allow)}"
+        return _net_said(allow)
     return ""
+
+
+def _net_said(allow: list[str]) -> str:
+    """The network in the run's log, which its users read: limited, and by how many entries --
+    never which hosts (D716: the admin's list is the admin's)."""
+    return f"network: an allowlist of {len(allow)} entr{'y' if len(allow) == 1 else 'ies'}" if allow else "network: none (an empty allowlist)"
 
 
 #: A loop's settings only an admin sets (D697), with what each does to its runs.

@@ -1037,7 +1037,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
                 "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
                 "options": meta.get("last_options"), "paused": store.server_get("paused"),
-                "network": {k: (store.server_get("sandbox") or {}).get(k) for k in ("network", "allow", "users_add")}}
+                # D716: the admin's hosts are the admin's: a user learns the network is limited, not by what
+                "network": {k: (store.server_get("sandbox") or {}).get(k) for k in ("network", "users_add", *(("allow",) if user.role == "admin" else ()))}}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
     def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:

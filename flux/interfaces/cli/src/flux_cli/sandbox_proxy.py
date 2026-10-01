@@ -162,7 +162,7 @@ class AllowProxy:
             if to is None:
                 if host not in self.refused:
                     self.refused.add(host)
-                    print(f"flux sandbox: refused {host} (not in FLUX_SANDBOX_ALLOW)", file=sys.stderr, flush=True)
+                    print(f"flux sandbox: refused {host} (not on the network allowlist)", file=sys.stderr, flush=True)
                 self._record(host, port_n)
                 client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 client.close()
