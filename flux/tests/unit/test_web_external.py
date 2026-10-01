@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from flux_cli import sandbox
 from flux_web import create_app
 from flux_web.logins import Logins, logged_in
-from flux_web.runs import run_env, sandbox_env
+from flux_web.runs import home_ready, run_env, sandbox_env
 from flux_web.store import Store
 
 H = {"X-Flux": "1"}
@@ -60,35 +60,34 @@ def test_an_external_users_run_has_nothing_of_the_servers_but_its_programs(tmp_p
     assert "ANTHROPIC_API_KEY" not in e and "OLLAMA_BASE_URL" not in e and "TEAM_TOKEN" not in e, "nothing of the machine's or the server's"
     assert e.get("FLUX_REMOTE_MODEL") != "server-model" and e["EVE_VAR"] == "mine"
     assert e["FLUX_OPENCODE_BIN"] == "/opt/corp/bin/opencode", "the admin's program: what runs, not whose account"
-    assert e["FLUX_SANDBOX_HOME_SRC"] == str(store.data / "users" / "eve" / "home")
+    assert e["FLUX_SANDBOX_HOME"] == str(store.data / "users" / "eve" / "home")
     i = run_env(store, ian, "x")
-    assert i["ANTHROPIC_API_KEY"] == "machine-claude" and i["TEAM_TOKEN"] == "server-secret" and "FLUX_SANDBOX_HOME_SRC" not in i
+    assert i["ANTHROPIC_API_KEY"] == "machine-claude" and i["TEAM_TOKEN"] == "server-secret"
+    assert i["FLUX_SANDBOX_HOME"] == str(store.data / "users" / "ian" / "home"), "D744: an internal user has a home too"
+    assert run_env(store, eve, "x", home_for=ian)["FLUX_SANDBOX_HOME"] == i["FLUX_SANDBOX_HOME"], "whoever starts it lends their logins"
     sandbox_env(e, False, {})                                   # on the host: their agents use their home
-    assert e["HOME"] == e["FLUX_SANDBOX_HOME_SRC"]
+    assert e["HOME"] == e["FLUX_SANDBOX_HOME"]
 
 
-def test_the_sandbox_takes_home_files_from_the_users_home(tmp_path, monkeypatch):
-    home, mine = tmp_path / "server-home", tmp_path / "eve-home"
-    (home / ".config/opencode").mkdir(parents=True)
-    (home / ".config/opencode/opencode.json").write_text('{"server": 1}')
-    (mine / ".config/opencode").mkdir(parents=True)
-    (mine / ".local/share/opencode").mkdir(parents=True)
-    (mine / ".local/share/opencode/auth.json").write_text('{"eve": 1}')
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    monkeypatch.setenv("FLUX_SANDBOX_HOME_SRC", str(mine))
-    args = types.SimpleNamespace(file=str(tmp_path / "x.problem.yaml"), db=None, out=None, json=None)
-    (tmp_path / "x.problem.yaml").write_text("id: x\nstatement: s\n")
-    cmd = sandbox.container_argv(["flux"], args, "task run", "flux-t", None, "docker")
-    vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
-    assert f"{mine}/.config/opencode:{home}/.config/opencode:ro" in vols, "their config, at its place in HOME"
-    assert not any(v.startswith(f"{home}/.config/opencode:") for v in vols), "never the server's"
-    app = sandbox.app_dir(args, "task run")
-    assert (app / "home/.local/share/opencode/auth.json").read_text() == '{"eve": 1}', "their login, copied in"
-    login = types.SimpleNamespace(home=str(mine), cmd=["--", "opencode", "auth", "login"])
-    cmd = sandbox.container_argv(["flux", "login"], login, "login", "flux-l", None, "docker")
-    vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
-    assert f"{mine.resolve()}:/home/flux-login" in vols, "a login's HOME is their home, writable, at a path of its own"
+def test_a_home_starts_with_the_admins_list_and_never_anyones_login(tmp_path, monkeypatch):
+    """D744: a home is started from the server account's home -- the admin's list, the agents'
+    configuration by default -- where it lacks them; a login is never among them."""
+    server = tmp_path / "server-home"
+    (server / ".config/opencode").mkdir(parents=True)
+    (server / ".config/opencode/opencode.json").write_text('{"provider": "corp"}')
+    (server / ".local/share/opencode").mkdir(parents=True)
+    (server / ".local/share/opencode/auth.json").write_text("the server's login")
+    (server / ".gitconfig").write_text("[user]")
+    monkeypatch.setenv("HOME", str(server))
+    store = _store(tmp_path)
+    eve = store.user(name="eve")
+    home = home_ready(store, eve)
+    assert (home / ".config/opencode/opencode.json").read_text() == '{"provider": "corp"}'
+    assert not (home / ".local/share/opencode/auth.json").exists() and not (home / ".gitconfig").exists()
+    store.server_set("sandbox", {"home_seed": [".gitconfig"]})
+    (home / ".gitconfig").write_text("eve's own")
+    home_ready(store, eve)
+    assert (home / ".gitconfig").read_text() == "eve's own", "never over what is there"
 
 
 def test_a_login_runs_in_a_terminal_its_link_shown_its_answer_typed(tmp_path, monkeypatch):

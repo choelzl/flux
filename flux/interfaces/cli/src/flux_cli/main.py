@@ -347,8 +347,8 @@ def _cmd_login(args: argparse.Namespace) -> int:
     if not cmd:
         print("flux login: which command? e.g. flux login --home DIR -- opencode auth login", file=sys.stderr)
         return 2
-    os.makedirs(args.home, exist_ok=True)
-    if not os.environ.get("FLUX_SANDBOXED"):
+    if not os.environ.get("FLUX_SANDBOXED"):                 # in the sandbox HOME is that folder already (D744: /home/flux)
+        os.makedirs(args.home, exist_ok=True)
         os.environ["HOME"] = str(args.home)
     os.environ.setdefault("TERM", "xterm-256color")
     pid, fd = pty.fork()

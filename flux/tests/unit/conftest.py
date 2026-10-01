@@ -106,6 +106,8 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 def _own_trace_root(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Every test registers its runs and traces under its own root, so parallel tests do not race (D531)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path_factory.mktemp("traces")))
+    # D744: a sandboxed run's HOME is a Flux home; a test never starts one in the real home
+    monkeypatch.setenv("FLUX_SANDBOX_HOME", str(tmp_path_factory.mktemp("flux-home")))
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

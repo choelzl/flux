@@ -72,7 +72,10 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert env["OPENCODE_SKIP_SAFE_CHECK"] == "1", "D714: OpenCode inside the sandbox"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     app = sandbox.app_dir(_args(tmp_path), "task run")
-    assert f"{app / 'home'}:{Path.home()}" in vols, "HOME is the application's"
+    import os as _os
+
+    assert f"{Path(_os.environ['FLUX_SANDBOX_HOME']).resolve()}:/home/flux" in vols and env["HOME"] == "/home/flux", \
+        "D744: HOME is the user's Flux home"
     assert env["TMPDIR"] == "/tmp" and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces"), \
         "scratch on the container's own /tmp (abc hangs on a mounted one), traces in the cache"
     assert env["XDG_CACHE_HOME"] == str(app / "cache")

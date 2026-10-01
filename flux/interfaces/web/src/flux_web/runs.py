@@ -30,12 +30,28 @@ _MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC
                "FLUX_CLAUDE_", "FLUX_CODEX_", "OPENCODE_", "CLAUDE_", "CODEX_", "FLUX_DEFAULT_AGENT")
 
 
-def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
+def home_ready(store: Store, user: User) -> Path:
+    """`user`'s Flux home (D744), started from the admin's list of home files where it lacks
+    them -- copied from this server account's home, never over what the user has."""
+    from flux_cli.sandbox import seed_home
+
+    home = store.home_of(user)
+    seed_home(home, Path(os.path.expanduser("~")), (store.server_get("sandbox") or {}).get("home_seed", list(HOME_SEED)))
+    return home
+
+
+#: What a home starts with unless the admin says otherwise (D744): the agents' configuration --
+#: never anyone's logins: each user logs in on their Account page.
+HOME_SEED = (".config/opencode",)
+
+
+def run_env(store: Store, user: User, app: str | None = None, home_for: User | None = None) -> dict[str, str]:
     """The environment of a user's run or check (D684, D696): the server's, then the model
     settings the admin set for the server, then the user's own. A run never reads the server's
     flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, OpenCode,
     Claude Code, Codex), a user who names their own endpoint gets none of the server's values of
-    that group -- no server key goes to someone else's endpoint."""
+    that group -- no server key goes to someone else's endpoint. HOME (D744) is the Flux home of
+    `home_for` -- whoever starts it: logins belong to people -- else of `user`."""
     from .store import GROUPS
 
     env = {**os.environ, "FLUX_CONFIG": os.devnull}
@@ -48,7 +64,6 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
 
         env = {k: v for k, v in env.items() if not k.startswith(_MODEL_VARS) or k in ADMIN_ONLY}
         server = {k: v for k, v in server.items() if k in ADMIN_ONLY}
-        env["FLUX_SANDBOX_HOME_SRC"] = str(store.home_of(user))       # their home: what runs mount and copy
     web: dict[str, str] = {}
     for name, g in GROUPS.items():
         keys = (*g["public"], *g["secret"])
@@ -86,6 +101,7 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     if names:
         env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
     env["FLUX_SANDBOX_REFUSALS"] = str(store.refusals_file)      # D708: hosts its sandbox refused, for the audit
+    env["FLUX_SANDBOX_HOME"] = str(home_ready(store, home_for or user))   # D744: every user's own home
     return env
 
 
@@ -132,7 +148,7 @@ HOST_RULE = r"(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-
 
 def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], asked: list[str]) -> str:
     """What the admin set for every sandbox (D698): PATH directories (and the server user's login
-    PATH), home paths mounted read-only or copied in, and the network. Returns how the network
+    PATH) and the network (the home files start each user's home, D744: `home_ready`). Returns how the network
     was set, for the log line. `asked`: the start's own allowlist entries."""
     from urllib.parse import urlsplit
 
@@ -141,10 +157,6 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
     extra = [d for d in dict.fromkeys(dirs) if d and d not in have and os.path.isdir(d)]
     if extra:
         env["PATH"] = os.pathsep.join([*extra, *[d for d in have if d]])   # the sandbox mounts each, read-only
-    for key, var in (("home_ro", "FLUX_SANDBOX_HOME_RO"), ("home_copy", "FLUX_SANDBOX_HOME_COPY")):
-        env.pop(var, None)
-        if cfg.get(key):
-            env[var] = ",".join(cfg[key])
     env.pop("FLUX_SANDBOX_ALLOW", None)
     env.pop("FLUX_SANDBOX_NET", None)
     if env.get("FLUX_SANDBOX") == "0":
@@ -190,13 +202,13 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
         env.pop(k, None)
     if not server_sandbox:
         env["FLUX_SANDBOX"] = "0"                    # D704: a --no-sandbox server says so (the command's own default is on)
-        if env.get("FLUX_SANDBOX_HOME_SRC"):
-            env["HOME"] = env["FLUX_SANDBOX_HOME_SRC"]    # D734: on the host, an external user's agents use their home
+        if env.get("FLUX_SANDBOX_HOME"):
+            env["HOME"] = env["FLUX_SANDBOX_HOME"]        # D744: on the host too, the user's agents use their home
         return
     if adv.get("sandbox") is False:
         env["FLUX_SANDBOX"] = "0"                    # an admin's choice for this loop: on the host
-        if env.get("FLUX_SANDBOX_HOME_SRC"):
-            env["HOME"] = env["FLUX_SANDBOX_HOME_SRC"]    # D734
+        if env.get("FLUX_SANDBOX_HOME"):
+            env["HOME"] = env["FLUX_SANDBOX_HOME"]        # D744
         return
     env["FLUX_SANDBOX"] = "1"                        # a shared server runs nothing on the host
     for key, var in (("memory", "FLUX_SANDBOX_MEMORY"), ("cpus", "FLUX_SANDBOX_CPUS"), ("pids", "FLUX_SANDBOX_PIDS"),
@@ -270,7 +282,7 @@ class RunManager:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
-        env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
+        env = {**run_env(self.store, user, app, home_for=by), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         adv = advanced(self.store, user.name, app)
         if adv.get("parallel"):                       # D741: an admin allows it; the document says how much

@@ -2957,7 +2957,7 @@ async function adminApplications(body) {
           : act("Use", () => use(a, false), { cls: "small primary" })))))))]));
 }
 
-/** What every sandbox gets (D698): the network, PATH directories, home files. */
+/** What every sandbox gets (D698): the network, PATH directories, what every home starts with (D744). */
 async function adminSandbox(body) {
   const r = await api("/admin/sandbox");
   const c = r.config;
@@ -2972,8 +2972,7 @@ async function adminSandbox(body) {
   const paths = ta("sb-path", lines(c.path), 3, "/opt/tools/bin");
   const loginP = h("input", { type: "checkbox", id: "sb-login", checked: !!c.login_path });
   const adds = r.login_path.filter(d => !r.path.includes(d));
-  const ro = ta("sb-ro", lines(c.home_ro), 3, ".config/my-opencode\n.cache/huggingface");
-  const cp = ta("sb-cp", lines(c.home_copy), 3, ".config/my-opencode/credentials.json");
+  const seed = ta("sb-seed", lines(c.home_seed), 3, ".config/opencode\n.gitconfig\n.npmrc");
   const allowBox = h("div", { class: "sb-allow" }, h("label", { class: "stack" }, "Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR", allow),
     h("label", { class: "check" }, endpoints, "also the model endpoints set under Models (their hosts)"),
     h("label", { class: "check" }, usersAdd, "a user may add hosts when starting a loop"));
@@ -2987,12 +2986,12 @@ async function adminSandbox(body) {
       h("details", {}, h("summary", { class: "muted" }, `The server's own PATH: ${r.path.length} directories`), h("pre", { class: "val small" }, r.path.join("\n"))),
       h("label", { class: "check" }, loginP, `add ${r.home}'s login PATH`, adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"),
       h("label", { class: "stack" }, "and these directories, first", paths)]),
-    card("Home files", [h("p", { class: "muted" }, `Paths inside ${r.home}. The container's home is the loop's own; these come in from the real one. Always: read-only ${r.fixed_ro.join(", ")}; copied ${r.fixed_copy.join(", ")}.`),
-      h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Mounted read-only (a folder or a file)", ro),
-        h("label", { class: "stack" }, "Copied in before each run (credentials an agent may refresh: the copy changes, the original does not)", cp))]),
+    card("Homes", [h("p", { class: "muted" }, "Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. ",
+        "Each user logs their agents in on their Account page; no one's login is shared."),
+      h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
     h("div", { class: "form-actions" }, act("Save", async () => {
       await api("/admin/sandbox", { method: "PUT", body: { network: mode.value, allow: list(allow), users_add: usersAdd.checked, endpoints: endpoints.checked,
-        path: list(paths), login_path: loginP.checked, home_ro: list(ro), home_copy: list(cp) } });
+        path: list(paths), login_path: loginP.checked, home_seed: list(seed) } });
       toast("Sandbox settings saved: they apply from each loop's next start", "ok"); route();
     }, { cls: "primary" })));
 }

@@ -132,8 +132,7 @@ class Advanced(BaseModel):
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
     path: list[str] = Field(default_factory=list)
     login_path: bool = False
-    home_ro: list[str] = Field(default_factory=list)
-    home_copy: list[str] = Field(default_factory=list)
+    home_seed: list[str] = Field(default_factory=lambda: [".config/opencode"])    # D744: every home starts with these
     network: str = "open"
     allow: list[str] = Field(default_factory=list)
     users_add: bool = True
@@ -596,11 +595,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/admin/sandbox")
     def get_sandbox(_a: User = Depends(admin_of)) -> dict[str, Any]:
         """What every sandbox gets (D698), and the server user's login PATH to choose from."""
-        from flux_cli.sandbox import _HOME_COPY, _HOME_RO
-
-        return {"config": store.server_get("sandbox") or SandboxConfig().model_dump(), "login_path": login_path(),
-                "path": os.environ.get("PATH", "").split(os.pathsep), "home": os.path.expanduser("~"),
-                "fixed_ro": list(_HOME_RO), "fixed_copy": list(_HOME_COPY), "sandboxed": sandbox}
+        return {"config": {**SandboxConfig().model_dump(), **(store.server_get("sandbox") or {})}, "login_path": login_path(),
+                "path": os.environ.get("PATH", "").split(os.pathsep), "home": os.path.expanduser("~"), "sandboxed": sandbox}
 
     @app.put("/api/admin/sandbox")
     def put_sandbox(body: SandboxConfig, a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -609,18 +605,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         for d in body.path:
             if not d.startswith("/"):
                 raise HTTPException(400, f"{d!r}: a PATH directory is absolute")
-        for rel in [*body.home_ro, *body.home_copy]:
+        for rel in body.home_seed:
             r = rel.strip().removeprefix("~/").strip("/")
             if not r or r.startswith("/") or ".." in r.split("/"):
                 raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .config/opencode")
         cfg = body.model_dump()
         cfg["allow"] = _rules(body.allow)
-        cfg["home_ro"] = [r.strip().removeprefix("~/").strip("/") for r in body.home_ro if r.strip()]
-        cfg["home_copy"] = [r.strip().removeprefix("~/").strip("/") for r in body.home_copy if r.strip()]
+        cfg["home_seed"] = [r.strip().removeprefix("~/").strip("/") for r in body.home_seed if r.strip()]
         cfg["path"] = [d.strip() for d in body.path if d.strip()]
         store.server_set("sandbox", cfg)
         store.audit(a.name, "sandbox settings", f"network {cfg['network']}: {', '.join(cfg['allow']) or '-'}; "
-                    f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; home ro {len(cfg['home_ro'])}, copy {len(cfg['home_copy'])}")
+                    f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; homes start with {len(cfg['home_seed'])} path(s)")
         return {"config": cfg}
 
     # ---- sharing a loop (D701): watch sees its runs and outputs, edit also changes and runs it
@@ -762,8 +757,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"ok": f"{path}: the part sent is gone"}
 
     # ---- a problem written or revised by an agent (D704)
-    def _author_env(whose: User, name: str) -> dict[str, str]:
-        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
+    def _author_env(whose: User, name: str, by: User | None = None) -> dict[str, str]:
+        env = {**run_env(store, whose, name, home_for=by), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, store.server_get("sandbox") or {}, adv, [])
@@ -831,7 +826,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(400, "say what to change")
         try:
             got = await _attach(d, files)
-            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name),
+            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name, user),
                             attachments=got, revise=w.meta(name).get("document"), by=user.name)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -870,7 +865,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if body.author not in AUTHORS:
             raise HTTPException(400, f"who answers is one of {', '.join(AUTHORS)}")
         try:
-            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name), by=user.name)
+            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user), by=user.name)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")
@@ -1110,7 +1105,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
+        env = {**run_env(store, whose, name, home_for=user), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, store.server_get("sandbox") or {}, adv, [])

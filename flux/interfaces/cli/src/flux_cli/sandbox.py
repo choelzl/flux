@@ -6,10 +6,10 @@ real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux s
 executables on PATH. Writable: the record's folder, the problem's `out/` and `workbench/`, the
 places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
 cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
-agents' directories), `home/` (HOME: the agents' sessions, kept across runs, their
-configuration read-only, their credentials copied in) and `cache/` (XDG_CACHE_HOME). Another
-application's traces, sessions and caches, the real home (`~/.ssh`, other repositories) and
-the Docker socket are not there.
+agents' directories) and `cache/` (XDG_CACHE_HOME); and HOME (D744): the user's own Flux home,
+writable, at `/home/flux` -- their agents' configuration, logins and sessions, kept from run to
+run and refreshed in place. Another application's traces and caches, another user's home, the
+real home (`~/.ssh`, other repositories) and the Docker socket are not there.
 
 Network: the host's (`FLUX_SANDBOX_NET=open`, the default), or only the hosts an allowlist names
 (`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): the container has no
@@ -35,8 +35,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ["IMAGE", "app_dir", "container_argv", "enabled", "engine", "engine_cli", "in_sandbox", "launch", "mounts_for",
-           "relay_proxy"]
+__all__ = ["HOME_IN", "IMAGE", "app_dir", "container_argv", "enabled", "engine", "engine_cli", "flux_home", "in_sandbox",
+           "launch", "mounts_for", "relay_proxy", "seed_home"]
 
 #: A glibc base: the host's own libraries are mounted over it; only its shape is used.
 IMAGE = os.environ.get("FLUX_SANDBOX_IMAGE", "debian:stable-slim")
@@ -46,16 +46,20 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-
        "ld.so.conf", "ld.so.conf.d", "localtime", "timezone", "alternatives", "gai.conf", "mime.types",
        "protocols", "services", "os-release", "lsb-release")
 #: Environment the container never gets: the host's sessions and other services' secrets.
-_DROP = ("HOME", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
+_DROP = ("HOME", "FLUX_SANDBOX_HOME", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
          "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS")
 _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_", "GOOGLE_APPLICATION")
-#: The agents' configuration, read-only, and their credentials, copied (a refresh inside stays inside).
-#: Not `~/.config/flux`: the host has read flux.env already and passes its settings in, so the
-#: key file itself stays outside (only the key's value travels, in the environment, as agents need it).
-_HOME_RO = (".config/opencode", ".opencode")
-_HOME_COPY = (".claude/.credentials.json", ".claude.json", ".local/share/opencode/auth.json")
+#: HOME inside (D744): the user's Flux home, at a path of its own -- this machine's folders under
+#: its own HOME (PATH folders, the flux source) are mounted at their own paths, and would otherwise
+#: make mount points in the user's home.
+HOME_IN = "/home/flux"
+#: On one's own machine, the Flux home starts with the agents' configuration and logins of the
+#: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
+#: passes its settings in, so the key file itself stays outside.
+SEED_OWN = (".config/opencode", ".claude.json", ".claude/.credentials.json", ".claude/settings.json",
+            ".local/share/opencode/auth.json", ".codex/auth.json", ".codex/config.toml")
 PROXY_PORT = 18080
 #: D722: certificates the host's tools are told of, wherever they are (a corporate CA in a home)
 CA_VARS = ("SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
@@ -79,10 +83,56 @@ def _home() -> Path:
     return Path(os.environ.get("HOME") or Path.home())
 
 
-def _home_src() -> Path:
-    """Where the home files mounted and copied come from (D734): an external user's own home
-    (`FLUX_SANDBOX_HOME_SRC`, set by `flux serve`), else this machine's user's."""
-    return Path(os.environ.get("FLUX_SANDBOX_HOME_SRC") or _home())
+def flux_home(args: Any = None, command: str = "") -> Path:
+    """The HOME a run gets (D744): `flux login --home DIR`'s; `FLUX_SANDBOX_HOME` (`flux serve`:
+    the home of the user who starts it); else this machine user's Flux home,
+    `~/.local/share/flux/home`, started from the real home's agent files (`SEED_OWN`)."""
+    if command == "login":
+        h = Path(args.home)
+    elif os.environ.get("FLUX_SANDBOX_HOME"):
+        h = Path(os.environ["FLUX_SANDBOX_HOME"])
+    else:
+        h = Path(os.environ.get("XDG_DATA_HOME") or _home() / ".local" / "share") / "flux" / "home"
+        h.mkdir(parents=True, exist_ok=True)
+        seed_home(h, _home(), SEED_OWN)
+    h.mkdir(parents=True, exist_ok=True)
+    os.chmod(h, 0o700)
+    return h.resolve()
+
+
+def seed_home(home: Path, src: Path, rels: Any) -> list[str]:
+    """`home` started from `src` (D744): each path copied where `home` lacks it -- a folder merged
+    file by file, a link as a link -- never over what is there, so what the user changed or
+    logged into stays theirs. Returns the paths copied. A path that leaves the home is skipped."""
+    done: list[str] = []
+
+    def merge(a: Path, b: Path, rel: str) -> None:
+        if b.is_symlink() or (b.exists() and not (a.is_dir() and not a.is_symlink() and b.is_dir())):
+            return
+        if a.is_symlink():
+            b.parent.mkdir(parents=True, exist_ok=True)
+            b.symlink_to(os.readlink(a))
+            done.append(rel)
+        elif a.is_dir():
+            b.mkdir(parents=True, exist_ok=True)
+            for c in sorted(a.iterdir()):
+                merge(c, b / c.name, f"{rel}/{c.name}")
+        elif a.is_file():
+            b.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(a, b)                                 # its mode and time: a program stays one, a key stays 0600
+            done.append(rel)
+
+    for rel in rels or ():
+        r = str(rel).strip().removeprefix("~/").strip("/")
+        if not r or r.startswith("/") or ".." in Path(r).parts:
+            continue
+        a = src / r
+        if a.exists() or a.is_symlink():
+            try:
+                merge(a, home / r, r)
+            except OSError:
+                pass                                           # what cannot be read is not copied
+    return done
 
 
 def _cache() -> Path:
@@ -116,7 +166,7 @@ def app_dir(args: Any, command: str) -> Path:
     ident = os.environ.get("FLUX_SANDBOX_APP") or ident
     key = re.sub(r"[^A-Za-z0-9_.-]+", "_", ident)[:80] or "unnamed"
     d = _cache() / "apps" / key
-    for sub in ("tmp", "home", "cache"):
+    for sub in ("tmp", "cache"):
         (d / sub).mkdir(parents=True, exist_ok=True)
     return d
 
@@ -202,90 +252,6 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     return ro, rw
 
 
-def _home_list(var: str, fixed: tuple[str, ...]) -> tuple[str, ...]:
-    """The fixed home paths and those `var` adds (D698: e.g. a modified agent's own config or
-    credentials), comma-separated and relative to HOME; one that leaves HOME is ignored."""
-    extra = []
-    for rel in os.environ.get(var, "").split(","):
-        rel = rel.strip()
-        if rel.startswith("~/"):
-            rel = rel[2:]
-        if rel.startswith("/"):                               # outside HOME: not this
-            continue
-        rel = rel.strip("/")
-        if rel and ".." not in Path(rel).parts:
-            extra.append(rel)
-    return tuple(dict.fromkeys((*fixed, *extra)))
-
-
-def home_ro() -> tuple[str, ...]:
-    return _home_list("FLUX_SANDBOX_HOME_RO", _HOME_RO)
-
-
-def home_copy() -> tuple[str, ...]:
-    return _home_list("FLUX_SANDBOX_HOME_COPY", _HOME_COPY)
-
-
-def _sandbox_home(app: Path) -> Path:
-    """The container's HOME, the application's, kept across its runs: the agents' sessions."""
-    sh = app / "home"
-    sh.mkdir(parents=True, exist_ok=True)
-    home = _home_src()
-    for rel in home_ro():
-        if (home / rel).exists():
-            mp = sh / rel                                     # the mount point, made by us, not by docker as root
-            if (home / rel).is_dir():
-                mp.mkdir(parents=True, exist_ok=True)
-            else:
-                mp.parent.mkdir(parents=True, exist_ok=True)
-                mp.touch(exist_ok=True)
-    for rel in home_copy():
-        src = home / rel
-        if src.exists() or src.is_symlink():
-            _copy_over(src, sh / rel)
-    return sh
-
-
-def _copy_over(src: Path, dst: Path) -> None:
-    """`src` copied onto `dst`, each run: what is there is replaced entry by entry -- a link
-    copied as a link, never written through (it may point at the host's own file) -- and what
-    only the copy has (an agent's sessions) is kept.
-
-    D725: a loop and its asks share this home, so another run may be executing a copied program
-    (OpenCode's binary) right now. A file is never opened for writing in place -- ETXTBSY, or on
-    a kernel that allows it, a program changed under itself -- but written beside and renamed
-    over; one already the same (size and time) is left alone."""
-    if dst.is_symlink() or (dst.exists() and dst.is_dir() != (src.is_dir() and not src.is_symlink())):
-        if src.is_symlink() and dst.is_symlink() and os.readlink(dst) == os.readlink(src):
-            return
-        shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink(missing_ok=True)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if src.is_symlink():
-        tmp = dst.with_name(f".{dst.name}.flux-{os.getpid()}-{uuid.uuid4().hex[:6]}")
-        tmp.symlink_to(os.readlink(src))
-        os.replace(tmp, dst)                                  # a run copying at once finds a link, never none
-    elif src.is_dir():                                       # a folder of credentials: copied whole
-        dst.mkdir(exist_ok=True)
-        for p in src.iterdir():
-            _copy_over(p, dst / p.name)
-    elif src.is_file():
-        st = src.stat()
-        try:
-            d = dst.stat()
-            if d.st_size == st.st_size and int(d.st_mtime) == int(st.st_mtime) and (d.st_mode & 0o7777) == (st.st_mode & 0o7777):
-                return
-        except FileNotFoundError:
-            pass
-        tmp = dst.with_name(f".{dst.name}.flux-{os.getpid()}-{uuid.uuid4().hex[:6]}")
-        try:
-            shutil.copyfile(src, tmp)
-            tmp.chmod(st.st_mode & 0o7777)                    # its own mode: a copied program stays one
-            os.utime(tmp, (st.st_atime, st.st_mtime))         # its own time: the next run sees it the same
-            os.replace(tmp, dst)
-        finally:
-            tmp.unlink(missing_ok=True)
-
-
 def _env() -> dict[str, str]:
     # D697: the variables `flux serve` set for this run on purpose pass, whatever their names
     passed = {n for n in os.environ.get("FLUX_SANDBOX_PASS", "").split(",") if n}
@@ -343,39 +309,17 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     eng = eng or engine()
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
-    if command == "login":                                    # D734: HOME is the user's own, writable: what the login writes stays
-        home, src = _home(), None
-        sh = Path(args.home).resolve()
-        sh.mkdir(parents=True, exist_ok=True)
-        # at a path of its own inside: this machine's folders under its HOME (the source, PATH
-        # folders) are mounted at their own paths, which would make mount points in the user's home
-        home_in = Path("/home/flux-login")
-    else:
-        home, src, sh = _home(), _home_src(), _sandbox_home(app)
-        home_in = home
-    # D706: a home path copied for each run is the run's copy. A read-only mount of it, or of a
-    # folder inside it (a PATH directory, a link's target), would hide that copy: dropped. A
-    # read-only folder above it would hide it too: the copy is mounted again on top of it.
-    copied = [str(home / rel) for rel in home_copy() if (sh / rel).exists()] if src else []
-    ro = [p for p in ro if not any(p == c or p.startswith(c + "/") for c in copied)]
-    # each read-only home path: its source (this machine's home, or an external user's) at its place in HOME
-    keep_ro = {str(home / rel): str(src / rel) for rel in home_ro() if src and (src / rel).exists()
-               and not any(str(home / rel) == c or str(home / rel).startswith(c + "/") for c in copied)}
-    over = [c for c in copied if any(c.startswith(p + "/") for p in [*ro, *keep_ro])]
-    for p in (ro + rw if home_in == home else []):           # mount points under HOME: made by us, not by the engine as root
-        if p.startswith(str(home) + "/"):
-            mp = sh / Path(p).relative_to(home)
-            if Path(p).is_file():                             # a file (a certificate, D722): a file to mount on
-                mp.parent.mkdir(parents=True, exist_ok=True)
-                mp.touch(exist_ok=True)
-            else:
-                mp.mkdir(parents=True, exist_ok=True)
+    home = flux_home(args, command)                           # D744: the user's own, writable, kept
     cli = engine_cli(eng)
     # scratch on the container's own /tmp: with TMPDIR on any directory mounted from the host,
     # Yosys's abc step hangs (both engines, D682); the traces stay in the application's cache
     size = os.environ.get("FLUX_SANDBOX_TMP_SIZE")
     cmd = [*cli, "run", "--rm", "--name", name, "--read-only",
            "--tmpfs", "/tmp:exec,mode=1777" + (f",size={size}" if size else ""),
+           # D744: this machine's own HOME path is scratch inside -- its folders mounted on it (PATH,
+           # the loops' caches) are at their places, and a tool that writes beside its install
+           # (OpenCode's `~/.opencode/.gitignore`, found walking up from a loop's cache) can
+           "--tmpfs", f"{_home()}:exec,mode=0700",
            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
            "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
            "--workdir", os.getcwd(), "--label", "flux.sandbox=1"]
@@ -401,17 +345,13 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
             cmd += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=53", "-v", f"{resolv}:/etc/resolv.conf:ro"]
         except OSError:
             pass                                              # no lookups seen; the proxy still filters
-    cmd += ["-v", f"{sh}:{home_in}"]                              # HOME: the application's
+    cmd += ["-v", f"{home}:{HOME_IN}"]                            # HOME: the user's Flux home
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
-    for p, from_ in keep_ro.items():
-        cmd += ["-v", f"{from_}:{p}:ro"]
-    for c in over:
-        cmd += ["-v", f"{sh / Path(c).relative_to(home)}:{c}"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
-    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=str(home_in), FLUX_SANDBOX_CLI=json.dumps(cli))
+    env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=HOME_IN, FLUX_SANDBOX_CLI=json.dumps(cli))
     env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
     if not env.get("NODE_EXTRA_CA_CERTS"):                    # D722: Node/Bun trust their own roots only; the host's too
         bundle = next((b for b in (env.get("SSL_CERT_FILE", ""), *BUNDLES) if b and Path(b).is_file()), None)

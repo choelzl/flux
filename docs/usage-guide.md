@@ -310,14 +310,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (no network) and is not seen.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
-  - **Home files:** paths inside the home folder mounted read-only (an agent's configuration) or
-    copied in before each run (credentials an agent may refresh: the copy changes, the original
-    does not). Always: `.config/opencode` and `.opencode` read-only; Claude Code's and OpenCode's
-    credentials copied. A copied path wins: a PATH folder or read-only path at or inside it is
-    not mounted over it, and a read-only folder above it gets the copy mounted on top.
-  - From the command line the same is set by `FLUX_SANDBOX_HOME_RO`, `FLUX_SANDBOX_HOME_COPY`
-    (comma-separated, relative to the home folder), `FLUX_SANDBOX_NET=allowlist` and
-    `FLUX_SANDBOX_ALLOW`.
+  - **Homes** (D744): every user has a home of their own, `<data>/users/<name>/home` (0700, no system
+    account): their runs' HOME, writable at `/home/flux`, kept -- their agents' settings, logins and
+    sessions. A run uses the home of whoever starts it. Every home starts with the admin's list of
+    paths from the server account's home (default `.config/opencode`), copied where it lacks them,
+    never over what is there; no one's login is among them. The server account's own home path is
+    scratch inside (a tmpfs, with its PATH folders and the loops' caches mounted on it).
+  - From the command line: `FLUX_SANDBOX_HOME` names the home; without it, a run's home is
+    `~/.local/share/flux/home`, started from your own agents' configuration and logins;
+    `FLUX_SANDBOX_NET=allowlist` and `FLUX_SANDBOX_ALLOW` set the network.
 - **Environment variables:** the server's (Admin › Models and variables), a user's (Account), a
   loop's (its Settings), applied in that order, a secret stored encrypted and never shown again.
   They reach the run inside the sandbox whatever their names (`FLUX_SANDBOX_PASS`). The
@@ -346,12 +347,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **internal** (the default): their runs use the server's model, agent and environment settings, under their own.
   - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
     environment variables -- only their own (Account) and the admin's agent programs; the network rules apply to
-    everyone. Their home files (agent configs, credentials) come from a home of their own,
-    `<data>/users/<name>/home` (by default under `~/.local/share/flux/web`; no system account). On Account,
-    **Agent logins** runs each agent's login command (`FLUX_<AGENT>_LOGIN`, the admin's; defaults `opencode auth
-    login`, `claude setup-token`, `codex login`) in the sandbox, with that home writable, in a small terminal: its
-    output with links, a line to type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, and their runs
-    copy it in.
+    everyone. Every user (D744) has a home of their own (see Homes); on Account, **Agent logins** runs each
+    agent's login command (`FLUX_<AGENT>_LOGIN`, the admin's; defaults `opencode auth login`, `claude setup-token`,
+    `codex login`) in the sandbox, with that home writable, in a small terminal: its output with links, a line to
+    type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, where their runs use it.
   - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with
