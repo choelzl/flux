@@ -66,7 +66,8 @@ def test_claude_stream_json_is_read_live_and_its_result_is_the_answer():
               {"type": "rate_limit_event"}]
     for ev in events:
         live.feed(json.dumps(ev) + "\n")
-    assert live.fields() == {"tool calls": "1. Bash", "reply (live tail)": "done\n"}
+    assert live.fields() == {"tool calls": "1. Bash", "reply (live tail)": "done\n", "steps total": 2,
+                             "steps": [{"k": "tool", "name": "Bash", "call": "Bash", "input": {}}, {"k": "text", "text": "done\n"}]}
     assert _parse("claude", "".join(json.dumps(e) + "\n" for e in events)) == ("the file is written", "s-1")
 
 
@@ -149,3 +150,50 @@ def test_claude_is_given_the_loops_folder_when_it_works_outside_it(tmp_path):
     assert got[-2:] == ["--add-dir", str(loop.resolve())]
     run_turn(spec, spec.argv, {"prompt": "p", "name": "answer", "home": str(work / "inner")}, workdir=work)
     assert "--add-dir" not in json.loads(argv_file.read_text()), "a home inside the workdir needs nothing"
+
+
+def test_the_steps_keep_the_conversation_in_order_opencode():
+    """D712: words, thinking and each tool call with its input and output, in the order they
+    came; words or thinking that go on are one step."""
+    live = _Live("opencode")
+    for ev in [{"type": "reasoning", "part": {"text": "an adder"}},
+               {"type": "reasoning", "part": {"text": "ripple is enough"}},
+               {"type": "text", "part": {"text": "Reading the brief."}},
+               {"type": "tool_use", "part": {"tool": "bash", "state": {"input": {"command": "ls -la"}, "output": "a.sv\nb.sv", "status": "completed"}}},
+               {"type": "tool_use", "part": {"tool": "read", "state": {"input": {"filePath": "/w/x.sv"}, "error": "no such file", "status": "error"}}},
+               {"type": "text", "part": {"text": "Done."}}]:
+        live.feed(json.dumps(ev))
+    st = live.steps
+    assert [s["k"] for s in st] == ["think", "text", "tool", "tool", "text"]
+    assert st[0]["text"] == "an adder\nripple is enough\n"
+    assert st[2]["name"] == "bash" and st[2]["call"] == "bash: ls -la" and st[2]["input"] == {"command": "ls -la"}
+    assert st[2]["out"] == "a.sv\nb.sv" and st[2]["error"] is False
+    assert st[3]["out"] == "no such file" and st[3]["error"] is True
+    f = live.fields()
+    assert f["steps total"] == 5 and len(f["steps"]) == 5
+
+
+def test_the_steps_of_claude_join_a_result_to_its_call_and_stream_the_words():
+    live = _Live("claude")
+    for ev in [{"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "thinking_delta", "thinking": "hm"}}},
+               {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "Let me "}}},
+               {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "look."}}},
+               {"type": "assistant", "message": {"content": [{"type": "text", "text": "Let me look."},
+                                                             {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "cat a"}}]}},
+               {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": [{"type": "text", "text": "A"}]}]}},
+               {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "thinking_delta", "estimated_tokens": 30}}}]:
+        live.feed(json.dumps(ev))
+    st = live.steps
+    assert [s["k"] for s in st] == ["think", "text", "tool", "think"]
+    assert st[1]["text"] == "Let me look.", "the words once: streamed, not again from the whole message"
+    assert st[2]["out"] == "A" and st[2]["error"] is False, "the result joined to its call by id"
+    assert st[3]["redacted"] == 30
+
+
+def test_a_turn_keeps_its_steps_for_the_record(tmp_path):
+    fake = tmp_path / "slow_agent.py"
+    fake.write_text(SLOW)
+    spec = AgentSpec("fake", (sys.executable, str(fake)), None, "opencode", timeout_s=30)
+    turn = run_turn(spec, spec.argv, {"prompt": "p", "name": "critique"}, workdir=tmp_path)
+    assert [s["k"] for s in turn.steps] == ["tool", "think", "text", "tool", "text"]
+    assert turn.steps[0]["out"] == "42"

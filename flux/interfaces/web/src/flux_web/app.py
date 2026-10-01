@@ -1196,7 +1196,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                         continue
                     if k is None:
                         t = {key: (v[:300] + "..." if isinstance(v, str) and len(v) > 300 else v)
-                             for key, v in t.items() if key not in ("hops",)} | {"hops": len(t.get("hops") or [])}
+                             for key, v in t.items() if key not in ("hops", "steps")} | {"hops": len(t.get("hops") or []),
+                                                                                         "steps": len(t.get("steps") or [])}
                     elif n != k:
                         continue
                     out.append({"k": n, **t})

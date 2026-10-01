@@ -1642,3 +1642,30 @@ the topics above.
     the dependence on a machine's own OpenCode config.
   - Tests: `test_coding_agent` (`external_directory` allowed) and `test_agent_live` (`--add-dir`
     given for a loop around the workdir, not for one inside it).
+- **D712: an agent's output is one conversation, in order.**
+  - Key insight: the live parser kept a tail per kind (thinking, words, the last tool output)
+    and the last 8 calls, so the page showed four boxes side by side with the order lost, and a
+    tool's output only for the last call. The order is in the stream; it only had to be kept.
+  - Rules (`_Live.steps`):
+    - A step is text, thinking, or a tool call. Words or thinking that go on are one step. A
+      tool call carries its name, its one-line call, its input as named fields (each with its
+      own text: a written file reads as code, not as JSON with `\n`), and its output and error.
+    - Claude's `tool_result` is joined to its `tool_use` by id. Redacted thinking is a step that
+      gives its token count. OpenCode's `tool_use` carries input and output together.
+    - The live row sends the last 40 steps with the total. The turn keeps every step (each text
+      its last 4000 characters) in its transcript record. The turns list sends only a count;
+      the selected turn sends them all.
+  - Web: `conversation()`, shared by Live and Agent turns.
+    - Text is rendered as Markdown with an accent bar.
+    - Thinking is folded under a one-line preview. A tool call is folded under its name and
+      call, says "running" while it has no output yet, and is red when it failed.
+    - What you open stays open across the redraw each second, and the box follows its end unless
+      read upward.
+    - Agent turns: the main facts in a line (model, exit, tokens, tool calls, cost), the rest
+      under "More", the prompt folded below the conversation.
+  - Live, OpenCode on LocalAI in Podman, a fresh add8 loop: the steps read thinking, `write
+    draft-add8.sv` (content as code, file path, "Wrote file successfully."), thinking, the
+    reply. A call opened stayed open across the redraws, with no page errors.
+  - Tests: `test_agent_live` (the order for OpenCode and for Claude; a result joined by id;
+    words streamed once; redacted thinking; a turn's steps kept). Unit suite and browser test:
+    1443 passed, 105 of 105.

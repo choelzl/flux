@@ -673,6 +673,44 @@ function markdown(text) {
   return h("div", { class: "md" }, out);
 }
 
+/** An agent's conversation (D712): what it did, in order -- its words as text, its thinking and
+    each tool call (input and output) folded, opened on a click and kept open across the redraws.
+    `offset`: how many earlier steps are not in `steps` (a live row sends its latest). */
+const convOpen = new Set();
+function conversation(steps, { key = "", offset = 0, live = false } = {}) {
+  const items = [];
+  if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} not shown here: the Agent turns tab has the whole turn once it ends.`));
+  const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
+  steps.forEach((st, i) => {
+    const id = `${key}:${offset + i}`, last = i === steps.length - 1;
+    if (st.k === "text") { if (String(st.text || "").trim()) items.push(h("div", { class: "cv-text" }, markdown(String(st.text).trim()))); return; }
+    const det = h("details", { class: `cv-step cv-${st.k}${st.error ? " bad" : ""}` });
+    if (convOpen.has(id)) det.open = true;
+    det.addEventListener("toggle", () => { if (det.open) convOpen.add(id); else convOpen.delete(id); });
+    if (st.k === "think") {
+      const t = String(st.text || "").trim();
+      det.append(h("summary", {}, h("span", { class: "cv-kind" }, "Thinking"),
+        h("span", { class: "cv-sum muted" }, t ? preview(t) : `redacted, about ${Number(st.redacted || 0).toLocaleString()} tokens`),
+        live && last ? h("span", { class: "cv-live" }, "…") : ""),
+        t ? h("pre", { class: "cv-body cv-thought" }, t) : "");
+    } else {
+      const state = st.out != null ? (st.error ? "failed" : "") : live && last ? "running" : "";
+      det.append(h("summary", {}, h("span", { class: "cv-kind" }, st.name || "tool"),
+        h("code", { class: "cv-sum" }, preview(String(st.call || "").replace(/^[^:]*:\s*/, ""), 160)),
+        state ? h("span", { class: `cv-state ${state === "failed" ? "bad" : "live"}` }, state) : ""),
+        ...Object.entries(st.input && typeof st.input === "object" ? st.input : st.input ? { input: String(st.input) } : {}).map(([k, v]) => {
+          const t = String(v ?? "");
+          return h("div", { class: "cv-io" }, h("small", {}, k || "input"),
+            t.includes("\n") || t.length > 90 ? h("pre", { class: "cv-body" }, t) : h("div", {}, h("code", { class: "cv-arg" }, t)));
+        }),
+        st.out != null ? h("div", { class: "cv-io" }, h("small", {}, st.error ? "error" : "output"),
+          h("pre", { class: `cv-body${st.error ? " err" : ""}` }, String(st.out).trim() || "(nothing)")) : "");
+    }
+    items.push(det);
+  });
+  return h("div", { class: `cv${live ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
+}
+
 /** The agents that can write a problem here (D704), as a select; the unavailable say why. */
 async function agentSelect(id) {
   const list = await api("/agents").catch(() => []);
@@ -1436,10 +1474,20 @@ async function loopPage(name, owner, tab = "Overview") {
           ["cost", full.cost_usd ? `$${Number(full.cost_usd).toFixed(4)}` : null], ["tool calls", full.tool_calls ?? (full.hops || []).length],
           ["prompt", full.prompt_chars ? `${full.prompt_chars} chars` : full.prompt ? `${String(full.prompt).length} chars` : null],
           ["finish", nt.finish], ["schema", nt.schema], ["folder", full.workdir]].filter(([, v]) => v != null && v !== "");
+        // D712: what most want first -- the model, the exit, the tokens, the tools; the rest folded
+        const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "tool calls", "cost"]);
+        const factEl = ([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 && v !== "0" ? " bad" : ""}` }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v)));
+        const more = facts.filter(([k]) => !MAIN.has(k));
         one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
-          h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v))))),
-          ...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
-          ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : []));
+          h("div", { class: "facts" }, facts.filter(([k]) => MAIN.has(k)).map(factEl)),
+          more.length ? h("details", { class: "facts-more" }, h("summary", {}, `More: ${more.map(([k]) => k).join(", ")}`), h("div", { class: "facts" }, more.map(factEl))) : "",
+          ...(Array.isArray(full.steps) && full.steps.length
+            ? [full.error ? h("div", { class: "blk" }, h("h3", {}, "error"), proseBlock(String(full.error))) : "",
+               conversation(full.steps, { key: `turn${t.k}` }),
+               full.stderr ? h("details", { class: "blk" }, h("summary", {}, "stderr"), proseBlock(String(full.stderr))) : "",
+               full.prompt ? h("details", { class: "blk" }, h("summary", {}, `The prompt (${String(full.prompt).length.toLocaleString()} characters)`), proseBlock(String(full.prompt))) : ""]
+            : [...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
+               ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : [])]));
       };
       const tokOf = (t) => { const n = t.notes && typeof t.notes === "object" ? t.notes : {};
         const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
@@ -1777,6 +1825,14 @@ function liveTree(base, qs, onQuestion) {
       h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
     const tools = String(f["tool calls"] || "").split("\n").filter(Boolean);
     const thinking = f["thinking (live tail)"] || f.thinking || "";
+    const steps = Array.isArray(f.steps) ? f.steps : null;
+    if (steps) {                                       // D712: one conversation, in order
+      const total = Number(f["steps total"] || steps.length);
+      return h("div", { class: "agent-view" },
+        h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
+        conversation(steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: true }),
+        stream("stderr", "stderr", f.stderr, "err"));
+    }
     return h("div", { class: "agent-view" },
       h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
       stream("thinking", "Thinking", thinking, "think"),
@@ -1808,7 +1864,7 @@ function liveTree(base, qs, onQuestion) {
     if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
     const n = selected;
     // D702: a stream read upward keeps its place across the redraw each second
-    const kept = new Map([...detail.querySelectorAll("pre[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
+    const kept = new Map([...detail.querySelectorAll("pre[data-k], .cv[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
     const sameTask = detail.dataset.task === String(n.id);
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
@@ -1827,7 +1883,7 @@ function liveTree(base, qs, onQuestion) {
         ? [(String(n.name).startsWith("agent:") ? agentView : toolView)(n, now), h("details", { class: "blk" }, h("summary", { class: "muted" }, "Parameters and every field"),
           block("Parameters", n.params), block("Fields", n.fields), block("Output", n.output))]
         : [block("Parameters", n.params), block(running(n) ? "So far" : "Live fields", n.fields), block("Output", n.output)]));
-    for (const pre of detail.querySelectorAll("pre.val")) {
+    for (const pre of detail.querySelectorAll("pre.val, .cv[data-k]")) {
       const k = pre.dataset.k, at = sameTask && k ? kept.get(k) : undefined;
       pre.scrollTop = at === undefined || at === -1 ? pre.scrollHeight : at;   // a live tail shows its end, unless read upward
     }

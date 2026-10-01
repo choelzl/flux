@@ -44,7 +44,7 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -356,6 +356,7 @@ class Turn:
     began: str = "fresh"           # how the conversation that ended on this turn began: fresh | resumed
     about: str = ""                # which model and tool version answered, as far as known (D696)
     tools: int = 0                 # the tool calls it made
+    steps: list[dict[str, Any]] = field(default_factory=list)   # what it did, in order (D712)
 
 
 def _parse(output: str, stdout: str) -> tuple[str, str | None]:
@@ -445,9 +446,34 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       prompt=subs.get("answer", "") if turn.resumed else subs.get("prompt", ""), ok=turn.ok,
                       rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
-                      about=turn.about, tool_calls=turn.tools, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
+                      about=turn.about, tool_calls=turn.tools, steps=turn.steps, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
                       **usage(spec.output, turn.stdout or ""))
     return turn
+
+
+def _short(step: dict[str, Any], chars: int = 4000) -> dict[str, Any]:
+    """A step with each text its last `chars` (an input's fields their first: a file's head reads)."""
+    out: dict[str, Any] = {}
+    for k, v in step.items():
+        if isinstance(v, str):
+            out[k] = v[-chars:]
+        elif isinstance(v, dict):
+            out[k] = {a: (b[:chars] + "…" if isinstance(b, str) and len(b) > chars else b) for a, b in v.items()}
+        else:
+            out[k] = v
+    return out
+
+
+def _text_of(out: Any) -> str:
+    """A tool's output as text, whatever shape the agent gave it."""
+    if isinstance(out, str):
+        return out
+    if isinstance(out, list):
+        return "\n".join(str(b.get("text") or "") if isinstance(b, dict) else str(b) for b in out)
+    try:
+        return json.dumps(out, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(out)
 
 
 def _detail(tool: str, args: Any) -> str:
@@ -471,9 +497,16 @@ class _Live:
 
     TAIL = 1500
     OUT_TAIL = 400
+    STEP_CHARS = 20000          # one step's text, its end kept
+    STEPS_KEPT = 400            # the steps a turn keeps; the live row sends the last STEPS_LIVE
+    STEPS_LIVE = 40
 
     def __init__(self, output: str) -> None:
         self.output, self.tools, self.words, self.thinking, self.result = output, [], "", "", ""
+        # D712: what the agent did, in order -- its words, its thinking, each tool call with its
+        # input and output -- so a page shows one conversation, not tails side by side
+        self.steps: list[dict[str, Any]] = []
+        self._by_id: dict[str, dict[str, Any]] = {}
         self.streamed = False                      # claude: the words came token by token
         self.thought_tokens = 0                    # claude: redacted thinking, counted
         # D676: signs of life, so a silent agent says why -- the model and version it started
@@ -512,17 +545,54 @@ class _Live:
             at = ", resets " + _t.strftime("%a %H:%M", _t.localtime(when))
         self.limit = f"{st} ({info.get('rateLimitType') or 'limit'}{at})"
 
+    def _step(self, kind: str, text: str) -> None:
+        """Words or thinking: one step while the same kind goes on, a new one after anything else."""
+        if not text:
+            return
+        last = self.steps[-1] if self.steps else None
+        if last is not None and last["k"] == kind:
+            last["text"] = (last["text"] + text)[-self.STEP_CHARS:]
+            return
+        self.steps.append({"k": kind, "text": text[-self.STEP_CHARS:]})
+        del self.steps[:-self.STEPS_KEPT]
+
+    def _tool_step(self, name: str, args: Any, ident: str | None = None, out: Any = None, error: bool = False) -> None:
+        step: dict[str, Any] = {"k": "tool", "name": name, "call": _detail(name, args), "input": self._args(args)}
+        if out is not None:
+            step.update(out=_text_of(out)[-self.STEP_CHARS:], error=bool(error))
+        self.steps.append(step)
+        del self.steps[:-self.STEPS_KEPT]
+        if ident:
+            self._by_id[ident] = step
+
+    def _args(self, args: Any) -> dict[str, str]:
+        """A tool's input as its named fields, each as text -- a file's content with its own lines,
+        not a JSON string with \\n in it."""
+        if args in (None, {}, ""):
+            return {}
+        if not isinstance(args, dict):
+            return {"": _text_of(args)[:self.STEP_CHARS]}
+        return {str(k): (v if isinstance(v, str) else _text_of(v))[:self.STEP_CHARS] for k, v in args.items()}
+
+    def _tool_result(self, ident: str | None, out: Any, error: bool) -> None:
+        step = self._by_id.pop(ident or "", None)
+        if step is not None:
+            step.update(out=_text_of(out)[-self.STEP_CHARS:], error=bool(error))
+
     def _say(self, text: str, *, sep: str = "\n") -> None:
         self.words = (self.words + text + sep)[-self.TAIL:]
+        self._step("text", text + sep)
 
     def _think(self, text: str, *, sep: str = "\n") -> None:
         self.thinking = (self.thinking + text + sep)[-self.TAIL:]
+        self._step("think", text + sep)
 
     def feed(self, line: str, now: float | None = None) -> None:
         self.lines += 1
         self.last = now
         if self.output == "text":
             self.words = (self.words + line)[-self.TAIL:]
+            self._step("text", line)
             return
         try:
             ev = json.loads(line)
@@ -537,6 +607,8 @@ class _Live:
                 state = part.get("state") or {}
                 self.tools.append(_detail(str(part.get("tool") or "tool"), state.get("input")))
                 out = state.get("output") or state.get("error")
+                self._tool_step(str(part.get("tool") or "tool"), state.get("input"), out=out if out is not None else None,
+                                error=bool(state.get("error")) or state.get("status") == "error")
                 if isinstance(out, str) and out.strip():
                     self.result = out.strip()[-self.OUT_TAIL:]
             elif kind == "text":
@@ -571,6 +643,10 @@ class _Live:
                         self._think(str(d["thinking"]), sep="")
                     else:                            # redacted: only its size
                         self.thought_tokens += int(d.get("estimated_tokens") or 0)
+                        last = self.steps[-1] if self.steps else None
+                        if last is None or last["k"] != "think":
+                            self.steps.append({"k": "think", "text": "", "redacted": 0})
+                        self.steps[-1]["redacted"] = self.steps[-1].get("redacted", 0) + int(d.get("estimated_tokens") or 0)
             elif e.get("type") == "content_block_stop" and self.words and not self.words.endswith("\n"):
                 self.words += "\n"
         elif kind == "assistant":
@@ -579,6 +655,7 @@ class _Live:
                     continue
                 if c.get("type") == "tool_use":
                     self.tools.append(_detail(str(c.get("name") or "tool"), c.get("input")))
+                    self._tool_step(str(c.get("name") or "tool"), c.get("input"), ident=c.get("id"))
                 elif c.get("type") == "text" and not self.streamed:
                     self._say(str(c.get("text") or ""))
                 elif c.get("type") == "thinking" and c.get("thinking") and not self.thinking:
@@ -589,6 +666,7 @@ class _Live:
                     body = c.get("content")
                     if isinstance(body, list):
                         body = "\n".join(str(b.get("text") or "") for b in body if isinstance(b, dict))
+                    self._tool_result(c.get("tool_use_id"), body or "", bool(c.get("is_error")))
                     if str(body or "").strip():
                         self.result = str(body).strip()[-self.OUT_TAIL:]
 
@@ -617,7 +695,14 @@ class _Live:
             out["thinking"] = f"about {self.thought_tokens:,} tokens (the tool does not show its thinking)"
         if self.words.strip():
             out["reply (live tail)"] = self.words
+        if self.steps:                                   # D712: the conversation, its latest steps
+            out["steps"] = [_short(st) for st in self.steps[-self.STEPS_LIVE:]]
+            out["steps total"] = len(self.steps)
         return out
+
+    def kept(self) -> list[dict[str, Any]]:
+        """The steps the turn's record keeps: every one, each text its last 4000 characters."""
+        return [_short(st) for st in self.steps]
 
 
 #: The largest prompt passed inline; Linux refuses one argument over 128 KiB (MAX_ARG_STRLEN)
@@ -725,8 +810,9 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     about = live.agent
     if timed_out:                                     # its session kept: a later turn may resume it
         return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
-                    about=about, tools=len(live.tools))
-    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools))
+                    about=about, tools=len(live.tools), steps=live.kept())
+    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools),
+                steps=live.kept())
 
 
 _VERSIONS: dict[str, str] = {}

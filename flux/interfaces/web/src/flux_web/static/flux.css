@@ -561,3 +561,32 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 td.bad { color: var(--bad); }
 .fact.bad span { color: var(--bad); }
 .node .exitn { color: var(--bad); font-size: 11px; margin-left: 6px; white-space: nowrap; }
+
+/* D712: an agent's conversation -- its words as text, thinking and tool calls folded */
+.cv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.cv > * { min-width: 0; }
+.cv.cv-live-box { max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+.cv-text { padding: 2px 2px 2px 10px; border-left: 3px solid var(--accent); }
+.cv-text .md > :first-child { margin-top: 0; }
+.cv-text .md > :last-child { margin-bottom: 0; }
+.cv-step { border: 1px solid var(--line); border-radius: 6px; background: var(--soft); }
+.cv-step > summary { display: flex; align-items: baseline; gap: 8px; padding: 4px 9px; cursor: pointer; list-style: none; min-width: 0; }
+.cv-step > summary::-webkit-details-marker { display: none; }
+.cv-step > summary::before { content: "▸"; color: var(--muted); font-size: 11px; }
+.cv-step[open] > summary::before { content: "▾"; }
+.cv-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+.cv-tool .cv-kind { color: var(--accent); }
+.cv-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.cv-think .cv-sum { font-style: italic; }
+.cv-state { font-size: 11px; white-space: nowrap; }
+.cv-state.live { color: var(--accent); }
+.cv-state.bad, .cv-step.bad .cv-kind { color: var(--bad); }
+.cv-live { color: var(--accent); }
+.cv-io { padding: 0 9px 8px; }
+.cv-io small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.cv-body { margin: 2px 0 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: var(--bg); border-radius: 4px; padding: 6px 8px; }
+.cv-thought { margin: 0 9px 8px; font-style: italic; color: var(--muted); }
+.cv-body.err { color: var(--bad); }
+.cv-arg { font-size: 12px; overflow-wrap: anywhere; }
+.cv-text { overflow-wrap: anywhere; }
+.facts-more > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 4px 0; }
