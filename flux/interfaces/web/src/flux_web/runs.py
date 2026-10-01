@@ -257,12 +257,11 @@ class RunManager:
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         adv = advanced(self.store, user.name, app)
         sandbox_env(env, self.sandbox, adv)
-        net = machine_env(env, self.store.server_get("sandbox") or {}, adv, list(options.get("allow") or []))
+        machine_env(env, self.store.server_get("sandbox") or {}, adv, list(options.get("allow") or []))
         if adv.get("sandbox") is False and self.sandbox:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
-            + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else []) \
-            + ([net] if net else [])
+            + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else [])   # D720: not the network
         with open(files["log"], "a") as fh:
             fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n")
         run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)

@@ -1840,3 +1840,9 @@ the topics above.
     - a loop from one with its files, and a document that loads;
     - a taken name, a bad name and an unknown kind refused;
     - `no-cache` on the page and its scripts.
+- **D720: a run's log says where it runs, not how its network is limited or how to leave the sandbox.**
+  - The sandbox's line is `flux <command>: in the <engine> sandbox <name>`. The network and the
+    `--no-sandbox` hint are gone: users read the log, and the network is the admin's business
+    (D716). The web's start line no longer names the network.
+  - An admin's choice to run a loop on the host is still said ("on the host, no sandbox (an
+    admin's setting)"), since that changes what the loop's code may touch.

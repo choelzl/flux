@@ -397,8 +397,8 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     # D714: the flux that is running, by its own interpreter -- not whichever `flux` PATH finds
     # first, nor `sys.argv[0]`, which under `python -m` is a source file, not a program
     cmd = container_argv([sys.executable, "-m", "flux_cli", *argv], args, command, name, proxy_dir, eng)
-    print(f"flux {command}: in the {eng} sandbox {name} (network: {f'an allowlist of {len(allow)} entr' + ('y' if len(allow) == 1 else 'ies') if allow else 'none (an empty allowlist)' if strict else 'open'}; "
-          f"--no-sandbox to run on the host)", file=sys.stderr, flush=True)
+    # D720: the run's log says where it runs, not how its network is limited nor how to leave the sandbox
+    print(f"flux {command}: in the {eng} sandbox {name}", file=sys.stderr, flush=True)
     try:
         return subprocess.call(cmd)
     except KeyboardInterrupt:
