@@ -117,8 +117,8 @@ class Store:
     def add_user(self, name: str, password: str, role: str = "user") -> User:
         if not name or not name.replace("-", "").replace("_", "").isalnum() or len(name) > 40:
             raise ValueError("a user name is letters, digits, - and _ (at most 40)")
-        if len(password) < 10:
-            raise ValueError("a password has at least 10 characters")
+        if len(password) < 6:
+            raise ValueError("a password has at least 6 characters")
         if role not in ("user", "admin"):
             raise ValueError("role is user or admin")
         with self._db() as db:
@@ -144,8 +144,8 @@ class Store:
                  role: str | None = None) -> None:
         with self._db() as db:
             if password is not None:
-                if len(password) < 10:
-                    raise ValueError("a password has at least 10 characters")
+                if len(password) < 6:
+                    raise ValueError("a password has at least 6 characters")
                 db.execute("UPDATE users SET pw = ? WHERE name = ?", (self.hash_password(password), name))
             if disabled is not None:
                 db.execute("UPDATE users SET disabled = ? WHERE name = ?", (int(disabled), name))
