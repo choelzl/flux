@@ -477,6 +477,7 @@ def flows(r: Run) -> None:
         b.js("document.querySelector('.tasks-drawing .fc-box.fc-pick[data-node=test]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return true;")
         b.wait("document.querySelector('.tasks-drawing .fc-box.fc-sel[data-node=test]')", timeout=10, what="the box selected")
         r.check("a box selects its latest task", bool(b.js("return document.querySelector('.detail-card .detail-head h2')?.textContent")))
+        r.check("a selected box shows its run's tasks (D730)", b.js("return document.querySelectorAll('.run-graph .rg-row').length") >= 1)
         r.check("a box says its own setting, not counts (D727)", not any("×" in t for t in b.js("return [...document.querySelectorAll('.tasks-drawing .fc-box-half')].map(t => t.textContent)")))
         # D728: the bar goes through the selected box's runs; a box opens what worked in it
         multi = b.js("""for (const g of document.querySelectorAll('.tasks-drawing .fc-box.fc-pick')) {

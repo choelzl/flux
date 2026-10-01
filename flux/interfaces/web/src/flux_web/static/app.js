@@ -689,7 +689,7 @@ function markdown(text) {
     each tool call (input and output) folded, opened on a click and kept open across the redraws.
     `offset`: how many earlier steps are not in `steps` (a live row sends its latest). */
 const convOpen = new Set();
-function conversation(steps, { key = "", offset = 0, live = false } = {}) {
+function conversation(steps, { key = "", offset = 0, live = false, scroll = false } = {}) {
   const items = [];
   if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} not shown here: the Agent turns tab has the whole turn once it ends.`));
   const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
@@ -720,7 +720,7 @@ function conversation(steps, { key = "", offset = 0, live = false } = {}) {
     }
     items.push(det);
   });
-  return h("div", { class: `cv${live ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
+  return h("div", { class: `cv${scroll ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
 }
 
 /** The agents that can write a problem here (D704), as a select; the unavailable say why. */
@@ -1872,6 +1872,42 @@ function liveTree(base, qs, onQuestion) {
     return latest(live.filter(worker)) || latest(live) || latest(all.filter(n => String(n.name).startsWith("agent:")))
       || latest(all.filter(n => /^(llm|model)/.test(String(n.name)))) || latest(all.filter(worker)) || v;
   }
+  /** The selected run's own tasks (D730), top to bottom as an indented tree under the step bar --
+      it fits the column: a line per task (state, its whole name, what for, time), same-named
+      siblings past three grouped as one ("tool:python3 ×6", opening the latest); a click opens
+      a task in the detail. */
+  const runBox = h("div", { class: "run-graph" });
+  function drawRunGraph(run, now) {
+    if (!run) { runBox.replaceChildren(); return; }
+    const MAX = 80;
+    let count = 0;
+    const group = (kids) => {
+      const out = [], by = new Map();
+      for (const k of kids) { const key = String(k.name); if (!by.has(key)) { by.set(key, []); out.push(key); } by.get(key).push(k); }
+      return out.flatMap(key => { const xs = by.get(key); return xs.length > 3 ? [{ many: xs }] : xs.map(n => ({ n })); });
+    };
+    const rows = [];
+    const lay = (it, depth, last) => {
+      if (count >= MAX) return;
+      count++;
+      const xs = it.many || [it.n], n = it.many ? xs.reduce((a, x) => (x.t0 >= a.t0 ? x : a)) : it.n;
+      const live = xs.some(running), failed = xs.filter(x => x.failed).length;
+      const state = live ? "running" : failed ? "failed" : "done";
+      const took = live ? `running · ${dur(now - n.t0)}` : dur(xs.reduce((t, x) => t + (x.seconds || 0), 0));
+      const pick = () => { selected = n; follow.checked = false; draw(); };
+      rows.push(h("div", { class: `rg-row ${state}${xs.includes(selected) ? " sel" : ""}`, style: `--d:${depth}`, tabindex: "0", role: "button",
+          onclick: pick, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } },
+        depth ? h("span", { class: "rg-branch", "aria-hidden": "true" }, last ? "└" : "├") : "",
+        h("span", { class: "rg-st" }, live ? "●" : failed ? "✗" : "✓"),
+        h("span", { class: "rg-nm" }, String(n.name) + (it.many ? ` ×${xs.length}` : "")),
+        n.why && !it.many ? h("span", { class: "rg-why" }, n.why) : "",
+        failed && it.many ? h("span", { class: "rg-why bad" }, `${failed} failed`) : "",
+        h("span", { class: "rg-dur" }, took)));
+      if (!it.many) { const ks = group(n.kids); ks.forEach((k, i) => lay(k, depth + 1, i === ks.length - 1)); }
+    };
+    lay({ n: run }, 0, true);
+    runBox.replaceChildren(h("div", { class: "run-graph-head muted small" }, "This run's tasks", count >= MAX ? ` (the first ${MAX})` : ""), h("div", { class: "run-graph-rows" }, rows));
+  }
   /** The visit a task belongs to: itself or the ancestor that began its box's stretch. */
   function visitOf(n) {
     for (let p = n; p; p = p.parent) { const b = boxOfTask(p); if (b && !(p.parent && boxOfTask(p.parent) === b)) return p; }
@@ -1886,7 +1922,7 @@ function liveTree(base, qs, onQuestion) {
       const v = await fetch(`${base}/document${qs}`, { credentials: "same-origin" }).then(r => r.json());
       if (!v.raw) { graphBox.replaceChildren(empty("The loop's document cannot be drawn: " + (v.error || "there is none."))); return; }
       const host = h("div", { class: "flux-crafter tasks-drawing" });
-      graphBox.replaceChildren(stepBar, host);
+      graphBox.replaceChildren(stepBar, runBox, host);
       drawingHandle = C.mount(host, true, { state: C.fromDoc(v.raw, v.normal || v.raw).state, activity: {},
         onBox: (id) => { if (latestOf[id]) { selected = focusOf(latestOf[id]); follow.checked = false; draw(); } } });
       draw();
@@ -1915,6 +1951,7 @@ function liveTree(base, qs, onQuestion) {
         title: `latest: ${latestOf[b].name}${latestOf[b].why ? " — " + latestOf[b].why : ""}` };
     }
     drawingHandle.setActivity(activity);
+    drawRunGraph(curBox ? cur : null, now);
     runs = curBox ? used[curBox] || [] : visits;
     runs.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
     const r = cur ? runs.indexOf(cur) : -1;
@@ -1998,9 +2035,17 @@ function liveTree(base, qs, onQuestion) {
     const steps = Array.isArray(f.steps) ? f.steps : null;
     if (steps) {                                       // D712: one conversation, in order
       const total = Number(f["steps total"] || steps.length);
+      // D731: its words first -- the last text it said, readable without scrolling through its work;
+      // the conversation below without that last text, and without a scroll of its own
+      const lastText = [...steps].reverse().find(st => st.k === "text" && String(st.text || "").trim());
+      const ends = lastText && steps[steps.length - 1] === lastText;
+      const said = lastText ? h("section", { class: "agent-reply" }, h("h3", {}, running(n) ? "Its latest words" : "Its reply"),
+        h("div", { class: "cv-text" }, markdown(String(lastText.text).trim()))) : "";
       return h("div", { class: "agent-view" },
         h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
-        conversation(steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: true }),
+        said,
+        h("h3", { class: "cv-title" }, "What it did"),
+        conversation(ends ? steps.slice(0, -1) : steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: running(n) }),
         stream("stderr", "stderr", f.stderr, "err"));
     }
     return h("div", { class: "agent-view" },
@@ -2036,6 +2081,7 @@ function liveTree(base, qs, onQuestion) {
     // D702: a stream read upward keeps its place across the redraw each second
     const kept = new Map([...detail.querySelectorAll("pre[data-k], .cv[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
     const sameTask = detail.dataset.task === String(n.id);
+    const panelTop = detail.scrollTop, panelAtEnd = detail.scrollTop + detail.clientHeight >= detail.scrollHeight - 12;
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
       const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
@@ -2057,6 +2103,9 @@ function liveTree(base, qs, onQuestion) {
       const k = pre.dataset.k, at = sameTask && k ? kept.get(k) : undefined;
       pre.scrollTop = at === undefined || at === -1 ? pre.scrollHeight : at;   // a live tail shows its end, unless read upward
     }
+    // D731: the panel's own place -- kept across the redraw; a running task read at its end stays at the end
+    if (sameTask) detail.scrollTop = panelAtEnd && running(n) ? detail.scrollHeight : panelTop;
+    else detail.scrollTop = 0;
   }
   search.addEventListener("input", draw);
   follow.addEventListener("change", draw);

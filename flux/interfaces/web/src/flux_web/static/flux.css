@@ -667,3 +667,22 @@ body:has(.composer) .toasts { bottom: 150px; }
 .step-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
 .step-bar .step-range { flex: 1 1 160px; min-width: 120px; }
 .step-bar .step-said { flex: 1 1 100%; overflow-wrap: anywhere; }
+/* D730: the selected run's own tasks, under the step bar */
+.run-graph:empty { display: none; }
+.run-graph { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--soft); }
+.run-graph-head { margin: 0 0 4px; }
+/* D731: an agent's reply first; the panel scrolls once, clear of the Ask button */
+.detail { padding-bottom: 64px; }
+.agent-reply { border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 8px; padding: 8px 10px; background: var(--panel); }
+.agent-reply h3, .cv-title { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.agent-reply .cv-text { border-left: 0; padding: 0; }
+.run-graph-rows { max-height: 240px; overflow: auto; display: grid; gap: 1px; font-size: 12.5px; }
+.rg-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 6px 2px calc(6px + var(--d) * 16px); border-radius: 5px; cursor: pointer; min-width: 0; }
+.rg-row:hover, .rg-row:focus-visible { background: var(--panel); outline: none; }
+.rg-row.sel { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.rg-branch { color: var(--muted); margin-left: -12px; width: 10px; }
+.rg-st { width: 12px; } .rg-row.done .rg-st { color: var(--ok); } .rg-row.failed .rg-st, .rg-row.failed .rg-nm { color: var(--bad); } .rg-row.running .rg-st { color: var(--accent); }
+.rg-nm { font-family: var(--mono); white-space: nowrap; }
+.rg-why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.rg-why.bad { color: var(--bad); }
+.rg-dur { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
