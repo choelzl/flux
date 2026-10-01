@@ -199,8 +199,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`, or as a
-    graph (D723: **Tree | Graph**, remembered per browser; each task a box, left to right by
-    depth, its ± opening or closing it; the same selection, collapse, search and follow). By
+    graph (**Tree | Graph**, remembered per browser; D726: the graph is the loop's own drawing, as
+    the configurator draws its document, each box saying how often it ran and for how long,
+    running or failed, unused boxes dimmed; a box selects its latest task). By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output; following, it shows the running task, and at rest the one that ended

@@ -189,3 +189,15 @@
 /* the loop page (guide/loop-shape.md): the drawing alone, and its table's keys on one line */
 #flux-loop-drawing { margin: .6em 0; }
 .md-typeset td code { white-space: nowrap; }
+/* D726: a running loop over the drawing (the web's Live › Tasks › Graph) */
+.fc-box.fc-act-idle { opacity: .45; }
+.fc-box.fc-act rect { stroke-width: 2.5; }
+.fc-box.fc-act-running rect { stroke: var(--fc-live, #2c64d8); stroke-width: 3.5; }
+.fc-box.fc-act-running .fc-box-half { fill: var(--fc-live, #2c64d8); font-weight: 600; }
+.fc-box.fc-act-failed rect { stroke: var(--fc-error, #c0352d); }
+.fc-box.fc-act-failed .fc-box-half { fill: var(--fc-error, #c0352d); }
+.fc-box.fc-pick { cursor: pointer; }
+.fc-box.fc-pick:hover rect, .fc-box.fc-pick:focus rect { stroke-width: 4; }
+.fc-box.fc-sel rect { stroke-width: 4.5; }
+@keyframes fc-pulse { 50% { stroke-opacity: .45; } }
+@media (prefers-reduced-motion: no-preference) { .fc-box.fc-act-running rect { animation: fc-pulse 1.4s ease-in-out infinite; } }

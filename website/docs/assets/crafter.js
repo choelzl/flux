@@ -1405,7 +1405,10 @@
         var title = n.id === "crit-division" ? "Critic: division" : n.id === "crit-part" ? "Critic: each part"
                   : n.id === "crit-decision" ? "Critic: decision" : n.id === "parts" ? "parts: sub-loops, composed" : box.title;
         var live = !fixed && !readonly;
-        var attrs = { class: "fc-box fc-" + half + (fixed ? " fc-static" : "") + (live ? "" : " fc-inert") + (openNode === n.id ? " fc-open" : "") + (n.small ? " fc-smallbox" : ""),
+        var act = readonly && parts.activity ? parts.activity[n.id] : null;      // D726
+        var picks = readonly && !!opts.onBox;
+        var attrs = { class: "fc-box fc-" + half + (fixed ? " fc-static" : "") + (live ? "" : " fc-inert") + (openNode === n.id ? " fc-open" : "") + (n.small ? " fc-smallbox" : "")
+                      + (parts.activity && readonly && opts.onBox ? (act ? " fc-act fc-act-" + act.state : " fc-act-idle") : "") + (picks && act ? " fc-pick" : "") + (act && act.sel ? " fc-sel" : ""),
                       "data-box": n.box, "data-node": n.id };
         if (live) {
           attrs.tabindex = "0"; attrs.role = "button"; attrs["aria-haspopup"] = "dialog";
@@ -1416,7 +1419,7 @@
         }
         var g = s("g", attrs);
         var full = stepNames(n.box);
-        g.appendChild(s("title", {}, readonly ? title + " (" + n.box + "): " + (box.says || box.fixed)
+        g.appendChild(s("title", {}, act && act.title ? title + ": " + act.title : readonly ? title + " (" + n.box + "): " + (box.says || box.fixed)
                                    : title + (full && full.length ? ": " + full.join(" → ") : "") + (fixed ? " — " + (box.fixed || "fixed") : "")));
         if (n.id === "parts") {                       // a stack: two shadows behind
           [6, 3].forEach(function (d) { g.appendChild(s("rect", { x: n.x + d, y: n.y - d, width: n.w, height: n.h, rx: 6, class: "fc-stack" })); });
@@ -1426,9 +1429,14 @@
           g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 19, "text-anchor": "middle", class: "fc-box-small" + (n.id === "parts" ? " fc-tiny" : "") }, title));
         } else {
           g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 19, "text-anchor": "middle", class: "fc-box-name" }, title));
-          g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 35, "text-anchor": "middle", class: "fc-box-half" }, subtitle(n.box, half)));
+          g.appendChild(s("text", { x: n.x + n.w / 2, y: n.y + 35, "text-anchor": "middle", class: "fc-box-half" }, act && act.label ? act.label : subtitle(n.box, half)));
         }
         if (fixed && !n.small) lock(g, n.x + n.w - 11, n.y + 5);
+        if (picks && act) {                            // D726: a box with activity opens its latest task
+          g.setAttribute("tabindex", "0"); g.setAttribute("role", "button");
+          g.addEventListener("click", function () { opts.onBox(n.id); });
+          g.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); opts.onBox(n.id); } });
+        }
         if (live) {
           g.addEventListener("click", function () { openPopover(openNode === n.id ? null : n.box, false, n.id); });
           g.addEventListener("keydown", function (ev) {
@@ -1681,8 +1689,11 @@
     host.innerHTML = "";
     if (readonly) {                                    // the loop at its defaults, nothing to click
       drawing().forEach(function (el) { host.appendChild(el); });
+      // D726: a running loop's activity over the drawing -- per node id, {state: running|done|
+      // failed, label, title}; `opts.onBox(nodeId)` when a box is clicked
+      parts.activity = opts.activity || {};
       renderDiagram();
-      return;
+      return { setActivity: function (m) { parts.activity = m || {}; renderDiagram(); } };
     }
     parts.form = h("div", { class: "fc-form" });
     parts.code = h("code", {});

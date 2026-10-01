@@ -1783,6 +1783,7 @@ function liveTree(base, qs, onQuestion) {
     try { localStorage.setItem("flux-tasks-view", m); } catch (_) {}
     for (const [k, b] of Object.entries(modeBtns)) { b.classList.toggle("on", k === m); b.setAttribute("aria-pressed", String(k === m)); }
     treeBox.hidden = m !== "tree"; graphBox.hidden = m !== "graph";
+    if (typeof collapseLbl !== "undefined") { collapseLbl.hidden = m === "graph"; search.hidden = m === "graph"; }   // the tree's own (D726)
     draw();
   };
   for (const [k, b] of Object.entries(modeBtns)) b.addEventListener("click", () => setMode(k));
@@ -1807,60 +1808,77 @@ function liveTree(base, qs, onQuestion) {
           h("span", { class: "dur" }, dur(running(n) ? now - n.t0 : n.seconds))),
         hasKids && opened ? h("div", { class: "kids" }, n.kids.slice(-300).map(row)) : "");
     };
-    if (mode === "graph") drawGraph(now, q);
+    if (mode === "graph") drawGraph(now);
     else treeBox.replaceChildren(...(roots.length ? roots.slice(-150).map(row) : [empty("Waiting for the run's first events…")]));
     drawDetail(now);
     drawStandings();
     dirty = false;
   }
-  /** The tasks as a graph (D723): each task a box, left to right by depth, joined to its parent;
-      the same collapse and search as the tree. A box selects its task; its ± opens or closes it. */
-  function drawGraph(now, q) {
-    if (!roots.length) { graphBox.replaceChildren(empty("Waiting for the run's first events…")); return; }
-    const W = 196, H = 30, COL = 226, ROW = 38, PAD = 12, cut = (t, k) => t.length > k ? t.slice(0, k - 1) + "…" : t;
-    const placed = [], edges = [];
-    let rows = 0;
-    const lay = (n, d) => {                                   // leaves take rows in order; a parent sits between its first and last child
-      if (q && !visibleUnder(n, q)) return null;
-      const opened = n.kids.length > 0 && (q ? true : isOpen(n));
-      const kids = opened ? n.kids.slice(-300).map(k => lay(k, d + 1)).filter(Boolean) : [];
-      const y = kids.length ? (kids[0].y + kids[kids.length - 1].y) / 2 : rows++;
-      const me = { n, d, y, opened };
-      placed.push(me);
-      for (const k of kids) edges.push([me, k]);
-      return me;
-    };
-    roots.slice(-150).forEach(r => lay(r, 0));
-    const X = (b) => PAD + b.d * COL, Y = (b) => PAD + b.y * ROW;
-    const width = PAD * 2 + (Math.max(...placed.map(b => b.d)) + 1) * COL - (COL - W), height = PAD * 2 + Math.max(rows - 1, 0) * ROW + H;
-    const svg = sv("svg", { width, height, viewBox: `0 0 ${width} ${height}`, class: "tgraph-svg", role: "img", "aria-label": "The tasks as a graph" },
-      edges.map(([a, b]) => { const x1 = X(a) + W, y1 = Y(a) + H / 2, x2 = X(b), y2 = Y(b) + H / 2, mx = (x1 + x2) / 2;
-        return sv("path", { class: "edge", d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` }); }),
-      placed.map(b => {
-        const n = b.n, state = running(n) ? "running" : n.failed ? "failed" : "done", took = dur(running(n) ? now - n.t0 : n.seconds);
-        const g = sv("g", { class: `gnode ${state}${n === selected ? " sel" : ""}${q && matches(n, q) ? " hit" : ""}`, transform: `translate(${X(b)},${Y(b)})`, tabindex: "0" },
-          sv("title", {}, [n.name, n.why].filter(Boolean).join(" — ")),
-          sv("rect", { width: W, height: H, rx: 6 }),
-          sv("text", { x: 9, y: H / 2 + 4, class: "st" }, running(n) ? "●" : n.failed ? "✗" : "✓"),
-          sv("text", { x: 24, y: H / 2 + 4, class: "nm" }, cut(String(n.name), Math.floor((W - 34 - (n.kids.length ? 18 : 0) - took.length * 6.6) / 7.3))),
-          sv("text", { x: W - (n.kids.length ? 26 : 8), y: H / 2 + 4, class: "dur", "text-anchor": "end" }, took));
-        g.addEventListener("click", () => { selected = n; follow.checked = false; draw(); });
-        g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selected = n; follow.checked = false; draw(); } });
-        if (n.kids.length) {
-          const t = sv("g", { class: "tog", transform: `translate(${W - 12},${H / 2})` }, sv("title", {}, b.opened ? "Close" : `Open (${n.kids.length})`),
-            sv("circle", { r: 8 }), sv("text", { y: 4, "text-anchor": "middle" }, b.opened ? "−" : "+"));
-          t.addEventListener("click", (e) => { e.stopPropagation(); open.set(n.id, !b.opened); draw(); });
-          g.append(t);
-        }
-        return g;
-      }));
-    graphBox.replaceChildren(svg);
-    const sel = follow.checked && placed.find(b => b.n === selected);   // following: the running task kept in view
-    if (sel) {
-      const x = X(sel), y = Y(sel);
-      if (x < graphBox.scrollLeft || x + W > graphBox.scrollLeft + graphBox.clientWidth) graphBox.scrollLeft = x - graphBox.clientWidth / 3;
-      if (y < graphBox.scrollTop || y + H > graphBox.scrollTop + graphBox.clientHeight) graphBox.scrollTop = y - graphBox.clientHeight / 2;
+  /** The tasks as the loop's own drawing (D726, after D723): the configurator's diagram of this
+      loop's document, read-only, each task placed on its box by its name -- how often the box
+      ran, for how long, running or failed; a box selects its latest task. */
+  const BOX_BY_WORD = { validate: "validate", propose: "orchestrate", orchestrate: "orchestrate", plan: "plan", dse: "dse",
+    generation: "generate", generate: "generate", "llm-gen": "generate", "template-fill": "generate", template: "generate", prototype: "generate",
+    patch: "generate", repair: "generate", rewrite: "generate", design: "generate", oracle: "generate", invent: "generate", compute: "generate",
+    test: "test", build: "test", gate: "test", judge: "test", admitted: "test", verify: "test",
+    simulation: "measure", physical: "measure", analytical: "measure", measure: "measure", screen: "measure", confirm: "measure", estimate: "measure",
+    calibrate: "calibrate", decide: "select", frontier: "select", decision: "select", select: "select",
+    records: "records", knowledge: "knowledge", feedback: "feedback", extract: "extract" };
+  const boxCache = new Map();
+  function boxOfTask(n) {
+    if (boxCache.has(n)) return boxCache.get(n);
+    const name = String(n.name).toLowerCase(), why = String(n.why || "").toLowerCase();
+    let b = null;
+    if (name.startsWith("critique")) b = /decision/.test(name + why) ? "crit-decision" : /division|decompos/.test(name + why) ? "crit-division" : "crit-part";
+    else if (name.startsWith("tool:")) b = /^generate/.test(why) ? "generate" : /^(stage|estimate)/.test(why) ? "measure" : /^(test|lint|golden|build|compile)/.test(why) ? "test" : null;
+    else if (/^generation: build\b/.test(name)) b = "test";                  // the gate's build of a draft
+    else if (/^evaluation\b|compose/.test(name)) b = "parts";                  // proven parts composed (drawn when it has parts)
+    else if (!name.startsWith("agent:")) b = BOX_BY_WORD[name.split(/[\s:]/)[0]] || null;
+    if (!b) b = n.parent ? boxOfTask(n.parent) : name.startsWith("agent:") ? "generate" : null;   // an agent or a tool: its step's box
+    boxCache.set(n, b);
+    return b;
+  }
+  let drawingHandle = null, drawingTried = false, latestOf = {};
+  async function loadDrawing() {
+    drawingTried = true;
+    const C = window.FluxCrafter;
+    if (!C) { graphBox.replaceChildren(empty("The configurator's script did not load.")); return; }
+    try {
+      if (!crafterCatalog) { crafterCatalog = await fetch("/crafter-assets/tools.json").then(r => r.json()).catch(() => []); C.setCatalog(crafterCatalog); }
+      const v = await fetch(`${base}/document${qs}`, { credentials: "same-origin" }).then(r => r.json());
+      if (!v.raw) { graphBox.replaceChildren(empty("The loop's document cannot be drawn: " + (v.error || "there is none."))); return; }
+      const host = h("div", { class: "flux-crafter tasks-drawing" });
+      graphBox.replaceChildren(h("p", { class: "muted small" }, "The loop as its document draws it: a box shows how often it ran and for how long; click one for its latest task."), host);
+      drawingHandle = C.mount(host, true, { state: C.fromDoc(v.raw, v.normal || v.raw).state, activity: {},
+        onBox: (id) => { if (latestOf[id]) { selected = latestOf[id]; follow.checked = false; draw(); } } });
+      draw();
+    } catch (x) { graphBox.replaceChildren(empty("The loop's drawing could not be made: " + x.message)); }
+  }
+  function drawGraph(now) {
+    if (!drawingHandle) { if (!drawingTried) { graphBox.replaceChildren(skeleton(6)); loadDrawing(); } return; }
+    boxCache.clear();
+    const acc = {};
+    latestOf = {};
+    for (const n of nodes.values()) {
+      const b = boxOfTask(n);
+      if (!b || (n.parent && boxOfTask(n.parent) === b)) continue;      // one count per stretch of a box, not per sub-task
+      const a = acc[b] || (acc[b] = { count: 0, secs: 0, running: false, failed: 0, last: null });
+      a.count++;
+      a.secs += running(n) ? now - n.t0 : (n.seconds || 0);
+      if (running(n)) a.running = true;
+      if (n.failed) a.failed++;
+      if (!a.last || n.t0 >= a.last.t0) a.last = n;
     }
+    let selBox = null;
+    for (let p = selected; p && !selBox; p = p.parent) { const b = boxOfTask(p); if (b && acc[b]) selBox = b; }
+    const activity = {};
+    for (const [b, a] of Object.entries(acc)) {
+      latestOf[b] = a.last;
+      activity[b] = { state: a.running ? "running" : a.last && a.last.failed ? "failed" : "done", sel: b === selBox,
+        label: a.running ? `running · ${dur(a.secs)}` : `${a.count}× · ${dur(a.secs)}${a.failed ? ` · ${a.failed} failed` : ""}`,
+        title: `${a.count} time(s), ${dur(a.secs)}; latest: ${a.last.name}${a.last.why ? " — " + a.last.why : ""}` };
+    }
+    drawingHandle.setActivity(activity);
   }
   /** The loop's standings (D418l) as a reader wants them: a line of counts, the frontier and the
       parts as small tables, anything else as short key/value lines. */
@@ -2000,9 +2018,10 @@ function liveTree(base, qs, onQuestion) {
   const pill = streamPill();
   const es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
+  const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
   const bar = h("div", { class: "toolbar" }, h("div", { class: "seg", role: "group", "aria-label": "View" }, modeBtns.tree, modeBtns.graph),
     h("label", { class: "check" }, follow, "follow the running task"),
-    h("label", { class: "check" }, collapse, "collapse finished"), search, pill.el);
+    collapseLbl, search, pill.el);
   setMode(mode);
   return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
 }
