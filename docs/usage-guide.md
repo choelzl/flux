@@ -360,6 +360,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (`CLAUDE_CODE_OAUTH_TOKEN`, encrypted) and never shows it (D748). For Codex set `FLUX_CODEX_LOGIN` to
     `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost). Inside the
     sandbox Codex runs without its own (bubblewrap cannot start there): the container is its sandbox (D750).
+    **Test** (D751) checks an agent for you -- its program, your login or key, one short answer
+    (`flux agent test <agent> --live` on the command line): a loop, a new loop's author or a question uses an
+    agent only once its test passed for whoever starts it; `task check` says which agents a document needs.
   - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with

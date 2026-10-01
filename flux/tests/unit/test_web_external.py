@@ -156,3 +156,28 @@ def test_every_user_logs_in_and_the_server_is_not_offered_to_an_external_one(tmp
     assert "FLUX_REMOTE_MODEL" not in eve.get("/api/settings").json()["server"]
     assert ian.get("/api/settings").json()["server"]["FLUX_REMOTE_MODEL"] == "server-model"
     assert eve.put("/api/settings", json={"values": {"FLUX_CODEX_LOGIN": "x"}}, headers=H).status_code == 400, "the admin's only"
+
+
+def test_an_agent_is_enabled_for_a_user_by_a_passed_test(tmp_path, monkeypatch):
+    """D751: a start, an authoring agent or an ask that needs an agent is refused until the
+    user who starts it has tested that agent and it passed; a new login is tested again."""
+    from flux_loop import TaskSpec
+    from flux_loop.agent_check import agents_used
+
+    doc = {"id": "x", "statement": "s", "language": "python",
+           "flow": {"generate": {"agent": "codex"}, "critique": {"agent": {"preset": "claude", "timeout_s": 60}}},
+           "gate": {"test": ["true"]}, "objectives": []}
+    assert agents_used(TaskSpec.from_dict(doc)) == ["codex", "claude"]
+    store = _store(tmp_path)
+    app = create_app(tmp_path / "data", sandbox=False)
+    ian = TestClient(app)
+    assert ian.post("/api/login", json={"name": "ian", "password": "ian has a long secret"}, headers=H).status_code == 200
+    ian.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml",
+             b"id: x\nstatement: s\nlanguage: python\nflow: {generate: {agent: codex}}\ngate: {test: ['true']}\n"))], headers=H)
+    r = ian.post("/api/apps/x/start", json={"passes": 1}, headers=H)
+    assert r.status_code == 409 and "Codex not set up for ian" in r.json()["detail"]
+    assert ian.post("/api/apps/x/asks", json={"question": "why?", "author": "claude"}, headers=H).status_code == 409
+    store.server_set("agent-test:ian:codex", {"ok": True})
+    assert [a["tested"] for a in ian.get("/api/logins").json()["agents"] if a["id"] == "codex"] == [{"ok": True}]
+    r = ian.post("/api/apps/x/start", json={"passes": 1}, headers=H)
+    assert r.status_code != 409 or "set up" not in r.text, "tested: no longer refused for it"

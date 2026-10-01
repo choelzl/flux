@@ -308,6 +308,48 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     logins = Logins()
 
+    # ---- is an agent ready for a user (D751): tested from Account, a loop needs it passed
+    def agent_test_of(user: User, agent: str) -> dict[str, Any]:
+        return store.server_get(f"agent-test:{user.name}:{agent}") or {}
+
+    def agents_gate(user: User, agents: list[str]) -> None:
+        """A start, an authoring agent or an ask refused while an agent it needs has not passed
+        its test for whoever starts it -- before a turn is spent (D751)."""
+        from .authoring import AUTHORS
+
+        bad = [AUTHORS.get(a, a) for a in agents if a in LOGIN_DEFAULTS and not agent_test_of(user, a).get("ok")]
+        if bad:
+            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: Account › Agent logins, log in and Test")
+
+    def author_agent(author: Any) -> list[str]:
+        name = author.get("preset") if isinstance(author, dict) else author
+        return [str(name)] if name in LOGIN_DEFAULTS else []
+
+    @app.post("/api/agents/{agent}/test")
+    def test_agent(agent: str, user: User = Depends(user_of)) -> dict[str, Any]:
+        """`flux agent test <agent> --live`, sandboxed as the user's runs are: their home, their
+        settings, the network rules. Its result is kept: a passed test enables the agent (D751)."""
+        if agent not in LOGIN_DEFAULTS:
+            raise HTTPException(404, f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
+        home_ready(store, user)
+        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1"}
+        sandbox_env(env, sandbox, {})
+        machine_env(env, store.server_get("sandbox") or {}, {}, [])
+        flux = shutil.which("flux", path=env.get("PATH"))
+        argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
+        try:
+            r = subprocess.run(argv, cwd=str(store.home_of(user)), env=env, capture_output=True, text=True, timeout=420,
+                               stdin=subprocess.DEVNULL)
+            line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.startswith("{")), "")
+            got = json.loads(line) if line else {"agent": agent, "ok": False, "steps": [
+                {"step": "run", "ok": False, "said": " ".join((r.stderr or r.stdout or f"exit {r.returncode}")[-500:].split())}]}
+        except subprocess.TimeoutExpired:
+            got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
+        got["when"] = time.time()
+        store.server_set(f"agent-test:{user.name}:{agent}", got)
+        store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}")
+        return got
+
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
         have = logged_in(store.home_of(user))
@@ -316,7 +358,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         cmds = store.server_settings(reveal=True)
         from .authoring import AUTHORS
 
-        return {"external": user.external, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a],
+        return {"external": user.external, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a], "tested": agent_test_of(user, a),
                                               "command": " ".join(logins.command(a, cmds))} for a in LOGIN_DEFAULTS],
                 "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
 
@@ -325,6 +367,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         try:
             cmd = logins.command(agent, store.server_settings(reveal=True))
             home_ready(store, user)
+            store.server_set(f"agent-test:{user.name}:{agent}", None)        # D751: a new login is tested again
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
             sandbox_env(env, sandbox, {})
             machine_env(env, store.server_get("sandbox") or {}, {}, [])       # the network rules apply to everyone
@@ -750,7 +793,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"ok": f"{path}: the part sent is gone"}
 
     # ---- a problem written or revised by an agent (D704)
-    def _author_env(whose: User, name: str, by: User | None = None) -> dict[str, str]:
+    def _author_env(whose: User, name: str, by: User | None = None, author: Any = None) -> dict[str, str]:
+        agents_gate(by or whose, author_agent(author))                      # D751
         home_ready(store, by or whose)
         env = {**run_env(store, whose, name, home_for=by), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
@@ -800,7 +844,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         try:
             got = await _attach(d, files)
-            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(user, name),
+            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(user, name, None, author),
                             attachments=got, revise=None, by=user.name)
         except (ValueError, HTTPException) as exc:
             shutil.rmtree(d, ignore_errors=True)
@@ -820,7 +864,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(400, "say what to change")
         try:
             got = await _attach(d, files)
-            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name, user),
+            authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name, user, author),
                             attachments=got, revise=w.meta(name).get("document"), by=user.name)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -859,7 +903,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if body.author not in AUTHORS:
             raise HTTPException(400, f"who answers is one of {', '.join(AUTHORS)}")
         try:
-            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user), by=user.name)
+            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author), by=user.name)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")
@@ -1171,6 +1215,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
         if not meta.get("document"):
             raise HTTPException(409, "this loop has no problem document yet")
+        try:                                       # D751: the agents it hands work to, tested by whoever starts it
+            from flux_loop import load_task
+            from flux_loop.agent_check import agents_used
+
+            needs = agents_used(load_task(str(d / meta["document"])))
+        except Exception:  # noqa: BLE001 -- a document the run itself will refuse, saying why
+            needs = []
+        agents_gate(user, needs)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             runs.start(whose, name, d, meta["document"], str(meta.get("id") or name), body.model_dump(), by=user)
         except ValueError as exc:

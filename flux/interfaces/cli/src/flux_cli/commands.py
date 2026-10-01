@@ -262,6 +262,18 @@ def cmd_task_check(args: argparse.Namespace) -> int:
         return 1
     print("  tools: " + ("present for every stage" if not skipped else
                          "present for the gate and the stages that run (see WILL SKIP above)"))
+    from flux_loop.agent_check import agents_used, check_agent
+
+    unready = []
+    for agent in agents_used(task):                      # D751: the agents it hands work to, set up for you?
+        got = check_agent(agent)
+        bad = next((st for st in got["steps"] if not st["ok"]), None)
+        print(f"  agent {agent}{' ' + got['version'] if got.get('version') else ''}: "
+              + ("set up (`flux agent test " + agent + " --live` asks it)" if bad is None else f"NOT READY: {bad['step']}: {bad['said']}"))
+        if bad is not None:
+            unready.append(agent)
+    if unready:
+        return 1
     from flux_loop.task import model_use
 
     if model_use(task):                                  # the model a run would use, asked now

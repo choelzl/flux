@@ -157,8 +157,8 @@ def app_dir(args: Any, command: str) -> Path:
         except Exception:  # noqa: BLE001 -- a document the run itself will refuse: its file name
             ident = doc.name.split(".")[0]
         where = doc.parent
-    elif command == "login":
-        ident = "login"
+    elif command in ("login", "agent test"):
+        ident = command.replace(" ", "-")
     else:
         where = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
         ident = f"ask-{where.name}"
@@ -203,7 +203,7 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     rw += [str(app / "tmp"), str(app / "cache")]              # the application's own, nothing shared (D681)
     for flag in ("db", "out", "json"):
         v = getattr(args, flag, None)
-        if v and v != ":memory:":
+        if v and v not in (":memory:", "-"):
             p = Path(v).resolve().parent
             p.mkdir(parents=True, exist_ok=True)
             rw.append(str(p))

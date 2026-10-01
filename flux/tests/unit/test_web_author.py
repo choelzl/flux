@@ -38,6 +38,8 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setattr(au.shutil, "which", lambda name, path=None: str(fake) if name == "flux" else None)
     store = Store(tmp_path / "data")
     store.add_user("bob", "another long secret")
+    for agent in ("opencode", "claude", "codex"):                  # D751: bob's agents passed their test
+        store.server_set(f"agent-test:bob:{agent}", {"ok": True})
     app = create_app(tmp_path / "data", sandbox=False)
     c = TestClient(app)
     c.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H)

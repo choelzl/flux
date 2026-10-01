@@ -708,3 +708,6 @@ body:has(.composer) .toasts { bottom: 150px; }
 .leaf-tasks { margin: 6px 0 4px; }
 .leaf-tasks h3 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .leaf-tasks .run-graph-rows { max-height: 180px; }
+.agent-steps { margin: 0; padding-left: 4px; list-style: none; display: grid; gap: 2px; color: var(--muted); }
+.agent-steps li.bad { color: var(--bad); }
+.agent-test-row td { border-top: none; padding-top: 0; }

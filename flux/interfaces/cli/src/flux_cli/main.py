@@ -135,6 +135,15 @@ def build_parser() -> argparse.ArgumentParser:
     lo_p.add_argument("cmd", nargs=argparse.REMAINDER, help="-- and the agent's login command, e.g. -- opencode auth login")
     lo_p.set_defaults(func=_cmd_login)
 
+    ag_p = subparsers.add_parser("agent", help="Coding agents: is one ready for you (D751).")
+    ag_sub = ag_p.add_subparsers(dest="agent_command", required=True)
+    at_p = ag_sub.add_parser("test", help="The agent's program, its login, its own status; --live: one short answer as a loop asks it.")
+    at_p.add_argument("agent", choices=("opencode", "claude", "codex"))
+    at_p.add_argument("--live", action="store_true", help="Also ask it one short question (a few hundred tokens).")
+    at_p.add_argument("--json", default=None, help="Also write the result as JSON to this file ('-': stdout only).")
+    at_p.add_argument("--no-sandbox", action="store_true", help="Run on this machine, not in the sandbox (also FLUX_SANDBOX=0).")
+    at_p.set_defaults(func=_cmd_agent_test)
+
     ask_p = subparsers.add_parser(
         "ask", help="The loop from a prompt and files: an author writes the problem, the loop runs it, the author steers.")
     ask_p.add_argument("prompt", nargs="?", default=None, help="What you want, in words (none: the setup screen opens).")
@@ -330,6 +339,26 @@ def _cmd_user(args):
     return user(args)
 
 
+def _cmd_agent_test(args: argparse.Namespace) -> int:
+    """`flux agent test NAME [--live]` (D751): each step said, exit 0 when the agent is ready."""
+    import json
+    from pathlib import Path
+
+    from flux_loop.agent_check import check_agent
+
+    got = check_agent(args.agent, live=args.live)
+    if args.json == "-":
+        print(json.dumps(got))
+        return 0 if got["ok"] else 1
+    print(f"{args.agent}{' ' + got['version'] if got.get('version') else ''}: {'READY' if got['ok'] else 'NOT READY'}"
+          f" ({got.get('seconds', 0)} s)")
+    for s in got["steps"]:
+        print(f"  {'ok  ' if s['ok'] else 'FAIL'} {s['step']}: {s['said']}")
+    if args.json:
+        Path(args.json).write_text(json.dumps(got, indent=1))
+    return 0 if got["ok"] else 1
+
+
 def _cmd_login(args: argparse.Namespace) -> int:
     """The agent's login command, run with HOME the given folder, under a terminal of its own
     (D734): a login made for a person (a menu, a prompt) needs one, and the container is started
@@ -410,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
     # `task check` too: building the problem imports its world hooks and its golden model (D683)
     boxed = ("task run" if args.command == "task" and getattr(args, "task_command", None) == "run"
              else "task check" if args.command == "task" and getattr(args, "task_command", None) == "check"
-             else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "login" if args.command == "login" else "")
+             else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "login" if args.command == "login"
+             else "agent test" if args.command == "agent" else "")
     if boxed and enabled(args):              # D680: the run re-launched in its container
         return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)
     db = getattr(args, "db", None)

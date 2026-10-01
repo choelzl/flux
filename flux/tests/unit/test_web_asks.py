@@ -73,6 +73,8 @@ def server(tmp_path, monkeypatch):
     store = Store(tmp_path / "data")
     store.add_user("ada", "correct horse battery", "admin")
     store.add_user("bob", "another long secret")
+    for agent in ("opencode", "claude", "codex"):                  # D751: bob's agents passed their test
+        store.server_set(f"agent-test:bob:{agent}", {"ok": True})
     store.add_user("cy", "cy has a long secret")
     return create_app(tmp_path / "data", sandbox=False), store, tmp_path
 
