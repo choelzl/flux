@@ -1846,3 +1846,23 @@ the topics above.
     (D716). The web's start line no longer names the network.
   - An admin's choice to run a loop on the host is still said ("on the host, no sandbox (an
     admin's setting)"), since that changes what the loop's code may touch.
+- **D721: the model settings in a tab per tool.**
+  - Key insight: five groups in one column made a long page, and Flux's own group held other
+    providers' settings (Ollama's URL and model, OpenRouter's key) beside its endpoint.
+  - Rules:
+    - `GROUPS` entries carry a `tab`. The tabs are Flux (Flux's own model and the agent by
+      default), OpenCode, Claude Code, Codex, and Other.
+    - Other is a new group: `OLLAMA_BASE_URL` and `FLUX_LLM_MODEL` (the local Ollama model,
+      which `flux_llm` reads) and `OPENROUTER_API_KEY`. Its endpoint is `OLLAMA_BASE_URL`: a user
+      who names their own gets none of the server's values of that group.
+    - The form draws every group and shows the selected tab's. One Save covers them all.
+    - A tab whose groups hold a value of their own is marked •. The tab last viewed is kept per
+      browser and per page (`flux-models-tab-<scope>`).
+    - A global CSS rule makes `[hidden]` always hide. `.set-group` set its own `display` and
+      kept hidden groups visible.
+  - The admin's Models page and a user's Account page both use it.
+  - Tests:
+    - `test_web_models`: the groups' order.
+    - Browser test (128 checks): the five tabs, and the Other tab showing only its own group.
+    - The test-only sandbox assertion from `b5a8688` now names the stray `/usr` mount when it
+      fails. It failed twice, then passed six runs in a row, and the path could not be caught.

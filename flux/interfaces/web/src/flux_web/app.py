@@ -284,7 +284,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def _groups() -> list[dict[str, Any]]:
         from .store import GROUPS
 
-        return [{"id": k, "label": g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
+        return [{"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
                  "endpoint": g["endpoint"], "hint": g.get("hint", "")} for k, g in GROUPS.items()]
 
     @app.get("/api/settings")

@@ -2590,10 +2590,28 @@ function settingsForm(st, { server = null, save, scope }) {
     const own = [...g.public, ...g.secret].some(k => st.values[k]);
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
-    return h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
+    const el = h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
       note ? h("p", { class: "small hint-line" }, note) : "", ...g.public.map(row), ...g.secret.map(row));
+    return { g, el, own };
   });
-  return [h("div", { class: "set-groups" }, groups), h("div", { class: "form-actions" }, act("Save", () => {
+  // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; one Save for all of them;
+  // a tab that holds a value is marked; the tab last looked at is kept in this browser
+  const tabs = [...new Set(st.groups.map(g => g.tab || g.label))];
+  const memo = `flux-models-tab-${scope}`;
+  let cur = (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
+  if (!tabs.includes(cur)) cur = tabs[0];
+  const bar = h("div", { class: "subtabs set-tabs", role: "tablist" });
+  const draw = () => {
+    bar.replaceChildren(...tabs.map(t => {
+      const set = groups.some(x => (x.g.tab || x.g.label) === t && x.own);
+      return h("button", { type: "button", role: "tab", class: t === cur ? "on" : "", "aria-selected": t === cur ? "true" : "false",
+        title: set ? "has settings of its own" : null, onclick: () => { cur = t; try { localStorage.setItem(memo, t); } catch (_) { /* per viewer */ } draw(); } },
+        t, set ? h("span", { class: "set-dot", "aria-label": "set" }, " •") : "");
+    }));
+    for (const x of groups) x.el.hidden = (x.g.tab || x.g.label) !== cur;
+  };
+  draw();
+  return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el)), h("div", { class: "form-actions" }, act("Save", () => {
     const values = {};
     for (const k of st.public) if (!inputs[k].disabled && (inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
     for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;

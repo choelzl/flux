@@ -204,7 +204,7 @@ def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "path", [*sys.path, str(src), str(tmp_path / "gone")])
     ro, _ = sandbox.mounts_for(_args(tmp_path), "task run")
     assert str(venv) in ro and str(src) in ro and str(tmp_path / "gone") not in ro
-    assert not any(p.startswith("/usr/") for p in ro), "the system mounts cover their own"
+    assert not any(p.startswith("/usr/") for p in ro), ("the system mounts cover their own", [p for p in ro if p.startswith("/usr/")])
     seen = {}
     monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
     monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd: seen.setdefault("cmd", cmd) and 0)
@@ -226,3 +226,87 @@ def test_a_name_looked_up_inside_is_asked_of_the_proxy(monkeypatch, tmp_path):
     assert not any("resolv.conf" in c for c in open_cmd), "an open network keeps the engine's resolver"
     q = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\x04evil\x07Example\x03com\x00" + b"\x00\x01\x00\x01"
     assert sandbox._dns_name(q) == "evil.example.com" and sandbox._dns_name(b"\x00" * 5) is None
+
+
+def test_loopback_stays_inside_and_the_hosts_certificates_go_in(monkeypatch, tmp_path):
+    """D721: a Bun agent's own local server is not sent to the host proxy (403 there); the
+    host's trust store -- a corporate CA a variable names, the system bundle for Node/Bun -- is
+    the container's."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    corp = tmp_path / "certs" / "corp.pem"
+    corp.parent.mkdir()
+    corp.write_text("-----BEGIN CERTIFICATE-----\n")
+    bundle = tmp_path / "bundle.crt"
+    bundle.write_text("x")
+    monkeypatch.setenv("SSL_CERT_FILE", str(corp))
+    monkeypatch.delenv("NODE_EXTRA_CA_CERTS", raising=False)
+    monkeypatch.setattr(sandbox, "BUNDLES", ("/nonexistent/ca.crt", str(bundle)))
+    ro, _ = sandbox.mounts_for(_args(tmp_path), "task run")
+    assert str(corp) in ro and "/etc/ssl" in ro
+    boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
+    env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(boxed[1:], boxed) if prev == "-e"}
+    assert set(env["NO_PROXY"].split(",")) >= {"localhost", "127.0.0.1", "::1"} and env["no_proxy"] == env["NO_PROXY"]
+    assert env["NODE_EXTRA_CA_CERTS"] == str(bundle) and env["SSL_CERT_FILE"] == str(corp)
+    monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(corp))
+    own = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
+    assert f"NODE_EXTRA_CA_CERTS={corp}" in own, "the host's own choice kept"
+
+
+def test_behind_a_corporate_proxy_allowed_hosts_go_through_it(tmp_path):
+    """D721: the allowlist proxy reaches an allowed host through the host's own proxy, with its
+    credentials; a host the host's NO_PROXY names is reached directly; a refusal upstream is
+    passed back."""
+    seen: list[bytes] = []
+
+    def corp(conn: socket.socket) -> None:
+        head = b""
+        while b"\r\n\r\n" not in head:
+            head += conn.recv(4096)
+        seen.append(head)
+        if b"evil-upstream" in head:
+            conn.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n")
+            conn.close()
+            return
+        conn.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+        while data := conn.recv(4096):                                      # the tunnel: an echo
+            conn.sendall(data)
+        conn.close()
+
+    up = socket.socket()
+    up.bind(("127.0.0.1", 0))
+    up.listen(8)
+    threading.Thread(target=lambda: [threading.Thread(target=corp, args=(up.accept()[0],), daemon=True).start()
+                                     for _ in iter(int, 1)], daemon=True).start()
+    d = tempfile.mkdtemp(dir=os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+    path = os.path.join(d, "p.sock")
+    proxies = {"https": f"http://bob:p%40ss@127.0.0.1:{up.getsockname()[1]}", "no": "direct.example"}
+    proxy = AllowProxy(path, ["api.example.com", "evil-upstream.example", "direct.example"], proxies=proxies)
+    try:
+        proxy.start()
+    except PermissionError:
+        pytest.skip("this environment forbids Unix sockets")
+
+    def connect(host: str) -> tuple[socket.socket, bytes]:
+        s = socket.socket(socket.AF_UNIX)
+        s.settimeout(10)
+        s.connect(path)
+        s.sendall(f"CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n".encode())
+        return s, s.recv(4096)
+
+    try:
+        s, reply = connect("api.example.com")
+        assert reply.startswith(b"HTTP/1.1 200")
+        s.sendall(b"ping")
+        assert s.recv(4096) == b"ping", "the tunnel runs through the host's proxy"
+        s.close()
+        assert seen[0].startswith(b"CONNECT api.example.com:443 HTTP/1.1")
+        assert b"Proxy-Authorization: Basic Ym9iOnBAc3M=" in seen[0], "bob:p@ss, unquoted"
+        _, refused = connect("evil-upstream.example")
+        assert refused.startswith(b"HTTP/1.1 407"), "the host proxy's refusal, as it said it"
+        _, direct = connect("direct.example")                              # NO_PROXY: tried directly (no such host)
+        assert direct.startswith(b"HTTP/1.1 502") and len(seen) == 2
+        _, out = connect("example.com")
+        assert out.startswith(b"HTTP/1.1 403") and len(seen) == 2, "the allowlist first: a refused host never goes upstream"
+    finally:
+        proxy.stop()
+        up.close()

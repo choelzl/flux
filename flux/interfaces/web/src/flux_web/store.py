@@ -37,21 +37,27 @@ CREATE TABLE IF NOT EXISTS server (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 #: coding agent. The admin sets them for the server; a user's own override theirs. Keys are
 #: secret: stored encrypted, never sent back, only handed to runs. `endpoint`: a user who names
 #: their own gets none of the server's values of that group.
+#: D721: each group shows on a tab of its own (`tab`); the agent by default beside Flux's model.
 GROUPS: dict[str, dict[str, Any]] = {
-    "model": {"label": "Flux's own model (OpenAI-compatible)", "endpoint": "FLUX_REMOTE_BASE_URL",
-              "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_LLM_MODEL", "OLLAMA_BASE_URL"),
-              "secret": ("FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY")},
-    "opencode": {"label": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
+    "model": {"label": "Flux's own model (OpenAI-compatible)", "tab": "Flux", "endpoint": "FLUX_REMOTE_BASE_URL",
+              "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S"),
+              "secret": ("FLUX_REMOTE_API_KEY",),
+              "hint": "The endpoint Flux's own model calls go to (a proposer, a critic, an Ask answered by the model)."},
+    "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
+              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: opencode, claude, codex or model."},
+    "opencode": {"label": "OpenCode", "tab": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
                  "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
                  "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
-    "claude": {"label": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
+    "claude": {"label": "Claude Code", "tab": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
                "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN"), "secret": ("ANTHROPIC_API_KEY",),
                "hint": "Empty: Claude Code's own login and model."},
-    "codex": {"label": "Codex", "endpoint": "OPENAI_BASE_URL",
+    "codex": {"label": "Codex", "tab": "Codex", "endpoint": "OPENAI_BASE_URL",
               "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN"), "secret": ("OPENAI_API_KEY",),
               "hint": "Empty: Codex's own login and model."},
-    "agent": {"label": "The agent by default", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
-              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: opencode, claude, codex or model."},
+    "other": {"label": "Other providers: Ollama, OpenRouter", "tab": "Other", "endpoint": "OLLAMA_BASE_URL",
+              "public": ("OLLAMA_BASE_URL", "FLUX_LLM_MODEL"), "secret": ("OPENROUTER_API_KEY",),
+              "hint": "Ollama: Flux's model calls go to a local Ollama when no endpoint is set on the Flux tab; FLUX_LLM_MODEL names its "
+                      "model. OpenRouter: its key, used when Flux's endpoint is OpenRouter's (the default when a key is set)."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
 #: D705: the program each agent is (a modified OpenCode, a Claude Code elsewhere): the admin's only,

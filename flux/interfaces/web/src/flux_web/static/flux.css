@@ -623,3 +623,6 @@ details.examples[open] > summary::before { content: "▾ "; }
 .examples-body { margin-top: 12px; display: grid; gap: 8px; }
 .examples-body .subtabs { margin: 0; }
 .examples-body .row { align-items: flex-end; gap: 10px; }
+.set-tabs { margin-bottom: 10px; }
+.set-dot { color: var(--accent); font-weight: 700; }
+[hidden] { display: none !important; }   /* D721: hidden wins over a class that sets display */

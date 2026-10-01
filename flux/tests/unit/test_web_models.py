@@ -43,7 +43,7 @@ def test_a_run_gets_the_servers_models_unless_its_user_names_their_own(server, m
     assert r.status_code == 200 and r.json()["values"]["FLUX_REMOTE_API_KEY"] == "set", "a key is never sent back"
     assert "server-key" not in ada.get("/api/admin/settings").text and "server-key" not in bob.get("/api/settings").text
     seen = bob.get("/api/settings").json()
-    assert seen["server"]["FLUX_REMOTE_MODEL"] == "qwen" and [g["id"] for g in seen["groups"]] == ["model", "opencode", "claude", "codex", "agent"]
+    assert seen["server"]["FLUX_REMOTE_MODEL"] == "qwen" and [g["id"] for g in seen["groups"]] == ["model", "agent", "opencode", "claude", "codex", "other"]
     assert ada.put("/api/admin/settings", json={"values": {"OPENAI_BASE_URL": "not a url"}}, headers=H).status_code == 400
     monkeypatch.setenv("FLUX_REMOTE_API_KEY_FILE", "/srv/flux/key")
     bob_u = store.user(name="bob")

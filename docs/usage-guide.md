@@ -301,7 +301,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   questions unless chosen otherwise (opencode, claude, codex or model); a user's own over the
   admin's. **Program (admins):** the program each agent is (`FLUX_OPENCODE_BIN`, `FLUX_CLAUDE_BIN`,
   `FLUX_CODEX_BIN`), for every run; its folder goes on the run's PATH, so the sandbox mounts it.
-- **Models (Admin › Models, Account):** endpoint, model and key for Flux's own model calls and for
+- **Models (Admin › Models, Account):** a tab per tool (D721) -- Flux (its own model, and the agent by
+  default), OpenCode, Claude Code, Codex, Other (Ollama's URL and model, OpenRouter's key); a tab with
+  settings of its own is marked •, one Save covers them all. endpoint, model and key for Flux's own model calls and for
   each coding agent: OpenCode (its own, else Flux's model's), Claude Code and Codex (a `--model`,
   their endpoint and key). The admin sets them for the server; on their Account a user sees the
   server's values in grey and may set their own. A user who names their own endpoint in a group
