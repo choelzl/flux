@@ -319,6 +319,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - From the command line: `FLUX_SANDBOX_HOME` names the home; without it, a run's home is
     `~/.local/share/flux/home`, started from your own agents' configuration and logins;
     `FLUX_SANDBOX_NET=allowlist` and `FLUX_SANDBOX_ALLOW` set the network.
+  - A run's variables reach its container in a file of its own (0600), never on the command line, where
+    any user of the machine could read them (D745).
 - **Environment variables:** the server's (Admin › Models and variables), a user's (Account), a
   loop's (its Settings), applied in that order, a secret stored encrypted and never shown again.
   They reach the run inside the sandbox whatever their names (`FLUX_SANDBOX_PASS`). The

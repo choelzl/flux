@@ -65,7 +65,7 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     monkeypatch.setenv("FLUX_SANDBOX_NET", "allowlist")
     monkeypatch.setenv("FLUX_SANDBOX_REFUSALS", "/data/network-refused.jsonl")
     cmd = sandbox.container_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-t", None, "docker")
-    env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
+    env = sandbox.container_env(cmd)
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
     assert not {"FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS"} & set(env), "D716: the proxy's, outside"
@@ -85,14 +85,14 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert cmd[cmd.index("--network") + 1] == "host"
     assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
     boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
-    assert boxed[boxed.index("--network") + 1] == "none" and "HTTPS_PROXY=http://127.0.0.1:18080" in boxed
+    assert boxed[boxed.index("--network") + 1] == "none" and sandbox.container_env(boxed)["HTTPS_PROXY"] == "http://127.0.0.1:18080"
     labels = [c for c, prev in zip(cmd[1:], cmd) if prev == "--label"]
     assert labels == ["flux.sandbox=1"], "a run of this machine's user: no loop's label"
     assert "GITHUB_TOKEN" not in env
     monkeypatch.setenv("HF_TOKEN", "hf")
     monkeypatch.setenv("FLUX_SANDBOX_PASS", "HF_TOKEN")                # D697: set on the web on purpose
     passed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
-    penv = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(passed[1:], passed) if prev == "-e"}
+    penv = sandbox.container_env(passed)
     assert penv["HF_TOKEN"] == "hf" and "GITHUB_TOKEN" not in penv
     monkeypatch.setenv("FLUX_SANDBOX_APP", "bob.x")
     web = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
@@ -175,7 +175,7 @@ def test_podman_rootless_from_a_bare_root_directory(monkeypatch, tmp_path):
     root = Path(cmd[cmd.index("--rootfs") + 1])
     assert root == tmp_path / "pod" / "rootfs" and (root / "bin").is_symlink() and (root / "etc").is_dir()
     assert cmd[cmd.index("--rootfs") + 2:] == ["flux", "task", "run", "x"]
-    env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(cmd[1:], cmd) if prev == "-e"}
+    env = sandbox.container_env(cmd)
     import json as _json
 
     assert _json.loads(env["FLUX_SANDBOX_CLI"]) == cli
@@ -247,15 +247,15 @@ def test_loopback_stays_inside_and_the_hosts_certificates_go_in(monkeypatch, tmp
     ro, _ = sandbox.mounts_for(_args(tmp_path), "task run")
     assert str(corp) in ro and "/etc/ssl" in ro
     boxed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", "/run/x", "docker")
-    env = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(boxed[1:], boxed) if prev == "-e"}
+    env = sandbox.container_env(boxed)
     assert set(env["NO_PROXY"].split(",")) >= {"localhost", "127.0.0.1", "::1"} and env["no_proxy"] == env["NO_PROXY"]
     assert env["NODE_EXTRA_CA_CERTS"] == str(corp) and env["SSL_CERT_FILE"] == str(corp), "the bundle the host names"
     monkeypatch.delenv("SSL_CERT_FILE")
     plain = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
-    assert f"NODE_EXTRA_CA_CERTS={bundle}" in plain, "else the system's"
+    assert sandbox.container_env(plain)["NODE_EXTRA_CA_CERTS"] == str(bundle), "else the system's"
     monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(corp))
     own = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
-    assert f"NODE_EXTRA_CA_CERTS={corp}" in own, "the host's own choice kept"
+    assert sandbox.container_env(own)["NODE_EXTRA_CA_CERTS"] == str(corp), "the host's own choice kept"
 
 
 def test_behind_a_corporate_proxy_allowed_hosts_go_through_it(tmp_path):
@@ -316,3 +316,20 @@ def test_behind_a_corporate_proxy_allowed_hosts_go_through_it(tmp_path):
     finally:
         proxy.stop()
         up.close()
+
+
+def test_no_value_is_on_the_containers_command_line(monkeypatch, tmp_path):
+    """D745: `ps` shows a process's arguments to every user of the machine; the model's key was
+    one of them (`-e FLUX_REMOTE_API_KEY=...`). The values are in a file of the run's own (0600)."""
+    import stat
+
+    monkeypatch.setenv("FLUX_REMOTE_API_KEY", "the-secret-key")
+    monkeypatch.setenv("FLUX_MULTI", "one\ntwo")
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-k", None, "podman")
+    assert not any("the-secret-key" in c for c in cmd), "no value on the command line"
+    env_file = cmd[cmd.index("--env-file") + 1]
+    assert stat.S_IMODE(Path(env_file).stat().st_mode) == 0o600
+    assert stat.S_IMODE(Path(env_file).parent.stat().st_mode) == 0o700
+    env = sandbox.container_env(cmd)
+    assert env["FLUX_REMOTE_API_KEY"] == "the-secret-key" and env["HOME"] == "/home/flux"
+    assert "FLUX_MULTI" in cmd and env["FLUX_MULTI"] == "one\ntwo", "several lines: by name, from the environment"

@@ -108,6 +108,8 @@ def _own_trace_root(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.Te
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path_factory.mktemp("traces")))
     # D744: a sandboxed run's HOME is a Flux home; a test never starts one in the real home
     monkeypatch.setenv("FLUX_SANDBOX_HOME", str(tmp_path_factory.mktemp("flux-home")))
+    # D745: a container command's variables file goes in the run's own runtime folder: a test's, not the machine's
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path_factory.mktemp("runtime")))
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

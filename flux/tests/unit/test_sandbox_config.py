@@ -39,7 +39,7 @@ def test_a_runs_home_is_the_users_own_writable_and_nothing_of_the_machines(tmp_p
     (tmp_path / "x.problem.yaml").write_text("id: x\nstatement: s\n")
     cmd = sandbox.container_argv(["flux"], args, "task run", "flux-t", None, "docker")
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
-    envs = dict(c.split("=", 1) for c, prev in zip(cmd[1:], cmd) if prev == "-e")
+    envs = sandbox.container_env(cmd)
     assert f"{mine.resolve()}:/home/flux" in vols and envs["HOME"] == "/home/flux"
     assert not any(v.startswith(f"{home}/.config") for v in vols), "nothing of the server account's home"
     assert "FLUX_SANDBOX_HOME" not in envs, "the host's path stays outside"

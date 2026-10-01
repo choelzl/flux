@@ -35,7 +35,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ["HOME_IN", "IMAGE", "app_dir", "container_argv", "enabled", "engine", "engine_cli", "flux_home", "in_sandbox",
+__all__ = ["HOME_IN", "IMAGE", "app_dir", "container_argv", "container_env", "enabled", "engine", "engine_cli", "flux_home", "in_sandbox",
            "launch", "mounts_for", "relay_proxy", "seed_home"]
 
 #: A glibc base: the host's own libraries are mounted over it; only its shape is used.
@@ -304,6 +304,30 @@ def _rootfs() -> Path:
     return root
 
 
+def run_dir(name: str) -> Path:
+    """The run's own folder on this machine's runtime disk (0700): its variables' file, the
+    proxy's socket. Removed when the run ends."""
+    d = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"flux-sandbox-{os.getuid()}" / name
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(d, 0o700)
+    return d
+
+
+def container_env(cmd: list[str]) -> dict[str, str]:
+    """The variables a container command gives (its `--env-file`, then `-e NAME`, from this
+    process's environment): what a test or an admin reads, not what `ps` shows."""
+    out: dict[str, str] = {}
+    for flag, val in zip(cmd, cmd[1:]):
+        if flag == "--env-file":
+            for line in Path(val).read_text().splitlines():
+                k, _, v = line.partition("=")
+                out[k] = v
+        elif flag == "-e":
+            k, eq, v = val.partition("=")
+            out[k] = v if eq else os.environ.get(k, "")
+    return out
+
+
 def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None,
                    eng: str | None = None) -> list[str]:
     eng = eng or engine()
@@ -367,8 +391,21 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         # D722: the container's loopback is its own (an agent's local server, its event stream);
         # through the proxy it would be refused, or be the host's
         env["NO_PROXY"] = env["no_proxy"] = "localhost,127.0.0.1,::1"
+    # D745: never a value on the command line -- `ps` shows it to every user of the machine (the
+    # model's key was there). One line each in a file of the run's own (0600); a value of
+    # several lines (which a file of variables cannot hold) by name, from this process's environment
+    lines = []
     for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
+        if "\n" in v or "\r" in v:
+            if os.environ.get(k) == v:
+                cmd += ["-e", k]
+        else:
+            lines.append(f"{k}={v}")
+    env_file = run_dir(name) / "env"
+    fd = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    cmd += ["--env-file", str(env_file)]
     if eng == "podman":
         return cmd + ["--rootfs", str(_rootfs()), *argv]
     init = shutil.which("tini")
@@ -404,13 +441,11 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     allow = _allowlist()
     proxy = None
     proxy_dir = None
+    mine = run_dir(name)                                      # a local filesystem: a home on sshfs/NFS cannot hold a socket
     if allow or strict:                                       # D698: an empty allowlist refuses all, never opens
         from .sandbox_proxy import AllowProxy
 
-        # a local filesystem: a home on sshfs/NFS cannot hold a socket
-        runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-        proxy_dir = str(Path(runtime) / f"flux-sandbox-{os.getuid()}" / name)
-        Path(proxy_dir).mkdir(parents=True, exist_ok=True, mode=0o700)
+        proxy_dir = str(mine)
         proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow, log=os.environ.get("FLUX_SANDBOX_REFUSALS"),
                            about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name})
         proxy.start()
@@ -427,7 +462,7 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     finally:
         if proxy is not None:
             proxy.stop()
-            shutil.rmtree(proxy_dir, ignore_errors=True)
+        shutil.rmtree(mine, ignore_errors=True)              # the variables' file with it
 
 
 def relay_proxy() -> None:
