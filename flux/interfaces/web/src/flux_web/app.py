@@ -98,6 +98,11 @@ class AskIn(BaseModel):                   # D705
     author: str = "opencode"
 
 
+class ExampleIn(BaseModel):            # D719: a new loop from `flux new`'s working problems
+    name: str
+    kind: str
+
+
 class ShareIn(BaseModel):                 # D701
     user: str
     perm: str | None = None
@@ -163,6 +168,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         if not request.url.path.endswith("/report"):
             resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        if not request.url.path.startswith("/api/"):
+            # D719: the page, its scripts and styles asked again each time (a 304 when unchanged):
+            # without it a browser keeps an old crafter.js or app.js after an update, by heuristic
+            resp.headers.setdefault("Cache-Control", "no-cache")
         return resp
 
     def user_of(request: Request) -> User:
@@ -911,6 +920,33 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "configure", name)
         return {"ok": "saved" + ("" if not after["error"] else f"; the loader says: {after['error']}"),
                 "id": w.meta(name).get("id"), "error": after["error"]}
+
+    @app.get("/api/examples")
+    def examples(_u: User = Depends(user_of)) -> list[dict[str, str]]:
+        """The working problems a new loop may start from (`flux new`'s kinds, D719)."""
+        from flux_cli.commands import NEW_KINDS
+
+        return [{"kind": k, "about": v} for k, v in NEW_KINDS.items()]
+
+    @app.post("/api/apps/from-example")
+    def from_example(body: ExampleIn, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A new loop from one of `flux new`'s working problems, with its files (D719)."""
+        import re as _re
+
+        from flux_cli.commands import template_files
+
+        name = body.name.strip()
+        if not _re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
+            raise HTTPException(400, "a name is a letter, then letters, digits or _ (it is the problem's id too)")
+        try:
+            files = template_files(name, body.kind)
+            meta = ws(user).create(name, [(rel, text.encode()) for rel, text in files])
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "new loop from an example", f"{name}: {body.kind}")
+        return {"name": name, **meta}
 
     @app.post("/api/apps/from-text")
     def from_text(body: DocText, user: User = Depends(user_of)) -> dict[str, Any]:

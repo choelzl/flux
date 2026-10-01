@@ -310,6 +310,19 @@ def flows(r: Run) -> None:
         r.check("the agent picker lists the four, the uninstalled disabled", [o[0] for o in opts] == ["opencode", "claude", "codex", "model"], str(opts))
         r.check("the Agent tab has its address", b.js("return location.hash") == "#/configure/agent")
         r.clean("New loop › Agent")
+        # D719: one name, a calm checklist, and a loop started from an example
+        r.page("#/configure", "document.querySelector('.flux-crafter .fc-form')", "the configurator")
+        r.check("the configurator has one name field, no separate application name",
+                not b.js("return [...document.querySelectorAll('#main label')].some(l => l.textContent.trim().startsWith('Application name'))"))
+        r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.fc-checks .fc-error') && !!document.querySelector('.fc-checks .fc-todo')"))
+        r.check("no command-line next steps", "Next steps" not in r.text())
+        b.js("document.querySelector('details.examples').open = true; return 1")
+        r.button("sweep", "details.examples .subtabs")
+        b.type("#ex-name", "fromex")
+        r.button("Create from this example", "details.examples")
+        b.wait("location.hash === '#/app/fromex/settings/problem' && document.querySelector('.flux-crafter .fc-form')", timeout=30, what="the new loop's Problem")
+        r.check("an example becomes a loop, opened at Settings › Problem", True)
+        r.clean("start from an example")
     r.step("new loop tabs", new_loop_tabs)
 
     def upload():

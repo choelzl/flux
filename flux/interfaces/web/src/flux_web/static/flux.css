@@ -615,3 +615,11 @@ body:has(.composer) .toasts { bottom: 150px; }
 .subrow { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
 .subrow:empty { display: none; }
 .subrow .subtabs { margin-bottom: 12px; }
+/* D719: start a new loop from an example */
+details.examples > summary { cursor: pointer; list-style: none; }
+details.examples > summary::-webkit-details-marker { display: none; }
+details.examples > summary::before { content: "▸ "; color: var(--muted); }
+details.examples[open] > summary::before { content: "▾ "; }
+.examples-body { margin-top: 12px; display: grid; gap: 8px; }
+.examples-body .subtabs { margin: 0; }
+.examples-body .row { align-items: flex-end; gap: 10px; }

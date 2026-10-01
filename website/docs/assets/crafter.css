@@ -133,6 +133,7 @@
 .fc-checks .fc-error::before { content: "✗"; }
 .fc-checks .fc-warning::before { content: "!"; color: var(--fc-warning); }
 .fc-checks .fc-note::before { content: "→"; color: var(--fc-muted); }
+.fc-checks .fc-todo::before { content: "○"; color: var(--fc-muted); font-weight: 400; }
 .fc-checks .fc-ok { color: var(--fc-ok); }
 .fc-checks .fc-ok::before { content: "✓"; }
 

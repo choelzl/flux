@@ -1038,6 +1038,29 @@ sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
 }
 
 
+#: What each `flux new` kind is, in a line (the web's "Start from an example", D719).
+NEW_KINDS = {
+    "sweep": "A script writes every point of a knob space; the fastest wins. No model needed.",
+    "tune": "Knobs go straight to your own commands (build flags, block sizes). No model needed.",
+    "python": "A model writes a Python function; a checker and a benchmark judge it.",
+    "rtl": "A model writes a SystemVerilog module; Verilator and ASAP7 synthesis judge it.",
+    "rtl-sweep": "A script spells one module per knob point; Verilator and Yosys judge them. No model needed.",
+}
+
+
+def template_files(name: str, kind: str) -> list[tuple[str, str]]:
+    """`flux new`'s problem of `kind` named `name`: (file name, text) pairs, the document as
+    `<name>.problem.yaml`, and its README."""
+    from pathlib import Path
+
+    if kind not in NEW_KINDS:
+        raise ValueError(f"a kind is one of {', '.join(NEW_KINDS)}")
+    source = Path(__file__).with_name("templates") / kind
+    out = [(f"{name}.problem.yaml" if f.name == "problem.yaml" else f.name, f.read_text().replace("__NAME__", name))
+           for f in sorted(source.iterdir()) if f.is_file()]
+    return [*out, ("README.md", _NEW_README[kind].format(name=name))]
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """`flux new NAME --kind python|rtl|sweep`: a working problem from
     `flux_cli/templates/<kind>/`, with its README."""
@@ -1053,16 +1076,10 @@ def cmd_new(args: argparse.Namespace) -> int:
         print(f"flux new: {target} exists and is not empty; choose another --dir")
         return 2
     target.mkdir(parents=True, exist_ok=True)
-    source = Path(__file__).with_name("templates") / args.kind
     written = []
-    for f in sorted(source.iterdir()):
-        if not f.is_file():
-            continue
-        out = target / (f"{name}.problem.yaml" if f.name == "problem.yaml" else f.name)
-        out.write_text(f.read_text().replace("__NAME__", name))
-        written.append(out.name)
-    (target / "README.md").write_text(_NEW_README[args.kind].format(name=name))
-    written.append("README.md")
+    for rel, text in template_files(name, args.kind):
+        (target / rel).write_text(text)
+        written.append(rel)
     doc = target / f"{name}.problem.yaml"
     print(f"wrote {target}/: {', '.join(written)}")
     print(f"next:\n  flux task check {doc}\n  flux task run {doc} --passes 1"

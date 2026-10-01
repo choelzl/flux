@@ -1803,3 +1803,40 @@ the topics above.
   - Tests: `test_agent_live` (fake opencode and claude dump what they receive: OpenCode without
     Anthropic, OpenAI or Claude variables and with its own and Flux's; Claude Code with its own
     and without OpenAI's or OpenCode's; the `--version` call the same).
+- **D719: the New loop configurator refined; examples to start from; pages never drawn over a newer one.**
+  - Key insight: a first-time user met two name fields, six red ✗ before typing anything,
+    command-line next steps on a page whose button creates the loop, a large diagram whose own
+    hint says the defaults are usually right, and no example to start from.
+  - Rules:
+    - One name. The form's **Loop name** is the loop's name and its problem's id. The separate
+      "Application name" card is gone, and the button says "Create the loop".
+    - New configurator options, off on the website docs:
+      - `calmChecks`: unmet items show as ○ to do until the form is touched.
+      - `nextSteps: false`: no command-line advice, for the new loop and for an existing loop's
+        configurator.
+      - `foldSteps`: section 2 is folded. The drawing is drawn when opened.
+      - `nameLabel`, `namePlaceholder`, `nameHint`.
+    - "Language of the design" (cut off) is now "Language", with the full wording as its hint.
+    - **Start from an example** is a folded card above the form. It lists `flux new`'s kinds, a
+      line each (`NEW_KINDS`), takes a name and creates the loop with its files
+      (`POST /api/apps/from-example`, through `template_files`, now shared with `flux new`). It
+      opens at Settings › Problem.
+    - An admin's Advanced card on a new loop says "Keep for the new loop".
+    - The page, its scripts and styles are sent with `Cache-Control: no-cache`, so a browser asks
+      again (a 304 when unchanged). Without it Firefox kept the old `crafter.js` after an update.
+    - Navigation is numbered (`navSeq`). Each page function shadows `show` with its own
+      (`pageShow()`) and draws only while it is the latest. A loop page left while it loaded
+      stops before its timers and refresh hook.
+      - Found by the browser test: after "Create from this example", the loop page still
+        loading drew itself 92 ms after the user had gone to New loop.
+  - Browser test (126 checks):
+    - one name field;
+    - an untouched checklist as to-do, not errors;
+    - no next steps;
+    - a loop from the sweep example opened at Settings › Problem;
+    - the next page not drawn over.
+  - Tests: `test_web_document_refused`:
+    - the examples listed;
+    - a loop from one with its files, and a document that loads;
+    - a taken name, a bad name and an unknown kind refused;
+    - `no-cache` on the page and its scripts.

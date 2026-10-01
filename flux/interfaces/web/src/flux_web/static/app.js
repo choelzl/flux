@@ -112,6 +112,16 @@ function statePill(st) {
   return h("span", { class: "pill" }, st.last_active ? "idle" : "never run");
 }
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
+/** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
+    (waiting on the server) must not draw over the one the user went to since. A page function's
+    first line shadows `show` with its own: `const show = pageShow();`. */
+let navSeq = 0;
+function pageShow() {
+  const mine = navSeq;
+  const f = (...nodes) => { if (mine === navSeq) show(...nodes); };
+  f.stale = () => mine !== navSeq;                 // left already: no timers, no refresh hook
+  return f;
+}
 /** Where this page is (D702): [label, href] from Loops down; the last is the page itself. */
 function crumbs(...parts) {
   return h("nav", { class: "crumbs-bar", "aria-label": "Where you are" }, parts.filter(Boolean).map(([label, href], i, all) =>
@@ -363,6 +373,7 @@ document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.co
 
 // ================================================================ pages
 async function loginPage() {
+  const show = pageShow();
   // D699: a phone's keyboard neither capitalises nor corrects a name
   const name = h("input", { autocomplete: "username", autocapitalize: "none", autocorrect: "off", spellcheck: "false", required: true });
   const pw = h("input", { type: "password", autocomplete: "current-password", required: true });
@@ -750,6 +761,7 @@ function authoringCard(name, st, { onStop } = {}) {
 }
 
 async function appsPage() {
+  const show = pageShow();
   const [loops, shared] = await Promise.all([api("/apps"), api("/shared").catch(() => [])]);
   const box = h("div", {}, loopsBrowser(loops));
   const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true }) : "");
@@ -765,6 +777,7 @@ async function appsPage() {
 }
 
 async function newPage() {
+  const show = pageShow();
   const name = h("input", { placeholder: "application name", required: true });
   const file = h("input", { value: "problem.problem.yaml", size: 28 });
   const ed = codeEditor("", "yaml");
@@ -841,7 +854,7 @@ function envEditor(rows, save, scope) {
     }, { cls: "primary small" })));
 }
 /** A loop's advanced settings (D697): only an admin changes them; everyone sees them. */
-function advancedCard(e, save) {
+function advancedCard(e, save, saveLabel = "Save") {
   const a = e.advanced || {};
   const said = [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
     ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
@@ -857,7 +870,7 @@ function advancedCard(e, save) {
     h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
-    h("div", { class: "form-actions" }, act("Save", async () => {
+    h("div", { class: "form-actions" }, act(saveLabel, async () => {
       if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) return;
       await save({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
         pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null,
@@ -866,10 +879,12 @@ function advancedCard(e, save) {
 }
 
 async function loopPage(name, owner, path = "") {
+  const show = pageShow();
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
   const base = `/api/apps/${enc(name)}`;
   const info = await api(`/apps/${enc(name)}${qs}`);
+  if (show.stale()) return;                         // D719: the user went elsewhere while it loaded
   // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
   const perm = info.perm || (info.mine ? "owner" : "admin");
   const mine = perm === "owner" || perm === "edit", isOwner = perm === "owner";
@@ -2051,6 +2066,7 @@ function filesPanel(name, yamlOf) {
     and its files edited directly, or an agent that revises it as told. */
 const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
 async function configurePage(name, owner, mode = "configurator") {
+  const show = pageShow();
   const isNew = !name;
   const host = h("div", {});
   const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
@@ -2084,6 +2100,33 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
   drawTabs(); draw();
 }
 
+/** Start from an example (D719): `flux new`'s working problems, each a loop at once with its
+    files -- then changed in its Settings › Problem. Folded, so the form stays the page. */
+async function examplesCard() {
+  const list = await api("/examples").catch(() => []);
+  if (!list.length) return "";
+  let kind = list[0].kind;
+  const name = h("input", { placeholder: "my_loop", id: "ex-name", style: "max-width:220px", "aria-label": "Its name" });
+  const about = h("p", { class: "muted small" });
+  const pick = h("div", { class: "subtabs", role: "tablist" });
+  const draw = () => {
+    pick.replaceChildren(...list.map(x => h("button", { type: "button", role: "tab", class: x.kind === kind ? "on" : "", "aria-selected": x.kind === kind ? "true" : "false",
+      onclick: () => { kind = x.kind; draw(); } }, x.kind)));
+    about.textContent = (list.find(x => x.kind === kind) || {}).about || "";
+  };
+  draw();
+  const go = act("Create from this example", async () => {
+    const n = name.value.trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(n)) { toast("Name it first: a letter, then letters, digits or _.", "warn"); name.focus(); return; }
+    await api("/apps/from-example", { method: "POST", body: { name: n, kind } });
+    toast(`${n} created from the ${kind} example`, "ok");
+    location.hash = `#/app/${enc(n)}/settings/problem`;
+  }, { cls: "primary" });
+  return h("details", { class: "card examples" }, h("summary", {}, h("strong", {}, "Start from an example"),
+      h("span", { class: "muted" }, " · a working loop with its files, to change from there")),
+    h("div", { class: "examples-body" }, pick, about, h("div", { class: "row" }, h("label", { class: "stack" }, "Its name", name), go)));
+}
+
 /** The configurator (D686): the crafter, the loop's files beside it. */
 async function crafterView(body, name, owner) {
   const C = window.FluxCrafter;
@@ -2109,7 +2152,7 @@ async function crafterView(body, name, owner) {
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
       host, panel.el);
     host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
-    C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document,
+    C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
@@ -2121,24 +2164,27 @@ async function crafterView(body, name, owner) {
     setTimeout(panel.draw, 300);
     return;
   }
-  const appName = h("input", { placeholder: "application name", required: true });
   const panel = filesPanel(null, yamlOf);
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
-    can_advance: true, sandboxed_server: true }, async (a) => { adv = a; toast("Kept: applied when the loop is created", "ok"); }) : "";
-  body.replaceChildren(card(null, h("label", { class: "stack narrow" }, "Application name", appName)), host, panel.el, advBox);
+    can_advance: true, sandboxed_server: true }, async (a) => { adv = a; toast("Kept: applied when the loop is created", "ok"); }, "Keep for the new loop") : "";
+  body.replaceChildren(await examplesCard(), host, panel.el, advBox);
   host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
   setTimeout(panel.draw, 300);
-  C.mount(host, false, { saveLabel: "Create the application", save: async (yaml, state) => {
-    if (!appName.value.trim()) { appName.focus(); throw new Error("Name the application first (above)."); }
-    const id = String(state.id || "").trim() || "my_problem";
-    await api("/apps/from-text", { method: "POST", body: { name: appName.value.trim(), filename: `${id}.problem.yaml`, text: yaml } });
-    const n = await panel.upload(appName.value.trim());
-    if (adv) await api(`/apps/${enc(appName.value.trim())}/advanced`, { method: "PUT", body: adv });
-    toast(`${appName.value.trim()} created${n ? ` with ${n} file(s)` : ""}`, "ok");
-    setTimeout(() => { location.hash = `#/app/${enc(appName.value.trim())}`; }, 400);
-    return "Created.";
-  } });
+  // D719: one name -- the form's, the problem's id and the loop's; the checklist calm until used;
+  // no command-line next steps; who does each step folded, its defaults being usually right
+  C.mount(host, false, { saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
+    nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits and _: the loop's name and its problem's id",
+    save: async (yaml, state) => {
+      const name = String(state.id || "").trim();
+      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error("Give the loop a name first (1. What do you want? › Loop name): a letter, then letters, digits or _.");
+      await api("/apps/from-text", { method: "POST", body: { name, filename: `${name}.problem.yaml`, text: yaml } });
+      const n = await panel.upload(name);
+      if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
+      toast(`${name} created${n ? ` with ${n} file(s)` : ""}`, "ok");
+      setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);
+      return "Created.";
+    } });
 }
 
 /** The changes of a save, shown before it writes (D693): true to write. */
@@ -2243,6 +2289,7 @@ function meter(frac, cls = "") {
   return h("div", { class: `meter ${cls}${f > 0.9 ? " high" : f > 0.75 ? " mid" : ""}` }, h("div", { style: `width:${(f * 100).toFixed(1)}%` }));
 }
 async function adminPage(sub = "") {
+  const show = pageShow();
   const tab = ADMIN_TABS[sub] ? sub : "";
   const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
@@ -2555,6 +2602,7 @@ function settingsForm(st, { server = null, save, scope }) {
 }
 
 async function accountPage() {
+  const show = pageShow();
   const [st, myEnv] = await Promise.all([api("/settings"), api("/env")]);
   async function save(values) { await api("/settings", { method: "PUT", body: { values } }); toast("Settings saved", "ok"); route(); }
   const pw = h("input", { type: "password", autocomplete: "new-password" });
@@ -2580,6 +2628,7 @@ async function accountPage() {
 
 // ================================================================ routing
 async function route() {
+  navSeq++;
   for (const f of cleanup.splice(0)) f();
   pageRefresh = null;
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page

@@ -1052,6 +1052,7 @@
     var parts = {};
 
     function changed(structural) {
+      parts.touched = true;
       if (structural) renderForm();
       renderDiagram();
       renderOutput();
@@ -1286,9 +1287,10 @@
       var langs = [["", "Choose..."]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
       var what = titled("1. What do you want?", [], [
         h("div", { class: "fc-line" }, [
-          field("Name", function () { return state.id; }, function (v) { state.id = v; }, { compact: true, placeholder: "my_design", hint: "Letters, digits and _" }),
-          field("Language of the design", function () { return state.language; }, function (v) { state.language = v; },
-                { compact: true, options: langs, structural: true }),
+          field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
+                { compact: true, placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits and _" }),
+          field("Language", function () { return state.language; }, function (v) { state.language = v; },
+                { compact: true, options: langs, structural: true, hint: "The language the designs are written in" }),
           state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
           ]),
         field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
@@ -1566,7 +1568,19 @@
     }
 
     function renderLevel2() {
-      return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], drawing())]);
+      if (!opts.foldSteps) {
+        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], drawing())]);
+      }
+      if (parts.stepsOpen === undefined) parts.stepsOpen = false;
+      var body = h("div", {}, drawing());
+      body.hidden = !parts.stepsOpen;
+      var toggle = h("button", { type: "button", class: "fc-toggle", "aria-expanded": parts.stepsOpen ? "true" : "false", on: { click: function () {
+        parts.stepsOpen = !parts.stepsOpen;
+        body.hidden = !parts.stepsOpen;
+        toggle.setAttribute("aria-expanded", parts.stepsOpen ? "true" : "false");
+        if (parts.stepsOpen) renderDiagram();
+      } } }, ["2. Who does each step?", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
+      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), body]);
     }
 
     // -- level 3: the same fields and rows as above, behind one toggle
@@ -1640,8 +1654,9 @@
       var msgs = check(state);
       parts.checks.innerHTML = "";
       if (!msgs.some(function (m) { return m.level !== "note"; })) parts.checks.appendChild(h("li", { class: "fc-ok", text: "Looks complete." }));
-      msgs.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + m.level, text: m.text })); });
-      parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
+      var calm = opts.calmChecks && !parts.touched;   // nothing typed yet: what is left to do, not errors
+      msgs.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text })); });
+      if (parts.next) parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
     }
 
     function copy() {
@@ -1673,7 +1688,7 @@
     parts.code = h("code", {});
     parts.file = h("span", { class: "fc-file" });
     parts.checks = h("ul", { class: "fc-checks" });
-    parts.next = h("code", {});
+    parts.next = opts.nextSteps === false ? null : h("code", {});
     parts.copyBtn = button("Copy", copy, opts.save ? "" : "fc-primary");
     parts.saved = h("span", { class: "fc-hint" });
     var saveBtn = opts.save ? button(opts.saveLabel || "Save", function () {
@@ -1686,7 +1701,7 @@
     var out = h("div", { class: "fc-output" }, [
       h("div", { class: "fc-output-head" }, [parts.file, saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
       h("pre", { class: "fc-yaml" }, [parts.code]),
-      h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat([
+      h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat(opts.nextSteps === false ? [] : [
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]));
