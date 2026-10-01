@@ -590,3 +590,28 @@ td.bad { color: var(--bad); }
 .cv-arg { font-size: 12px; overflow-wrap: anywhere; }
 .cv-text { overflow-wrap: anywhere; }
 .facts-more > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 4px 0; }
+
+/* D713: the views under a tab, the Ask panel, the end of Settings */
+.subtabs { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; flex-wrap: wrap; }
+.subtabs button { border: 0; background: transparent; padding: 4px 12px; border-radius: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.subtabs button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .08); font-weight: 600; }
+.subtabs button:hover:not(.on) { color: var(--ink); }
+.ask-fab { position: fixed; right: 24px; bottom: 24px; z-index: 40; border-radius: 999px; padding: 10px 20px; font-weight: 600;
+  background: var(--accent); color: #fff; border: 0; box-shadow: 0 4px 14px rgb(0 0 0 / .18); cursor: pointer; }
+.ask-fab.on { background: var(--ink); color: var(--panel); }
+main:has(.composer) .ask-fab { bottom: 96px; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 50; background: var(--bg);
+  border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgb(0 0 0 / .12); transform: translateX(105%); transition: transform .18s ease;
+  display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.drawer-head h2 { margin: 0; font-size: 16px; }
+.drawer-body { flex: 1; overflow: auto; padding: 12px 16px 24px; display: grid; gap: 12px; align-content: start; }
+.drawer-body .card { margin: 0; }
+.danger-card { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+@media (max-width: 640px) { .ask-fab { right: 16px; bottom: 16px; } main:has(.composer) .ask-fab { bottom: 88px; } }
+body:has(.ask-fab) .toasts { bottom: 78px; }
+body:has(.composer) .toasts { bottom: 150px; }
+.subrow { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.subrow:empty { display: none; }
+.subrow .subtabs { margin-bottom: 12px; }

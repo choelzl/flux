@@ -236,14 +236,14 @@ class Run:
         """Click the button (or link) whose text is `label`, in `scope`; a tab only when the scope
         is a tab bar (the Upload tab and the Upload button share their label)."""
         ok = self.b.js("""const [label, scope] = arguments;
-            const tabs = scope.includes('.tabs');
+            const tabs = scope.includes('tabs');
             const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
               && (tabs || x.getAttribute('role') !== 'tab'));
             if (!el) return false; el.click(); return true;""", label, scope)
         end = time.time() + 10
         while not ok and time.time() < end:                 # a button busy with its last click comes back
             time.sleep(0.2)
-            ok = self.b.js("""const [label, scope] = arguments; const tabs = scope.includes('.tabs');
+            ok = self.b.js("""const [label, scope] = arguments; const tabs = scope.includes('tabs');
                 const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
                   && (tabs || x.getAttribute('role') !== 'tab'));
                 if (!el) return false; el.click(); return true;""", label, scope)
@@ -329,14 +329,45 @@ def flows(r: Run) -> None:
 
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("a loop has its tabs", tabs[:2] == ["Overview", "Live"] and "Ask" in tabs and "Settings" in tabs, str(tabs))
+        r.check("a loop has six tabs (D713)", tabs == ["Overview", "Live", "Results", "Agents", "Files", "Settings"], str(tabs))
+        head = b.js("return document.querySelector('.page-head').innerText")
+        r.check("the header has no Configure or Delete: Settings has them", "Configure" not in head and "Delete" not in head, head)
+        subs_of = "[...document.querySelectorAll('#main .subtabs.views [role=tab]')]"
         for t in tabs:
             r.button(t, "#main .tabs")
             b.wait(f"[...document.querySelectorAll('#main .tabs [role=tab]')].find(x => x.textContent === '{t}').classList.contains('on')")
             b.wait("!document.querySelector('#main .skeleton')", timeout=15, what=f"{t} loaded")
-            crumb = b.js("return document.querySelector('.crumbs-bar') && document.querySelector('.crumbs-bar').innerText")
-            r.check(f"tab {t}: the breadcrumb says where", crumb and "sw" in crumb, str(crumb))
-            r.clean(f"tab {t}")
+            for v in b.js(f"return {subs_of}.map(x => x.textContent)") or [""]:
+                if v:
+                    r.button(v, "#main .subtabs.views")
+                    b.wait(f"{subs_of}.find(x => x.textContent === '{v}').classList.contains('on')", what=f"{t} › {v}")
+                    b.wait("!document.querySelector('#main .skeleton')", timeout=15, what=f"{t} › {v} loaded")
+                where = f"{t} › {v}" if v else t
+                crumb = b.js("return document.querySelector('.crumbs-bar') && document.querySelector('.crumbs-bar').innerText")
+                r.check(f"{where}: the breadcrumb says where", crumb and "sw" in crumb, str(crumb))
+                r.clean(where)
+        r.check("Settings ends with Delete for the owner", b.js("return !!document.querySelector('#main .danger-card')") or
+                (r.button("Variables and sharing", "#main .subtabs.views") or
+                 b.wait("document.querySelector('#main .danger-card')", what="the Delete card")))
+        # the old addresses lead to their new places
+        for old, tab, view in (("log", "Live", "Log"), ("timeline", "Live", "Timeline"), ("workbench", "Files", "Workbench"),
+                               ("agent-turns", "Agents", None), ("configure/edit", "Settings", "Problem")):
+            r.page(f"#/app/sw/{old}", f"[...document.querySelectorAll('#main .tabs [role=tab]')].find(x => x.textContent === '{tab}' && x.classList.contains('on'))", old)
+            if view:
+                r.check(f"/{old} opens {tab} › {view}", b.wait(f"{subs_of}.some(x => x.textContent === '{view}' && x.classList.contains('on'))", what=view))
+            else:
+                r.check(f"/{old} opens {tab}", True)
+        r.check("/configure/edit opens Direct edit", b.wait("document.querySelector('#main .editor textarea')", what="Direct edit"))
+        r.clean("old addresses")
+        # Ask: a panel over any tab
+        r.page("#/app/sw/results", "document.querySelector('.ask-fab')", "the Ask button")
+        b.click(".ask-fab")
+        b.wait("document.querySelector('.drawer.open #ask-q')", what="the Ask panel")
+        r.check("Ask opens as a panel over the tab, Results still under it", b.js("return location.hash.endsWith('/results')"))
+        b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
+        b.wait("!document.querySelector('.drawer.open')", what="the panel closed by Escape")
+        r.check("Escape closes it", True)
+        r.clean("ask panel")
     r.step("every tab", every_tab)
 
     def files_and_gitignore():
@@ -356,7 +387,7 @@ def flows(r: Run) -> None:
     r.step("files and .gitignore", files_and_gitignore)
 
     def direct_edit():
-        r.page("#/app/sw/configure/edit", "document.querySelector('.editor textarea')", "Direct edit")
+        r.page("#/app/sw/settings/problem/edit", "document.querySelector('.editor textarea')", "Direct edit")
         edit = "const [from, to] = arguments; const t = document.querySelector('.editor textarea'); t.value = t.value.replace(from, to); t.dispatchEvent(new Event('input')); return true;"
         b.js(edit, "timeout_s: 60", "timeout_s: 90")
         r.button("Save")
@@ -382,7 +413,7 @@ def flows(r: Run) -> None:
     r.step("direct edit", direct_edit)
 
     def variables_and_sharing():
-        r.page("#/app/sw/settings", "document.querySelector('#env-loop-name')", "Settings")
+        r.page("#/app/sw/settings/loop", "document.querySelector('#env-loop-name')", "Settings")
         b.type("#env-loop-name", "SEED")
         b.type("#env-loop-value", "7")
         r.button("Add", "#main")
@@ -432,8 +463,12 @@ def flows(r: Run) -> None:
         head = b.js("return document.querySelector('.page-head').innerText")
         r.check("a watcher has no Start, Configure or Delete", not any(w in head for w in ("Start", "Configure", "Delete")), head)
         r.check("a watcher may leave", "Leave" in head, head)
-        r.page("#/u/bob/app/sw/ask", "document.querySelector('#main .card')", "Ask as a watcher")
+        r.page("#/u/bob/app/sw/ask", "document.querySelector('.drawer.open .drawer-body .card')", "Ask as a watcher")
         r.check("a watcher reads the answers and asks nothing", not b.js("return !!document.querySelector('#ask-q')"))
+        r.page("#/u/bob/app/sw/settings", "document.querySelector('#main .tabs')", "Settings as a watcher")
+        b.wait("!document.querySelector('#main .skeleton')", timeout=15)
+        r.check("a watcher has no Problem to change and no Delete", not b.js(
+            "return [...document.querySelectorAll('#main .subtabs [role=tab]')].some(x => x.textContent === 'Problem') || !!document.querySelector('.danger-card')"))
         r.clean("watcher")
     r.step("a watcher", watcher)
 

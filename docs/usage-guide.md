@@ -179,7 +179,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Code:** files, a design's source and the code in agent prompts are highlighted (YAML,
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
-- **A loop's page** (tabs: Overview, Live, Log, Timeline, Agent turns, Results, Files, Workbench, Settings):
+- **A loop's page** (D713: six tabs -- Overview, Live, Results, Agents, Files, Settings -- some with views
+  under them: Live › Tasks, Log, Timeline; Files › Loop files, Workbench; Settings › Problem (the
+  configurator, Direct edit, an agent), Variables and sharing (with Advanced and, for the owner, Delete
+  at the end). The header has Start/Stop and Check. **Ask** is a button at the bottom right that opens a
+  panel over any tab: the questions and answers, and a new question. Escape closes it. An address
+  names the view (`#/app/x/live/log`, `#/app/x/settings/problem/edit`, `#/app/x/ask` opens the panel), and
+  the old ones (`/log`, `/timeline`, `/agent-turns`, `/workbench`, `/configure/...`) lead to their new places.
+  What each view shows:
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes

@@ -546,7 +546,7 @@ function loopsTable(loops, { who = false } = {}) {
           : l.perm === "edit" ? [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })] : [])
         : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
         : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
-           h("a", { class: "btn small", href: `#/app/${enc(name)}/configure` }, "Configure")];
+           h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
       return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
         who ? h("td", {}, l.owner) : "",
         h("td", {}, h("a", { href, class: "strong" }, name)),
@@ -864,7 +864,7 @@ function advancedCard(e, save) {
     }, { cls: "primary" }))]);
 }
 
-async function loopPage(name, owner, tab = "Overview") {
+async function loopPage(name, owner, path = "") {
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
   const base = `/api/apps/${enc(name)}`;
@@ -874,8 +874,27 @@ async function loopPage(name, owner, tab = "Overview") {
   const mine = perm === "owner" || perm === "edit", isOwner = perm === "owner";
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
-  const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench", "Ask", "Settings"];
-  const tabBar = h("div", { class: "tabs", role: "tablist" });
+  // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
+  // (the configurator, direct edit, an agent) under Settings, Delete at Settings' end; Ask a panel
+  // that opens over any tab. The old addresses lead to their new places.
+  const tabs = ["Overview", "Live", "Results", "Agents", "Files", "Settings"];
+  const SLUG = { Overview: "", Live: "live", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
+  const TAB_OF = Object.fromEntries(Object.entries(SLUG).map(([t, k]) => [k, t]));
+  const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem" };
+  let parts = String(path || "").split("/").filter(Boolean);
+  if (ALIAS[parts[0]]) parts = [...ALIAS[parts[0]].split("/"), ...parts.slice(1)];
+  let askOpen = parts[0] === "ask";
+  if (askOpen) parts = [];
+  let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
+  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+                 Settings: [["problem", "Problem"], ["loop", "Variables and sharing"]] };
+  const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !(perm === "owner" || perm === "edit")));
+  const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
+  function setUrl() {
+    const segs = [SLUG[tab], tab === "Overview" ? "" : (curSub() === (subsOf(tab)[0] || [""])[0] && !mode ? "" : curSub()), mode].filter(Boolean);
+    history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${segs.length ? "/" + segs.join("/") : ""}`);
+  }
+  const tabBar = h("div", { class: "tabs", role: "tablist" }), subHolder = h("div", { class: "subrow" });
   let question = st.question || null;
   const log = logView(base, qs);
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
@@ -888,19 +907,20 @@ async function loopPage(name, owner, tab = "Overview") {
   });
   function drawCrumbs() {
     crumbBar.replaceChildren(crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null,
-      [name, appHref(owner, name)], tab !== "Overview" ? [tab, null] : null));
+      [name, appHref(owner, name)], tab !== "Overview" ? [tab, null] : null,
+      curSub() && curSub() !== (subsOf(tab)[0] || [""])[0] ? [subsOf(tab).find(([k]) => k === curSub())[1], null] : null));
   }
   function drawTabs() {
     drawCrumbs();
     tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
-      onclick: () => { tab = t; history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${t === "Overview" ? "" : "/" + t.toLowerCase().replace(" ", "-")}`); drawTabs(); drawBody(); } }, t)));
+      onclick: () => { tab = t; sub = ""; mode = ""; setUrl(); drawTabs(); drawBody(); } }, t)));
   }
   function drawHead() {
     const acts = [];
     if (st.running && perm !== "watch") {
       acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
     } else if (!st.running && mine && info.document) {
-      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); tab = "Live"; drawTabs(); drawBody(); } }, { cls: "primary" }));
+      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }));
     }
     if (mine) {
       acts.push(act("Check", async () => {
@@ -910,12 +930,7 @@ async function loopPage(name, owner, tab = "Overview") {
         out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
         await d;
       }));
-      if (info.document) acts.push(h("a", { class: "btn", href: `${appHref(info.owner, name)}/configure` }, "Configure"));
       if (perm === "edit") acts.push(leaveBtn());
-      if (!st.running && isOwner) acts.push(act("Delete", async () => {
-        if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
-        await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
-      }, { cls: "danger" }));
     }
     if (perm === "watch") acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
@@ -925,7 +940,7 @@ async function loopPage(name, owner, tab = "Overview") {
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
   }
-  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && (tab === "Live" || tab === "Overview")) drawBody(); }
+  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody(); }
   // notes and the agent's question
   const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
   const noteList = h("div", { class: "notes" });
@@ -939,7 +954,7 @@ async function loopPage(name, owner, tab = "Overview") {
   }
   function drawBanner() {
     composer.update();
-    if (!question || !st.running || tab === "Live") { banner.replaceChildren(); return; }
+    if (!question || !st.running || (tab === "Live" && !curSub())) { banner.replaceChildren(); return; }
     const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
     const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
     banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
@@ -1000,7 +1015,7 @@ async function loopPage(name, owner, tab = "Overview") {
       if (atEnd) toEnd();
     });
     const el = card("The log", box, { cls: "livelog-card", actions: [h("label", { class: "check small" }, onlyBad, "problems only"),
-      h("button", { class: "small", type: "button", onclick: () => goTab("Log") }, "Open the Log tab")] });
+      h("button", { class: "small", type: "button", onclick: () => goTab("Live", "log") }, "The whole log")] });
     return { el, fill };
   })();
 
@@ -1067,7 +1082,7 @@ async function loopPage(name, owner, tab = "Overview") {
     const params = new URLSearchParams(owner ? { owner } : {});
     if (tlStart != null) params.set("start", tlStart);
     const t = await api(`/apps/${enc(name)}/timeline?${params}`);
-    if (tab !== "Timeline") return;
+    if (tab !== "Live" || curSub() !== "timeline") return;
     if (!t.bars.length) { body.replaceChildren(card(null, empty("No phase in the journal yet."))); return; }
     const color = {}; t.kinds.forEach((k, i) => { color[k.kind] = PALETTE[i % PALETTE.length]; });
     const startSel = h("select", { onchange: (e) => { tlStart = Number(e.target.value); tlPass = ""; timelineView(); } },
@@ -1277,17 +1292,28 @@ async function loopPage(name, owner, tab = "Overview") {
       h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })));
   }
 
-  const goTab = (t) => { tab = t; drawTabs(); drawBody(); };
+  const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; setUrl(); drawTabs(); drawBody(); };
   /** Questions about the loop (D705): an agent reads it -- its files, its record, its log -- and
       answers; nothing changes. Kept with the loop, newest first; one answered at a time. */
   let askTimer = null;
   cleanup.push(() => clearTimeout(askTimer));
+  const askBox = h("div", { class: "drawer-body" });
+  const drawer = h("aside", { class: "drawer", "aria-label": "Ask about this loop" },
+    h("div", { class: "drawer-head" }, h("h2", {}, "Ask about this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
+  const askFab = h("button", { class: "ask-fab", type: "button", title: "Ask an agent about this loop: it reads it and answers", onclick: () => setAsk(!askOpen) }, "Ask");
+  function setAsk(open) {
+    askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
+    if (open) { askBox.replaceChildren(skeleton(4)); askView(); } else clearTimeout(askTimer);
+  }
+  const onKey = (e) => { if (e.key === "Escape" && askOpen && !document.querySelector("dialog[open]")) setAsk(false); };
+  document.addEventListener("keydown", onKey);
+  cleanup.push(() => document.removeEventListener("keydown", onKey));
   async function askView() {
     const list = await api(`/apps/${enc(name)}/asks${qs}`).catch(() => []);
-    if (tab !== "Ask") return;
+    if (!askOpen) return;
     const busy = list.some(a => a.running);
     clearTimeout(askTimer);
-    if (busy) askTimer = setTimeout(() => { if (tab === "Ask" && !body.contains(document.activeElement)) askView(); else if (tab === "Ask") askTimer = setTimeout(askView, 3000); }, 3000);
+    if (busy) askTimer = setTimeout(() => { if (askOpen && !askBox.contains(document.activeElement)) askView(); else if (askOpen) askTimer = setTimeout(askView, 3000); }, 3000);
     let form = "";
     if (mine) {
       const q = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
@@ -1310,7 +1336,7 @@ async function loopPage(name, owner, tab = "Overview") {
         : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))],
       mine && !a.running ? h("div", { class: "form-actions" }, act("Forget", async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); askView(); }, { cls: "small" })) : ""],
       { cls: "ask-card" });
-    body.replaceChildren(form, ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
+    askBox.replaceChildren(form, ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
   }
   /** The loop's settings (D697): its environment variables over the user's and the server's, and
       what only an admin sets -- the sandbox and its limits. */
@@ -1325,9 +1351,14 @@ async function loopPage(name, owner, tab = "Overview") {
       e.user.length || e.server.length ? h("div", { class: "blk" }, h("h3", {}, "Under them"),
         envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))],
           new Set(e.loop.map(x => x.name)))) : ""]);
+    const danger = isOwner ? card("Delete this loop", [h("p", { class: "muted" }, "Its document, files, record and log go. This cannot be undone."),
+      h("div", { class: "form-actions" }, st.running ? h("span", { class: "muted" }, "Stop it first.") : act("Delete", async () => {
+        if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
+        await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
+      }, { cls: "danger" }))], { cls: "danger-card" }) : "";
     body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
       await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv }); toast("Advanced settings saved: they apply from the next start", "ok"); settingsView();
-    }));
+    }), danger);
   }
   /** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
       a list one item a line. */
@@ -1397,7 +1428,7 @@ async function loopPage(name, owner, tab = "Overview") {
         stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
         use ? stat("Models and agents", `${use.total.turns} turn(s)`, [dur(use.total.seconds) || "0s",
           use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",
-          use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agent turns")) : "",
+          use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agents")) : "",
         stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
       q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
@@ -1405,7 +1436,7 @@ async function loopPage(name, owner, tab = "Overview") {
         card("Latest notes", notes.length ? h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
           h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text)))) : empty(st.running && mine ? "No note yet: send one from the Live tab." : "No note yet.")),
         card("Agents' workbench", bench.length ? h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
-          h("a", { href: "javascript:void 0", onclick: () => goTab("Workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
+          h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
           b.first ? h("div", { class: "first" }, b.first) : ""))) : empty("Empty."))),
         h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart.")),
           lastPass(r))));
@@ -1429,22 +1460,29 @@ async function loopPage(name, owner, tab = "Overview") {
     if (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6) return "";
     return authoringCard(name, st, { onStop: mine ? async () => { toast((await api(`/apps/${enc(name)}/author/stop${qs}`, { method: "POST" })).ok, "ok"); } : null });
   }
+  function drawSubs() {
+    const o = subsOf(tab), cur = curSub();
+    subHolder.replaceChildren(o.length > 1 ? h("div", { class: "subtabs views", role: "tablist" }, o.map(([k, label]) => h("button", { role: "tab", type: "button",
+      class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false", onclick: () => { sub = k; mode = ""; setUrl(); drawCrumbs(); drawBody(); } }, label))) : "");
+  }
   async function drawBody() {
-    drawBanner();
-    if (tab === "Settings") return settingsView();
-    if (tab === "Ask") return askView();
+    drawBanner(); drawSubs();
+    if (tab === "Settings") {
+      if (curSub() === "problem") { configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder }); return; }
+      return settingsView();
+    }
     if (tab === "Overview") {
       if (!st.running && !st.last_active) {
         const ab = await authorBox();
         body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
-          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/configure/agent` }, "Have an agent write it") : "")));
+          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : "")));
         return;
       }
       body.replaceChildren(card(null, skeleton(7)));
       await overview();
       return;
     }
-    if (tab === "Live") {
+    if (tab === "Live" && !curSub()) {
       if (!st.running && !st.last_active) {
         body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
         return;
@@ -1454,13 +1492,13 @@ async function loopPage(name, owner, tab = "Overview") {
           h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
         st.running && mine ? composer.el : ""));
       live.draw(); liveLog.fill(); composer.update();
-    } else if (tab === "Timeline") {
+    } else if (tab === "Live" && curSub() === "timeline") {
       body.replaceChildren(card(null, skeleton(7)));
       await timelineView();
-    } else if (tab === "Log") {
+    } else if (tab === "Live" && curSub() === "log") {
       body.replaceChildren(card(null, log.el, { cls: "log-card" }));
       log.render();
-    } else if (tab === "Agent turns") {
+    } else if (tab === "Agents") {
       body.replaceChildren(card(null, skeleton(7)));
       const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
       const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
@@ -1508,11 +1546,11 @@ async function loopPage(name, owner, tab = "Overview") {
       const r = await api(`/apps/${enc(name)}/results${qs}`);
       if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No result yet: a design is a result once a stage measured it."))); return; }
       body.replaceChildren(resultsView(r));
-    } else if (tab === "Files") {
+    } else if (tab === "Files" && !curSub()) {
       const files = await api(`/apps/${enc(name)}/files${qs}${showIgnored() ? (qs ? "&" : "?") + "ignored=true" : ""}`);
       body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [fileList(files), mine ? adder() : ""], { cls: "files-card", actions: [ignoredToggle()] }), card(null, viewer, { cls: "viewer-card" })));
       if (info.document) openFile(info.document, false);
-    } else if (tab === "Workbench") {
+    } else if (tab === "Files" && curSub() === "workbench") {
       const bench = await api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []);
       body.replaceChildren(h("div", { class: "grid-app" }, card("Agents' workbench", bench.length
         ? ["tools", "notes", ""].map(kind => {
@@ -1531,14 +1569,15 @@ async function loopPage(name, owner, tab = "Overview") {
   const tick = setInterval(async () => {
     await refresh().catch(() => {});
     // the Overview and the Timeline follow a running loop (D693, D696): once a minute
-    if (++beat % 12 === 0 && (tab === "Overview" || tab === "Timeline") && st.running && !document.hidden && !busy) {   // every minute (D696)
+    if (++beat % 12 === 0 && (tab === "Overview" || (tab === "Live" && curSub() === "timeline")) && st.running && !document.hidden && !busy) {   // every minute (D696)
       busy = true; try { await (tab === "Overview" ? overview() : timelineView()); } catch (_) { /* the next beat */ } finally { busy = false; }
     }
   }, 5000);
   cleanup.push(() => clearInterval(tick));
   pageRefresh = () => refresh();
   drawHead(); drawTabs(); drawBanner(); drawBody();
-  show(crumbBar, header, banner, tabBar, body);
+  show(crumbBar, header, banner, tabBar, subHolder, body, askFab, drawer);
+  if (askOpen) setAsk(true);
 }
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
@@ -2012,12 +2051,23 @@ function filesPanel(name, yamlOf) {
 const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
 async function configurePage(name, owner, mode = "configurator") {
   const isNew = !name;
+  const host = h("div", {});
+  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
+    : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
+  show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
+    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
+  configureInto(host, name, owner, mode, isNew ? "#/configure" : `${appHref(owner, name)}/settings/problem`);
+}
+
+/** The ways to make or change a problem (D704), as tabs, into `host`: New loop's page, and a
+    loop's Settings › Problem (D713). `base`: the address the modes extend. */
+function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
+  const isNew = !name;
   const modes = isNew ? ["configurator", "upload", "agent"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
-  const body = h("div", {}), tabBar = h("div", { class: "tabs", role: "tablist" });
-  const base = isNew ? "#/configure" : `${appHref(owner, name)}/configure`;
+  const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
   function drawTabs() {
-    tabBar.replaceChildren(...modes.map(k => h("button", { role: "tab", class: k === mode ? "on" : "", "aria-selected": k === mode ? "true" : "false",
+    tabBar.replaceChildren(...modes.map(k => h("button", { role: "tab", type: "button", class: k === mode ? "on" : "", "aria-selected": k === mode ? "true" : "false",
       onclick: () => { mode = k; history.replaceState(null, "", base + (k === "configurator" ? "" : "/" + k)); drawTabs(); draw(); } }, CONFIG_MODES[k])));
   }
   async function draw() {
@@ -2029,10 +2079,7 @@ async function configurePage(name, owner, mode = "configurator") {
       else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }
-  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
-    : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
-  show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
-    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), tabBar, body);
+  if (barHost) { barHost.append(tabBar); host.replaceChildren(body); } else host.replaceChildren(tabBar, body);
   drawTabs(); draw();
 }
 
@@ -2051,7 +2098,7 @@ async function crafterView(body, name, owner) {
     if (!v.document) { body.replaceChildren(card(null, empty("This loop has no problem document yet: an agent may be writing it (the loop's Overview), or use Direct edit."))); return; }
     if (v.raw == null) {                                // D710: not YAML at all -- the form would read nothing and save over it
       body.replaceChildren(card(null, [h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error),
-        h("p", { class: "muted" }, "The configurator cannot read it. Fix it in ", h("a", { href: `${appHref(owner, name)}/configure/edit` }, "Direct edit"), ".")]));
+        h("p", { class: "muted" }, "The configurator cannot read it. Fix it in ", h("a", { href: `${appHref(owner, name)}/settings/problem/edit` }, "Direct edit"), ".")]));
       return;
     }
     const got = C.fromDoc(v.raw, v.normal || v.raw);
@@ -2539,15 +2586,12 @@ async function route() {
   if (hash === "#/login") { drawNav(); return loginPage(); }
   if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
-  const TABS = { "": "Overview", live: "Live", log: "Log", timeline: "Timeline", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench", ask: "Ask", settings: "Settings" };
   try {
     let m;
     pageOwner = null;
-    if ((m = hash.match(/^#\/app\/([^/]+)\/configure(?:\/([a-z]+))?$/))) return await configurePage(decodeURIComponent(m[1]), null, m[2]);
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)\/configure(?:\/([a-z]+))?$/))) { pageOwner = decodeURIComponent(m[1]); return await configurePage(decodeURIComponent(m[2]), pageOwner, m[3]); }
-    if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Overview");
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) { pageOwner = decodeURIComponent(m[1]); } else pageOwner = null;
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Overview");
+    // D713: a loop's address is its tab and what is under it: /live/log, /files/workbench, /settings/problem/edit
+    if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z-]+)*)$/))) return await loopPage(decodeURIComponent(m[1]), null, m[2].slice(1));
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)((?:\/[a-z-]+)*)$/))) { pageOwner = decodeURIComponent(m[1]); return await loopPage(decodeURIComponent(m[2]), pageOwner, m[3].slice(1)); }
     if (hash === "#/new") return await newPage();
     if ((m = hash.match(/^#\/configure(?:\/([a-z]+))?$/))) return await configurePage(null, null, m[1]);
     if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");
@@ -2573,7 +2617,7 @@ function drawNav() {
   const here = location.hash || "#/";
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
   document.getElementById("nav").replaceChildren(...(me ? [
-    link("#/", "Loops", here === "#/" || (here.startsWith("#/app") && !here.endsWith("/configure")) || here.startsWith("#/u/")),
+    link("#/", "Loops", here === "#/" || here.startsWith("#/app") || here.startsWith("#/u/")),
     link("#/configure", "New loop", here.startsWith("#/configure") || here === "#/new"),
     me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""] : []));
   drawBell();

@@ -1669,3 +1669,27 @@ the topics above.
   - Tests: `test_agent_live` (the order for OpenCode and for Claude; a result joined by id;
     words streamed once; redacted thinking; a turn's steps kept). Unit suite and browser test:
     1443 passed, 105 of 105.
+- **D713: a loop's page has six tabs; Ask is a panel; Delete and the problem live in Settings.**
+  - Key insight: ten tabs mixed things a user switches between (what it does, what it found)
+    with things a user does once in a while (change the problem, delete, ask). The second kind
+    belongs under a tab or over the page, not beside the first.
+  - Rules:
+    - Tabs: Overview, Live, Results, Agents, Files, Settings.
+    - Views under a tab, as a segmented row: Live › Tasks, Log, Timeline; Files › Loop files,
+      Workbench; Settings › Problem, Variables and sharing. Problem's own modes (Configurator,
+      Direct edit, Agent) sit on the same row.
+    - The configure page's core is `configureInto(host, …, base)`, used by New loop and by
+      Settings › Problem. A watcher has no Problem view.
+    - The header has Start/Stop and Check (and Leave for a guest). Delete is the last card of
+      Settings for the owner, with "Stop it first" while it runs.
+    - Ask is a floating button that opens a right-hand panel over any tab, full width on a
+      phone. Escape or Close shuts it. It stays above the note box on Live, and notices are
+      lifted above it, since one covered it.
+    - Addresses: `#/app/x/<tab>/<view>/<mode>`. `/ask` opens the panel. The old addresses lead
+      to their new places: `/log`, `/timeline`, `/agent-turns`, `/workbench`, `/configure[/mode]`.
+  - Browser test (120 checks), now covering:
+    - the six tabs and every view under them, each with its breadcrumb;
+    - the header without Configure or Delete, and Delete at the end of Settings;
+    - each old address opening its new place;
+    - the Ask panel over Results, closed by Escape;
+    - a watcher without Problem or Delete.
