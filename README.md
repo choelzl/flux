@@ -28,7 +28,7 @@ it tried. Website: <https://choelzl.github.io/flux/>.
 
    ```bash
    .venv/bin/flux new primes --kind sweep
-   .venv/bin/flux task run primes/primes.problem.yaml --passes 1
+   .venv/bin/flux task run primes/primes.problem.yaml --passes 6    # a pass a point
    ```
 
 Extras: `pip install -e "./flux[bankmap]"` (z3), `[nlu]` (scipy), `[zigzag]`, `[all]`.
@@ -54,7 +54,7 @@ Extras: `pip install -e "./flux[bankmap]"` (z3), `[nlu]` (scipy), `[zigzag]`, `[
 4. Run a first hardware search, no AI model needed (about three minutes):
 
    ```bash
-   flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 1
+   flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 12
    ```
 
 ### Add an AI model

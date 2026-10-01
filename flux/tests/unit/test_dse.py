@@ -7,6 +7,9 @@ import pytest
 from flux_loop import LoopRequest, LoopState, Problem, Verdict, run_loop
 from flux_loop.dse import Anneal, Genetic, Gradient, ModelSearch, MonteCarlo, Pareto, Phases, Sweep, neighbour, neighbours, points
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 SPACE = {"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 2, 3]}
 
 
@@ -55,7 +58,7 @@ class Bowl(Problem):
 
 def _run(policy, steps=40):
     prob = Bowl(policy)
-    out = run_loop(prob, LoopRequest(steps=steps, finalists=0, screen_only=True), proposer=None, log=lambda _m: None)
+    out = run_loop(prob, LoopRequest(batch=WHOLE, steps=steps, finalists=0, screen_only=True), proposer=None, log=lambda _m: None)
     return prob, out
 
 
@@ -103,7 +106,7 @@ def test_anneal_and_genetic_reach_the_floor_on_a_bowl():
 
 def test_a_policy_without_a_space_or_an_objective_says_so():
     said = []
-    state = LoopState(request=LoopRequest(), say=said.append, proposer=None, feedback=None)
+    state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
 
     class Flat(Bowl):
         def space(self, state):
@@ -157,7 +160,7 @@ def test_the_model_names_the_next_points_and_bad_ones_are_dropped():
     proposer = ScriptedProposer(replies)
     prob = Bowl(ModelSearch(batch_size=2, rounds=6))
     said = []
-    out = run_loop(prob, LoopRequest(steps=10, finalists=0, screen_only=True), proposer=proposer, log=said.append)
+    out = run_loop(prob, LoopRequest(batch=WHOLE, steps=10, finalists=0, screen_only=True), proposer=proposer, log=said.append)
     assert prob.measured[:2] == [{"x": 0, "y": 0}, {"x": 5, "y": 3}] and prob.measured[2:] == [{"x": 3, "y": 2}]
     assert out.decision.candidate.knobs == {"x": 3, "y": 2} and len(proposer.prompts) == 4
     assert "DESIGN-SPACE EXPLORATION" in proposer.prompts[0] and "MEASURED SO FAR: nothing" in proposer.prompts[0]
@@ -176,7 +179,7 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
     assert any(line.startswith("dse: llm {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
     said = []
-    state = LoopState(request=LoopRequest(), say=said.append, proposer=None, feedback=None)
+    state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
     assert list(prob.search(state)) == [] and any("this run has none" in m for m in said)
 
 
@@ -239,7 +242,7 @@ class Two(Problem):
 
 def _two(policy, **kw):
     prob = Two(policy, **kw)
-    out = run_loop(prob, LoopRequest(steps=60, finalists=0, screen_only=True), proposer=None, log=lambda _m: None)
+    out = run_loop(prob, LoopRequest(batch=WHOLE, steps=60, finalists=0, screen_only=True), proposer=None, log=lambda _m: None)
     return prob, out
 
 
@@ -320,7 +323,7 @@ def test_the_models_phase_moves_only_its_knobs():
     phases = Phases(phases=({"policy": "llm", "knobs": ["x"], "rounds": 1, "batch": 2},))
     prob = Two(phases, seeds=[{"x": 0, "y": 5}])
     proposer = ScriptedProposer([json.dumps({"points": [{"x": 6}, {"x": 7}], "why": "x up"})])
-    run_loop(prob, LoopRequest(steps=10, finalists=0, screen_only=True), proposer=proposer, log=lambda _m: None)
+    run_loop(prob, LoopRequest(batch=WHOLE, steps=10, finalists=0, screen_only=True), proposer=proposer, log=lambda _m: None)
     assert prob.measured == [{"x": 0, "y": 5}, {"x": 6, "y": 5}, {"x": 7, "y": 5}]
     assert "held at the incumbent's" in proposer.prompts[0] and '"y": 5' in proposer.prompts[0]
 
@@ -342,7 +345,7 @@ def test_a_resumed_search_goes_on_from_the_record(tmp_path):
     that measured every point proposes none, a sampler draws new points -- instead of walking
     from the start, taking every number from the cache and calling the old answer rest."""
     db = str(tmp_path / "c.db")
-    req = LoopRequest(steps=40, finalists=0, screen_only=True, db=db)
+    req = LoopRequest(batch=WHOLE, steps=40, finalists=0, screen_only=True, db=db)
     first = Bowl(MonteCarlo(samples=6, batch_size=3, seed=0))
     run_loop(first, req, proposer=None, log=lambda _m: None)
     again = Bowl(MonteCarlo(samples=6, batch_size=3, seed=0))
@@ -352,8 +355,8 @@ def test_a_resumed_search_goes_on_from_the_record(tmp_path):
     assert len({s.candidate.key() for s in out.scored}) == 12, "the decision is over the whole record"
 
     db = str(tmp_path / "s.db")
-    run_loop(Bowl(Sweep()), LoopRequest(steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
+    run_loop(Bowl(Sweep()), LoopRequest(batch=WHOLE, steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
     swept = Bowl(Sweep())
-    out = run_loop(swept, LoopRequest(steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
+    out = run_loop(swept, LoopRequest(batch=WHOLE, steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
     assert swept.measured == [], "every point is on the record: nothing is walked again"
     assert out.decision is not None and out.decision.candidate.knobs == {"x": 3, "y": 2}

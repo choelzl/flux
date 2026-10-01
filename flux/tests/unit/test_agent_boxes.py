@@ -14,8 +14,12 @@ import pytest
 from flux_loop import PromptProblem, TaskError, TaskSpec
 from flux_loop.boxes import box_turn
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 FAKE = r'''import json, sys
 from pathlib import Path
+
 mode, brief, out = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 count = out.with_name("calls")
 n = int(count.read_text()) + 1 if count.exists() else 1
@@ -136,7 +140,7 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, AgentOrchestrator) and prob.roles().orchestrator.coding
     said: list[str] = []
-    out = run_loop(prob, LoopRequest(db=str(tmp_path / "o.db"), steps=4, repair_attempts=1, critique_rounds=0,
+    out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "o.db"), steps=4, repair_attempts=1, critique_rounds=0,
                                      prototype=False, screen_only=True),
                    proposer=ScriptedProposer(['{"artifact": "good", "why": "-"}'] * 4), log=said.append)
     assert sorted(out.admitted) == ["one", "two"]
@@ -166,7 +170,7 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
            "flow": {"dse": {"agent": _agent(tmp_path, "good", answer)}}}
     said: list[str] = []
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
-                   LoopRequest(steps=2, finalists=0, screen_only=True, prototype=False), log=said.append)
+                   LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=said.append)
     measured = [s.candidate.knobs for s in out.scored if "cost" in s.metrics]
     assert {"x": 2, "y": "bb"} in measured and all(p.get("x") != 9 for p in measured)
     assert any("the agent proposes 1 point(s)" in m and "1 dropped" in m for m in said), said
@@ -183,7 +187,7 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
            "flow": {"dse": "sweep", "select": {"agent": _agent(tmp_path, "good", {"pick": "1", "why": "the smallest"})}}}
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
-                   LoopRequest(steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
+                   LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
     assert out.decision.name == "1" and "the agent chose 1 among 3 ties: the smallest" in out.decided_by
 
 
@@ -202,7 +206,7 @@ def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert [type(s).__name__ for s in prob.roles().knowledge.sources] == ["AgentLessons"]
     db = str(tmp_path / "r.db")
-    run_loop(prob, LoopRequest(db=db, steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
+    run_loop(prob, LoopRequest(batch=WHOLE, db=db, steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
     rec = Records(db, objective={"study": "rows"}, name="rows")
     seqs = [t.seq for t in rec.store.trials(rec.campaign_id) if t.result is not None]
     good = {"lessons": [{"text": "cost grows with x", "rows": seqs[:2]}]}
@@ -230,7 +234,7 @@ def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_p
     model = ScriptedProposer(['{"artifact": "x", "why": "-"}'] * 4)
     said: list[str] = []
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),
-             LoopRequest(db=str(tmp_path / "p.db"), steps=2, repair_attempts=1, critique_rounds=0, prototype=False,
+             LoopRequest(batch=WHOLE, db=str(tmp_path / "p.db"), steps=2, repair_attempts=1, critique_rounds=0, prototype=False,
                          screen_only=True, agent=("plan",)), proposer=model, log=said.append)
     assert any("plan: agent" in m and "answered" in m for m in said), said
     assert any("a lookup table first" in p for p in model.prompts), "the method is the part's brief"
@@ -259,5 +263,5 @@ def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):
     assert prob.prototype() is not None and prob.prototype_agent() is not None
 
     def st(on):
-        return LoopState(request=LoopRequest(prototype=on), say=lambda _m: None, proposer=None, feedback=None)
+        return LoopState(request=LoopRequest(batch=WHOLE, prototype=on), say=lambda _m: None, proposer=None, feedback=None)
     assert _agent_writes_prototypes(prob, st(True)) and not _agent_writes_prototypes(prob, st(False))

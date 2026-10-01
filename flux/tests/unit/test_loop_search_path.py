@@ -11,6 +11,9 @@ import pytest
 from flux_loop import (BuildError, Candidate, LoopRequest, Problem, StageNames, Verdict,
                        run_loop)
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 
 class Sweep(Problem):
     """A two-stage sweep: the batch is the space, odd designs do not build, the coarse stage
@@ -64,7 +67,7 @@ class Sweep(Problem):
 
 def test_a_batch_goes_through_the_gate_and_one_measurement_call(tmp_path):
     problem = Sweep()
-    out = run_loop(problem, LoopRequest(db=str(tmp_path / "s.db"), steps=4, finalists=2),
+    out = run_loop(problem, LoopRequest(batch=WHOLE, db=str(tmp_path / "s.db"), steps=4, finalists=2),
                    log=lambda _m: None)
     # the gate refused the odd sizes, and only the survivors were measured -- in ONE call
     assert problem.batch_sizes == [2, 2], "the coarse stage took the batch; the fine stage the finalists"
@@ -87,7 +90,7 @@ def test_the_standings_say_what_a_search_has_done_not_what_it_has_proven(monkeyp
     seen: list[dict] = []
     monkeypatch.setattr(flux_profile, "publish",
                         lambda kind, payload: seen.append(payload) if kind == "standings" else None)
-    run_loop(Sweep(), LoopRequest(steps=2, finalists=1), log=lambda _m: None)
+    run_loop(Sweep(), LoopRequest(batch=WHOLE, steps=2, finalists=1), log=lambda _m: None)
     assert seen and all(p["searching"] for p in seen) and all(p["parts"] == [] for p in seen)
     last = seen[-1]
     assert last["gated"] == 2 and last["refused"] == 2
@@ -109,16 +112,16 @@ def test_the_frontier_and_the_finalists_are_the_problems_to_choose(tmp_path):
             return list(front) + [s for s in state.scored if s.name == "d0-4"]   # + the incumbent
 
     problem = Four()
-    out = run_loop(problem, LoopRequest(steps=2, finalists=1), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=2, finalists=1), log=lambda _m: None)
     assert [s.name for s in out.frontier] == ["d0-2"]
     assert sorted(s.name for s in out.confirmed) == ["d0-2", "d0-4"]
 
 
 def test_one_stage_decides_on_the_first_and_screen_only_says_so(tmp_path):
-    out = run_loop(Sweep(fine=False), LoopRequest(steps=2), log=lambda _m: None)
+    out = run_loop(Sweep(fine=False), LoopRequest(batch=WHOLE, steps=2), log=lambda _m: None)
     assert out.decision is not None and out.decision.stage == "coarse" and not out.confirmed
     assert not any("must not be quoted" in n for n in out.not_established)
-    held = run_loop(Sweep(), LoopRequest(steps=2, screen_only=True), log=lambda _m: None)
+    held = run_loop(Sweep(), LoopRequest(batch=WHOLE, steps=2, screen_only=True), log=lambda _m: None)
     assert not held.confirmed
     assert any("every number is from the coarse stage" in n for n in held.not_established)
 
@@ -131,7 +134,7 @@ def test_a_short_result_list_is_refused_rather_than_repaired(tmp_path):
             return super().measure_batch(cands, stage, state)[:-1]
 
     with pytest.raises(RuntimeError, match="one per candidate, in order"):
-        run_loop(Loses(), LoopRequest(steps=1), log=lambda _m: None)
+        run_loop(Loses(), LoopRequest(batch=WHOLE, steps=1), log=lambda _m: None)
 
 
 def test_a_stage_that_cannot_measure_one_candidate_refuses_only_that_one(tmp_path):
@@ -140,7 +143,7 @@ def test_a_stage_that_cannot_measure_one_candidate_refuses_only_that_one(tmp_pat
             return [{"error": "the tool crashed"} if c.knobs["size"] == 2 else got
                     for c, got in zip(cands, super().measure_batch(cands, stage, state))]
 
-    out = run_loop(Fails(fine=False), LoopRequest(steps=1), log=lambda _m: None)
+    out = run_loop(Fails(fine=False), LoopRequest(batch=WHOLE, steps=1), log=lambda _m: None)
     assert [s.name for s in out.scored] == ["d0-4"]
     assert ("d0-2", "coarse: the tool crashed") in out.refused
 
@@ -148,7 +151,7 @@ def test_a_stage_that_cannot_measure_one_candidate_refuses_only_that_one(tmp_pat
 def test_the_record_holds_the_problems_own_stages_and_the_gates_refusals(tmp_path):
     db = str(tmp_path / "r.db")
     problem = Sweep()
-    out = run_loop(problem, LoopRequest(db=db, steps=2, finalists=1), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, db=db, steps=2, finalists=1), log=lambda _m: None)
     from flux_records import Records
 
     rec = Records(db, objective=problem.objective(None))
@@ -194,12 +197,12 @@ def test_a_failed_measurement_is_never_cached_as_an_answer(tmp_path):
 
     db = str(tmp_path / "c.db")
     problem = Flaky()
-    first = run_loop(problem, LoopRequest(db=db, steps=1), log=lambda _m: None)
+    first = run_loop(problem, LoopRequest(batch=WHOLE, db=db, steps=1), log=lambda _m: None)
     assert not first.scored and first.refused == [("one", "coarse: the tool crashed")]
-    again = run_loop(problem, LoopRequest(db=db, steps=1), log=lambda _m: None)
+    again = run_loop(problem, LoopRequest(batch=WHOLE, db=db, steps=1), log=lambda _m: None)
     assert [s.name for s in again.scored] == ["one"], "the second run measured it again"
     assert problem.calls == 2
-    third = run_loop(problem, LoopRequest(db=db, steps=1), log=lambda _m: None)
+    third = run_loop(problem, LoopRequest(batch=WHOLE, db=db, steps=1), log=lambda _m: None)
     assert [s.name for s in third.scored] == ["one"] and problem.calls == 2, (
         "the measurement that worked IS cached")
 
@@ -213,7 +216,7 @@ def test_an_empty_batch_is_a_step_that_measured_nothing(tmp_path):
             yield []
             yield [Candidate(name="late", knobs={"size": 2})]
 
-    out = run_loop(Quiet(fine=False), LoopRequest(steps=4), log=lambda _m: None)
+    out = run_loop(Quiet(fine=False), LoopRequest(batch=WHOLE, steps=4), log=lambda _m: None)
     assert [s.name for s in out.scored] == ["late"]
 
 
@@ -244,7 +247,7 @@ def test_the_parts_path_is_untouched_by_the_search_hook(tmp_path):
         def measure(self, cand, stage, state):
             return {"value": 1.0}
 
-    out = run_loop(Parts(), LoopRequest(steps=2), log=lambda _m: None)
+    out = run_loop(Parts(), LoopRequest(batch=WHOLE, steps=2), log=lambda _m: None)
     assert list(out.admitted) == ["a"] and out.decision is not None
     assert out.decision.metrics == {"value": 1.0}
 
@@ -285,7 +288,7 @@ def test_the_standings_of_a_search_carry_its_designs_with_their_numbers(monkeypa
 
     seen = []
     monkeypatch.setattr(flux_profile, "publish", lambda kind, payload: seen.append(payload) if kind == "standings" else None)
-    out = run_loop(Grid(), LoopRequest(steps=3, finalists=0, screen_only=True, prototype=False, critique_rounds=0), proposer=None, log=lambda _m: None)
+    out = run_loop(Grid(), LoopRequest(batch=WHOLE, steps=3, finalists=0, screen_only=True, prototype=False, critique_rounds=0), proposer=None, log=lambda _m: None)
     assert out.decision is not None
     last = seen[-1]
     assert last["searching"] and last["objective"] == {"goal": "the smallest design over 100 MHz", "now": "screening"}

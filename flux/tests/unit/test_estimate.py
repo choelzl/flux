@@ -30,7 +30,7 @@ def _doc(tmp_path: Path, xs, estimate=None, **more) -> dict:
     return {"id": "est", "statement": "the cheapest x", "language": "text", "space": {"x": list(xs)},
             "flow": {"dse": "sweep", "generate": {"command": f"{{python}} {tmp_path}/gen.py {{artifact}} {{x}}"}},
             "gate": {"test": ["true"]}, "stages": [stage],
-            "objectives": [{"metric": "cost", "direction": "minimize"}], "budget": {"steps": 2}, **more}
+            "objectives": [{"metric": "cost", "direction": "minimize"}], "budget": {"steps": 2, "batch": 100}, **more}
 
 
 def _run(tmp_path: Path, doc: dict, proposer=None, db: str = "e.db"):

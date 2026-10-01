@@ -15,6 +15,9 @@ from flux_loop import (Candidate, Improve, LoopRequest, Problem, PromptProblem, 
                        Template, Verdict, rig, run_loop)
 from flux_llm import Reply
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 
 class Fabric(Problem):
     """One part, drafted by a template that widens the design each time it is asked."""
@@ -74,7 +77,7 @@ class Fabric(Problem):
 
 def _request(tmp_path, **kw):
     kw.setdefault("steps", 6)
-    return LoopRequest(db=str(tmp_path / "r.db"), prototype=False,
+    return LoopRequest(batch=WHOLE, db=str(tmp_path / "r.db"), prototype=False,
                        critique_rounds=0, **kw)
 
 
@@ -217,7 +220,7 @@ def test_a_document_that_asks_for_what_it_cannot_measure_is_refused(tmp_path):
                       "metrics_re": {"bytes": r"(\d+)"}}],
            "objectives": [{"metric": "byets", "direction": "minimize"}]}
     problem = PromptProblem(TaskSpec.from_dict(doc))
-    wrong = problem.validate(LoopRequest())
+    wrong = problem.validate(LoopRequest(batch=WHOLE))
     assert wrong and "no stage measures" in wrong[0] and "bytes" in wrong[0], wrong
     with pytest.raises(RuntimeError, match="cannot be answered as posed"):
         run_loop(problem, _request(tmp_path), proposer=None, log=lambda _m: None)
@@ -231,5 +234,5 @@ def test_a_cutoff_on_a_metric_its_stage_does_not_measure_is_refused():
                       "cutoff": {"metric": "fmax_mhz", "at": 600}},
                      {"name": "lines", "command": ["wc", "-l", "{artifact}"],
                       "metrics_re": {"lines": r"(\d+)"}}]}
-    wrong = PromptProblem(TaskSpec.from_dict(doc)).validate(LoopRequest())
+    wrong = PromptProblem(TaskSpec.from_dict(doc)).validate(LoopRequest(batch=WHOLE))
     assert any("cuts on 'fmax_mhz'" in w for w in wrong), wrong

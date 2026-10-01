@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from flux_loop import Candidate, LoopRequest, Problem, SubLoop, Template, Verdict, run_loop
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 
 class Both(Problem):
     """A problem with a part to write AND a space to search: the mixed case."""
@@ -53,7 +56,7 @@ class Both(Problem):
 
 def _request(tmp_path, **kw):
     kw.setdefault("steps", 4)
-    return LoopRequest(db=str(tmp_path / "w.db"), prototype=False,
+    return LoopRequest(batch=WHOLE, db=str(tmp_path / "w.db"), prototype=False,
                        critique_rounds=0, **kw)
 
 

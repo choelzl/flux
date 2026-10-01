@@ -15,13 +15,34 @@ run waits for a stop or an operator's note instead of spinning or leaving.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import dataclasses
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from . import ops
 
-__all__ = ["between_passes", "run_passes"]
+__all__ = ["between_passes", "carrying", "run_passes", "this_run"]
+
+#: The run whose passes share one search (D738): a policy's place carries from pass to pass of
+#: a run, and a `run_loop` outside one (or a new run) starts the search afresh from the record.
+_RUN: contextvars.ContextVar[object | None] = contextvars.ContextVar("flux_passes_run", default=None)
+
+
+def this_run() -> object | None:
+    return _RUN.get()
+
+
+@contextlib.contextmanager
+def carrying(mark: object | None = None) -> Iterator[object]:
+    """The passes run inside share one search (D738); the same `mark` again carries it on."""
+    mark = object() if mark is None else mark
+    token = _RUN.set(mark)
+    try:
+        yield mark
+    finally:
+        _RUN.reset(token)
 
 
 class _Held:
@@ -93,11 +114,12 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
     feedback = feedback if notes else None
     cap = int(request.passes if passes is None else passes)
     n = rests = 0
-    while True:
-        out = run(dataclasses.replace(request, explore=rests), feedback)
-        n += 1
-        go, rests, feedback = between_passes(out, n, passes=cap, rests=rests, feedback=feedback,
-                                             proposer=proposer, say=say)
-        if not go:
-            return out
-        say(f"\n── pass {n + 1}" + (f": at rest, exploring for a better design ({rests} in a row)" if rests else "") + " ──")
+    with carrying():
+        while True:
+            out = run(dataclasses.replace(request, explore=rests), feedback)
+            n += 1
+            go, rests, feedback = between_passes(out, n, passes=cap, rests=rests, feedback=feedback,
+                                                 proposer=proposer, say=say)
+            if not go:
+                return out
+            say(f"\n── pass {n + 1}" + (f": at rest, exploring for a better design ({rests} in a row)" if rests else "") + " ──")

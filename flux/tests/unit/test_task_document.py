@@ -15,6 +15,9 @@ from flux_llm import ScriptedProposer
 from flux_loop import (LoopRequest, PromptProblem, TaskError, TaskSpec, load_task, request_for,
                        run_loop, task_report_lines)
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 DIGITS = FLUX_ROOT / "core/loop/examples/digits.task.json"
 
@@ -427,7 +430,7 @@ def test_a_document_names_a_world_and_binds_its_hooks(tmp_path):
     assert prob.stages() == ["screen"], "confirm needs a tool that is not on PATH"
     assert prob.objectives()[0].stage == "screen" and prob.objectives()[0].unit == "MHz"
     assert prob.ladder() == Ladder(sweep=(2, 4), redesigns=1)
-    req = LoopRequest(db=str(tmp_path / "t.db"))
+    req = LoopRequest(batch=WHOLE, db=str(tmp_path / "t.db"))
     assert prob.objective(req) == {"study": "tiny"}
     assert prob.standing(None)["goal"] == "within 2 ULP"
     from flux_loop import Candidate, Scored
@@ -461,7 +464,7 @@ def test_a_world_document_runs_the_loop_end_to_end(tmp_path):
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
            "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]}]}
     prob = PromptProblem(TaskSpec.from_dict(doc))
-    out = run_loop(prob, LoopRequest(db=str(tmp_path / "tiny.db"), steps=2, prototype=False, critique_rounds=0),
+    out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "tiny.db"), steps=2, prototype=False, critique_rounds=0),
                    proposer=ScriptedProposer(['{"artifact": "ok", "why": "-"}']), log=lambda _m: None)
     assert prob.world.built and out.admitted["a"].artifact == "ok"
     assert out.decision is not None and out.decision.metrics["fmax_mhz"] == 900.0
@@ -564,11 +567,11 @@ def test_validate_llm_lets_the_model_object_before_a_step_is_spent(tmp_path):
     task = TaskSpec.from_dict(_flow_doc({"validate": "llm"}))
     prob = PromptProblem(task)
     proposer = ScriptedProposer([json.dumps({"ok": False, "objections": ["fmax_mhz has no goal", "one stage measures nothing new"]})])
-    state = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=proposer, feedback=None)
+    state = LoopState(request=LoopRequest(batch=WHOLE), say=lambda _m: None, proposer=proposer, feedback=None)
     assert prob.objections(state) == ["fmax_mhz has no goal", "one stage measures nothing new"]
     assert "THE DOCUMENT:" in proposer.prompts[0] and '"validate": "llm"' in proposer.prompts[0] and "validate: llm" in proposer.prompts[0]
     assert PromptProblem(TaskSpec.from_dict(_flow_doc({}))).objections(state) == []        # rules only: no call
-    assert prob.objections(LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None)) == []
+    assert prob.objections(LoopState(request=LoopRequest(batch=WHOLE), say=lambda _m: None, proposer=None, feedback=None)) == []
 
 
 def test_a_document_learns_its_margins_from_the_calibrations(tmp_path):
@@ -584,7 +587,7 @@ def test_a_document_learns_its_margins_from_the_calibrations(tmp_path):
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "margin": 0.03}]}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     said = []
-    state = LoopState(request=LoopRequest(), say=said.append, proposer=None, feedback=None)
+    state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
     stages = ["screen", "confirm", "route"]
     prob.calibrated([Bias("fmax_mhz", "confirm", "route", 0.878, 0.01, 7)], state)
     o = prob.objectives()[0]
@@ -638,7 +641,7 @@ def test_a_space_and_a_generator_command_are_a_dse_with_no_world(tmp_path):
         "stages": [{"name": "screen", "metrics": ["size"],
                     "command": ["{python}", "-c", "import sys; print('size=' + str(len(open(sys.argv[1]).read())))", "{artifact}"]}],
         "objectives": [{"metric": "size", "direction": "minimize"}],
-        "budget": {"steps": 1, "prototype": False, "finalists": 0},
+        "budget": {"steps": 1, "prototype": False, "finalists": 0, "batch": 100},
     })
     problem = PromptProblem(task)
     out = run_loop(problem, request_for(task, db=""), log=lambda m: None)
@@ -715,7 +718,7 @@ def test_a_test_that_exits_3_is_a_build_failure_run_once(tmp_path):
     doc = {"id": "d", "statement": "the digits", "gate": {"test": ["{python}", "{home}/check.py", "{artifact}", str(runs)],
                                                           "count_re": r"(\d+) failing"}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
-    state = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None, workdir=str(tmp_path))
+    state = LoopState(request=LoopRequest(batch=WHOLE, db=""), say=lambda _m: None, proposer=None, feedback=None, workdir=str(tmp_path))
     broken = Candidate("b", "SYNTAX here")
     with pytest.raises(BuildError, match="did not compile"):
         prob.build(broken, None, state)

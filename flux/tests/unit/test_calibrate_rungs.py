@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from flux_loop import Bias, Candidate, LoopRequest, Problem, Scored, Verdict, bias, run_loop
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 
 class Two(Problem):
     """An estimate that reads low, and a placement that settles it."""
@@ -54,7 +57,7 @@ class Two(Problem):
 
 def _request(tmp_path, **kw):
     kw.setdefault("steps", 1)
-    return LoopRequest(db=str(tmp_path / "c.db"), prototype=False,
+    return LoopRequest(batch=WHOLE, db=str(tmp_path / "c.db"), prototype=False,
                        critique_rounds=0, **kw)
 
 

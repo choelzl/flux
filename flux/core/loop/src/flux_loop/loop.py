@@ -133,7 +133,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     # Both kinds of work are asked for before anything is reloaded (D457): a problem may have
     # batches, parts, or both. Only parts carry memory to re-verify, so the record is read
     # back only when there are parts.
-    searching: Iterator[list[Candidate]] | None = problem.search(state)
+    searching = _search_session(problem, state)     # D738: the search lives across passes
     if searching is not None:
         _reload_measured(problem, state)     # D682: before the walk's first step reads what is measured
     with _phase("propose: decompose", why="the parts this pass works on") as out:
@@ -305,7 +305,7 @@ def _run_child(problem: Problem, state: LoopState, sub: SubLoop, todo: list) -> 
             pass
 
 
-def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Candidate]] | None,
+def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | None",
                todo: list, goals: list[str]) -> None:
     """The step loop (D457). Each step spends itself on one work item: a part to write (plan,
     generate against the fast test, judge), a sub-task run as its own loop (`SubLoop`, D455),
@@ -317,8 +317,9 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
     request = state.request
     got: list[Scored] = []
     hunting = searching is not None
-    live = hunting
-    asked = False
+    live = hunting and not searching.done
+    paused = False                  # D738: the search's next design waits for the next pass
+    carried = 0                     # D738: the search's designs this pass carries, up to `request.batch`
     step = 0
     started = time.monotonic()
     admitted_before = set(state.admitted)          # D506: what the record gave, before this pass
@@ -370,15 +371,23 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
                 with _phase("DSE: batch", why="the search policy proposes, the gate and the first stage measure") as out:
-                    batch = _next_batch(searching, got, asked)
-                    asked = True
-                    if batch is None:      # the search is done; any parts left are not
+                    # D738: one pass, one design (or `budget.batch` of them): the search picks
+                    # between passes, from what the last ones measured
+                    batch = searching.take(max(1, int(request.batch or 1) - carried))
+                    if not batch and searching.done:   # the search is done; any parts left are not
                         out["candidates"] = "none: the search is done"
                         live = False
+                        state.search_done = True
                         continue           # and this step was not spent
                     out["candidates"] = len(batch)
                     state.step = step + 1
-                    got = _search_step(problem, state, batch)
+                    got = _search_step(problem, state, batch) if batch else []   # an empty round is a spent step
+                    searching.measured(got, len(batch))
+                    state.search_done = searching.done
+                    carried += len(batch)
+                    if carried >= max(1, int(request.batch or 1)) or searching.done:
+                        live = False                   # this pass's designs are in hand
+                        paused = not searching.done    # the search goes on next pass
             else:
                 state.step = step + 1
                 n = min(int(request.parallel_parts or 1), sum(1 for w in waiting if w is not None),
@@ -395,7 +404,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
                 _publish(problem, state, todo, goals, f"after step {state.step}",
                          searching=hunting)
                 _publish_mentor(problem, state)
-        if (not state.improved and not state.pool and not todo and not live
+        if (not state.improved and not state.pool and not todo and not live and not paused
                 and not (set(state.admitted) - admitted_before) and (state.rested or not state.sent_back)
                 and not getattr(state, "search_done", False)):      # a finished search says so below
             # D506/D518: a pass where every design sent back stood and nothing was admitted, or
@@ -421,7 +430,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: Iterator[list[Cand
                 state.lessons.append(f"[loop] the search used every one of its {request.steps} "
                                      "step(s); the problem may have had more to propose")
     finally:
-        if searching is not None:
+        if searching is not None and searching.done:
             searching.close()
 
 
@@ -578,6 +587,90 @@ def _forget_stale_compositions(state: LoopState) -> None:
     state.pool = [c for c in state.pool if c.subgoal is not None or c.key() not in state.compositions]
     state.compositions.clear()
     state.fresh = True
+
+
+class _StateProxy:
+    """The pass's state, as a search living across passes sees it (D738): each pass binds its own."""
+
+    def __init__(self, state: LoopState) -> None:
+        object.__setattr__(self, "_state", state)
+
+    def bind(self, state: LoopState) -> None:
+        object.__setattr__(self, "_state", state)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_state"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(object.__getattribute__(self, "_state"), name, value)
+
+
+class _SearchSession:
+    """The search across passes (D738). The policy proposes batches as it always did; each pass
+    takes the next `n` points of the current one, and the policy hears the batch's results once
+    all of it is measured -- so a sweep's 6 points are 6 passes, an anneal's temperature and a
+    genetic population carry on, and the decision at each pass's end sees every design so far."""
+
+    def __init__(self, gen: Iterator[list[Candidate]], proxy: _StateProxy) -> None:
+        self.gen, self.proxy = gen, proxy
+        self.queue: list[Candidate] = []
+        self.got: list[Scored] = []
+        self.asked = False
+        self.pending = 0
+        self.ended = False
+        self.last = False                        # the policy said this batch is its last
+        self.run: object | None = None           # the run whose passes share it (passes.carrying)
+
+    def take(self, n: int) -> list[Candidate]:
+        if not self.queue and self.pending <= 0 and not self.ended:
+            self.proxy.search_done = False
+            batch = _next_batch(self.gen, self.got, self.asked)
+            self.asked, self.got = True, []
+            if batch is None:
+                self.ended = True
+                return []
+            self.last = bool(getattr(self.proxy, "search_done", False))
+            self.queue, self.pending = list(batch), len(batch)
+        out, self.queue = self.queue[:n], self.queue[n:]
+        return out
+
+    def measured(self, got: list[Scored], n: int) -> None:
+        self.got.extend(got)
+        self.pending -= n
+
+    @property
+    def done(self) -> bool:
+        return self.ended or (self.last and not self.queue and self.pending <= 0)
+
+    def close(self) -> None:
+        try:
+            self.gen.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _search_session(problem: Problem, state: LoopState) -> _SearchSession | None:
+    """The problem's search, carried from the last pass (bound to this one's state), or a new
+    one when there was none, it ended, or this is another run (a new run starts it from the
+    record, D682)."""
+    from .passes import this_run
+
+    run = this_run()
+    session = problem.__dict__.get("_flux_search") if hasattr(problem, "__dict__") else None
+    if session is not None and not session.done and run is not None and session.run is run:
+        session.proxy.bind(state)
+        return session
+    proxy = _StateProxy(state)
+    gen = problem.search(proxy)
+    if gen is None:
+        return None
+    session = _SearchSession(gen, proxy)
+    session.run = run
+    try:
+        problem.__dict__["_flux_search"] = session
+    except Exception:  # noqa: BLE001 -- a problem without a dict: one search per pass, as before
+        pass
+    return session
 
 
 def _next_batch(gen: Iterator[list[Candidate]] | None, got: list[Scored],

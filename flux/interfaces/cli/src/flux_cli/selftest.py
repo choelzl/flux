@@ -28,19 +28,19 @@ def _flux(*args: str, cwd: Path, timeout: float) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, timeout=timeout)
 
 
-def _decided(cwd: Path, kind: str, timeout: float, *extra: str) -> tuple[bool, str]:
-    """`flux new` of this kind, run for one pass: (a decision was made, what it was or why not)."""
+def _decided(cwd: Path, kind: str, timeout: float, *extra: str, passes: int = 1) -> tuple[bool, str]:
+    """`flux new` of this kind, run for `passes` passes: (a decision was made, what it was or why not)."""
     name = f"st_{kind.replace('-', '_')}"
     made = _flux("new", name, "--kind", kind, cwd=cwd, timeout=120)
     if made.returncode != 0:
         return False, (made.stdout + made.stderr).strip().splitlines()[-1:][0] if (made.stdout + made.stderr).strip() else "flux new failed"
-    return _run_doc(cwd / name / f"{name}.problem.yaml", cwd, timeout, *extra)
+    return _run_doc(cwd / name / f"{name}.problem.yaml", cwd, timeout, *extra, passes=passes)
 
 
-def _run_doc(doc: Path, cwd: Path, timeout: float, *extra: str) -> tuple[bool, str]:
+def _run_doc(doc: Path, cwd: Path, timeout: float, *extra: str, passes: int = 1) -> tuple[bool, str]:
     answer = cwd / f"{doc.stem}.answer.json"
     try:
-        run = _flux("task", "run", str(doc), "--passes", "1", "--json", str(answer), *extra, cwd=cwd, timeout=timeout)
+        run = _flux("task", "run", str(doc), "--passes", str(passes), "--json", str(answer), *extra, cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"no decision within {timeout:.0f}s"
     try:
@@ -75,13 +75,13 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             True if not rtl_tools else None,
             "verilator, yosys, openroad" if not rtl_tools
             else f"missing {', '.join(rtl_tools)}: the RTL checks skip (use `nix develop`)"))
-        check("a sweep, no model (flux new --kind sweep)", lambda: _decided(work, "sweep", 300))
+        check("a sweep, no model (flux new --kind sweep)", lambda: _decided(work, "sweep", 300, passes=6))         # D738: a pass a point
         check("an RTL sweep (flux new --kind rtl-sweep)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
-              else _decided(work, "rtl-sweep", 900, "--screen-only"))
+              else _decided(work, "rtl-sweep", 900, "--screen-only", passes=6))
         if args.full:
             check("the README's first run (adder16)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
                   else _run_doc(FLUX / "applications/adder16/adder16.problem.yaml", work, 1800, "--screen-only",
-                                "--db", str(work / "adder16.db"), "--out", str(work / "adder16.v")))
+                                "--db", str(work / "adder16.db"), "--out", str(work / "adder16.v"), passes=12))
         if args.no_model:
             check("the model", lambda: (None, "--no-model"))
         else:

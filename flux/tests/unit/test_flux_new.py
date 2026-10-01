@@ -27,7 +27,7 @@ def test_the_sweep_runs_to_a_decision_without_a_model(tmp_path, capsys, monkeypa
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     main(["new", "primes", "--kind", "sweep", "--dir", str(tmp_path / "p")])
     answer = tmp_path / "answer.json"
-    rc = main(["task", "run", str(tmp_path / "p/primes.problem.yaml"), "--passes", "1", "--json", str(answer)])
+    rc = main(["task", "run", str(tmp_path / "p/primes.problem.yaml"), "--passes", "20", "--json", str(answer)])
     got = json.loads(answer.read_text())
     assert rc == 0 and got["decision"]["name"].startswith(("odd_sieve", "slice_sieve"))
     assert len(got["frontier"]) == 6 and not got["refused"]
@@ -63,7 +63,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
         doc["flow"]["dse"] = dse
         doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
         answer = tmp_path / "a.json"
-        assert main(["task", "run", str(doc_path), "--passes", "1", "--json", str(answer),
+        assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer),
                      "--db", str(tmp_path / f"r{len(str(dse))}.db")]) == 0
         got = json.loads(answer.read_text())
         assert len(got["frontier"]) == (3 if isinstance(dse, str) else 2), got["frontier"]
@@ -92,7 +92,7 @@ def test_a_world_of_your_own_beside_the_document(tmp_path, monkeypatch):
     doc["world"] = "tinyworld:World"
     doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
     answer = tmp_path / "a.json"
-    assert main(["task", "run", str(doc_path), "--passes", "1", "--json", str(answer)]) == 0
+    assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer)]) == 0
     got = json.loads(answer.read_text())
     assert got["result"]["fastest"] == got["decision"]["name"]
 
@@ -104,7 +104,7 @@ def test_the_tune_kind_runs_to_a_decision_without_a_model(tmp_path, monkeypatch)
     doc = (tmp_path / "t" / "mm.problem.yaml").read_text()
     assert "workers: 1" in doc and "{block}" in doc
     answer = tmp_path / "answer.json"
-    assert main(["task", "run", str(tmp_path / "t/mm.problem.yaml"), "--passes", "1", "--json", str(answer)]) == 0
+    assert main(["task", "run", str(tmp_path / "t/mm.problem.yaml"), "--passes", "20", "--json", str(answer)]) == 0
     got = json.loads(answer.read_text())
     assert len(got["frontier"]) == 15 and not got["refused"] and got["decision"]["knobs"]["block"] in (64, 128, 256)
 
@@ -120,7 +120,7 @@ def test_the_banner_says_when_no_model_is_needed(tmp_path, capsys, monkeypatch):
         assert bool(model_use(task)) is needs, (kind, model_use(task))
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     capsys.readouterr()
-    main(["task", "run", str(tmp_path / "tune/k_tune.problem.yaml"), "--passes", "1"])
+    main(["task", "run", str(tmp_path / "tune/k_tune.problem.yaml"), "--passes", "20"])
     assert "model: none needed" in capsys.readouterr().out
 
 
@@ -137,7 +137,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     doc["budget"]["steps"] = 4
     doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
     answer = tmp_path / "a.json"
-    assert main(["task", "run", str(doc_path), "--passes", "1", "--json", str(answer)]) == 0
+    assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer)]) == 0
     got = json.loads(answer.read_text())
     blocks = {row["knobs"]["block"] for row in got["frontier"]}
     orders = {row["knobs"]["order"] for row in got["frontier"] if row["knobs"]["block"] != got["decision"]["knobs"]["block"]}
@@ -150,7 +150,7 @@ def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tm
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     main(["new", "primes", "--kind", "sweep", "--dir", str(tmp_path / "p")])
     doc, db = str(tmp_path / "p/primes.problem.yaml"), str(tmp_path / "p.db")
-    assert main(["task", "run", doc, "--passes", "1", "--db", db]) == 0
+    assert main(["task", "run", doc, "--passes", "20", "--db", db]) == 0
     capsys.readouterr()
     assert main(["task", "run", doc, "--passes", "5", "--db", db]) == 0
     out = capsys.readouterr().out
@@ -163,7 +163,7 @@ def test_the_report_of_a_tuning_ranks_every_point_with_its_knobs(tmp_path, monke
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
     answer, db = tmp_path / "a.json", str(tmp_path / "mm.db")
-    main(["task", "run", str(tmp_path / "t/mm.problem.yaml"), "--passes", "1", "--json", str(answer), "--db", db])
+    main(["task", "run", str(tmp_path / "t/mm.problem.yaml"), "--passes", "20", "--json", str(answer), "--db", db])
     out = tmp_path / "r.html"
     assert main(["report", db, "--out", str(out)]) == 0
     page = out.read_text()

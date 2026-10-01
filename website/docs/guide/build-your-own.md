@@ -62,7 +62,9 @@ what is missing.
 flux task run myproblem/myproblem.problem.yaml --passes 1
 ```
 
-Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen.
+Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen. A search
+(`space:` and `flow.dse`) tries one design a pass, the next picked from what the last ones
+measured: give it a pass per point, or `budget.batch: N` for N designs a pass.
 [Run a problem](run.md) has the options, stopping and resuming, and choosing the AI model.
 
 ## 6. Read the result

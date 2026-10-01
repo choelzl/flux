@@ -47,7 +47,8 @@ def run_toy(doc: dict[str, Any], db: str = "", **request: Any):
     from flux_loop import LoopRequest, PromptProblem, TaskSpec, run_loop
 
     prob = PromptProblem(TaskSpec.from_dict(doc))
-    req = {"db": db, "steps": 40, "finalists": 0, "screen_only": True, "prototype": False, **request}
+    # D738: the whole search in one pass (a pass carries one design by default)
+    req = {"db": db, "steps": 40, "finalists": 0, "screen_only": True, "prototype": False, "batch": 10_000, **request}
     return prob, run_loop(prob, LoopRequest(**req), log=lambda _m: None)
 
 

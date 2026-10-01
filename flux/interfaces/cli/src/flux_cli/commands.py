@@ -998,7 +998,7 @@ Yosys and OpenSTA on ASAP7.
 | `gen.py` | the generator: a 16-bit popcount as a sum, an adder tree, or small tables |
 | `golden.py` | what the module must compute |
 
-    flux task run {name}.problem.yaml --passes 1
+    flux task run {name}.problem.yaml --passes 6      # a pass a point of `space:` (D738)
 
 Add an architecture to `gen.py` and its name to `space:`, or add knobs (widths, pipeline
 depth, table size). For placed numbers, add the `confirm` stage from `flux new --kind rtl`.
@@ -1016,7 +1016,7 @@ the rest; the fastest wins.
 | `workload.py` | the program being tuned: a blocked matrix multiply (block size, loop order) |
 | `check.py` / `bench.py` | the gate (still correct?) and the stage (`time_ms=`) |
 
-    flux task run {name}.problem.yaml --passes 1
+    flux task run {name}.problem.yaml --passes 15      # a pass a point of `space:` (D738)
 
 To tune your own program, replace `workload.py`, list its knobs under `space:`, and make the gate
 and the stage run it with them. They can be any command: a build with flags, a solver with
@@ -1036,7 +1036,7 @@ wrong one; `bench.py` times the survivors; the fastest wins.
 | `render.py` | the generator: one candidate per point (`render.py <out> <algorithm> <wheel>`) |
 | `check.py` / `bench.py` | the gate and the stage |
 
-    flux task run {name}.problem.yaml --passes 1
+    flux task run {name}.problem.yaml --passes 6      # a pass a point of `space:` (D738)
 
 To try another idea, add a value to `space:` and its code to `render.py`; to search instead of
 sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
@@ -1089,7 +1089,8 @@ def cmd_new(args: argparse.Namespace) -> int:
         written.append(rel)
     doc = target / f"{name}.problem.yaml"
     print(f"wrote {target}/: {', '.join(written)}")
-    print(f"next:\n  flux task check {doc}\n  flux task run {doc} --passes 1"
+    points = {"sweep": 6, "rtl-sweep": 6, "tune": 15}.get(args.kind, 1)     # D738: a pass a point
+    print(f"next:\n  flux task check {doc}\n  flux task run {doc} --passes {points}"
           + (" --screen-only" if args.kind == "rtl" else ""))
     return 0
 

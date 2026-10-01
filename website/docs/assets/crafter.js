@@ -408,7 +408,7 @@
       id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
-      budget: { steps: "", passes: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
+      budget: { steps: "", passes: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
       space: [], partsMode: "none", parts: "",
     };
   }
@@ -638,7 +638,7 @@
     }
 
     var b = state.budget || {}, bp = [];
-    ["steps", "passes", "repair_attempts", "finalists", "workers"].forEach(function (key) {
+    ["steps", "passes", "batch", "repair_attempts", "finalists", "workers"].forEach(function (key) {
       var v = String(b[key] || "").trim();
       if (v !== "") bp.push([key, typed(v)]);
     });
@@ -802,7 +802,7 @@
       });
     });
 
-    ["steps", "passes", "repair_attempts", "finalists", "workers"].forEach(function (key) {
+    ["steps", "passes", "batch", "repair_attempts", "finalists", "workers"].forEach(function (key) {
       var v = String((state.budget || {})[key] || "").trim();
       if (v && !/^\d+$/.test(v)) error("Budget \"" + key + "\" should be a whole number.");
     });
@@ -836,7 +836,7 @@
   var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
                     "objectives", "budget"];
-  var BUDGET_KEYS = ["steps", "passes", "repair_attempts", "finalists", "workers", "prototype"];
+  var BUDGET_KEYS = ["steps", "passes", "batch", "repair_attempts", "finalists", "workers", "prototype"];
 
   function argvOf(run) {
     var a = Array.isArray(run) ? run.map(String) : String(run || "").trim().split(/\s+/).filter(Boolean);
@@ -1626,6 +1626,7 @@
       var budget = h("div", { class: "fc-grid" }, [
         num("Designs per round", "steps", "24", "Work items in one round"),
         num("Rounds", "passes", "until stopped", "How many rounds before the run stops"),
+        num("Search designs a round", "batch", "1", "With a search: designs one round tries side by side; 1 picks each round's design from the last ones' numbers"),
         num("Repairs per design", "repair_attempts", "12", "Repairs a draft gets after a check fails"),
         num("Designs fully measured", "finalists", "3", "How many designs reach the costliest measurement"),
         num("Tool runs at once", "workers", "auto", "Measurements in parallel; 1 for anything timed"),

@@ -11,6 +11,9 @@ import pytest
 from flux_loop import (Candidate, LoopRequest, Problem, Verdict, above, below, run_loop,
                        within_best)
 
+#: D738: these tests measure what one pass does with a whole search; one design a pass is the default
+WHOLE = 10_000
+
 
 class Chain(Problem):
     """Three stages over the same four candidates, each stage a little less optimistic."""
@@ -54,7 +57,7 @@ class Chain(Problem):
 def test_the_chain_climbs_stage_by_stage():
     """Three stages mean three measurements, each over the survivors of the one below."""
     problem = Chain()
-    out = run_loop(problem, LoopRequest(steps=1, finalists=2), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=2), log=lambda _m: None)
     assert [stage for stage, _n in problem.measured] == ["coarse", "middle", "fine"]
     assert [n for _r, n in problem.measured] == [4, 2, 2], "the finalist spread bounds each stage"
     assert out.decision is not None and out.decision.stage == "fine"
@@ -67,7 +70,7 @@ def test_a_floor_cuts_before_the_next_stage_and_says_why():
     """A design under an absolute floor is not measured on the next stage."""
     problem = Chain(cutoff=lambda stage, scored: (
         above(scored, "value", 25.0, unit=" units") if stage == "coarse" else (list(scored), "")))
-    out = run_loop(problem, LoopRequest(steps=1, finalists=4), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=4), log=lambda _m: None)
     assert problem.measured[0] == ("coarse", 4)
     assert problem.measured[1] == ("middle", 2), "d1 and d2 were cut, d3 and d4 climbed"
     assert any("2 of 4 measured design(s) went no further" in l and "value below 25" in l
@@ -78,7 +81,7 @@ def test_a_band_cuts_relative_to_this_runs_own_best():
     """A relative floor: the threshold is a fraction of the best measured value."""
     problem = Chain(cutoff=lambda stage, scored: (
         within_best(scored, "value", 0.75) if stage == "coarse" else (list(scored), "")))
-    out = run_loop(problem, LoopRequest(steps=1, finalists=4), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=4), log=lambda _m: None)
     # the best is 40; 75% of it is 30, so d3 (30) and d4 (40) climb
     assert problem.measured[1] == ("middle", 2)
     assert any("75% of this run's best" in l for l in out.lessons)
@@ -87,7 +90,7 @@ def test_a_band_cuts_relative_to_this_runs_own_best():
 def test_a_budget_cuts_the_other_way():
     problem = Chain(cutoff=lambda stage, scored: (
         below(scored, "cost", 2.0) if stage == "coarse" else (list(scored), "")))
-    problem_out = run_loop(problem, LoopRequest(steps=1, finalists=4), log=lambda _m: None)
+    problem_out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=4), log=lambda _m: None)
     assert problem.measured[1] == ("middle", 2), "only the two cheapest climbed"
     assert problem_out.decision is not None
 
@@ -95,7 +98,7 @@ def test_a_budget_cuts_the_other_way():
 def test_a_cutoff_that_keeps_nothing_stops_the_chain_and_says_so():
     """The decision is made on the last stage that produced results, and the report says so."""
     problem = Chain(cutoff=lambda stage, scored: above(scored, "value", 1e9))
-    out = run_loop(problem, LoopRequest(steps=1), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1), log=lambda _m: None)
     assert [stage for stage, _n in problem.measured] == ["coarse"]
     assert out.decision is not None and out.decision.stage == "coarse"
     assert any("worth the middle stage" in n for n in out.not_established)
@@ -107,14 +110,14 @@ def test_a_cutoff_that_raises_costs_nothing():
         raise RuntimeError("the rule is wrong")
 
     problem = Chain(cutoff=boom)
-    out = run_loop(problem, LoopRequest(steps=1, finalists=2), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=2), log=lambda _m: None)
     assert [stage for stage, _n in problem.measured] == ["coarse", "middle", "fine"]
     assert out.decision is not None
 
 
 def test_screen_only_stops_after_the_first_stage():
     problem = Chain()
-    out = run_loop(problem, LoopRequest(steps=1, screen_only=True), log=lambda _m: None)
+    out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, screen_only=True), log=lambda _m: None)
     assert [stage for stage, _n in problem.measured] == ["coarse"]
     assert out.decision is not None and out.decision.stage == "coarse" and not out.confirmed
     assert any("every number is from the coarse stage" in n for n in out.not_established)
@@ -130,7 +133,7 @@ def test_the_finalists_hook_is_told_which_stage_it_is_choosing_for():
             return list(front) if stage == "middle" else list(front)[:1]
 
     problem = Told()
-    run_loop(problem, LoopRequest(steps=1, finalists=4), log=lambda _m: None)
+    run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=4), log=lambda _m: None)
     assert asked == ["middle", "fine"]
     assert problem.measured == [("coarse", 4), ("middle", 4), ("fine", 1)]
 

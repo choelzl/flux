@@ -192,6 +192,7 @@ class LoopRequest:
     critique_rounds: int = 1        # times a critic may send a passing part back; 0 = no critic
     calibrate: bool = True          # the calibrate node between stages; `flow: {calibrate: off}` turns it off
     workers: int = 0                # tool runs at once (a stage's candidates, a sweep's points); 0 = the box decides
+    batch: int = 1                  # D738: the search's designs one pass carries (made and measured side by side)
     parallel_parts: int = 1         # parts drafted at once on worker threads; admission, the record's row
                                     # and the state stay on the loop's thread (D569)
     ahead: bool = True              # measure an admitted part alone on a worker while the model writes the

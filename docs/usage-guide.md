@@ -81,6 +81,12 @@ tools, and refuses a document that asks for what nothing measures.
 
 A run resumes from its record: what was measured is never paid for twice.
 
+**A search works between passes** (D738). With `space:` and `flow.dse`, a pass tries one design, the
+search's next pick from what the passes before it measured: a 6-point sweep is 6 passes
+(`--passes 6`), an anneal or a genetic population carries on from pass to pass. `budget.batch: N`
+lets one pass make, check and measure N of the search's picks side by side (worth it when the tools
+take many designs at once). A new run starts the search again from its record.
+
 ## Long runs and records
 
 ```bash
