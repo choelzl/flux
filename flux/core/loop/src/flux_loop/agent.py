@@ -202,6 +202,24 @@ def _merged(base: Any, over: Any) -> Any:
     return over
 
 
+#: The variables each coding agent reads of its own (D718): its endpoint, key and settings. An
+#: agent gets none of the others': OpenCode's providers read ANTHROPIC_API_KEY and OPENAI_API_KEY
+#: by themselves, and would answer on the Claude Code or Codex account the run was given for them.
+_AGENT_VARS = {"claude": ("ANTHROPIC_", "CLAUDE_CODE_", "FLUX_CLAUDE_"),
+               "codex": ("OPENAI_", "CODEX_", "FLUX_CODEX_"),
+               "opencode": ("OPENCODE_", "FLUX_OPENCODE_")}
+
+
+def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[str, str]:
+    """`env` without the other coding agents' variables. The agent is its preset's tool, else
+    the program's name; one Flux does not know keeps everything."""
+    who = spec.tool if spec.tool in _AGENT_VARS else Path(program).name if Path(program).name in _AGENT_VARS else None
+    if who is None:
+        return env
+    theirs = tuple(p for k, ps in _AGENT_VARS.items() if k != who for p in ps)
+    return {k: v for k, v in env.items() if not k.startswith(theirs)}
+
+
 def _config_env(spec: AgentSpec, env: dict[str, str]) -> dict[str, str]:
     """The spec's JSON config merged into what the environment already holds there (D673)."""
     for key, text in spec.config:
@@ -748,7 +766,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
-    env = _config_env(spec, {**os.environ, "PWD": str(workdir)})
+    env = _own_env(spec, _config_env(spec, {**os.environ, "PWD": str(workdir)}), cmd[0])
     if subs.get("probe"):
         env["FLUX_PROBE"] = subs["probe"]            # `flux probe` finds its turn's context (D678)
     # the prompt on stdin unless the command names a slot for it (D672); a resume's answer
@@ -842,7 +860,7 @@ def _about(exe: str, env: dict[str, str]) -> str:
         pass
     if exe not in _VERSIONS:
         try:
-            r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+            r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL, env=env)   # D718: its own variables
             _VERSIONS[exe] = (r.stdout.strip().splitlines() or [""])[0][:60] if r.returncode == 0 else ""
         except (OSError, subprocess.TimeoutExpired):
             _VERSIONS[exe] = ""

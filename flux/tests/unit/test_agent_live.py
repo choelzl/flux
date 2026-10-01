@@ -197,3 +197,32 @@ def test_a_turn_keeps_its_steps_for_the_record(tmp_path):
     turn = run_turn(spec, spec.argv, {"prompt": "p", "name": "critique"}, workdir=tmp_path)
     assert [s["k"] for s in turn.steps] == ["tool", "think", "text", "tool", "text"]
     assert turn.steps[0]["out"] == "42"
+
+
+def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch):
+    """D718: OpenCode's providers read ANTHROPIC_API_KEY and OPENAI_API_KEY by themselves; an
+    agent gets only its own group's variables, and Flux's."""
+    import os
+
+    from flux_loop.agent import agent_spec
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("opencode", "claude"):
+        p = bin_dir / name
+        p.write_text(f"#!{sys.executable}\nimport json, os, sys\n"
+                     f"json.dump(dict(os.environ), open({str(tmp_path / name)!r} + ('.version' if '--version' in sys.argv else '') + '.env', 'w'))\n")
+        p.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    for k, v in {"ANTHROPIC_API_KEY": "claude-key", "ANTHROPIC_BASE_URL": "https://a.example", "OPENAI_API_KEY": "codex-key",
+                 "CLAUDE_CODE_USE_BEDROCK": "1", "FLUX_OPENCODE_API_KEY": "oc-key", "FLUX_REMOTE_API_KEY": "flux-key"}.items():
+        monkeypatch.setenv(k, v)
+    for name in ("opencode", "claude"):
+        spec = agent_spec(name)
+        run_turn(spec, spec.argv, {"prompt": "p", "name": "n", "workdir": str(tmp_path)}, workdir=tmp_path)
+    oc = json.loads((tmp_path / "opencode.env").read_text())
+    assert not {"ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "CLAUDE_CODE_USE_BEDROCK"} & set(oc)
+    assert oc["FLUX_OPENCODE_API_KEY"] == "oc-key" and oc["FLUX_REMOTE_API_KEY"] == "flux-key" and "OPENCODE_CONFIG_CONTENT" in oc
+    assert "ANTHROPIC_API_KEY" not in json.loads((tmp_path / "opencode.version.env").read_text()), "its version asked with its own too"
+    cl = json.loads((tmp_path / "claude.env").read_text())
+    assert cl["ANTHROPIC_API_KEY"] == "claude-key" and "OPENAI_API_KEY" not in cl and "FLUX_OPENCODE_API_KEY" not in cl

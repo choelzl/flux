@@ -1779,3 +1779,27 @@ the topics above.
     - `test_sandbox`: a lookup refused and recorded; one allowed by its address answered 204;
       the resolver mounted only under an allowlist; the query's name parsed.
     - `test_web_refusals`: a lookup's audit line.
+- **D718: each coding agent gets its own variables, not the other agents'.**
+  - Key insight: a run's environment holds every agent group the web sets (D696):
+    - Claude Code's `ANTHROPIC_*`;
+    - Codex's `OPENAI_*`;
+    - OpenCode's `FLUX_OPENCODE_*` and `OPENCODE_*`.
+    OpenCode's providers read `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` by themselves. So OpenCode
+    with no settings of its own could answer on the Claude Code or Codex account, and any agent
+    could read the others' keys.
+  - Rules (`_own_env`, applied where every agent turn starts: loop runs, Ask, authoring):
+    - The prefixes per agent are: claude `ANTHROPIC_`, `CLAUDE_CODE_`, `FLUX_CLAUDE_`; codex
+      `OPENAI_`, `CODEX_`, `FLUX_CODEX_`; opencode `OPENCODE_`, `FLUX_OPENCODE_`. An agent gets
+      none of the other agents' prefixes.
+    - Flux's own variables (`FLUX_REMOTE_*`) stay, since an OpenCode config may read its key
+      from them.
+    - The agent is its preset's tool, else its program's name. One Flux does not know keeps
+      everything.
+    - The `--version` call that names the agent's version gets the same environment; it had
+      inherited everything.
+  - Live, in Podman: with dummy `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` passed into the
+    sandbox, an OpenCode Ask answered through its own settings and found neither in its
+    environment.
+  - Tests: `test_agent_live` (fake opencode and claude dump what they receive: OpenCode without
+    Anthropic, OpenAI or Claude variables and with its own and Flux's; Claude Code with its own
+    and without OpenAI's or OpenCode's; the `--version` call the same).
