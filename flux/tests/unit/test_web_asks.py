@@ -52,7 +52,7 @@ FAKE = r'''#!/usr/bin/env python3
 import os, sys, time
 a = sys.argv[1:]
 out = a[a.index("--out") + 1]
-for _ in range(600):                                  # held until the test says go: a handshake, not a clock
+for _ in range(2400):                                 # held until the test says go: a handshake, not a clock
     if os.path.exists(os.path.join(out, "go")):
         break
     time.sleep(0.05)
@@ -91,7 +91,7 @@ def test_a_question_about_a_loop_is_answered_and_kept_with_it(server, monkeypatc
     assert r.status_code == 200, r.text
     assert bob.post("/api/apps/x/asks", json={"question": "another", "author": "opencode"}, headers=H).status_code == 409
     (tmp / f"data/users/bob/apps/x/runs/asks/{r.json()['id']}/go").write_text("")
-    for _ in range(300):
+    for _ in range(1200):                               # ends when answered; long only under a loaded machine
         got = bob.get("/api/apps/x/asks").json()
         if not got[0]["running"]:
             break

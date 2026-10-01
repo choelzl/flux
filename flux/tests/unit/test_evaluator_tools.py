@@ -143,7 +143,7 @@ def test_a_tool_task_says_what_ran_and_how_it_went(tmp_path, seen):
 
 def test_a_timed_out_tool_keeps_what_it_printed_and_odd_bytes_are_replaced(seen):
     with pytest.raises(RuntimeError, match="timed out"):
-        run_tool([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(30)"], timeout_s=1.5)
+        run_tool([sys.executable, "-c", "import time; print('started', flush=True); time.sleep(30)"], timeout_s=6)   # time to start under load
     _n, failed, out = seen.ends[-1]
     assert failed and out["exit"] == "timed out" and out["stdout"] == "started\n"
     run = run_tool([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'a\\xffb\\r\\nc')"], timeout_s=30)

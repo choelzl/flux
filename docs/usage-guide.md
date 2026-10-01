@@ -319,6 +319,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   application (read only) and every run (and may stop it), and the audit trail. The audit also
   lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
   host and port per run; a checkbox shows only those.
+- **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
+  `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
+  loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and
+  stop, a watcher, the admin tabs and the dark theme. Each page is checked for script errors and
+  red notices. It prints a report and exits 1 on a failure, with screenshots in
+  `~/snap/firefox/common/flux-e2e/shots/` (`FLUX_E2E_HOME` moves it). `FLUX_E2E_SANDBOX=1` runs
+  the loops in the sandbox.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
 - **Limits:** `--max-running` runs at once per user (4).

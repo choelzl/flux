@@ -1993,6 +1993,11 @@ async function crafterView(body, name, owner) {
   if (name) {                                           // an existing loop, read back
     const v = await api(`/apps/${enc(name)}/document`);
     if (!v.document) { body.replaceChildren(card(null, empty("This loop has no problem document yet: an agent may be writing it (the loop's Overview), or use Direct edit."))); return; }
+    if (v.raw == null) {                                // D710: not YAML at all -- the form would read nothing and save over it
+      body.replaceChildren(card(null, [h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error),
+        h("p", { class: "muted" }, "The configurator cannot read it. Fix it in ", h("a", { href: `${appHref(owner, name)}/configure/edit` }, "Direct edit"), ".")]));
+      return;
+    }
     const got = C.fromDoc(v.raw, v.normal || v.raw);
     const panel = filesPanel(name, yamlOf);
     body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
@@ -2057,11 +2062,21 @@ async function directEdit(body, name) {
     if (text === before) { toast("Nothing changes.", "info"); return; }
     if (!await confirmDiff(file, before, text)) return;
     await api(`/apps/${enc(name)}/file?path=${enc(file)}`, { method: "PUT", body: { text } });
-    before = text; toast(`${file} saved`, "ok"); panel.draw();
+    before = text; panel.draw();
+    const err = await loaderSays();
+    toast(err ? `${file} saved, but the loader refuses it: ${err}` : `${file} saved`, err ? "warn" : "ok");
   }, { cls: "primary" });
+  // D710: a document the loader refuses is said here, on opening and on saving -- not first at Start
+  const refused = h("div", {});
+  async function loaderSays() {
+    const v = await api(`/apps/${enc(name)}/document`).catch(() => ({}));
+    refused.replaceChildren(v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "");
+    return v.error || "";
+  }
   body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "The document", fileIn),
       h("span", { class: "muted" }, "As written: comments and everything kept. Check before starting: Start runs the check on what you saved.")),
-    ed.el, h("div", { class: "form-actions" }, save)]), panel.el);
+    refused, ed.el, h("div", { class: "form-actions" }, save)]), panel.el);
+  if (doc) loaderSays();
   setTimeout(panel.draw, 200);
 }
 

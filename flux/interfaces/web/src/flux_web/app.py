@@ -890,7 +890,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         try:
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
-            return {"document": doc, "before": path.read_text(), "after": merged(body.text, views(path)["raw"], body.kept)}
+            return {"document": doc, "before": path.read_text(), "after": merged(body.text, views(path)["raw"] or {}, body.kept)}
         except (WorkspaceError, ValueError, OSError) as exc:
             raise fail(exc) from exc
 
@@ -903,7 +903,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         try:
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
-            text = merged(body.text, views(path)["raw"], body.kept)
+            text = merged(body.text, views(path)["raw"] or {}, body.kept)
             w.write(name, doc, text)
             after = views(path)
         except (WorkspaceError, ValueError, OSError) as exc:

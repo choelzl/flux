@@ -14,10 +14,14 @@ KEPT_HEADER = "# Kept as written: the configurator does not edit these (D686).\n
 
 
 def views(path: Path) -> dict[str, Any]:
-    """{raw, normal, error}: `normal` is None when the loader refuses the document."""
+    """{raw, normal, error}: `normal` is None when the loader refuses the document; `raw` is None
+    too when it is not YAML (or JSON) at all -- said as the loader says it, never raised (D710)."""
     text = path.read_text()
-    raw = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
-    if not isinstance(raw, dict):
+    try:
+        raw = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+    except (ValueError, yaml.YAMLError):
+        raw = None
+    if raw is not None and not isinstance(raw, dict):
         raise ValueError("the document is not a mapping of keys")
     try:
         from flux_loop import load_task

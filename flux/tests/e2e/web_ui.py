@@ -1,0 +1,490 @@
+"""The web interface, end to end in a real browser (D710): a fresh `flux serve` on its own data,
+headless Firefox driven over Marionette, the flows a user walks -- each step checked, every page
+watched for errors (a script error, an unhandled failure, a red notice).
+
+    python3 tests/e2e/web_ui.py            # from flux/, in the dev shell; prints a report, exits 1 on a failure
+
+Firefox from a Snap reads and writes only under ~/snap/firefox/common: the profile and the files
+to upload live there (FLUX_E2E_HOME to choose another place). The server runs `--no-sandbox` unless
+FLUX_E2E_SANDBOX=1: the flows test the pages, not the sandbox. Screenshots of failures go to
+<home>/shots/."""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import traceback
+from pathlib import Path
+
+HOME = Path(os.environ.get("FLUX_E2E_HOME") or Path.home() / "snap" / "firefox" / "common" / "flux-e2e")
+PASSWORDS = {"ada": "ada the admin secret", "bob": "bob has a secret", "cy": "cy has a secret"}
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class Browser:
+    """Just enough Marionette: navigate, run a script and get its value, click, type, attach a
+    file, take a screenshot."""
+
+    def __init__(self, profile: Path) -> None:
+        self.port = free_port()
+        profile.mkdir(parents=True, exist_ok=True)
+        (profile / "user.js").write_text(f'user_pref("marionette.port", {self.port});\n'
+                                         'user_pref("browser.shell.checkDefaultBrowser", false);\n'
+                                         'user_pref("datareporting.policy.dataSubmissionEnabled", false);\n')
+        self.proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", str(profile), "--window-size", "1280,900"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(90):
+            try:
+                self.sock = socket.create_connection(("127.0.0.1", self.port), timeout=30)
+                break
+            except OSError:
+                time.sleep(1)
+        else:
+            raise RuntimeError("Firefox's Marionette never answered")
+        self.buf, self.mid = b"", 0
+        self._recv()
+        self.cmd("WebDriver:NewSession", {"capabilities": {}})
+        self.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+
+    def _recv(self):
+        while b":" not in self.buf:
+            self.buf += self.sock.recv(65536)
+        n, _, rest = self.buf.partition(b":")
+        n = int(n)
+        while len(rest) < n:
+            rest += self.sock.recv(1 << 20)
+        self.buf = rest[n:]
+        return json.loads(rest[:n])
+
+    def cmd(self, name, params):
+        self.mid += 1
+        m = json.dumps([0, self.mid, name, params]).encode()
+        self.sock.sendall(str(len(m)).encode() + b":" + m)
+        r = self._recv()
+        if r[2]:
+            raise RuntimeError(f"{name}: {r[2].get('message', r[2])}")
+        return r[3]
+
+    def go(self, url):
+        self.cmd("WebDriver:Navigate", {"url": url})
+
+    def js(self, script, *args):
+        r = self.cmd("WebDriver:ExecuteScript", {"script": script, "args": list(args)})
+        return r.get("value") if isinstance(r, dict) else r
+
+    def ajs(self, script, *args):
+        """An async script: `resolve` is its last argument."""
+        r = self.cmd("WebDriver:ExecuteAsyncScript", {"script": script, "args": list(args)})
+        return r.get("value") if isinstance(r, dict) else r
+
+    def find(self, css):
+        r = self.cmd("WebDriver:FindElement", {"using": "css selector", "value": css})
+        return list(r["value"].values())[0]
+
+    def click(self, css):
+        self.cmd("WebDriver:ElementClick", {"id": self.find(css)})
+
+    def type(self, css, text):
+        el = self.find(css)
+        self.cmd("WebDriver:ElementClear", {"id": el})
+        self.cmd("WebDriver:ElementSendKeys", {"id": el, "text": text})
+
+    def attach(self, css, path):
+        self.cmd("WebDriver:ElementSendKeys", {"id": self.find(css), "text": str(path)})
+
+    def shot(self, path):
+        r = self.cmd("WebDriver:TakeScreenshot", {"full": False})
+        Path(path).write_bytes(base64.b64decode(r["value"]))
+
+    def wait(self, expr, timeout=20.0, what=""):
+        """Until `expr` (a JS expression) is truthy; its value, or an error saying what was awaited."""
+        end = time.time() + timeout
+        last = None
+        while time.time() < end:
+            try:
+                last = self.js(f"return ({expr});")
+            except RuntimeError:
+                last = None
+            if last:
+                return last
+            time.sleep(0.25)
+        raise AssertionError(f"waited {timeout:.0f}s for {what or expr}")
+
+    def quit(self):
+        try:
+            self.cmd("Marionette:Quit", {})
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(1)
+        self.proc.kill()
+
+
+# the page's own failures, collected from the moment it loads
+WATCH = """
+if (!window.__e2e) {
+  window.__e2e = { errors: [], bad: [] };
+  addEventListener('error', e => window.__e2e.errors.push('error: ' + e.message));
+  addEventListener('unhandledrejection', e => window.__e2e.errors.push('unhandled: ' + (e.reason && e.reason.message || e.reason)));
+  const ce = console.error; console.error = (...a) => { window.__e2e.errors.push('console: ' + a.join(' ')); ce.apply(console, a); };
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes)
+    if (n.nodeType === 1 && n.classList.contains('toast') && n.classList.contains('bad')) window.__e2e.bad.push(n.textContent.replace('×', '').trim()); })
+    .observe(document.body, { childList: true, subtree: true });
+}
+return true;
+"""
+
+
+class Run:
+    def __init__(self) -> None:
+        self.results: list[tuple[str, bool, str]] = []
+        HOME.mkdir(parents=True, exist_ok=True)
+        self.shots = HOME / "shots"
+        shutil.rmtree(self.shots, ignore_errors=True)
+        self.shots.mkdir()
+        self.files = HOME / "files"
+        shutil.rmtree(self.files, ignore_errors=True)
+        self.files.mkdir()
+        self.data = Path(tempfile.mkdtemp(prefix="flux-e2e-"))
+        from flux_web.store import Store
+
+        store = Store(self.data)
+        for name, pw in PASSWORDS.items():
+            store.add_user(name, pw, "admin" if name == "ada" else "user")
+        self.port = free_port()
+        self.url = f"http://127.0.0.1:{self.port}"
+        args = ["flux", "serve", "--port", str(self.port), "--data", str(self.data)]
+        if os.environ.get("FLUX_E2E_SANDBOX") != "1":
+            args.append("--no-sandbox")
+        self.server = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=open(HOME / "serve.log", "w"))
+        for _ in range(60):
+            try:
+                socket.create_connection(("127.0.0.1", self.port), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.5)
+        profile = HOME / "profile"
+        shutil.rmtree(profile, ignore_errors=True)
+        self.b = Browser(profile)
+
+    # ---- checks
+    def check(self, name, ok, detail=""):
+        self.results.append((name, bool(ok), detail))
+        mark = "ok  " if ok else "FAIL"
+        print(f"{mark} {name}" + (f" -- {detail}" if detail and not ok else ""), flush=True)
+        if not ok:
+            try:
+                self.b.shot(self.shots / f"{len(self.results):02d}-{name.replace(' ', '_')[:60]}.png")
+            except Exception:  # noqa: BLE001
+                pass
+
+    def step(self, name, fn):
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001 -- a step that breaks is a failure, the next steps go on
+            self.check(name, False, f"{type(exc).__name__}: {exc}")
+            traceback.print_exc()
+
+    def clean(self, where):
+        """No error and no red notice on this page since the last look."""
+        got = self.b.js("const e = window.__e2e || {errors: [], bad: []}; const r = {errors: e.errors.splice(0), bad: e.bad.splice(0)}; return r;")
+        self.check(f"{where}: no page error", not got["errors"], "; ".join(got["errors"])[:400])
+        self.check(f"{where}: no error notice", not got["bad"], "; ".join(got["bad"])[:400])
+
+    # ---- the browser as a user
+    def login(self, name):
+        b = self.b
+        b.go(f"{self.url}/#/login")
+        b.wait("document.querySelector('form.login input')", what="the login form")
+        b.js(WATCH)
+        b.js("return fetch('/api/logout', {method: 'POST', headers: {'X-Flux': '1'}}).then(() => true)")
+        b.go(f"{self.url}/#/login")
+        b.wait("document.querySelector('form.login input')")
+        b.js(WATCH)
+        b.type("form.login input:not([type=password])", name)
+        b.type("form.login input[type=password]", PASSWORDS[name])
+        b.click("form.login button[type=submit]")
+        b.wait(f"document.querySelector('#who') && document.querySelector('#who').textContent.includes('{name}')", what=f"{name} logged in")
+        b.js(WATCH)
+
+    def page(self, hash_, ready, what):
+        """Go to `hash_` and wait for `ready` on the new page -- not on what the last one left (a
+        hash change keeps the document: the old page's content is gone first)."""
+        same = self.b.js("return location.pathname === '/' && location.hash === arguments[0]", hash_)
+        self.b.js("window.__e2e_old = document.querySelector('#main') && document.querySelector('#main').firstElementChild; return 1")
+        self.b.go(f"{self.url}/{hash_}")
+        if same:                                        # the same address: no hashchange of its own -- drawn again
+            self.b.js("window.dispatchEvent(new HashChangeEvent('hashchange')); return 1")
+        self.b.js(WATCH)
+        return self.b.wait(f"(!window.__e2e_old || !window.__e2e_old.isConnected) && ({ready})", what=what)
+
+    def text(self):
+        return self.b.js("return document.querySelector('#main').innerText")
+
+    def button(self, label, scope="#main"):
+        """Click the button (or link) whose text is `label`, in `scope`; a tab only when the scope
+        is a tab bar (the Upload tab and the Upload button share their label)."""
+        ok = self.b.js("""const [label, scope] = arguments;
+            const tabs = scope.includes('.tabs');
+            const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
+              && (tabs || x.getAttribute('role') !== 'tab'));
+            if (!el) return false; el.click(); return true;""", label, scope)
+        end = time.time() + 10
+        while not ok and time.time() < end:                 # a button busy with its last click comes back
+            time.sleep(0.2)
+            ok = self.b.js("""const [label, scope] = arguments; const tabs = scope.includes('.tabs');
+                const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
+                  && (tabs || x.getAttribute('role') !== 'tab'));
+                if (!el) return false; el.click(); return true;""", label, scope)
+        if not ok:
+            raise AssertionError(f"no button {label!r} in {scope}")
+
+    def dialog_button(self, label):
+        self.b.wait("document.querySelector('dialog.dlg[open]')", what="a dialog")
+        self.button(label, "dialog.dlg[open]")
+
+    def api(self, path, method="GET", body=None):
+        return self.b.ajs("""const [path, method, body, done] = arguments;
+            fetch('/api' + path, {method, headers: {'X-Flux': '1', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined})
+              .then(async r => done({status: r.status, body: await r.text()})).catch(e => done({status: 0, body: String(e)}));""", path, method, body)
+
+    def close(self):
+        self.b.quit()
+        self.server.terminate()
+        try:
+            self.server.wait(10)
+        except subprocess.TimeoutExpired:
+            self.server.kill()
+        shutil.rmtree(self.data, ignore_errors=True)
+
+
+def flows(r: Run) -> None:
+    b = r.b
+    # a loop to upload: a sweep, no model needed
+    subprocess.run(["flux", "new", "--kind", "sweep", "sw", "--dir", str(r.files / "sw")], check=True, stdout=subprocess.DEVNULL)
+
+    def login_refused():
+        b.go(f"{r.url}/#/login")
+        b.wait("document.querySelector('form.login input')")
+        b.js(WATCH)
+        b.type("form.login input:not([type=password])", "bob")
+        b.type("form.login input[type=password]", "not the password")
+        b.click("form.login button[type=submit]")
+        said = b.wait("document.querySelector('form.login .err') && document.querySelector('form.login .err').textContent", what="the refusal")
+        r.check("a wrong password is refused, said", "wrong name or password" in said, said)
+        b.js("window.__e2e.errors.splice(0); return true;")       # the 401 itself is expected
+    r.step("login refused", login_refused)
+
+    def login_as_typed_on_a_phone():
+        b.type("form.login input:not([type=password])", " Bob ")
+        b.type("form.login input[type=password]", PASSWORDS["bob"])
+        b.click("form.login button[type=submit]")
+        b.wait("document.querySelector('#who') && document.querySelector('#who').textContent.includes('bob')", what="bob logged in")
+        b.js(WATCH)
+        r.check("a name logs in whatever its case and spaces", True)
+        r.check("the empty list says so, without buttons in the middle", "No loop yet." in r.text()
+                and not b.js("return !!document.querySelector('.empty a.btn, .empty button')"))
+        r.clean("loops page")
+    r.step("login", login_as_typed_on_a_phone)
+
+    def new_loop_tabs():
+        r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
+        tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
+        r.check("New loop has three ways", tabs == ["Configurator", "Upload", "Agent"], str(tabs))
+        b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
+        r.clean("New loop › Configurator")
+        r.button("Agent", "#main .tabs")
+        b.wait("document.querySelector('#ag-who')", what="the agent form")
+        opts = b.js("return [...document.querySelectorAll('#ag-who option')].map(o => [o.value, o.disabled])")
+        r.check("the agent picker lists the four, the uninstalled disabled", [o[0] for o in opts] == ["opencode", "claude", "codex", "model"], str(opts))
+        r.check("the Agent tab has its address", b.js("return location.hash") == "#/configure/agent")
+        r.clean("New loop › Agent")
+    r.step("new loop tabs", new_loop_tabs)
+
+    def upload():
+        r.page("#/configure/upload", "document.querySelector('#up-name')", "the Upload tab")
+        b.type("#up-name", "sw")
+        inputs = b.js("return [...document.querySelectorAll('#main input[type=file]')].length")
+        r.check("the upload has a file and a folder picker", inputs == 2, str(inputs))
+        paths = [str(f) for f in sorted((r.files / "sw").iterdir()) if f.is_file()]
+        b.attach("#main input[type=file]:not([webkitdirectory])", "\n".join(paths))   # several at once: one per line
+        r.button("Upload")
+        b.wait("location.hash === '#/app/sw'", timeout=30, what="the new loop's page")
+        head = b.wait("document.querySelector('.page-head') && document.querySelector('.page-head').innerText.includes('sw.problem.yaml')"
+                      " && document.querySelector('.page-head').innerText", what="the loop's own header")
+        r.check("uploaded: the loop's page with its document", "sw.problem.yaml" in head, head)
+        r.clean("upload")
+    r.step("upload", upload)
+
+    def every_tab():
+        tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
+        r.check("a loop has its tabs", tabs[:2] == ["Overview", "Live"] and "Ask" in tabs and "Settings" in tabs, str(tabs))
+        for t in tabs:
+            r.button(t, "#main .tabs")
+            b.wait(f"[...document.querySelectorAll('#main .tabs [role=tab]')].find(x => x.textContent === '{t}').classList.contains('on')")
+            b.wait("!document.querySelector('#main .skeleton')", timeout=15, what=f"{t} loaded")
+            crumb = b.js("return document.querySelector('.crumbs-bar') && document.querySelector('.crumbs-bar').innerText")
+            r.check(f"tab {t}: the breadcrumb says where", crumb and "sw" in crumb, str(crumb))
+            r.clean(f"tab {t}")
+    r.step("every tab", every_tab)
+
+    def files_and_gitignore():
+        r.page("#/app/sw/files", "document.querySelector('.files-card ul.files')", "the Files tab")
+        r.check("the document opens in the editor", b.wait("document.querySelector('.viewer .editor textarea')", what="the editor"))
+        put = r.api("/apps/sw/file?path=.gitignore", "PUT", {"text": "*.tmp\n"})
+        put2 = r.api("/apps/sw/file?path=scratch.tmp", "PUT", {"text": "x"})
+        r.check("files written", put["status"] == 200 and put2["status"] == 200, str((put, put2)))
+        r.page("#/app/sw/files", "document.querySelector('.files-card ul.files')", "the Files tab")
+        names = b.js("return [...document.querySelectorAll('.files-card ul.files li')].map(l => l.innerText)")
+        r.check(".gitignore hides scratch.tmp", not any("scratch.tmp" in n for n in names), str(names))
+        b.click("#show-ignored")
+        b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
+        r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
+        b.click("#show-ignored")
+        r.clean("files")
+    r.step("files and .gitignore", files_and_gitignore)
+
+    def direct_edit():
+        r.page("#/app/sw/configure/edit", "document.querySelector('.editor textarea')", "Direct edit")
+        edit = "const [from, to] = arguments; const t = document.querySelector('.editor textarea'); t.value = t.value.replace(from, to); t.dispatchEvent(new Event('input')); return true;"
+        b.js(edit, "timeout_s: 60", "timeout_s: 90")
+        r.button("Save")
+        b.wait("document.querySelector('dialog.dlg[open] pre.diff')", what="the diff before saving")
+        r.check("the diff shows the edited line", b.js("return [...document.querySelectorAll('dialog.dlg[open] .d-add')].some(d => d.textContent.includes('timeout_s: 90'))"))
+        r.dialog_button("Save")
+        b.wait("!document.querySelector('dialog.dlg[open]')")
+        got = r.api("/apps/sw/file?path=sw.problem.yaml")
+        r.check("saved", "timeout_s: 90" in got["body"])
+        r.check("a document that loads: no refusal shown", not b.js("return !!document.querySelector('#main .callout.bad')"))
+        # a document the loader refuses: said on saving, not first at Start
+        b.js(edit, "statement: >-", "statement: >- broken")
+        r.button("Save")
+        r.dialog_button("Save")
+        b.wait("document.querySelector('#main .callout.bad')", what="the loader's refusal")
+        r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .callout.bad').textContent"))
+        b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
+        b.js(edit, "statement: >- broken", "statement: >-")
+        r.button("Save")
+        r.dialog_button("Save")
+        b.wait("!document.querySelector('#main .callout.bad')", what="the refusal gone once fixed")
+        r.clean("direct edit")
+    r.step("direct edit", direct_edit)
+
+    def variables_and_sharing():
+        r.page("#/app/sw/settings", "document.querySelector('#env-loop-name')", "Settings")
+        b.type("#env-loop-name", "SEED")
+        b.type("#env-loop-value", "7")
+        r.button("Add", "#main")
+        b.wait("[...document.querySelectorAll('#main table.env td')].some(t => t.textContent === 'SEED')", what="the variable listed")
+        b.type("#env-loop-name", "FLUX_SANDBOX")
+        b.type("#env-loop-value", "0")
+        b.js("window.__e2e.bad.splice(0); return true;")
+        r.button("Add", "#main")
+        said = b.wait("window.__e2e.bad.length && window.__e2e.bad.join(' ')", what="the refusal said")
+        r.check("the sandbox's own variable is refused, and said", "cannot be set" in said, said)
+        b.js("window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return true;")
+        b.js("const s = document.querySelector('#share-user'); s.value = 'cy'; return true;")
+        b.js("const s = document.querySelector('#share-perm'); s.value = 'watch'; return true;")
+        r.button("Share")
+        b.wait("location.hash.includes('settings') && [...document.querySelectorAll('#main td.strong')].some(t => t.textContent === 'cy')", what="cy listed")
+        r.check("shared with cy to watch", True)
+        r.clean("settings")
+    r.step("variables and sharing", variables_and_sharing)
+
+    def start_and_stop():
+        r.page("#/app/sw", "document.querySelector('.page-head')", "the loop")
+        r.button("Start")
+        b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good, dialog.dlg[open] .preflight .callout.bad')", timeout=60, what="the check before starting")
+        r.check("the start dialog says the check", b.js("return !!document.querySelector('dialog.dlg[open] .preflight .callout.good')"),
+                b.js("return document.querySelector('dialog.dlg[open]').innerText"))
+        r.dialog_button("Start")
+        b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.live')", timeout=30, what="running")
+        b.wait("document.querySelector('.tree .node')", timeout=60, what="the task tree")
+        r.check("Live shows the task tree", True)
+        b.wait("document.querySelectorAll('.livelog-card .ln').length > 3", timeout=60, what="the log on Live")
+        r.check("Live shows the log", True)
+        r.check("the note line is there while running", b.js("return !!document.querySelector('.composer .composer-in')"))
+        r.button("Stop now", ".page-head")
+        b.wait("!document.querySelector('.page-head .pill.live')", timeout=60, what="stopped")
+        r.check("stopped", True)
+        r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
+        r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
+        r.clean("start, live, stop, results")
+    r.step("start and stop", start_and_stop)
+
+    def watcher():
+        r.login("cy")
+        r.page("#/", "document.querySelector('#main')", "cy's loops")
+        b.wait("document.querySelector('#main').innerText.includes('Shared with me')", what="the shared list")
+        r.check("cy sees the loop shared with them", "bob" in r.text() and "watching" in r.text())
+        r.page("#/u/bob/app/sw", "document.querySelector('.page-head')", "the shared loop")
+        head = b.js("return document.querySelector('.page-head').innerText")
+        r.check("a watcher has no Start, Configure or Delete", not any(w in head for w in ("Start", "Configure", "Delete")), head)
+        r.check("a watcher may leave", "Leave" in head, head)
+        r.page("#/u/bob/app/sw/ask", "document.querySelector('#main .card')", "Ask as a watcher")
+        r.check("a watcher reads the answers and asks nothing", not b.js("return !!document.querySelector('#ask-q')"))
+        r.clean("watcher")
+    r.step("a watcher", watcher)
+
+    def admin():
+        r.login("ada")
+        tabs = ["", "applications", "resources", "sandbox", "models", "users", "audit"]
+        for t in tabs:
+            r.page(f"#/admin{'/' + t if t else ''}", "document.querySelector('#main .tabs')", f"admin {t or 'loops'}")
+            b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
+            r.clean(f"admin › {t or 'loops'}")
+        r.page("#/admin", "document.querySelector('#main .tabs')", "admin loops")
+        b.wait("document.querySelector('#main').innerText.includes('sw')", what="every loop listed")
+        r.check("the admin sees bob's loop", "bob" in r.text())
+    r.step("admin", admin)
+
+    def dark():
+        r.page("#/", "document.querySelector('button.theme')", "the theme button")
+        for _ in range(3):                              # system -> light -> dark, as a user clicks it
+            if b.js("return document.documentElement.dataset.theme === 'dark'"):
+                break
+            b.click("button.theme")
+        r.check("the theme button reaches dark", b.js("return document.documentElement.dataset.theme") == "dark")
+        b.js("window.__before_reload = 1; location.reload(); return true;")
+        b.wait("!window.__before_reload && document.body && document.querySelector('#who button.theme')", what="the page again")
+        b.js(WATCH)
+        r.check("dark is remembered across a reload", b.js("return document.documentElement.dataset.theme") == "dark")
+        bg = b.js("return getComputedStyle(document.body).backgroundColor")
+        r.check("dark: the page is dark", bg and sum(int(x) for x in bg[bg.index('(') + 1:bg.index(')')].split(",")[:3]) < 150, bg)
+        for h in ("#/", "#/u/bob/app/sw", "#/u/bob/app/sw/results", "#/admin/resources", "#/account"):
+            r.page(h, "document.querySelector('#main')", h)
+            b.wait("!document.querySelector('#main .skeleton')", timeout=20)
+            r.clean(f"dark {h}")
+        b.js("localStorage.setItem('flux-theme', 'system'); return true;")
+    r.step("dark", dark)
+
+
+def main() -> int:
+    if not shutil.which("firefox"):
+        print("no firefox: the end-to-end test needs one")
+        return 2
+    run = Run()
+    try:
+        flows(run)
+    finally:
+        run.close()
+    failed = [x for x in run.results if not x[1]]
+    print(f"\n{len(run.results) - len(failed)} of {len(run.results)} checks passed" + (f"; screenshots of failures in {run.shots}" if failed else ""))
+    for name, _ok, detail in failed:
+        print(f"  FAIL {name}: {detail}")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
