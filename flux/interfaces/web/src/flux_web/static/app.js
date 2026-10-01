@@ -38,7 +38,12 @@ async function api(path, { method = "GET", body, form } = {}) {
   if (r.status === 401 && path !== "/login") { me = null; location.hash = "#/login"; throw new Error("log in"); }
   const type = r.headers.get("content-type") || "";
   const data = type.includes("json") ? await r.json() : await r.text();
-  if (!r.ok) throw new Error((data && data.detail) ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : r.statusText);
+  if (!r.ok) {
+    if (data && data.detail) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    // D700: an error page that is not the server's own (a proxy's, a crash): its status at least
+    const said = typeof data === "string" ? data.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) : "";
+    throw new Error(r.status === 413 ? "Too large for the server (or a proxy in front of it): 413." : `The server answered ${r.status} ${r.statusText}${said ? ": " + said : ""}`);
+  }
   return data;
 }
 
@@ -123,15 +128,25 @@ function act(label, fn, { cls = "", title } = {}) {
 const toasts = h("div", { class: "toasts", role: "status", "aria-live": "polite" });
 document.body.append(toasts);
 function toast(text, kind = "info", { timeout = 5000, href } = {}) {
+  // D700: a dialog is in the top layer: a notice shown under it was never seen
+  const host = [...document.querySelectorAll("dialog.dlg[open]")].pop() || document.body;
+  if (toasts.parentNode !== host) host.append(toasts);
   const t = h("div", { class: `toast ${kind}` }, href ? h("a", { href }, text) : text,
     h("button", { class: "x", "aria-label": "dismiss", onclick: () => t.remove() }, "×"));
   toasts.append(t);
   if (timeout) setTimeout(() => t.remove(), timeout);
 }
+// D700: a failure nobody caught is said, not lost in the console
+window.addEventListener("unhandledrejection", (e) => {
+  const m = e.reason && e.reason.message ? e.reason.message : String(e.reason || "");
+  if (m && m !== "log in") toast(m, "bad", { timeout: 8000 });
+});
+window.addEventListener("error", (e) => { if (e.message) toast(`The page failed: ${e.message}`, "bad", { timeout: 8000 }); });
+
 function dialog(title, body, buttons) {
   return new Promise((resolve) => {
     const d = h("dialog", { class: "dlg" });
-    const done = (v) => { d.close(); d.remove(); resolve(v); };
+    const done = (v) => { d.close(); if (toasts.parentNode === d) document.body.append(toasts); d.remove(); resolve(v); };
     d.append(h("h2", {}, title), body, h("div", { class: "dlg-actions" }, buttons.map(([label, value, cls]) =>
       h("button", { class: cls || "", type: "button", onclick: () => done(typeof value === "function" ? value() : value) }, label))));
     d.addEventListener("cancel", (e) => { e.preventDefault(); done(null); });
@@ -392,6 +407,46 @@ function lastSaid(st) {
   return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
 }
 
+/** Files to a loop (D700): in batches of at most 300 files and 40 MB, a file over 40 MB in
+    parts of 32 MB, the document first when the loop is created. `entries`: [{file, path}];
+    `onProgress(sentBytes, totalBytes)`. A folder dropped whole loses its top folder first. */
+async function sendFiles(name, entries, { create = false, folder = "", onProgress = () => {} } = {}) {
+  const BATCH_FILES = 300, BATCH_BYTES = 40 * 2 ** 20, PART = 32 * 2 ** 20;
+  let list = entries.map(e => ({ file: e.file, path: String(e.path || e.file.name).replace(/^\/+/, "") }));
+  const firsts = new Set(list.map(e => e.path.split("/")[0]));
+  if (firsts.size === 1 && list.every(e => e.path.includes("/"))) list = list.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") }));
+  if (folder) list = list.map(e => ({ ...e, path: `${folder.replace(/^\/+|\/+$/g, "")}/${e.path}` }));
+  const isDoc = (e) => !e.path.includes("/") && /\.(problem\.ya?ml|task\.(json|ya?ml))$/i.test(e.path);
+  list.sort((a, b) => (isDoc(b) ? 1 : 0) - (isDoc(a) ? 1 : 0));
+  const total = list.reduce((n, e) => n + e.file.size, 0);
+  let sent = 0, written = 0, made = !create;
+  const small = list.filter(e => e.file.size <= BATCH_BYTES), big = list.filter(e => e.file.size > BATCH_BYTES);
+  if (create && !small.some(isDoc)) throw new Error("No problem document (a *.problem.yaml) at the top of the upload.");
+  for (let i = 0; i < small.length;) {
+    const batch = [];
+    let bytes = 0;
+    while (i < small.length && batch.length < BATCH_FILES && (bytes + small[i].file.size <= BATCH_BYTES || !batch.length)) { bytes += small[i].file.size; batch.push(small[i++]); }
+    const form = new FormData();
+    if (!made) form.append("name", name); else form.append("folder", "");
+    for (const e of batch) form.append("files", e.file, e.path);
+    const r = await api(made ? `/apps/${enc(name)}/files` : "/apps", { method: "POST", form });
+    made = true; written += r.written ? r.written.length : batch.length;
+    sent += bytes; onProgress(sent, total);
+  }
+  for (const e of big) {
+    for (let off = 0; off < e.file.size; off += PART) {
+      const chunk = e.file.slice(off, off + PART);
+      const final = off + PART >= e.file.size;
+      const r = await fetch(`/api/apps/${enc(name)}/part?path=${enc(e.path)}&offset=${off}&final=${final}`,
+        { method: "PUT", body: chunk, headers: { "X-Flux": "1" }, credentials: "same-origin" }).catch(() => { offline(true); throw new Error("The server cannot be reached."); });
+      if (!r.ok) { const d = await r.json().catch(() => null); throw new Error(d && d.detail ? `${e.path}: ${d.detail}` : `${e.path}: the server answered ${r.status}`); }
+      sent += chunk.size; onProgress(sent, total);
+    }
+    written++;
+  }
+  return written;
+}
+
 /** A drop target for files and folders (D693): a folder keeps its paths ("rtl/top.sv"). `onFiles`
     gets [{file, path}] and the dropped folder's name, when one folder was dropped. */
 function dropZone(label, onFiles) {
@@ -428,7 +483,7 @@ function dropZone(label, onFiles) {
 }
 
 function loopsTable(loops, { who = false } = {}) {
-  if (!loops.length) return empty("No loop yet.", h("p", {}, h("a", { class: "btn primary", href: "#/configure" }, "Build a new loop"), " or upload a document with its files."));
+  if (!loops.length) return empty("No loop yet.");
   return h("table", { class: "list" },
     h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"),
       h("th", { class: "num" }, "Designs"), h("th", {}, "Best"), h("th", {}, ""))),
@@ -500,10 +555,18 @@ async function uploadDialog() {
     const chosen = [...[...files.files, ...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), ...dropped];
     if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); continue; }
     if (!name.value.trim()) { toast("Name the loop first.", "warn"); continue; }
-    const form = new FormData(); form.append("name", name.value.trim());
-    for (const f of chosen) form.append("files", f.file, f.path);
-    try { await api("/apps", { method: "POST", form }); toast(`${name.value} uploaded`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`; return; }
-    catch (x) { toast(x.message, "bad"); }
+    const bar = h("progress", { max: 1, value: 0, class: "upload-bar" }), barSaid = h("span", { class: "muted small" });
+    const wait = h("div", {}, h("p", {}, `Uploading ${chosen.length} file(s) to ${name.value.trim()}…`), bar, barSaid);
+    const shown = dialog("Uploading", wait, []);
+    void shown;
+    try {
+      const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: (a, b) => { bar.value = b ? a / b : 1; barSaid.textContent = ` ${bytes(a)} of ${bytes(b)}`; } });
+      [...document.querySelectorAll("dialog.dlg[open]")].pop().dispatchEvent(new Event("cancel"));
+      toast(`${name.value} uploaded: ${n} file(s)`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`; return;
+    } catch (x) {
+      [...document.querySelectorAll("dialog.dlg[open]")].pop().dispatchEvent(new Event("cancel"));
+      toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 });
+    }
   }
 }
 
@@ -754,21 +817,17 @@ async function loopPage(name, owner, tab = "Overview") {
     const addFiles = h("input", { type: "file", multiple: true });
     const addFolder = h("input", { placeholder: "folder (optional)" });
     const dz = dropZone("Drop files or folders to add them", async (got) => {
-      const form = new FormData(); form.append("folder", addFolder.value);
-      for (const f of got) form.append("files", f.file, f.path);
       try {
-        const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
-        toast(`Added ${r.written.length} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok"); drawBody();
-      } catch (x) { toast(x.message, "bad"); }
+        const n = await sendFiles(name, got, { folder: addFolder.value.trim(), onProgress: (a, b) => { if (b > 40 * 2 ** 20) toast(`Uploading: ${bytes(a)} of ${bytes(b)}`, "info", { timeout: 1500 }); } });
+        toast(`Added ${n} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok"); drawBody();
+      } catch (x) { toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 }); }
     });
     return h("div", {}, dz, h("details", { class: "adder" }, h("summary", {}, "Add files"),
       h("label", { class: "stack" }, "Files or a .zip", addFiles), h("label", { class: "stack" }, "Into folder", addFolder),
       act("Add", async () => {
         if (!addFiles.files.length) { toast("Choose files or a .zip.", "warn"); return; }
-        const form = new FormData(); form.append("folder", addFolder.value);
-        for (const f of addFiles.files) form.append("files", f, f.name);
-        const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form });
-        toast(`Added ${r.written.length} file(s)`, "ok"); drawBody();
+        const n = await sendFiles(name, [...addFiles.files].map(f => ({ file: f, path: f.name })), { folder: addFolder.value.trim() });
+        toast(`Added ${n} file(s)`, "ok"); drawBody();
       }, { cls: "small primary" })));
   }
 
@@ -1559,10 +1618,8 @@ function filesPanel(name, yamlOf) {
   const dz = dropZone("Drop scripts, models or folders here", async (got) => {
     const pre = into.value.trim().replace(/^\/+|\/+$/g, "");
     if (!name) { for (const g of got) staged.set(pre ? `${pre}/${g.path}` : g.path, { file: g.file }); draw(); return; }
-    const form = new FormData(); form.append("folder", pre);
-    for (const g of got) form.append("files", g.file, g.path);
-    try { const r = await api(`/apps/${enc(name)}/files`, { method: "POST", form }); toast(`Added ${r.written.length} file(s)`, "ok"); draw(); }
-    catch (x) { toast(x.message, "bad"); }
+    try { const n = await sendFiles(name, got, { folder: pre }); toast(`Added ${n} file(s)`, "ok"); draw(); }
+    catch (x) { toast(`The upload failed: ${x.message}`, "bad", { timeout: 12000 }); }
   });
   async function draw() {
     const files = await list().catch(() => []);
@@ -1583,10 +1640,7 @@ function filesPanel(name, yamlOf) {
   return { el: card("Files that go with it", box, { cls: "files-card" }), watch, draw,
     async upload(appName) {                                  // a new loop: its files, once it exists
       if (!staged.size) return 0;
-      const form = new FormData(); form.append("folder", "");
-      for (const [p, x] of staged) form.append("files", x.file || new Blob([x.text], { type: "text/plain" }), p);
-      const r = await api(`/apps/${enc(appName)}/files`, { method: "POST", form });
-      return r.written.length;
+      return sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })));
     } };
 }
 
@@ -1652,7 +1706,7 @@ async function configurePage(name) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", resources: "Resources", sandbox: "Sandbox", models: "Models and variables", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", applications: "Applications", resources: "Resources", sandbox: "Sandbox", models: "Models and variables", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -1668,6 +1722,7 @@ async function adminPage(sub = "") {
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
   if (tab === "sandbox") return adminSandbox(body);
+  if (tab === "applications") return adminApplications(body);
   if (tab === "models") {
     const st = await api("/admin/settings");
     const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
@@ -1821,6 +1876,29 @@ async function adminResources(body) {
   await load();
   const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);
   cleanup.push(() => clearInterval(t));
+}
+
+/** The applications of this Flux (D700): an admin sees each and makes it one of their loops --
+    its files linked in, its record its own; Refresh takes the folder's files again. */
+async function adminApplications(body) {
+  const r = await api("/admin/applications");
+  if (!r.root) { body.replaceChildren(card(null, empty("No applications folder: set FLUX_APPLICATIONS to one."))); return; }
+  const use = async (a, refresh) => {
+    if (refresh && !await confirmDialog(`Refresh ${a.name}?`, "Its files are taken again from the folder; edits made to them in the loop go. Its record, log and workbench stay.", { ok: "Refresh" })) return;
+    await api(`/admin/applications/${enc(a.name)}/use${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+    toast(refresh ? `${a.name}: its files taken again` : `${a.name} is one of your loops`, "ok");
+    location.hash = `#/app/${enc(a.name)}`;
+  };
+  body.replaceChildren(card(`The applications folder`, [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root),
+      ". Use one to make it a loop of yours: its files are linked in (no copy on the same disk), and a run writes only the loop's own record, log and workbench."),
+    h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Application", "What it asks", "Size", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
+      h("tbody", {}, r.applications.map(a => h("tr", {},
+        h("td", {}, h("strong", {}, a.name), h("div", { class: "mono muted small" }, a.document)),
+        h("td", { class: "muted small app-what" }, a.statement),
+        h("td", { class: "num mono" }, bytes(a.size)),
+        h("td", { class: "right" }, h("div", { class: "actions end" }, a.loop
+          ? [h("a", { class: "btn small primary", href: `#/app/${enc(a.name)}` }, "Open"), a.linked ? act("Refresh", () => use(a, true), { cls: "small" }) : h("span", { class: "muted small", title: "A loop of yours has this name; it was not made from this folder" }, "name taken")]
+          : act("Use", () => use(a, false), { cls: "small primary" })))))))]));
 }
 
 /** What every sandbox gets (D698): the network, PATH directories, home files. */

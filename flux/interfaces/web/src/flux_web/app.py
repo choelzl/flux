@@ -567,6 +567,70 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "add files", f"{name}: {len(written)} file(s)")
         return {"written": written}
 
+    @app.put("/api/apps/{name}/part")
+    async def put_part(name: str, path: str, offset: int, request: Request, final: bool = False,
+                       user: User = Depends(user_of)) -> dict[str, Any]:
+        """A large file in parts (D700): the raw body written at `offset`; `final` moves it into place."""
+        data = await request.body()
+        try:
+            size = ws(user).put_part(name, path, offset, data, final)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        if final:
+            store.audit(user.name, "add files", f"{name}: {path} ({size} bytes, in parts)")
+        return {"size": size}
+
+    # ---- the applications folder of this Flux (D700): an admin sees them and makes one a loop
+    def _apps_root() -> Path | None:
+        given = os.environ.get("FLUX_APPLICATIONS")
+        root = Path(given) if given else Path(__file__).resolve().parents[4] / "applications"
+        return root if root.is_dir() else None
+
+    @app.get("/api/admin/applications")
+    def applications(a: User = Depends(admin_of)) -> dict[str, Any]:
+        from . import admin as adm
+        from .workspace import _pick_document
+
+        root = _apps_root()
+        if root is None:
+            return {"root": None, "applications": []}
+        mine = {x["name"]: x for x in ws(a).apps()}
+        out = []
+        for d in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
+            tops = [p.name for p in d.iterdir() if p.is_file()]
+            doc = _pick_document(tops)
+            if doc is None:
+                continue
+            statement = ""
+            try:
+                import yaml
+
+                raw = yaml.safe_load((d / doc).read_text()) or {}
+                statement = " ".join(str(raw.get("statement") or "").split())[:220] if isinstance(raw, dict) else ""
+            except Exception:  # noqa: BLE001 -- a document the list cannot read: its name alone
+                pass
+            loop = mine.get(d.name)
+            out.append({"name": d.name, "document": doc, "statement": statement, "size": adm.dir_size(d),
+                        "loop": bool(loop), "linked": bool(loop and ws(a).meta(d.name).get("source") == str(d.resolve()))})
+        return {"root": str(root), "applications": out}
+
+    @app.post("/api/admin/applications/{app_name}/use")
+    def use_application(app_name: str, refresh: bool = False, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """The application as one of the admin's loops: its files linked in; `refresh` takes them
+        again (the loop's record, log and workbench stay)."""
+        root = _apps_root()
+        src = (root / app_name).resolve() if root else None
+        if root is None or src is None or src.parent != root.resolve() or not src.is_dir():
+            raise HTTPException(404, f"no application {app_name!r}")
+        if refresh and any(runs.live(r) for r in store.runs(a, app_name)):
+            raise HTTPException(409, "stop the loop first")
+        try:
+            meta = ws(a).import_dir(app_name, src, replace=refresh)
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "application refreshed" if refresh else "application used", app_name)
+        return {"name": app_name, **meta}
+
     @app.get("/api/apps/{name}/document")
     def document_views(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """The document as the configurator reads it back (D686): as written, and as the loader

@@ -1275,3 +1275,44 @@ the topics above.
   - The history: a week kept, thinning with a burst kept, admin only, a sample of the machine.
   - Login: four ways of typing a name, a password with a trailing space refused, a case-variant
     name refused at creation.
+
+- **D700: uploads of any size, failures said, the applications folder for admins.**
+  - **The failure was never seen:** "at most 500 files and 50 MB" came back as a toast, but a
+    toast lives in the page while a modal dialog sits in the browser's top layer above it.
+    - A toast now moves into the open dialog.
+    - Errors nobody caught (`unhandledrejection`, `error`) become toasts.
+    - An error page that is not the server's JSON (a proxy's 413, a crash) is said with its status.
+  - **Limits:**
+    - One request: 900 files and 256 MB. Starlette refuses more than 1000 files itself, with its
+      own message, before ours.
+    - A loop's own files: 100,000 files and 8 GB; a zip may fill a loop.
+    - Our refusal says to send in batches.
+  - **The page sends any size** (`sendFiles`):
+    - Batches of 300 files and 40 MB, the document first when the loop is made.
+    - A folder's common top directory is dropped, so all batches agree.
+    - A file over 40 MB goes in 32 MB parts (`PUT /api/apps/{name}/part?path&offset&final`): each
+      appended to a hidden `.part-upload` file at its offset, and the last part moves it into
+      place. A part out of order is refused.
+    - A progress bar shows while it goes.
+    - Uploading, adding on the Files tab and the configurator's files all use it.
+    - Checked in Firefox: 600 small files and a 100 MB one, as 3 batches and 4 parts, landed whole.
+  - **Applications** (admins):
+    - `GET /api/admin/applications` lists `applications/` (or `FLUX_APPLICATIONS`): each folder
+      with a document at its top, what it asks, its size.
+    - `POST …/use` imports one into the admin's loops (`import_dir`). Files are hard linked
+      (copied when the disk differs), without `out/`, `runs/`, `workbench/`, `.git` or
+      `__pycache__`; the meta names the `source`.
+    - A run never writes its inputs (read-only in the sandbox). An edit or an added file unlinks
+      before writing, so the repository's copy never changes.
+    - `?refresh=true` takes the files again and keeps the loop's record, log and workbench; not
+      while it runs.
+    - The tab offers Use, or Open and Refresh.
+    - sshfs does not show hard links by inode number, so the response counts what was linked and
+      what copied.
+  - **The empty loop lists** say "No loop yet." alone: New loop and Upload a loop are at the top
+    right.
+
+  Tests (`test_web_uploads.py`): parts in order, out of order refused, in place at the last, the
+  run's folders refused; a batch over the limit saying how to go past it; an application listed,
+  used, an edit not reaching the folder, refreshed with the record kept, a path escape refused; a
+  loop's own limit.

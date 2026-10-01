@@ -6,14 +6,18 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import shutil
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-MAX_BYTES = 50 * 1024 * 1024
-MAX_FILES = 500
+MAX_BYTES = 256 * 1024 * 1024           # one request (D700: the page sends a large upload in batches)
+MAX_FILES = 900                         # below the 1000 files a request may carry (Starlette)
+LOOP_BYTES = 8 * 1024 ** 3              # a loop's own files in all
+LOOP_FILES = 100_000
+PART_BYTES = 64 * 1024 * 1024           # one part of a file sent in parts
 TEXT_MAX = 2 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
 DOC_SUFFIXES = (".problem.yaml", ".problem.yml", ".task.json", ".task.yaml", ".yaml", ".yml", ".json")
@@ -70,12 +74,12 @@ class Workspace:
         d = self.root / check_name(name)
         if d.exists() and not replace:
             raise WorkspaceError(f"application {name!r} exists")
-        if len(files) == 1 and files[0][0].lower().endswith(".zip"):
+        unzipped = len(files) == 1 and files[0][0].lower().endswith(".zip")
+        if unzipped:
             files = _unzip(files[0][1])
         if not files:
             raise WorkspaceError("no files")
-        if len(files) > MAX_FILES or sum(len(b) for _p, b in files) > MAX_BYTES:
-            raise WorkspaceError(f"at most {MAX_FILES} files and {MAX_BYTES // 2**20} MB")
+        _check_batch(files, unzipped)
         rels = [safe_rel(p) for p, _b in files]
         # a folder upload names every file under the folder: drop the common first directory
         firsts = {PurePosixPath(r).parts[0] for r in rels}
@@ -97,12 +101,13 @@ class Workspace:
         """Files added to (or replacing files in) an existing application, under `sub`; a single
         .zip is unpacked. The same checks as a new one."""
         d = self.app(name)
-        if len(files) == 1 and files[0][0].lower().endswith(".zip"):
+        unzipped = len(files) == 1 and files[0][0].lower().endswith(".zip")
+        if unzipped:
             files = _unzip(files[0][1])
         if not files:
             raise WorkspaceError("no files")
-        if len(files) > MAX_FILES or sum(len(b) for _p, b in files) > MAX_BYTES:
-            raise WorkspaceError(f"at most {MAX_FILES} files and {MAX_BYTES // 2**20} MB")
+        _check_batch(files, unzipped)
+        self._check_room(name, sum(len(b) for _p, b in files), len(files))
         prefix = safe_rel(sub) + "/" if sub.strip("/") else ""
         rels = [safe_rel(prefix + p) for p, _b in files]
         written = []
@@ -113,6 +118,7 @@ class Workspace:
             if target.is_dir():
                 raise WorkspaceError(f"{rel!r} is a folder")
             target.parent.mkdir(parents=True, exist_ok=True)
+            target.unlink(missing_ok=True)                # D700: a linked file is replaced, not written through
             target.write_bytes(content)
             written.append(rel)
         meta = self.meta(name)
@@ -120,6 +126,81 @@ class Workspace:
             meta["id"] = _doc_id(d / meta["document"]) or meta.get("id")
             (d / ".flux-app.json").write_text(json.dumps(meta))
         return written
+
+    def _check_room(self, name: str, more_bytes: int, more_files: int) -> None:
+        """A loop's own files stay under LOOP_BYTES and LOOP_FILES in all (D700)."""
+        n, size = 0, 0
+        for rec in self.inputs(name):
+            n += 1
+            size += rec["size"]
+        if size + more_bytes > LOOP_BYTES or n + more_files > LOOP_FILES:
+            raise WorkspaceError(f"a loop holds at most {LOOP_FILES} files and {LOOP_BYTES // 2**30} GB of its own")
+
+    def put_part(self, name: str, rel: str, offset: int, data: bytes, final: bool) -> int:
+        """A large file in parts (D700): each part written at its offset into a hidden partial
+        file, moved into place with the last. Returns the size so far."""
+        rel = safe_rel(rel)
+        if rel == ".flux-app.json" or rel.split("/")[0] in ("out", "runs", "workbench"):
+            raise WorkspaceError(f"{rel!r} is not one of the loop's own files")
+        if len(data) > PART_BYTES:
+            raise WorkspaceError(f"a part is at most {PART_BYTES // 2**20} MB")
+        target = self.path(name, rel)
+        part = target.with_name(f".{target.name}.part-upload")
+        if offset == 0:
+            self._check_room(name, 0, 1)
+            part.parent.mkdir(parents=True, exist_ok=True)
+            part.unlink(missing_ok=True)
+        elif not part.exists() or part.stat().st_size != offset:
+            raise WorkspaceError(f"{rel}: the part at {offset} does not follow the parts before")
+        if offset + len(data) > LOOP_BYTES:
+            raise WorkspaceError(f"a file is at most {LOOP_BYTES // 2**30} GB")
+        with open(part, "ab") as fh:
+            fh.write(data)
+        size = part.stat().st_size
+        if final:
+            target.unlink(missing_ok=True)
+            part.replace(target)
+        return size
+
+    def import_dir(self, name: str, src: Path, replace: bool = False) -> dict[str, Any]:
+        """A folder of this machine as a loop (D700: the admin's applications): its files hard
+        linked where the disk allows (copied otherwise) -- a run never writes its inputs, and an
+        edit replaces a file rather than writing through the link. Its record, log and workbench
+        are the loop's own; with `replace`, the files are taken again and those stay."""
+        src = src.resolve()
+        d = self.root / check_name(name)
+        if d.exists() and not replace:
+            raise WorkspaceError(f"application {name!r} exists")
+        rels = []
+        for p in sorted(src.rglob("*")):
+            rel = p.relative_to(src)
+            if not p.is_file() or rel.parts[0] in ("out", "runs", "workbench", ".git") or "__pycache__" in rel.parts \
+                    or p.name == ".flux-app.json" or p.name.endswith(".part-upload"):
+                continue
+            rels.append(str(rel))
+        doc = _pick_document(rels)
+        if doc is None:
+            raise WorkspaceError(f"no problem document in {src}")
+        if len(rels) > LOOP_FILES:
+            raise WorkspaceError(f"at most {LOOP_FILES} files")
+        d.mkdir(parents=True, exist_ok=True)
+        if replace:                                   # the loop's own files go; out/, runs/, workbench/ stay
+            for rec in self.inputs(name):
+                (d / rec["path"]).unlink(missing_ok=True)
+        linked = copied = 0
+        for rel in rels:
+            target = d / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.unlink(missing_ok=True)
+            try:
+                os.link(src / rel, target)
+                linked += 1
+            except OSError:
+                shutil.copy2(src / rel, target)
+                copied += 1
+        meta = {**(self.meta(name) if replace else {}), "document": doc, "id": _doc_id(d / doc) or name, "source": str(src)}
+        (d / ".flux-app.json").write_text(json.dumps(meta))
+        return {**meta, "linked": linked, "copied": copied}
 
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
         rel = safe_rel(filename)
@@ -252,6 +333,7 @@ class Workspace:
         if len(text.encode()) > TEXT_MAX:
             raise WorkspaceError("too large to edit here")
         p.parent.mkdir(parents=True, exist_ok=True)
+        p.unlink(missing_ok=True)                      # D700: a linked file is replaced, not written through
         p.write_text(text)
         meta = self.meta(name)
         if rel == meta.get("document"):
@@ -271,10 +353,19 @@ def _unzip(data: bytes) -> list[tuple[str, bytes]]:
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
             raise WorkspaceError(f"{info.filename!r} is a link; links are not accepted")
         total += info.file_size
-        if total > MAX_BYTES or len(out) >= MAX_FILES:
-            raise WorkspaceError(f"at most {MAX_FILES} files and {MAX_BYTES // 2**20} MB")
+        if total > LOOP_BYTES or len(out) >= LOOP_FILES:
+            raise WorkspaceError(f"a zip holds at most {LOOP_FILES} files and {LOOP_BYTES // 2**30} GB")
         out.append((safe_rel(info.filename), z.read(info)))
     return out
+
+
+def _check_batch(files: list[tuple[str, bytes]], unzipped: bool = False) -> None:
+    """One request's files: at most MAX_FILES and MAX_BYTES (the page sends more in batches, a
+    large file in parts); a zip's contents up to a loop's own limits."""
+    n, size = (LOOP_FILES, LOOP_BYTES) if unzipped else (MAX_FILES, MAX_BYTES)
+    if len(files) > n or sum(len(b) for _p, b in files) > size:
+        raise WorkspaceError(f"at most {n} files and {size // 2**20} MB at once" + ("" if unzipped else
+                             ": the page sends more in batches; from elsewhere, send it in several requests"))
 
 
 def _pick_document(rels: list[str]) -> str | None:

@@ -146,7 +146,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
   accepted designs or decision. **Upload a loop** (beside New loop) takes a dropped folder, files
-  or a `.zip`. Each loop shows its accepted and measured designs and the
+  or a `.zip`, of any size: the page sends it in batches (300 files, 40 MB) and a file over 40 MB in
+  parts of 32 MB, with a progress bar. A loop holds up to 100,000 files and 8 GB of its own; one
+  request from elsewhere, 900 files and 256 MB (a zip, up to the loop's limits). A failure is said
+  above the dialog, as is any error the page did not expect. Each loop shows its accepted and measured designs and the
   decision's number on the first objective (✓ or ✗ against its limit).
 - **Applications:** upload files, a folder or a `.zip`, or write the YAML in the page; add
   files (or a `.zip`) to an existing one. Files and folders can also be dragged onto the page:
@@ -251,7 +254,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
-- **Admin** (tabs: Loops, Resources, Users, Audit):
+- **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
+  - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with
+    what it asks and its size. **Use** makes one a loop of the admin's: its files hard linked
+    (copied across disks), its record, log and workbench its own; an edit replaces a file rather
+    than writing through the link, so the folder never changes. **Refresh** takes the folder's
+    files again and keeps the record.
   - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
     reason users see; running loops go on), **stop every loop** after its pass or at once.
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
