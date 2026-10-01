@@ -162,13 +162,12 @@ def _library_line(task: Any, problem: Any) -> str:
 
     from flux_knowledge import status
     from flux_knowledge.library import library_files
-    from flux_loop.document import LIBRARY_FOLDERS, library_folders, library_on
+    from flux_loop.document import LIBRARY_FOLDER, library_folders, library_on
 
     folders = library_folders(task)
     st = status(folders)
     if not st["documents"]:
-        return (f"library: empty -- drop papers in {st['path']}, or in a folder beside the document: "
-                + ", ".join(f"{f}/" for f in LIBRARY_FOLDERS))
+        return f"library: empty -- drop papers in {LIBRARY_FOLDER}/ beside the document, or in {st['path']} for every loop"
     own = sum(len(library_files([f])) - len(library_files()) for f in folders)       # D735: the loop's own
     head = (f"library: {st['documents']} documents ({st['pdfs']} PDFs, pdftotext "
             f"{'present' if st['pdftotext'] else 'missing'})"

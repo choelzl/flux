@@ -1185,30 +1185,18 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     return flow, doc
 
 
-#: D735: a loop's own papers -- the folders beside its document that join its library without a
-#: word in the document (`inputs/` is where `flux ask` puts what it was given).
-LIBRARY_FOLDERS = ("papers", "library", "references", "inputs")
+#: D735, D736: a loop's own papers, references and specs: one folder beside its document, read
+#: without a word in the document (`flux ask` puts what it was given there).
+LIBRARY_FOLDER = "library"
 
 
 def library_folders(task: "TaskSpec") -> tuple[str, ...]:
-    """The folders a document's library adds to the shared one (D648, D735): the one its
-    `knowledge: {library: ...}` names, and its own paper folders beside it."""
+    """The folders a document's library adds to the shared one (D648, D736): the one its
+    `knowledge: {library: ...}` names, and its own `library/` beside it."""
     out = [task.library] if task.library else []
-    if task.home:
-        home = Path(task.home)
-        out += [str((home / name).resolve()) for name in LIBRARY_FOLDERS if (home / name).is_dir()]
-        # and any other folder beside it holding PDFs ("research/"), not the loop's own working ones
-        try:
-            others = sorted(p for p in home.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))
-                            and p.name not in _NOT_PAPERS and p.name not in LIBRARY_FOLDERS)
-        except OSError:
-            others = []
-        out += [str(p.resolve()) for p in others if next(p.rglob("*.pdf"), None) is not None]
+    if task.home and (Path(task.home) / LIBRARY_FOLDER).is_dir():
+        out.append(str((Path(task.home) / LIBRARY_FOLDER).resolve()))
     return tuple(dict.fromkeys(out))
-
-
-#: The loop's own working folders, never its papers.
-_NOT_PAPERS = ("out", "runs", "workbench", "agents", "skills", "node_modules", "build", "venv")
 
 
 def library_on(task: "TaskSpec") -> bool:
