@@ -119,4 +119,4 @@ def test_passes_mark_each_pass_and_why_the_run_ended(tmp_path):
     marks = [(e["name"], json.loads(e["why"])) for e in read_events(str(tmp_path / "events.jsonl"))[0] if e["ev"] == "mark"]
     assert [m for m in marks if m[0] == "pass"] == [("pass", {"n": 1, "explore": 0}), ("pass", {"n": 2, "explore": 0}),
                                                    ("pass", {"n": 3, "explore": 0})]
-    assert marks[-1] == ("ended", {"why": "3 pass(es) done, as asked"})
+    assert marks[-1] == ("ended", {"why": "3 passes done"})

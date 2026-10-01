@@ -91,29 +91,29 @@ def between_passes(out: Any, n: int, *, passes: int = 0, rests: int = 0, feedbac
     """After pass `n` (1-based) ended with `out`: (go on?, rests in a row, the feedback channel
     for the next pass). Stops only for a cap, a stop asked for, or a script that is spent."""
     if passes and n >= passes:
-        return _ended(f"{passes} pass(es) done, as asked", rests, feedback)
+        return _ended(f"{passes} pass{'es' if passes != 1 else ''} done", rests, feedback)
     asked = ops.stop_requested()
     if asked:
         ops.clear_stop()
         say(f"stopping at the pass boundary: {asked}")
-        return _ended(f"stopped at the pass boundary: {asked}", rests, feedback)
+        return _ended(f"stopped: {asked}", rests, feedback)
     if proposer is not None and _scripted_spent(proposer):   # one proposer, or a tuple of them
         say("the scripted replies are spent; a script has nothing more to try")
-        return _ended("the scripted replies are spent", rests, feedback)
+        return _ended("the script is spent", rests, feedback)
     rests = rests + 1 if getattr(out, "at_rest", False) else 0
     if rests and not getattr(out, "explorable", True) and passes:
         say("at rest, and nothing here drafts a new design; the remaining passes would change nothing")
-        return _ended("at rest, and nothing here drafts a new design", rests, feedback)
+        return _ended("at rest: nothing new to try", rests, feedback)
     if rests and not getattr(out, "explorable", True):
         say("at rest, and nothing here drafts a new design (no model or coding agent generates for this "
             "campaign): waiting for a note, or `flux stop` / Ctrl-C to end")
-        mark("waiting", why="at rest, and nothing here drafts a new design: waiting for a note or a stop")
+        mark("waiting", why="at rest: waiting for a note or a stop")
         while True:
             asked = ops.stop_requested()
             if asked:
                 ops.clear_stop()
                 say(f"stopping: {asked}")
-                return _ended(f"stopped while waiting: {asked}", rests, feedback)
+                return _ended(f"stopped: {asked}", rests, feedback)
             notes = list(feedback.drain()) if feedback is not None else []
             if notes:
                 say(f"a note arrived: {getattr(notes[-1], 'text', notes[-1])!s:.120}; another pass")

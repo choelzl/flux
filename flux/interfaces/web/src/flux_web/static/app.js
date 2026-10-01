@@ -1829,12 +1829,19 @@ function liveTree(base, qs, onQuestion) {
   const partOf = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.part; if (v) return String(v); } return ""; };
   const rootOf = (n) => { let p = n; while (p.parent) p = p.parent; return p; };
   const within = (v, n) => { for (let p = n; p; p = p.parent) if (p === v) return true; return false; };
+  // D742: a leaf's name is a word; the crafter's box name is its tooltip
+  const LEAF_NAME = { validate: "Checks", knowledge: "Reading", records: "Record", feedback: "Notes", orchestrate: "Pick", plan: "Plan",
+    dse: "Search", generate: "Design", test: "Check", measure: "Measure", calibrate: "Calibrate", select: "Choose", extract: "Lessons",
+    "crit-division": "Critic", "crit-part": "Critic", "crit-decision": "Critic", parts: "Compose" };
   function leafTitle(b, v) {
-    if (isDivide(v)) return "Divide into parts";
-    if (/^propose: finalists/.test(String(v.name))) return "Choose the finalists";
-    if (b === "parts") return "Put the parts together";
+    if (isDivide(v)) return "Divide";
+    if (/^propose: finalists/.test(String(v.name))) return "Finalists";
+    return LEAF_NAME[b] || b;
+  }
+  function boxName(it) {
     const C = window.FluxCrafter;
-    return (C && C.boxTitle ? C.boxTitle(b) : null) || b;
+    return it.title === "Divide" ? "Divide into parts" : it.title === "Finalists" ? "Choose the finalists" : it.title === "Compose" ? "Put the parts together"
+      : it.title === "Setup" ? "The pass's own setup" : (C && C.boxTitle ? C.boxTitle(it.box) : null) || it.title;
   }
   function leavesOf(vs, key) {
     const out = [];
@@ -1887,12 +1894,12 @@ function liveTree(base, qs, onQuestion) {
       while (i < vs.length && isSetup(vs[i])) i++;
       const lead = vs.slice(0, i), rest = vs.slice(i);
       if (p === order[0]) { setupLeaves.push(...leavesOf(lead, "setup")); return leavesOf(rest, key); }
-      const pre = lead.length ? [{ leaf: true, box: "validate", title: "Set up the pass", tasks: lead, key: `${key}/setup` }] : [];
+      const pre = lead.length ? [{ leaf: true, box: "validate", title: "Setup", tasks: lead, key: `${key}/setup` }] : [];
       return [...pre, ...leavesOf(rest, key)];
     };
     const passWhy = (p, vs) => {
       const made = designsOf(vs);
-      return [p.explore ? "exploring" : "", made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : ""].filter(Boolean).join(" · ");
+      return [made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : "", p.explore ? "exploring" : ""].filter(Boolean).join(" · ");
     };
     if (!hasParts) {
       for (const p of order) out.push(branch(`pass:${p.n}`, `Pass ${p.n}`, passWhy(p, p.visits), passBody(p, p.visits, `pass:${p.n}`)));
@@ -1909,12 +1916,14 @@ function liveTree(base, qs, onQuestion) {
       }
       const st = standings.get("standings") || {};
       const partState = new Map((Array.isArray(st.parts) ? st.parts : []).map(x => [String(x.part), x.state]));
-      for (const [k, kids] of byPart) out.push(branch(`part:${k}`, `Part ${k}`, partState.get(k) || "its own loop", kids));
-      if (whole.length) out.push(branch("whole", "The whole", "the division, the parts put together, the decision", whole));
+      for (const [k, kids] of byPart) out.push(branch(`part:${k}`, `Part ${k}`, partState.get(k) || "", kids));
+      if (whole.length) out.push(branch("whole", "Whole", "", whole));
     }
     if (setupLeaves.length) out.unshift(branch("setup", "Setup", "", setupLeaves));
+    for (const it of out) if (it.why == null) it.why = "";
     const end = endLeaves();
-    if (end.length) out.push(branch("end", "End", (end[0].tasks[0].why || ""), end));
+    const dec = end.find(l => l.title === "Decision");
+    if (end.length) out.push(branch("end", "End", ((dec || end[0]).tasks[0].why || "").split(" · ")[0], end));
     return out;
   }
   function endLeaves() {
@@ -1925,19 +1934,20 @@ function liveTree(base, qs, onQuestion) {
     const leaves = [];
     const pseudo = (key, title, why, output, t, live = false) => leaves.push({ leaf: true, box: "end", title, key: `end/${key}`,
       tasks: [{ id: `end:${key}`, name: title, why, params: {}, fields: {}, output, kids: [], parent: null, t0: t, t1: live ? null : t, seconds: 0, pseudo: true }] });
-    if (at(waiting) && !ended) pseudo("waiting", "Waiting", waiting.why || "at rest: waiting for a note or a stop", {}, waiting.t, true);
-    if (ended) pseudo("why", "Why it ended", ended.why || "", { why: ended.why }, ended.t);
+    if (at(waiting) && !ended) pseudo("waiting", "Waiting", waiting.why || "for a note or a stop", {}, waiting.t, true);
+    if (ended) pseudo("why", "Reason", ended.why || "", { why: ended.why }, ended.t);
     if (outs) {
       const d = outs.decision;
       const nums = d && d.metrics ? Object.entries(d.metrics).map(([k, v]) => `${k}=${typeof v === "number" ? Number(v.toPrecision(5)) : v}`).join(", ") : "";
-      pseudo("decision", "The decision", d ? `${d.name}${nums ? " · " + nums : ""}` : "none: nothing was admitted",
+      pseudo("decision", "Decision", d ? `${d.name}${nums ? " · " + nums : ""}` : "none",
         { decision: d, "decided by": outs.decided_by, "the front": outs.front, refused: outs.refused, stopped: outs.stopped }, outs.t);
-      if (outs.lessons && outs.lessons.length) pseudo("lessons", "Learn from results", `${outs.lessons.length} lesson(s)`, { lessons: outs.lessons }, outs.t);
+      if (outs.lessons && outs.lessons.length) pseudo("lessons", "Lessons", String(outs.lessons.length), { lessons: outs.lessons }, outs.t);
       if ((outs.established || []).length || (outs.not_established || []).length)
-        pseudo("established", "What this run established", (outs.established || [])[0] || "",
+        pseudo("established", "Established", `${(outs.established || []).length}${(outs.not_established || []).length ? ` · ${outs.not_established.length} not` : ""}`,
           { established: outs.established, "not established": outs.not_established }, outs.t);
-      if (outs.design) pseudo("design", "Design written", outs.design, { file: outs.design }, outs.t);
-      if (outs.answer) pseudo("answer", "Answer written", outs.answer, { file: outs.answer }, outs.t);
+      const base = (f) => String(f).split("/").pop();
+      if (outs.design) pseudo("design", "Design file", base(outs.design), { file: outs.design }, outs.t);
+      if (outs.answer) pseudo("answer", "Answer file", base(outs.answer), { file: outs.answer }, outs.t);
     }
     return leaves;
   }
@@ -1966,8 +1976,37 @@ function liveTree(base, qs, onQuestion) {
     drawStandings();
     dirty = false;
   }
-  /** A leaf's line: what its latest work was about -- a tool or an agent by name and purpose, any other task by its purpose. */
-  const leafWhy = (n) => /^(tool|agent):/.test(String(n.name)) ? [String(n.name).replace(/^[^:]+:\s*/, ""), n.why].filter(Boolean).join(" · ") : String(n.why || "");
+  /** A leaf's line (D742): what it produced, short -- the designs it made or checked, the stage
+      it measured on, the decision, a critic's verdict -- not the code's own wording. */
+  const subtree = (vs) => { const all = []; const walk = (n) => { all.push(n); n.kids.forEach(walk); }; vs.forEach(walk); return all; };
+  const uniq = (xs) => [...new Set(xs.filter(Boolean))];
+  const listed = (xs) => xs.length > 3 ? `${xs.slice(0, 3).join(", ")} +${xs.length - 3}` : xs.join(", ");
+  function leafLine(it) {
+    if (it.tasks[0].pseudo) return it.tasks[0].why || "";
+    const all = subtree(it.tasks), latest = it.tasks.reduce((a, x) => (x.t0 >= a.t0 ? x : a));
+    const toolWhy = (re) => uniq(all.filter(n => String(n.name).startsWith("tool:")).map(n => (re.exec(String(n.why || "")) || [])[1]));
+    const agent = all.find(n => String(n.name).startsWith("agent:"));
+    switch (it.box) {
+      case "dse": return listed(designsOf(it.tasks)) || (latest.output && latest.output.candidates != null ? String(latest.output.candidates) : "");
+      case "generate": {
+        const made = uniq([...toolWhy(/^generate (.+)$/), ...all.map(n => (/^generation: build (.+)$/.exec(String(n.name)) || [])[1])]);
+        return [agent ? String(agent.name).replace(/^agent:\s*/, "") : "", listed(made)].filter(Boolean).join(" · ");
+      }
+      case "test": return listed(toolWhy(/^test (.+)$/)) || String(latest.why || "").replace(/candidate\(s\)/, "design(s)");
+      case "measure": {
+        const stages = uniq(it.tasks.map(n => String(n.name).replace(/^[^:]+:\s*/, "").replace(/\s*\(.*\)$/, "").replace(/ alone$/, "")));
+        const what = toolWhy(/^stage \S+ (.+)$/);
+        return [stages.join(", "), listed(what)].filter(Boolean).join(" · ");
+      }
+      case "select": { const d = all.map(n => n.output && n.output.decision).filter(Boolean).pop(); return d ? String(d) : String(latest.why || ""); }
+      case "crit-decision": case "crit-part": case "crit-division": {
+        const v = latest.output && latest.output.verdict;
+        return [String(latest.why || ""), v ? (/^no objection/.test(v) ? "no objection" : "objects") : ""].filter(Boolean).join(" · ");
+      }
+      case "orchestrate": { const p = all.map(n => n.output && n.output.picked).filter(Boolean).pop(); return p ? String(p) : ""; }
+      default: return it.title === "Setup" || SETUP_BOXES.has(it.box) ? "" : String(latest.why || "");
+    }
+  }
   function drawLoopTree(now, q) {
     const items = loopTree();
     shownItems = items;
@@ -1977,7 +2016,7 @@ function liveTree(base, qs, onQuestion) {
       items.forEach(walk);
       return hit;
     })();
-    const row = (it) => {
+    const row = (it, known = "") => {
       if (q && !itemMatches(it, q)) return "";
       const live = itemRunning(it), bad = !live && itemFailed(it);
       const state = live ? "running" : bad ? "failed" : "done";
@@ -1990,8 +2029,8 @@ function liveTree(base, qs, onQuestion) {
               onclick: pick, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } },
             h("span", { class: "caret" }, ""),
             h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
-            h("span", { class: "nm" }, it.title), it.tasks.length > 1 ? h("span", { class: "kidsn" }, `×${it.tasks.length}`) : "",
-            leafWhy(focusOf(latest)) ? h("span", { class: "why" }, leafWhy(focusOf(latest))) : "",
+            h("span", { class: "nm", title: boxName(it) }, it.title), it.tasks.length > 1 && it.title !== "Setup" ? h("span", { class: "kidsn" }, `×${it.tasks.length}`) : "",
+            (() => { const line = leafLine(it).split(" · ").filter(x => x && x !== known).join(" · "); return line ? h("span", { class: "why" }, line) : ""; })(),
             latest.pseudo ? "" : h("span", { class: "dur" }, dur(took))));
       }
       const opened = q ? true : open.has(it.key) ? open.get(it.key) : (!collapse.checked || live || bad || itemHas(it, selected));
@@ -2002,7 +2041,7 @@ function liveTree(base, qs, onQuestion) {
           h("span", { class: "nm" }, it.title), it.why ? h("span", { class: "why" }, it.why) : "",
           !opened ? h("span", { class: "kidsn" }, String(it.kids.length)) : "",
           it.key === "end" ? "" : h("span", { class: "dur" }, dur(took))),
-        opened ? h("div", { class: "kids" }, it.kids.map(row)) : "");
+        opened ? h("div", { class: "kids" }, it.kids.map(k => row(k, /^Pass /.test(it.title) ? it.why.split(" · ")[0] : ""))) : "");
     };
     treeBox.replaceChildren(...(items.length ? items.map(row) : [empty("Waiting for the run's first events…")]));
   }
@@ -2310,7 +2349,7 @@ function liveTree(base, qs, onQuestion) {
     const tabBar = tabs.length > 1 ? h("div", { class: "dtabs", role: "tablist" }, tabs.map(([t]) => h("button", { type: "button", class: `small${want && t === want[0] ? " on" : ""}`, role: "tab",
       "aria-selected": String(!!want && t === want[0]), onclick: () => { detailTab = t; drawDetail(Date.now() / 1000); } }, t))) : "";
     const leaf = n.pseudo ? null : leafOf(n);
-    const leafRows = leaf ? h("div", { class: "leaf-tasks" }, h("h3", {}, `${leaf.title} ×${leaf.tasks.length}`),
+    const leafRows = leaf ? h("div", { class: "leaf-tasks" }, h("h3", {}, `${boxName(leaf)} ×${leaf.tasks.length}`),
       h("div", { class: "run-graph-rows" }, leaf.tasks.map(v => {
         const fo = focusOf(v), on = within(v, n);
         return h("div", { class: `rg-row ${running(v) ? "running" : failedBelow(v) ? "failed" : "done"}${on ? " sel" : ""}`, tabindex: "0", role: "button",
@@ -2320,8 +2359,13 @@ function liveTree(base, qs, onQuestion) {
           h("span", { class: "rg-nm" }, String(fo.name)), fo.why ? h("span", { class: "rg-why" }, fo.why) : "",
           h("span", { class: "rg-dur" }, running(v) ? `running · ${dur(now - v.t0)}` : dur(v.seconds)));
       }))) : "";
+    const step = n.pseudo ? null : (() => {         // the leaf whose own visit holds the task, not one above it
+      const v = visitOf(n); let hit = null, near = null;
+      const walk = (it) => { if (it.leaf) { if (!hit && v && it.tasks.includes(v)) hit = it; if (!near && itemHas(it, n)) near = it; } else it.kids.forEach(walk); };
+      shownItems.forEach(walk); return hit || near;
+    })();
     detail.replaceChildren(
-      h("div", { class: "detail-head" }, h("h2", {}, n.name),
+      h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
         n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.failed ? "failed" : "done"),
         n.pseudo ? "" : h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",

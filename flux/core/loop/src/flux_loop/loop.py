@@ -1133,10 +1133,12 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     pool = on_stage.get(reached) or []
     with _phase("frontier", why=f"{len(pool)} on {reached}"):
         front = list(problem.frontier(pool, state))
-    with _phase("decide", why=f"{len(pool)} in the pool"):
+    with _phase("decide", why=f"{len(pool)} in the pool") as out:
         pick, decided_by = problem.decide(pool, state)
         if pick is not None:
             pick, decided_by = _select(problem, state, pool, pick, decided_by)
+        out["decision"] = pick.name if pick is not None else None        # D742: the tree's leaf says it
+        out["decided by"] = decided_by
     if pick is not None:
         state.lessons.append(f"[{pick.stage}] decision {pick.name}: "
                              + ", ".join(f"{k}={v:g}" for k, v in pick.metrics.items())

@@ -476,7 +476,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         from flux_loop.passes import mark
 
-        mark("ended", why="stopped now (interrupted)")
+        mark("ended", why="stopped now")
         print("run abandoned; the campaign record holds what was judged")
         return 130
     _print(out)
