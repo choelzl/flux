@@ -70,6 +70,8 @@ def test_a_copied_home_path_is_never_hidden_by_a_read_only_mount(tmp_path, monke
     assert f"{home}/.tools:{home}/.tools:ro" in vols, "a folder above a copy: still mounted"
     assert f"{sh}/.tools/creds:{home}/.tools/creds" in vols, "... and the copy again on top of it"
     assert f"{home}/other/bin:{home}/other/bin:ro" in vols
+    path = next(c for c, prev in zip(cmd[1:], cmd) if prev == "-e" and c.startswith("PATH=")).split(os.pathsep)
+    assert f"{home}/.mycode/creds/bin" in path[0].split("=", 1)[1:] + path, "only its mount goes: it stays on PATH, found in the copy"
     assert (sh / ".mycode/creds/token.json").is_file() and (sh / ".tools/creds/key").read_text() == "k"
 
 
