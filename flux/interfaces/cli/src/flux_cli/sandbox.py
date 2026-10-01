@@ -197,14 +197,27 @@ def _sandbox_home(app: Path) -> Path:
                 mp.touch(exist_ok=True)
     for rel in home_copy():
         src = home / rel
-        dst = sh / rel
-        if src.is_file():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, dst)
-            dst.chmod(0o600)
-        elif src.is_dir():                                   # a folder of credentials: copied whole, each run
-            shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=True)
+        if src.exists() or src.is_symlink():
+            _copy_over(src, sh / rel)
     return sh
+
+
+def _copy_over(src: Path, dst: Path) -> None:
+    """`src` copied onto `dst`, each run: what is there is replaced entry by entry -- a link
+    copied as a link, never written through (it may point at the host's own file) -- and what
+    only the copy has (an agent's sessions) is kept."""
+    if dst.is_symlink() or (dst.exists() and dst.is_dir() != (src.is_dir() and not src.is_symlink())):
+        shutil.rmtree(dst) if dst.is_dir() and not dst.is_symlink() else dst.unlink()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_symlink():
+        dst.symlink_to(os.readlink(src))
+    elif src.is_dir():                                       # a folder of credentials: copied whole
+        dst.mkdir(exist_ok=True)
+        for p in src.iterdir():
+            _copy_over(p, dst / p.name)
+    elif src.is_file():
+        shutil.copyfile(src, dst)
+        dst.chmod(0o600)
 
 
 def _env() -> dict[str, str]:

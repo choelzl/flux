@@ -73,6 +73,34 @@ def test_a_copied_home_path_is_never_hidden_by_a_read_only_mount(tmp_path, monke
     assert (sh / ".mycode/creds/token.json").is_file() and (sh / ".tools/creds/key").read_text() == "k"
 
 
+def test_a_copied_folder_with_links_is_copied_again_every_run(tmp_path, monkeypatch):
+    """D707: the second run's copy replaced the first's link with "file exists"; a link is copied
+    as a link and never written through, a changed type replaced, what only the copy has kept."""
+    home = tmp_path / "home"
+    (home / ".mycode/creds/sub").mkdir(parents=True)
+    (home / ".mycode/creds/token").write_text("t1")
+    (home / ".mycode/creds/current").symlink_to("token")
+    (home / ".mycode/creds/sub/x").write_text("x")
+    outside = tmp_path / "host-file"
+    outside.write_text("host")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("FLUX_SANDBOX_HOME_COPY", ".mycode/creds")
+    app = tmp_path / "app"
+    sh = sandbox._sandbox_home(app)
+    c = sh / ".mycode/creds"
+    (c / "session.json").write_text("{}")                    # the agent's own, in the copy
+    (c / "token").unlink()
+    (c / "token").symlink_to(outside)                         # a link where the host has a file
+    (home / ".mycode/creds/token").write_text("t2")
+    (home / ".mycode/creds/sub").rename(home / ".mycode/creds/was-sub")
+    (home / ".mycode/creds/sub").write_text("now a file")
+    sandbox._sandbox_home(app)                                # the second run
+    assert (c / "token").read_text() == "t2" and not (c / "token").is_symlink()
+    assert outside.read_text() == "host", "never written through a link"
+    assert os.readlink(c / "current") == "token" and (c / "sub").read_text() == "now a file"
+    assert (c / "session.json").is_file() and (c / "was-sub/x").read_text() == "x"
+
+
 def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))

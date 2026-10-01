@@ -1522,3 +1522,15 @@ the topics above.
     - The copy under the read-only folder is visible.
   - Tests: `test_sandbox_config` (dropped inside, mounted again above, other PATH folders
     unchanged).
+- **D707: a copied home folder is copied again every run, links and all.**
+  - Key insight: `copytree(dirs_exist_ok=True, symlinks=True)` makes a folder's links on the first
+    run and fails on the next with "file exists": `os.symlink` does not replace. `copyfile` onto a
+    link writes through it, which can reach a host file.
+  - Rules (`_copy_over`): entry by entry.
+    - A link is copied as a link.
+    - A link or an entry of another type already in the copy is removed first; a file is never
+      written through a link.
+    - What only the copy has (an agent's sessions, its refreshed files) is kept.
+  - Tests: `test_sandbox_config` (a second run over a link, a link where the host has a file, a
+    folder become a file, the copy's own files kept, the host file untouched). Three runs in a
+    row with the server's own copy list.
