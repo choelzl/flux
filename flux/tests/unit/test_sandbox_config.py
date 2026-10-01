@@ -228,3 +228,22 @@ def test_a_copied_program_running_in_another_run_is_replaced_not_written_over(tm
         assert sorted(p.name for p in dst.parent.iterdir()) == ["agent"], "no temporary left behind"
     finally:
         running.kill()
+
+
+def test_a_read_only_file_is_copied_again_when_it_changed(tmp_path):
+    """D725: git makes its packs read-only (OpenCode's `.local/share/opencode/snapshot/*/pack/*`);
+    the copy of one must be replaceable on the next run (it failed with errno 13 when written
+    in place)."""
+    src = tmp_path / "host" / "snapshot" / "pack" / "pack-1.rev"
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"one")
+    src.chmod(0o444)
+    dst = tmp_path / "app" / "snapshot"
+    sandbox._copy_over(src.parent.parent, dst)
+    copied = dst / "pack" / "pack-1.rev"
+    assert copied.read_bytes() == b"one" and (copied.stat().st_mode & 0o777) == 0o444
+    src.chmod(0o644)
+    src.write_bytes(b"two!")
+    src.chmod(0o444)
+    sandbox._copy_over(src.parent.parent, dst)                              # was: PermissionError, errno 13
+    assert copied.read_bytes() == b"two!" and (copied.stat().st_mode & 0o777) == 0o444

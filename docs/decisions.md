@@ -1944,3 +1944,7 @@ the topics above.
   - Live, in Podman: the loop's OpenCode ran from the copy. The ask's re-copy put in a new file
     (another inode), the ask answered (`opencode --version`), and the loop ran on its old one.
     The unit test runs a copied program and checks it is replaced, not written over.
+  - The same rule fixes errno 13 on a copied git repository. OpenCode's
+    `.local/share/opencode/snapshot/*/pack/*` files are read-only (0444), so the old in-place copy
+    could not reopen its own earlier copy for writing. A rename over a read-only file needs only
+    the folder to be writable. A test reproduces the error on the old code.
