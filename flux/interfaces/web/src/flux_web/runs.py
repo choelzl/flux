@@ -176,7 +176,8 @@ def _net_said(allow: list[str]) -> str:
 #: A loop's settings only an admin sets (D697), with what each does to its runs.
 ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memory limit (e.g. 16g)", "cpus": "CPUs (e.g. 8)",
             "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)",
-            "allow": "hosts this loop may reach as well (D698)"}
+            "allow": "hosts this loop may reach as well (D698)",
+            "parallel": "work at once (tool runs, parts drafted together; default 1, D740)"}
 
 
 def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
@@ -272,6 +273,7 @@ class RunManager:
         env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         adv = advanced(self.store, user.name, app)
+        env["FLUX_PARALLEL_MAX"] = str(int(adv.get("parallel") or 1))     # D740: one at a time unless an admin says
         sandbox_env(env, self.sandbox, adv)
         machine_env(env, self.store.server_get("sandbox") or {}, adv, list(options.get("allow") or []))
         if adv.get("sandbox") is False and self.sandbox:

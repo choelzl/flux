@@ -289,8 +289,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     <folder> --author opencode`.
   - **Settings:** the loop's environment variables (over the user's and the server's, which are
     listed under them), and its advanced settings: run in the sandbox or on the host, memory,
-    CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
-    creating a loop); everyone sees them.
+    CPUs, processes, scratch size, and **At once** (D740): the tool runs and parts drafted together,
+    1 unless an admin raises it for the loop, whatever its document asks (`budget.workers`,
+    `parallel_parts`; the log says when it holds one back). Only an admin changes the advanced
+    settings (also when creating a loop); everyone sees them.
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist the container has no network; a proxy on the host forwards to allowed hosts

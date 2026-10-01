@@ -179,6 +179,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     # a design sent back to be improved -- and climbing the chain, so the evaluator->generator
     # edge is a cycle inside the pass.
     lad = problem.ladder()
+    from .pool import parallel_cap
+
+    cap = parallel_cap()
+    asked = max(int(request.workers or 0), int(request.parallel_parts or 1))
+    if cap is not None and asked > cap:          # D740: the server's cap, said where the run is read
+        state.say(f"  at once: {cap} (the document asks {asked}; an admin raises it in the loop's Advanced settings)")
     if request.ahead and problem.stages() and problem.subgoals() and lad is not None and getattr(lad, "alone", None):
         # D563: the tools work while the model thinks -- only where the ladder declares the
         # stage a part is measured on alone; otherwise it would be a tool run for nothing
@@ -393,7 +399,9 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                         paused = not searching.done    # the search goes on next pass
             else:
                 state.step = step + 1
-                n = min(int(request.parallel_parts or 1), sum(1 for w in waiting if w is not None),
+                from .pool import capped
+
+                n = min(capped(int(request.parallel_parts or 1)), sum(1 for w in waiting if w is not None),   # D740
                         max(1, int(request.steps) - step))                  # never past the budget
                 if n > 1:
                     worked = _parts_step(problem, state, todo, goals, n)   # D569: several parts drafted at once

@@ -866,22 +866,24 @@ function advancedCard(e, save, saveLabel = "Save") {
   const a = e.advanced || {};
   const said = [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
     ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
-    ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : [])].join(" · ");
+    ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : []),
+    a.parallel > 1 ? `${a.parallel} at once` : "one at a time"].join(" · ");
   if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, ". An admin sets these."));
   const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
   const f = (k, ph) => h("input", { id: `adv-${k}`, value: a[k] ?? "", placeholder: ph, style: "width:120px" });
-  const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
+  const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit"), par = f("parallel", "1");
   const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
   return card("Advanced (admins)", [h("p", { class: "muted" }, "Apply from the loop's next start, whoever starts it.",
       e.sandboxed_server ? "" : " This server runs without the sandbox (--no-sandbox): the limits do nothing."),
     h("label", { class: "check" }, sb, "Run in the sandbox (off: on the host, with this machine's files and network: only for code you trust)"),
     h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
-      h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
+      h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp),
+      h("label", { class: "stack", title: "Tool runs and parts drafted together, whatever the document asks (budget.workers, parallel_parts); 1 unless raised here" }, "At once", par)),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
     h("div", { class: "form-actions" }, act(saveLabel, async () => {
       if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) return;
       await save({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
-        pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null,
+        pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.value.trim() ? Number(par.value) : null,
         allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean) });
     }, { cls: "primary" }))]);
 }

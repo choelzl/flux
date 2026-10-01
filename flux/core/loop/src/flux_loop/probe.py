@@ -225,7 +225,9 @@ def probe(kind: str, file: str, stages: str | list[str] | None = None, ctx_path:
         from concurrent.futures import ThreadPoolExecutor
 
         t0 = time.monotonic()
-        with ThreadPoolExecutor(max_workers=len(runs)) as pool:
+        from .pool import capped
+
+        with ThreadPoolExecutor(max_workers=capped(len(runs))) as pool:          # D740
             done = list(pool.map(lambda r: _stage(ctx, ctx_path, src, text, r[0], r[1]), runs))
         for (w, n, cap), (ok, report, got) in zip(runs, done):
             _log(ctx, row(w, ok, report.splitlines()[-1] if ok else report.splitlines()[0], t0,

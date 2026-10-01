@@ -14,19 +14,35 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Iterable, TypeVar
 
-__all__ = ["run_parallel", "workers"]
+__all__ = ["parallel_cap", "run_parallel", "workers"]
 
 T = TypeVar("T")
+
+
+def parallel_cap() -> int | None:
+    """What may run at once, at most, whatever the document asks (D740): `FLUX_PARALLEL_MAX`,
+    which `flux serve` sets for every run -- 1 unless an admin raised it for the loop. None
+    (no cap) when unset, as on one's own machine."""
+    raw = os.environ.get("FLUX_PARALLEL_MAX", "").strip()
+    try:
+        return max(1, int(raw)) if raw else None
+    except ValueError:
+        return 1
+
+
+def capped(n: int) -> int:
+    cap = parallel_cap()
+    return max(1, min(int(n), cap) if cap else int(n))
 
 
 def workers(request: Any) -> int:
     """How many tool runs may go at once: the request's `workers`, or half the machine's
     cores up to four when it says 0 (a placement is a process of its own; two or three of
-    them share a box without starving the model's turn)."""
+    them share a box without starving the model's turn); never past `parallel_cap`."""
     n = int(getattr(request, "workers", 0) or 0)
     if n <= 0:
         n = max(1, min(4, (os.cpu_count() or 2) // 2))
-    return n
+    return capped(n)
 
 
 def _call(fn: Callable[[T], Any], item: T) -> tuple[Any, BaseException | None]:
