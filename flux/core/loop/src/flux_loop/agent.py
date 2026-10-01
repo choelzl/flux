@@ -63,7 +63,11 @@ DENIED = ("verilator", "yosys", "openroad", "sta", "klayout", "champsim", "timel
           "timeloop-mapper", "gcc", "g++", "cc", "c++", "clang", "clang++", "make", "cmake", "ninja", "pytest",
           "flux rtl", "flux task", "flux run", "bash", "sh")
 _CLAUDE_DENY = ("--allowedTools", "Bash", "--disallowedTools", "AskUserQuestion", *(f"Bash({c}:*)" for c in DENIED))
-_OPENCODE_DENY = {"permission": {"bash": {"*": "allow", **{k: "deny" for c in DENIED for k in (c, f"{c} *")}}}}
+# D710: and paths outside its working folder -- the loop's own files, its log, an Ask's loop --
+# which OpenCode otherwise asks for, and `opencode run` cannot ask: refused. The sandbox is the
+# boundary, and the shell it is allowed reads them anyway.
+_OPENCODE_DENY = {"permission": {"external_directory": "allow",
+                                 "bash": {"*": "allow", **{k: "deny" for c in DENIED for k in (c, f"{c} *")}}}}
 
 PRESETS: dict[str, dict[str, Any]] = {
     "claude": {"argv": ("claude", "-p", "--permission-mode", "acceptEdits", "--output-format", "stream-json",
@@ -651,6 +655,9 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     cmd = [t.format(**_inline(subs, workdir)) for t in argv]
     if spec.add_dir and subs.get("workbench"):
         cmd += [*spec.add_dir, subs["workbench"]]  # its real path: a tool that checks it sees past the link (D677)
+    home = subs.get("home")
+    if spec.add_dir and home and home != "." and not Path(home).resolve().is_relative_to(Path(str(workdir)).resolve()):
+        cmd += [*spec.add_dir, str(Path(home).resolve())]   # D710: the loop's folder, read from outside the workdir
     if shutil.which(cmd[0]) is None and not Path(cmd[0]).is_file():
         return Turn(False, 127, "", stderr=f"{cmd[0]} is not on PATH (the coding agent named by the document)")
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise

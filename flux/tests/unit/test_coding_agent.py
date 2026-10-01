@@ -288,6 +288,7 @@ def test_opencode_is_denied_the_design_tools_in_its_inline_config():
     env = _config_env(spec, {"OPENCODE_CONFIG_CONTENT": '{"permission": {"edit": "allow"}, "model": "m"}'})
     cfg = json.loads(env["OPENCODE_CONFIG_CONTENT"])
     assert cfg["model"] == "m" and cfg["permission"]["edit"] == "allow"
+    assert cfg["permission"]["external_directory"] == "allow", "D710: `opencode run` cannot ask for a path outside its folder"
     bash = cfg["permission"]["bash"]
     assert list(bash)[0] == "*" and bash["*"] == "allow"            # first: a later, narrower rule wins
     assert bash["yosys"] == bash["yosys *"] == bash["flux rtl *"] == "deny" and len(bash) == 1 + 2 * len(DENIED)

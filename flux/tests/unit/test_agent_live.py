@@ -129,3 +129,23 @@ def test_a_claude_turn_stopped_before_its_result_keeps_its_session():
               {"type": "assistant", "session_id": "s-9", "message": {"content": [{"type": "text", "text": "working"}]}}]
     text, session = _parse("claude", "".join(json.dumps(e) + "\n" for e in events))
     assert session == "s-9"
+
+
+def test_claude_is_given_the_loops_folder_when_it_works_outside_it(tmp_path):
+    """D710: an Ask works in `runs/asks/<id>/` and reads the loop around it; Claude Code reads
+    outside its working folder only through --add-dir."""
+    from dataclasses import replace
+
+    argv_file = tmp_path / "argv.json"
+    fake = tmp_path / "fake_claude.py"
+    fake.write_text(f"import json, sys\njson.dump(sys.argv[1:], open({str(argv_file)!r}, 'w'))\n")
+    loop = tmp_path / "loop"
+    work = loop / "runs" / "asks" / "1"
+    work.mkdir(parents=True)
+    spec = AgentSpec("fake", (sys.executable, str(fake)), None, "text", timeout_s=30)
+    spec = replace(spec, add_dir=("--add-dir",))
+    run_turn(spec, spec.argv, {"prompt": "p", "name": "answer", "home": str(loop)}, workdir=work)
+    got = json.loads(argv_file.read_text())
+    assert got[-2:] == ["--add-dir", str(loop.resolve())]
+    run_turn(spec, spec.argv, {"prompt": "p", "name": "answer", "home": str(work / "inner")}, workdir=work)
+    assert "--add-dir" not in json.loads(argv_file.read_text()), "a home inside the workdir needs nothing"

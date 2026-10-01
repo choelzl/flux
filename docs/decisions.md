@@ -1594,3 +1594,51 @@ the topics above.
     - the exit and the ends at its end;
     - a timeout keeping what was printed;
     - a byte that is not UTF-8.
+- **D710: the web interface tested end to end in a real browser, and what that test found.**
+  - `flux/tests/e2e/web_ui.py`:
+    - It starts its own `flux serve` (temporary data; users ada as admin, bob and cy) and drives
+      headless Firefox over Marionette, with no extra packages.
+    - 105 checks: login refused and accepted (" Bob "); New loop's three ways; upload; every tab
+      with its breadcrumb; Files and `.gitignore`; Direct edit, with its diff and the loader's
+      refusal; variables; sharing to watch; start, Live, stop, results; a watcher's view; the
+      admin tabs; the dark theme across a reload.
+    - Every page is watched for script errors, unhandled rejections and red notices.
+    - Run twice in a row: 105 of 105 both times.
+  - Key insight about driving the page: a hash change keeps the document, so "wait for X" is
+    satisfied by the page being left.
+    - `page()` waits until the old content is gone, and redraws a page that is already shown.
+    - `button()` never takes a tab for a button (the Upload tab and the Upload button share
+      their label), and waits for a button busy with its last click.
+  - Found and fixed in the interface:
+    - A document that is not YAML made `GET /document` fail with a 500: `views()` raised.
+      - Now it is said with the loader's words (`not valid YAML (line, column)`), `raw` is
+        None, and saving merges onto `{}`.
+      - The configurator does not open its form on it, since saving would write over the file;
+        it points to Direct edit.
+    - Direct edit saved a document the loader refuses and said "saved"; the user learned it at
+      Start. Now the refusal is shown above the editor when the document is opened and when it
+      is saved, with a warning notice.
+  - Unit tests:
+    - `test_web_document_refused`.
+    - Two tests that failed only under the full parallel suite now allow for a loaded machine:
+      the timed-out tool gets 6 s to start; the Ask handshake waits up to 120 s on each side,
+      ending as soon as it can.
+- **D711: an agent reads the loop's files from outside its working folder.**
+  - Key insight: an Ask works in `runs/asks/<id>/`, so the loop's log, document and record are
+    outside its working folder; a loop's agent reads `{home}` from its trace folder.
+    - OpenCode asks for an `external_directory` path, and `opencode run` cannot ask: refused,
+      with a permission error. It worked on this machine only because its own
+      `~/.config/opencode` allows it.
+    - Claude Code reads outside its folder only through `--add-dir`.
+  - Rules:
+    - Flux's OpenCode permissions (merged into `OPENCODE_CONFIG_CONTENT`) allow
+      `external_directory`. The sandbox is the boundary, and the shell it is allowed reads
+      these files anyway.
+    - Claude Code is given `--add-dir <home>` when the loop's folder is not inside its working
+      folder, as the workbench already is.
+  - Live: a consult with OpenCode, its working folder inside the loop, quoted `runs/loop.log`.
+    With `external_directory` forced back to "ask", this OpenCode version still read the file
+    through its allowed shell, so the reported refusal was not reproduced here. The fix removes
+    the dependence on a machine's own OpenCode config.
+  - Tests: `test_coding_agent` (`external_directory` allowed) and `test_agent_live` (`--add-dir`
+    given for a loop around the workdir, not for one inside it).
