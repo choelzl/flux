@@ -780,8 +780,11 @@ def _rig_for(task: TaskSpec, caller: "Roles | None") -> "Roles":
 
 
 def _point_name(point: dict[str, Any]) -> str:
-    """A candidate's name from its point: the values joined, or a digest when that is long."""
-    name = "-".join(str(v) for v in point.values())
+    """A candidate's name from its point: the values joined, or a digest when that is long. A
+    value that is not a word by itself (a number, a flag, a letter) carries its knob (D743):
+    `list_sieve-wheel=1`, not `list_sieve-1`."""
+    name = "-".join(str(v) if isinstance(v, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.]{2,}", v) else f"{k}={v}"
+                    for k, v in point.items())
     if len(name) <= 60:
         return name
     return "p" + hashlib.sha1(json.dumps(point, sort_keys=True, default=str).encode()).hexdigest()[:12]

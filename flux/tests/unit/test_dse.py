@@ -137,7 +137,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
     assert prob.roles().orchestrator.name == "montecarlo" and prob.roles().orchestrator.samples == 4
     assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 point(s): x[3] x y[2]")
                for line in describe_flow(task, prob))
-    assert prob.instantiate(points(task.space)[:2], None)[1].name == "1-b"
+    assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
     with pytest.raises(TaskError, match="registered: anneal, control, genetic"):
         TaskSpec.from_dict({**doc, "flow": {"dse": "hillclimb"}})
     with pytest.raises(TaskError, match="space.y: a non-empty list"):

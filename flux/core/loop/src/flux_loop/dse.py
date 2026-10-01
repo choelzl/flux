@@ -245,7 +245,9 @@ class Policy(Rules):
             fresh.append(p)
         # D739: points, not designs -- a pass makes the ones it takes (`instantiate_taken`), so a
         # sweep's 6 designs are written over its 6 passes, not all in the first
-        return [Candidate(name="-".join(str(v) for v in p.values()), knobs=dict(p),
+        from .document import _point_name
+
+        return [Candidate(name=_point_name(p), knobs=dict(p),
                           meta={"strategy": label or self.tag, POINT: True}) for p in fresh]
 
     def objective(self, problem: Any, state: Any) -> tuple[str, float] | None:

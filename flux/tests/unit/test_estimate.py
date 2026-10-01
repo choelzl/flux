@@ -68,7 +68,7 @@ def test_the_surrogate_estimates_nothing_until_the_record_has_rows_then_skips(tm
     assert _tool_runs(tmp_path) == [1, 2, 3], "the three estimated to fail never reached the tool"
     assert out.provenance["estimates"] == {"place": {"skipped": 3, "measured": 0}}
     why = dict(out.refused)
-    assert why["4"].startswith("place: estimated cost 40 fails cost <= 35 (the cutoff) by more than 5%"), why
+    assert why["x=4"].startswith("place: estimated cost 40 fails cost <= 35 (the cutoff) by more than 5%"), why
     assert any("place: 3 estimated to fail, skipped" in m for m in said)
     from flux_loop.task import task_report_lines
 
@@ -84,7 +84,7 @@ def test_a_command_estimator_skips_past_the_margin_and_its_estimate_is_on_the_ro
     # 35 with a 10% margin is 38.5: an estimate on the boundary runs, one past it is skipped
     assert _tool_runs(tmp_path) == [1, 2, 3]
     assert out.provenance["estimates"] == {"place": {"skipped": 1, "measured": 3}}
-    assert "estimated cost 38.6 fails cost <= 35 (the cutoff) by more than 10%" in dict(out.refused)["4"]
+    assert "estimated cost 38.6 fails cost <= 35 (the cutoff) by more than 10%" in dict(out.refused)["x=4"]
     rows = problem.open_records(request_for(problem.task, db=str(tmp_path / "e.db")), lambda _m: None).known_rows(stage="place")
     got = {r.candidate["x"]: (r.metrics["cost"], r.candidate["meta"]["provenance"]["estimate"]) for r in rows}
     assert got[1] == (10.0, {"cost": 10.0}) and got[3] == (30.0, {"cost": 38.5}), "measured beside its estimate"
@@ -98,7 +98,7 @@ def test_the_model_estimates_against_an_objective_limit_and_no_model_estimates_n
     model = ScriptedProposer([reply])
     out, _p, _s = _run(tmp_path, doc, proposer=model)
     assert _tool_runs(tmp_path) == [1, 2]
-    assert "fails cost <= 25 (the objective's limit)" in dict(out.refused)["3"]
+    assert "fails cost <= 25 (the objective's limit)" in dict(out.refused)["x=3"]
     assert "ESTIMATE what the place stage will measure (cost)" in model.prompts[0]
     (tmp_path / "tool.log").unlink()
     out, _p, _s = _run(tmp_path, doc, proposer=None, db="none.db")

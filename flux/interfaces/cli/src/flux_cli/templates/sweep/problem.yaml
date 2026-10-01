@@ -7,6 +7,8 @@ statement: >-
 language: python
 
 space:
+  # list_sieve: a list of flags, crossed out one multiple at a time; slice_sieve: a bytearray,
+  # crossed out a slice at a time; odd_sieve: the same over odd numbers only (half the memory)
   algorithm: [list_sieve, slice_sieve, odd_sieve]
   wheel: [0, 1]                         # skip even trial factors (list_sieve only; the others ignore it)
 

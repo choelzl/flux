@@ -185,10 +185,10 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
     doc = {"id": "front", "statement": "a trade", "space": {"x": [1, 2, 3]}, "gate": {"test": ["true"]},
            "stages": [{"name": "run", "command": stage, "metrics": ["speed", "size"]}],
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
-           "flow": {"dse": "sweep", "select": {"agent": _agent(tmp_path, "good", {"pick": "1", "why": "the smallest"})}}}
+           "flow": {"dse": "sweep", "select": {"agent": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})}}}
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
                    LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
-    assert out.decision.name == "1" and "the agent chose 1 among 3 ties: the smallest" in out.decided_by
+    assert out.decision.name == "x=1" and "the agent chose x=1 among 3 ties: the smallest" in out.decided_by
 
 
 def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path):

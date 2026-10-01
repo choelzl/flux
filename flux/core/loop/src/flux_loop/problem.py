@@ -223,7 +223,9 @@ class OrchestratorRole(_Role):
         take. The default keeps a point as knobs, named by its values; a world that generates
         text from a point (RTL from a configuration) generates -- and may verify -- it here,
         the whole batch at once."""
-        return [Candidate(name="-".join(str(v) for v in p.values()), knobs=dict(p)) for p in points]
+        from .document import _point_name
+
+        return [Candidate(name=_point_name(p), knobs=dict(p)) for p in points]
 
     def subgoals(self) -> list[str]:
         """The parts to divide into (operators, fabrics, ...) in default order,
