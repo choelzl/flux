@@ -1504,3 +1504,21 @@ the topics above.
       - the agent by default (admin, user, refused value);
       - the programs (admin only, refused value, folder on PATH).
     - `test_web_models` lists the new group.
+- **D706: a home path copied for each run is never hidden by a read-only mount.**
+  - Key insight: Podman and Docker mount by destination, deepest last. A read-only mount at or
+    below a copied home path lands on top of the copy, so the run sees the host's read-only files,
+    not its writable copy. This happens with a PATH directory such as a modified OpenCode's `bin`
+    inside its copied folder, or with a home path given both ways. A read-only folder above the
+    copy hides it too.
+  - Rules (`container_argv`):
+    - A read-only mount equal to or inside a copied path (a PATH directory, a link's target, a
+      read-only home path) is dropped. The copy holds the same files, writable.
+    - A copied path below a read-only mount is mounted again from the sandbox home, at its own
+      path, on top of it.
+  - Live, in Podman: with a copied folder whose `bin/` is on PATH, and a second copied folder
+    inside a read-only PATH folder:
+    - The copy reads and writes, and the host's file is unchanged.
+    - The tool in the copied `bin/` runs.
+    - The copy under the read-only folder is visible.
+  - Tests: `test_sandbox_config` (dropped inside, mounted again above, other PATH folders
+    unchanged).

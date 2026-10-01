@@ -47,6 +47,32 @@ def test_extra_home_paths_are_mounted_or_copied_and_never_leave_home(tmp_path, m
     assert (app / "home/.mycode/creds/token.json").read_text() == '{"t": 1}', "a folder of credentials, copied whole"
 
 
+def test_a_copied_home_path_is_never_hidden_by_a_read_only_mount(tmp_path, monkeypatch):
+    """D706: a PATH directory inside a copied folder is not mounted (the copy holds it); one above
+    a copied folder is, with the copy mounted again on top of it."""
+    home = tmp_path / "home"
+    for d in (".mycode/creds/bin", ".tools/bin", ".tools/creds", "other/bin"):
+        (home / d).mkdir(parents=True)
+    (home / ".mycode/creds/token.json").write_text("{}")
+    (home / ".tools/creds/key").write_text("k")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("FLUX_SANDBOX_HOME_COPY", ".mycode/creds,.tools/creds")
+    monkeypatch.setenv("FLUX_SANDBOX_HOME_RO", ".mycode/creds/bin")
+    monkeypatch.setenv("PATH", os.pathsep.join([f"{home}/.mycode/creds/bin", f"{home}/.tools", f"{home}/other/bin",
+                                                os.environ["PATH"]]))
+    args = types.SimpleNamespace(file=str(tmp_path / "x.problem.yaml"), db=None, out=None, json=None)
+    (tmp_path / "x.problem.yaml").write_text("id: x\nstatement: s\n")
+    cmd = sandbox.container_argv(["flux"], args, "task run", "flux-t", None, "docker")
+    vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
+    sh = sandbox.app_dir(args, "task run") / "home"
+    assert not any(v.startswith(f"{home}/.mycode/creds") for v in vols), "inside the copy: not mounted over it"
+    assert f"{home}/.tools:{home}/.tools:ro" in vols, "a folder above a copy: still mounted"
+    assert f"{sh}/.tools/creds:{home}/.tools/creds" in vols, "... and the copy again on top of it"
+    assert f"{home}/other/bin:{home}/other/bin:ro" in vols
+    assert (sh / ".mycode/creds/token.json").is_file() and (sh / ".tools/creds/key").read_text() == "k"
+
+
 def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))

@@ -260,7 +260,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Home files:** paths inside the home folder mounted read-only (an agent's configuration) or
     copied in before each run (credentials an agent may refresh: the copy changes, the original
     does not). Always: `.config/opencode` and `.opencode` read-only; Claude Code's and OpenCode's
-    credentials copied.
+    credentials copied. A copied path wins: a PATH folder or read-only path at or inside it is
+    not mounted over it, and a read-only folder above it gets the copy mounted on top.
   - From the command line the same is set by `FLUX_SANDBOX_HOME_RO`, `FLUX_SANDBOX_HOME_COPY`
     (comma-separated, relative to the home folder), `FLUX_SANDBOX_NET=allowlist` and
     `FLUX_SANDBOX_ALLOW`.

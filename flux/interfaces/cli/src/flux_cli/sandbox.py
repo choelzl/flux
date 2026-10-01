@@ -265,6 +265,14 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
     home, sh = _home(), _sandbox_home(app)
+    # D706: a home path copied for each run is the run's copy. A read-only mount of it, or of a
+    # folder inside it (a PATH directory, a link's target), would hide that copy: dropped. A
+    # read-only folder above it would hide it too: the copy is mounted again on top of it.
+    copied = [str(home / rel) for rel in home_copy() if (sh / rel).exists()]
+    ro = [p for p in ro if not any(p == c or p.startswith(c + "/") for c in copied)]
+    keep_ro = [str(home / rel) for rel in home_ro() if (home / rel).exists()
+               and not any(str(home / rel) == c or str(home / rel).startswith(c + "/") for c in copied)]
+    over = [c for c in copied if any(c.startswith(p + "/") for p in ro + keep_ro)]
     for p in ro + rw:                                         # mount points under HOME: made by us, not by the engine as root
         if p.startswith(str(home) + "/"):
             (sh / Path(p).relative_to(home)).mkdir(parents=True, exist_ok=True)
@@ -293,9 +301,10 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     cmd += ["-v", f"{sh}:{home}"]                              # HOME: the application's
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
-    for rel in home_ro():
-        if (home / rel).exists():
-            cmd += ["-v", f"{home / rel}:{home / rel}:ro"]
+    for p in keep_ro:
+        cmd += ["-v", f"{p}:{p}:ro"]
+    for c in over:
+        cmd += ["-v", f"{sh / Path(c).relative_to(home)}:{c}"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
