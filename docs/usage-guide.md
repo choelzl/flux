@@ -165,7 +165,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Code:** files, a design's source and the code in agent prompts are highlighted (YAML,
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
-- **A loop's page** (tabs: Overview, Live, Log, Timeline, Agent turns, Results, Files, Workbench):
+- **A loop's page** (tabs: Overview, Live, Log, Timeline, Agent turns, Results, Files, Workbench, Settings):
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits. A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
@@ -176,8 +176,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
-    thinking), output and the log's latest lines; following, it shows the running task, and at
-    rest the one that ended last. Standings show as counts, the frontier and the parts. It shows the
+    thinking) and output; following, it shows the running task, and at rest the one that ended
+    last. Under it, the log as it grows, coloured as the Log tab, problems only on demand. A line
+    docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when
+    the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
     Show one start or all; jump to the previous or next problem. It can follow (it pauses when
@@ -208,6 +210,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
     When an agent asks (`questions: operator`), the page shows the question and its time left,
     and the answer goes back to the agent.
+  - **Settings:** the loop's environment variables (over the user's and the server's, which are
+    listed under them), and its advanced settings: run in the sandbox or on the host, memory,
+    CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
+    creating a loop); everyone sees them.
+- **Environment variables:** the server's (Admin › Models and variables), a user's (Account), a
+  loop's (its Settings), applied in that order, a secret stored encrypted and never shown again.
+  They reach the run inside the sandbox whatever their names (`FLUX_SANDBOX_PASS`). The
+  sandbox's and the loop's own variables, the process's basics (`PATH`, `HOME`, `LD_*`, …) and
+  the model settings cannot be set this way.
 - **Usage:** the Account page gives your turns, time and tokens over all your loops; the Admin
   page, every user's.
 - **Streams:** the Live and Log tabs say whether their stream is live. A dropped stream is opened

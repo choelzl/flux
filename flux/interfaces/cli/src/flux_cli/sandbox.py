@@ -171,9 +171,11 @@ def _sandbox_home(app: Path) -> Path:
 
 
 def _env() -> dict[str, str]:
+    # D697: the variables `flux serve` set for this run on purpose pass, whatever their names
+    passed = {n for n in os.environ.get("FLUX_SANDBOX_PASS", "").split(",") if n}
     out = {}
     for k, v in os.environ.items():
-        if k in _DROP or (any(s in k.upper() for s in _SECRETISH) and not k.startswith("FLUX_")):
+        if k in _DROP or (any(s in k.upper() for s in _SECRETISH) and not k.startswith("FLUX_") and k not in passed):
             continue
         out[k] = v
     return out

@@ -80,6 +80,12 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert boxed[boxed.index("--network") + 1] == "none" and "HTTPS_PROXY=http://127.0.0.1:18080" in boxed
     labels = [c for c, prev in zip(cmd[1:], cmd) if prev == "--label"]
     assert labels == ["flux.sandbox=1"], "a run of this machine's user: no loop's label"
+    assert "GITHUB_TOKEN" not in env
+    monkeypatch.setenv("HF_TOKEN", "hf")
+    monkeypatch.setenv("FLUX_SANDBOX_PASS", "HF_TOKEN")                # D697: set on the web on purpose
+    passed = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
+    penv = {c.split("=", 1)[0]: c.split("=", 1)[1] for c, prev in zip(passed[1:], passed) if prev == "-e"}
+    assert penv["HF_TOKEN"] == "hf" and "GITHUB_TOKEN" not in penv
     monkeypatch.setenv("FLUX_SANDBOX_APP", "bob.x")
     web = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
     assert "flux.app=bob.x" in [c for c, prev in zip(web[1:], web) if prev == "--label"], "D695: the admin finds its loop"

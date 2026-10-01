@@ -1129,3 +1129,53 @@ the topics above.
     - folded charts;
     - the files panel, with golden.py taken away and flagged missing;
     - Account and Admin › Models.
+
+- **D697: the Live log and the note line, environment variables, a loop's advanced settings.**
+  - **Live:**
+    - The log is its own card under the task. It is coloured as the Log tab (problems, warnings,
+      starts), wraps, keeps the last 80 lines, follows the end, and has "problems only" and a
+      link to the Log tab.
+    - It is fed by the Log tab's own stream (`onLines`), not a second connection.
+    - The scroll to the end waits for layout (`requestAnimationFrame`); set at once, it landed
+      mid-way.
+  - **Notes:** the note card in the side column is gone. A line is docked at the bottom of the
+    Live tab, like a chat's.
+    - Enter sends, Shift+Enter breaks the line, and it grows to six lines.
+    - The notes sent so far fold above it.
+    - When the agent asks, the line shows the question and its time left, and Send becomes
+      Answer. The banner stays on the other tabs.
+  - **Environment variables:**
+    - Scopes, applied in order: the server's (admins), a user's, a loop's (its owner). They are
+      stored in the `server` table, secrets encrypted with the key of the model settings, and a
+      secret is only ever said to be "set".
+    - Names: `[A-Za-z_][A-Za-z0-9_]*`, at most 64. Refused: `FLUX_SANDBOX*` (a user must not take
+      a loop out of the sandbox), the loop's plumbing (`FLUX_CONFIG`, `FLUX_FEEDBACK_INBOX`,
+      `FLUX_TRACE_ROOT`, `FLUX_<AGENT>_ARGS/BIN`, `OPENCODE_CONFIG_CONTENT`), `PATH`, `HOME`,
+      `LD_*`, `PYTHON*`, `XDG_*`, `NIX_*`, and the model settings (set under Models).
+    - The sandbox drops secret-looking names that do not start with `FLUX_` (`*TOKEN*`, …), so a
+      variable set on the web would have vanished. `run_env` now lists the names it set in
+      `FLUX_SANDBOX_PASS`, and the sandbox passes those whatever their names.
+    - A deleted loop's variables and settings go with it.
+  - **Advanced settings** (`PUT /api/apps/{name}/advanced`, admins only, any owner's loop): run in
+    the sandbox or on the host, memory, CPUs, processes, scratch `/tmp` size.
+    - `sandbox_env` drops whatever the environment said about the sandbox, then sets it from the
+      server and the loop.
+    - A start on the host says so in the log line that marks it.
+    - Admins can set these when creating a loop. Everyone sees them on Settings; going on the
+      host asks for confirmation.
+  - **Live check:**
+    - A copy of the sweep whose bench prints `seed` and `token_len`, started from the web in
+      Podman, measured `seed=4242` (the loop's `SEED`) and `token_len=16` (the user's secret
+      `HF_TOKEN`, a name the sandbox drops unless passed).
+    - With the admin setting off, the next start ran on the host, and its log said so.
+
+  Tests (`test_web_env.py`):
+    - the scopes' order;
+    - secrets never sent back;
+    - nine refused names;
+    - `FLUX_SANDBOX_PASS`;
+    - a deleted loop's variables gone;
+    - advanced settings admin only, with size checks;
+    - `sandbox_env` overriding the environment's own.
+
+  Also tested: the sandbox passing a listed secret-looking name and still dropping an unlisted one.

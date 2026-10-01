@@ -27,7 +27,7 @@ __all__ = ["RunManager", "loop_files", "run_env"]
 _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
 
 
-def run_env(store: Store, user: User) -> dict[str, str]:
+def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     """The environment of a user's run or check (D684, D696): the server's, then the model
     settings the admin set for the server, then the user's own. A run never reads the server's
     flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, OpenCode,
@@ -56,7 +56,41 @@ def run_env(store: Store, user: User) -> dict[str, str]:
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
     _agents(env, web)
+    # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
+    # their names pass into the sandbox whatever they look like
+    names: list[str] = []
+    for scope in ("global", f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
+        for name, x in store.env(scope, reveal=True).items():
+            env[name] = x["value"]
+            names.append(name)
+    if names:
+        env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
     return env
+
+
+#: A loop's settings only an admin sets (D697), with what each does to its runs.
+ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memory limit (e.g. 16g)", "cpus": "CPUs (e.g. 8)",
+            "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)"}
+
+
+def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
+    return store.server_get(f"adv:{user_name}:{app}") or {}
+
+
+def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) -> None:
+    """The sandbox as the server and the loop's advanced settings say (D697)."""
+    for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE"):
+        env.pop(k, None)
+    if not server_sandbox:
+        return
+    if adv.get("sandbox") is False:
+        env["FLUX_SANDBOX"] = "0"                    # an admin's choice for this loop: on the host
+        return
+    env["FLUX_SANDBOX"] = "1"                        # a shared server runs nothing on the host
+    for key, var in (("memory", "FLUX_SANDBOX_MEMORY"), ("cpus", "FLUX_SANDBOX_CPUS"), ("pids", "FLUX_SANDBOX_PIDS"),
+                     ("tmp_size", "FLUX_SANDBOX_TMP_SIZE")):
+        if adv.get(key) not in (None, ""):
+            env[var] = str(adv[key])
 
 
 def _agents(env: dict[str, str], web: dict[str, str]) -> None:
@@ -121,14 +155,17 @@ class RunManager:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
-        env = {**run_env(self.store, user), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
+        env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         env.pop("FLUX_SANDBOX_ALLOW", None)
         if options.get("allow"):
             env["FLUX_SANDBOX_ALLOW"] = ",".join(str(h).strip() for h in options["allow"] if str(h).strip())
-        if self.sandbox:
-            env["FLUX_SANDBOX"] = "1"                       # a shared server runs nothing on the host
+        adv = advanced(self.store, user.name, app)
+        sandbox_env(env, self.sandbox, adv)
+        if adv.get("sandbox") is False and self.sandbox:
+            options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
+            + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else []) \
             + ([f"network {env['FLUX_SANDBOX_ALLOW']}"] if options.get("allow") else [])
         with open(files["log"], "a") as fh:
             fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {user.name} · {', '.join(said)} ──\n")

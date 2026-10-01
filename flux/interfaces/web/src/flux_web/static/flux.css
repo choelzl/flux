@@ -465,3 +465,19 @@ fieldset.set-group legend { font-weight: 600; padding: 0 6px; }
 @media (max-width: 560px) { .set-row { grid-template-columns: 1fr; } .set-row code.var { grid-column: 1; } }
 .set-groups { align-items: start; }
 fieldset.set-group { align-content: start; }
+
+/* D697: the Live log, the composer, settings */
+.live-wrap { display: grid; gap: 0; }
+.logview.mini { max-height: 300px; min-height: 160px; font-size: 11.8px; }
+.livelog-card .card-head { margin-bottom: 6px; }
+.composer { position: sticky; bottom: 0; z-index: 5; margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 -4px 18px rgba(0, 0, 0, .08); padding: 8px 10px; display: grid; gap: 6px; }
+.composer.asking { border-color: var(--warn); box-shadow: 0 -4px 18px color-mix(in srgb, var(--warn) 25%, transparent); }
+.composer-row { display: flex; gap: 8px; align-items: flex-end; }
+.composer-in { flex: 1; resize: none; min-height: 38px; max-height: 180px; line-height: 1.45; padding: 8px 10px; }
+.composer-ask:empty { display: none; }
+.composer-ask pre.question { margin: 4px 0 0; max-height: 160px; overflow: auto; }
+.composer-hist { max-height: 220px; overflow: auto; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+table.env td { vertical-align: top; overflow-wrap: anywhere; }
+table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
+.env-add { margin-top: 10px; align-items: center; }

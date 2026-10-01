@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -20,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import RunManager, loop_files, run_env
+from .runs import ADVANCED, RunManager, advanced, loop_files, run_env, sandbox_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -90,6 +91,20 @@ class Limit(BaseModel):
 
 class StopAll(BaseModel):
     now: bool = False
+
+
+class EnvVar(BaseModel):                  # D697
+    name: str
+    value: str | None = None
+    secret: bool = False
+
+
+class Advanced(BaseModel):
+    sandbox: bool = True
+    memory: str | None = Field(default=None, max_length=16)
+    cpus: str | None = Field(default=None, max_length=8)
+    pids: int | None = None
+    tmp_size: str | None = Field(default=None, max_length=16)
 
 
 class Settings(BaseModel):
@@ -347,6 +362,64 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(a.name, "running limit", f"{uname}: {body.max_running if body.max_running is not None else 'the default'}")
         return {"max_running": body.max_running}
 
+    # ---- environment variables (D697): the server's (admins), a user's, a loop's
+    def _env_list(scope: str) -> list[dict[str, Any]]:
+        return [{"name": k, **v} for k, v in sorted(store.env(scope).items())]
+
+    def _set_env(scope: str, body: EnvVar, who: User, what: str) -> list[dict[str, Any]]:
+        try:
+            store.set_env(scope, body.name, body.value, body.secret)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(who.name, "variable" if body.value is not None else "variable removed", f"{what}: {body.name}")
+        return _env_list(scope)
+
+    @app.get("/api/admin/env")
+    def global_env(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        return _env_list("global")
+
+    @app.put("/api/admin/env")
+    def put_global_env(body: EnvVar, a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        return _set_env("global", body, a, "the server")
+
+    @app.get("/api/env")
+    def my_env(user: User = Depends(user_of)) -> dict[str, Any]:
+        """The user's variables, and the server's they come after (names only for a secret)."""
+        return {"mine": _env_list(f"user:{user.id}"), "server": _env_list("global")}
+
+    @app.put("/api/env")
+    def put_my_env(body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        return _set_env(f"user:{user.id}", body, user, user.name)
+
+    @app.get("/api/apps/{name}/env")
+    def loop_env(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A loop's variables, with the user's and the server's under them, and its advanced settings."""
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        return {"loop": _env_list(f"loop:{whose.name}:{name}"), "user": _env_list(f"user:{whose.id}"),
+                "server": _env_list("global"), "advanced": advanced(store, whose.name, name), "advanced_said": ADVANCED,
+                "sandboxed_server": sandbox, "can_advance": user.admin}
+
+    @app.put("/api/apps/{name}/env")
+    def put_loop_env(name: str, body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        loop_of(name, user)
+        return _set_env(f"loop:{user.name}:{name}", body, user, f"{user.name}/{name}")
+
+    @app.put("/api/apps/{name}/advanced")
+    def put_advanced(name: str, body: Advanced, owner: str | None = None, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """A loop's settings only an admin sets (D697): off the sandbox, its limits."""
+        _w, whose, _d, _run = loop_of(name, a, owner)
+        for k, v in (("memory", body.memory), ("tmp_size", body.tmp_size)):
+            if v and not re.fullmatch(r"\d+(\.\d+)?[kmgKMG]?", v):
+                raise HTTPException(400, f"{k}: a size such as 16g")
+        if body.cpus and not re.fullmatch(r"\d+(\.\d+)?", body.cpus):
+            raise HTTPException(400, "cpus: a number such as 8")
+        if body.pids is not None and not 64 <= body.pids <= 1_000_000:
+            raise HTTPException(400, "pids: from 64 to 1000000")
+        got = {k: v for k, v in body.model_dump().items() if v not in (None, "") and not (k == "sandbox" and v is True)}
+        store.server_set(f"adv:{whose.name}:{name}", got or None)
+        store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
+        return {"advanced": got}
+
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return store.audit_log()
@@ -472,6 +545,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             ws(user).delete(name)
         except WorkspaceError as exc:
             raise fail(exc) from exc
+        store.server_set(f"env:loop:{user.name}:{name}", None)        # D697: its variables and settings go with it
+        store.server_set(f"adv:{user.name}:{name}", None)
         store.audit(user.name, "delete app", name)
         return {"ok": name}
 
@@ -545,9 +620,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
-        if sandbox:
-            env["FLUX_SANDBOX"] = "1"
+        env = {**run_env(store, user, name), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
+        sandbox_env(env, sandbox, advanced(store, user.name, name))
         digest = w.inputs_digest(name)
         try:
             r = subprocess.run([shutil.which("flux") or sys.argv[0], "task", "check", str(d / doc)], cwd=str(d), env=env,

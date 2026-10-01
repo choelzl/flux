@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -51,6 +52,24 @@ GROUPS: dict[str, dict[str, Any]] = {
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
+
+
+#: Names a run's variables never take (D697): the sandbox and the loop's own plumbing, the
+#: process's basics, and the model settings (set under Models).
+_RESERVED_ENV = re.compile(r"(FLUX_SANDBOX.*|FLUX_CONFIG|FLUX_FEEDBACK_INBOX|FLUX_RUN_LOG|FLUX_TRACE_ROOT|FLUX_SANDBOXED|"
+                           r"FLUX_LLM_REMOTE|FLUX_[A-Z]+_ARGS|FLUX_[A-Z]+_BIN|OPENCODE_CONFIG_CONTENT|PATH|HOME|PWD|USER|SHELL|"
+                           r"TMPDIR|TMP|TEMP|LD_.*|PYTHON.*|XDG_.*|NIX_.*)")
+
+
+def check_env_name(name: str) -> str:
+    name = str(name or "").strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name):
+        raise ValueError(f"{name!r}: a variable's name is letters, digits and _, not starting with a digit")
+    if _RESERVED_ENV.fullmatch(name.upper()):
+        raise ValueError(f"{name} is the sandbox's or the loop's own; it cannot be set here")
+    if name in PUBLIC_SETTINGS + SECRET_SETTINGS:
+        raise ValueError(f"{name} is a model setting: set it under Models")
+    return name
 
 
 @dataclass
@@ -277,6 +296,30 @@ class Store:
                 db.execute("DELETE FROM server WHERE key = ?", (key,))
             else:
                 db.execute("INSERT OR REPLACE INTO server VALUES (?, ?)", (key, json.dumps(value)))
+
+    # ---- environment variables of runs (D697): the server's, a user's, a loop's
+    def env(self, scope: str, reveal: bool = False) -> dict[str, dict[str, Any]]:
+        """{name: {value, secret}} of a scope ("global", "user:<id>", "loop:<user>:<app>"); a
+        secret's value is "set" unless `reveal` (for runs only)."""
+        got = self.server_get(f"env:{scope}") or {}
+        out = {}
+        for name, x in got.items():
+            val = x["value"]
+            if x.get("secret"):
+                val = self._fernet().decrypt(val.encode()).decode() if reveal else "set"
+            out[name] = {"value": val, "secret": bool(x.get("secret"))}
+        return out
+
+    def set_env(self, scope: str, name: str, value: str | None, secret: bool = False) -> None:
+        name = check_env_name(name)
+        got = self.server_get(f"env:{scope}") or {}
+        if value is None:
+            got.pop(name, None)
+        else:
+            if len(value) > 20000:
+                raise ValueError("a value of at most 20000 characters")
+            got[name] = {"value": self._fernet().encrypt(value.encode()).decode() if secret else value, "secret": bool(secret)}
+        self.server_set(f"env:{scope}", got or None)
 
     # ---- audit
     def audit(self, user: str | None, action: str, detail: str = "") -> None:
