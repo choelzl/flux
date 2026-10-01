@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import ADVANCED, HOST_RULE, RunManager, advanced, login_path, loop_files, machine_env, run_env, sandbox_env
+from .runs import ADVANCED, HOST_RULE, RunManager, advanced, home_ready, login_path, loop_files, machine_env, run_env, sandbox_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -330,6 +330,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _external(user)
         try:
             cmd = logins.command(agent, store.server_settings(reveal=True))
+            home_ready(store, user)
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
             sandbox_env(env, sandbox, {})
             machine_env(env, store.server_get("sandbox") or {}, {}, [])       # the network rules apply to everyone
@@ -758,6 +759,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     # ---- a problem written or revised by an agent (D704)
     def _author_env(whose: User, name: str, by: User | None = None) -> dict[str, str]:
+        home_ready(store, by or whose)
         env = {**run_env(store, whose, name, home_for=by), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
@@ -1105,6 +1107,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
+        home_ready(store, user)
         env = {**run_env(store, whose, name, home_for=user), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)

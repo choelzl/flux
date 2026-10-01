@@ -101,7 +101,7 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     if names:
         env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
     env["FLUX_SANDBOX_REFUSALS"] = str(store.refusals_file)      # D708: hosts its sandbox refused, for the audit
-    env["FLUX_SANDBOX_HOME"] = str(home_ready(store, home_for or user))   # D744: every user's own home
+    env["FLUX_SANDBOX_HOME"] = str(store.home_of(home_for or user))   # D744: every user's own home (started by `home_ready`)
     return env
 
 
@@ -282,6 +282,7 @@ class RunManager:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
+        home_ready(self.store, by)                            # D744: started before anything runs in it, not on a page's look
         env = {**run_env(self.store, user, app, home_for=by), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         adv = advanced(self.store, user.name, app)
