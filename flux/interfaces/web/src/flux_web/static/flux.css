@@ -189,6 +189,34 @@ pre.log.small { max-height: 34vh; margin-top: 12px; }
 .tree .kidsn { color: var(--muted); font-size: 11px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; }
 .tree .dur { color: var(--muted); margin-left: auto; padding-left: 8px; flex: none; }
 .tree .kids { margin-left: 13px; border-left: 1px solid var(--line); padding-left: 5px; }
+/* D723: the tasks as a graph, and the Tree | Graph switch */
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; margin: 0; }
+.seg button + button { border-left: none; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+.seg button.on { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.tgraph { overflow: auto; max-height: calc(100vh - 250px); min-height: 420px; }
+.tgraph-svg { display: block; font-family: var(--mono); font-size: 12px; }
+.tgraph-svg .edge { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.tgraph-svg .gnode { cursor: pointer; }
+.tgraph-svg .gnode:focus { outline: none; }
+.tgraph-svg .gnode rect { fill: var(--panel); stroke: var(--line); }
+.tgraph-svg .gnode:hover rect, .tgraph-svg .gnode:focus-visible rect { stroke: var(--accent); }
+.tgraph-svg .gnode.sel rect { fill: color-mix(in srgb, var(--accent) 15%, var(--panel)); stroke: var(--accent); stroke-width: 1.5; }
+.tgraph-svg .gnode.hit rect { fill: color-mix(in srgb, var(--warn) 22%, var(--panel)); }
+.tgraph-svg .gnode.failed rect { stroke: color-mix(in srgb, var(--bad) 60%, var(--line)); }
+.tgraph-svg .nm { fill: var(--ink); }
+.tgraph-svg .failed .nm { fill: var(--bad); }
+.tgraph-svg .dur { fill: var(--muted); font-size: 11px; }
+.tgraph-svg .st { font-size: 11px; }
+.tgraph-svg .done .st { fill: var(--ok); }
+.tgraph-svg .failed .st { fill: var(--bad); }
+.tgraph-svg .running .st { fill: var(--run); animation: pulse 1.4s ease-in-out infinite; }
+.tgraph-svg .running rect { stroke: color-mix(in srgb, var(--run) 55%, var(--line)); }
+.tgraph-svg .tog circle { fill: var(--soft); stroke: var(--line); }
+.tgraph-svg .tog text { fill: var(--muted); font-size: 12px; }
+.tgraph-svg .tog:hover circle { stroke: var(--accent); }
 .standings h2 { margin-bottom: 8px; }
 .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; }
 .stats small { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .05em; }
@@ -481,6 +509,19 @@ fieldset.set-group { align-content: start; }
 table.env td { vertical-align: top; overflow-wrap: anywhere; }
 table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
 .env-add { margin-top: 10px; align-items: center; }
+/* D723: sharing, one grid -- who, what they may do, the action */
+.share-grid { display: grid; grid-template-columns: minmax(150px, 240px) 150px max-content; gap: 8px 14px; align-items: center; }
+.share-grid select { width: 100%; }
+.share-grid button { min-width: 74px; justify-content: center; }
+.share-who { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.share-who .strong { overflow: hidden; text-overflow: ellipsis; }
+.share-av { width: 26px; height: 26px; border-radius: 50%; flex: none; display: inline-grid; place-items: center; font-size: 12px; font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--accent); }
+.share-add-sep { grid-column: 1 / -1; border-top: 1px solid var(--line); margin: 4px 0 2px; }
+.share-grid > .share-add-sep:first-child { display: none; }
+.share-none { margin: 0 0 10px; }
+.share-note { margin: 12px 0 0; }
+@media (max-width: 560px) { .share-grid { grid-template-columns: minmax(0, 1fr) 118px max-content; gap: 8px 8px; } }
 
 /* D698: the sandbox's settings */
 .sb-allow { display: grid; gap: 8px; margin-top: 10px; }
@@ -616,11 +657,7 @@ body:has(.composer) .toasts { bottom: 150px; }
 .subrow:empty { display: none; }
 .subrow .subtabs { margin-bottom: 12px; }
 /* D719: start a new loop from an example */
-details.examples > summary { cursor: pointer; list-style: none; }
-details.examples > summary::-webkit-details-marker { display: none; }
-details.examples > summary::before { content: "▸ "; color: var(--muted); }
-details.examples[open] > summary::before { content: "▾ "; }
-.examples-body { margin-top: 12px; display: grid; gap: 8px; }
+.examples-body { display: grid; gap: 8px; }
 .examples-body .subtabs { margin: 0; }
 .examples-body .row { align-items: flex-end; gap: 10px; }
 .set-tabs { margin-bottom: 10px; }

@@ -135,11 +135,11 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
-- **New loop**, three ways (D704): **Configurator** (below; D719: **Start from an example** at its top
-  makes a working loop of one of `flux new`'s kinds -- sweep, tune, python, rtl, rtl-sweep -- with its
-  files, opened in Settings › Problem; the form's **Loop name** is the loop's name and its problem's
-  id; the checklist shows what is left to do; who does each step is folded), **Upload** (a folder, files or a
-  `.zip`), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
+- **New loop**, four ways (D704): **Configurator** (below; the form's **Loop name** is the loop's
+  name and its problem's id; the checklist shows what is left to do; who does each step is folded),
+  **Upload** (a folder, files or a `.zip`), **Example** (D719, a tab of its own since D723: a working
+  loop of one of `flux new`'s kinds -- sweep, tune, python, rtl, rtl-sweep -- with its files, opened
+  in Settings › Problem), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
   a reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex or Flux's own
   model; one not installed says so). The agent writes the problem document and the files it names
   -- `flux ask --no-run` in the sandbox, with your model settings -- and the document is checked;
@@ -198,7 +198,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
-  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`. By
+  - **Live:** the task tree as the TUI shows it, from the run's journal `events.jsonl`, or as a
+    graph (D723: **Tree | Graph**, remembered per browser; each task a box, left to right by
+    depth, its ± opening or closing it; the same selection, collapse, search and follow). By
     default it follows the running task (an agent first) and collapses finished branches, and it
     can be searched. Select a task for its parameters, live fields (an agent's commands, output,
     thinking) and output; following, it shows the running task, and at rest the one that ended
@@ -216,7 +218,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
     Only the lines in view are drawn, so a log of a hundred thousand lines scrolls as a short one
     (with wrap on, the last 3000).
-    Show one start or all; jump to the previous or next problem. It can follow (it pauses when
+    Show one start or all. It can follow (it pauses when
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in the lane of its kind: agent, model, gate, a
@@ -339,7 +341,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   A user sees only their own loops and those shared with them. An admin manages users, sees every
   application (read only) and every run (and may stop it), and the audit trail. The audit also
   lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
-  host and port per run; a checkbox shows only those.
+  host and port per run. The audit narrows by what happened and by whom (D723), and searches
+  the details.
 - **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
   `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
   loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and

@@ -817,18 +817,26 @@ async function sharingCard(name, isOwner) {
   const sh = await api(`/apps/${enc(name)}/shares`).catch(() => null);
   if (!sh) return "";
   const set = async (user, perm) => { await api(`/apps/${enc(name)}/shares`, { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
-  const said = { watch: "watch: sees its runs and outputs", edit: "edit: also changes, starts and stops it" };
-  const rows = sh.shares.length ? h("table", { class: "list compact" }, h("tbody", {}, sh.shares.map(x => h("tr", {}, h("td", { class: "strong" }, x.user),
-      h("td", {}, isOwner ? h("select", { onchange: (e) => set(x.user, e.target.value) }, ["watch", "edit"].map(p => h("option", { value: p, selected: x.perm === p }, said[p])))
-        : h("span", { class: "pill" }, x.perm)),
-      h("td", { class: "right" }, isOwner ? act("Stop sharing", () => set(x.user, null), { cls: "small" }) : "")))))
-    : h("p", { class: "muted" }, "Shared with nobody.");
-  if (!isOwner) return card("Sharing", rows);
+  // D723: one grid -- who, what they may do, the action -- the row to add in the same columns
+  const CAN = { watch: "Can watch", edit: "Can edit" };
+  const access = (attrs, cur) => h("select", attrs, Object.entries(CAN).map(([p, label]) => h("option", { value: p, selected: cur === p }, label)));
+  const person = (u) => h("div", { class: "share-who" }, h("span", { class: "share-av", "aria-hidden": "true" }, u.slice(0, 1).toUpperCase()), h("span", { class: "strong" }, u));
+  const rows = sh.shares.flatMap(x => [person(x.user),
+    isOwner ? access({ "aria-label": `What ${x.user} may do`, onchange: (e) => set(x.user, e.target.value) }, x.perm) : h("span", { class: "pill" }, CAN[x.perm] || x.perm),
+    isOwner ? h("button", { type: "button", class: "small", onclick: () => set(x.user, null) }, "Remove") : h("span", {})]);
+  const none = h("p", { class: "muted share-none" }, isOwner ? "Only you: share it with someone below." : "Shared with nobody else.");
+  if (!isOwner) return card("Sharing", sh.shares.length ? h("div", { class: "share-grid" }, rows) : none);
   const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
-  const who = h("select", { id: "share-user" }, h("option", { value: "" }, free.length ? "a user…" : "no other user"), free.map(u => h("option", { value: u }, u)));
-  const how = h("select", { id: "share-perm" }, ["watch", "edit"].map(p => h("option", { value: p }, said[p])));
-  return card("Sharing", [h("p", { class: "muted" }, "Watch: they see its runs, log, results, turns and files. Edit: they also change its files and settings, start and stop it -- its runs use your model settings and keys, and the log says who started each."),
-    rows, h("div", { class: "row env-add" }, who, how, act("Share", async () => { if (!who.value) { toast("Choose a user.", "warn"); return; } await set(who.value, how.value); }, { cls: "primary small" }))]);
+  const who = h("select", { id: "share-user", "aria-label": "Share with" }, h("option", { value: "" }, free.length ? "Choose a user…" : "No other user"), free.map(u => h("option", { value: u }, u)));
+  const how = access({ id: "share-perm", "aria-label": "What they may do" }, "watch");
+  if (!free.length) who.disabled = how.disabled = true;
+  const add = act("Share", async () => { if (!who.value) { toast("Choose a user.", "warn"); return; } await set(who.value, how.value); }, { cls: "primary small" });
+  if (!free.length) add.disabled = true;
+  return card("Sharing", [
+    sh.shares.length ? "" : none,
+    h("div", { class: "share-grid" }, rows, h("div", { class: "share-add-sep" }), who, how, add),
+    h("p", { class: "muted small share-note" }, h("strong", {}, "Watch"), ": its runs, log, results, turns and files. ",
+      h("strong", {}, "Edit"), ": also its files and settings, and starting and stopping it; their runs use your model settings and keys, and the log says who started each.")]);
 }
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
@@ -1597,7 +1605,7 @@ async function loopPage(name, owner, path = "") {
 }
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
-    pick one from, and the previous or next problem to jump to (D692). */
+    pick one from (D692). */
 function logView(base, qs) {
   const lines = []; let partial = "", seen = 0;
   const listeners = [];                                   // D697: the Live tab's log follows the same stream
@@ -1697,22 +1705,6 @@ function logView(base, qs) {
     counted();
     later();
   }
-  /** The previous (-1) or next (+1) problem line from the middle of the view: scrolled to, flashed. */
-  function jump(dir) {
-    const bad = (l) => PROBLEM.test(l.text);
-    follow.checked = false;
-    const r = wrap.checked ? 0 : rowHeight();
-    if (!r) { toast("Turn wrap off to jump through the whole log.", "info", { timeout: 3000 }); return; }
-    const mid = Math.floor((box.scrollTop + box.clientHeight / 2) / r);
-    let at = -1;
-    if (dir > 0) { for (let i = mid + 1; i < shown.length; i++) if (bad(shown[i])) { at = i; break; } }
-    else { for (let i = Math.min(mid - 1, shown.length - 1); i >= 0; i--) if (bad(shown[i])) { at = i; break; } }
-    if (at < 0) { toast(dir > 0 ? "No later problem." : "No earlier problem.", "info", { timeout: 2500 }); return; }
-    box.scrollTop = at * r - box.clientHeight / 2;
-    paint();
-    const el = win.querySelector(`[data-n="${shown[at].n}"]`);
-    if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
-  }
   box.addEventListener("scroll", () => {                       // scrolling up pauses the follow
     const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
     if (!atEnd && follow.checked) follow.checked = false;
@@ -1726,10 +1718,7 @@ function logView(base, qs) {
   drawStarts();
   const bar = h("div", { class: "toolbar" }, startSel,
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
-    h("label", { class: "check" }, problems, "problems only"), filter,
-    h("div", { class: "actions" }, h("button", { class: "small", title: "The previous problem", onclick: () => jump(-1) }, "◀ problem"),
-      h("button", { class: "small", title: "The next problem", onclick: () => jump(1) }, "problem ▶")),
-    count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
+    h("label", { class: "check" }, problems, "problems only"), filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const pill = streamPill();
   bar.append(pill.el);
   const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
@@ -1737,7 +1726,8 @@ function logView(base, qs) {
            problem: (t) => PROBLEM.test(t) };
 }
 
-/** The live task tree: follow the running task, collapse what finished, search. */
+/** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
+    graph (D723), the same tasks, selection and collapse either way. */
 function liveTree(base, qs, onQuestion) {
   const nodes = new Map(), roots = [], standings = new Map();
   let selected = null, dirty = true;
@@ -1745,7 +1735,7 @@ function liveTree(base, qs, onQuestion) {
   const follow = h("input", { type: "checkbox", checked: true });
   const collapse = h("input", { type: "checkbox", checked: true });
   const search = h("input", { placeholder: "search tasks", class: "filter" });
-  const treeBox = h("div", { class: "tree" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
+  const treeBox = h("div", { class: "tree" }), graphBox = h("div", { class: "tgraph" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
   function onEvent(e) {
     if (e.ev === "hello") {                        // a new start: its tree begins afresh (D689)
       nodes.clear(); roots.length = 0; standings.clear(); open.clear(); selected = null; dirty = true;
@@ -1785,6 +1775,17 @@ function liveTree(base, qs, onQuestion) {
     if (!collapse.checked) return true;
     return running(n) || failedBelow(n);
   }
+  let mode = "tree";
+  try { mode = localStorage.getItem("flux-tasks-view") === "graph" ? "graph" : "tree"; } catch (_) { /* per browser, when it can */ }
+  const modeBtns = { tree: h("button", { type: "button", class: "small" }, "Tree"), graph: h("button", { type: "button", class: "small" }, "Graph") };
+  const setMode = (m) => {
+    mode = m;
+    try { localStorage.setItem("flux-tasks-view", m); } catch (_) {}
+    for (const [k, b] of Object.entries(modeBtns)) { b.classList.toggle("on", k === m); b.setAttribute("aria-pressed", String(k === m)); }
+    treeBox.hidden = m !== "tree"; graphBox.hidden = m !== "graph";
+    draw();
+  };
+  for (const [k, b] of Object.entries(modeBtns)) b.addEventListener("click", () => setMode(k));
   function matches(n, q) { return (n.name + " " + (n.why || "")).toLowerCase().includes(q); }
   function visibleUnder(n, q) { return matches(n, q) || n.kids.some(k => visibleUnder(k, q)); }
   function draw() {
@@ -1806,10 +1807,60 @@ function liveTree(base, qs, onQuestion) {
           h("span", { class: "dur" }, dur(running(n) ? now - n.t0 : n.seconds))),
         hasKids && opened ? h("div", { class: "kids" }, n.kids.slice(-300).map(row)) : "");
     };
-    treeBox.replaceChildren(...(roots.length ? roots.slice(-150).map(row) : [empty("Waiting for the run's first events…")]));
+    if (mode === "graph") drawGraph(now, q);
+    else treeBox.replaceChildren(...(roots.length ? roots.slice(-150).map(row) : [empty("Waiting for the run's first events…")]));
     drawDetail(now);
     drawStandings();
     dirty = false;
+  }
+  /** The tasks as a graph (D723): each task a box, left to right by depth, joined to its parent;
+      the same collapse and search as the tree. A box selects its task; its ± opens or closes it. */
+  function drawGraph(now, q) {
+    if (!roots.length) { graphBox.replaceChildren(empty("Waiting for the run's first events…")); return; }
+    const W = 196, H = 30, COL = 226, ROW = 38, PAD = 12, cut = (t, k) => t.length > k ? t.slice(0, k - 1) + "…" : t;
+    const placed = [], edges = [];
+    let rows = 0;
+    const lay = (n, d) => {                                   // leaves take rows in order; a parent sits between its first and last child
+      if (q && !visibleUnder(n, q)) return null;
+      const opened = n.kids.length > 0 && (q ? true : isOpen(n));
+      const kids = opened ? n.kids.slice(-300).map(k => lay(k, d + 1)).filter(Boolean) : [];
+      const y = kids.length ? (kids[0].y + kids[kids.length - 1].y) / 2 : rows++;
+      const me = { n, d, y, opened };
+      placed.push(me);
+      for (const k of kids) edges.push([me, k]);
+      return me;
+    };
+    roots.slice(-150).forEach(r => lay(r, 0));
+    const X = (b) => PAD + b.d * COL, Y = (b) => PAD + b.y * ROW;
+    const width = PAD * 2 + (Math.max(...placed.map(b => b.d)) + 1) * COL - (COL - W), height = PAD * 2 + Math.max(rows - 1, 0) * ROW + H;
+    const svg = sv("svg", { width, height, viewBox: `0 0 ${width} ${height}`, class: "tgraph-svg", role: "img", "aria-label": "The tasks as a graph" },
+      edges.map(([a, b]) => { const x1 = X(a) + W, y1 = Y(a) + H / 2, x2 = X(b), y2 = Y(b) + H / 2, mx = (x1 + x2) / 2;
+        return sv("path", { class: "edge", d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` }); }),
+      placed.map(b => {
+        const n = b.n, state = running(n) ? "running" : n.failed ? "failed" : "done", took = dur(running(n) ? now - n.t0 : n.seconds);
+        const g = sv("g", { class: `gnode ${state}${n === selected ? " sel" : ""}${q && matches(n, q) ? " hit" : ""}`, transform: `translate(${X(b)},${Y(b)})`, tabindex: "0" },
+          sv("title", {}, [n.name, n.why].filter(Boolean).join(" — ")),
+          sv("rect", { width: W, height: H, rx: 6 }),
+          sv("text", { x: 9, y: H / 2 + 4, class: "st" }, running(n) ? "●" : n.failed ? "✗" : "✓"),
+          sv("text", { x: 24, y: H / 2 + 4, class: "nm" }, cut(String(n.name), Math.floor((W - 34 - (n.kids.length ? 18 : 0) - took.length * 6.6) / 7.3))),
+          sv("text", { x: W - (n.kids.length ? 26 : 8), y: H / 2 + 4, class: "dur", "text-anchor": "end" }, took));
+        g.addEventListener("click", () => { selected = n; follow.checked = false; draw(); });
+        g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selected = n; follow.checked = false; draw(); } });
+        if (n.kids.length) {
+          const t = sv("g", { class: "tog", transform: `translate(${W - 12},${H / 2})` }, sv("title", {}, b.opened ? "Close" : `Open (${n.kids.length})`),
+            sv("circle", { r: 8 }), sv("text", { y: 4, "text-anchor": "middle" }, b.opened ? "−" : "+"));
+          t.addEventListener("click", (e) => { e.stopPropagation(); open.set(n.id, !b.opened); draw(); });
+          g.append(t);
+        }
+        return g;
+      }));
+    graphBox.replaceChildren(svg);
+    const sel = follow.checked && placed.find(b => b.n === selected);   // following: the running task kept in view
+    if (sel) {
+      const x = X(sel), y = Y(sel);
+      if (x < graphBox.scrollLeft || x + W > graphBox.scrollLeft + graphBox.clientWidth) graphBox.scrollLeft = x - graphBox.clientWidth / 3;
+      if (y < graphBox.scrollTop || y + H > graphBox.scrollTop + graphBox.clientHeight) graphBox.scrollTop = y - graphBox.clientHeight / 2;
+    }
   }
   /** The loop's standings (D418l) as a reader wants them: a line of counts, the frontier and the
       parts as small tables, anything else as short key/value lines. */
@@ -1949,9 +2000,11 @@ function liveTree(base, qs, onQuestion) {
   const pill = streamPill();
   const es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
-  const bar = h("div", { class: "toolbar" }, h("label", { class: "check" }, follow, "follow the running task"),
+  const bar = h("div", { class: "toolbar" }, h("div", { class: "seg", role: "group", "aria-label": "View" }, modeBtns.tree, modeBtns.graph),
+    h("label", { class: "check" }, follow, "follow the running task"),
     h("label", { class: "check" }, collapse, "collapse finished"), search, pill.el);
-  return { tree: h("div", {}, bar, treeBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
+  setMode(mode);
+  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
 }
 
 // ================================================================ the configurator (D686)
@@ -2064,12 +2117,12 @@ function filesPanel(name, yamlOf) {
 /** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
-const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
+const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", example: "Example", edit: "Direct edit", agent: "Agent" };
 async function configurePage(name, owner, mode = "configurator") {
   const show = pageShow();
   const isNew = !name;
   const host = h("div", {});
-  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
+  const sub = isNew ? "Build the problem with the configurator, upload one you have, start from a working example, or have an agent write it from what you tell it and the files you give it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
   show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
     head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
@@ -2080,7 +2133,7 @@ async function configurePage(name, owner, mode = "configurator") {
     loop's Settings › Problem (D713). `base`: the address the modes extend. */
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
-  const modes = isNew ? ["configurator", "upload", "agent"] : ["configurator", "edit", "agent"];
+  const modes = isNew ? ["configurator", "upload", "example", "agent"] : ["configurator", "edit", "agent"];   // D723: the examples a tab of their own
   if (!modes.includes(mode)) mode = "configurator";
   const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
   function drawTabs() {
@@ -2092,6 +2145,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
     try {
       if (mode === "configurator") await crafterView(body, name, owner);
       else if (mode === "upload") body.replaceChildren(uploadForm());
+      else if (mode === "example") body.replaceChildren(await examplesCard());
       else if (mode === "edit") await directEdit(body, name);
       else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
@@ -2101,10 +2155,10 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
 }
 
 /** Start from an example (D719): `flux new`'s working problems, each a loop at once with its
-    files -- then changed in its Settings › Problem. Folded, so the form stays the page. */
+    files -- then changed in its Settings › Problem. New loop's Example tab (D723), not the configurator's. */
 async function examplesCard() {
   const list = await api("/examples").catch(() => []);
-  if (!list.length) return "";
+  if (!list.length) return card(null, empty("No examples on this server."));
   let kind = list[0].kind;
   const name = h("input", { placeholder: "my_loop", id: "ex-name", style: "max-width:220px", "aria-label": "Its name" });
   const about = h("p", { class: "muted small" });
@@ -2122,9 +2176,8 @@ async function examplesCard() {
     toast(`${n} created from the ${kind} example`, "ok");
     location.hash = `#/app/${enc(n)}/settings/problem`;
   }, { cls: "primary" });
-  return h("details", { class: "card examples" }, h("summary", {}, h("strong", {}, "Start from an example"),
-      h("span", { class: "muted" }, " · a working loop with its files, to change from there")),
-    h("div", { class: "examples-body" }, pick, about, h("div", { class: "row" }, h("label", { class: "stack" }, "Its name", name), go)));
+  return card("Start from an example", [h("p", { class: "muted" }, "A working loop with its files, to change from there."),
+    h("div", { class: "examples-body" }, pick, about, h("div", { class: "row" }, h("label", { class: "stack" }, "Its name", name), go))], { cls: "examples" });
 }
 
 /** The configurator (D686): the crafter, the loop's files beside it. */
@@ -2168,7 +2221,7 @@ async function crafterView(body, name, owner) {
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
     can_advance: true, sandboxed_server: true }, async (a) => { adv = a; toast("Kept: applied when the loop is created", "ok"); }, "Keep for the new loop") : "";
-  body.replaceChildren(await examplesCard(), host, panel.el, advBox);
+  body.replaceChildren(host, panel.el, advBox);
   host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
   setTimeout(panel.draw, 300);
   // D719: one name -- the form's, the problem's id and the loop's; the checklist calm until used;
@@ -2312,13 +2365,27 @@ async function adminPage(sub = "") {
     return;
   }
   const audit = await api("/audit");
-  // D708: the hosts a loop's sandbox refused are here too, once per host and run
-  const only = h("input", { type: "checkbox" }), rows = h("tbody", {});
-  const draw = () => rows.replaceChildren(...audit.filter(x => !only.checked || x.action === "network refused").map(x => h("tr", {},
-    h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", { class: x.action === "network refused" ? "bad" : "" }, x.action),
-    h("td", { class: "mono muted" }, x.detail))));
-  only.onchange = draw; draw();
-  body.replaceChildren(card(null, [h("label", { class: "muted" }, only, " only the hosts a sandbox refused"),
+  // D708: the hosts a loop's sandbox refused are here too, once per host and run.
+  // D723: narrowed by what happened and by whom, each a list of what the trail holds
+  const NOONE = "\u0000";                                   // an entry without a user (the server's own)
+  const tally = (key) => { const m = new Map(); for (const x of audit) m.set(key(x), (m.get(key(x)) || 0) + 1); return [...m].sort((a, b) => a[0] < b[0] ? -1 : 1); };
+  const pick = (label, all, entries, name) => h("select", { "aria-label": label },
+    h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
+  const what = pick("What", "Every kind", tally(x => x.action), v => v);
+  const who = pick("Who", "Everyone", tally(x => x.user || NOONE), v => v === NOONE ? "no user" : v);
+  const find = h("input", { placeholder: "search the details", class: "filter" });
+  const count = h("span", { class: "muted" }), rows = h("tbody", {});
+  const draw = () => {
+    const f = find.value.trim().toLowerCase();
+    const got = audit.filter(x => (!what.value || x.action === what.value) && (!who.value || (x.user || NOONE) === who.value)
+      && (!f || String(x.detail || "").toLowerCase().includes(f)));
+    count.textContent = got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`;
+    rows.replaceChildren(...(got.length ? got.map(x => h("tr", {},
+      h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""), h("td", { class: x.action === "network refused" ? "bad" : "" }, x.action),
+      h("td", { class: "mono muted" }, x.detail))) : [h("tr", {}, h("td", { colspan: 4 }, empty("Nothing matches.")))]));
+  };
+  what.onchange = who.onchange = draw; find.oninput = draw; draw();
+  body.replaceChildren(card(null, [h("div", { class: "toolbar" }, what, who, find, count),
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 

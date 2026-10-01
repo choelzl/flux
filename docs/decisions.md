@@ -1899,3 +1899,23 @@ the topics above.
     - A loopback server inside answered 200 (before: 403 from the host proxy).
     - A TLS server signed by a private root: 200 when the host's `SSL_CERT_FILE` holds the
       root, `UNABLE_TO_VERIFY_LEAF_SIGNATURE` without it.
+- **D723: the web's tasks as a tree or a graph, an audit narrowed by kind and user, a tidier sharing box, the examples in a tab.**
+  - Tasks (Live): **Tree | Graph**, remembered per browser (`flux-tasks-view`). The graph is one
+    SVG: each task a box (state, name, time), laid out left to right by depth, each leaf on its own
+    row and a parent level with the middle of its children, joined to its parent by a curve. It
+    reads the same collapse, search, selection and follow as the tree: a box selects its task,
+    its ± opens or closes it, and following keeps the running task in view. A name is cut to fit
+    beside its time.
+  - Log: the ◀ problem / problem ▶ buttons are gone. "problems only" and the filter do the job.
+  - Audit (admin): two selects, What and Who, each listing what the trail holds with its count,
+    plus a search of the details, and "N of M entries". This replaces the "only refused hosts"
+    checkbox: that is What = network refused.
+  - Sharing: one grid of who (an initial and the name), what they may do ("Can watch" / "Can
+    edit") and the action (Remove / Share), with the row to add in the same columns. What each
+    level allows is a short note below, not a paragraph above.
+  - New loop: **Example** is its own tab (`#/configure/example`), not a fold at the top of the
+    Configurator.
+  - Browser test (137 checks): the graph is shown, selects, is remembered, and goes back to the
+    tree; the log has no problem arrows; the audit narrows to one kind and to one user; the
+    configurator has no examples, and the Example tab makes a loop. Checked by eye on a fed tree
+    of 25 tasks, three levels deep, in light and dark.
