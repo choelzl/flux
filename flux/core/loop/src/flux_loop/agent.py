@@ -75,7 +75,8 @@ PRESETS: dict[str, dict[str, Any]] = {
                "resume": ("claude", "-p", "--resume", "{session}", "--permission-mode", "acceptEdits",
                           "--output-format", "stream-json", "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
                "output": "claude", "add_dir": ("--add-dir",)},
-    "codex": {"argv": ("codex", "exec", "--full-auto", "-"), "resume": None, "output": "text"},
+    # D748: `--full-auto` is gone (Codex 0.159); writing in its folder, no prompts, in a folder that is no git repository
+    "codex": {"argv": ("codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"), "resume": None, "output": "text"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}"),
                  "resume": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}", "--session", "{session}"),
                  "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": _OPENCODE_DENY}},
