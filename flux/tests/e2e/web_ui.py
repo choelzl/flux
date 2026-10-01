@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -495,6 +496,11 @@ def flows(r: Run) -> None:
         else:
             r.check("the step bar goes through the selected box's runs (no box ran twice: one run each)", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
+        b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=30, what="the log's lines")
+        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
+        stamps = b.wait("[...document.querySelectorAll('.logview .ln .at')].map(a => a.textContent).filter(Boolean)", timeout=10, what="the times")
+        r.check("the log shows each line's time when asked (D732)", bool(stamps) and all(re.match(r"^\d\d:\d\d:\d\d$", x) for x in stamps), str(stamps[:3]))
+        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
         r.check("the graph view is remembered", b.js("return !!document.querySelector('.seg button.on') && document.querySelector('.seg button.on').textContent") == "Graph")
         r.button("Tree", ".tree-card .seg")
@@ -537,14 +543,13 @@ def flows(r: Run) -> None:
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Other providers: Ollama, OpenRouter"], str(shown))
         r.page("#/admin/audit", "document.querySelector('#main select[aria-label=What]')", "the audit")   # D723
-        groups = b.js("return [...document.querySelectorAll('#main select[aria-label=What] optgroup')].map(g => g.label)")
-        r.check("the audit's kinds are grouped (D724)", "Users and sign-in" in groups and "Runs" in groups, str(groups))
-        b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'g:Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
+        opts = b.js("return [...document.querySelectorAll('#main select[aria-label=What] option')].map(o => [o.value, o.textContent])")
+        values = [v for v, _ in opts if v]
+        r.check("the audit's What offers groups only (D733)", "Users and sign-in" in values and "Runs" in values
+                and "login" not in values and not b.js("return !!document.querySelector('#main select[aria-label=What] optgroup')"), str(opts))
+        b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
         whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
         r.check("a group shows its kinds together", "login" in whats and set(whats) <= {"login", "login refused", "add user", "change user", "change password"}, str(whats))
-        kind = b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'k:login'; s.dispatchEvent(new Event('change')); return 'login';")
-        whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
-        r.check("the audit narrows to one kind", whats and set(whats) == {kind}, f"{kind}: {whats}")
         b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
              "const w = document.querySelector('#main select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
         whos = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[1].textContent)")

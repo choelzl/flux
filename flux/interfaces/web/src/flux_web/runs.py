@@ -265,10 +265,10 @@ class RunManager:
         with open(files["log"], "a") as fh:
             fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n")
         run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)
-        fh = open(files["log"], "ab")
-        proc = subprocess.Popen(argv, cwd=str(app_dir), stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        # D732: through the stamper, which writes each line with its time
+        proc = subprocess.Popen([sys.executable, "-m", "flux_web.stamp", str(files["log"]), "--", *argv], cwd=str(app_dir),
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
                                 env=env, start_new_session=True)
-        fh.close()
         self.store.set_run(run_id, pid=proc.pid)
         threading.Thread(target=self._wait, args=(run_id, proc), daemon=True).start()
 

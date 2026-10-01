@@ -686,3 +686,4 @@ body:has(.composer) .toasts { bottom: 150px; }
 .rg-why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .rg-why.bad { color: var(--bad); }
 .rg-dur { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ln .at { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; display: inline-block; min-width: 8ch; }

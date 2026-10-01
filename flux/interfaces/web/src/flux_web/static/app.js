@@ -1038,7 +1038,12 @@ async function loopPage(name, owner, path = "") {
       while (box.childElementCount > N) box.firstChild.remove();
       if (atEnd) toEnd();
     });
+    log.onTimes(fill);
+    const liveTimes = h("input", { type: "checkbox", checked: log.times.checked });
+    liveTimes.addEventListener("change", () => { log.times.checked = liveTimes.checked; log.times.dispatchEvent(new Event("change")); });
+    log.onTimes(() => { liveTimes.checked = log.times.checked; });
     const el = card("The log", box, { cls: "livelog-card", actions: [h("label", { class: "check small" }, onlyBad, "problems only"),
+      h("label", { class: "check small" }, liveTimes, "times"),
       h("button", { class: "small", type: "button", onclick: () => goTab("Live", "log") }, "The whole log")] });
     return { el, fill };
   })();
@@ -1627,6 +1632,14 @@ function logView(base, qs) {
   const WARN = /\b(warning|nudged|retry|stopping|interrupted|could not)\b/i;
   const GOOD = /\b(ADMITTED|DECISION|passed|decided)\b/;
   const MARK = /^── started (.+?) ──$/;
+  const STAMP = /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d{3} /;   // flux_web.stamp.STAMP_RE (D732)
+  const times = h("input", { type: "checkbox" });
+  try { times.checked = localStorage.getItem("flux-log-times") === "on"; } catch (_) { /* per browser, when it can */ }
+  const timeListeners = [];
+  times.addEventListener("change", () => {
+    try { localStorage.setItem("flux-log-times", times.checked ? "on" : "off"); } catch (_) { /* per browser */ }
+    ROW = 0; render(); for (const f of timeListeners) f();
+  });
   const starts = [];                                      // [{n, text}], a line per start
   let startIdx = -1;                                      // -1: every start
   let matcher = null;
@@ -1645,7 +1658,9 @@ function logView(base, qs) {
   const keep = (l) => inStart(l) && (!problems.checked || PROBLEM.test(l.text) || WARN.test(l.text) || MARK.test(l.text)) && (!matcher || matcher.test(l.text));
   function lineEl(l) {
     const cls = MARK.test(l.text) ? "marker" : PROBLEM.test(l.text) ? "bad" : WARN.test(l.text) ? "warn" : GOOD.test(l.text) ? "good" : "";
-    return h("div", { class: "ln " + cls, "data-n": String(l.n) }, h("span", { class: "no" }, String(l.n)), h("span", { class: "tx" }, l.text || " "));
+    return h("div", { class: "ln " + cls, "data-n": String(l.n) }, h("span", { class: "no" }, String(l.n)),
+      times.checked ? h("span", { class: "at", title: l.at || "written before times were kept" }, l.at ? l.at.slice(11) : "") : "",
+      h("span", { class: "tx" }, l.text || " "));
   }
   function drawStarts() {
     const cur = startSel.value;
@@ -1694,7 +1709,11 @@ function logView(base, qs) {
   }
   function add(chunk) {
     const parts = (partial + chunk).split("\n"); partial = parts.pop();
-    const fresh = parts.map(t => { const l = { n: ++seen, text: t }; lines.push(l); if (MARK.test(t)) starts.push(l); return l; });
+    const fresh = parts.map(t => {
+      const m = STAMP.exec(t);                              // D732: the run's own time, written by the stamper
+      const l = { n: ++seen, text: m ? t.slice(m[0].length) : t, at: m ? m[1] : null };
+      lines.push(l); if (MARK.test(l.text)) starts.push(l); return l;
+    });
     if (lines.length > MAX) {
       lines.splice(0, lines.length - MAX);
       shown = shown.filter(l => l.n >= lines[0].n);
@@ -1718,12 +1737,13 @@ function logView(base, qs) {
   drawStarts();
   const bar = h("div", { class: "toolbar" }, startSel,
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
-    h("label", { class: "check" }, problems, "problems only"), filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
+    h("label", { class: "check" }, problems, "problems only"), h("label", { class: "check", title: "Each line's time (lines written since D732)" }, times, "times"),
+    filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const pill = streamPill();
   bar.append(pill.el);
   const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
   return { el: h("div", {}, bar, box), close: () => es.close(), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
-           problem: (t) => PROBLEM.test(t) };
+           problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
 
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
@@ -2485,7 +2505,7 @@ async function adminPage(sub = "") {
   const tally = (key) => { const m = new Map(); for (const x of audit) m.set(key(x), (m.get(key(x)) || 0) + 1); return [...m].sort((a, b) => a[0] < b[0] ? -1 : 1); };
   const pick = (label, all, entries, name) => h("select", { "aria-label": label },
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
-  // D724: the kinds in groups -- a group as a whole, or one kind of it; a kind not listed is Other
+  // D724: the kinds in groups; a kind not listed is Other
   const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password"]],
     ["Runs", ["start", "stop", "note", "stop all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["new loop from an example", "loop by an agent", "configure", "write document", "problem revised by an agent",
@@ -2500,10 +2520,10 @@ async function adminPage(sub = "") {
       const mine = [...kinds].filter(([k]) => groupOf(k) === g);
       if (!mine.length) return "";
       const n = mine.reduce((t, [, c]) => t + c, 0);
-      return h("optgroup", { label: g }, h("option", { value: `g:${g}` }, `All ${g.toLowerCase()} (${n})`),
-        mine.map(([k, c]) => h("option", { value: `k:${k}` }, `${k} (${c})`)));
+      // D733: a group only -- one kind alone is never what is looked for; the rows keep their kind
+      return h("option", { value: g, title: mine.map(([k, c]) => `${k} (${c})`).join(", ") }, `${g} (${n})`);
     }));
-  const isWhat = (x) => !what.value || (what.value.startsWith("g:") ? groupOf(x.action) === what.value.slice(2) : x.action === what.value.slice(2));
+  const isWhat = (x) => !what.value || groupOf(x.action) === what.value;
   const who = pick("Who", "Everyone", tally(x => x.user || NOONE), v => v === NOONE ? "no user" : v);
   const find = h("input", { placeholder: "search the details", class: "filter" });
   const count = h("span", { class: "muted" }), rows = h("tbody", {});

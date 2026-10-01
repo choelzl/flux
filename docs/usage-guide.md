@@ -215,7 +215,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     a failed one is red; what you open stays open as it updates), the latest at the bottom. The
     Agent turns tab shows a finished turn the same way, the prompt folded below it. Before D712, it showed: its model and version, status, output and
     exit; its thinking, the commands it ran, the last command's output and its words, each a stream
-    that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand. A line
+    that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand, and each line's
+    time with **times** (D732: a run writes every line with its time; the setting is one for both logs,
+    kept per browser; lines from before have none). A line
     docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when
     the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
@@ -347,7 +349,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
   host and port per run. The audit narrows by what happened and by whom (D723), and searches
   the details. What happened comes in groups (D724): users and sign-in, runs, loops and their
-  files, sharing and loop settings, server, network, and other; a group as a whole or one kind of it.
+  files, sharing and loop settings, server, network, and other; the filter offers the groups only (D733),
+  each row keeping its exact kind.
 - **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
   `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
   loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and
