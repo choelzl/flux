@@ -214,6 +214,22 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     listed under them), and its advanced settings: run in the sandbox or on the host, memory,
     CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
     creating a loop); everyone sees them.
+- **Sandbox (Admin › Sandbox):** what every container gets.
+  - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
+    an allowlist the container has no network; a proxy on the host forwards to allowed hosts
+    only. A name is resolved and passes when one of its addresses is in an allowed IP or CIDR,
+    and is reached at that address. Optionally the model endpoints' hosts join the list, and users
+    may add hosts when starting. A loop's Settings (admins) may add hosts for that loop. An empty
+    allowlist reaches nothing.
+  - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
+    (their own shell's, interactive and login) can be added, and further directories.
+  - **Home files:** paths inside the home folder mounted read-only (an agent's configuration) or
+    copied in before each run (credentials an agent may refresh: the copy changes, the original
+    does not). Always: `.config/opencode` and `.opencode` read-only; Claude Code's and OpenCode's
+    credentials copied.
+  - From the command line the same is set by `FLUX_SANDBOX_HOME_RO`, `FLUX_SANDBOX_HOME_COPY`
+    (comma-separated, relative to the home folder), `FLUX_SANDBOX_NET=allowlist` and
+    `FLUX_SANDBOX_ALLOW`.
 - **Environment variables:** the server's (Admin › Models and variables), a user's (Account), a
   loop's (its Settings), applied in that order, a secret stored encrypted and never shown again.
   They reach the run inside the sandbox whatever their names (`FLUX_SANDBOX_PASS`). The

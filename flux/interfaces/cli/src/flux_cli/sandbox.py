@@ -152,21 +152,52 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     return ro, rw
 
 
+def _home_list(var: str, fixed: tuple[str, ...]) -> tuple[str, ...]:
+    """The fixed home paths and those `var` adds (D698: e.g. a modified agent's own config or
+    credentials), comma-separated and relative to HOME; one that leaves HOME is ignored."""
+    extra = []
+    for rel in os.environ.get(var, "").split(","):
+        rel = rel.strip()
+        if rel.startswith("~/"):
+            rel = rel[2:]
+        if rel.startswith("/"):                               # outside HOME: not this
+            continue
+        rel = rel.strip("/")
+        if rel and ".." not in Path(rel).parts:
+            extra.append(rel)
+    return tuple(dict.fromkeys((*fixed, *extra)))
+
+
+def home_ro() -> tuple[str, ...]:
+    return _home_list("FLUX_SANDBOX_HOME_RO", _HOME_RO)
+
+
+def home_copy() -> tuple[str, ...]:
+    return _home_list("FLUX_SANDBOX_HOME_COPY", _HOME_COPY)
+
+
 def _sandbox_home(app: Path) -> Path:
     """The container's HOME, the application's, kept across its runs: the agents' sessions."""
     sh = app / "home"
     sh.mkdir(parents=True, exist_ok=True)
     home = _home()
-    for rel in _HOME_RO:
+    for rel in home_ro():
         if (home / rel).exists():
-            (sh / rel).mkdir(parents=True, exist_ok=True)       # the mount point, made by us, not by docker as root
-    for rel in _HOME_COPY:
+            mp = sh / rel                                     # the mount point, made by us, not by docker as root
+            if (home / rel).is_dir():
+                mp.mkdir(parents=True, exist_ok=True)
+            else:
+                mp.parent.mkdir(parents=True, exist_ok=True)
+                mp.touch(exist_ok=True)
+    for rel in home_copy():
         src = home / rel
+        dst = sh / rel
         if src.is_file():
-            dst = sh / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dst)
             dst.chmod(0o600)
+        elif src.is_dir():                                   # a folder of credentials: copied whole, each run
+            shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=True)
     return sh
 
 
@@ -256,7 +287,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     cmd += ["-v", f"{sh}:{home}"]                              # HOME: the application's
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
-    for rel in _HOME_RO:
+    for rel in home_ro():
         if (home / rel).exists():
             cmd += ["-v", f"{home / rel}:{home / rel}:ro"]
     for p in rw:
@@ -304,10 +335,11 @@ def launch(argv: list[str], args: Any, command: str) -> int:
               f"runs on this machine directly.", file=sys.stderr)
         return 2
     name = f"flux-{uuid.uuid4().hex[:10]}"
-    allow = _allowlist() if os.environ.get("FLUX_SANDBOX_NET", "open") == "allowlist" or _allowlist() else []
+    strict = os.environ.get("FLUX_SANDBOX_NET", "open") == "allowlist"
+    allow = _allowlist()
     proxy = None
     proxy_dir = None
-    if allow:
+    if allow or strict:                                       # D698: an empty allowlist refuses all, never opens
         from .sandbox_proxy import AllowProxy
 
         # a local filesystem: a home on sshfs/NFS cannot hold a socket
@@ -318,7 +350,7 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         proxy.start()
     exe = shutil.which("flux") or sys.argv[0]
     cmd = container_argv([exe, *argv], args, command, name, proxy_dir, eng)
-    print(f"flux {command}: in the {eng} sandbox {name} (network: {'allowlist ' + ','.join(allow) if allow else 'open'}; "
+    print(f"flux {command}: in the {eng} sandbox {name} (network: {('allowlist ' + ','.join(allow)) if allow else 'none (an empty allowlist)' if strict else 'open'}; "
           f"--no-sandbox to run on the host)", file=sys.stderr, flush=True)
     try:
         return subprocess.call(cmd)

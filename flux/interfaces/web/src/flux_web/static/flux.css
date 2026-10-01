@@ -481,3 +481,8 @@ fieldset.set-group { align-content: start; }
 table.env td { vertical-align: top; overflow-wrap: anywhere; }
 table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
 .env-add { margin-top: 10px; align-items: center; }
+
+/* D698: the sandbox's settings */
+.sb-allow { display: grid; gap: 8px; margin-top: 10px; }
+.sb-allow[hidden] { display: none; }
+textarea.mono { font-family: var(--mono); font-size: 12.5px; }

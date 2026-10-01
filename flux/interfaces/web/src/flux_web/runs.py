@@ -68,9 +68,88 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     return env
 
 
+_LOGIN_PATH: list[str] = []
+
+
+def login_path() -> list[str]:
+    """The server user's login PATH (D698), asked of their own shell once (from the user database,
+    not $SHELL, which a nix shell sets to its own): a service or a nix shell often runs without
+    ~/.local/bin, ~/.opencode/bin and the like. Interactive too, for what .bashrc adds; the answer
+    is read between markers, past whatever the shell prints."""
+    if not _LOGIN_PATH:
+        import pwd
+        import re
+
+        try:
+            shell = pwd.getpwuid(os.getuid()).pw_shell or "/bin/sh"
+        except KeyError:
+            shell = "/bin/sh"
+        base = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        try:
+            text = Path("/etc/environment").read_text()
+            m = re.search(r'^PATH="?([^"\n]+)"?', text, re.M)
+            base = m.group(1) if m else base
+        except OSError:
+            pass
+        home = os.path.expanduser("~")
+        try:
+            r = subprocess.run([shell, "-ilc", 'printf "\\n@@FLUXPATH@@%s@@\\n" "$PATH"'], capture_output=True, text=True, timeout=20,
+                               stdin=subprocess.DEVNULL, start_new_session=True,
+                               env={"HOME": home, "USER": os.environ.get("USER", ""), "LOGNAME": os.environ.get("USER", ""),
+                                    "SHELL": shell, "TERM": "dumb", "PATH": base})
+            m = re.search(r"@@FLUXPATH@@(.*?)@@", r.stdout)
+            if m:
+                _LOGIN_PATH.extend(d for d in m.group(1).split(os.pathsep) if d.startswith("/"))
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return list(_LOGIN_PATH)
+
+
+#: Network rules an allowlist takes: a domain (and its subdomains), *.domain, an IP, a CIDR, localhost.
+HOST_RULE = r"(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*|[0-9A-Fa-f:.]+(/\d{1,3})?"
+
+
+def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], asked: list[str]) -> str:
+    """What the admin set for every sandbox (D698): PATH directories (and the server user's login
+    PATH), home paths mounted read-only or copied in, and the network. Returns how the network
+    was set, for the log line. `asked`: the start's own allowlist entries."""
+    from urllib.parse import urlsplit
+
+    dirs = [*(cfg.get("path") or []), *(login_path() if cfg.get("login_path") else [])]
+    have = env.get("PATH", "").split(os.pathsep)
+    extra = [d for d in dict.fromkeys(dirs) if d and d not in have and os.path.isdir(d)]
+    if extra:
+        env["PATH"] = os.pathsep.join([*extra, *[d for d in have if d]])   # the sandbox mounts each, read-only
+    for key, var in (("home_ro", "FLUX_SANDBOX_HOME_RO"), ("home_copy", "FLUX_SANDBOX_HOME_COPY")):
+        env.pop(var, None)
+        if cfg.get(key):
+            env[var] = ",".join(cfg[key])
+    env.pop("FLUX_SANDBOX_ALLOW", None)
+    env.pop("FLUX_SANDBOX_NET", None)
+    if env.get("FLUX_SANDBOX") == "0":
+        return ""                                         # on the host: the admin chose this loop's network as the machine's
+    loop = [str(x) for x in adv.get("allow") or []]
+    if cfg.get("network") == "allowlist":
+        allow = [*(cfg.get("allow") or []), *loop, *(asked if cfg.get("users_add") else [])]
+        if cfg.get("endpoints"):
+            for k in ("FLUX_REMOTE_BASE_URL", "FLUX_OPENCODE_BASE_URL", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "OLLAMA_BASE_URL"):
+                if env.get(k):
+                    allow.append(urlsplit(env[k]).hostname or "")
+        allow = [a for a in dict.fromkeys(a.strip() for a in allow) if a]
+        env["FLUX_SANDBOX_NET"] = "allowlist"
+        env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
+        return f"network allowlist {', '.join(allow) or '(nothing)'}"
+    allow = [a for a in dict.fromkeys(str(x).strip() for x in [*loop, *asked]) if a]
+    if allow:
+        env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
+        return f"network {', '.join(allow)}"
+    return ""
+
+
 #: A loop's settings only an admin sets (D697), with what each does to its runs.
 ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memory limit (e.g. 16g)", "cpus": "CPUs (e.g. 8)",
-            "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)"}
+            "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)",
+            "allow": "hosts this loop may reach as well (D698)"}
 
 
 def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
@@ -157,16 +236,14 @@ class RunManager:
             argv.append("--screen-only")
         env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
-        env.pop("FLUX_SANDBOX_ALLOW", None)
-        if options.get("allow"):
-            env["FLUX_SANDBOX_ALLOW"] = ",".join(str(h).strip() for h in options["allow"] if str(h).strip())
         adv = advanced(self.store, user.name, app)
         sandbox_env(env, self.sandbox, adv)
+        net = machine_env(env, self.store.server_get("sandbox") or {}, adv, list(options.get("allow") or []))
         if adv.get("sandbox") is False and self.sandbox:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else []) \
-            + ([f"network {env['FLUX_SANDBOX_ALLOW']}"] if options.get("allow") else [])
+            + ([net] if net else [])
         with open(files["log"], "a") as fh:
             fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {user.name} · {', '.join(said)} ──\n")
         run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)

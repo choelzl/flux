@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import ADVANCED, RunManager, advanced, loop_files, run_env, sandbox_env
+from .runs import ADVANCED, HOST_RULE, RunManager, advanced, login_path, loop_files, machine_env, run_env, sandbox_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -105,6 +105,18 @@ class Advanced(BaseModel):
     cpus: str | None = Field(default=None, max_length=8)
     pids: int | None = None
     tmp_size: str | None = Field(default=None, max_length=16)
+    allow: list[str] | None = None
+
+
+class SandboxConfig(BaseModel):          # D698: what every sandbox gets
+    path: list[str] = Field(default_factory=list)
+    login_path: bool = False
+    home_ro: list[str] = Field(default_factory=list)
+    home_copy: list[str] = Field(default_factory=list)
+    network: str = "open"
+    allow: list[str] = Field(default_factory=list)
+    users_add: bool = True
+    endpoints: bool = True
 
 
 class Settings(BaseModel):
@@ -415,10 +427,52 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(400, "cpus: a number such as 8")
         if body.pids is not None and not 64 <= body.pids <= 1_000_000:
             raise HTTPException(400, "pids: from 64 to 1000000")
+        body.allow = _rules(body.allow or []) or None
         got = {k: v for k, v in body.model_dump().items() if v not in (None, "") and not (k == "sandbox" and v is True)}
         store.server_set(f"adv:{whose.name}:{name}", got or None)
         store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
         return {"advanced": got}
+
+    def _rules(items: list[str]) -> list[str]:
+        out = []
+        for x in items:
+            x = str(x).strip()
+            if not x:
+                continue
+            if not re.fullmatch(HOST_RULE, x) and x != "localhost":
+                raise HTTPException(400, f"{x!r}: a host, *.domain, an IP or a CIDR")
+            out.append(x)
+        return list(dict.fromkeys(out))
+
+    @app.get("/api/admin/sandbox")
+    def get_sandbox(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """What every sandbox gets (D698), and the server user's login PATH to choose from."""
+        from flux_cli.sandbox import _HOME_COPY, _HOME_RO
+
+        return {"config": store.server_get("sandbox") or SandboxConfig().model_dump(), "login_path": login_path(),
+                "path": os.environ.get("PATH", "").split(os.pathsep), "home": os.path.expanduser("~"),
+                "fixed_ro": list(_HOME_RO), "fixed_copy": list(_HOME_COPY), "sandboxed": sandbox}
+
+    @app.put("/api/admin/sandbox")
+    def put_sandbox(body: SandboxConfig, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if body.network not in ("open", "allowlist"):
+            raise HTTPException(400, "network: open or allowlist")
+        for d in body.path:
+            if not d.startswith("/"):
+                raise HTTPException(400, f"{d!r}: a PATH directory is absolute")
+        for rel in [*body.home_ro, *body.home_copy]:
+            r = rel.strip().removeprefix("~/").strip("/")
+            if not r or r.startswith("/") or ".." in r.split("/"):
+                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .config/opencode")
+        cfg = body.model_dump()
+        cfg["allow"] = _rules(body.allow)
+        cfg["home_ro"] = [r.strip().removeprefix("~/").strip("/") for r in body.home_ro if r.strip()]
+        cfg["home_copy"] = [r.strip().removeprefix("~/").strip("/") for r in body.home_copy if r.strip()]
+        cfg["path"] = [d.strip() for d in body.path if d.strip()]
+        store.server_set("sandbox", cfg)
+        store.audit(a.name, "sandbox settings", f"network {cfg['network']}: {', '.join(cfg['allow']) or '-'}; "
+                    f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; home ro {len(cfg['home_ro'])}, copy {len(cfg['home_copy'])}")
+        return {"config": cfg}
 
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
@@ -621,7 +675,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
         env = {**run_env(store, user, name), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
-        sandbox_env(env, sandbox, advanced(store, user.name, name))
+        adv = advanced(store, user.name, name)
+        sandbox_env(env, sandbox, adv)
+        machine_env(env, store.server_get("sandbox") or {}, adv, [])
         digest = w.inputs_digest(name)
         try:
             r = subprocess.run([shutil.which("flux") or sys.argv[0], "task", "check", str(d / doc)], cwd=str(d), env=env,
@@ -646,7 +702,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"digest": digest, "changed": digest != meta.get("last_start_digest"),
                 "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
                 "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
-                "options": meta.get("last_options"), "paused": store.server_get("paused")}
+                "options": meta.get("last_options"), "paused": store.server_get("paused"),
+                "network": {k: (store.server_get("sandbox") or {}).get(k) for k in ("network", "allow", "users_add")}}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
     def loop_of(name: str, user: User, owner: str | None = None) -> tuple[Workspace, User, Path, dict[str, Any] | None]:

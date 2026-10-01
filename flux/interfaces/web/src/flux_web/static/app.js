@@ -340,7 +340,11 @@ async function startLoop(name) {
   const passes = h("input", { type: "number", min: 1, value: last.passes || 1, style: "width:90px" });
   const forever = h("input", { type: "checkbox", checked: last.passes === null });
   const screen = h("input", { type: "checkbox", checked: !!last.screen_only });
-  const allow = h("input", { placeholder: "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
+  const net = pre.network || {};
+  const allow = h("input", { placeholder: net.network === "allowlist" ? "more hosts for this start" : "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
+  if (net.network === "allowlist" && !net.users_add) allow.disabled = true;
+  const netSaid = net.network === "allowlist" ? h("p", { class: "muted small" }, `The server allows only: ${(net.allow || []).join(", ") || "nothing"}`,
+    net.users_add ? "; hosts added here join them for this start." : "; an admin sets the list.") : "";
   passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
   const checkBox = h("div", { class: "preflight" });
@@ -349,7 +353,7 @@ async function startLoop(name) {
     checkBox,
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
     h("label", { class: "check" }, screen, "screen only (skip the costly stages)"),
-    h("label", { class: "stack", style: "margin-top:10px" }, "Network allowlist (hosts, domains, CIDRs)", allow));
+    h("label", { class: "stack", style: "margin-top:10px" }, "Network allowlist (hosts, domains, CIDRs)", allow), netSaid);
   const said = (ok, text, output) => checkBox.replaceChildren(h("div", { class: `callout ${ok === true ? "good" : ok === false ? "bad" : ""}` },
     h("strong", {}, text), output ? h("details", {}, h("summary", {}, "the check's output"), h("pre", { class: "log small" }, output)) : ""));
   const waiting = dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
@@ -573,20 +577,24 @@ function envEditor(rows, save, scope) {
 function advancedCard(e, save) {
   const a = e.advanced || {};
   const said = [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
-    ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`)].join(" · ");
+    ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
+    ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : [])].join(" · ");
   if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, ". An admin sets these."));
   const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
   const f = (k, ph) => h("input", { id: `adv-${k}`, value: a[k] ?? "", placeholder: ph, style: "width:120px" });
   const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
+  const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
   return card("Advanced (admins)", [h("p", { class: "muted" }, "Apply from the loop's next start, whoever starts it.",
       e.sandboxed_server ? "" : " This server runs without the sandbox (--no-sandbox): the limits do nothing."),
     h("label", { class: "check" }, sb, "Run in the sandbox (off: on the host, with this machine's files and network: only for code you trust)"),
     h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
+    h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
     h("div", { class: "form-actions" }, act("Save", async () => {
       if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) return;
       await save({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
-        pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null });
+        pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null,
+        allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean) });
     }, { cls: "primary" }))]);
 }
 
@@ -1556,7 +1564,7 @@ async function configurePage(name) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", resources: "Resources", models: "Models and variables", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", resources: "Resources", sandbox: "Sandbox", models: "Models and variables", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -1571,6 +1579,7 @@ async function adminPage(sub = "") {
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
+  if (tab === "sandbox") return adminSandbox(body);
   if (tab === "models") {
     const st = await api("/admin/settings");
     const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
@@ -1672,6 +1681,46 @@ async function adminResources(body) {
   await load();
   const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);
   cleanup.push(() => clearInterval(t));
+}
+
+/** What every sandbox gets (D698): the network, PATH directories, home files. */
+async function adminSandbox(body) {
+  const r = await api("/admin/sandbox");
+  const c = r.config;
+  const lines = (a) => (a || []).join("\n");
+  const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+  const ta = (id, value, rows, ph) => h("textarea", { id, rows, placeholder: ph, class: "mono", value });
+  const mode = h("select", { id: "sb-net" }, h("option", { value: "open", selected: c.network !== "allowlist" }, "open: the containers reach any host"),
+    h("option", { value: "allowlist", selected: c.network === "allowlist" }, "allowlist: only the hosts below"));
+  const allow = ta("sb-allow", lines(c.allow), 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20");
+  const usersAdd = h("input", { type: "checkbox", id: "sb-users", checked: c.users_add !== false });
+  const endpoints = h("input", { type: "checkbox", id: "sb-ep", checked: c.endpoints !== false });
+  const paths = ta("sb-path", lines(c.path), 3, "/opt/tools/bin");
+  const loginP = h("input", { type: "checkbox", id: "sb-login", checked: !!c.login_path });
+  const adds = r.login_path.filter(d => !r.path.includes(d));
+  const ro = ta("sb-ro", lines(c.home_ro), 3, ".config/my-opencode\n.cache/huggingface");
+  const cp = ta("sb-cp", lines(c.home_copy), 3, ".config/my-opencode/credentials.json");
+  const allowBox = h("div", { class: "sb-allow" }, h("label", { class: "stack" }, "Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR", allow),
+    h("label", { class: "check" }, endpoints, "also the model endpoints set under Models (their hosts)"),
+    h("label", { class: "check" }, usersAdd, "a user may add hosts when starting a loop"));
+  const showAllow = () => { allowBox.hidden = mode.value !== "allowlist"; };
+  mode.addEventListener("change", showAllow); showAllow();
+  body.replaceChildren(
+    r.sandboxed ? "" : h("p", { class: "callout bad" }, "This server runs without the sandbox (--no-sandbox): none of this applies."),
+    card("Network", [h("p", { class: "muted" }, "What the containers may reach. With an allowlist they have no network of their own: a proxy on this machine forwards to the allowed hosts and refuses the rest, a name resolved and checked against the IPs and CIDRs. A loop's Settings may add hosts for that loop; a loop an admin runs on the host has the machine's network."),
+      h("label", { class: "stack" }, "Mode", mode), allowBox]),
+    card("PATH", [h("p", { class: "muted" }, "Every directory on the runs' PATH is mounted read-only in the container."),
+      h("details", {}, h("summary", { class: "muted" }, `The server's own PATH: ${r.path.length} directories`), h("pre", { class: "val small" }, r.path.join("\n"))),
+      h("label", { class: "check" }, loginP, `add ${r.home}'s login PATH`, adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"),
+      h("label", { class: "stack" }, "and these directories, first", paths)]),
+    card("Home files", [h("p", { class: "muted" }, `Paths inside ${r.home}. The container's home is the loop's own; these come in from the real one. Always: read-only ${r.fixed_ro.join(", ")}; copied ${r.fixed_copy.join(", ")}.`),
+      h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Mounted read-only (a folder or a file)", ro),
+        h("label", { class: "stack" }, "Copied in before each run (credentials an agent may refresh: the copy changes, the original does not)", cp))]),
+    h("div", { class: "form-actions" }, act("Save", async () => {
+      await api("/admin/sandbox", { method: "PUT", body: { network: mode.value, allow: list(allow), users_add: usersAdd.checked, endpoints: endpoints.checked,
+        path: list(paths), login_path: loginP.checked, home_ro: list(ro), home_copy: list(cp) } });
+      toast("Sandbox settings saved: they apply from each loop's next start", "ok"); route();
+    }, { cls: "primary" })));
 }
 
 async function adminUsers(body) {

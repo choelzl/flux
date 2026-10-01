@@ -1179,3 +1179,49 @@ the topics above.
     - `sandbox_env` overriding the environment's own.
 
   Also tested: the sandbox passing a listed secret-looking name and still dropping an unlisted one.
+
+- **D698: the admin's sandbox: the network allowlist, PATH, home files.**
+  - **Network** (Admin › Sandbox, `server` table key `sandbox`): open, or an allowlist.
+    - Under an allowlist, a start's own entries count only when the admin lets users add.
+    - A loop's advanced settings (admins) add hosts for that loop.
+    - "The model endpoints" adds the hosts of the base URLs set under Models.
+    - On the host (an admin's per-loop choice) a run has the machine's network.
+    - The start dialog says the server's list, and disables its own field when users may not add.
+  - **The proxy checks IPs for names** (`permitted`). A name no name rule covers is resolved; it
+    passes when one of its addresses is in an IP or CIDR rule, and the proxy connects to that
+    address, so the name cannot change between the check and the connection. Before, an IP rule
+    held only for a client that connected by bare IP.
+  - **An empty allowlist opened the network:** with `FLUX_SANDBOX_NET=allowlist` and no
+    `FLUX_SANDBOX_ALLOW`, `launch` started no proxy and gave the container the host's network.
+    It now starts a proxy that allows nothing, and says "none".
+  - **PATH:** every directory on the run's PATH was already mounted read-only. The admin adds
+    directories, and optionally the server user's login PATH.
+    - The login PATH is read from their shell in the user database, run `-ilc`, starting from
+      `/etc/environment`, and read between markers.
+    - `$SHELL` inside a nix shell is nix's bash, whose built-in PATH is `/no-such-path`; Ubuntu's
+      login files set none.
+  - **Home files:** `FLUX_SANDBOX_HOME_RO` and `FLUX_SANDBOX_HOME_COPY` (comma-separated, relative
+    to HOME) extend the fixed lists, for example a modified agent's own config and credentials.
+    - A path leaving HOME (absolute, `..`) is ignored.
+    - A file is mounted onto a file.
+    - A copied folder is copied whole before each run.
+    - Users cannot set these: `FLUX_SANDBOX*` is reserved (D697).
+  - **Live, in Podman, through the web,** a probe loop's bench measured:
+
+    | Probe | Result |
+    |---|---|
+    | the login PATH | on PATH |
+    | a read-only folder from HOME | read |
+    | a copied credentials file | read |
+    | the LocalAI host, allowlisted by name | reached |
+    | example.com | refused, logged |
+
+    The same with only the LocalAI host's IP `/32` allowed: reached by name; example.com
+    refused.
+
+  Tests (`test_sandbox_config.py`):
+    - names passing IP rules by resolution, and a bare IP refused;
+    - extra home paths mounted, copied, and kept inside HOME;
+    - an empty allowlist giving no network and a proxy that allows nothing;
+    - the admin's settings in a run's environment, including users not adding;
+    - admin only, with bad entries refused.

@@ -13,7 +13,7 @@ import sys
 import threading
 from urllib.parse import urlsplit
 
-__all__ = ["AllowProxy", "allowed"]
+__all__ = ["AllowProxy", "allowed", "permitted"]
 
 
 def allowed(host: str, allow: list[str]) -> bool:
@@ -38,6 +38,39 @@ def allowed(host: str, allow: list[str]) -> bool:
         if host == rule or host.endswith("." + rule.lstrip("*.")) or (rule.startswith("*.") and host.endswith(rule[1:])):
             return True
     return False
+
+
+def permitted(host: str, port: int, allow: list[str]) -> str | None:
+    """Where to connect for `host`, or None when the allowlist refuses it (D698). A name the
+    rules name goes as it is. Any other name is resolved, and passes when one of its addresses
+    falls in an IP or CIDR rule -- that address is the one connected to, so the name cannot
+    resolve elsewhere between the check and the connection."""
+    if allowed(host, allow):
+        return host.strip("[]")
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+        return None                                   # a bare IP no rule names
+    except ValueError:
+        pass
+    if not any(_is_net(r) for r in allow):
+        return None
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError:
+        return None
+    for info in infos:
+        addr = info[4][0]
+        if allowed(addr, allow):
+            return addr
+    return None
+
+
+def _is_net(rule: str) -> bool:
+    try:
+        ipaddress.ip_network(rule.strip(), strict=False)
+        return True
+    except ValueError:
+        return False
 
 
 def _pipe(a: socket.socket, b: socket.socket) -> None:
@@ -104,14 +137,15 @@ class AllowProxy:
             else:
                 u = urlsplit(target)
                 host, port_n = u.hostname or "", u.port or (443 if u.scheme == "https" else 80)
-            if not allowed(host, self.allow):
+            to = permitted(host, port_n, self.allow)
+            if to is None:
                 if host not in self.refused:
                     self.refused.add(host)
                     print(f"flux sandbox: refused {host} (not in FLUX_SANDBOX_ALLOW)", file=sys.stderr, flush=True)
                 client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 client.close()
                 return
-            up = socket.create_connection((host.strip("[]"), port_n), timeout=30)
+            up = socket.create_connection((to, port_n), timeout=30)
             up.settimeout(None)
             if method.upper() == "CONNECT":
                 client.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
