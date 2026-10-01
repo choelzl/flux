@@ -27,7 +27,19 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
+// D701: on a loop shared with this user (or an admin's look at another's), every call about it
+// names its owner -- the server checks what this user may do with it
+let pageOwner = null;
+function owned(path) {
+  if (!pageOwner || !/^\/apps\/[^/?]+/.test(path) || /[?&]owner=/.test(path)) return path;
+  return path + (path.includes("?") ? "&" : "?") + "owner=" + encodeURIComponent(pageOwner);
+}
+async function withOwner(owner, fn) {
+  const was = pageOwner; pageOwner = owner || null;
+  try { return await fn(); } finally { pageOwner = was; }
+}
 async function api(path, { method = "GET", body, form } = {}) {
+  path = owned(path);
   const opt = { method, headers: { "X-Flux": "1" }, credentials: "same-origin" };
   if (form) opt.body = form;
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
@@ -348,7 +360,10 @@ async function loginPage() {
 }
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
-async function startLoop(name) {
+async function startLoop(name, owner) {
+  return withOwner(owner || pageOwner, () => startLoopOwned(name));
+}
+async function startLoopOwned(name) {
   // D693: the last start's options, and the check when the inputs changed since it was run
   const pre = await api(`/apps/${enc(name)}/preflight`).catch(() => ({}));
   if (pre.paused) { toast(`New starts are paused by an admin: ${pre.paused}`, "warn", { timeout: 8000 }); return false; }
@@ -437,7 +452,7 @@ async function sendFiles(name, entries, { create = false, folder = "", onProgres
     for (let off = 0; off < e.file.size; off += PART) {
       const chunk = e.file.slice(off, off + PART);
       const final = off + PART >= e.file.size;
-      const r = await fetch(`/api/apps/${enc(name)}/part?path=${enc(e.path)}&offset=${off}&final=${final}`,
+      const r = await fetch("/api" + owned(`/apps/${enc(name)}/part?path=${enc(e.path)}&offset=${off}&final=${final}`),
         { method: "PUT", body: chunk, headers: { "X-Flux": "1" }, credentials: "same-origin" }).catch(() => { offline(true); throw new Error("The server cannot be reached."); });
       if (!r.ok) { const d = await r.json().catch(() => null); throw new Error(d && d.detail ? `${e.path}: ${d.detail}` : `${e.path}: the server answered ${r.status}`); }
       sent += chunk.size; onProgress(sent, total);
@@ -490,7 +505,9 @@ function loopsTable(loops, { who = false } = {}) {
     h("tbody", {}, loops.map(l => {
       const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
       const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
-      const acts = owner ? (l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })] : [])
+      const acts = owner ? (l.perm === "watch" ? [h("span", { class: "pill" }, "watching")]
+          : l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+          : l.perm === "edit" ? [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })] : [])
         : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
         : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
            h("a", { class: "btn small", href: `#/app/${enc(name)}/configure` }, "Configure")];
@@ -571,14 +588,19 @@ async function uploadDialog() {
 }
 
 async function appsPage() {
-  const loops = await api("/apps");
+  const [loops, shared] = await Promise.all([api("/apps"), api("/shared").catch(() => [])]);
   const box = h("div", {}, loopsBrowser(loops));
+  const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true }) : "");
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
       h("button", { class: "", type: "button", onclick: () => uploadDialog() }, "Upload a loop"),
       h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
-    card(null, box));
-  pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps"))); };
+    card(null, box), shared.length ? card("Shared with me", sharedBox) : "");
+  pageRefresh = async () => {
+    if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps")));
+    const sh = await api("/shared").catch(() => []);
+    sharedBox.replaceChildren(sh.length ? loopsTable(sh, { who: true }) : "");
+  };
 }
 
 async function newPage() {
@@ -613,6 +635,26 @@ function usageCard(u) {
         h("td", { class: "num mono" }, String(b.turns)), h("td", { class: "num mono" }, dur(b.seconds)),
         h("td", { class: "num mono" }, b.counted ? fmtTok(b.tokens_in) : "—"), h("td", { class: "num mono" }, b.counted ? fmtTok(b.tokens_out) : "—"),
         h("td", { class: "num mono" }, b.cost_usd ? `$${b.cost_usd.toFixed(2)}` : "—"))))) : ""]);
+}
+
+/** Who else sees or edits a loop (D701): the owner shares it with a user to watch (its runs and
+    outputs) or to edit (change and run it too); everyone else with it sees the list. */
+async function sharingCard(name, isOwner) {
+  const sh = await api(`/apps/${enc(name)}/shares`).catch(() => null);
+  if (!sh) return "";
+  const set = async (user, perm) => { await api(`/apps/${enc(name)}/shares`, { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
+  const said = { watch: "watch: sees its runs and outputs", edit: "edit: also changes, starts and stops it" };
+  const rows = sh.shares.length ? h("table", { class: "list compact" }, h("tbody", {}, sh.shares.map(x => h("tr", {}, h("td", { class: "strong" }, x.user),
+      h("td", {}, isOwner ? h("select", { onchange: (e) => set(x.user, e.target.value) }, ["watch", "edit"].map(p => h("option", { value: p, selected: x.perm === p }, said[p])))
+        : h("span", { class: "pill" }, x.perm)),
+      h("td", { class: "right" }, isOwner ? act("Stop sharing", () => set(x.user, null), { cls: "small" }) : "")))))
+    : h("p", { class: "muted" }, "Shared with nobody.");
+  if (!isOwner) return card("Sharing", rows);
+  const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
+  const who = h("select", { id: "share-user" }, h("option", { value: "" }, free.length ? "a user…" : "no other user"), free.map(u => h("option", { value: u }, u)));
+  const how = h("select", { id: "share-perm" }, ["watch", "edit"].map(p => h("option", { value: p }, said[p])));
+  return card("Sharing", [h("p", { class: "muted" }, "Watch: they see its runs, log, results, turns and files. Edit: they also change its files and settings, start and stop it -- its runs use your model settings and keys, and the log says who started each."),
+    rows, h("div", { class: "row env-add" }, who, how, act("Share", async () => { if (!who.value) { toast("Choose a user.", "warn"); return; } await set(who.value, how.value); }, { cls: "primary small" }))]);
 }
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
@@ -667,7 +709,9 @@ async function loopPage(name, owner, tab = "Overview") {
   const q = owner ? `&owner=${enc(owner)}` : "";
   const base = `/api/apps/${enc(name)}`;
   const info = await api(`/apps/${enc(name)}${qs}`);
-  const mine = info.mine;
+  // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
+  const perm = info.perm || (info.mine ? "owner" : "admin");
+  const mine = perm === "owner" || perm === "edit", isOwner = perm === "owner";
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
   const tabs = ["Overview", "Live", "Log", "Timeline", "Agent turns", "Results", "Files", "Workbench", "Settings"];
@@ -683,10 +727,10 @@ async function loopPage(name, owner, tab = "Overview") {
   }
   function drawHead() {
     const acts = [];
-    if (st.running) {
+    if (st.running && perm !== "watch") {
       acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
-    } else if (mine) {
-      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name)) { await refresh(); tab = "Live"; drawTabs(); drawBody(); } }, { cls: "primary" }));
+    } else if (!st.running && mine) {
+      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); tab = "Live"; drawTabs(); drawBody(); } }, { cls: "primary" }));
     }
     if (mine) {
       acts.push(act("Check", async () => {
@@ -696,13 +740,16 @@ async function loopPage(name, owner, tab = "Overview") {
         out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
         await d;
       }));
-      if (info.document) acts.push(h("a", { class: "btn", href: `#/app/${enc(name)}/configure` }, "Configure"));
-      if (!st.running) acts.push(act("Delete", async () => {
+      if (info.document) acts.push(h("a", { class: "btn", href: `${appHref(info.owner, name)}/configure` }, "Configure"));
+      if (!st.running && isOwner) acts.push(act("Delete", async () => {
         if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
         await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
       }, { cls: "danger" }));
     }
-    header.replaceChildren(head(h("span", {}, name, " ", statePill(st), mine ? "" : h("span", { class: "pill" }, `${info.owner}'s · read only`)),
+    const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
+      : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin's look: read only" },
+      `${info.owner}'s · ${perm === "edit" ? "you may edit" : perm === "watch" ? "watching" : "read only"}`);
+    header.replaceChildren(head(h("span", {}, name, " ", statePill(st), whose),
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
   }
@@ -1057,14 +1104,24 @@ async function loopPage(name, owner, tab = "Overview") {
     const e = await api(`/apps/${enc(name)}/env${qs}`);
     if (tab !== "Settings") return;
     const varsCard = card("Environment variables", [
-      h("p", { class: "muted" }, "What this loop's runs and checks get, over your own and the server's. A secret is stored encrypted and never shown again."),
+      h("p", { class: "muted" }, isOwner ? "What this loop's runs and checks get, over your own and the server's. A secret is stored encrypted and never shown again."
+        : `What this loop's runs and checks get, over ${info.owner}'s own and the server's: the runs are ${info.owner}'s. A secret is stored encrypted and never shown again.`),
       envEditor(e.loop, mine ? async (v) => { await api(`/apps/${enc(name)}/env`, { method: "PUT", body: v }); settingsView(); } : null, "loop"),
       e.user.length || e.server.length ? h("div", { class: "blk" }, h("h3", {}, "Under them"),
-        envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: mine ? "yours (Account)" : `${info.owner}'s` }))],
+        envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))],
           new Set(e.loop.map(x => x.name)))) : ""]);
-    body.replaceChildren(varsCard, advancedCard(e, async (adv) => {
+    body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
       await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv }); toast("Advanced settings saved: they apply from the next start", "ok"); settingsView();
     }));
+  }
+  /** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
+      a list one item a line. */
+  function conclusionText(c) {
+    if (c == null) return "";
+    if (typeof c !== "object") return String(c);
+    const one = (v) => typeof v === "object" && v !== null ? JSON.stringify(v) : String(v);
+    return Object.entries(c).filter(([, v]) => v != null && v !== "" && !(Array.isArray(v) && !v.length))
+      .map(([k, v]) => Array.isArray(v) ? `${k.replace(/_/g, " ")}:\n${v.map(x => "  - " + one(x)).join("\n")}` : `${k.replace(/_/g, " ")}: ${one(v)}`).join("\n");
   }
   /** The last pass in a line (D699): when it ended, what it concluded, how many measurements
       it took, under the charts where the Overview had room. */
@@ -1074,7 +1131,7 @@ async function loopPage(name, owner, tab = "Overview") {
     const p = ps[ps.length - 1], prev = ps.length > 1 ? ps[ps.length - 2].when : 0;
     const took = (r.rows || []).filter(x => x.when > prev && x.when <= p.when).length;
     return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} measurement(s)` : ""),
-      p.conclusion ? h("pre", { class: "val small conclusion" }, String(p.conclusion)) : "",
+      p.conclusion ? h("pre", { class: "val small conclusion" }, conclusionText(p.conclusion)) : "",
       h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
   }
   /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
@@ -1144,7 +1201,7 @@ async function loopPage(name, owner, tab = "Overview") {
     if (tab === "Settings") return settingsView();
     if (tab === "Overview") {
       if (!st.running && !st.last_active) {
-        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")));
+        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")));
         return;
       }
       body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
@@ -1153,7 +1210,7 @@ async function loopPage(name, owner, tab = "Overview") {
     }
     if (tab === "Live") {
       if (!st.running && !st.last_active) {
-        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
+        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
         return;
       }
       body.replaceChildren(h("div", { class: "live-wrap" },
@@ -1644,7 +1701,7 @@ function filesPanel(name, yamlOf) {
     } };
 }
 
-async function configurePage(name) {
+async function configurePage(name, owner) {
   const C = window.FluxCrafter;
   if (!C) { show(card(null, empty("The configurator's script did not load."))); return; }
   if (!crafterCatalog) {
@@ -1657,7 +1714,7 @@ async function configurePage(name) {
     const got = C.fromDoc(v.raw, v.normal || v.raw);
     const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
     const panel = filesPanel(name, yamlOf);
-    show(head(h("span", {}, "Configure ", h("a", { href: `#/app/${enc(name)}` }, name)),
+    show(head(h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)),
         h("span", {}, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
           got.kept.length ? "; what the form does not edit is kept as written" : "")),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
@@ -2051,8 +2108,11 @@ async function route() {
   const TABS = { "": "Overview", live: "Live", log: "Log", timeline: "Timeline", "agent-turns": "Agent turns", results: "Results", files: "Files", workbench: "Workbench", settings: "Settings" };
   try {
     let m;
+    pageOwner = null;
     if ((m = hash.match(/^#\/app\/([^/]+)\/configure$/))) return await configurePage(decodeURIComponent(m[1]));
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)\/configure$/))) { pageOwner = decodeURIComponent(m[1]); return await configurePage(decodeURIComponent(m[2]), pageOwner); }
     if ((m = hash.match(/^#\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[1]), null, TABS[m[2] || ""] || "Overview");
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) { pageOwner = decodeURIComponent(m[1]); } else pageOwner = null;
     if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)(?:\/([a-z-]+))?$/))) return await loopPage(decodeURIComponent(m[2]), decodeURIComponent(m[1]), TABS[m[3] || ""] || "Overview");
     if (hash === "#/new") return await newPage();
     if (hash === "#/configure") return await configurePage(null);

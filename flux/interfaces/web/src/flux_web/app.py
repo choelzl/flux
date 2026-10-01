@@ -93,6 +93,11 @@ class StopAll(BaseModel):
     now: bool = False
 
 
+class ShareIn(BaseModel):                 # D701
+    user: str
+    perm: str | None = None
+
+
 class EnvVar(BaseModel):                  # D697
     name: str
     value: str | None = None
@@ -161,16 +166,32 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def ws(user: User) -> Workspace:
         return Workspace(store.data, user.name)
 
-    def reader(user: User, owner: str | None) -> tuple[Workspace, User]:
-        """Whose applications a read names: one's own, or, for an admin, any user's (D684)."""
-        if not owner or owner == user.name:
-            return ws(user), user
-        if not user.admin:
-            raise HTTPException(403, "admins only")
+    def access(user: User, owner: str | None, name: str | None) -> tuple[Workspace, User, str]:
+        """Whose loop a call names, and what this user may do with it (D701): "owner"; "edit" or
+        "watch" when the owner shared it with them; "admin" for an admin (watch, and stop)."""
+        if not owner or owner.strip().lower() == user.name.lower():
+            return ws(user), user, "owner"
         other = store.user(name=owner)
         if other is None:
             raise HTTPException(404, "no such user")
-        return Workspace(store.data, other.name), other
+        perm = store.shares(other.name, name).get(user.name) if name else None
+        if perm:
+            return Workspace(store.data, other.name), other, perm
+        if user.admin:
+            return Workspace(store.data, other.name), other, "admin"
+        raise HTTPException(403, "this loop is not shared with you")
+
+    def reader(user: User, owner: str | None, name: str | None = None) -> tuple[Workspace, User]:
+        """Whose loop a read names: one's own, one shared with this user, or, for an admin, any (D684, D701)."""
+        w, whose, _perm = access(user, owner, name)
+        return w, whose
+
+    def editor(user: User, owner: str | None, name: str) -> tuple[Workspace, User]:
+        """Whose loop a change names: one's own, or one shared with this user to edit (D701)."""
+        w, whose, perm = access(user, owner, name)
+        if perm not in ("owner", "edit"):
+            raise HTTPException(403, "you may watch this loop, not change it")
+        return w, whose
 
     def fail(exc: Exception) -> HTTPException:
         return HTTPException(400, str(exc))
@@ -443,9 +464,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "sandboxed_server": sandbox, "can_advance": user.admin}
 
     @app.put("/api/apps/{name}/env")
-    def put_loop_env(name: str, body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        loop_of(name, user)
-        return _set_env(f"loop:{user.name}:{name}", body, user, f"{user.name}/{name}")
+    def put_loop_env(name: str, body: EnvVar, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        _w, whose, _d, _run = loop_of(name, user, owner, edit=True)
+        return _set_env(f"loop:{whose.name}:{name}", body, user, f"{whose.name}/{name}")
 
     @app.put("/api/apps/{name}/advanced")
     def put_advanced(name: str, body: Advanced, owner: str | None = None, a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -505,6 +526,40 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                     f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; home ro {len(cfg['home_ro'])}, copy {len(cfg['home_copy'])}")
         return {"config": cfg}
 
+    # ---- sharing a loop (D701): watch sees its runs and outputs, edit also changes and runs it
+    @app.get("/api/apps/{name}/shares")
+    def get_shares(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose, perm = access(user, owner, name)
+        return {"shares": [{"user": u, "perm": p} for u, p in sorted(store.shares(whose.name, name).items())],
+                "users": [u.name for u in store.users() if u.name != whose.name and not u.disabled], "can_share": perm == "owner"}
+
+    @app.put("/api/apps/{name}/shares")
+    def put_share(name: str, body: ShareIn, user: User = Depends(user_of)) -> dict[str, Any]:
+        loop_of(name, user)                                   # the owner's own: only they share it
+        other = store.user(name=body.user)
+        if other is None or other.id == user.id:
+            raise HTTPException(400, "share with another user of this server")
+        try:
+            got = store.set_share(user.name, name, other.name, body.perm)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "share" if body.perm else "unshare", f"{name} with {other.name}: {body.perm or '-'}")
+        return {"shares": [{"user": u, "perm": p} for u, p in sorted(got.items())]}
+
+    @app.get("/api/shared")
+    def shared(user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        """The loops other users shared with this one, with what they may do (D701)."""
+        out = []
+        for owner, app_name, perm in store.shared_with(user.name):
+            o = store.user(name=owner)
+            w = Workspace(store.data, owner)
+            if o is None or not (w.root / app_name).is_dir():
+                continue
+            meta = w.meta(app_name)
+            out.append({"name": app_name, "owner": owner, "perm": perm, "document": meta.get("document"),
+                        **runs.state(o, app_name), "summary": _summary(w, o, app_name)})
+        return out
+
     @app.get("/api/audit")
     def audit(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return store.audit_log()
@@ -557,23 +612,25 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"name": name, **meta}
 
     @app.post("/api/apps/{name}/files")
-    async def add_files(name: str, files: list[UploadFile] = File(...), folder: str = Form(""),
+    async def add_files(name: str, files: list[UploadFile] = File(...), folder: str = Form(""), owner: str | None = None,
                         user: User = Depends(user_of)) -> dict[str, Any]:
+        w, _whose = editor(user, owner, name)
         got = [(f.filename or "file", await f.read()) for f in files]
         try:
-            written = ws(user).add(name, got, folder)
+            written = w.add(name, got, folder)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         store.audit(user.name, "add files", f"{name}: {len(written)} file(s)")
         return {"written": written}
 
     @app.put("/api/apps/{name}/part")
-    async def put_part(name: str, path: str, offset: int, request: Request, final: bool = False,
+    async def put_part(name: str, path: str, offset: int, request: Request, final: bool = False, owner: str | None = None,
                        user: User = Depends(user_of)) -> dict[str, Any]:
         """A large file in parts (D700): the raw body written at `offset`; `final` moves it into place."""
+        w, _whose = editor(user, owner, name)
         data = await request.body()
         try:
-            size = ws(user).put_part(name, path, offset, data, final)
+            size = w.put_part(name, path, offset, data, final)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         if final:
@@ -637,7 +694,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         takes it; neither runs any of its code."""
         from .configure import views
 
-        w, _whose = reader(user, owner)
+        w, _whose = reader(user, owner, name)
         try:
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
@@ -646,12 +703,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
 
     @app.post("/api/apps/{name}/document/preview")
-    def preview_document(name: str, body: DocSave, user: User = Depends(user_of)) -> dict[str, Any]:
+    def preview_document(name: str, body: DocSave, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """What a configurator save would write (D693): the document now, and after -- the kept
         keys carried over as the save would."""
         from .configure import merged, views
 
-        w = ws(user)
+        w, _whose = editor(user, owner, name)
         try:
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
@@ -660,11 +717,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
 
     @app.put("/api/apps/{name}/document")
-    def save_document(name: str, body: DocSave, user: User = Depends(user_of)) -> dict[str, Any]:
+    def save_document(name: str, body: DocSave, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """The configurator's YAML, with the keys it keeps carried over as written (D686)."""
         from .configure import merged, views
 
-        w = ws(user)
+        w, _whose = editor(user, owner, name)
         try:
             doc = w.meta(name).get("document")
             path = w.path(name, doc or "")
@@ -696,37 +753,39 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         store.server_set(f"env:loop:{user.name}:{name}", None)        # D697: its variables and settings go with it
         store.server_set(f"adv:{user.name}:{name}", None)
+        store.server_set(f"share:{user.name}:{name}", None)
         store.audit(user.name, "delete app", name)
         return {"ok": name}
 
     @app.get("/api/apps/{name}")
     def app_info(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        w, whose = reader(user, owner)
+        w, whose = reader(user, owner, name)
         try:
             w.app(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
-        return {"name": name, "owner": whose.name, "mine": whose.id == user.id, **w.meta(name), "files": w.files(name),
+        perm = access(user, owner, name)[2]
+        return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
                 "state": runs.state(whose, name)}
 
     @app.get("/api/apps/{name}/files")
     def app_files(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         try:
-            return reader(user, owner)[0].files(name, path)
+            return reader(user, owner, name)[0].files(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
 
     @app.get("/api/apps/{name}/workbench")
     def workbench(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         try:
-            return reader(user, owner)[0].workbench(name)
+            return reader(user, owner, name)[0].workbench(name)
         except WorkspaceError as exc:
             raise fail(exc) from exc
 
     @app.get("/api/apps/{name}/file")
     def app_file(name: str, path: str, download: bool = False, owner: str | None = None, user: User = Depends(user_of)):
         try:
-            data, is_text = reader(user, owner)[0].read(name, path)
+            data, is_text = reader(user, owner, name)[0].read(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         if download or not is_text:
@@ -737,40 +796,40 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.get("/api/apps/{name}/inputs")
     def list_inputs(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """The loop's own files (D696): what the configurator edits beside the document."""
-        w, _whose = reader(user, owner)
+        w, _whose = reader(user, owner, name)
         try:
             return w.inputs(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
 
     @app.delete("/api/apps/{name}/file")
-    def delete_file(name: str, path: str, user: User = Depends(user_of)) -> dict[str, str]:
+    def delete_file(name: str, path: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         try:
-            ws(user).remove(name, path)
+            editor(user, owner, name)[0].remove(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         store.audit(user.name, "delete file", f"{name}/{path}")
         return {"ok": f"{path} deleted"}
 
     @app.put("/api/apps/{name}/file")
-    def put_file(name: str, path: str, body: FileText, user: User = Depends(user_of)) -> dict[str, str]:
+    def put_file(name: str, path: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         try:
-            ws(user).write(name, path, body.text)
+            editor(user, owner, name)[0].write(name, path, body.text)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         store.audit(user.name, "edit", f"{name}/{path}")
         return {"ok": path}
 
     @app.post("/api/apps/{name}/check")
-    def check(name: str, user: User = Depends(user_of)) -> dict[str, Any]:
-        w = ws(user)
+    def check(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        w, whose = editor(user, owner, name)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        env = {**run_env(store, user, name), "FLUX_SANDBOX_APP": f"{user.name}.{name}"}
-        adv = advanced(store, user.name, name)
+        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
+        adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, store.server_get("sandbox") or {}, adv, [])
         digest = w.inputs_digest(name)
@@ -784,10 +843,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"ok": ok, "output": output}
 
     @app.get("/api/apps/{name}/preflight")
-    def preflight(name: str, user: User = Depends(user_of)) -> dict[str, Any]:
+    def preflight(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Before a start (D693): did the inputs change since the last start, and was the check
         run on them as they are now -- with what result."""
-        w = ws(user)
+        w, _whose = editor(user, owner, name)
         try:
             w.app(name)
         except WorkspaceError as exc:
@@ -801,9 +860,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "network": {k: (store.server_get("sandbox") or {}).get(k) for k in ("network", "allow", "users_add")}}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
-    def loop_of(name: str, user: User, owner: str | None = None) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
-        """(workspace, whose, the application's folder, its latest start or None)."""
-        w, whose = reader(user, owner)
+    def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
+        """(workspace, whose, the application's folder, its latest start or None); `edit`: a change."""
+        w, whose = editor(user, owner, name) if edit else reader(user, owner, name)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
@@ -821,27 +880,29 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return [runs.state(user, a["name"]) for a in ws(user).apps()]
 
     @app.post("/api/apps/{name}/start")
-    def start(name: str, body: RunOptions, user: User = Depends(user_of)) -> dict[str, str]:
-        w, _whose, d, _run = loop_of(name, user)
+    def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        w, whose, d, _run = loop_of(name, user, owner, edit=True)
         meta = w.meta(name)
-        try:
-            runs.start(user, name, d, meta["document"], str(meta.get("id") or name), body.model_dump())
+        try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
+            runs.start(whose, name, d, meta["document"], str(meta.get("id") or name), body.model_dump(), by=user)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         w.set_meta(name, last_start_digest=w.inputs_digest(name), last_options=body.model_dump())    # D693
-        store.audit(user.name, "start", name)
+        store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
         return {"ok": f"{name} started: it resumes from its record"}
 
     @app.post("/api/apps/{name}/stop")
     def stop(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
-        _w, whose, _d, run = loop_of(name, user, owner)         # an admin may stop anyone's
+        if access(user, owner, name)[2] == "watch":             # the owner, an editor or an admin may stop it
+            raise HTTPException(403, "you may watch this loop, not stop it")
+        _w, whose, _d, run = loop_of(name, user, owner)
         said = runs.stop(run, now=body.now)
         store.audit(user.name, "stop", f"{whose.name}/{name}: {said}")
         return {"ok": said}
 
     @app.post("/api/apps/{name}/notes")
-    def add_note(name: str, body: NoteIn, user: User = Depends(user_of)) -> dict[str, str]:
-        _w, _whose, d, run = loop_of(name, user)                 # the owner's only
+    def add_note(name: str, body: NoteIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, _whose, d, run = loop_of(name, user, owner, edit=True)   # the owner or an editor
         if not run or not runs.live(run):
             raise HTTPException(409, "the loop is not running")
         runs.note(d / "runs", user, body.text.strip())

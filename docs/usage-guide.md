@@ -216,6 +216,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
     When an agent asks (`questions: operator`), the page shows the question and its time left,
     and the answer goes back to the agent.
+  - **Sharing** (on Settings, the owner's): share the loop with another user to **watch** (its
+    runs, log, results, turns, files and settings) or to **edit** (also change its files, document
+    and variables, start, stop and send it notes). An editor's runs are the owner's loop: its record,
+    the owner's model settings, keys and limits; the log line of each start says who started it.
+    Deleting and sharing stay the owner's. Loops shared with you are listed under **Shared with
+    me**, with what you may do.
   - **Settings:** the loop's environment variables (over the user's and the server's, which are
     listed under them), and its advanced settings: run in the sandbox or on the host, memory,
     CPUs, processes, scratch size. Only an admin changes the advanced settings (also when
@@ -275,7 +281,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   it); a password is exactly as typed. `flux user add` says which data folder it wrote; `flux
   serve` says its data folder and its accounts: the two must be the same folder. Passwords are hashed with scrypt; five failures lock a name for ten minutes;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
-  A user sees only their own applications and runs. An admin manages users, sees every
+  A user sees only their own loops and those shared with them. An admin manages users, sees every
   application (read only) and every run (and may stop it), and the audit trail.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.

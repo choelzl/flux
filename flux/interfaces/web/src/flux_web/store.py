@@ -331,6 +331,36 @@ class Store:
             got[name] = {"value": self._fernet().encrypt(value.encode()).decode() if secret else value, "secret": bool(secret)}
         self.server_set(f"env:{scope}", got or None)
 
+    # ---- a loop shared with other users (D701): "watch" sees its runs and outputs, "edit" also
+    #      changes and runs it
+    def shares(self, owner: str, app: str) -> dict[str, str]:
+        return dict(self.server_get(f"share:{owner}:{app}") or {})
+
+    def set_share(self, owner: str, app: str, user: str, perm: str | None) -> dict[str, str]:
+        if perm not in (None, "watch", "edit"):
+            raise ValueError("a share is watch or edit")
+        got = self.shares(owner, app)
+        if perm is None:
+            got.pop(user, None)
+        else:
+            got[user] = perm
+        self.server_set(f"share:{owner}:{app}", got or None)
+        return got
+
+    def shared_with(self, user: str) -> list[tuple[str, str, str]]:
+        """(owner, app, permission) of every loop shared with `user`."""
+        import json
+
+        with self._db() as db:
+            rows = db.execute("SELECT key, value FROM server WHERE key LIKE 'share:%'").fetchall()
+        out = []
+        for r in rows:
+            _k, owner, app = r["key"].split(":", 2)
+            perm = json.loads(r["value"]).get(user)
+            if perm:
+                out.append((owner, app, perm))
+        return out
+
     # ---- audit
     def audit(self, user: str | None, action: str, detail: str = "") -> None:
         with self._db() as db:

@@ -321,7 +321,7 @@ def test_a_user_can_neither_see_nor_use_another_users_loops(server):
         ada = _client(app, "ada", "correct horse battery")
         assert ada.get("/api/apps/x/state", params={"owner": "bob"}).json()["running"] is True
         assert ada.put("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}, json={"text": "id: z"},
-                       headers=H).status_code in (400, 404), "an admin reads; the owner writes"
+                       headers=H).status_code in (400, 403, 404), "an admin reads; the owner writes"
         assert ada.post("/api/apps/x/stop", params={"owner": "bob"}, json={"now": True}, headers=H).status_code == 200
     finally:
         proc.kill()

@@ -1316,3 +1316,39 @@ the topics above.
   run's folders refused; a batch over the limit saying how to go past it; an application listed,
   used, an edit not reaching the folder, refreshed with the record kept, a path escape refused; a
   loop's own limit.
+
+- **D701: a loop shared to watch or to edit.**
+  - **Permissions:** an owner shares a loop with another user.
+    - **watch:** its runs and outputs: state, log, Live, Timeline, results, turns, files,
+      settings.
+    - **edit:** also its files, document and variables; check, start, stop, and notes to it.
+    - Deleting and sharing stay the owner's.
+    - An admin without a share watches, and may stop it, as before.
+    - Shares live in the `server` table (`share:<owner>:<app>`) and go with a deleted loop.
+  - **One check for every route:** `access(user, owner, name)` returns "owner", "edit", "watch"
+    or "admin".
+    - Reads go through `reader`, changes through `editor`, which refuses watch and admin.
+    - The routes that change a loop used to act on the caller's own workspace whatever the owner;
+      each now takes `owner` and passes it through `editor`. These are files, parts, document,
+      preview, check, preflight, start, notes and variables.
+    - Stop refuses watch.
+    - A route left on the caller's own workspace would have let a watcher's call land on their own
+      loop of the same name. `test_web_share` calls each with `owner` as the watcher and as the
+      editor.
+  - **An editor's start is the owner's loop:** the owner's record, model settings, keys,
+    variables, sandbox key and limits. `RunManager.start(..., by=)` writes who started it in the
+    start's log line, and the audit says both.
+  - **The page:**
+    - While on another's loop, every call about it carries `owner` (`owned()` in `api()`).
+    - Actions follow the permission: edit offers Start, Check, Configure, the files' editor, the
+      note line and variables. Watch offers only what it may see, with a "watching" label.
+    - Deleting is the owner's only.
+    - The Loops page lists "Shared with me".
+    - The Settings tab has a Sharing card: the owner adds a user, changes watch and edit, stops
+      sharing; others see the list.
+  - **Fixed on the way:** the Overview's last pass printed `[object Object]`, because a pass's
+    conclusion is a record. It is now shown a field per line.
+  - **Live, two users in Firefox:** cedric shared sw (watch) and probe2 (edit) with dee.
+    - dee's list showed both.
+    - On sw: no Stop, no note line.
+    - On probe2: Start, Check, Configure; no Delete; cedric's variables named as his.

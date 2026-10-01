@@ -212,7 +212,10 @@ class RunManager:
         self.store, self.sandbox, self.max_running = store, sandbox, max_running
 
     # ---- start: the loop resumes from its record
-    def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any]) -> None:
+    def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any],
+              by: User | None = None) -> None:
+        """`user`: whose loop (its record, settings, limits); `by`: who started it, when another (D701)."""
+        by = by or user
         paused = self.store.server_get("paused")
         if paused:
             raise ValueError(f"starts are paused by an admin: {paused}")
@@ -245,7 +248,7 @@ class RunManager:
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else []) \
             + ([net] if net else [])
         with open(files["log"], "a") as fh:
-            fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {user.name} · {', '.join(said)} ──\n")
+            fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n")
         run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)
         fh = open(files["log"], "ab")
         proc = subprocess.Popen(argv, cwd=str(app_dir), stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
