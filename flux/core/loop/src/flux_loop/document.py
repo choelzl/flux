@@ -1185,6 +1185,32 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     return flow, doc
 
 
+#: D735: a loop's own papers -- the folders beside its document that join its library without a
+#: word in the document (`inputs/` is where `flux ask` puts what it was given).
+LIBRARY_FOLDERS = ("papers", "library", "references", "inputs")
+
+
+def library_folders(task: "TaskSpec") -> tuple[str, ...]:
+    """The folders a document's library adds to the shared one (D648, D735): the one its
+    `knowledge: {library: ...}` names, and its own paper folders beside it."""
+    out = [task.library] if task.library else []
+    if task.home:
+        home = Path(task.home)
+        out += [str((home / name).resolve()) for name in LIBRARY_FOLDERS if (home / name).is_dir()]
+        # and any other folder beside it holding PDFs ("research/"), not the loop's own working ones
+        try:
+            others = sorted(p for p in home.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))
+                            and p.name not in _NOT_PAPERS and p.name not in LIBRARY_FOLDERS)
+        except OSError:
+            others = []
+        out += [str(p.resolve()) for p in others if next(p.rglob("*.pdf"), None) is not None]
+    return tuple(dict.fromkeys(out))
+
+
+#: The loop's own working folders, never its papers.
+_NOT_PAPERS = ("out", "runs", "workbench", "agents", "skills", "node_modules", "build", "venv")
+
+
 def library_on(task: "TaskSpec") -> bool:
     """Whether the library reaches this document's prompts and agents: always, unless
     `flow.knowledge` says `none` (D648)."""
@@ -1311,7 +1337,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
             pass
     said = list(flow.get("knowledge") or [])
     knowledge = (["sheet"] if task.knowledge else []) + (
-        [] if not library_on(task) else ["library" + (f" + {task.library}" if task.library else "")
+        [] if not library_on(task) else ["library" + "".join(f" + {Path(f).name}/" for f in library_folders(task))
                                          + " (on by default; `knowledge: none` turns it off)"])
     knowledge += ["digest"] if "digest" in said else []
     extract = flow.get("extract", "none")

@@ -571,7 +571,9 @@ class PromptProblem(Problem):
 
             role = self.roles().knowledge
             self._mentor = role
-            folders = (self.task.library,) if self.task.library else ()
+            from .document import library_folders
+
+            folders = library_folders(self.task)          # D735: the loop's own papers too
             if library_on(self.task) and (role is None or hasattr(role, "sources")):
                 from flux_knowledge import Library, Mentor, Papers
                 from flux_knowledge.library import library_files

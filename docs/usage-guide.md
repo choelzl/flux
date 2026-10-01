@@ -94,6 +94,15 @@ flux gc --db DB --keep-days 7 --apply   # remove trace directories no record nam
 flux knowledge digest --db DB     # the library's key points, digested once by the model
 ```
 
+**Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
+its own papers (D735) -- the folders `papers/`, `library/`, `references/` and `inputs/` beside its document
+(`flux ask` puts what it was given in `inputs/`), any other folder there holding PDFs, and a folder
+`knowledge: {library: DIR}` names. Every prompt gets the excerpts nearest the problem and a line per paper,
+each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
+`pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
+The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
+model's digest of each paper, once per paper, which the plan reads.
+
 ## The sandbox
 
 `flux task run` and `flux ask` run in a container (D680), so neither an agent nor a

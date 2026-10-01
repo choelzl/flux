@@ -158,14 +158,21 @@ def cmd_replay(args: argparse.Namespace) -> int:
 
 def _library_line(task: Any, problem: Any) -> str:
     """What the library holds and who reads it (D648), one line."""
-    from flux_knowledge import status
-    from flux_loop.document import library_on
+    from pathlib import Path
 
-    st = status((task.library,) if task.library else ())
+    from flux_knowledge import status
+    from flux_knowledge.library import library_files
+    from flux_loop.document import LIBRARY_FOLDERS, library_folders, library_on
+
+    folders = library_folders(task)
+    st = status(folders)
     if not st["documents"]:
-        return f"library: empty -- drop papers in {st['path']}" + (f" or {task.library}" if task.library else "")
+        return (f"library: empty -- drop papers in {st['path']}, or in a folder beside the document: "
+                + ", ".join(f"{f}/" for f in LIBRARY_FOLDERS))
+    own = sum(len(library_files([f])) - len(library_files()) for f in folders)       # D735: the loop's own
     head = (f"library: {st['documents']} documents ({st['pdfs']} PDFs, pdftotext "
-            f"{'present' if st['pdftotext'] else 'missing'})" + (f", with {task.library}" if task.library else ""))
+            f"{'present' if st['pdftotext'] else 'missing'})"
+            + (f", {own} of them the loop's own ({', '.join(Path(f).name + '/' for f in folders)})" if folders else ""))
     if not library_on(task):
         return head + ", off (flow.knowledge: none)"
     try:

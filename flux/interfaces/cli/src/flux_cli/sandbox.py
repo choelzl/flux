@@ -170,6 +170,19 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     if command in ("task run", "task check"):
         doc = Path(args.file).resolve()
         ro.append(str(doc.parent))
+        # D735: the papers the run reads -- the shared library where FLUX_LIBRARY moved it, and a
+        # folder the document's `knowledge: {library: ...}` names outside its own
+        lib = os.environ.get("FLUX_LIBRARY")
+        if lib and _exists(lib):
+            ro.append(str(Path(lib).resolve()))
+        try:
+            from flux_loop import load_task
+
+            own = load_task(str(doc)).library
+            if own and not Path(own).resolve().is_relative_to(doc.parent):
+                ro.append(str(Path(own).resolve()))
+        except Exception:  # noqa: BLE001 -- a document the run itself will refuse
+            pass
         for sub in ("out", "workbench"):                     # the run's own, under the problem
             (doc.parent / sub).mkdir(exist_ok=True)
             rw.append(str(doc.parent / sub))
