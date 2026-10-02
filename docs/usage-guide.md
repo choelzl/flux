@@ -75,7 +75,7 @@ flow:
   select: {finalists: 2}
 ```
 
-`flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+`flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`.
 
