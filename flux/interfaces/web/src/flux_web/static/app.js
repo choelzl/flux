@@ -1626,7 +1626,8 @@ function logView(base, qs) {
   box.append(spacer, win);
   let shown = [], ROW = 0, drawn = "";
   const follow = h("input", { type: "checkbox", checked: true });
-  const wrap = h("input", { type: "checkbox" });
+  const wrap = h("input", { type: "checkbox", checked: NARROW.matches });   // D754: on a phone a line wraps, never scrolls
+  if (wrap.checked) box.classList.add("wrap");
   const problems = h("input", { type: "checkbox" });
   const filter = h("input", { placeholder: "filter (text or /regex/)", class: "filter" });
   const count = h("span", { class: "muted" });
@@ -2983,6 +2984,26 @@ async function loginsCard() {
 }
 
 // ================================================================ routing
+// ---- D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's name
+const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
+function labelTables(root) {
+  for (const t of root.querySelectorAll("table.list")) {
+    const heads = [...t.querySelectorAll(":scope > thead th")].map(th => th.textContent.trim());
+    if (!heads.some(Boolean)) continue;
+    for (const tr of t.querySelectorAll(":scope > tbody > tr")) {
+      [...tr.children].forEach((td, i) => { if (heads[i] && td.dataset.label !== heads[i]) td.dataset.label = heads[i]; });
+    }
+  }
+}
+{
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; labelTables(document.body); });
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 async function route() {
   navSeq++;
   for (const f of cleanup.splice(0)) f();

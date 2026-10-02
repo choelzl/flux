@@ -672,19 +672,27 @@ def flows(r: Run) -> None:
     r.step("agent test", agent_test)
 
     def phone():
-        """At a phone's width every main page fits: no sideways scroll, no error."""
+        """At a phone's width nothing scrolls sideways (D754): a list's rows stack, tabs and logs wrap."""
         b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 844})
         try:
-            for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/results", "#/app/sw/files", "#/app/sw/settings", "#/account"):
+            pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
+                                          "#/app/sw/files", "#/app/sw/settings", "#/account")]
+            pages += [("ada", h) for h in ("#/admin", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
+            who = None
+            for user, h in pages:
+                if user != who:
+                    r.login(user)
+                    who = user
                 r.page(h, "document.querySelector('#main')", h)
                 b.wait("!document.querySelector('#main .skeleton')", timeout=20)
-                time.sleep(0.5)
+                time.sleep(0.8)
                 wide = b.js("return [document.documentElement.scrollWidth, window.innerWidth]")
                 over = b.js("""return [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect();
                     return r.width > 0 && r.right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed'
-                      && !e.closest('pre, table, .scroll-x, .tree, .run-graph-rows, .cm-editor, .flux-crafter svg, .fc-drawing, .tasks-drawing, .diff'); })
-                    .slice(0, 3).map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right))""")
-                r.check(f"phone {h}: no sideways scroll", wide[0] <= wide[1] + 1, f"{wide} {over}")
+                      && !e.closest('pre, code, .cm-editor, .drawer:not(.open)'); })
+                    .filter((e, i, all) => !all.some(p => p !== e && p.contains(e))).slice(0, 3)
+                    .map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right))""")
+                r.check(f"phone {h}: nothing wider than the screen", wide[0] <= wide[1] + 1 and not over, f"{wide} {over}")
                 r.clean(f"phone {h}")
         finally:
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})

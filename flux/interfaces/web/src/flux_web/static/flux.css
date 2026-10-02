@@ -712,7 +712,17 @@ body:has(.composer) .toasts { bottom: 150px; }
 .agent-steps li.bad { color: var(--bad); }
 .agent-test-row td { border-top: none; padding-top: 0; }
 
-/* D752: on a phone a list wider than the screen scrolls in its own box, never the page */
+/* D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's
+   name (app.js labels the cells from the header); tabs and checkbox labels wrap */
 @media (max-width: 640px) {
-  #main table.list { display: block; max-width: 100%; overflow-x: auto; }
+  .tabs { flex-wrap: wrap; }
+  label.check { white-space: normal; max-width: 100%; }
+  table.list, table.list > tbody, table.list > tbody > tr, table.list > tbody > tr > td, table.list > tfoot,
+  table.list > tfoot > tr, table.list > tfoot > tr > td { display: block; width: auto; max-width: 100%; }
+  table.list > thead { display: none; }
+  table.list > tbody > tr { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  table.list > tbody > tr > td { border: none; padding: 2px 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  table.list > tbody > tr > td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 6.5em; margin-right: 8px;
+    color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+  table.list .actions { justify-content: flex-start; flex-wrap: wrap; }
 }

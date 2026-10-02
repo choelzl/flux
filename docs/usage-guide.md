@@ -406,7 +406,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   `~/snap/firefox/common/flux-e2e/shots/` (`FLUX_E2E_HOME` moves it). `FLUX_E2E_SANDBOX=1` runs
   the loops in the sandbox.
   It also runs passes at once, an agent's Test with a stand-in Codex and the main pages at a phone's width
-  (D752). The task tree's building (`static/looptree.js`) is tested apart under node on recorded journals:
+  (D752) -- where nothing may be wider than the screen: lists stack, tabs and logs wrap (D754). The task tree's building (`static/looptree.js`) is tested apart under node on recorded journals:
   `tests/unit/test_looptree.py`.
 - **Data:** `$XDG_DATA_HOME/flux/web` (`--data`), holding `flux-web.db` and
   `users/<name>/apps/<app>/`. A run's sandbox cache is `~/.cache/flux/apps/<user>-<app>/`.
