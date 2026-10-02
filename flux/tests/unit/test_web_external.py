@@ -64,7 +64,6 @@ def test_an_external_users_run_has_nothing_of_the_servers_but_its_programs(tmp_p
     i = run_env(store, ian, "x")
     assert i["ANTHROPIC_API_KEY"] == "machine-claude" and i["TEAM_TOKEN"] == "server-secret"
     assert i["FLUX_SANDBOX_HOME"] == str(store.data / "users" / "ian" / "home"), "D744: an internal user has a home too"
-    assert run_env(store, eve, "x", home_for=ian)["FLUX_SANDBOX_HOME"] == i["FLUX_SANDBOX_HOME"], "whoever starts it lends their logins"
     sandbox_env(e, False, {})                                   # on the host: their agents use their home
     assert e["HOME"] == e["FLUX_SANDBOX_HOME"]
 
@@ -214,3 +213,28 @@ def test_a_login_that_ends_well_is_tested_at_once(tmp_path, monkeypatch):
         raise AssertionError("no Test after the login")
     assert got["agent"] == "codex" and got["steps"], got
     assert not {a["id"]: a for a in ian.get("/api/logins").json()["agents"]}["codex"]["testing"], "done: no longer testing"
+
+
+def test_a_shared_loop_runs_on_its_owners_agents(tmp_path, monkeypatch):
+    """D769: whoever starts a shared loop, it runs as its owner's -- their home, their logins, their
+    agents' Tests; the one who starts it needs no login of their own."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    store = _store(tmp_path)
+    app = create_app(tmp_path / "data", sandbox=False)
+
+    def client(n, pw):
+        c = TestClient(app)
+        assert c.post("/api/login", json={"name": n, "password": pw}, headers=H).status_code == 200
+        return c
+
+    ian, old = client("ian", "ian has a long secret"), client("old", "old has a long secret")
+    ian.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml",
+             b"id: x\nstatement: s\nlanguage: python\nflow: {generate: {agent: codex}}\ngate: {test: ['true']}\n"))], headers=H)
+    assert ian.put("/api/apps/x/shares", json={"user": "old", "perm": "edit"}, headers=H).status_code == 200
+    r = old.post("/api/apps/x/start?owner=ian", json={"passes": 1}, headers=H)
+    assert r.status_code == 409 and "Codex not set up for ian" in r.json()["detail"], r.text
+    store.server_set("agent-test:ian:codex", {"ok": True})
+    r = old.post("/api/apps/x/start?owner=ian", json={"passes": 1}, headers=H)
+    assert "set up" not in r.text, "the owner's Test is what counts, not the starter's"
+    i = run_env(store, store.user(name="ian"), "x")
+    assert i["FLUX_SANDBOX_HOME"] == str(store.data / "users" / "ian" / "home"), "the owner's home: their logins"

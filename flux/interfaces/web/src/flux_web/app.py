@@ -319,12 +319,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     def agents_gate(user: User, agents: list[str]) -> None:
         """A start, an authoring agent or an ask refused while an agent it needs has not passed
-        its test for whoever starts it -- before a turn is spent (D751)."""
+        its test for the loop's owner, whose logins it runs on (D769) -- before a turn is spent (D751)."""
         from .authoring import AUTHORS
 
         bad = [AUTHORS.get(a, a) for a in agents if a in LOGIN_DEFAULTS and not agent_test_of(user, a).get("ok")]
         if bad:
-            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: Account › Agent logins, log in and Test")
+            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: {user.name}'s Account › Agent logins, log in and Test")
 
     def author_agent(author: Any) -> list[str]:
         name = author.get("preset") if isinstance(author, dict) else author
@@ -909,9 +909,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     # ---- a problem written or revised by an agent (D704)
     def _author_env(whose: User, name: str, by: User | None = None, author: Any = None) -> dict[str, str]:
-        agents_gate(by or whose, author_agent(author))                      # D751
-        home_ready(store, by or whose)
-        env = {**run_env(store, whose, name, home_for=by), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
+        agents_gate(whose, author_agent(author))                            # D751, D769: the owner's agents
+        home_ready(store, whose)
+        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, sandbox_config(store), adv, [])
@@ -1231,8 +1231,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         doc = w.meta(name).get("document")
-        home_ready(store, user)
-        env = {**run_env(store, whose, name, home_for=user), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
+        home_ready(store, whose)
+        env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop: its settings and logins (D769)
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, sandbox_config(store), adv, [])
@@ -1322,14 +1322,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
         if not meta.get("document"):
             raise HTTPException(409, "this loop has no problem document yet")
-        try:                                       # D751: the agents it hands work to, tested by whoever starts it
+        try:                                       # D751: the agents it hands work to, tested by its owner (D769)
             from flux_loop import load_task
             from flux_loop.agent_check import agents_used
 
             needs = agents_used(load_task(str(d / meta["document"])))
         except Exception:  # noqa: BLE001 -- a document the run itself will refuse, saying why
             needs = []
-        agents_gate(user, needs)
+        agents_gate(whose, needs)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             runs.start(whose, name, d, meta["document"], str(meta.get("id") or name), body.model_dump(), by=user)
         except ValueError as exc:

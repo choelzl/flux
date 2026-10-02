@@ -335,7 +335,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     A login that ends well is tested at once (Account shows "testing…", then the result).
   - **Homes** (D744): every user has a home of their own, `<data>/users/<name>/home` (0700, no system
     account): their runs' HOME, writable at `/home/flux`, kept -- their agents' settings, logins and
-    sessions. A run uses the home of whoever starts it. Every home starts with the admin's list of
+    sessions. A run uses its loop's owner's home -- a shared loop runs on the owner's agent logins, whoever starts it (D769). Every home starts with the admin's list of
     paths from the server account's home (default `.config/opencode` and a corporate OpenCode's
     plugin parts and state under `.local/share/opencode/` and `.local/state/opencode/`, D765), copied where it lacks them,
     never over what is there; no one's login is among them. The server account's own home path is

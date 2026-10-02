@@ -3115,7 +3115,7 @@ async function loginsCard() {
   await drawList();
   return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs use what the login writes. ",
     "The login runs as a run does, in the sandbox, under the server's network rules. ",
-    "A loop, a new loop's author or a question uses an agent once its Test passed for you; a login that ends well is tested at once."), box, term]);
+    "Your loops run on your logins -- also when someone you share one with starts it -- and use an agent once its Test passed for you; a login that ends well is tested at once."), box, term]);
 }
 
 // ================================================================ routing

@@ -59,13 +59,13 @@ HOME_SEED = (".config/opencode",
              ".local/share/opencode/request-utils", ".local/share/opencode/images", ".local/state/opencode/kv2.json")
 
 
-def run_env(store: Store, user: User, app: str | None = None, home_for: User | None = None) -> dict[str, str]:
+def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     """The environment of a user's run or check (D684, D696): the server's, then the model
     settings the admin set for the server, then the user's own. A run never reads the server's
     flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, OpenCode,
     Claude Code, Codex), a user who names their own endpoint gets none of the server's values of
-    that group -- no server key goes to someone else's endpoint. HOME (D744) is the Flux home of
-    `home_for` -- whoever starts it: logins belong to people -- else of `user`."""
+    that group -- no server key goes to someone else's endpoint. HOME (D744) is `user`'s Flux home:
+    a loop's owner, whose agents' logins a shared loop runs on, whoever starts it (D769)."""
     from .store import GROUPS
 
     env = {**os.environ, "FLUX_CONFIG": os.devnull}
@@ -116,12 +116,11 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     _agents(env, web)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like
-    # D748: an agent's login kept as a setting is a person's, like the files in their home -- whoever
-    # starts the run lends theirs; and the settings' names pass into the sandbox whatever they look like
-    starter = home_for or user
+    # D748: an agent's login kept as a setting is a person's, like the files in their home -- the
+    # loop's owner's (D769); and the settings' names pass into the sandbox whatever they look like
     for k in _LOGIN_SETTINGS:
         env.pop(k, None)
-        own = store.settings(starter, reveal=True).get(k)
+        own = store.settings(user, reveal=True).get(k)
         if own:
             env[k] = own
     names: list[str] = [k for k in (*web, *_LOGIN_SETTINGS) if k in env]
@@ -132,7 +131,7 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     if names:
         env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
     env["FLUX_SANDBOX_REFUSALS"] = str(store.refusals_file)      # D708: hosts its sandbox refused, for the audit
-    env["FLUX_SANDBOX_HOME"] = str(store.home_of(home_for or user))   # D744: every user's own home (started by `home_ready`)
+    env["FLUX_SANDBOX_HOME"] = str(store.home_of(user))   # D744: every user's own home (started by `home_ready`)
     return env
 
 
@@ -322,8 +321,9 @@ class RunManager:
             argv += ["--passes", str(int(passes))]
         if options.get("screen_only"):
             argv.append("--screen-only")
-        home_ready(self.store, by)                            # D744: started before anything runs in it, not on a page's look
-        env = {**run_env(self.store, user, app, home_for=by), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
+        home_ready(self.store, user)                          # D744: started before anything runs in it, not on a page's look
+        # D769: the owner's loop runs as the owner's -- their agents' logins too, whoever starts it
+        env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
                "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
         adv = advanced(self.store, user.name, app)
         if adv.get("parallel"):                       # D741: an admin allows it; the document says how much
