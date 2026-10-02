@@ -171,3 +171,16 @@ def test_a_resumed_pass_folds_its_rechecks_into_its_setup_before_its_design():
                {"t": 10.5 + i, "ev": "end", "id": i, "name": "", "seconds": 0.1, "failed": False, "output": {}}]
     t = tree("".join(json.dumps(e) + "\n" for e in ev))
     assert titles(branch(t, "Pass 2")["kids"]) == ["Setup", "Design"]
+
+
+def test_the_papers_digest_is_a_leaf_of_the_setup():
+    """D771: `knowledge: digest` in the Setup, beside the Reading, saying what it digested and by whom."""
+    ev = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1})}]
+    for i, (n, out) in enumerate([("knowledge: prepare x", {}), ("knowledge: digest", {"digested": 2, "in all": 3, "by": "opencode"}),
+                                  ("DSE: batch", {})], start=1):
+        ev += [{"t": 1 + i, "ev": "start", "id": i, "parent": None, "name": n, "why": "", "params": {}},
+               {"t": 1.5 + i, "ev": "end", "id": i, "name": "", "seconds": 0.1, "failed": False, "output": out}]
+    t = tree("".join(json.dumps(e) + "\n" for e in ev))
+    setup = branch(t, "Setup")                              # the first pass's Setup is the run's
+    assert titles(setup["kids"]) == ["Reading", "Digest"], t
+    assert next(k for k in setup["kids"] if k["leaf"] == "Digest")["line"] == "2 new by opencode · 3 paper(s) digested"

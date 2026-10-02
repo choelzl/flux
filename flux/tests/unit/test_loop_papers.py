@@ -78,3 +78,62 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
     assert "other.md" not in text
     digest.render(state)
     assert len(model.prompts) == 1, "once: the record keeps it"
+
+
+def _adders(tmp_path, monkeypatch, knowledge=None):
+    from flux_loop import TaskSpec
+
+    monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "shared"))
+    (tmp_path / "shared").mkdir(exist_ok=True)
+    (tmp_path / "loop/library").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "loop/library/adders.md").write_text("Prefix adders: Kogge-Stone has log2(n) levels and fan-out 2. " * 20)
+    doc = {"id": "x", "statement": "an 8-bit adder", "language": "verilog", "gate": {"test": ["true"]}, "objectives": []}
+    if knowledge is not None:
+        doc["knowledge"] = knowledge
+    return TaskSpec.from_dict(doc, base=tmp_path / "loop")
+
+
+def test_the_papers_are_digested_in_the_setup(tmp_path, monkeypatch):
+    """D771: the Setup's `knowledge: digest` digests what is new, said in the task pane; a prompt
+    after it only reads what is stored."""
+    from types import SimpleNamespace
+
+    from flux_loop import PromptProblem
+
+    asked = []
+    model = SimpleNamespace(model="m1", propose=lambda p: asked.append(p) or SimpleNamespace(text="adders\nlog2(n) levels"))
+    problem = PromptProblem(_adders(tmp_path, monkeypatch))
+    assert problem.digesting()
+    state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
+    got = problem.digest(state)
+    assert got["digested"] == 1 and got["in all"] == 1 and got["new"] == "adders.md" and got["by"] == "m1"
+    assert problem.digest(state)["digested"] == 0 and len(asked) == 1, "once"
+    digest = next(s for s in problem.knowledge().sources if type(s).__name__ == "Digest")
+    assert "log2(n) levels" in digest.render(state) and len(asked) == 1, "the prompt reads what the Setup made"
+
+
+def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
+    """D771: `knowledge: {digest: {agent: …}}` -- one agent turn per paper, told where the file is."""
+    import sys
+    from types import SimpleNamespace
+
+    import pytest
+
+    from flux_loop import PromptProblem, TaskError
+    from flux_loop.agent_check import agents_used
+
+    fake = tmp_path / "agent.py"
+    fake.write_text("import sys\nbrief = sys.stdin.read()\nassert 'adders.md' in brief and 'is the file' in brief\n"
+                    "print('Prefix adders, read by the agent\\nKogge-Stone: log2(n) levels')\n")
+    spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
+    task = _adders(tmp_path, monkeypatch, {"digest": {"agent": spec}})
+    problem = PromptProblem(task)
+    model = SimpleNamespace(model="m1", propose=lambda p: (_ for _ in ()).throw(AssertionError("not the model")))
+    state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
+    got = problem.digest(state)
+    assert got["digested"] == 1, got
+    digest = next(s for s in problem.knowledge().sources if type(s).__name__ == "Digest")
+    assert "read by the agent" in digest.render(state)
+    assert agents_used(_adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})) == ["opencode"], "its Test gates a start"
+    with pytest.raises(TaskError, match="knowledge.digest"):
+        _adders(tmp_path, monkeypatch, {"digest": "someone"})

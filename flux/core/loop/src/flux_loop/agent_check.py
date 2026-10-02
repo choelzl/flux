@@ -40,7 +40,7 @@ def logged_in(home: Path) -> dict[str, bool]:
 
 def agents_used(task: Any) -> list[str]:
     """The coding agents a document hands work to -- `generate: {agent: …}`, a box's
-    `{agent: …}`, an orchestrator's `coding` agent -- by preset, in the order first named."""
+    `{agent: …}`, an orchestrator's `coding` agent, the papers' digest -- by preset, in the order first named."""
     from .agent import agent_spec
 
     found: list[str] = []
@@ -68,6 +68,8 @@ def agents_used(task: Any) -> list[str]:
 
     for part in (getattr(task, "generator", None), getattr(task, "flow", None), getattr(task, "roles", None)):
         walk(part or {})
+    if getattr(task, "digest_by", None) is not None:          # D771: the papers' digest by an agent
+        take(task.digest_by)
     return found
 
 

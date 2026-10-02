@@ -7,6 +7,10 @@ campaign on the machine reads it, and only a changed document is digested again.
 the generator's static prefix carries the digests as the `digest` knowledge source
 (window-bound, ranked against the part in hand, D548/D550); the orchestrator's planning prompt
 carries the library's index, one line per document.
+
+D771: a run digests in its Setup (the `knowledge: digest` phase), so its prompts only read what
+is stored; `ask` hands each document to someone else than the run's model -- a coding agent the
+document names (`knowledge: {digest: {agent: opencode}}`), which reads the file itself.
 """
 
 from __future__ import annotations
@@ -66,9 +70,10 @@ def digests_in(db: str) -> dict[str, dict[str, Any]]:
 
 
 def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: None,
-                   documents: Iterable[tuple[str, str]] | None = None) -> list[dict[str, Any]]:
+                   documents: Iterable[tuple[str, str]] | None = None, ask: Any = None) -> list[dict[str, Any]]:
     """Digest every library document the store does not hold yet (by content), one model
-    call each, and store the digests. Returns the digests made this call."""
+    call each -- or one `ask(path, prompt) -> (text, by)` each (D771) -- and store the
+    digests. Returns the digests made this call."""
     have = digests_in(db)
     made: list[dict[str, Any]] = []
     docs = list(documents) if documents is not None else library_documents(index)
@@ -77,14 +82,19 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
     if not todo:
         say(f"  digest: every library document is digested ({len(have)})")
         return made
-    say(f"  digest: {len(todo)} library document(s) to digest, one model call each")
+    say(f"  digest: {len(todo)} library document(s) to digest, one {'agent' if ask else 'model'} call each")
     store = _store(db)
     for path, text in todo:
         name = path.rsplit("/", 1)[-1]
         cut = f" (the first {MAX_DOC_CHARS:,} characters of {len(text):,})" if len(text) > MAX_DOC_CHARS else ""
         prompt = BRIEF.format(name=name, cut=cut, text=text[:MAX_DOC_CHARS])
+        by = str(getattr(proposer, "model", "") or "")
         try:
-            got = (proposer.propose(prompt).text or "").strip()
+            if ask is not None:
+                got, by = ask(path, prompt)
+                got = (got or "").strip()
+            else:
+                got = (proposer.propose(prompt).text or "").strip()
         except Exception as exc:  # noqa: BLE001 -- one document's failure is not the library's
             say(f"  digest: {name} not digested ({exc!s:.100})")
             continue
@@ -92,7 +102,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
             say(f"  digest: {name}: the model wrote nothing")
             continue
         doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
-               "model": str(getattr(proposer, "model", "") or ""), "digest": got[:2000]}
+               "model": by, "digest": got[:2000]}
         store.results.put_document("digest", doc)
         made.append(doc)
         say(f"  digest: {name}: {len(got)} chars")
@@ -118,9 +128,10 @@ class Digest:
     title = "KEY POINTS FROM THE LIBRARY (each document digested once by a model; the excerpts below are the source)"
     static = True
 
-    def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = ()) -> None:
+    def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = (), ask: Any = None) -> None:
         self.db = db
         self.make = make
+        self.ask = ask                                     # D771: who digests, when not the run's model
         # D753: a loop's own papers (`library/`, `inputs/`): only those are digested and shown
         self.folders = tuple(str(f) for f in folders)
 
@@ -135,18 +146,33 @@ class Digest:
         return [(p, t) for p, t in library_documents(index_for(self.folders))
                 if any(absolute(p).startswith(f + "/") for f in mine)]
 
+    def make_now(self, state: Any) -> dict[str, Any]:
+        """The documents not digested yet, digested now (D771: in the run's Setup) -- what was
+        done, for the task pane."""
+        db = self.db or str(getattr(getattr(state, "request", None), "db", "") or "")
+        proposer = getattr(state, "proposer", None)
+        if not db or not self.make or (proposer is None and self.ask is None):
+            return {}
+        say = getattr(state, "say", None) or (lambda _m: None)
+        documents = self._documents()
+        try:
+            made = digest_library(db, proposer, say=say, documents=documents, ask=self.ask)
+        except Exception as exc:  # noqa: BLE001 -- the library stays what it is
+            say(f"  digest: could not digest the library ({exc!s:.100})")
+            return {"error": f"{exc!s:.300}"}
+        have = digests_in(db)
+        if documents is not None:
+            have = {p: d for p, d in have.items() if p in {q for q, _t in documents}}
+        return {"digested": len(made), "in all": len(have),
+                "new": ", ".join(d["source"].rsplit("/", 1)[-1] for d in made)[:600],
+                "by": ", ".join(sorted({d["model"] for d in made if d.get("model")}))}
+
     def render(self, state: Any) -> str:
         db = self.db or str(getattr(getattr(state, "request", None), "db", "") or "")
         if not db:
             return ""
-        proposer = getattr(state, "proposer", None)
-        say = getattr(state, "say", None) or (lambda _m: None)
         documents = self._documents()
-        if self.make and proposer is not None:
-            try:
-                digest_library(db, proposer, say=say, documents=documents)
-            except Exception as exc:  # noqa: BLE001 -- the library stays what it is
-                say(f"  digest: could not digest the library ({exc!s:.100})")
+        self.make_now(state)                               # nothing left to do after the Setup's
         have = digests_in(db)
         if documents is not None:                          # D753: the loop's own papers' digests
             own = {p for p, _t in documents}

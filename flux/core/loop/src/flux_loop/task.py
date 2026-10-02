@@ -592,6 +592,27 @@ class PromptProblem(Problem):
                                     Mentor([*lib, *role.sources], budget=role.budget, share=role.share))
         return self._mentor
 
+    def digesting(self) -> bool:
+        """Whether this loop digests papers at all (D771): its own, or the library's by `flow.knowledge`."""
+        return any(type(x).__name__ == "Digest" for x in getattr(self.knowledge(), "sources", ()))
+
+    def digest(self, state: LoopState) -> dict[str, Any]:
+        """D771: the papers not digested yet, digested in the run's Setup -- by its model, or by
+        the coding agent `knowledge: {digest: {agent: …}}` names, which reads each file itself.
+        What was done, for the task pane; {} when the loop digests nothing."""
+        mentor = self.knowledge()
+        sources = [x for x in getattr(mentor, "sources", ()) if type(x).__name__ == "Digest"]
+        if not sources:
+            return {}
+        ask = _agent_digest(self.task.digest_by) if self.task.digest_by is not None else None
+        out: dict[str, Any] = {}
+        for src in sources:
+            if ask is not None:
+                src.ask = ask
+            for k, v in src.make_now(state).items():
+                out[k] = (out[k] + v) if isinstance(v, int) and isinstance(out.get(k), int) else v
+        return out
+
     def mentor_sections(self, state: LoopState) -> list[tuple[str, str]]:
         out = [("task", self.task.statement + ("\n\n" + self.task.contract if self.task.contract else ""))]
         if self.task.knowledge:
@@ -1605,3 +1626,32 @@ def model_use(task: "TaskSpec") -> str:
     if orch in ("llm", "model", "agent") or (isinstance(orch, dict) and set(orch) & {"llm", "model", "agent"}):
         reasons.append(f"the orchestrator is the {orch if isinstance(orch, str) else next(iter(orch))}")
     return "; ".join(reasons)
+
+
+def _agent_digest(spec: Any):
+    """D771: `ask(path, prompt) -> (digest, by)` -- one coding agent turn per paper, in a scratch
+    directory of its own: the brief (the document's text with it) and where the file itself is."""
+    import shutil
+    import tempfile
+
+    from .agent import agent_spec, run_turn
+
+    agent = agent_spec(spec)
+
+    def ask(path: str, prompt: str) -> tuple[str, str]:
+        work = Path(tempfile.mkdtemp(prefix="flux-digest-"))
+        try:
+            brief = (f"The document is the file {path} (read it with your tools if its text below is cut "
+                     "or garbled: a PDF's figures and tables). Do not write any file; answer with the key points only.\n\n"
+                     + prompt)
+            (work / "BRIEF.md").write_text(brief)
+            subs = {"prompt": brief, "prompt_file": str(work / "BRIEF.md"), "artifact": str(work / "digest.md"),
+                    "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work)}
+            turn = run_turn(agent, agent.argv, subs, workdir=work)
+            if not turn.ok:
+                raise RuntimeError(f"{agent.tool} exited {turn.rc}: {' '.join((turn.stderr or '').split())[-200:]}")
+            return turn.text, f"{agent.tool}" + (f" ({turn.about})" if turn.about else "")
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    return ask

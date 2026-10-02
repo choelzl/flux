@@ -234,6 +234,9 @@ class TaskSpec:
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
     knowledge_sheet: str = ""            # where `knowledge` was read from, for the report
     library: str = ""                    # `knowledge: {library: dir}`, absolute: indexed with the shared one (D648)
+    #: `knowledge: {digest: {agent: …}}` (D771): who digests the papers in the Setup -- a coding
+    #: agent's spec; None = the run's model.
+    digest_by: Any = None
     #: The agents' workbench (D677), absolute; "" = none. Their tools and notes, kept across
     #: runs beside the document; the loop provides it and never reads it. Where, like `home`,
     #: not what: not compared, not in the digest (only `workbench: false` is written).
@@ -361,11 +364,22 @@ class TaskSpec:
                 raise TaskError(f"ladder keys {bad_ladder} are not the ladder's; known: {sorted(known_ladder)}")
         elif ladder not in (None, True, False):
             raise TaskError("`ladder` is true (the default ladder) or an object of its fields")
-        knowledge, sheet, library = doc.get("knowledge") or "", "", ""
+        knowledge, sheet, library, digest_by = doc.get("knowledge") or "", "", "", None
         if isinstance(knowledge, dict):
-            bad_keys = sorted(set(knowledge) - {"sheet", "text", "files", "library"})
+            bad_keys = sorted(set(knowledge) - {"sheet", "text", "files", "library", "digest"})
             if bad_keys:
-                raise TaskError(f"knowledge keys {bad_keys} are not known; known: files, library, sheet, text")
+                raise TaskError(f"knowledge keys {bad_keys} are not known; known: digest, files, library, sheet, text")
+            dg = knowledge.get("digest")
+            if dg not in (None, "model"):                # D771: an agent reads and digests the papers
+                agent = dg.get("agent") if isinstance(dg, dict) and set(dg) == {"agent"} else None
+                try:
+                    from .agent import agent_spec
+
+                    agent_spec(agent)
+                except (ValueError, TypeError) as exc:
+                    raise TaskError("knowledge.digest is `model` (the default) or {agent: opencode|claude|codex|{...}}, "
+                                    f"not {dg!r}") from exc
+                digest_by = agent
             if knowledge.get("library"):            # D648: the document's own papers
                 lib = Path(str(knowledge["library"]))
                 lib = lib if lib.is_absolute() or base is None else Path(base) / lib
@@ -444,7 +458,7 @@ class TaskSpec:
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, cache=cache, hooks=hooks, record=record, ladder=ladder if ladder else None,
-            knowledge_sheet=sheet, library=library,
+            knowledge_sheet=sheet, library=library, digest_by=digest_by,
             skills=skills, workbench=workbench,
         )
 
@@ -472,7 +486,9 @@ class TaskSpec:
                        **({"estimate": r.estimate.to_doc()} if r.estimate else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
-            "knowledge": {"text": self.knowledge, "library": self.library} if self.library else self.knowledge,
+            "knowledge": ({"text": self.knowledge, **({"library": self.library} if self.library else {}),
+                           **({"digest": {"agent": self.digest_by}} if self.digest_by is not None else {})}
+                          if self.library or self.digest_by is not None else self.knowledge),
             "joiner": self.joiner,
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: ({"values": list(v), "when": dict(self.when[k])} if k in self.when else list(v))
                                                                         for k, v in self.space.items()},

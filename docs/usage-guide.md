@@ -113,6 +113,14 @@ each coding agent a LIBRARY section with the papers and the files nearest its qu
 The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
 model's digest of each paper, once per paper, which the plan reads. The loop's own papers are digested by
 its model once each, on their own, and their key points join every prompt (D753).
+The digest runs in each pass's Setup (the tree's **Digest** leaf, beside Reading: how many new, by whom, how
+many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
+itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
+
+```yaml
+knowledge:
+  digest: {agent: opencode}     # or claude, codex, or a full agent spec; `model` (the default) = the loop's model
+```
 
 ## The sandbox
 

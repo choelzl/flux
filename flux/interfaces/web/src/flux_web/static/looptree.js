@@ -70,6 +70,7 @@
     var b = null;
     if (name.startsWith("critique")) b = /decision/.test(name + why) ? "crit-decision" : /division|decompos/.test(name + why) ? "crit-division" : "crit-part";
     else if (name.startsWith("tool:")) b = /^generate/.test(why) ? "generate" : /^(stage|estimate)/.test(why) ? "measure" : /^(test|lint|golden|build|compile)/.test(why) ? "test" : null;
+    else if (/^knowledge: digest\b/.test(name)) b = "digest";                // D771: the papers digested in the Setup
     else if (/^gate: (tools|the problem)\b/.test(name)) b = "validate";        // D739: the document's own checks
     else if (/^generation: build\b/.test(name)) b = "test";                  // the gate's build of a draft
     else if (/^evaluation\b|: compose\b/.test(name)) b = "parts";            // proven parts composed (drawn when it has parts)
@@ -96,14 +97,14 @@
       || latest(all.filter(function (n) { return /^(llm|model)/.test(String(n.name)); })) || latest(all.filter(worker)) || v;
   }
 
-  var SETUP_BOXES = new Set(["validate", "knowledge", "records", "feedback"]);
+  var SETUP_BOXES = new Set(["validate", "knowledge", "digest", "records", "feedback"]);
   var WORK = new Set(["orchestrate", "plan", "dse", "generate"]);
   var isDivide = function (n) { return /^propose: decompose/.test(String(n.name)); };
   var isSetup = function (n) { return SETUP_BOXES.has(boxOf(n)) || isDivide(n); };
   var partOf = function (n) { for (var p = n; p; p = p.parent) { var v = p.params && p.params.part; if (v) return String(v); } return ""; };
   var passTag = function (n) { for (var p = n; p; p = p.parent) { var v = p.params && p.params.pass; if (v != null && v !== "") return Number(v); } return null; };
   // D742: a leaf's name is a word; the crafter's box name is its tooltip
-  var LEAF_NAME = { validate: "Checks", knowledge: "Reading", records: "Record", feedback: "Notes", orchestrate: "Pick", plan: "Plan",
+  var LEAF_NAME = { validate: "Checks", knowledge: "Reading", digest: "Digest", records: "Record", feedback: "Notes", orchestrate: "Pick", plan: "Plan",
     dse: "Search", generate: "Design", test: "Check", measure: "Measure", calibrate: "Calibrate", select: "Choose", extract: "Lessons",
     "crit-division": "Critic", "crit-part": "Critic", "crit-decision": "Critic", parts: "Compose" };
   function leafTitle(b, v) {
@@ -258,6 +259,9 @@
     var toolWhy = function (re) { return uniq(all.filter(function (n) { return String(n.name).indexOf("tool:") === 0; }).map(function (n) { return (re.exec(String(n.why || "")) || [])[1]; })); };
     var agent = all.filter(function (n) { return String(n.name).indexOf("agent:") === 0; })[0];
     switch (it.box) {
+      case "digest": { var o = latest.output || {};                       // D771: what this Setup digested
+        if (o.error) return "failed";
+        return o["in all"] == null ? "" : (o.digested ? o.digested + " new" + (o.by ? " by " + o.by : "") + " · " : "") + o["in all"] + " paper(s) digested"; }
       case "dse": return listed(designsOf(it.tasks)) || (latest.output && latest.output.candidates != null ? String(latest.output.candidates) : "");
       case "generate": {
         var made = uniq(toolWhy(/^generate (.+)$/).concat(all.map(function (n) { return (/^generation: build (.+)$/.exec(String(n.name)) || [])[1]; })));
