@@ -52,6 +52,7 @@ class _Session:
         self.size = 0
         self.pending = ""                       # D748: a line that may still be a secret being printed
         self.on_secret: Any = None
+        self.on_end: Any = None                 # D768: told the exit once the login ends
         self.lock = threading.Lock()
 
     def text(self) -> str:
@@ -74,7 +75,8 @@ class Logins:
             cmd[0] = program
         return cmd
 
-    def start(self, user: str, agent: str, home: Path, cmd: list[str], env: dict[str, str], on_secret: Any = None) -> None:
+    def start(self, user: str, agent: str, home: Path, cmd: list[str], env: dict[str, str], on_secret: Any = None,
+              on_end: Any = None) -> None:
         with self._lock:
             old = self._by.get(user)
             if old and old.ended is None:
@@ -87,6 +89,7 @@ class Logins:
                                     env={**env, "TERM": "xterm-256color"}, start_new_session=True, close_fds=True)
             sess = self._by[user] = _Session(agent, proc, proc.stdout.fileno())
             sess.on_secret = on_secret
+            sess.on_end = on_end
         threading.Thread(target=self._read, args=(sess,), daemon=True).start()
         threading.Thread(target=self._limit, args=(sess,), daemon=True).start()
 
@@ -118,6 +121,11 @@ class Logins:
                 sess.size += len(rest)
         sess.rc = sess.proc.wait()
         sess.ended = time.time()
+        if sess.on_end is not None:
+            try:
+                sess.on_end(sess.rc)
+            except Exception:  # noqa: BLE001 -- the login has ended either way
+                pass
 
     @staticmethod
     def _kept(sess: _Session, text: str, end: bool = False) -> str:
@@ -152,7 +160,7 @@ class Logins:
 
     @staticmethod
     def _kill(sess: _Session) -> None:
-        for sig in (signal.SIGINT, signal.SIGTERM):
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGKILL):      # D768: the last one is not asked
             try:
                 os.killpg(sess.proc.pid, sig)
             except (ProcessLookupError, PermissionError):

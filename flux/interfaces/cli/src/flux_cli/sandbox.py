@@ -46,7 +46,7 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-
        "ld.so.conf", "ld.so.conf.d", "localtime", "timezone", "alternatives", "gai.conf", "mime.types",
        "protocols", "services", "os-release", "lsb-release")
 #: Environment the container never gets: the host's sessions and other services' secrets.
-_DROP = ("HOME", "FLUX_SANDBOX_HOME", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
+_DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
          "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS")
@@ -350,6 +350,8 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
            "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
            "--workdir", os.getcwd(), "--label", "flux.sandbox=1"]
+    if eng == "podman" and (os.environ.get("FLUX_SANDBOX_TIMEOUT") or "").isdigit():
+        cmd += ["--timeout", os.environ["FLUX_SANDBOX_TIMEOUT"]]   # D768: ended by Podman itself, its client gone or not
     if os.environ.get("FLUX_SANDBOX_APP"):
         cmd += ["--label", f"flux.app={os.environ['FLUX_SANDBOX_APP']}"]    # `flux serve`'s admin finds its loop (D695)
     if eng == "docker":

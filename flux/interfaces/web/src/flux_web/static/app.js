@@ -3049,7 +3049,7 @@ async function loginsCard() {
   const box = h("div", {});
   const out = h("pre", { class: "login-out", "aria-live": "polite" });
   const line = h("input", { placeholder: "type here, then Send (or a key below)", class: "login-in", "aria-label": "Input to the login" });
-  let offset = 0, text = "", timer = null;
+  let offset = 0, text = "", timer = null, testTimer = null, wasTesting = new Set();
   const linkify = (t) => {                                  // links as links, the rest as text nodes
     const parts = [], re = /https?:\/\/[^\s"'<>]+/g; let at = 0, m;
     while ((m = re.exec(t))) { parts.push(t.slice(at, m.index), h("a", { href: m[0], target: "_blank", rel: "noopener noreferrer" }, m[0])); at = m.index + m[0].length; }
@@ -3075,13 +3075,19 @@ async function loginsCard() {
     term.querySelector(".login-what").textContent = st.running ? `Logging ${st.agent} in…` : st.agent ? `${st.agent}: the login ended${st.rc ? ` (exit ${st.rc})` : ""}` : "";
     for (const el of term.querySelectorAll(".login-row, .login-keys, .login-head button")) el.hidden = !st.running;
     if (st.running) timer = setTimeout(poll, 700);
-    else drawList();
+    else setTimeout(drawList, 500);                         // D768: its Test has begun by then
   }
   async function drawList() {
     const lg = await api("/logins").catch(() => null);
     if (!lg || !box.isConnected && box.parentNode) return;
     // D751: an agent is used in your loops once its test passed -- the program, the login, one short answer
-    const tested = (a) => { const t = a.tested || {}; return t.ok ? ["ok", "ready"] : t.when ? ["bad", "test failed"] : ["", "not tested"]; };
+    const tested = (a) => { const t = a.tested || {}; return a.testing ? ["live", "testing…"] : t.ok ? ["ok", "ready"] : t.when ? ["bad", "test failed"] : ["", "not tested"]; };
+    // D768: a login that ended well is tested at once, on the server -- said here when it is done
+    for (const a of lg.agents) if (wasTesting.has(a.id) && !a.testing && a.tested)
+      toast(a.tested.ok ? `${a.label} is logged in and ready for your loops` : `${a.label} is logged in but its Test failed: see its steps`, a.tested.ok ? "ok" : "warn");
+    wasTesting = new Set(lg.agents.filter(a => a.testing).map(a => a.id));
+    clearTimeout(testTimer);
+    if (wasTesting.size) testTimer = setTimeout(drawList, 2000);
     const steps = (t) => h("ul", { class: "agent-steps small" }, (t.steps || []).map(st =>
       h("li", { class: st.ok ? "" : "bad" }, h("span", { class: "mono" }, st.ok ? "✓ " : "✗ "), h("strong", {}, st.step), " ", st.said)));
     box.replaceChildren(h("table", { class: "list compact" }, h("tbody", {}, lg.agents.flatMap(a => [h("tr", {},
@@ -3092,7 +3098,7 @@ async function loginsCard() {
       h("td", {}, h("span", { class: `pill ${tested(a)[0]}`, title: a.tested && a.tested.when ? `tested ${new Date(a.tested.when * 1000).toLocaleString()}` : "" }, tested(a)[1])),
       h("td", { class: "mono muted small", title: a.command }, a.command.replace(/^\S*\//, "")),
       h("td", { class: "right" }, h("div", { class: "actions end" },
-        act("Test", async () => {
+        a.testing ? h("span", { class: "muted small" }, "testing…") : act("Test", async () => {
           toast(`Testing ${a.label}: it is asked one short question…`, "info");
           const got = await api(`/agents/${a.id}/test`, { method: "POST" });
           toast(got.ok ? `${a.label} is ready for your loops` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
@@ -3105,11 +3111,11 @@ async function loginsCard() {
       ...(a.tested && a.tested.steps && a.tested.steps.length ? [h("tr", { class: "agent-test-row" }, h("td", { colspan: 5 }, steps(a.tested)))] : [])]))));
     if (lg.session && lg.session.running && term.hidden) { term.hidden = false; poll(); }
   }
-  cleanup.push(() => clearTimeout(timer));
+  cleanup.push(() => { clearTimeout(timer); clearTimeout(testTimer); });
   await drawList();
   return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs use what the login writes. ",
     "The login runs as a run does, in the sandbox, under the server's network rules. ",
-    "A loop, a new loop's author or a question uses an agent once its Test passed for you."), box, term]);
+    "A loop, a new loop's author or a question uses an agent once its Test passed for you; a login that ends well is tested at once."), box, term]);
 }
 
 // ================================================================ routing

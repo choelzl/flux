@@ -226,3 +226,53 @@ def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch)
     assert "ANTHROPIC_API_KEY" not in json.loads((tmp_path / "opencode.version.env").read_text()), "its version asked with its own too"
     cl = json.loads((tmp_path / "claude.env").read_text())
     assert cl["ANTHROPIC_API_KEY"] == "claude-key" and "OPENAI_API_KEY" not in cl and "FLUX_OPENCODE_API_KEY" not in cl
+
+
+LEAVES = r'''import subprocess, sys
+# a server it starts and leaves running, holding the turn's output
+subprocess.Popen([sys.executable, "-c", "import time; open(sys.argv[1], 'w').write('up'); time.sleep(300)", sys.argv[1]])
+print('{"type": "text", "part": {"text": "done"}}', flush=True)
+'''
+
+
+def _running(word: bytes) -> list[str]:
+    import os
+
+    out = []
+    for p in os.listdir("/proc"):
+        try:
+            if p.isdigit() and word in open(f"/proc/{p}/cmdline", "rb").read():
+                out.append(p)
+        except OSError:
+            pass
+    return out
+
+
+def test_what_an_agent_leaves_running_ends_with_its_turn(tmp_path):
+    """D768: an agent's turn is a process group of its own -- a server it left running holding the
+    turn's output neither keeps the turn waiting nor outlives it."""
+    import time
+
+    fake = tmp_path / "leaves.py"
+    fake.write_text(LEAVES.replace("import time;", "import sys, time;"))
+    mark = tmp_path / "child-up"
+    spec = AgentSpec("fake", (sys.executable, str(fake), str(mark)), None, "opencode", timeout_s=60)
+    t0 = time.monotonic()
+    turn = run_turn(spec, spec.argv, {"prompt": "p", "name": "x"}, workdir=tmp_path)
+    assert turn.ok and turn.text == "done" and time.monotonic() - t0 < 20, "not held open by what it left"
+    assert mark.exists(), "the child did run"
+    left = _running(str(mark).encode())
+    assert not left, f"left running: {left}"
+
+
+def test_an_agent_past_its_time_is_stopped_with_all_it_started(tmp_path):
+    import time
+
+    fake = tmp_path / "slow.py"
+    fake.write_text("import subprocess, sys, time\nsubprocess.Popen(['sleep', '301'])\ntime.sleep(300)\n")
+    spec = AgentSpec("fake", (sys.executable, str(fake)), None, "opencode", timeout_s=2)
+    t0 = time.monotonic()
+    turn = run_turn(spec, spec.argv, {"prompt": "p", "name": "x"}, workdir=tmp_path)
+    assert not turn.ok and turn.rc == 124 and time.monotonic() - t0 < 20
+    left = _running(b"sleep\x00301")
+    assert not left, f"left running: {left}"

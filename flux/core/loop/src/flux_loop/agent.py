@@ -788,9 +788,11 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # comes in `answer`. With nothing to send, stdin is closed so no agent waits on it.
     slots = {m for t in argv for m in re.findall(r"\{(\w+)\}", t)}
     feed = None if slots & {"prompt", "prompt_file", "answer"} else subs.get("answer", subs.get("prompt"))
+    # D768: a group of its own -- what the agent starts (a shell, a language server, a server it
+    # left running) ends with its turn, and never holds the turn open
     proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             stdin=subprocess.PIPE if feed is not None else subprocess.DEVNULL,
-                            text=True, env=env, bufsize=1)
+                            text=True, env=env, bufsize=1, start_new_session=True)
     lines: queue.Queue = queue.Queue()
     err: list[str] = []
 
@@ -823,8 +825,13 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     timed_out = False
     shown = 0.0
     with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row:
-        ended = False
+        ended, exited = False, None
         while True:
+            if not ended and proc.poll() is not None:
+                exited = exited or time.monotonic()
+                if time.monotonic() - exited > 5:      # it exited, something it started holds its output
+                    end_group(proc)
+                    ended = True
             if ended:                                 # its output closed: wait for the exit itself
                 try:
                     proc.wait(timeout=1.0)
@@ -843,11 +850,12 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
                     pass
             now = time.monotonic()
             if now - t0 > spec.timeout_s and proc.poll() is None:
-                proc.kill()
+                end_group(proc)
                 timed_out = True
             if now - shown >= 1.0:                    # the row, at most once a second
                 shown = now
                 progress(elapsed=f"{now - t0:.0f}s", **live.fields(now, t0))
+        end_group(proc)                               # D768: what it left running, too
         for t in readers:
             t.join(timeout=5)
         row.update(live.fields())
@@ -860,6 +868,33 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
                     about=about, tools=len(live.tools), steps=live.kept())
     return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools),
                 steps=live.kept())
+
+
+def end_group(proc: subprocess.Popen) -> None:
+    """D768: an agent's process group ended -- asked (TERM), then made (KILL) -- and the agent reaped."""
+    import signal
+    import time
+
+    for sig, wait in ((signal.SIGTERM, 3.0), (signal.SIGKILL, 0.0)):
+        try:
+            os.killpg(proc.pid, sig)
+        except (ProcessLookupError, PermissionError, OSError):
+            break
+        t = time.monotonic() + wait
+        while time.monotonic() < t:
+            proc.poll()                               # the agent reaped once it exits: its zombie is not the group
+            try:
+                os.killpg(proc.pid, 0)
+            except (ProcessLookupError, PermissionError, OSError):
+                break
+            time.sleep(0.1)
+        else:
+            continue
+        break
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 _VERSIONS: dict[str, str] = {}

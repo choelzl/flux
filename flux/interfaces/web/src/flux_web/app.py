@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -308,7 +309,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS), "external": user.external}
 
     # ---- every user's agent logins (D734, D747: internal users too, since each has a home of their own)
-    from .logins import LOGIN_DEFAULTS, Logins, logged_in
+    from .logins import LIMIT_S, LOGIN_DEFAULTS, Logins, logged_in
 
     logins = Logins()
 
@@ -329,30 +330,43 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         name = author.get("preset") if isinstance(author, dict) else author
         return [str(name)] if name in LOGIN_DEFAULTS else []
 
-    @app.post("/api/agents/{agent}/test")
-    def test_agent(agent: str, user: User = Depends(user_of)) -> dict[str, Any]:
+    testing: set[tuple[str, str]] = set()
+    testing_lock = threading.Lock()
+
+    def run_agent_test(user: User, agent: str) -> dict[str, Any]:
         """`flux agent test <agent> --live`, sandboxed as the user's runs are: their home, their
         settings, the network rules. Its result is kept: a passed test enables the agent (D751)."""
+        with testing_lock:
+            testing.add((user.name, agent))
+        try:
+            home_ready(store, user)
+            env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
+                   "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
+            sandbox_env(env, sandbox, {})
+            machine_env(env, sandbox_config(store), {}, [])
+            flux = shutil.which("flux", path=env.get("PATH"))
+            argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
+            try:
+                r = subprocess.run(argv, cwd=str(store.home_of(user)), env=env, capture_output=True, text=True, timeout=420,
+                                   stdin=subprocess.DEVNULL)
+                line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.startswith("{")), "")
+                got = json.loads(line) if line else {"agent": agent, "ok": False, "steps": [
+                    {"step": "run", "ok": False, "said": " ".join((r.stderr or r.stdout or f"exit {r.returncode}")[-500:].split())}]}
+            except subprocess.TimeoutExpired:
+                got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
+            got["when"] = time.time()
+            store.server_set(f"agent-test:{user.name}:{agent}", got)
+            store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}")
+            return got
+        finally:
+            with testing_lock:
+                testing.discard((user.name, agent))
+
+    @app.post("/api/agents/{agent}/test")
+    def test_agent(agent: str, user: User = Depends(user_of)) -> dict[str, Any]:
         if agent not in LOGIN_DEFAULTS:
             raise HTTPException(404, f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
-        home_ready(store, user)
-        env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1"}
-        sandbox_env(env, sandbox, {})
-        machine_env(env, sandbox_config(store), {}, [])
-        flux = shutil.which("flux", path=env.get("PATH"))
-        argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
-        try:
-            r = subprocess.run(argv, cwd=str(store.home_of(user)), env=env, capture_output=True, text=True, timeout=420,
-                               stdin=subprocess.DEVNULL)
-            line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.startswith("{")), "")
-            got = json.loads(line) if line else {"agent": agent, "ok": False, "steps": [
-                {"step": "run", "ok": False, "said": " ".join((r.stderr or r.stdout or f"exit {r.returncode}")[-500:].split())}]}
-        except subprocess.TimeoutExpired:
-            got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
-        got["when"] = time.time()
-        store.server_set(f"agent-test:{user.name}:{agent}", got)
-        store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}")
-        return got
+        return run_agent_test(user, agent)
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
@@ -363,6 +377,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         from .authoring import AUTHORS
 
         return {"external": user.external, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a], "tested": agent_test_of(user, a),
+                                              "testing": (user.name, a) in testing,
                                               "command": " ".join(logins.command(a, cmds))} for a in LOGIN_DEFAULTS],
                 "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
 
@@ -372,11 +387,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             cmd = logins.command(agent, store.server_settings(reveal=True))
             home_ready(store, user)
             store.server_set(f"agent-test:{user.name}:{agent}", None)        # D751: a new login is tested again
-            env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
+            env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1",
+                   "FLUX_SANDBOX_TIMEOUT": str(int(LIMIT_S) + 60)}  # D768: it ends itself, whatever happens to us
             sandbox_env(env, sandbox, {})
             machine_env(env, sandbox_config(store), {}, [])       # the network rules apply to everyone
+            def tested_after(rc: int) -> None:          # D768: a login that ended well is tested at once
+                if rc == 0:
+                    threading.Thread(target=run_agent_test, args=(user, agent), daemon=True).start()
+
             logins.start(user.name, agent, store.home_of(user), cmd, env,
-                         on_secret=lambda name, value: store.set_setting(user, name, value))   # D748
+                         on_secret=lambda name, value: store.set_setting(user, name, value),   # D748
+                         on_end=tested_after)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "agent login", f"{agent}: {' '.join(cmd)}")
@@ -452,6 +473,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         from flux_cli.sandbox import _local
 
         from . import admin as adm
+
+        if sandbox:                                  # D768: a container no process runs any more, removed
+            try:
+                for c in adm.reap():
+                    store.audit("server", "container left behind, removed", f"{c['name']} ({c.get('app') or '?'}): {c['said']}")
+            except Exception:  # noqa: BLE001 -- the sample goes on
+                pass
 
         m = adm.machine({k: v for k, v in {"server data": str(store.data), "sandbox caches": str(adm.cache_root().parent),
                                                "sandbox storage": str(_local())}.items() if os.path.exists(v)})

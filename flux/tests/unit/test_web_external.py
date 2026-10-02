@@ -181,3 +181,36 @@ def test_an_agent_is_enabled_for_a_user_by_a_passed_test(tmp_path, monkeypatch):
     assert [a["tested"] for a in ian.get("/api/logins").json()["agents"] if a["id"] == "codex"] == [{"ok": True}]
     r = ian.post("/api/apps/x/start", json={"passes": 1}, headers=H)
     assert r.status_code != 409 or "set up" not in r.text, "tested: no longer refused for it"
+
+
+def test_a_login_that_ends_well_is_tested_at_once(tmp_path, monkeypatch):
+    """D768: the Test runs on the server when a login ends with 0 -- the page need not be open; a
+    login that failed or was stopped is not tested."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    store = _store(tmp_path)
+    app = create_app(tmp_path / "data", sandbox=False)
+    ian = TestClient(app)
+    assert ian.post("/api/login", json={"name": "ian", "password": "ian has a long secret"}, headers=H).status_code == 200
+
+    def login(line):
+        store.set_server_setting("FLUX_CODEX_LOGIN", line)
+        assert ian.post("/api/logins/codex", headers=H).status_code == 200
+        for _ in range(300):
+            if not ian.get("/api/logins/session").json()["running"]:
+                return
+            time.sleep(0.1)
+        raise AssertionError("the login did not end")
+
+    login("sh -c 'exit 3'")
+    time.sleep(1.0)
+    assert store.server_get("agent-test:ian:codex") is None, "a failed login: not tested"
+    login("sh -c 'mkdir -p .codex && echo {} > .codex/auth.json'")
+    for _ in range(600):
+        got = store.server_get("agent-test:ian:codex")
+        if got and got.get("when"):
+            break
+        time.sleep(0.2)
+    else:
+        raise AssertionError("no Test after the login")
+    assert got["agent"] == "codex" and got["steps"], got
+    assert not {a["id"]: a for a in ian.get("/api/logins").json()["agents"]}["codex"]["testing"], "done: no longer testing"

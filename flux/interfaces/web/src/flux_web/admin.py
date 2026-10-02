@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -163,6 +164,74 @@ def kill_container(name: str) -> str:
     subprocess.run([*cli, "kill", name], capture_output=True, text=True, timeout=60)
     r = subprocess.run([*cli, "rm", "-f", name], capture_output=True, text=True, timeout=60)
     return "removed" if r.returncode == 0 else (r.stderr.strip() or "not removed")
+
+
+def attached() -> dict[str, int]:
+    """The sandbox containers a process on this machine still runs -- the `run --name flux-…`
+    client a loop, a login or a Test started and reads -- each with that client's pid."""
+    out: dict[str, int] = {}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                argv = fh.read().split(b"\0")
+        except OSError:
+            continue
+        if b"run" in argv and b"--name" in argv:
+            i = argv.index(b"--name")
+            if i + 1 < len(argv) and argv[i + 1].startswith(b"flux-"):
+                out[argv[i + 1].decode("utf-8", "replace")] = int(pid)
+    return out
+
+
+def _ancestors(pid: int) -> set[int]:
+    seen: set[int] = set()
+    while pid > 1 and pid not in seen:
+        seen.add(pid)
+        try:
+            with open(f"/proc/{pid}/status") as fh:
+                pid = int(next(ln.split()[1] for ln in fh if ln.startswith("PPid:")))
+        except (OSError, StopIteration, ValueError):
+            break
+    return seen
+
+
+#: Containers the server itself waits on (a login, an agent's Test): a server that restarted no
+#: longer reads them, though their client lives on. A loop's run outlives a restart on purpose.
+SERVERS_OWN = (".login", ".agent-test")
+
+
+def reap(grace_s: float = 120.0, now: float | None = None) -> list[dict[str, Any]]:
+    """D768: the sandbox containers no process runs any more -- a client killed with the server, a
+    login or Test whose request is gone -- stopped and removed, after `grace_s` of their life (a
+    client being started is not mistaken for one gone); a login's or Test's whose client is not this
+    server's own (one before a restart) with its client. Those removed."""
+    now = time.time() if now is None else now
+    got = containers()
+    if got.get("error"):
+        return []
+    held = attached()
+    gone = []
+    for c in got["containers"]:
+        if c["state"] != "running":
+            continue
+        if c.get("started") is not None and now - float(c["started"]) < grace_s:
+            continue
+        client = held.get(c["name"])
+        if client is not None:
+            if not str(c.get("app") or "").endswith(SERVERS_OWN) or os.getpid() in _ancestors(client):
+                continue
+            try:                                          # a former server's: its client, and what started it
+                os.killpg(os.getpgid(client), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        try:
+            said = kill_container(c["name"])
+        except (ValueError, OSError, subprocess.TimeoutExpired):
+            continue
+        gone.append({**c, "said": said})
+    return gone
 
 
 def loop_disk(app_dir: Path, user: str, app: str) -> dict[str, Any]:

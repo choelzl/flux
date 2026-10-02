@@ -330,6 +330,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (no network) and is not seen.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
+  - **Leftovers** (D768): a login's or Test's container ends itself (Podman's `--timeout`); each minute the server removes
+    a sandbox container no process runs any more (in the audit); an agent's turn ends with everything it started.
+    A login that ends well is tested at once (Account shows "testing…", then the result).
   - **Homes** (D744): every user has a home of their own, `<data>/users/<name>/home` (0700, no system
     account): their runs' HOME, writable at `/home/flux`, kept -- their agents' settings, logins and
     sessions. A run uses the home of whoever starts it. Every home starts with the admin's list of
