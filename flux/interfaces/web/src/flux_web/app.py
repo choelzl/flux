@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import ADVANCED, HOST_RULE, RunManager, advanced, home_ready, sandbox_config, login_path, loop_files, machine_env, run_env, sandbox_env
+from .runs import ADVANCED, HOME_SEED, HOST_RULE, RunManager, advanced, home_ready, sandbox_config, login_path, loop_files, machine_env, run_env, sandbox_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -141,7 +141,7 @@ class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
     path: list[str] = Field(default_factory=list)
     login_path: bool = False
-    home_seed: list[str] = Field(default_factory=lambda: [".config/opencode"])    # D744: every home starts with these
+    home_seed: list[str] = Field(default_factory=lambda: list(HOME_SEED))    # D744: every home starts with these
     network: str = "open"
     allow: list[str] = Field(default_factory=list)
     users_add: bool = True

@@ -148,6 +148,10 @@ def test_only_an_admin_sets_the_sandbox_and_bad_entries_are_refused(tmp_path):
         return c
 
     ada, bob = client("ada", "correct horse battery"), client("bob", "another long secret")
+    from flux_web.runs import HOME_SEED
+
+    assert ada.get("/api/admin/sandbox").json()["config"]["home_seed"] == list(HOME_SEED), \
+        "D765: the form shows the homes' own default (a corporate OpenCode's parts), so saving it keeps them"
     good = {"network": "allowlist", "allow": ["*.example.org", "10.0.0.0/8", "localhost"], "path": ["/opt/x/bin"], "home_seed": ["~/.config/mycode"]}
     assert bob.put("/api/admin/sandbox", json=good, headers=H).status_code == 403
     r = ada.put("/api/admin/sandbox", json=good, headers=H)

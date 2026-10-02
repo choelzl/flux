@@ -34,8 +34,8 @@ _MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC
 #: The logins kept as settings (D748): a person's, so whoever starts a run lends theirs.
 _LOGIN_SETTINGS = ("CLAUDE_CODE_OAUTH_TOKEN",)
 #: The agents' folders in the server account's environment, never a run's (D748): each user's are in their home.
-_OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
-                "XDG_CACHE_HOME")
+_OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "NGA_DATA_HOME", "XDG_CONFIG_HOME",
+                "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME")
 
 
 def home_ready(store: Store, user: User) -> Path:
@@ -53,7 +53,10 @@ def home_ready(store: Store, user: User) -> Path:
 
 #: What a home starts with unless the admin says otherwise (D744): the agents' configuration --
 #: never anyone's logins: each user logs in on their Account page.
-HOME_SEED = (".config/opencode",)
+HOME_SEED = (".config/opencode",
+             # D765: a corporate OpenCode's own parts beside its login (its plugins' tools and assets, its state)
+             ".local/share/opencode/mapper", ".local/share/opencode/icons", ".local/share/opencode/mock-tools",
+             ".local/share/opencode/request-utils", ".local/share/opencode/images", ".local/state/opencode/kv2.json")
 
 
 def run_env(store: Store, user: User, app: str | None = None, home_for: User | None = None) -> dict[str, str]:

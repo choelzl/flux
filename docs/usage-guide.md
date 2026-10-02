@@ -335,7 +335,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Homes** (D744): every user has a home of their own, `<data>/users/<name>/home` (0700, no system
     account): their runs' HOME, writable at `/home/flux`, kept -- their agents' settings, logins and
     sessions. A run uses the home of whoever starts it. Every home starts with the admin's list of
-    paths from the server account's home (default `.config/opencode`), copied where it lacks them,
+    paths from the server account's home (default `.config/opencode` and a corporate OpenCode's
+    plugin parts and state under `.local/share/opencode/` and `.local/state/opencode/`, D765), copied where it lacks them,
     never over what is there; no one's login is among them. The server account's own home path is
     scratch inside (a tmpfs, with its PATH folders and the loops' caches mounted on it).
   - From the command line: `FLUX_SANDBOX_HOME` names the home; without it, a run's home is

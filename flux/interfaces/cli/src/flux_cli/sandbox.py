@@ -59,7 +59,10 @@ HOME_IN = "/home/flux"
 #: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
 #: passes its settings in, so the key file itself stays outside.
 SEED_OWN = (".config/opencode", ".claude.json", ".claude/.credentials.json", ".claude/settings.json",
-            ".local/share/opencode/auth.json", ".codex/auth.json", ".codex/config.toml")
+            ".local/share/opencode/auth.json", ".codex/auth.json", ".codex/config.toml",
+            # D765: a corporate OpenCode's own parts beside its login (its plugins' tools and assets, its state)
+            ".local/share/opencode/mapper", ".local/share/opencode/icons", ".local/share/opencode/mock-tools",
+            ".local/share/opencode/request-utils", ".local/share/opencode/images", ".local/state/opencode/kv2.json")
 PROXY_PORT = 18080
 #: D722: certificates the host's tools are told of, wherever they are (a corporate CA in a home)
 CA_VARS = ("SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
