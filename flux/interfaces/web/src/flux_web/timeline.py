@@ -11,6 +11,7 @@ clock saw, parallel work counted once) and its share of the wall clock, and the 
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import threading
@@ -24,6 +25,7 @@ _READING = threading.Lock()
 _KEPT = ("ev", "t", "id", "parent", "name", "why", "failed")
 
 
+@functools.lru_cache(maxsize=8192)
 def kind_of(name: str) -> str | None:
     """The kind of work a phase names, or None when it names none of its own."""
     head, _, rest = name.partition(":")
@@ -95,42 +97,80 @@ def _union(spans: list[tuple[float, float]]) -> float:
     return total
 
 
+_TABLES: dict[tuple, dict[str, Any]] = {}      # (path, inode, start) -> its phases, read as they come
+_RESULTS: dict[tuple, dict[str, Any]] = {}
+
+
+def _table(path: str, idx: int, events: list[dict[str, Any]]) -> dict[str, Any]:
+    """D780: a start's phases, built from the events added since the last look -- each phase's
+    times, its children counted, the earliest and latest moment heard."""
+    with _READING:
+        key = (path, _CACHE.get(path, (None,))[0], idx)     # a new file (a new start's) is another table
+        tb = _TABLES.get(key)
+        if tb is None or tb["n"] > len(events):
+            tb = _TABLES[key] = {"n": 0, "ph": {}, "t0": None, "last_t": None, "kind": {}}
+        ph = tb["ph"]
+        for e in events[tb["n"]:]:
+            t = e.get("t")
+            if t is not None:
+                t = float(t)
+                tb["t0"] = t if tb["t0"] is None else min(tb["t0"], t)
+                tb["last_t"] = t if tb["last_t"] is None else max(tb["last_t"], t)
+            if e.get("ev") == "start":
+                ph[e["id"]] = {"id": e["id"], "parent": e.get("parent"), "name": str(e.get("name") or ""),
+                               "why": str(e.get("why") or "")[:200], "t0": float(e["t"]), "t1": None, "failed": False, "kids": 0}
+                if e.get("parent") in ph:
+                    ph[e["parent"]]["kids"] += 1
+            elif e.get("ev") == "end" and e.get("id") in ph:
+                ph[e["id"]].update(t1=float(e["t"]), failed=bool(e.get("failed")))
+        tb["n"] = len(events)
+        return tb
+
+
+def _kind_in(tb: dict[str, Any], p: dict[str, Any]) -> str:
+    """A phase's kind: its own name's, else its nearest ancestor's (kept: it does not change)."""
+    got = tb["kind"].get(p["id"])
+    if got is None:
+        q, got = p, None
+        while q is not None and got is None:
+            got = kind_of(q["name"])
+            q = tb["ph"].get(q["parent"])
+        got = tb["kind"][p["id"]] = got or "loop"
+    return got
+
+
 def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: float | None = None,
              running: bool | None = None) -> dict[str, Any]:
-    """One start's bars (the latest by default) and where its time went."""
+    """One start's bars (the latest by default) and where its time went. D780: its phases are
+    built as the journal grows, and a start that is not running is worked out once."""
     every = starts(path)
     if not every:
         return {"starts": [], "start": None, "bars": [], "kinds": [], "passes": []}
     idx = len(every) - 1 if start is None or not 0 <= start < len(every) else start
     events = every[idx]
     now = now or time.time()
-    ph: dict[int, dict[str, Any]] = {}
-    for e in events:
-        if e.get("ev") == "start":
-            ph[e["id"]] = {"id": e["id"], "parent": e.get("parent"), "name": str(e.get("name") or ""),
-                           "why": str(e.get("why") or "")[:200], "t0": float(e["t"]), "t1": None, "failed": False, "kids": 0}
-        elif e.get("ev") == "end" and e.get("id") in ph:
-            ph[e["id"]].update(t1=float(e["t"]), failed=bool(e.get("failed")))
-    for p in ph.values():
-        if p["parent"] in ph:
-            ph[p["parent"]]["kids"] += 1
-    last_t = max([float(e.get("t", 0)) for e in events] or [now])
+    tb = _table(path, idx, events)
+    ph = tb["ph"]
+    last_t = tb["last_t"] if tb["last_t"] is not None else now
     alive = idx == len(every) - 1 and now - last_t < 3600    # the latest start, heard from lately: still going
     if running is not None:                                 # D755: the server knows: an ended loop is not running
         alive = alive and running
+    said = []
+    for i, ev in enumerate(every):
+        other = tb if i == idx else _table(path, i, ev)
+        said.append({"index": i, "t0": other["t0"], "t1": other["last_t"]})
+    done = (path, _CACHE.get(path, (None,))[0], idx, len(events), limit, len(every))
+    if not alive and done in _RESULTS:
+        return {**_RESULTS[done], "starts": said}
     bars = []
     for p in ph.values():
         if p["kids"]:
             continue
-        q, kind = p, None
-        while q is not None and kind is None:
-            kind = kind_of(q["name"])
-            q = ph.get(q["parent"])
         t1 = p["t1"] if p["t1"] is not None else (now if alive else last_t)
-        bars.append({"name": p["name"], "why": p["why"], "kind": kind or "loop", "t0": p["t0"], "t1": t1,
+        bars.append({"name": p["name"], "why": p["why"], "kind": _kind_in(tb, p), "t0": p["t0"], "t1": t1,
                      "running": p["t1"] is None and alive, "failed": p["failed"]})
     bars.sort(key=lambda b: b["t0"])
-    t0 = min([float(e["t"]) for e in events if "t" in e] or [now])
+    t0 = tb["t0"] if tb["t0"] is not None else now
     t_end = now if alive else last_t
     kinds: dict[str, dict[str, Any]] = {}
     for b in bars:
@@ -146,12 +186,13 @@ def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: flo
         table.append({**k, "busy": busy, "share": busy / wall, "summed": k["summed"], "mean": k["summed"] / max(k["count"], 1)})
     table.sort(key=lambda k: -k["busy"])
     passes = [p["t0"] for p in ph.values() if p["parent"] is None and p["name"].startswith("propose: decompose")]
-    said = []
-    for i, ev in enumerate(every):
-        ts = [float(e["t"]) for e in ev if "t" in e]
-        said.append({"index": i, "t0": min(ts) if ts else None, "t1": max(ts) if ts else None})
     if len(bars) > limit:                                  # the longest kept: the short ones do not show anyway
         bars = sorted(bars, key=lambda b: b["t1"] - b["t0"], reverse=True)[:limit]
         bars.sort(key=lambda b: b["t0"])
-    return {"starts": said, "start": idx, "t0": t0, "t1": t_end, "running": alive, "bars": bars, "kinds": table,
-            "passes": sorted(passes), "wall": t_end - t0}
+    out = {"starts": said, "start": idx, "t0": t0, "t1": t_end, "running": alive, "bars": bars, "kinds": table,
+           "passes": sorted(passes), "wall": t_end - t0}
+    if not alive:
+        if len(_RESULTS) > 64:                             # a few loops' worth, not every one ever looked at
+            _RESULTS.clear()
+        _RESULTS[done] = out
+    return out

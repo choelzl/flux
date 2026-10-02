@@ -158,3 +158,36 @@ def test_the_timeline_reads_the_journal_as_it_grows(tmp_path):
     p.unlink()
     p.write_text(_json.dumps({"t": 9, "ev": "hello"}) + "\n")
     assert len(starts(str(p))) == 1, "a new file: read afresh"
+
+
+def test_the_timeline_built_as_the_journal_grows_is_the_one_read_whole(tmp_path):
+    """D780: the phases of a start are added as its events come; what the page gets equals a
+    reading of the whole file afresh, ended or running."""
+    import json as _json
+
+    import flux_web.timeline as tl
+
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello"}]
+    n = 0
+
+    def grow(k):
+        nonlocal n
+        with p.open("a") as fh:
+            for _ in range(k):
+                n += 1
+                fh.write(_json.dumps({"t": n, "ev": "start", "id": n, "parent": None if n % 3 else n - 1,
+                                      "name": ["simulation: screen", "agent: claude", "generation: x"][n % 3], "why": ""}) + "\n")
+                if n % 4:
+                    fh.write(_json.dumps({"t": n + 0.5, "ev": "end", "id": n, "seconds": 0.5, "failed": n % 7 == 0}) + "\n")
+
+    import shutil
+
+    p.write_text("".join(_json.dumps(r) + "\n" for r in rows))
+    for i, k in enumerate((10, 25, 7)):
+        grow(k)
+        for running in (True, False):
+            built = tl.timeline(str(p), now=n + 10, running=running)          # added to what the last look built
+            fresh = tmp_path / f"fresh-{i}-{running}.jsonl"                     # the same file, never looked at
+            shutil.copy(p, fresh)
+            assert built == tl.timeline(str(fresh), now=n + 10, running=running), (k, running)
