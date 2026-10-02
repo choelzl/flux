@@ -45,11 +45,16 @@ def test_the_journal_writes_the_tree_beside_the_tui(tmp_path):
     assert ("start", "pass") in seen and ("end", "gate") in seen, "the TUI still hears everything"
     events, offset = read_events(str(tmp_path / "events.jsonl"))
     kinds = [(e["ev"], e.get("name") or e.get("key")) for e in events]
-    assert kinds == [("start", "pass"), ("start", "gate"), ("update", "gate"), ("end", "gate"), ("end", "pass"),
-                     ("publish", "best"), ("start", "in a thread"), ("end", "in a thread")]
+    assert kinds == [("start", "pass"), ("start", "gate"), ("end", "gate"), ("end", "pass"),
+                     ("start", "in a thread"), ("end", "in a thread")], "D761: the structure only, appended"
     start_gate = events[1]
-    assert start_gate["parent"] == events[0]["id"] and events[6]["parent"] is None
-    assert len(events[2]["fields"]["tail"]) == 4003 and events[4]["output"] == {"decision": "d#1"}
+    assert start_gate["parent"] == events[0]["id"] and events[4]["parent"] is None
+    assert events[3]["output"] == {"decision": "d#1"}
+    import time as _time
+
+    _time.sleep(1.2)                                          # the flusher writes within a second
+    live = json.loads((tmp_path / "live.json").read_text())
+    assert live["publish"] == {"best": {"x": 1}} and live["updates"] == {}, "the latest only; an ended phase's fields gone"
     assert offset == (tmp_path / "events.jsonl").stat().st_size
     with open(tmp_path / "events.jsonl", "a") as fh:
         fh.write('{"ev": "mark", "name": "half')              # a line still being written
@@ -141,3 +146,24 @@ def test_a_long_starts_last_passes_are_found_from_the_end(tmp_path):
     assert window_start(str(p), 200) is None, "the start is shorter than the window"
     events, end = read_events(str(p), 0, limit=500)
     assert 0 < end <= 500 and events, "read in slices, each ending on a whole line"
+
+
+def test_a_long_running_phase_keeps_one_live_snapshot_not_thousands(tmp_path):
+    """D761: an hour-long agent turn sent its fields every second into the journal; now the journal
+    has its start and its end, and live.json its latest fields while it runs."""
+    import time as _time
+
+    from flux_loop.journal import END_MAX
+
+    j = Journal(str(tmp_path / "events.jsonl"))
+    tok = j.phase_start("agent: opencode", "draft", {})
+    for i in range(50):
+        j.phase_update(tok, "agent: opencode", {"steps": [{"text": "x" * 3000}] * 40, "i": i})
+    _time.sleep(1.2)
+    live = json.loads((tmp_path / "live.json").read_text())
+    assert live["updates"][str(tok)]["i"] == 49, "the latest"
+    j.phase_end(tok, "agent: opencode", 1.0, False, {"steps": [{"text": "y" * 4000}] * 60})
+    events, _ = read_events(str(tmp_path / "events.jsonl"))
+    assert [e["ev"] for e in events] == ["start", "end"]
+    assert len(json.dumps(events[1]["output"])) <= END_MAX, "an end's output is capped"
+    assert (tmp_path / "events.jsonl").stat().st_size < 60_000

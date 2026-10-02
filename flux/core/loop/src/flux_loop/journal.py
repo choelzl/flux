@@ -1,12 +1,15 @@
-"""The run's journal (D683): every phase event of the live task tree, appended as JSON lines to
-`<run dir>/events.jsonl`, so another process -- `flux serve` -- can follow a run as the TUI does.
+"""The run's journal (D683): the live task tree, so another process -- `flux serve` -- can follow a
+run as the TUI does. Two files in the run's directory (D761):
 
-One line per event: `{"t", "ev": start|update|end|mark|publish, "id", "parent", "name", ...}`.
-A phase's `id` is its order of start in this process; `parent` is the phase open around it on
-the same thread, or the phase a worker thread was handed its work under (D739); null at the top. Updates are at most one a second per
-phase; every text value is cut to its last TAIL characters. It never fails the run: a write
-that fails is dropped.
-"""
+- `events.jsonl`, appended: `{"t", "ev": hello|start|end|mark, "id", "parent", "name", ...}`. A
+  phase's `id` is its order of start in this process; `parent` is the phase open around it on the
+  same thread, or the phase a worker thread was handed its work under (D739); null at the top. An
+  end's output is cut to END_MAX.
+- `live.json`, rewritten at most once a second: each running phase's latest fields, and the
+  standings -- what is only ever read at its latest, never appended.
+
+Every text value is cut to its last TAIL characters. It never fails the run: a write that fails
+is dropped."""
 
 from __future__ import annotations
 
@@ -35,15 +38,77 @@ def _cut(value: Any) -> Any:
     return _cut(str(value))
 
 
+#: An end's output at most this long as JSON (D761): a turn's whole conversation is the turn log's.
+END_MAX = 48_000
+
+
+def _capped(output: dict[str, Any]) -> dict[str, Any]:
+    """An end's output within END_MAX: its strings and lists cut harder until it fits."""
+    out = _cut(output or {})
+    for chars, items in ((1500, 20), (400, 8), (120, 3)):
+        if len(json.dumps(out, default=str)) <= END_MAX:
+            break
+        out = _shrunk(out, chars, items)
+    return out
+
+
+def _shrunk(value: Any, chars: int, items: int) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= chars else "..." + value[-chars:]
+    if isinstance(value, dict):
+        return {k: _shrunk(v, chars, items) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_shrunk(v, chars, items) for v in value[-items:]]
+    return value
+
+
 class Journal:
+    """D761: two files. `events.jsonl` is the run's structure, appended: starts, ends, marks. What
+    is only ever read at its latest -- a running phase's live fields, the standings -- is not
+    appended a second at a time (an hour-long agent turn made tens of MB of it): it is kept in
+    `live.json`, rewritten at most once a second."""
+
     def __init__(self, path: str) -> None:
         self.path = path
+        self.live_path = os.path.join(os.path.dirname(path), "live.json")
         self._lock = threading.Lock()
         self._n = 0
         self._stacks: dict[int, list[int]] = {}
-        self._last_update: dict[int, float] = {}
-        self._pending: dict[int, tuple[str, dict]] = {}
         self._adopted: dict[int, int] = {}     # a worker thread -> the phase it works under (D739)
+        self._live: dict[str, Any] = {"updates": {}, "publish": {}}
+        self._dirty = False
+        self._written = 0.0
+        self._flusher: threading.Thread | None = None
+
+    def _touch_live(self) -> None:
+        """The live state changed: written now if a second has passed, else by the flusher."""
+        self._dirty = True
+        if time.monotonic() - self._written >= 1.0:
+            self._write_live()
+        elif self._flusher is None:
+            self._flusher = threading.Thread(target=self._flush_soon, daemon=True, name="flux-journal-live")
+            self._flusher.start()
+
+    def _flush_soon(self) -> None:
+        time.sleep(1.0)
+        self._flusher = None
+        if self._dirty:
+            self._write_live()
+
+    def _write_live(self) -> None:
+        with self._lock:
+            doc = {"t": round(time.time(), 3), "updates": dict(self._live["updates"]), "publish": dict(self._live["publish"])}
+            self._dirty, self._written = False, time.monotonic()
+        tmp = f"{self.live_path}.{os.getpid()}.{threading.get_ident()}"
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(doc, fh, default=str)
+            os.replace(tmp, self.live_path)
+        except (OSError, TypeError, ValueError):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
     def _write(self, row: dict[str, Any]) -> None:
         row = {"t": round(time.time(), 3), **row}
@@ -66,23 +131,21 @@ class Journal:
         return pid
 
     def phase_update(self, token: int, name: str, output: dict) -> None:
-        now = time.monotonic()
-        if now - self._last_update.get(token, 0.0) < 1.0:
-            self._pending[token] = (name, output)          # the newest waits for the next second or the end
-            return
-        self._last_update[token] = now
-        self._pending.pop(token, None)
-        self._write({"ev": "update", "id": token, "name": name, "fields": _cut(output)})
+        with self._lock:
+            self._live["updates"][str(token)] = _cut(output)
+        self._touch_live()
 
     def phase_end(self, token: int, name: str, seconds: float, failed: bool, output: dict) -> None:
         with self._lock:
             stack = self._stacks.get(threading.get_ident(), [])
             if stack and stack[-1] == token:
                 stack.pop()
-        self._pending.pop(token, None)
-        self._last_update.pop(token, None)
+        with self._lock:
+            had = self._live["updates"].pop(str(token), None) is not None
         self._write({"ev": "end", "id": token, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
-                     "output": _cut(output or {})})
+                     "output": _capped(output or {})})
+        if had:
+            self._touch_live()
 
     def adopt(self, token: int | None) -> None:
         """This thread's phases go under `token` (flux_profile.carried), or nowhere again."""
@@ -96,7 +159,9 @@ class Journal:
         self._write({"ev": "mark", "name": name, "why": _cut(why)})
 
     def publish(self, key: str, payload: dict) -> None:
-        self._write({"ev": "publish", "key": key, "payload": _cut(payload)})
+        with self._lock:
+            self._live["publish"][key] = _cut(payload)
+        self._touch_live()
 
 
 def attach(run_dir: str) -> Journal:
@@ -111,6 +176,7 @@ def attach(run_dir: str) -> Journal:
             os.makedirs(run_dir, exist_ok=True)
             j = _ATTACHED[run_dir] = Journal(os.path.join(run_dir, "events.jsonl"))
             j._write({"ev": "hello", "pid": os.getpid()})
+            j._write_live()                              # D761: a new start's live state begins empty
             add_listener(j)
     return j
 

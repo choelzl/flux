@@ -154,3 +154,20 @@ process.stdout.write(JSON.stringify(LT.build(m).map(b => b.kids.map(k => [k.titl
     r = subprocess.run(["node", "-e", js, str(LOOPTREE)], input="".join(json.dumps(e) + "\n" for e in ev),
                        capture_output=True, text=True, timeout=60)
     assert json.loads(r.stdout) == [[["Search", True], ["Design", True]]], r.stdout + r.stderr
+
+
+def test_a_resumed_pass_folds_its_rechecks_into_its_setup_before_its_design():
+    """D761 (found live): `propose: decompose` is in the Pick box, and counted as the pass's first work --
+    the re-checks before the Design stayed six leaves."""
+    ev = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1})}]
+    names = ["gate: tools", "propose: decompose", "records: re-verify *", "knowledge: prepare x", "simulation: screen",
+             "frontier", "propose: finalists", "simulation: confirm", "generation: improve x#3"]
+    for i, n in enumerate(names, start=1):
+        ev += [{"t": 1 + i, "ev": "start", "id": i, "parent": None, "name": n, "why": "", "params": {}},
+               {"t": 1.5 + i, "ev": "end", "id": i, "name": "", "seconds": 0.1, "failed": False, "output": {}}]
+    ev += [{"t": 30, "ev": "mark", "name": "pass", "why": json.dumps({"n": 2})}]
+    for i, n in enumerate(names, start=20):
+        ev += [{"t": 10 + i, "ev": "start", "id": i, "parent": None, "name": n, "why": "", "params": {}},
+               {"t": 10.5 + i, "ev": "end", "id": i, "name": "", "seconds": 0.1, "failed": False, "output": {}}]
+    t = tree("".join(json.dumps(e) + "\n" for e in ev))
+    assert titles(branch(t, "Pass 2")["kids"]) == ["Setup", "Design"]

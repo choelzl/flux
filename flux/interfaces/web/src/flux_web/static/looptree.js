@@ -39,6 +39,14 @@
     return {};
   }
 
+  /** The live state (D761): each running phase's latest fields, the standings -- whole, each time. */
+  function applyLive(m, doc) {
+    var ups = (doc && doc.updates) || {};
+    Object.keys(ups).forEach(function (id) { var n = m.nodes.get(Number(id)); if (n && n.t1 == null) n.fields = ups[id] || {}; });
+    var pub = (doc && doc.publish) || {};
+    Object.keys(pub).forEach(function (k) { m.standings.set(k, pub[k]); });
+  }
+
   var running = function (n) { return n.t1 == null; };
   function failedBelow(n) { return n.failed || n.kids.some(failedBelow); }
   var within = function (v, n) { for (var p = n; p; p = p.parent) if (p === v) return true; return false; };
@@ -192,8 +200,10 @@
       while (i < vs.length && isSetup(vs[i])) i++;
       // D755: a resumed pass first re-checks and re-measures what the record holds, then works --
       // all of that before its first pick, search or design is its setup, one leaf
-      var w = vs.findIndex(function (v) { return WORK.has(boxOf(v)); });
-      if (w < 0) {                                   // no new work (the Conclusion): all before its decision
+      var w = vs.findIndex(function (v) {             // dividing into parts and choosing finalists are not new work
+        return WORK.has(boxOf(v)) && !isDivide(v) && !/^propose: finalists/.test(String(v.name));
+      });
+      if (w < 0 && p.conclude) {                     // the Conclusion: all before its decision
         for (var k = vs.length - 1; k >= 0; k--) if (boxOf(vs[k]) === "select" && /^decide\b/.test(String(vs[k].name))) { w = k; break; }
       }
       if (w > i) i = w;
@@ -270,7 +280,7 @@
   var itemTasks = function (it) { return it.leaf ? it.tasks : it.kids.reduce(function (a, k) { return a.concat(itemTasks(k)); }, []); };
   var itemHas = function (it, n) { return !!n && itemTasks(it).some(function (v) { return within(v, n); }); };
 
-  var api = { LOOP_MARKS: LOOP_MARKS, model: model, apply: apply, build: build, leafLine: leafLine, boxName: boxName, boxOf: boxOf,
+  var api = { LOOP_MARKS: LOOP_MARKS, model: model, apply: apply, applyLive: applyLive, build: build, leafLine: leafLine, boxName: boxName, boxOf: boxOf,
     focusOf: focusOf, visitOf: visitOf, running: running, failedBelow: failedBelow, within: within, subtree: subtree,
     itemTasks: itemTasks, itemHas: itemHas };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

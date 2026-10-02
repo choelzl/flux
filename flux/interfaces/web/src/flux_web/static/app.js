@@ -2207,10 +2207,14 @@ function liveTree(base, qs, onQuestion) {
   // D759: a day-long run's tree opens on its last 30 passes; "Earlier" loads the rest
   const WINDOW = 30;
   let es = followStream(`${base}/events${qs}${qs ? "&" : "?"}window=${WINDOW}`, "events", onEvent, pill.set);
+  // D761: what runs now -- its live fields, the standings -- from live.json, whole each time it changes
+  const liveEs = new EventSource(`${base}/live${qs}`);
+  let lastLive = null;
+  liveEs.addEventListener("live", (m) => { try { lastLive = JSON.parse(m.data); LT.applyLive(mdl, lastLive); dirty = true; } catch (_) {} });
   loadAll = () => {
     es.close();
     LT.apply(mdl, { ev: "hello" }); open.clear(); selected = null; selLeafKey = null; dirty = true;
-    es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
+    es = followStream(`${base}/events${qs}`, "events", onEvent, (st) => { pill.set(st); if (lastLive) LT.applyLive(mdl, lastLive); });
   };
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
   const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
@@ -2218,7 +2222,7 @@ function liveTree(base, qs, onQuestion) {
     h("label", { class: "check" }, follow, "follow the running task"),
     collapseLbl, search, pill.el);
   setMode(mode);
-  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => { es.close(); clearInterval(tick); } };
+  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => { es.close(); liveEs.close(); clearInterval(tick); } };
 }
 
 // ================================================================ the configurator (D686)

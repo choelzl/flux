@@ -1435,6 +1435,39 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                          at, request, "events", preface)
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/api/apps/{name}/live")
+    async def live(name: str, request: Request, owner: str | None = None, user: User = Depends(user_of)):
+        """The latest start's live state (D761): `live.json` -- each running phase's latest fields
+        and the standings -- sent whole each time it changes."""
+        _w, whose, _d, _run = loop_of(name, user, owner)
+
+        async def stream():
+            seen = None
+            yield "retry: 3000\n\n"
+            while True:
+                if await request.is_disconnected():
+                    return
+                ev = runs.events_path(runs.latest(whose, name))
+                path = os.path.join(os.path.dirname(ev), "live.json") if ev else None
+                try:
+                    st = os.stat(path) if path else None
+                except OSError:
+                    st = None
+                if st is not None and (st.st_ino, st.st_mtime_ns, st.st_size) != seen:
+                    seen = (st.st_ino, st.st_mtime_ns, st.st_size)
+                    try:
+                        with open(path) as fh:
+                            body = fh.read()
+                        json.loads(body)
+                        yield f"event: live\ndata: {body}\n\n"
+                    except (OSError, ValueError):
+                        seen = None                              # half written: read again
+                else:
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(1.0)
+
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/apps/{name}/log")
     async def log(name: str, request: Request, offset: str = "0", tail: int = 0, owner: str | None = None,
                   user: User = Depends(user_of)):

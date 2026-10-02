@@ -219,7 +219,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
   - **Long runs** (D759): Live › Tasks opens on the last 30 passes ("Earlier" loads the rest), the log on its
-    last 2 MB ("Load all" for the rest).
+    last 2 MB ("Load all" for the rest). A run's journal keeps only its tasks' starts and ends; what runs now and the standings
+    are `live.json` beside it, rewritten each second (D761), so an hour-long pass does not grow it.
   - **Talk** (D758): the button on every loop page opens the drawer -- a note to the running loop (it joins the
     next prompt, or answers its agent's open question; the notes so far under it) and questions to an agent about it.
   - **When something is wrong** (D757): a failed start's Overview says why (its log's own lines, with the log a
