@@ -149,6 +149,8 @@ flow:
 
 In the configurator's drawing it is the **Digest the papers** box (off, the model, a coding agent; D784). Its form also takes a folder of papers and whether the model digests them (D781). A Setup digests at most 8 new papers (`FLUX_DIGEST_PER_PASS`), the loop's own first;
 the rest follow in later passes, and a digester that fails three times in a row waits for the next pass (D782).
+An agent reads each paper from a `paper.txt` beside it; it needs a model served with room for its own
+prompt (OpenCode's alone is about 33,000 tokens) and working tool calls -- else digest with the model (D785).
 
 ## The sandbox
 
