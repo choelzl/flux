@@ -274,8 +274,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in the lane of its kind: agent, model, gate, a
-    stage, generation, re-verify, knowledge, the loop's own work. Per kind: phases, busy time (work
-    side by side counted once), share of the wall clock, summed time, and how many ran at once.
+    stage, generation, re-verify, knowledge, the loop's own work. Per kind (D772): calls, the average
+    and the longest call, the total (the wall clock its calls held, side by side counted once) and its
+    share of the wall clock; summed time and how many ran at once only where calls ran side by side.
     Choose a start and a pass. It redraws once a minute while the loop runs.
   - **Agent turns:** each prompt, reply and tool call, with its model and tool version, tokens,
     tool calls, session, exit and folder. Above them, what the

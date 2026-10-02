@@ -48,6 +48,7 @@ def test_the_timeline_counts_parallel_work_once_and_splits_the_starts(tmp_path):
     assert kinds["agent"]["busy"] == 10 and kinds["agent"]["count"] == 1, "the agent under the generation is the agent's"
     scr = kinds["stage screen"]
     assert scr["count"] == 2 and scr["summed"] == 9 and scr["busy"] == 5, "two tools side by side: busy once, summed twice"
+    assert scr["mean"] == 4.5 and scr["longest"] == 5 and kinds["agent"]["mean"] == 10, "D772: a call's average and the longest"
     assert t["passes"] == [1, 16]
     gate = next(b for b in t["bars"] if b["kind"] == "gate")
     assert gate["running"] and gate["t1"] == 20.0, "a phase not ended in a live start runs to now"

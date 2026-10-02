@@ -5,8 +5,9 @@ Every phase that has no child phase (the work itself: a tool, an agent, a model 
 the kind of work of its nearest ancestor, itself first -- an agent, a model call, a check of
 the gate, a stage's measurement, a generation, a record re-verified, the knowledge prepared,
 or the loop's own bookkeeping. Per kind: how
-many, the busy time (the union of their bars: what the wall clock saw, parallel work counted
-once) and the summed time. Passes start where a `propose: decompose` phase starts at the top."""
+many calls, their average and longest, the busy time (the union of their bars: what the wall
+clock saw, parallel work counted once) and its share of the wall clock, and the summed time
+(above the busy time only when calls ran side by side, D772). Passes start where a `propose: decompose` phase starts at the top."""
 
 from __future__ import annotations
 
@@ -120,15 +121,16 @@ def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: flo
     t_end = now if alive else last_t
     kinds: dict[str, dict[str, Any]] = {}
     for b in bars:
-        k = kinds.setdefault(b["kind"], {"kind": b["kind"], "count": 0, "summed": 0.0, "spans": []})
+        k = kinds.setdefault(b["kind"], {"kind": b["kind"], "count": 0, "summed": 0.0, "longest": 0.0, "spans": []})
         k["count"] += 1
         k["summed"] += b["t1"] - b["t0"]
+        k["longest"] = max(k["longest"], b["t1"] - b["t0"])
         k["spans"].append((b["t0"], b["t1"]))
     wall = max(t_end - t0, 1e-9)
     table = []
     for k in kinds.values():
         busy = _union(k.pop("spans"))
-        table.append({**k, "busy": busy, "share": busy / wall, "summed": k["summed"]})
+        table.append({**k, "busy": busy, "share": busy / wall, "summed": k["summed"], "mean": k["summed"] / max(k["count"], 1)})
     table.sort(key=lambda k: -k["busy"])
     passes = [p["t0"] for p in ph.values() if p["parent"] is None and p["name"].startswith("propose: decompose")]
     said = []

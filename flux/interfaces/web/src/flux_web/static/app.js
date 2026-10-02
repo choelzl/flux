@@ -1114,7 +1114,7 @@ async function loopPage(name, owner, path = "") {
   }
 
   /** Where the time goes (D694): one start's phases as bars in lanes by kind of work, and per
-      kind the busy time (parallel work once), its share of the wall clock and the summed time. */
+      kind its calls, the average and longest, the total (parallel work once) and its share (D772). */
   const PALETTE = ["#5b8def", "#e8804f", "#4fb286", "#b176e0", "#d9b440", "#e0607e", "#48b3c9", "#8f9aa6", "#a3c956", "#c98a56"];
   let tlStart = null, tlPass = "";
   async function timelineView() {
@@ -1129,16 +1129,21 @@ async function loopPage(name, owner, path = "") {
         `start ${st.index + 1} · ${st.t0 ? new Date(st.t0 * 1000).toLocaleString() : "?"}${st.t0 && st.t1 ? " · " + dur(st.t1 - st.t0) : ""}`)));
     const passSel = h("select", { onchange: (e) => { tlPass = e.target.value; draw(); } },
       h("option", { value: "" }, `every pass (${t.passes.length})`), t.passes.map((p, i) => h("option", { value: String(i), selected: tlPass === String(i) }, `pass ${i + 1}`)));
+    // D772: per kind its calls, the time of one, the time of all and their share; side by side only when it happened
+    const together = (k) => k.busy > 0 && k.summed > k.busy * 1.05 && k.summed - k.busy >= 1;
+    const side = t.kinds.some(together);
     const kindsTable = h("table", { class: "list compact kinds" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Kind of work"), h("th", { class: "num" }, "Phases"), h("th", { class: "num" }, "Busy"),
-        h("th", {}, "Share of the wall clock"), h("th", { class: "num", title: "Every phase's own time added: above Busy when they ran side by side" }, "Summed"),
-        h("th", { class: "num", title: "Summed over busy: how many ran at once, on average" }, "At once"))),
+      h("thead", {}, h("tr", {}, h("th", {}, "Kind of work"), h("th", { class: "num" }, "Calls"), h("th", { class: "num" }, "Average"),
+        h("th", { class: "num" }, "Longest"), h("th", { class: "num", title: "The wall clock its calls held (side by side counted once)" }, "Total"),
+        h("th", {}, "Share of the wall clock"),
+        side ? h("th", { class: "num", title: "Every call's own time added, and how many ran at once on average" }, "Summed · at once") : "")),
       h("tbody", {}, t.kinds.map(k => h("tr", {},
         h("td", {}, h("i", { class: "sw", style: `background:${color[k.kind]}` }), k.kind),
-        h("td", { class: "num mono" }, String(k.count)), h("td", { class: "num mono" }, dur(k.busy)),
+        h("td", { class: "num mono" }, String(k.count)), h("td", { class: "num mono" }, dur(k.mean)),
+        h("td", { class: "num mono" }, dur(k.longest)), h("td", { class: "num mono strong" }, dur(k.busy)),
         h("td", {}, h("div", { class: "share" }, h("div", { class: "share-bar", style: `width:${Math.min(100, k.share * 100).toFixed(1)}%;background:${color[k.kind]}` }),
           h("span", {}, `${(k.share * 100).toFixed(k.share < 0.1 ? 1 : 0)}%`))),
-        h("td", { class: "num mono" }, dur(k.summed)), h("td", { class: "num mono" }, k.busy > 0 ? `×${(k.summed / k.busy).toFixed(1)}` : "")))));
+        side ? h("td", { class: "num mono" }, together(k) ? `${dur(k.summed)} · ×${(k.summed / k.busy).toFixed(1)}` : "—") : ""))));
     const chartBox = h("div", { class: "gantt-box" });
     function draw() {
       let a = t.t0, b = t.t1;
@@ -1165,7 +1170,7 @@ async function loopPage(name, owner, path = "") {
         h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${t.bars.length} phase(s) · ${t.passes.length} pass(es)`))),
       card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed lines: a pass begins. Hover a bar for its phase.")]),
       card("Where the time goes", [kindsTable,
-        h("p", { class: "muted small" }, "Each phase that does the work (a tool, an agent, a model call) counts in the kind of its nearest named phase. Busy: the wall clock it held, work side by side counted once.")]));
+        h("p", { class: "muted small" }, "Each call that does the work (a tool, an agent, a model call) counts in the kind of its nearest named phase. Total: the wall clock its calls held, work side by side counted once.")]));
   }
 
   /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
