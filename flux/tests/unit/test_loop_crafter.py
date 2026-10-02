@@ -138,9 +138,9 @@ s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "agents_everywher
 for (const b of c.DELEGABLE) if (b !== "dse") s.flow[b] = "agent:claude";
 s.flow.knowledge = "none"; s.flow.critique = "llm";
 add("agents_everywhere", "rtl", s);
-s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_by_agent"; s.flow.knowledge = "agent:opencode";   // D773
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_by_agent"; s.flow.digest = "agent:opencode";   // D773
 add("papers_by_agent", "rtl", s);
-s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_folder"; s.knowledgeLibrary = "papers"; s.knowledgeDigest = "model";   // D781
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_folder"; s.knowledgeLibrary = "papers"; s.flow.digest = "model";   // D781
 add("papers_folder", "rtl", s);
 out.readback = {papers: c.fromDoc({id: "r", statement: "s", flow: {knowledge: {files: ["a.md"], library: "papers", digest: true}}}, null)};
 out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES[b].title, says: c.BOXES[b].says,
@@ -384,7 +384,7 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     f = BUILT["papers_folder"]
     assert "knowledge: {library: papers, digest: true}" in f["yaml"], f["yaml"]
     r = BUILT["readback"]["papers"]
-    assert (r["state"]["knowledgeFiles"], r["state"]["knowledgeLibrary"], r["state"]["knowledgeDigest"]) == ("a.md", "papers", "model")
+    assert (r["state"]["knowledgeFiles"], r["state"]["knowledgeLibrary"], r["state"]["flow"]["digest"]) == ("a.md", "papers", "model")
     assert not r["kept"], "D781: the folder and the digest are the configurator's own now"
 
 

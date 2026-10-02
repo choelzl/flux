@@ -82,8 +82,13 @@
       choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "none", half: "off", label: "No notes" }] },
     knowledge: { title: "Background reading", says: "What the model reads with every request.",
       choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
-                { value: "none", half: "off", label: "None: no library" }]
-        .concat(agentChoices("The library, its papers digested by a coding agent in the Setup")) },
+                { value: "none", half: "off", label: "None: no library" }] },
+    // D784: who sums the papers up, once each, in each pass's Setup -- not a flow key of its own:
+    // it is written into flow.knowledge (digest: true, or agent: ...)
+    digest: { title: "Digest the papers", says: "Optionally, each paper of the library is summed up once, in the Setup, and the summaries reach every prompt.",
+      choices: [{ value: "off", half: "off", label: "Off: the papers are read as they are" },
+                { value: "model", half: "model", label: "The model sums up each paper" }]
+        .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
     extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
       choices: [{ value: "none", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
@@ -98,6 +103,7 @@
   function defaultFlow() {
     var out = {};
     FLOW_BOXES.forEach(function (b) { out[b] = BOXES[b].choices[0].value; });
+    out.digest = "off";                                  // D784: a box of the drawing, written into knowledge
     return out;
   }
 
@@ -406,7 +412,7 @@
   // ------------------------------------------------------------------ the state
   function base() {
     return {
-      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "", knowledgeLibrary: "", knowledgeDigest: "",
+      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "", knowledgeLibrary: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
@@ -669,9 +675,10 @@
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
       if (String(state.knowledgeLibrary || "").trim()) K.library = String(state.knowledgeLibrary).trim();   // D781
-      if (state.knowledgeDigest === "model" && !(kv && typeof kv === "object")) K.digest = true;
+      var dg = (state.flow || {}).digest;                  // D784: the Digest box
+      if (dg === "model") K.digest = true;
+      else if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.agent = dg.slice(6);
       if (kv === "none" || kv === "off") K = { off: true };
-      else if (kv && typeof kv === "object" && !Array.isArray(kv)) Object.keys(kv).forEach(function (k) { K[k] = kv[k]; });
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
     }
@@ -813,7 +820,7 @@
     // the flow
     FLOW_BOXES.forEach(function (b) {
       var v = flow[b];
-      if (typeof v === "string" && v.indexOf("agent:") === 0 && DELEGABLE.indexOf(b) < 0 && b !== "generate" && b !== "knowledge") {
+      if (typeof v === "string" && v.indexOf("agent:") === 0 && DELEGABLE.indexOf(b) < 0 && b !== "generate" && b !== "knowledge" && b !== "digest") {
         error("\"" + BOXES[b].title + "\" (" + b + ") is never handed to a coding agent: it establishes the facts.");
       } else if (v !== undefined && !choiceOf(b, v)) {
         error("\"" + BOXES[b].title + "\" (" + b + ") cannot be \"" + v + "\".");
@@ -1048,9 +1055,9 @@
       if (!BOXES[box]) { flowOk = false; return; }
       if (box === "knowledge") {
         var ls = Array.isArray(v) ? v : [v];
-        if (v && typeof v === "object" && !Array.isArray(v) && typeof v.agent === "string" && choiceOf(box, "agent:" + v.agent)) { s.flow.knowledge = "agent:" + v.agent; return; }   // D773
+        if (v && typeof v === "object" && !Array.isArray(v) && typeof v.agent === "string" && choiceOf("digest", "agent:" + v.agent)) { s.flow.digest = "agent:" + v.agent; return; }   // D773, D784
         if (ls.length === 1 && ls[0] === "none") s.flow.knowledge = "none";
-        else if (ls.length === 1 && ls[0] === "digest") s.knowledgeDigest = "model";          // D781
+        else if (ls.length === 1 && ls[0] === "digest") s.flow.digest = "model";          // D781, D784
         else if (!(ls.length === 0 || (ls.length === 1 && ls[0] === "library"))) flowOk = false;
         return;
       }
@@ -1461,9 +1468,10 @@
           field("A folder of papers (optional)", function () { return state.knowledgeLibrary; },
                 function (v) { state.knowledgeLibrary = v; }, { compact: true, grow: true, placeholder: "papers",
                   hint: "Beside the document; library/ and inputs/ are read without saying" }),
-          field("Digest the papers in the Setup", function () { return state.knowledgeDigest; },
-                function (v) { state.knowledgeDigest = v; }, { compact: true, options: [["", "No"], ["model", "Yes, by the model"]],
-                  hint: "Each paper summed up once; a coding agent instead: Background reading in the flow" })]),
+          field("Digest the papers in the Setup", function () { return state.flow.digest || "off"; },
+                function (v) { state.flow.digest = v; }, { compact: true, structural: true,
+                  options: BOXES.digest.choices.map(function (c) { return [c.value, c.label.split(":")[0].replace(/^The /, "")]; }),
+                  hint: "Each paper summed up once; the same choice as the Digest box of step 2" })]),
       ]);
       var kids = [what];
       if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));
@@ -1488,7 +1496,7 @@
         at("test", "test", C, 3), at("crit-part", "critique", C + (W - SW) / 2, 4, true),
         at("measure", "measure", C, 5), at("calibrate", "calibrate", C, 6),
         at("select", "select", C, 7), at("crit-decision", "critique", S + (W - SW) / 2, 7, true),
-        at("records", "records", C, 8), at("extract", "extract", S, 8)];
+        at("records", "records", C, 8), at("extract", "extract", S, 8), at("digest", "digest", S, 3)];
       if (hasParts()) out.push(at("parts", "parts", L - 44, 4, true));
       return out;
     }
@@ -1517,6 +1525,7 @@
         { d: down("orchestrate", "generate") },
         { d: "M" + right("dse") + " " + cy("dse") + " H" + left("generate") },
         { d: "M" + left("knowledge") + " " + (cy("knowledge") - 8) + " H" + right("generate"), side: true },
+        { d: "M" + cx("digest") + " " + top("digest") + " V" + bot("knowledge"), side: true },          // D784: the papers summed up
         { d: elbow("generate", "test") },
         { d: down("test", "crit-part") },
         { d: down("crit-part", "measure") },
