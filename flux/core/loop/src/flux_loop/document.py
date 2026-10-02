@@ -35,7 +35,7 @@ from .types import (LoopRequest)
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 
-__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "needs_upgrade", "read_input", "request_for", "resolve", "upgrade", "upgrade_file", "world_hooks"]
+__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "world_hooks"]
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -260,7 +260,7 @@ class TaskSpec:
             _HOMES.append(str(Path(base).resolve()))       # D602: its modules resolve beside it
         if isinstance(doc, dict):
             doc = _lift(doc)                               # D775: each box's own settings under `flow`
-        unknown = sorted(set(doc) - DOCUMENT_KEYS - _INTERNAL_KEYS) if isinstance(doc, dict) else []
+        unknown = sorted(set(doc) - DOCUMENT_KEYS - _INTERNAL_KEYS - _LIFTED_KEYS) if isinstance(doc, dict) else []
         if unknown:
             import difflib
 
@@ -499,7 +499,7 @@ class TaskSpec:
         out = self._to_dict()
         if "calibrate" in self.flow and "budget" in out:
             out["budget"] = {k: v for k, v in out["budget"].items() if k != "calibrate"}
-        return upgrade(out)
+        return _layout(out)
 
     @property
     def digest(self) -> str:
@@ -921,9 +921,11 @@ def _workbench(value: Any, base: Any) -> str:
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
     "id", "statement", "contract", "language", "parts", "max_parts",
-    "flow", "subtasks", "max_subtasks", "seeds", "brief", "gate", "stages", "objectives",
-    "knowledge", "joiner", "budget", "params", "space", "workload", "world", "hooks", "ladder", "cache",
+    "flow", "subtasks", "max_subtasks", "brief", "objectives",
+    "joiner", "budget", "params", "workload", "world", "hooks", "ladder", "cache",
     "skills", "workbench"})
+#: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
+_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
 _INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})
@@ -1075,32 +1077,24 @@ _FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("no
 _KNOWLEDGE_SOURCES = ("sheet", "library", "digest", "none")
 
 
-#: D775: what moved into `flow`, each beside its box -- the old top-level key and where it is now.
-MOVED = {"gate": "flow.test", "stages": "flow.measure", "space": "flow.dse.space", "seeds": "flow.dse.seeds",
-         "knowledge": "flow.knowledge"}
 _KNOWLEDGE_KEYS = ("files", "sheet", "text", "library", "off", "digest", "agent")
-
-
-def _moved(what: str, where: str) -> TaskError:
-    return TaskError(f"`{what}` is said as `{where}` now (D775); `flux task upgrade FILE` rewrites a document")
 
 
 def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     """D775: each box's own settings, said under `flow`, read into the fields the loop keeps:
     `flow.test` the gate, `flow.measure` the stages (a map: a stage's name to its command or its
     settings), `flow.dse` its space and seeds beside its policy, `flow.knowledge` what is read
-    and who digests it, `flow.select` its finalists. The old places are refused, saying where."""
+    and who digests it, `flow.select` its finalists. The fields themselves are not a document's keys."""
     if doc.get("_lifted"):
         return doc
     strict = not doc.get("_inherited")                     # an inherited parent's fields are the loop's already
     if strict:
-        for key, where in MOVED.items():
-            if key in doc:
-                raise _moved(key, where)
-        if isinstance(doc.get("budget"), dict):
-            for key, where in (("finalists", "flow.select.finalists"), ("calibrate", "flow.calibrate")):
-                if key in doc["budget"]:
-                    raise _moved(f"budget.{key}", where)
+        said = sorted(set(doc) & _LIFTED_KEYS)
+        if said:
+            raise TaskError(f"keys a problem document does not have: {', '.join(said)}")
+        knobs = sorted(set(doc.get("budget") or {}) & {"finalists", "calibrate"}) if isinstance(doc.get("budget"), dict) else []
+        if knobs:
+            raise TaskError(f"budget keys {knobs} are not loop knobs")
     doc = {**doc, "_lifted": True}
     raw = doc.get("flow")
     if not isinstance(raw, dict):
@@ -1183,13 +1177,12 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
-def upgrade(doc: Any) -> Any:
-    """D775: a document of the earlier layout -- `gate`, `stages`, `space`, `seeds`,
-    `knowledge` at the top, `budget.finalists`, `budget.calibrate` -- in this one, each under its
-    box in `flow`. `flux task upgrade` writes it; a document already upgraded comes back as it is."""
+def _layout(doc: Any) -> Any:
+    """D775: the loop's fields -- gate, stages, space, seeds, knowledge, finalists, calibrate --
+    as a document says them, each under its box in `flow`: what `to_dict` writes."""
     if not isinstance(doc, dict):
         return doc
-    out = {k: v for k, v in doc.items() if k not in MOVED and k not in ("_lifted", "_inherited")}
+    out = {k: v for k, v in doc.items() if k not in _LIFTED_KEYS and k not in ("_lifted", "_inherited")}
     flow = dict(doc.get("flow") or {})
     budget = dict(doc["budget"]) if isinstance(doc.get("budget"), dict) else None
     if flow.get("test") == "gate":
@@ -1250,55 +1243,12 @@ def upgrade(doc: Any) -> Any:
         else:
             out.pop("budget", None)
     if isinstance(out.get("subtasks"), list):
-        out["subtasks"] = [upgrade(c) for c in out["subtasks"]]
+        out["subtasks"] = [_layout(c) for c in out["subtasks"]]
     if flow:
         out["flow"] = flow
     else:
         out.pop("flow", None)
     return out
-
-
-def upgrade_file(path: str | Path, *, write: bool = True) -> dict[str, Any]:
-    """D775: a document file of the earlier layout rewritten in this one: {"status": "current" |
-    "upgraded" | "failed" | "would upgrade", "why", "text"}. The result is loaded before it is
-    written; the original is kept beside as `<file>.orig` (YAML comments are not carried over)."""
-    import yaml
-
-    path = Path(path)
-    text = path.read_text()
-    try:
-        doc = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
-    except (ValueError, yaml.YAMLError) as exc:
-        return {"status": "failed", "why": f"not YAML or JSON: {exc}", "text": ""}
-    new = upgrade(doc)
-    if new == doc:
-        return {"status": "current", "why": "already in the current layout", "text": text}
-    out = (json.dumps(new, indent=2) + "\n" if path.suffix == ".json"
-           else yaml.safe_dump(new, sort_keys=False, allow_unicode=True, width=110, default_flow_style=None))
-    if not write:
-        return {"status": "would upgrade", "why": "", "text": out}
-    tmp = path.with_name(f"{path.stem}.upgrading{path.suffix}")         # the loader reads by suffix
-    tmp.write_text(out)
-    try:
-        load_task(str(tmp))
-    except Exception as exc:  # noqa: BLE001 -- said; the original left alone
-        tmp.unlink()
-        return {"status": "failed", "why": f"the result does not load: {exc}", "text": out}
-    path.with_name(path.name + ".orig").write_text(text)
-    tmp.replace(path)
-    return {"status": "upgraded", "why": f"the original is {path.name}.orig", "text": out}
-
-
-def needs_upgrade(path: str | Path) -> bool:
-    """Whether a document file is of the earlier layout (D775) -- read, not loaded."""
-    import yaml
-
-    path = Path(path)
-    try:
-        doc = json.loads(path.read_text()) if path.suffix == ".json" else yaml.safe_load(path.read_text())
-    except (OSError, ValueError, yaml.YAMLError):
-        return False
-    return isinstance(doc, dict) and upgrade(doc) != doc
 
 
 def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

@@ -330,15 +330,9 @@ def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False)
         return None, None, f"`{DOCUMENT}` is not YAML: {exc}"
     if not isinstance(doc, dict):
         return None, None, f"`{DOCUMENT}` is not a mapping of keys"
-    from .document import MOVED
-
-    moved = [k for k in doc if k in MOVED]
-    if moved:
-        return None, None, "; ".join(f"`{k}` is said as `{MOVED[k]}` (under `flow`)" for k in moved)
     unknown = sorted(set(doc) - DOCUMENT_KEYS)
     if unknown:
-        return None, None, (f"keys a document does not have: {', '.join(unknown)}; the keys are "
-                            f"{', '.join(sorted(DOCUMENT_KEYS - set(MOVED)))}")
+        return None, None, f"keys a document does not have: {', '.join(unknown)}; the keys are {', '.join(sorted(DOCUMENT_KEYS))}"
     missing = [f for f in _home_files(doc) if not (workdir / f).is_file()]
     if missing:
         return None, None, f"the commands name {', '.join(missing)} beside the document, and it is not there: write it"

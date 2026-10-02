@@ -69,18 +69,15 @@ flow:
   select: {finalists: 2}
 ```
 
-`flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. A document
-of the earlier layout (`gate:`, `stages:`, `space:`, `seeds:`, `knowledge:` at the top,
-`budget.finalists`) is refused with where each went; `flux task upgrade FILE...` rewrites it
-(the original kept as `FILE.orig`; YAML comments are not carried over; `--dry-run` prints it).
-On the web (D776), such a loop's Overview offers **Upgrade the document**, and Admin › Loops **Upgrade all**.
+`flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
+document does not have, and `budget` takes no `finalists` or `calibrate`.
 
 ## Check and run a problem
 
 ```bash
 flux task check DOC          # what it needs, what it will skip; runs nothing
 flux task run DOC            # runs until stopped (Ctrl-C, flux stop, q in the TUI)
-flux task upgrade DOC...     # a document of the earlier layout, rewritten (D775)
 ```
 
 `task check` lists the parts, the roles each can be switched to, the stages and their

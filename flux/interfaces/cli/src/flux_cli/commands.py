@@ -183,28 +183,6 @@ def _library_line(task: Any, problem: Any) -> str:
     return head + (", used by: prompts, plan, agents" if used else ", not read by this world's knowledge")
 
 
-def cmd_task_upgrade(args: argparse.Namespace) -> int:
-    """D775: documents of the earlier layout rewritten with each box's settings under `flow`
-    (gate, stages, space, seeds, knowledge, finalists, calibrate). The original is kept beside
-    as `<file>.orig` (YAML comments are not carried over); the result is loaded before it is
-    written. `--dry-run` prints it instead."""
-    from flux_loop.document import upgrade_file
-
-    bad = 0
-    for f in args.files:
-        got = upgrade_file(f, write=not args.dry_run)
-        if got["status"] == "would upgrade":
-            print(f"# {f}\n{got['text']}")
-        elif got["status"] == "failed":
-            print(f"{f}: not upgraded, {got['why']}", file=sys.stderr)
-            bad += 1
-        elif got["status"] == "upgraded":
-            print(f"{f}: upgraded ({got['why']}; YAML comments are not carried over)")
-        else:
-            print(f"{f}: {got['why']}")
-    return 1 if bad else 0
-
-
 def cmd_task_check(args: argparse.Namespace) -> int:
     """Validate a task document, list what it declares, and name any tool it needs that
     is not on PATH; runs nothing."""
