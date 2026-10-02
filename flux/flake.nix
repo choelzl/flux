@@ -122,7 +122,6 @@
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
             "applications/interconnect_mapping/lib/src"
-            "applications/nlu/lib/src"
             "evaluator/openroad/src"
             "generator/harness_spec/src"
             "generator/harness_rtl/src"

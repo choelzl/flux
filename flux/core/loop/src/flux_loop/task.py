@@ -1333,8 +1333,7 @@ class PromptProblem(Problem):
             command = (self.task.generator or {}).get("command")
             if command:                                 # D801: the parent's generate composes them
                 return self._composed(dict(zip(names, ordered)), tuple(command), state)
-            return Candidate(self.task.id, self.task.joiner.join(c.artifact for c in ordered),
-                             knobs={"task": self.task.id, "subtasks": names})
+            return None                                 # D802: no generate, no whole -- each is its own answer
         if not self.parts:
             return super().compose(admitted, state)
         ordered = [admitted[p.name] for p in self.parts if p.name in admitted]
@@ -1600,6 +1599,15 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
     if d is not None:
         metrics = ", ".join(f"{k}={v:g}" for k, v in d.metrics.items())
         lines.append(f"  DECISION {d.name} [{d.stage}; {out.decided_by}]" + (f": {metrics}" if metrics else ""))
+    elif getattr(out, "children", None):            # D802: a parent of sub-loops that composes no whole
+        lines.append(f"  DECISIONS, one per sub-loop ({sum(1 for c in out.children.values() if c.decision)} of {len(out.children)})")
+        for name, child in out.children.items():
+            cd = child.decision
+            if cd is None:
+                lines.append(f"    {name:<12} decided nothing")
+            else:
+                metrics = ", ".join(f"{k}={v:g}" for k, v in cd.metrics.items())
+                lines.append(f"    {name:<12} {cd.name} [{cd.stage}; {child.decided_by}]" + (f": {metrics}" if metrics else ""))
     else:
         lines.append("  NO CANDIDATE SURVIVED -- see NOT ESTABLISHED below")
     report = getattr(getattr(problem, "world", None), "report", None)

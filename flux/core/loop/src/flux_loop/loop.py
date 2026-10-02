@@ -1219,6 +1219,7 @@ def _result(problem: Problem, state: LoopState, pick: Scored | None, decided_by:
         not_established=list(state.not_established), notes=notes, stopped=state.stopped,
         at_rest=state.stopped.startswith("at rest"),
         explorable=bool(state.admitted) and any(_can_draft(problem, None if k == "*" else k, state) for k in state.admitted),
+        children=dict(state.children),
         provenance={"problem": problem.name, "measurements": state.tool_runs, "cache_hits": state.cache_hits,
                     "request": {
             k: v for k, v in state.request.__dict__.items()},

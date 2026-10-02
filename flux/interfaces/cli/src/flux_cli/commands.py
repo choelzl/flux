@@ -422,7 +422,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         return 1
     for name, tools in problem.skipped_stages():
         print(f"warning: stage {name} will not run -- needs {', '.join(tools)}, not on PATH")
-    db = args.db or str(task.out_dir() / f"{task.record or task.id}.db")          # beside the document, under out/
+    db = args.db or str(task.out_dir() / f"{(task.record or task.id).split('/')[0]}.db")          # beside the document, under out/
     overrides: dict[str, Any] = {"db": db}
     for flag, knob in (("steps", "steps"), ("repair", "repair_attempts"), ("tool_hops", "tool_hops"),
                        ("hop_share", "hop_share"), ("patience", "prototype_patience")):
@@ -655,7 +655,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
     def run_pass(task: Any, problem: Any, explore: int = 0) -> Any:
         if args.no_run:
             raise _NoRun()
-        overrides: dict[str, Any] = {"db": str(task.out_dir() / f"{task.record or task.id}.db"), "explore": explore}
+        overrides: dict[str, Any] = {"db": str(task.out_dir() / f"{(task.record or task.id).split('/')[0]}.db"), "explore": explore}
         if args.steps is not None:
             overrides["steps"] = args.steps
         if args.screen_only:

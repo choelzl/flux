@@ -246,8 +246,12 @@ class TaskSpec:
     home: str = field(default="", compare=False)      # not the document's: two loads of one text are equal
 
     def out_dir(self) -> Path:
-        """Where a run of this document writes: `<home>/out/`, made on first use."""
-        p = Path(self.home or ".") / "out"
+        """Where a run of this document writes: `<home>/out/`, made on first use -- a sub-loop's
+        in a folder, its parent's (D802: one record for the parent and its sub-loops)."""
+        home = Path(self.home or ".")
+        for _ in Path(self.from_path).parts if self.from_path else ():
+            home = home.parent
+        p = home / "out"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -820,6 +824,13 @@ def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
         raise TaskError(f"subtasks: {rel}/{DOCUMENT_FILE} does not say its `id`: it is its folder's name (D786)")
     from dataclasses import replace
 
+    parent = dict(parent)
+    know = parent.get("knowledge")
+    if isinstance(know, dict):                             # the parent's files, beside the parent
+        def _abs(f: Any) -> Any:
+            return f if not isinstance(f, str) or Path(f).is_absolute() else str((Path(base) / f).resolve())
+        parent["knowledge"] = {k: ([_abs(x) for x in v] if k == "files" and isinstance(v, list) else _abs(v) if k == "sheet" else v)
+                               for k, v in know.items()}
     try:
         own = _lift({**raw, "id": home.name})              # its own surface, read before it inherits
         return replace(TaskSpec.from_dict(_inherited(parent, own), home), from_path=rel)
@@ -1031,6 +1042,9 @@ def load_task(path: str | Path) -> TaskSpec:
     is a TaskError that names the file (D590): a missing file, a syntax error with its line, a
     key no document has, and whatever the document itself gets wrong."""
     p = Path(path)
+    parent = _parent_listing(p)
+    if parent is not None:                                 # D802: a sub-loop alone, as its parent reads it
+        return parent
     if p.is_dir():
         docs = documents_in(p)
         if not docs:
@@ -1068,6 +1082,31 @@ def load_task(path: str | Path) -> TaskSpec:
         return task_in(doc, p.parent, alt=alt_name(p))
     except TaskError as exc:
         raise TaskError(f"{p}: {exc}") from exc
+
+
+def _parent_listing(path: Path) -> TaskSpec | None:
+    """The sub-task a folder is, when a document a few folders up lists it under `subtasks:`
+    (D802): read through the parent, so it inherits what the parent says and keeps its record."""
+    import os
+
+    import yaml
+
+    folder = (path if path.is_dir() else path.parent).resolve()
+    if not (folder / DOCUMENT_FILE).is_file():
+        return None
+    for anc in list(folder.parents)[:3]:
+        doc_path = anc / DOCUMENT_FILE
+        if not doc_path.is_file():
+            continue
+        try:
+            raw = yaml.safe_load(doc_path.read_text()) or {}
+        except yaml.YAMLError:
+            continue
+        rel = os.path.relpath(folder, anc)
+        if isinstance(raw, dict) and isinstance(raw.get("subtasks"), list) and rel in raw["subtasks"]:
+            whole = load_task(doc_path)
+            return next(c for c in whole.subtasks if c.from_path == rel)
+    return None
 
 
 def task_in(doc: dict[str, Any], home: Path, alt: str = "") -> TaskSpec:

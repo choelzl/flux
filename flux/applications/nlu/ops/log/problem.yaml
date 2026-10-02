@@ -1,0 +1,12 @@
+# The FP16 log: one sub-loop of the NLU (D802) -- this folder says only what differs from
+# ../../problem.yaml: the statement, the contract, the golden model beside it.
+statement: >-
+  A purely combinational SystemVerilog module `log_fp16` computing ln(x) for an IEEE 754
+  binary16 (FP16) input `x`, its FP16 result `y`: within 1 ULP of the correctly rounded
+  reference on ALL 65536 inputs, as fast and small as possible on ASAP7.
+contract: |-
+  One module named exactly `log_fp16`, combinational (no clock or reset):
+    - input  logic [15:0] x
+    - output logic [15:0] y
+  `y` is within 1 ULP of the FP16 rounding of ln(x) computed in double precision. A NaN input
+  gives a NaN; +-0 give -Inf, a negative x gives NaN, +Inf gives +Inf.

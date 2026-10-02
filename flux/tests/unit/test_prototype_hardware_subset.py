@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "applications" / "nlu" / "lib" / "src"))
 from flux_loop.pyint.rules import hardware_subset_violations  # noqa: E402
 from flux_llm import Reply
 from flux_loop import Prototype
@@ -86,28 +85,6 @@ def test_each_way_out_of_the_subset_is_named(body, expect):
 def test_a_prototype_without_design_and_one_that_does_not_parse():
     assert "no `design(x)` function" in hardware_subset_violations("import numpy as np\n")[0]
     assert "does not parse" in hardware_subset_violations("def design(x:\n")[0]
-
-
-def test_the_nlu_gate_refuses_before_running_the_harness(monkeypatch):
-    from nlu_fixtures import nlu_problem
-
-    ran: list[str] = []
-
-    def never(*args, **kwargs):
-        ran.append("ran")
-        return [("prototype", "")]
-
-    monkeypatch.setattr("flux_loop.run_compute", never)
-    problem = nlu_problem(ops=("exp",), test_rounds=0)      # the document problem in the FP16 world (D519)
-
-    class State:
-        class request:
-            compute_timeout_s = 10.0
-
-    verdict = problem.prototype_check(SHORTCUT, "exp", State())
-    assert not verdict.ok and "not hardware-implementable" in verdict.why
-    assert "np.exp" in verdict.why and verdict.payload["hardware_subset"]
-    assert ran == [], "refused before the 65536-input run was spent"
 
 
 def test_a_rejected_patch_names_the_closest_real_lines():

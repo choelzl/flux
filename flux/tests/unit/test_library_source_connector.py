@@ -57,15 +57,3 @@ def test_the_library_indexes_source_files_beside_papers(tmp_path):
     heads = [c.heading for c in by["library/fpnew/fpnew_classifier.sv"]]
     assert any(h and h.startswith("module fpnew_classifier") for h in heads)
     assert all(c.id.startswith("library/fpnew/fpnew_classifier#") for c in by["library/fpnew/fpnew_classifier.sv"])
-
-
-def test_the_prefix_carries_no_pre_written_design(tmp_path):
-    """A design written by Claude or an external tool is not shown to the model as an example (D478)."""
-    from flux_loop import LoopRequest, LoopState
-    from nlu_fixtures import nlu_problem
-
-    prob = nlu_problem(ops=("log",), ulp_budget=1, clock_period_ps=1250.0, seed=1)
-    st = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None,
-                   workdir=str(tmp_path))
-    prefix = prob.prompt_prefix("log", st)
-    assert "WORKED EXAMPLE" not in prefix and "module nlu_exp" not in prefix

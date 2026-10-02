@@ -53,7 +53,10 @@ def golden_check(task: Any) -> list[str]:
 
 
 def golden_path(task: Any) -> Path | None:
-    """The golden model a document's gate names (`--golden <file>`, `{home}` resolved)."""
+    """The golden model a document's gate names (`--golden <file>`, `{home}` resolved); none
+    for a parent of sub-loops, whose gate is its children's (D802)."""
+    if getattr(task, "subtasks", None) or getattr(task, "split", False):
+        return None
     cmd = golden_check(task)
     if "--golden" not in cmd or cmd.index("--golden") + 1 >= len(cmd):
         return None

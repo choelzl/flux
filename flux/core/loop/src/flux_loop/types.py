@@ -355,6 +355,8 @@ class LoopResult:
     #: whether a model could draft something new; an at-rest pass with nothing explorable waits
     #: for a stop or a note (D593)
     explorable: bool = True
+    #: D802: each sub-loop's own result, by name (a parent of sub-loops that composes no whole)
+    children: dict[str, Any] = field(default_factory=dict)
 
     @property
     def cut_short(self) -> bool:

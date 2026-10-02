@@ -1,64 +1,36 @@
-# nlu — an FP16 non-linear unit, designed by the loop
+# nlu — the seven operators of an FP16 non-linear unit, designed by the loop
 
-**The problem.** One hardware unit for `exp`, `log`, `sigmoid`, `tanh`, `gelu`,
-`recip`, `rsqrt` at IEEE half precision, with a hard correctness gate — every
-operator within **1 ULP** of the FP16 reference — and a measured **PPA** verdict
-(area, fmax, power) from real synthesis and placement on ASAP7.
+**The problem.** `exp`, `log`, `sigmoid`, `tanh`, `gelu`, `recip`, `rsqrt` at IEEE half
+precision, each with a hard correctness gate — within **1 ULP** of the correctly rounded FP16
+reference on all 65,536 inputs — and a measured **PPA** verdict (fmax, area, power) from real
+synthesis and placement on ASAP7.
 
-**The division of labor.** Claude built the rig; the model running in it does the
-designing. The rig fixes only what a judge must own: the interface contract, the
-FP16 reference and ULP arithmetic, a test-vector floor no author can lower, the
-tool chain, the record. The model chooses the computation method per operator
-(LUT, interpolation, piecewise/minimax polynomial, Newton-Raphson, CORDIC, bit
-products, parabolic synthesis…), shared datapath vs per-op units, combinational vs
-pipelined and how deep — and it also **authors the unit tests**: adversarial FP16
-vectors per operator, merged over the floor and kept in the campaign record.
+**One loop per operator (D802).** `problem.yaml` is the parent: it lists the operators as
+sub-loops in folders (`subtasks: [ops/recip, ...]`) and says what they share — the language,
+the gate (`flux rtl test {artifact} --golden {home}/golden.py`, `{home}` being the operator's
+folder), the stages (synthesis, then placement, at 1250 ps), the objectives (at least 800 MHz,
+then the least area, then the least power), the methods sheet (`knowledge/nlu-methods.md`) and
+the budget. Each `ops/<op>/` holds a `problem.yaml` saying only what differs — its statement
+and its contract — and its `golden.py`: the reference in double precision, rounded to FP16
+once, with `TOLERANCE_ULP = {"y": 1}`. A folder may override anything else too: its own
+`flow.test`, a stage, the budget.
 
-**Correctness is a proof, not a sample.** FP16 has 65536 inputs, so every operator
-is checked **exhaustively** in Verilator; `error-rate` and `max ULP` in the report
-cover the whole domain. A design over budget is refused with its worst failing
-inputs attached — they feed the repair prompt and the record. Specials are judged
-by class: NaN→NaN (any payload), the reference's infinities exactly (saturating at
-65504 where the reference overflows is an error, not an ULP).
-
-**The chain** (the one loop every application runs on): author (model tests) → prototype (the model's
-algorithm in the integer subset, checked on all 65,536 inputs inside the turn) → transpile
-(the RTL, mechanically) → prove (exhaustive ULP) → screen (yosys+STA: area/fmax, cached) →
-frontier (area vs fmax; error is a gate, never a trade) → confirm (OpenROAD placement: the
-PPA the report quotes) → improve (the fmax ladder: sweep, take, depth pass, contender,
-redesign) → decide (the smallest area meeting the `fmax_mhz` objective's goal, 800 MHz on the
-routed stage in the document; otherwise the knee).
-
-**The flywheel.** The campaign record (`applications/nlu/out/nlu.db` by default, or `--db`):
-designs (with sources), refusals
-with counterexamples, the authored test suite and the decision all land in the
-campaign record; a resumed run re-judges recorded designs (cached where tools and
-source are unchanged), reads back conclusions, style/method/latency duels and past
-refusals. The
-designer prompt also reads the operator's paper library
-(`mentor/knowledge/library/`) through the local BM25 index.
-
-The NLU is a PROBLEM DOCUMENT: `problem.yaml` says the parts, the objectives,
-the ladder, the stages, the knowledge sheet and the budget, and names
-the FP16 world (`flux_nlu.world.World`: the toolkit, the transpiler, the exhaustive gate, the
-op mux, the yosys/OpenROAD flows) once. `flux task run` is the demo; another ask in this world
-is a copy of the folder (its name is the id) with its own numbers.
-
-It needs a model: the operators are designed by it (see "Choose a model" in the
-[usage guide](../../../docs/usage-guide.md)).
+**The chain** is the loop's own, per operator: a Python prototype of the algorithm, checked
+against the golden model on every input; the RTL spelled from it (py2sv); the gate (Verilator
+against the golden's vectors, within 1 ULP; NaN → any NaN); the synthesis screen; placement for
+the finalists; the improve ladder; the decision. There is no composed unit: each operator is its
+own answer, and the parent's report lists them. A parent that should compose its operators into
+one unit says so with `generate: {command: "... {parts} {artifact}"}` (D801).
 
 ```bash
 cd flux
 nix develop --command flux task check applications/nlu
-nix develop --command flux task run applications/nlu --tui --think
-nix develop --command flux task run applications/nlu --agent all   # the agent also calls tools, orchestrates and plans the pass
-nix develop --command flux task run applications/nlu   # headless, until `flux stop` or Ctrl-C
+nix develop --command flux task run applications/nlu --tui        # every operator, in order
+nix develop --command flux task run applications/nlu/ops/exp      # one operator, as the parent reads it
 ```
 
-The knobs are the document: `params:` (`ulp_budget`, `clock_period_ps`, `seed`, `test_rounds`),
-the operators as `parts:`, the clock goal in `objectives:` and the loop's budget under
-`budget:`. Another ask -- other operators, a 2-ULP budget, a 1 GHz clock -- is a copy of
-the folder (its name is its id) with those changed. Routing
-the composed unit takes over an hour; `--screen-only` stops at synthesis. The record of the
-earlier demo campaigns is `demo-nlu.db` beside the document; `--db
-applications/nlu/demo-nlu.db` resumes from it instead of starting a new record.
+It needs a model: the operators are designed by it (see "Choose a model" in the
+[usage guide](../../../docs/usage-guide.md)). The record is `applications/nlu/out/nlu.db`, one
+campaign per operator (`nlu/exp`, ...) -- an operator run alone resumes the same one. Another
+ask -- a 2-ULP budget, a 1 GHz clock, other operators -- is a copy of the folder (its name is its
+id) with those changed.

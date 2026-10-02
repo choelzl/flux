@@ -13,9 +13,8 @@ dependencies = ["pyyaml>=6", "numpy>=1.24", "jsonschema>=4"]
 
 [project.optional-dependencies]
 bankmap = ["z3-solver"]
-nlu = ["scipy"]
 zigzag = ["zigzag-dse"]
-all = ["z3-solver", "scipy", "zigzag-dse"]
+all = ["z3-solver", "zigzag-dse"]
 
 [project.scripts]
 flux = "flux_cli.main:main"
@@ -33,7 +32,6 @@ dev-mode-dirs = [
     "applications/bankmap/lib/src",
     "applications/interconnect_mapping/lib/src",
     "applications/macarray/lib/src",
-    "applications/nlu/lib/src",
     "core/frontier/src",
     "core/ir/src",
     "core/llm/src",
@@ -64,7 +62,6 @@ packages = [
     "applications/bankmap/lib/src/flux_bankmap",
     "applications/interconnect_mapping/lib/src/flux_imapping",
     "applications/macarray/lib/src/flux_macarray",
-    "applications/nlu/lib/src/flux_nlu",
     "core/frontier/src/flux_frontier",
     "core/ir/src/flux_ir",
     "core/llm/src/flux_llm",

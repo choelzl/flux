@@ -127,24 +127,6 @@ def test_the_macarray_document_screens_one_pe_end_to_end(tmp_path):
 
 
 @pytest.mark.heavy
-def test_the_nlu_document_runs_one_part_with_a_scripted_model(tmp_path):
-    """One operator, prototyped by a scripted model, transpiled, built and admitted through `flux task run`."""
-    sys.path.insert(0, str(FLUX / "tests" / "unit"))
-    from test_nlu_family import knobbed_exp
-
-    doc = _doc("nlu", tmp_path, parts=["exp"],
-               params={"ops": ["exp"], "test_rounds": 0, "seed": 1},
-               flow={"orchestrate": "rules", "critique": "off"},
-               budget={"steps": 3, "repair_attempts": 1, "prototype_attempts": 2, "finalists": 0})
-    if not _tools_ok(doc):
-        pytest.skip("verilator/yosys are not on PATH")
-    replies = _replies(tmp_path, [json.dumps({"prototype": knobbed_exp()})])
-    r = flux("task", "run", str(doc), "--db", str(tmp_path / "n.db"), "--screen-only", "--replies", str(replies), timeout=1800)
-    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-3000:]
-    assert "ADMITTED exp" in r.stdout, r.stdout[-4000:]
-
-
-@pytest.mark.heavy
 def test_the_prefetcher_document_runs_when_its_simulator_and_traces_are_there(tmp_path):
     doc = _doc("prefetcher", tmp_path, budget={"steps": 2, "finalists": 0},
                flow={"generate": {"catalog": [str(APPS / "prefetcher" / "bingo_default.ini")]}})   # no model
