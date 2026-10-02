@@ -88,3 +88,33 @@ def test_a_loop_works_one_thing_at_a_time_unless_an_admin_allows_parallel_work(s
     assert bob.put("/api/apps/x/advanced", json={"parallel": True}, headers=H).status_code == 403
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": True}, headers=H).json()["advanced"] == {"parallel": True}
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": False}, headers=H).json()["advanced"] == {}
+
+
+def test_admin_agents_sets_each_agents_program_login_files_and_hosts(server, tmp_path, monkeypatch):
+    """D756: Admin › Agents -- an agent's program, login command and arguments, the files every home
+    starts with for it and the hosts it needs; only an admin; each user's readiness shown."""
+    from flux_web.runs import home_ready, machine_env, run_env, sandbox_config
+
+    app, store = server
+    srv_home = tmp_path / "server-home"
+    (srv_home / ".config/corp-opencode").mkdir(parents=True)
+    (srv_home / ".config/corp-opencode/provider.json").write_text("{}")
+    monkeypatch.setenv("HOME", str(srv_home))
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    body = {"bin": "/opt/corp/bin/opencode", "login": "opencode auth login https://ai.corp.example", "args": "--agent flux",
+            "home": [".config/corp-opencode"], "hosts": ["ai.corp.example"]}
+    assert bob.put("/api/admin/agents/opencode", json=body, headers=H).status_code == 403
+    assert ada.put("/api/admin/agents/opencode", json={**body, "home": ["../etc"]}, headers=H).status_code == 400
+    assert ada.put("/api/admin/agents/opencode", json=body, headers=H).status_code == 200
+    got = {a["id"]: a for a in ada.get("/api/admin/agents").json()["agents"]}
+    oc = got["opencode"]
+    assert oc["bin"] == "/opt/corp/bin/opencode" and oc["login"].endswith("ai.corp.example") and oc["found"] == ""
+    assert {u["user"]: u["state"] for u in oc["users"]} == {"ada": "not tested", "bob": "not tested"}
+    bob_user = store.user(name="bob")
+    assert (home_ready(store, bob_user) / ".config/corp-opencode/provider.json").is_file(), "every home starts with its files"
+    env = run_env(store, bob_user, "x")
+    assert env["FLUX_OPENCODE_BIN"] == "/opt/corp/bin/opencode" and env["FLUX_OPENCODE_ARGS"].startswith("--agent flux")
+    store.server_set("sandbox", {"network": "allowlist", "allow": ["a.example"]})
+    env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
+    machine_env(env, sandbox_config(store), {}, [])
+    assert env["FLUX_SANDBOX_ALLOW"].split(",")[:2] == ["a.example", "ai.corp.example"], "its hosts join the allowlist"

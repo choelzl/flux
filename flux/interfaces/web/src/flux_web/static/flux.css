@@ -726,3 +726,4 @@ body:has(.composer) .toasts { bottom: 150px; }
     color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
   table.list .actions { justify-content: flex-start; flex-wrap: wrap; }
 }
+.agent-found { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }

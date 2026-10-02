@@ -668,6 +668,13 @@ def flows(r: Run) -> None:
         steps = b.js("return [...document.querySelectorAll('.agent-steps li')].map(x => x.textContent)")
         r.check("the test says each step, the answer last", any("answer" in x and "FLUX-OK" in x for x in steps), str(steps))
         r.check("tested, the agent is accepted", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 200)
+        r.login("ada")                                     # D756: the admin sees it found, and whom it is ready for
+        r.page("#/admin/agents", "[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Codex')", "Admin › Agents")
+        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('Ready for: bob'))",
+               timeout=30, what="Codex found, ready for bob")
+        r.check("Admin › Agents: the program found with its version, ready for who tested it",
+                "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
+        r.clean("Admin › Agents")
         r.clean("agent test")
     r.step("agent test", agent_test)
 

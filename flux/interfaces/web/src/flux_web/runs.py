@@ -42,7 +42,10 @@ def home_ready(store: Store, user: User) -> Path:
     from flux_cli.sandbox import seed_home
 
     home = store.home_of(user)
-    seed_home(home, Path(os.path.expanduser("~")), (store.server_get("sandbox") or {}).get("home_seed", list(HOME_SEED)))
+    seeds = list((store.server_get("sandbox") or {}).get("home_seed", list(HOME_SEED)))
+    for a in (store.server_get("agents") or {}).values():   # D756: each agent's own files too
+        seeds += list(a.get("home") or [])
+    seed_home(home, Path(os.path.expanduser("~")), list(dict.fromkeys(seeds)))
     return home
 
 
@@ -100,6 +103,9 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
                 env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
+    for agent, a in (store.server_get("agents") or {}).items():   # D756: the admin's extra arguments for an agent
+        if a.get("args"):
+            env[f"FLUX_{agent.upper()}_ARGS"] = f"{a['args']} {env.get(f'FLUX_{agent.upper()}_ARGS', '')}".strip()
     _agents(env, web)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like
@@ -162,6 +168,15 @@ def login_path() -> list[str]:
 
 #: Network rules an allowlist takes: a domain (and its subdomains), *.domain, an IP, a CIDR, localhost.
 HOST_RULE = r"(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*|[0-9A-Fa-f:.]+(/\d{1,3})?"
+
+
+def sandbox_config(store: Store) -> dict[str, Any]:
+    """What every sandbox gets (D698), with the hosts each agent needs (D756) in its allowlist."""
+    cfg = dict(store.server_get("sandbox") or {})
+    hosts = [h for a in (store.server_get("agents") or {}).values() for h in (a.get("hosts") or [])]
+    if hosts:
+        cfg["allow"] = list(dict.fromkeys([*(cfg.get("allow") or []), *hosts]))
+    return cfg
 
 
 def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], asked: list[str]) -> str:
@@ -309,7 +324,7 @@ class RunManager:
         else:
             env["FLUX_PARALLEL_MAX"] = "1"
         sandbox_env(env, self.sandbox, adv)
-        machine_env(env, self.store.server_get("sandbox") or {}, adv, list(options.get("allow") or []))
+        machine_env(env, sandbox_config(self.store), adv, list(options.get("allow") or []))
         if adv.get("sandbox") is False and self.sandbox:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \

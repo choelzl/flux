@@ -299,6 +299,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     and drafts one part at a time whatever its document asks (the log says so); on, the document
     says how many (`budget.workers`, `parallel_parts`). Only an admin changes the advanced
     settings (also when creating a loop); everyone sees them.
+- **Agents (Admin › Agents, D756):** per coding agent: found on this server or not, and its version; its
+  program, login command, extra arguments; the files every home starts with for it; the hosts it needs on the
+  allowlist; whom it is ready for (each user's Test).
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist the container has no network; a proxy on the host forwards to allowed hosts

@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .runs import ADVANCED, HOST_RULE, RunManager, advanced, home_ready, login_path, loop_files, machine_env, run_env, sandbox_env
+from .runs import ADVANCED, HOST_RULE, RunManager, advanced, home_ready, sandbox_config, login_path, loop_files, machine_env, run_env, sandbox_env
 from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -127,6 +127,14 @@ class Advanced(BaseModel):
     tmp_size: str | None = Field(default=None, max_length=16)
     allow: list[str] | None = None
     parallel: bool = False                  # D741: parallel work allowed; how much is the document's
+
+
+class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's
+    bin: str = Field(default="", max_length=1024)
+    login: str = Field(default="", max_length=1024)
+    args: str = Field(default="", max_length=1024)
+    home: list[str] = Field(default_factory=list)
+    hosts: list[str] = Field(default_factory=list)
 
 
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
@@ -334,7 +342,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         home_ready(store, user)
         env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1"}
         sandbox_env(env, sandbox, {})
-        machine_env(env, store.server_get("sandbox") or {}, {}, [])
+        machine_env(env, sandbox_config(store), {}, [])
         flux = shutil.which("flux", path=env.get("PATH"))
         argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
         try:
@@ -370,7 +378,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             store.server_set(f"agent-test:{user.name}:{agent}", None)        # D751: a new login is tested again
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1"}
             sandbox_env(env, sandbox, {})
-            machine_env(env, store.server_get("sandbox") or {}, {}, [])       # the network rules apply to everyone
+            machine_env(env, sandbox_config(store), {}, [])       # the network rules apply to everyone
             logins.start(user.name, agent, store.home_of(user), cmd, env,
                          on_secret=lambda name, value: store.set_setting(user, name, value))   # D748
         except ValueError as exc:
@@ -628,6 +636,80 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             out.append(x)
         return list(dict.fromkeys(out))
 
+    # ---- Admin › Agents (D756): each coding agent's program, login, arguments, the files every
+    # home starts with for it, the hosts it needs; whether this server finds it; who has it ready
+    def _agent_found(agent: str, settings: dict[str, str]) -> tuple[str, str]:
+        exe = settings.get(f"FLUX_{agent.upper()}_BIN") or agent
+        cfg = store.server_get("sandbox") or {}
+        path_dirs = [*(cfg.get("path") or []), *(login_path() if cfg.get("login_path") else []), *os.environ.get("PATH", "").split(os.pathsep)]
+        found = exe if "/" in exe and os.path.exists(exe) else (shutil.which(exe, path=os.pathsep.join(d for d in path_dirs if d)) or "")
+        version = ""
+        if found:
+            try:
+                key = (found, os.stat(found).st_mtime)
+            except OSError:
+                key = (found, 0)
+            if key not in _VERSIONS:                       # asked once per program as it is on disk
+                try:
+                    r = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
+                    lines = (r.stdout or r.stderr).strip().splitlines()
+                    _VERSIONS[key] = lines[-1][:80] if lines else ""
+                except (OSError, subprocess.TimeoutExpired):
+                    _VERSIONS[key] = ""
+            version = _VERSIONS[key]
+        return found, version
+
+    _VERSIONS: dict[tuple[str, float], str] = {}
+
+    @app.get("/api/admin/agents")
+    def admin_agents(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        from .authoring import AUTHORS
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        settings = store.server_settings()
+        cfg = store.server_get("agents") or {}
+        with ThreadPoolExecutor(max_workers=len(LOGIN_DEFAULTS)) as pool:       # each asked at once
+            seen = dict(zip(LOGIN_DEFAULTS, pool.map(lambda a: _agent_found(a, settings), LOGIN_DEFAULTS)))
+        out = []
+        for agent in LOGIN_DEFAULTS:
+            up, mine = agent.upper(), cfg.get(agent) or {}
+            found, version = seen[agent]
+            users = []
+            for u in store.users():
+                t = agent_test_of(u, agent)
+                users.append({"user": u.name, "kind": u.role, "state": "ready" if t.get("ok") else "failed" if t.get("when") else "not tested",
+                              "when": t.get("when")})
+            out.append({"id": agent, "label": AUTHORS.get(agent, agent), "bin": settings.get(f"FLUX_{up}_BIN") or "",
+                        "login": settings.get(f"FLUX_{up}_LOGIN") or "", "login_default": LOGIN_DEFAULTS[agent],
+                        "args": mine.get("args") or "", "home": mine.get("home") or [], "hosts": mine.get("hosts") or [],
+                        "found": found, "version": version, "users": users})
+        return {"agents": out}
+
+    @app.put("/api/admin/agents/{agent}")
+    def put_admin_agent(agent: str, body: AgentConfig, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if agent not in LOGIN_DEFAULTS:
+            raise HTTPException(404, f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
+        exe = body.bin.strip()
+        if exe and not (exe.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", exe)):
+            raise HTTPException(400, "the program: an absolute path, or a name found on PATH")
+        home = []
+        for rel in body.home:
+            r = rel.strip().removeprefix("~/").strip("/")
+            if r and (r.startswith("/") or ".." in r.split("/")):
+                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .config/opencode")
+            if r:
+                home.append(r)
+        up = agent.upper()
+        store.set_server_setting(f"FLUX_{up}_BIN", exe or None)
+        store.set_server_setting(f"FLUX_{up}_LOGIN", body.login.strip() or None)
+        cfg = store.server_get("agents") or {}
+        cfg[agent] = {"args": body.args.strip(), "home": home, "hosts": _rules(body.hosts)}
+        store.server_set("agents", cfg)
+        store.audit(a.name, "agent settings", f"{agent}: program {exe or '(on PATH)'}; login {body.login.strip() or '(default)'}; "
+                    f"{len(home)} home path(s), {len(cfg[agent]['hosts'])} host(s)")
+        return {"ok": f"{agent} saved"}
+
     @app.get("/api/admin/sandbox")
     def get_sandbox(_a: User = Depends(admin_of)) -> dict[str, Any]:
         """What every sandbox gets (D698), and the server user's login PATH to choose from."""
@@ -799,7 +881,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         env = {**run_env(store, whose, name, home_for=by), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
-        machine_env(env, store.server_get("sandbox") or {}, adv, [])
+        machine_env(env, sandbox_config(store), adv, [])
         return env
 
     async def _attach(d: Path, files: list[UploadFile] | None) -> list[Path]:
@@ -1147,7 +1229,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         env = {**run_env(store, whose, name, home_for=user), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop, its settings
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
-        machine_env(env, store.server_get("sandbox") or {}, adv, [])
+        machine_env(env, sandbox_config(store), adv, [])
         digest = w.inputs_digest(name)
         try:
             r = subprocess.run([shutil.which("flux") or sys.argv[0], "task", "check", str(d / doc)], cwd=str(d), env=env,

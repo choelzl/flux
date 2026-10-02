@@ -2507,7 +2507,7 @@ async function reviseByAgent(body, name, owner) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", applications: "Applications", resources: "Resources", sandbox: "Sandbox", models: "Models and variables", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", applications: "Applications", resources: "Resources", sandbox: "Sandbox", agents: "Agents", models: "Models and variables", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -2525,6 +2525,7 @@ async function adminPage(sub = "") {
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
   if (tab === "sandbox") return adminSandbox(body);
+  if (tab === "agents") return adminAgents(body);
   if (tab === "applications") return adminApplications(body);
   if (tab === "models") {
     const st = await api("/admin/settings");
@@ -2782,6 +2783,41 @@ async function adminSandbox(body) {
     }, { cls: "primary" })));
 }
 
+/** Admin › Agents (D756): each coding agent as the server runs it -- found or not and its version,
+    its program, login command and extra arguments, the files every home starts with for it, the
+    hosts it needs on the allowlist -- and who has it ready (a passed Test on their Account). */
+async function adminAgents(body) {
+  body.replaceChildren(skeleton(6));
+  const r = await api("/admin/agents");
+  const lines = (a) => (a || []).join("\n");
+  const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+  body.replaceChildren(...r.agents.map(a => {
+    const f = (id, value, ph) => h("input", { id: `ag-${a.id}-${id}`, value, placeholder: ph, class: "mono", autocomplete: "off" });
+    const bin = f("bin", a.bin, a.id), login = f("login", a.login, a.login_default), args = f("args", a.args, "none");
+    const home = h("textarea", { id: `ag-${a.id}-home`, rows: 2, class: "mono", placeholder: { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" }[a.id] || "", value: lines(a.home) });
+    const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
+    const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
+    return card(a.label, [
+      h("div", { class: "agent-found" },
+        h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
+        h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}` : `${a.bin || a.id} is not on the runs' PATH`)),
+      h("div", { class: "grid-2" },
+        h("label", { class: "stack" }, "Program (a path, or a name on PATH)", bin),
+        h("label", { class: "stack" }, "Login command", login),
+        h("label", { class: "stack" }, "Extra arguments, every run", args),
+        h("div", {}),
+        h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
+        h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts)),
+      h("p", { class: "small" }, h("strong", {}, "Ready for: "), ready.length ? ready.join(", ") : "nobody yet",
+        failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
+        h("span", { class: "muted" }, " (each user tests it on their Account page)")),
+      h("div", { class: "form-actions" }, act("Save", async () => {
+        await api(`/admin/agents/${a.id}`, { method: "PUT", body: { bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts) } });
+        toast(`${a.label} saved: from the next start, login and test`, "ok"); route();
+      }, { cls: "primary" }))]);
+  }));
+}
+
 async function adminUsers(body) {
   const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/resources").catch(() => null)]);
   const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
@@ -2859,7 +2895,11 @@ function settingsForm(st, { server = null, save, scope }) {
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
     const el = h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
-      note ? h("p", { class: "small hint-line" }, note) : "", ...g.public.map(row), ...g.secret.map(row));
+      note ? h("p", { class: "small hint-line" }, note) : "",
+      // D756: an agent's program and login are Admin › Agents'
+      ...g.public.filter(k => !/_(BIN|LOGIN)$/.test(k)).map(row), ...g.secret.map(row),
+      g.public.some(k => /_(BIN|LOGIN)$/.test(k)) && scope === "server" ? h("p", { class: "muted small" }, "Its program, login command and arguments: ",
+        h("a", { href: "#/admin/agents" }, "Admin › Agents"), ".") : "");
     return { g, el, own };
   });
   // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; one Save for all of them;
