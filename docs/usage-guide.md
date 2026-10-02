@@ -142,7 +142,7 @@ each coding agent a LIBRARY section with the papers and the files nearest its qu
 The sandbox mounts each library read-only. Every paper of the library is digested once -- the loop's own
 first, then the shared ones -- and the key points join every prompt; there is nothing to say for it, and
 `flow.knowledge: off` turns the library and its digest off (D791). The digest runs first in each pass's
-Setup (the tree's **Digest** leaf, before Reading: how many new, by whom, how many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
+Setup (the tree's **Digest** leaf, before Reading: how many new, by whom, how many in all). A digest is kept in the run's home too (`~/.cache/flux/digests`, `FLUX_DIGESTS` elsewhere; on the web, each user's Flux home), keyed by the document's content: another loop or a later run takes it from there with no call, and only a changed document is digested again (D794), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
 
 ```yaml

@@ -134,6 +134,7 @@ def test_a_setup_digests_a_few_its_own_papers_first_and_stops_when_the_digester_
         raise RuntimeError("opencode exited 1: An authentication key is required")
 
     said.clear()
+    monkeypatch.setenv("FLUX_DIGESTS", str(tmp_path / "nothing-kept"))      # D794: none kept from above
     assert digest_library(str(tmp_path / "e.db"), None, documents=docs, ask=broken, say=said.append) == []
     assert sum("not digested" in m for m in said) == 3, "three tries, not one a file"
     assert any("3 failures in a row" in m and "authentication key" in m for m in said), said
@@ -156,3 +157,23 @@ def test_an_answer_that_is_a_tool_call_or_a_fragment_is_no_digest(tmp_path):
                           ask=lambda p, prompt, text="": (next(answers), "opencode"), say=said.append)
     assert [d["digest"] for d in made] == [long], "the message kept; the fragment not"
     assert any("the answer is 16 characters" in m for m in said), said
+
+
+def test_a_digest_is_kept_for_the_next_loop_and_never_asked_twice(tmp_path, monkeypatch):
+    """D794: a document digested once -- by any loop or run of this home -- is taken from the
+    kept digests by the next, keyed by its content; a changed document is asked again."""
+    monkeypatch.setenv("FLUX_DIGESTS", str(tmp_path / "kept"))
+    docs = [("a/PACE.pdf", "PACE: piecewise approximation, 16 segments, 1 ULP"), ("b/other.pdf", "another paper")]
+    first = _Model()
+    made = digest_library(str(tmp_path / "one.db"), first, documents=docs)
+    assert len(first.prompts) == 2 and not any(d.get("reused") for d in made)
+    assert len(list((tmp_path / "kept").glob("*.json"))) == 2
+    said: list[str] = []
+    second = _Model()
+    again = digest_library(str(tmp_path / "two.db"), second, documents=[("elsewhere/PACE.pdf", docs[0][1])] + docs[1:], say=said.append)
+    assert second.prompts == [] and all(d["reused"] for d in again), "another loop's record: no call"
+    assert set(digests_in(str(tmp_path / "two.db"))) == {"elsewhere/PACE.pdf", "b/other.pdf"}
+    assert any("2 document(s) taken from the digests kept before" in m for m in said), said
+    changed = digest_library(str(tmp_path / "two.db"), second, documents=[("b/other.pdf", "another paper, revised")])
+    assert len(second.prompts) == 1 and not changed[0].get("reused"), "new content is digested"
+

@@ -8,6 +8,11 @@ the generator's static prefix carries the digests as the `digest` knowledge sour
 (window-bound, ranked against the part in hand, D548/D550); the orchestrator's planning prompt
 carries the library's index, one line per document.
 
+D794: a digest made once is kept in the run's home too (`~/.cache/flux/digests`, or
+`FLUX_DIGESTS`), keyed by the document's content and the recipe: another loop, or the next run,
+takes it from there instead of asking again. Inside the sandbox that home is the user's Flux
+home, so one user's papers never reach another's runs.
+
 D771: a run digests in its Setup (the `knowledge: digest` phase), so its prompts only read what
 is stored; `ask` hands each document to someone else than the run's model -- a coding agent the
 document names (`knowledge: {digest: {agent: opencode}}`), which reads the file itself.
@@ -16,6 +21,9 @@ document names (`knowledge: {digest: {agent: opencode}}`), which reads the file 
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+from pathlib import Path
 from typing import Any, Iterable
 
 __all__ = ["Digest", "RECIPE", "digest_library", "digests_in", "index_lines", "library_documents"]
@@ -50,6 +58,30 @@ def library_documents(index: Any = None, *, standard_id: str = "library") -> lis
         if c.standard_id == standard_id:
             by_path.setdefault(c.source_path, []).append(c.text)
     return [(path, "\n\n".join(texts)) for path, texts in sorted(by_path.items())]
+
+
+def shared_dir() -> Path:
+    """Where digests are kept across loops and runs (D794): `FLUX_DIGESTS`, else the run's home cache."""
+    return Path(os.environ.get("FLUX_DIGESTS") or Path.home() / ".cache" / "flux" / "digests")
+
+
+def _shared_get(text_key: str) -> dict[str, Any] | None:
+    try:
+        got = json.loads((shared_dir() / f"{RECIPE}-{text_key}.json").read_text())
+        return got if isinstance(got, dict) and len(str(got.get("digest") or "")) >= MIN_DIGEST_CHARS else None
+    except (OSError, ValueError):
+        return None
+
+
+def _shared_put(doc: dict[str, Any]) -> None:
+    try:
+        d = shared_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = d / f".{RECIPE}-{doc['hash']}.json.{os.getpid()}"
+        tmp.write_text(json.dumps({k: doc[k] for k in ("hash", "recipe", "chars", "model", "digest")}))
+        tmp.replace(d / f"{RECIPE}-{doc['hash']}.json")
+    except OSError:
+        pass                                          # a cache that cannot be written is no cache
 
 
 def _store(db: str):
@@ -115,8 +147,21 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
     made: list[dict[str, Any]] = []
     docs = list(documents) if documents is not None else library_documents(index)
     todo = [(p, t) for p, t in docs if t.strip() and have.get(p, {}).get("hash") != _key(t)]
+    store = _store(db) if todo else None
+    kept = 0
+    for path, text in list(todo):                     # D794: digested before, by another loop or run
+        got = _shared_get(_key(text))
+        if got is not None:
+            doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
+                   "model": str(got.get("model") or ""), "digest": str(got["digest"])[:2000], "reused": True}
+            store.results.put_document("digest", doc)
+            made.append(doc)
+            todo.remove((path, text))
+            kept += 1
+    if kept:
+        say(f"  digest: {kept} document(s) taken from the digests kept before (no call)")
     if not todo:
-        say(f"  digest: every library document is digested ({len(have)})")
+        say(f"  digest: every library document is digested ({len(have) + kept})")
         return made
     from .library import absolute
 
@@ -127,7 +172,6 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
     now, later = todo[:limit], len(todo) - min(limit, len(todo))
     say(f"  digest: {len(todo)} library document(s) to digest, one {'agent' if ask else 'model'} call each"
         + (f"; {len(now)} now, {later} in the passes after" if later else ""))
-    store = _store(db)
     failed: list[str] = []
     for path, text in now:
         why = stopped() if stopped is not None else None
@@ -163,6 +207,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
         doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
                "model": by, "digest": got[:2000]}
         store.results.put_document("digest", doc)
+        _shared_put(doc)
         made.append(doc)
         say(f"  digest: {name}: {len(got)} chars")
     return made
@@ -237,7 +282,8 @@ class Digest:
         if documents is not None:
             have = {p: d for p, d in have.items() if p in {q for q, _t in documents}}
         total = len(documents) if documents is not None else None
-        return {"digested": len(made), "in all": len(have), **({"to do": total - len(have)} if total is not None else {}),
+        return {"digested": len(made), **({"reused": sum(1 for d in made if d.get("reused"))} if any(d.get("reused") for d in made) else {}),
+                "in all": len(have), **({"to do": total - len(have)} if total is not None else {}),
                 "new": ", ".join(d["source"].rsplit("/", 1)[-1] for d in made)[:600],
                 "by": ", ".join(sorted({d["model"] for d in made if d.get("model")}))}
 
