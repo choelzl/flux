@@ -138,6 +138,8 @@ s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "agents_everywher
 for (const b of c.DELEGABLE) if (b !== "dse") s.flow[b] = "agent:claude";
 s.flow.knowledge = "none"; s.flow.critique = "llm";
 add("agents_everywhere", "rtl", s);
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_by_agent"; s.flow.knowledge = "agent:opencode";   // D773
+add("papers_by_agent", "rtl", s);
 out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES[b].title, says: c.BOXES[b].says,
                                                                  flow: c.FLOW_BOXES.includes(b), values: c.BOXES[b].choices.map(x => x.value)}]));
 out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
@@ -372,6 +374,9 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert "knowledge: none" in y and "critique: llm" in y and "test:" not in y.split("flow:")[1].split("gate:")[0]
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
+    p = BUILT["papers_by_agent"]
+    assert "knowledge: {agent: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
+    assert _load(tmp_path, p).digest_by == "opencode", "D773: the configurator's Background reading by an agent loads as one"
 
 
 def test_pareto_needs_two_objectives_and_an_estimate_its_margin_and_command():

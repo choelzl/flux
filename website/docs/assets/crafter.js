@@ -82,7 +82,8 @@
       choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "none", half: "off", label: "No notes" }] },
     knowledge: { title: "Background reading", says: "What the model reads with every request.",
       choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
-                { value: "none", half: "off", label: "None: no library" }] },
+                { value: "none", half: "off", label: "None: no library" }]
+        .concat(agentChoices("The library, its papers digested by a coding agent in the Setup")) },
     extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
       choices: [{ value: "none", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
@@ -773,7 +774,7 @@
     // the flow
     FLOW_BOXES.forEach(function (b) {
       var v = flow[b];
-      if (typeof v === "string" && v.indexOf("agent:") === 0 && DELEGABLE.indexOf(b) < 0 && b !== "generate") {
+      if (typeof v === "string" && v.indexOf("agent:") === 0 && DELEGABLE.indexOf(b) < 0 && b !== "generate" && b !== "knowledge") {
         error("\"" + BOXES[b].title + "\" (" + b + ") is never handed to a coding agent: it establishes the facts.");
       } else if (v !== undefined && !choiceOf(b, v)) {
         error("\"" + BOXES[b].title + "\" (" + b + ") cannot be \"" + v + "\".");
@@ -913,6 +914,7 @@
       if (!BOXES[box]) { flowOk = false; return; }
       if (box === "knowledge") {
         var ls = Array.isArray(v) ? v : [v];
+        if (v && typeof v === "object" && !Array.isArray(v) && typeof v.agent === "string" && choiceOf(box, "agent:" + v.agent)) { s.flow.knowledge = "agent:" + v.agent; return; }   // D773
         if (ls.length === 1 && ls[0] === "none") s.flow.knowledge = "none";
         else if (!(ls.length === 0 || (ls.length === 1 && ls[0] === "library"))) flowOk = false;
         return;

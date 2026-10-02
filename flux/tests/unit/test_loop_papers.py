@@ -80,7 +80,7 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
     assert len(model.prompts) == 1, "once: the record keeps it"
 
 
-def _adders(tmp_path, monkeypatch, knowledge=None):
+def _adders(tmp_path, monkeypatch, knowledge=None, flow=None):
     from flux_loop import TaskSpec
 
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "shared"))
@@ -90,6 +90,8 @@ def _adders(tmp_path, monkeypatch, knowledge=None):
     doc = {"id": "x", "statement": "an 8-bit adder", "language": "verilog", "gate": {"test": ["true"]}, "objectives": []}
     if knowledge is not None:
         doc["knowledge"] = knowledge
+    if flow is not None:
+        doc["flow"] = flow
     return TaskSpec.from_dict(doc, base=tmp_path / "loop")
 
 
@@ -113,7 +115,7 @@ def test_the_papers_are_digested_in_the_setup(tmp_path, monkeypatch):
 
 
 def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
-    """D771: `knowledge: {digest: {agent: …}}` -- one agent turn per paper, told where the file is."""
+    """D771, D773: `flow: {knowledge: {agent: …}}` -- one agent turn per paper, told where the file is."""
     import sys
     from types import SimpleNamespace
 
@@ -126,7 +128,7 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     fake.write_text("import sys\nbrief = sys.stdin.read()\nassert 'adders.md' in brief and 'is the file' in brief\n"
                     "print('Prefix adders, read by the agent\\nKogge-Stone: log2(n) levels')\n")
     spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
-    task = _adders(tmp_path, monkeypatch, {"digest": {"agent": spec}})
+    task = _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": spec}})
     problem = PromptProblem(task)
     model = SimpleNamespace(model="m1", propose=lambda p: (_ for _ in ()).throw(AssertionError("not the model")))
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
@@ -134,6 +136,11 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     assert got["digested"] == 1, got
     digest = next(s for s in problem.knowledge().sources if type(s).__name__ == "Digest")
     assert "read by the agent" in digest.render(state)
-    assert agents_used(_adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})) == ["opencode"], "its Test gates a start"
-    with pytest.raises(TaskError, match="knowledge.digest"):
-        _adders(tmp_path, monkeypatch, {"digest": "someone"})
+    oc = _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": "opencode"}})
+    assert agents_used(oc) == ["opencode"], "its Test gates a start"
+    assert oc.flow["knowledge"] == {"agent": "opencode"} and oc.digest_by == "opencode"
+    assert type(oc).from_dict(oc.to_dict(), base=tmp_path / "loop").digest_by == "opencode", "written back as read"
+    with pytest.raises(TaskError, match="flow.knowledge"):
+        _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": "someone"}})
+    with pytest.raises(TaskError, match="knowledge keys"):
+        _adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})

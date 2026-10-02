@@ -118,9 +118,11 @@ many in all), so no prompt waits on it (D771). An agent can digest instead of th
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
 
 ```yaml
-knowledge:
-  digest: {agent: opencode}     # or claude, codex, or a full agent spec; `model` (the default) = the loop's model
+flow:
+  knowledge: {agent: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
 ```
+
+The configurator's Background reading box offers it as "a coding agent".
 
 ## The sandbox
 
