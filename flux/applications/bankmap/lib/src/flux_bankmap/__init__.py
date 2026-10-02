@@ -1,7 +1,7 @@
 """Conflict-free bank mapping: the space, the checker, the solvers (D356).
 
-The study runs from `applications/bankmap/problem.yaml`; `flux_bankmap.world.World`
-is its world."""
+The study runs from `applications/bankmap/problem.yaml`, its phases the commands of
+`flux_bankmap.steps` (D799)."""
 
 from .check import StrideVerdict, Verdict, check
 from .impossible import Impossibility, find_impossibility, max_feasible_concurrency

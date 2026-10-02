@@ -79,7 +79,7 @@ def instantiate_taken(problem: Any, state: Any, cands: list[Candidate]) -> list[
     return out
 from .types import Candidate, Scored
 
-__all__ = ["Anneal", "Control", "Genetic", "Gradient", "ModelSearch", "MonteCarlo", "Pareto", "Phases", "Policy",
+__all__ = ["Anneal", "CommandSearch", "Control", "Genetic", "Gradient", "ModelSearch", "MonteCarlo", "Pareto", "Phases", "Policy",
            "Sweep", "neighbour", "points", "point_of", "validate_phase"]
 
 
@@ -868,6 +868,115 @@ def validate_phase(spec: Any) -> None:
     make_phase(spec)
 
 
+@dataclass
+class CommandSearch(Policy):
+    """A search a command runs (D799): the document's own chain of tries -- a solver, a proof,
+    a model it asks itself -- as a script beside it. Each round the loop writes `{history}`, a
+    JSON file of everything measured and refused so far (name, knobs, stage, metrics, why), and
+    keeps `{state}`, a JSON file the command may read and write between rounds; the command
+    prints one JSON object (its last line that is one):
+
+        {"candidates": [{"name", "artifact", "knobs"?, "why"?, "by"?}],
+         "lessons": [...], "not_established": [...], "conclusion": {...}?, "done": false}
+
+    The candidates go through the gate and the stages like any; `done` (or no candidates) ends
+    the search; a `conclusion` is recorded as the run's answer when nothing was decided (a
+    partial answer, a proof that none exists)."""
+
+    name: str = "command"
+    run: Any = ""
+    timeout_s: float = 600.0
+
+    def search(self, problem: Any, state: Any) -> Iterator[list[Candidate]] | None:
+        if not self.run:
+            state.say("  command search: no `run` command")
+            return None
+        return self._rounds(problem, state)
+
+    def _history(self, state: Any) -> dict[str, Any]:
+        measured = [{"name": s.candidate.name, "knobs": dict(s.candidate.knobs or {}), "stage": s.stage,
+                     "metrics": dict(s.metrics), "by": s.candidate.meta.get("strategy", "")} for s in state.scored]
+        refused = [{"name": n, "why": why} for n, why in state.refused]
+        records = getattr(state, "records", None)             # a resumed record's refusals too
+        if records is not None and getattr(records, "resumed", False):
+            have = {r["name"] for r in refused}
+            for cand, why in records.refusals(limit=500):
+                name = str(cand.get("name") or "")
+                if name and name not in have:
+                    have.add(name)
+                    refused.insert(0, {"name": name, "why": why})
+        drain = getattr(state, "drain", None)                 # the operator's notes, for a model the command asks
+        guidance = drain() if callable(drain) else None
+        return {"measured": measured, "refused": refused, "guidance": guidance or ""}
+
+    def _rounds(self, problem: Any, state: Any) -> Iterator[list[Candidate]]:
+        import json
+        from pathlib import Path
+
+        from .document import _command
+
+        task = getattr(problem, "task", None)
+        out_dir = task.out_dir() if task is not None and callable(getattr(task, "out_dir", None)) else Path(state.workdir or ".")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        keep = out_dir / f"{getattr(task, 'record', '') or 'search'}.search-state.json"
+        history = Path(state.workdir or out_dir) / "search-history.json"
+        cmd = tuple(_command(self.run, "flow.orchestrate.command"))
+        rounds = 0
+        while True:
+            rounds += 1
+            history.parent.mkdir(parents=True, exist_ok=True)
+            history.write_text(json.dumps({**self._history(state), "round": rounds}, indent=1, default=str))
+            subs = {"history": str(history), "state": str(keep), "workdir": str(history.parent),
+                    "home": getattr(task, "home", "") or ".", "python": __import__("sys").executable,
+                    "artifact": "", "name": "search", "part": "", "point": ""}
+            got = problem._run(cmd, subs, self.timeout_s, "search")
+            said = _last_json((got.stdout or ""))
+            if not got.ok or said is None:
+                tail = ((got.stdout or "") + "\n" + (got.stderr or "")).strip()[-300:]
+                state.not_established.append(f"the search command stopped (exit {got.returncode}): {tail}")
+                return
+            for line in said.get("lessons") or []:
+                state.lessons.append(str(line))
+                state.say(f"  {line}")
+            state.not_established.extend(str(x) for x in said.get("not_established") or [])
+            if said.get("conclusion") and getattr(state, "records", None) is not None:
+                state.records.conclude(dict(said["conclusion"]))
+            cands = [Candidate(name=str(c["name"]), artifact=str(c.get("artifact", "")), knobs=dict(c.get("knobs") or {}),
+                               meta={"strategy": str(c.get("by") or "command"), **({"idea": str(c["why"])} if c.get("why") else {})})
+                     for c in said.get("candidates") or [] if isinstance(c, dict) and c.get("name")]
+            state.say(f"  command search, round {rounds}: {len(cands)} candidate(s)"
+                      + (f" -- {said['say']}" if said.get("say") else ""))
+            if not cands:
+                if hasattr(state, "search_done"):
+                    state.search_done = True
+                return
+            if said.get("done") and hasattr(state, "search_done"):
+                state.search_done = True
+            yield cands
+            if said.get("done"):
+                return
+
+
+def _last_json(text: str) -> dict[str, Any] | None:
+    """The last line of `text` that is a JSON object (a command may print other lines first)."""
+    import json
+
+    for line in reversed(text.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                got = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(got, dict):
+                return got
+    try:
+        got = json.loads(text)
+        return got if isinstance(got, dict) else None
+    except ValueError:
+        return None
+
+
 def _factory(cls):
     def make(config: dict[str, Any]):
         return cls(**_config(cls, config))
@@ -875,6 +984,6 @@ def _factory(cls):
     return make
 
 
-for _cls in (Sweep, MonteCarlo, Anneal, Gradient, Genetic, ModelSearch, Pareto, Control, Phases):
+for _cls in (Sweep, MonteCarlo, Anneal, Gradient, Genetic, ModelSearch, Pareto, Control, Phases, CommandSearch):
     _POLICIES[_cls.name] = _cls
     register("orchestrator", _cls.name, _factory(_cls))

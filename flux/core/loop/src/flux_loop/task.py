@@ -902,9 +902,19 @@ class PromptProblem(Problem):
     def _run(self, cmd: tuple[str, ...], subs: dict[str, str], timeout_s: float, what: str):
         from flux_evaluator_abi.tools import run_tool
 
+        if any("{params}" in t for t in cmd) and "params" not in subs:
+            subs = {**subs, "params": self._params_file(subs.get("workdir") or ".")}   # D799
+
         who = subs.get("name") or ""                   # D709: the task says which candidate
         return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
                         what=f"{what} {who}" if who and who not in what else what)
+
+    def _params_file(self, workdir: str) -> str:
+        """`{params}` (D799): the document's `params:` as a JSON file a command reads."""
+        path = Path(workdir) / "params.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.task.params, indent=1, default=str))
+        return str(path)
 
     def _gate_run(self, subs: dict[str, str]) -> tuple[int, str]:
         """The gate's checks in order (D652): (score, report) of the first that fails, the checks
@@ -1606,7 +1616,9 @@ def model_use(task: "TaskSpec") -> str:
     flow = dict(task.flow or {})
     gen = dict(task.generator or {})
     reasons = []
-    if not gen and not task.space:
+    searched = flow.get("dse")
+    by_command = isinstance(searched, dict) and "command" in searched     # D799: the command writes them
+    if not gen and not task.space and not by_command:
         reasons.append("it writes the candidates")
     phases = flow.get("dse")
     specs = phases if isinstance(phases, list) else [phases] if phases else []

@@ -67,6 +67,11 @@ Say only what is yours; the rest is inferred.
     that does nothing (its component off) sits at its home value, and starts from it when
     switched on. A phase's `knobs`, `hold` and `keep` take globs (`bingo.*`, `"*.on"`).
     `pareto` needs two objectives.
+  - `orchestrate: {command: "{python} {home}/search.py {history} {state} {params}"}` (D799): a
+    search a command decides, round by round -- it reads `{history}` (what was measured and
+    refused), keeps `{state}`, and prints one JSON object: `candidates` (name, artifact, knobs,
+    why), `lessons`, `not_established`, a `conclusion` (kept when nothing passes), `done`.
+    `{params}` is the document's `params:` as a JSON file, for any command.
   - `generate`: `model` (the default), `{command: "..."}` (a script renders each candidate; with a
     space, once per point, knobs as `{knob}`), `{by: opencode|claude|codex}` (with `bin`,
     `args` beside: another executable, extra arguments such as `[--agent, flux]`; per machine

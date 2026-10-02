@@ -140,7 +140,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
     assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 point(s): x[3] x y[2]")
                for line in describe_flow(task, prob))
     assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
-    with pytest.raises(TaskError, match="available: agent, anneal, control, genetic"):
+    with pytest.raises(TaskError, match="available: agent, anneal, command, control, genetic"):
         TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": "hillclimb"}})
     with pytest.raises(TaskError, match="space.y: a non-empty list"):
         TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": {"space": {"x": [1], "y": []}}}})
@@ -367,3 +367,44 @@ def test_a_resumed_search_goes_on_from_the_record(tmp_path):
     out = run_loop(swept, LoopRequest(batch=WHOLE, steps=40, finalists=0, screen_only=True, db=db), proposer=None, log=lambda _m: None)
     assert swept.measured == [], "every point is on the record: nothing is walked again"
     assert out.decision is not None and out.decision.candidate.knobs == {"x": 3, "y": 2}
+
+
+def test_a_search_a_command_runs_proposes_rounds_and_concludes(tmp_path):
+    """D799: `orchestrate: {command: ...}` -- each round the command reads the history and its own
+    state, prints the next candidates (or none: done), lessons and a conclusion; `{params}` is the
+    document's params as a JSON file."""
+    from flux_loop import PromptProblem, load_task, request_for, run_loop
+
+    home = tmp_path / "words"
+    home.mkdir()
+    (home / "search.py").write_text(
+        "import json, sys\n"
+        "hist, st_path, params = json.load(open(sys.argv[1])), sys.argv[2], json.load(open(sys.argv[3]))\n"
+        "try: st = json.load(open(st_path))\nexcept Exception: st = {'n': 0}\n"
+        "st['n'] += 1; json.dump(st, open(st_path, 'w'))\n"
+        "seen = {m['name'] for m in hist['measured']} | {r['name'] for r in hist['refused']}\n"
+        "todo = [w for w in params['words'] if w not in seen]\n"
+        "if not todo: print(json.dumps({'candidates': [], 'lessons': ['tried ' + ', '.join(sorted(seen))], "
+        "'conclusion': {'decision': 'all tried'}}))\n"
+        "else: print('thinking...'); print(json.dumps({'candidates': [{'name': todo[0], 'artifact': todo[0] + '\\n'}]}))\n")
+    (home / "problem.yaml").write_text(
+        "statement: the longest word the check admits\nlanguage: text\n"
+        "params: {words: [ab, xyz, abcd]}\n"
+        "objectives: [{metric: chars, direction: maximize}]\n"
+        "flow:\n  orchestrate: {command: \"{python} {home}/search.py {history} {state} {params}\"}\n"
+        "  test: \"{python} -c \\\"import sys; print(int('x' in open(sys.argv[1]).read()), 'failing')\\\" {artifact}\"\n"
+        "  measure:\n    len: {command: \"{python} -c \\\"import sys; print('chars=' + str(len(open(sys.argv[1]).read().strip())))\\\" {artifact}\","
+        " metrics: [chars]}\n"
+        "budget: {prototype: false}\n")
+    task = load_task(home)
+    assert task.flow["dse"] == {"command": {"run": "{python} {home}/search.py {history} {state} {params}"}}
+    assert task.to_dict()["flow"]["orchestrate"] == {"command": "{python} {home}/search.py {history} {state} {params}"}
+    prob = PromptProblem(task)
+    said: list[str] = []
+    refused = []
+    for _ in range(4):
+        out = run_loop(prob, request_for(task, db=str(tmp_path / "w.db")), log=said.append)
+        refused += out.refused
+    assert out.decision is not None and out.decision.name == "abcd"
+    assert [n for n, _ in refused] == ["xyz"], "the gate judged the command's candidate, once: a resumed record's refusals are history"
+    assert any("tried ab, abcd, xyz" in line for line in out.lessons)

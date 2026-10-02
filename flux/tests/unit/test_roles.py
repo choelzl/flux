@@ -73,13 +73,13 @@ def _request(tmp_path, **kw):
 
 # ------------------------------------------------------------------- the registry
 def test_the_registry_says_what_each_role_can_be_switched_to():
-    assert available_roles("orchestrator") == ["agent", "anneal", "control", "genetic", "given", "gradient", "llm", "model",
+    assert available_roles("orchestrator") == ["agent", "anneal", "command", "control", "genetic", "given", "gradient", "llm", "model",
                                                 "montecarlo", "pareto", "phases", "rules", "sweep"], (
         "the agent joined this role (D505); the DSE policies left it (D507) and came back over `space:` (D553)")
     assert "model" in available_roles("generator") and "catalog" in available_roles("generator")
     with pytest.raises(ValueError, match="not one of the four roles"):
         available_roles("evaluation")
-    with pytest.raises(ValueError, match="available: agent, anneal, control, genetic, given, gradient, llm, model, montecarlo, pareto, phases, rules, sweep"):
+    with pytest.raises(ValueError, match="available: agent, anneal, command, control, genetic, given, gradient, llm, model, montecarlo, pareto, phases, rules, sweep"):
         make_role("orchestrator", "vibes")
 
 
@@ -232,7 +232,7 @@ def test_a_document_says_who_fills_a_role():
 
 
 def test_a_role_a_document_cannot_mean_is_a_load_error():
-    with pytest.raises(TaskError, match="available: agent, anneal, control, genetic, given, gradient, llm, model, montecarlo, pareto, phases, rules, sweep"):
+    with pytest.raises(TaskError, match="available: agent, anneal, command, control, genetic, given, gradient, llm, model, montecarlo, pareto, phases, rules, sweep"):
         TaskSpec.from_dict(_doc(roles={"orchestrator": "telepathy"}))
     with pytest.raises(TaskError, match="is not a box of the drawing"):
         TaskSpec.from_dict(_doc(roles={"evaluation": "tools"}))

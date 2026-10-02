@@ -27,25 +27,7 @@ def _req(strides, n, banks=8, bits=12, **kw):
                           z3_seconds=20, **kw)
 
 
-BANKMAP_DOC = Path(__file__).resolve().parents[2] / "applications" / "bankmap" / "problem.yaml"
-
-
-def _problem(**params):
-    """The document problem with these params, built the way `flux task run` builds it (D519).
-    No campaign name, so a record is keyed by the ask."""
-    import yaml
-    from flux_loop import PromptProblem, TaskSpec
-
-    doc = yaml.safe_load(BANKMAP_DOC.read_text())
-    doc["params"] = {**doc["params"], "z3_seconds": 20, **params}
-    return PromptProblem(TaskSpec.from_dict(doc, base=BANKMAP_DOC.parent))
-
-
-def _run(prob, *, db="", proposer=None, log=None, feedback=None, steps=None):
-    from flux_loop import request_for, run_loop
-
-    req = request_for(prob.task, db=db, **({"steps": steps} if steps else {}))
-    return run_loop(prob, req, proposer=proposer, feedback=feedback, log=log or (lambda _m: None))
+BANKMAP = Path(__file__).resolve().parents[2] / "applications" / "bankmap"
 
 
 def test_modulo_fails_exactly_the_strides_that_are_multiples_of_the_bank_count():
@@ -176,16 +158,6 @@ def test_no_witness_where_a_mapping_exists():
 
     assert find_impossibility(_req([1, 8, 16], 4)) is None
     assert find_impossibility(_req([1], 8)) is None
-
-
-def test_the_study_refuses_an_impossible_request_without_a_solver_round():
-    said = []
-    prob = _problem(strides=[1, 8, 16, 17], concurrent=8, banks=8, address_bits=12)
-    out = _run(prob, log=said.append)
-    assert out.decision is None and prob.world.impossible
-    assert any("impossible for ANY mapping" in l for l in out.lessons)
-    assert prob.world.provenance().get("impossible") is True
-    assert not any("z3: searching" in s for s in said), "no solver time on a proved impossibility"
 
 
 def test_a_fold_with_the_wrong_number_of_bank_bits_is_dropped():
@@ -337,19 +309,6 @@ def test_two_identical_bank_bits_are_not_a_fold():
     assert len(set(m.taps)) == len(m.taps)
 
 
-def test_pairwise_stride_compatibility_is_proved_not_inferred():
-    """Powers of two through 4-lane crossbars into 4 groups: each alone, never two."""
-    from flux_bankmap import crossbar_stages
-    from flux_bankmap.world import stride_compatibility
-
-    r = _req([1, 2, 16, 64], 4, banks=32, stages=crossbar_stages(5, "4x8", lanes=4))
-    lines = stride_compatibility(r, lambda _m: None)
-    assert lines and "NO two of them together" in lines[0]
-    assert stride_compatibility(_req([1, 3], 4, banks=32,
-                                     stages=crossbar_stages(5, "4x8", lanes=4)),
-                                lambda _m: None) == []
-
-
 # ---- topologies: every interconnect reduces to stages (D364) --------------------------------
 def test_named_topologies_reduce_to_stages():
     from flux_bankmap.topology import parse
@@ -414,27 +373,6 @@ def test_omega_blocks_a_permutation_the_bank_level_allows():
     assert check(m, net).conflict_free
 
 
-def test_explicit_stages_do_not_inherit_the_crossbar_note(tmp_path):
-    """Explicit stages do not get the full crossbar's "no conflict point" note. The document end
-    to end, model and solver off."""
-    import yaml
-    from flux_llm import ScriptedProposer
-    from flux_loop import PromptProblem, TaskSpec, request_for, run_loop
-
-    path = Path(__file__).resolve().parents[2] / "applications/bankmap/problem.yaml"
-    doc = yaml.safe_load(path.read_text())
-    doc["params"] = {**doc.get("params", {}), "strides": [1], "concurrent": 2, "banks": 8, "z3_seconds": 2, "llm_round": 0,
-                     "topology": None, "stages": [{"bits": [1, 2], "capacity": 1, "lanes": 2, "lane_key": "mod"}]}
-    prob = PromptProblem(TaskSpec.from_dict(doc, base=path.parent))
-    run = run_loop(prob, request_for(prob.task, db=str(tmp_path / "b.db")), proposer=ScriptedProposer([]), log=lambda _m: None)
-    out = {"result": prob.world.result(run)}
-    request = out["result"]["request"]
-    assert request["topology"] == "explicit stages"
-    assert not any("no conflict point" in n for n in request["notes"])
-    assert request["stages"] and "modulo 2" in request["stages"][0]
-    assert out["result"]["decision"] is None or "verilog" in out["result"]["decision"]
-
-
 # ---- free lane assignment: the wiring is a decision variable (D372) -------------------------
 def test_a_free_stage_is_unconstrained_until_solved_then_concrete():
     from flux_bankmap import Stage
@@ -476,51 +414,115 @@ def test_the_solver_chooses_a_wiring_the_chunk_proof_forbids():
     assert check(m, wired).conflict_free
 
 
-def test_joint_unsat_fixes_the_interleave_so_the_model_still_runs(monkeypatch):
-    """When no wiring rescues the linear family, the non-linear round still runs on the
-    interleaved wiring, fixed by rule and stated (D372)."""
-    from flux_bankmap import world as world_module
-    from flux_bankmap.solve_z3 import SolveTrace
-    from flux_llm import ScriptedProposer
-
-    monkeypatch.setattr(world_module, "solve",
-                        lambda req, **kw: (None, SolveTrace(outcome="unsat (stub)")))
-    prob = _problem(strides=[1, 3], concurrent=8, banks=32, llm_round=2,
-                    stages=[{"bits": [3, 4], "capacity": 1, "lanes": 4, "lane_key": "free", "blocks": 7}])
-    proposer = ScriptedProposer(["[]"])
-    out = _run(prob, proposer=proposer, steps=3)
-    assert prob.world.request.stages[0].partition == ((0, 7), (1,), (2,), (3,), (4,), (5,), (6,))
-    assert any("fixed by rule" in l for l in out.lessons)
-    assert out.decision is None
-    assert proposer.prompts, "the model round ran, against the rule-fixed wiring"
-
-
 # ---------- the rim: --db is real, feedback reaches the prompt (D402) ----------
 
-def test_db_records_trials_and_reseeds_the_tried_list(tmp_path):
-    from flux_feedback import scripted_channel
-    from flux_llm import ScriptedProposer
-    from flux_loop import request_for
-    from flux_records import Records
 
-    db = str(tmp_path / "bm.db")
-    ask = dict(strides=[1, 8, 16], concurrent=4, banks=8, address_bits=12, llm_round=2)
-    prob = _problem(**ask)
-    # an always-refused non-answer, so the run records a model refusal beside the baseline's
-    first = _run(prob, db=db, steps=3,
-                 proposer=ScriptedProposer(['[{"kind": "modulo", "shift": 1, "why": "shifted"}]']))
-    assert first.refused                       # checked and refused
-    rec = Records(db, objective=prob.objective(request_for(prob.task, db=db)), name=prob.task.id)
-    assert rec.resumed
-    refusals = rec.refusals(stage="gate")       # the loop's stage for a refused candidate (D446)
-    assert any("mod B" in c.get("name", "") for c, _ in refusals)
-    assert rec.conclusions(limit=1)            # the decision landed as INFERENCE
+# ---- D799: the study is a document; its chain is `flux_bankmap.steps search`, a round per call
+def _round(tmp_path, params, refused=(), measured=()):
+    """One call of the chain, as the loop makes it: the history so far, the state it keeps."""
+    import json
 
-    # the resumed run's model round is told what already failed, and what the operator typed
-    proposer = ScriptedProposer(["[]"])
-    _run(_problem(**ask), db=db, steps=3, proposer=proposer,
-         feedback=scripted_channel("avoid plain shifts"))
-    assert proposer.prompts, "the model round ran on the resumed record"
-    prompt = proposer.prompts[-1]
-    assert "mod B" in prompt                   # past refusals seeded into ALREADY TRIED
-    assert "HUMAN GUIDANCE" in prompt and "avoid plain shifts" in prompt
+    from flux_bankmap import steps
+
+    (tmp_path / "params.json").write_text(json.dumps({"z3_seconds": 20, "address_bits": 12, **params}))
+    (tmp_path / "history.json").write_text(json.dumps({"measured": list(measured), "refused": list(refused),
+                                                       "guidance": ""}))
+    return steps.search(str(tmp_path / "history.json"), str(tmp_path / "state.json"), str(tmp_path / "params.json"))
+
+
+def test_the_chain_refuses_an_impossible_request_without_the_solvers_search(tmp_path, monkeypatch):
+    import flux_bankmap.solve_z3 as z3
+
+    params = {"strides": [1, 8, 16, 17], "concurrent": 8, "banks": 8}
+    first = _round(tmp_path, params)
+    assert [c["by"] for c in first["candidates"]] == ["baseline"] and not first.get("done")
+    asked = []
+    real = z3.solve
+    monkeypatch.setattr(z3, "solve", lambda req, **kw: asked.append(kw) or real(req, **kw))
+    second = _round(tmp_path, params, refused=[{"name": first["candidates"][0]["name"], "why": "conflicts"}])
+    assert second["done"] and not second["candidates"]
+    assert any("impossible for ANY mapping" in line for line in second["lessons"])
+    assert any("proved, not searched" in line for line in second["not_established"])
+    assert all("timeout_s" in kw for kw in asked), "only the partial answers' bounded descents, no full solver search"
+
+
+def test_pairwise_stride_compatibility_is_proved_not_inferred():
+    """Powers of two through 4-lane crossbars into 4 groups: each alone, never two."""
+    from flux_bankmap import crossbar_stages
+    from flux_bankmap.steps import stride_compatibility
+
+    r = _req([1, 2, 16, 64], 4, banks=32, stages=crossbar_stages(5, "4x8", lanes=4))
+    lines = stride_compatibility(r)
+    assert lines and "NO two of them together" in lines[0]
+    assert stride_compatibility(_req([1, 3], 4, banks=32, stages=crossbar_stages(5, "4x8", lanes=4))) == []
+
+
+def test_explicit_stages_do_not_inherit_the_crossbar_note():
+    from flux_bankmap.steps import request_of
+
+    req = request_of({"strides": [1], "concurrent": 2, "banks": 8, "address_bits": 12, "topology": None,
+                      "stages": [{"bits": [1, 2], "capacity": 1, "lanes": 2, "lane_key": "mod"}]})
+    assert not any("no conflict point" in n for n in req.notes)
+    assert req.stages and "modulo 2" in req.stages[0].describe()
+
+
+def test_joint_unsat_fixes_the_interleave_so_the_model_still_runs(tmp_path, monkeypatch):
+    """When no wiring rescues the linear family, the model round still runs on the interleaved
+    wiring, fixed by rule and said (D372)."""
+    import flux_bankmap.solve_z3 as z3
+    from flux_bankmap import steps
+    from flux_bankmap.solve_z3 import SolveTrace
+
+    monkeypatch.setattr(z3, "solve", lambda req, **kw: (None, SolveTrace(outcome="unsat (stub)")))
+    asked = []
+    monkeypatch.setattr(steps, "propose", lambda req, st, history, params: asked.append(req) or [])
+    params = {"strides": [1, 3], "concurrent": 8, "banks": 32, "llm_round": 2,
+              "stages": [{"bits": [3, 4], "capacity": 1, "lanes": 4, "lane_key": "free", "blocks": 7}]}
+    base = _round(tmp_path, params)["candidates"][0]["name"]
+    said = _round(tmp_path, params, refused=[{"name": base, "why": "conflicts"}])
+    assert any("fixed by rule" in line for line in said["lessons"])
+    assert asked and asked[0].stages[0].partition == ((0, 7), (1,), (2,), (3,), (4,), (5,), (6,))
+    assert said["done"] and said.get("conclusion") is None or said["conclusion"]["conflict_free"] is False
+
+
+def test_the_model_is_told_what_was_refused_and_what_the_operator_typed(tmp_path, monkeypatch):
+    """D402: the refusals on the record seed ALREADY TRIED; the operator's notes reach the prompt."""
+    import json
+
+    import flux_llm
+    from flux_bankmap import steps
+
+    seen: list[str] = []
+
+    class Fake:
+        def propose(self, prompt, **kw):
+            seen.append(prompt)
+            return type("R", (), {"text": '[{"kind": "modulo", "shift": 1, "why": "shifted"}]'})()
+
+    monkeypatch.setattr(flux_llm, "OpenAIChatProposer", lambda *a, **k: Fake())
+    req = steps.request_of({"strides": [1, 8, 16], "concurrent": 4, "banks": 8, "address_bits": 12, "llm_round": 2})
+    got = steps.propose(req, {"z3": "unsat"}, {"refused": [{"name": "bank = addr mod B", "why": "stride 8 conflicts"}],
+                                              "guidance": "HUMAN GUIDANCE: avoid plain shifts"}, {"llm_round": 2})
+    assert got and seen and "mod B" in seen[0] and "avoid plain shifts" in seen[0]
+    assert json.dumps([m.to_dict() for m, _ in got])
+
+
+def test_the_document_decides_a_fold_end_to_end(tmp_path):
+    """The document run as `flux task run` runs it: the modulo refused, z3's fold decided."""
+    import shutil
+
+    from flux_loop import PromptProblem, load_task, request_for, run_loop
+
+    home = tmp_path / "bankmap"
+    shutil.copytree(BANKMAP, home, ignore=shutil.ignore_patterns("out", "lib", "__pycache__"))
+    text = (home / "problem.yaml").read_text().replace("address_bits: 20", "address_bits: 12").replace("z3_seconds: 60", "z3_seconds: 20")
+    (home / "problem.yaml").write_text(text)
+    task = load_task(home / "problem.yaml")
+    prob = PromptProblem(task)
+    refused = []
+    for _ in range(3):                                   # a pass a round: the modulo, then z3's fold
+        out = run_loop(prob, request_for(task, db=str(tmp_path / "b.db")), log=lambda _m: None)
+        refused += out.refused
+    assert out.decision is not None and out.decision.metrics["hardware_cost"] >= 1
+    assert any(name.startswith("bank = (addr >> 0) mod") for name, _ in refused)
+

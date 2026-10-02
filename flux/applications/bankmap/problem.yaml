@@ -1,4 +1,5 @@
-# A conflict-free address-to-bank mapping, or the proof there is none. The world is `flux_bankmap`.
+# A conflict-free address-to-bank mapping, or the proof there is none (D799: the study is this
+# document and the commands of `flux_bankmap.steps` -- no world).
 #     flux task run applications/bankmap --db demo-bankmap.db --tui
 
 statement: >-
@@ -8,25 +9,27 @@ statement: >-
   achievable instead.
 language: verilog
 
-world: flux_bankmap.world:World
-params:
+params:                         # the ask, read by every step as {params}
   strides: [1, 8, 16]
   concurrent: 4
   banks: 8
   address_bits: 20
   z3_seconds: 60
-  topology: crossbar          # crossbar | staged:GxH | omega | butterfly | clos:n,m,r | benes
-  llm_round: 6                # model-proposed mappings per round; 0 = solver only
+  topology: crossbar            # crossbar | staged:GxH | omega | butterfly | clos:n,m,r | benes
+  llm_round: 6                  # model-proposed mappings per round; 0 = solver only
+  model_rounds: 2               # model rounds after the solver
   # also: max_xor_inputs, stage_capacities, lanes, stages, problem
-
-flow:
-  measure:
-    exhaustive: {metrics: [hardware_cost, clean_fraction]}
 
 objectives:
   - {metric: hardware_cost, direction: minimize, unit: XOR}
 
+flow:
+  orchestrate:                  # the chain: baseline, proof, z3, then the model's rounds
+    command: "{python} -m flux_bankmap.steps search {history} {state} {params}"
+  test:
+    exhaustive: "{python} -m flux_bankmap.steps check {artifact} {params}"
+  measure:
+    exhaustive: {command: "{python} -m flux_bankmap.steps cost {artifact}", metrics: [hardware_cost, clean_fraction]}
 
 budget:
-  steps: 4                    # baseline, solver, then two model rounds
   prototype: false

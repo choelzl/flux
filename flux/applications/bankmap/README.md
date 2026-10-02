@@ -6,14 +6,21 @@ say precisely what is achievable when that is impossible.
 
 ```bash
 cd flux
-nix develop --command flux task run applications/bankmap --steps 2   # solver only, no model, seconds
-nix develop --command flux task run applications/bankmap --tui       # plus model rounds
+nix develop --command flux task run applications/bankmap --tui       # baseline, proof, z3, then model rounds
 ```
 
+The study is the document and the commands of `flux_bankmap.steps`, one per phase (D799) -- no
+world. The chain below is `orchestrate: {command: "... steps search {history} {state} {params}"}`:
+the loop calls it once a round with what was measured and refused so far, and it prints the next
+candidates (each a mapping's Verilog with a `// flux_bankmap:` line saying the mapping and the
+wiring), lessons, and -- when nothing conflict-free exists -- the best partial answer as the run's
+conclusion. The gate is `steps check` (the exhaustive checker), the one stage `steps cost` (the
+XOR count). A model round asks the run's own model (`FLUX_REMOTE_*`, a local Ollama), told the
+solver's outcome, the counter-examples, what was refused and what the operator typed.
+
 The record and the chosen mapping's Verilog go to `applications/bankmap/out/` (`bankmap.db`,
-`bankmap.v`) unless `--db` / `--out` say otherwise. `--steps 2` stops after the baseline and
-the solver's step; the document's 4 adds two model rounds, which report themselves skipped
-when no model is reachable.
+`bankmap.v`) unless `--db` / `--out` say otherwise. `params.model_rounds: 0` stops after the
+solver; a round with no model reachable ends the chain where the solver did.
 
 ## Changing the ask
 
@@ -30,6 +37,7 @@ params:
   z3_seconds: 60            # solver budget per attempt
   max_xor_inputs: null      # hardware bound: address bits folded into one bank bit
   llm_round: 6              # mappings a model may propose per round; 0 = solver only
+  model_rounds: 2           # model rounds after the solver
 ```
 
 (That example is the impossible request below.) The interconnect keys -- `topology`,

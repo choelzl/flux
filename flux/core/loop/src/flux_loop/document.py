@@ -41,7 +41,7 @@ __all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_O
 #: a name neither is stays as written (a script's own braces are its business)
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
 BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                "prompt", "prompt_file", "point")
+                "prompt", "prompt_file", "point", "params", "history", "state")
 
 
 class TaskError(ValueError):
@@ -1196,6 +1196,13 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
         raise TaskError("flow.dse is `orchestrate`: `orchestrate: {policy: sweep, space: {...}}` (D797)")
     flow = dict(flow)
     o = flow.get("orchestrate")                            # D797: a search is the orchestrator's choice
+    if isinstance(o, dict) and "command" in o and isinstance(o["command"], (str, list)):
+        # D799: a search a command runs -- its rounds' candidates, its conclusion
+        rest = {k: v for k, v in o.items() if k != "command"}
+        bad = sorted(set(rest) - {"timeout_s"})
+        if bad:
+            raise TaskError(f"flow.orchestrate: a command's search takes `command` and `timeout_s`, not {bad}")
+        flow["orchestrate"] = o = {"command": {"run": o["command"], **rest}}
     if isinstance(o, list) or (isinstance(o, str) and o in _dse_words()) \
             or (isinstance(o, dict) and ({"policy", "space", "seeds"} & set(o) or set(o) & set(_dse_words()))):
         flow["dse"] = flow.pop("orchestrate")
@@ -1319,6 +1326,8 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
             out[box] = value
     if "dse" in out:                                       # D797: the search, as the orchestrator
         dse = out.pop("dse")
+        if isinstance(dse, dict) and set(dse) == {"command"} and isinstance(dse["command"], dict):
+            dse = {"command": dse["command"].get("run"), **{k: v for k, v in dse["command"].items() if k != "run"}}
         out["orchestrate"] = {"by": "model"} if dse == "model" else dse
     lessons = out.pop("extract", "off")
     if lessons != "off":
