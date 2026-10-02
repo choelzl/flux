@@ -73,6 +73,7 @@ flow:
 of the earlier layout (`gate:`, `stages:`, `space:`, `seeds:`, `knowledge:` at the top,
 `budget.finalists`) is refused with where each went; `flux task upgrade FILE...` rewrites it
 (the original kept as `FILE.orig`; YAML comments are not carried over; `--dry-run` prints it).
+On the web (D776), such a loop's Overview offers **Upgrade the document**, and Admin › Loops **Upgrade all**.
 
 ## Check and run a problem
 

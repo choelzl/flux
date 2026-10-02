@@ -35,7 +35,7 @@ from .types import (LoopRequest)
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 
-__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "upgrade", "world_hooks"]
+__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "needs_upgrade", "read_input", "request_for", "resolve", "upgrade", "upgrade_file", "world_hooks"]
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -1256,6 +1256,49 @@ def upgrade(doc: Any) -> Any:
     else:
         out.pop("flow", None)
     return out
+
+
+def upgrade_file(path: str | Path, *, write: bool = True) -> dict[str, Any]:
+    """D775: a document file of the earlier layout rewritten in this one: {"status": "current" |
+    "upgraded" | "failed" | "would upgrade", "why", "text"}. The result is loaded before it is
+    written; the original is kept beside as `<file>.orig` (YAML comments are not carried over)."""
+    import yaml
+
+    path = Path(path)
+    text = path.read_text()
+    try:
+        doc = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+    except (ValueError, yaml.YAMLError) as exc:
+        return {"status": "failed", "why": f"not YAML or JSON: {exc}", "text": ""}
+    new = upgrade(doc)
+    if new == doc:
+        return {"status": "current", "why": "already in the current layout", "text": text}
+    out = (json.dumps(new, indent=2) + "\n" if path.suffix == ".json"
+           else yaml.safe_dump(new, sort_keys=False, allow_unicode=True, width=110, default_flow_style=None))
+    if not write:
+        return {"status": "would upgrade", "why": "", "text": out}
+    tmp = path.with_name(f"{path.stem}.upgrading{path.suffix}")         # the loader reads by suffix
+    tmp.write_text(out)
+    try:
+        load_task(str(tmp))
+    except Exception as exc:  # noqa: BLE001 -- said; the original left alone
+        tmp.unlink()
+        return {"status": "failed", "why": f"the result does not load: {exc}", "text": out}
+    path.with_name(path.name + ".orig").write_text(text)
+    tmp.replace(path)
+    return {"status": "upgraded", "why": f"the original is {path.name}.orig", "text": out}
+
+
+def needs_upgrade(path: str | Path) -> bool:
+    """Whether a document file is of the earlier layout (D775) -- read, not loaded."""
+    import yaml
+
+    path = Path(path)
+    try:
+        doc = json.loads(path.read_text()) if path.suffix == ".json" else yaml.safe_load(path.read_text())
+    except (OSError, ValueError, yaml.YAMLError):
+        return False
+    return isinstance(doc, dict) and upgrade(doc) != doc
 
 
 def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

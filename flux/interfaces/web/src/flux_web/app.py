@@ -1171,8 +1171,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
         perm = access(user, owner, name)[2]
-        return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
-                "state": runs.state(whose, name)}
+        meta = w.meta(name)
+        from flux_loop.document import needs_upgrade
+
+        old = bool(meta.get("document")) and needs_upgrade(w.path(name, meta["document"]))   # D775
+        return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **meta, "files": w.files(name),
+                "state": runs.state(whose, name), "old_layout": old}
 
     @app.get("/api/apps/{name}/files")
     def app_files(name: str, path: str = "", ignored: bool = False, owner: str | None = None,
@@ -1251,6 +1255,59 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output})   # D693
         return {"ok": ok, "output": output}
 
+    @app.post("/api/apps/{name}/document/upgrade")
+    def upgrade_document(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """D775: the loop's document of the earlier layout rewritten with each box's settings under
+        `flow`; the original kept beside it as `<document>.orig`."""
+        from flux_loop.document import upgrade_file
+
+        w, whose = editor(user, owner, name)
+        doc = w.meta(name).get("document")
+        if not doc:
+            raise HTTPException(404, "this loop has no problem document yet")
+        got = upgrade_file(w.path(name, doc))
+        if got["status"] == "failed":
+            raise HTTPException(409, f"not upgraded: {got['why']}")
+        if got["status"] == "upgraded":
+            store.audit(user.name, "upgrade document", name if whose.id == user.id else f"{whose.name}/{name}")
+        return {"ok": f"{doc}: {'upgraded (the original is kept as ' + doc + '.orig)' if got['status'] == 'upgraded' else got['why']}",
+                "status": got["status"]}
+
+    def _documents() -> list[dict[str, Any]]:
+        from flux_loop.document import needs_upgrade
+
+        out = []
+        for u in store.users():
+            w = Workspace(store.data, u.name)
+            for a in w.apps():
+                doc = w.meta(a["name"]).get("document")
+                if doc:
+                    path = w.path(a["name"], doc)
+                    out.append({"user": u.name, "app": a["name"], "document": doc, "old": needs_upgrade(path), "path": path})
+        return out
+
+    @app.get("/api/admin/documents")
+    def admin_documents(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D775: every loop's document, and which are of the earlier layout."""
+        docs = _documents()
+        return {"old": [{k: d[k] for k in ("user", "app", "document")} for d in docs if d["old"]], "all": len(docs)}
+
+    @app.post("/api/admin/documents/upgrade")
+    def admin_upgrade_documents(a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D775: every loop's document of the earlier layout upgraded; each said, a failure with why."""
+        from flux_loop.document import upgrade_file
+
+        done = []
+        for d in _documents():
+            if not d["old"]:
+                continue
+            got = upgrade_file(d["path"])
+            done.append({"user": d["user"], "app": d["app"], "document": d["document"], "status": got["status"], "why": got["why"]})
+            if got["status"] == "upgraded":
+                store.audit(a.name, "upgrade document", f"{d['user']}/{d['app']}")
+        return {"done": done, "upgraded": sum(x["status"] == "upgraded" for x in done),
+                "failed": sum(x["status"] == "failed" for x in done)}
+
     @app.post("/api/apps/{name}/validate")
     def validate_text(name: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Whether a document, not yet saved, loads (D757): what Direct edit says before it writes."""
@@ -1327,6 +1384,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
         if not meta.get("document"):
             raise HTTPException(409, "this loop has no problem document yet")
+        from flux_loop.document import needs_upgrade
+
+        if needs_upgrade(d / meta["document"]):           # D775: refused here, with what to do, not by the run
+            raise HTTPException(409, f"{meta['document']} is of the earlier layout: upgrade it (Overview › Upgrade the document, "
+                                     "or `flux task upgrade`) -- each box's settings are said under flow now")
         try:                                       # D751: the agents it hands work to, tested by its owner (D769)
             from flux_loop import load_task
             from flux_loop.agent_check import agents_used

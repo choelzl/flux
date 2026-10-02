@@ -1483,6 +1483,10 @@ async function loopPage(name, owner, path = "") {
           use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",
           use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agents")) : "",
         stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
+      // D775: a document of the earlier layout is said before a start is refused for it
+      info.old_layout ? h("section", { class: "callout bad", role: "alert" }, h("strong", {}, "This loop's document is of the earlier layout. "),
+        "Its gate, stages, space, seeds or knowledge are said at the top; they are said under flow now, so it cannot start as it is. ",
+        mine ? upgradeButton(name, owner) : h("span", { class: "muted" }, "Its owner can upgrade it.")) : "",
       // D757: a failed start says why, in its log's own words, where the loop is opened
       st.failed && (st.error || []).length ? h("section", { class: "card why-failed", role: "alert" }, h("div", { class: "card-head" }, h("h2", {}, "Why it stopped"),
         h("button", { class: "small", onclick: () => goTab("Live", "log") }, "The log")),
@@ -2398,7 +2402,8 @@ async function crafterView(body, name, owner) {
     const panel = filesPanel(name, yamlOf);
     body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
         got.kept.length ? "; what the form does not edit is kept as written" : ""),
-      v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
+      v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error,
+        /\(D775\)/.test(v.error) ? [" ", upgradeButton(name, owner)] : "") : "",
       host, panel.el);
     host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
     C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
@@ -2612,8 +2617,18 @@ async function adminPage(sub = "") {
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 
+/** D775: a loop's document of the earlier layout, upgraded in place (the original kept as .orig). */
+function upgradeButton(name, owner) {
+  return act("Upgrade the document", async () => {
+    const r = await api(`/apps/${enc(name)}/document/upgrade${owner ? `?owner=${enc(owner)}` : ""}`, { method: "POST" });
+    toast(r.ok, "ok");
+    route();
+  }, { cls: "small primary", title: "Each box's settings moved under flow (D775); the original is kept beside it as .orig" });
+}
+
 async function adminLoops(body) {
-  const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null)]);
+  const [allApps, res, docs] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null),
+                                                   api("/admin/documents").catch(() => null)]);
   const paused = res ? res.paused : null;
   const running = allApps.filter(l => l.running).length;
   const reason = h("input", { placeholder: "why (users see it)", style: "min-width:260px" });
@@ -2634,7 +2649,19 @@ async function adminLoops(body) {
         const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
       }, { cls: "danger" }))]);
   const box = h("div", {}, loopsBrowser(allApps, { who: true }));
-  body.replaceChildren(controls, card("Every loop", box));
+  // D775: the documents of the earlier layout, every user's, upgraded at once
+  const old = docs && docs.old.length ? card(`Documents of the earlier layout (${docs.old.length} of ${docs.all})`, [
+    h("p", { class: "muted" }, "These loops cannot start until their document says each box's settings under flow. ",
+      "Upgrading rewrites each, keeping the original beside it as .orig (YAML comments are not carried over)."),
+    h("ul", { class: "small" }, docs.old.slice(0, 30).map(d => h("li", {}, h("a", { href: `#/u/${enc(d.user)}/app/${enc(d.app)}` }, `${d.user}/${d.app}`),
+      " ", h("span", { class: "mono muted" }, d.document)))),
+    act(`Upgrade all ${docs.old.length}`, async () => {
+      const r = await api("/admin/documents/upgrade", { method: "POST" });
+      toast(`${r.upgraded} document(s) upgraded` + (r.failed ? `; ${r.failed} not: ${r.done.filter(x => x.status === "failed").map(x => `${x.user}/${x.app}: ${x.why}`).join("; ")}` : ""),
+            r.failed ? "warn" : "ok");
+      route();
+    }, { cls: "primary" })]) : "";
+  body.replaceChildren(controls, old, card("Every loop", box));
   pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); };
 }
 

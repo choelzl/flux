@@ -188,40 +188,20 @@ def cmd_task_upgrade(args: argparse.Namespace) -> int:
     (gate, stages, space, seeds, knowledge, finalists, calibrate). The original is kept beside
     as `<file>.orig` (YAML comments are not carried over); the result is loaded before it is
     written. `--dry-run` prints it instead."""
-    import json as _json
-    from pathlib import Path
-
-    import yaml
-
-    from flux_loop import load_task
-    from flux_loop.document import upgrade
+    from flux_loop.document import upgrade_file
 
     bad = 0
     for f in args.files:
-        path = Path(f)
-        text = path.read_text()
-        doc = _json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
-        new = upgrade(doc)
-        if new == doc:
-            print(f"{f}: already in the current layout")
-            continue
-        out = (_json.dumps(new, indent=2) + "\n" if path.suffix == ".json"
-               else yaml.safe_dump(new, sort_keys=False, allow_unicode=True, width=110, default_flow_style=None))
-        if args.dry_run:
-            print(f"# {f}\n{out}")
-            continue
-        tmp = path.with_name(f"{path.stem}.upgrading{path.suffix}")     # the loader reads by suffix
-        tmp.write_text(out)
-        try:
-            load_task(str(tmp))
-        except Exception as exc:  # noqa: BLE001 -- said, the original left alone
-            print(f"{f}: not upgraded, the result does not load: {exc}", file=sys.stderr)
-            tmp.unlink()
+        got = upgrade_file(f, write=not args.dry_run)
+        if got["status"] == "would upgrade":
+            print(f"# {f}\n{got['text']}")
+        elif got["status"] == "failed":
+            print(f"{f}: not upgraded, {got['why']}", file=sys.stderr)
             bad += 1
-            continue
-        path.with_name(path.name + ".orig").write_text(text)
-        tmp.replace(path)
-        print(f"{f}: upgraded (the original is {path.name}.orig; YAML comments are not carried over)")
+        elif got["status"] == "upgraded":
+            print(f"{f}: upgraded ({got['why']}; YAML comments are not carried over)")
+        else:
+            print(f"{f}: {got['why']}")
     return 1 if bad else 0
 
 
