@@ -635,12 +635,12 @@
     var checks = r.checks.filter(function (c) { return c.run; });
     if (!own("flow.test")) { if (kf["flow.test"] !== undefined) F.push("  test: " + inline(kf["flow.test"], false)); }
     else if (checks.length) {
-      F.push("  test:                     # each must pass, in order");
+      F.push("  test:                     # by name; each must pass, in order");
       checks.forEach(function (c) {
-        var p = [["name", c.name], ["run", c.run]];
+        var p = [["run", c.run]];
         if (c.count_re) p.push(["count_re", c.count_re]);
         if (c.timeout) p.push(["timeout_s", typed(c.timeout)]);
-        F.push("    - " + flowMap(p));
+        F.push("    " + q(String(c.name || "test").trim() || "test") + ": " + (p.length === 1 ? q(c.run) : flowMap(p)));
       });
     }
 
@@ -1080,11 +1080,11 @@
     // gate: checks in order
     var gate = normal.gate;
     var gateOk = true;
-    if (gate && !Array.isArray(gate) && typeof gate === "object" && gate.build) {
-      gate = []; gateOk = false;             // its build step fails on any exit but 0: the list has no such check
-    } else if (gate && !Array.isArray(gate) && typeof gate === "object") {   // the old {test} form
-      gate = ["build", "test"].filter(function (n) { return gate[n]; }).map(function (n) {
-        return { name: n, run: gate[n], count_re: n === "test" ? gate.count_re : null, timeout_s: gate.timeout_s };
+    if (typeof gate === "string" || Array.isArray(gate)) gate = { test: gate };
+    if (gate && typeof gate === "object") {             // D789: a map by name, in order
+      gate = Object.keys(gate).map(function (n) {
+        var c = gate[n];
+        return (c && typeof c === "object" && !Array.isArray(c)) ? Object.assign({ name: n }, c) : { name: n, run: c };
       });
     }
     (gate || []).forEach(function (c) {
@@ -1098,7 +1098,7 @@
       if (c.timeout_s && Number(c.timeout_s) !== CHECK_TIMEOUT) row.timeout = String(c.timeout_s);
       s.checks.push(row);
     });
-    if (!gateOk) { s.checks = []; keep("gate", "a failure pattern (`fail_re`), or the `{build, test}` form, whose build step has no list form"); }
+    if (!gateOk) { s.checks = []; keep("gate", "a failure pattern (`fail_re`)"); }
 
     // stages: a catalog tool, an evaluator, or a command of one's own
     var stagesOk = true;

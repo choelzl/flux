@@ -109,7 +109,7 @@ def test_the_asks_skills_go_to_the_author_and_into_the_problem(tmp_path):
     doc = {"statement": "digits",
            "language": "text",
            "budget": {"steps": 1, "prototype": False},
-           "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": '(\\d+) failing'}}}
+           "flow": {"test": "{python} {home}/check.py {artifact}"}}
     reply = f"FILE problem.yaml\n```\n{yaml.safe_dump(doc)}```\nFILE check.py\n```\n{check}```\nWHY: ok\n"
     author = ScriptedProposer([reply])
     got = drive(Ask(prompt="digits", workdir=work, passes=1, skills=skills), proposer=author,
@@ -132,8 +132,7 @@ def test_flux_task_run_hands_the_skill_to_the_model(tmp_path, capsys):
                                                                  "budget": {"steps": 1,
                                                                             "repair_attempts": 1,
                                                                             "prototype": False},
-                                                                 "flow": {"test": {"test": "{python} {home}/check.py {artifact}",
-                                                                                   "count_re": '(\\d+) failing'}}}))
+                                                                 "flow": {"test": "{python} {home}/check.py {artifact}"}}))
     seen: list[str] = []
     import flux_llm
 

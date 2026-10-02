@@ -93,7 +93,7 @@ def test_a_design_admitted_under_todays_judge_is_not_judged_again(tmp_path):
         "import sys\ngot = open(sys.argv[1]).read().split()\nprint(f'{int(got != [str(i) for i in range(10)])} failing')\n")
     doc = {"id": "j", "statement": "the ten digits, one per line", "language": "text",
            "budget": {"steps": 1, "prototype": False},
-           "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": r"(\d+) failing"}}}
+           "flow": {"test": "{python} {home}/check.py {artifact}"}}
     db = str(tmp_path / "j.db")
     good = json.dumps({"artifact": "\n".join(str(i) for i in range(10)) + "\n", "why": "as asked"})
 

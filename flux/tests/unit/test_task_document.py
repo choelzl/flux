@@ -45,9 +45,9 @@ def test_the_example_task_loads_and_round_trips():
 @pytest.mark.parametrize("doc, message", [
     ({}, "`id`"),
     ({"id": "t"}, "`statement`"),
-    ({"id": "t", "statement": "x"}, "`gate` needs"),
-    ({"id": "t", "statement": "x", "flow": {"test": {"test": 42}}}, "gate.test must be"),
-    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"], "count_re": "("}}}, "not a regex"),
+    ({"id": "t", "statement": "x"}, "`flow.test` is a command"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": 42}}}, "flow.test.test: a command"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": {"run": ["a"], "count_re": "("}}}}, "not a regex"),
     ({"id": "t", "statement": "x", "parts": ["p", "p"], "flow": {"test": {"test": ["a"]}}}, "unique"),
     ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": None}}}, "exactly one of"),
     ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": ["m"]}}},
@@ -126,8 +126,7 @@ def test_parts_are_generated_one_at_a_time_and_composed_in_order(tmp_path):
                                "parts": [{"name": "head", "statement": "0 to 4"}, {"name": "tail", "statement": "5 to 9"}],
                                "joiner": '\n',
                                "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
-                               "flow": {"test": {"test": ["{python}", "-c", script, "{artifact}", "{part}"],
-                                                 "count_re": '(\\d+) failing'}}})
+                               "flow": {"test": ["{python}", "-c", script, "{artifact}", "{part}"]}})
     problem = PromptProblem(task)
     assert problem.subgoals() == ["head", "tail"]
     # the default planner asks the model which part is next; a scripted planner answer first
@@ -202,7 +201,7 @@ def test_flux_task_check_rejects_a_bad_document(tmp_path, capsys):
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"statement": "x"}))
     assert main(["task", "check", str(bad)]) == 2
-    assert "bad.json: `gate` needs" in capsys.readouterr().out
+    assert "bad.json: `flow.test` is a command" in capsys.readouterr().out
 
 
 # ---- propose: decompose (D431)
@@ -219,8 +218,7 @@ def _decomposed_task(**extra):
                                "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
                                **extra,
                                "flow": {**extra.get("flow", {}),
-                                        "test": {"test": ["{python}", "-c", script, "{artifact}", "{part}"],
-                                                 "count_re": '(\\d+) failing'}}})
+                                        "test": ["{python}", "-c", script, "{artifact}", "{part}"]}})
 
 
 def test_a_task_may_ask_the_orchestrator_to_decompose_it(tmp_path):
@@ -628,8 +626,7 @@ def test_a_command_is_a_string_or_a_list_and_a_flux_head_runs_this_flux():
 
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
-                               "flow": {"test": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
-                                                 "count_re": '(\\d+) failing'},
+                               "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
                                         "measure": {"s": {"command": "flux rtl measure {artifact} --stage synth",
                                                           "metrics": ["fmax_mhz", "area_um2"]},
                                                     "r": {"command": ["{python}", "-c", "print('k=1')"],
@@ -658,8 +655,7 @@ def test_a_space_and_a_generator_command_are_a_dse_with_no_world(tmp_path):
                                "budget": {"steps": 1, "prototype": False, "batch": 100},
                                "flow": {"dse": {"policy": "sweep", "space": {"width": [4, 1, 2], "fill": ["a", "b"]}},
                                         "generate": {"command": "{python} " + str(gen) + " {artifact} {width} {fill}"},
-                                        "test": {"test": ["{python}", "-c", "import sys; bad = sys.argv[1] == 'b'; print(f'{int(bad)} failing')", "{fill}"],
-                                                 "count_re": '(\\d+) failing'},
+                                        "test": ["{python}", "-c", "import sys; bad = sys.argv[1] == 'b'; print(f'{int(bad)} failing')", "{fill}"],
                                         "measure": {"screen": {"metrics": ["size"],
                                                                "command": ["{python}", "-c", "import sys; print('size=' + str(len(open(sys.argv[1]).read())))", "{artifact}"]}},
                                         "select": {"finalists": 0}}})
@@ -741,8 +737,7 @@ def test_a_test_that_exits_3_is_a_build_failure_run_once(tmp_path):
     runs = tmp_path / "runs"
     doc = {"id": "d",
            "statement": "the digits",
-           "flow": {"test": {"test": ["{python}", "{home}/check.py", "{artifact}", str(runs)],
-                             "count_re": '(\\d+) failing'}}}
+           "flow": {"test": ["{python}", "{home}/check.py", "{artifact}", str(runs)]}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
     state = LoopState(request=LoopRequest(batch=WHOLE, db=""), say=lambda _m: None, proposer=None, feedback=None, workdir=str(tmp_path))
     broken = Candidate("b", "SYNTAX here")

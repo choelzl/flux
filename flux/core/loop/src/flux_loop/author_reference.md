@@ -28,13 +28,13 @@ Say only what is yours; the rest is inferred.
   measured design's gain over 1.0 (the smallest design that stays near the fastest).
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
-    prints `N failing` or exits non-zero. Several checks, cheapest first, as a list:
-    `test: [{name: lint, run: "flux rtl lint {artifact}"}, {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 120}]`.
-    They run in order; the first that reports failures refuses the design ("failed at lint: ...")
-    and the rest do not run. Exit 3 from any check means the design did not build. Each check may
-    say `count_re` (one integer group) or `fail_re` (one match per failure) for a checker that
-    prints something else, and `timeout_s`. `{build, test}` is the two checks `build` (any
-    non-zero exit: did not build) and `test`. Never an agent: it establishes the facts.
+    prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
+    `measure`: `test: {lint: "flux rtl lint {artifact}", golden: {run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    They run in the order written; the first that reports failures refuses the design ("failed at
+    lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
+    check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
+    group) or `fail_re` (one match per failure) for a checker that prints something else. A check
+    named `build` refuses on any non-zero exit (did not build). Never an agent: it establishes the facts.
   - `measure`: the costed measurements, cheapest first, a map from each stage's name to its
     command (`screen: flux rtl measure {artifact} --stage synth --clock-ps 1000`) or its
     settings. A `flux rtl measure` stage needs nothing more: its metrics and tools are known, and

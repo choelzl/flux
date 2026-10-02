@@ -14,8 +14,7 @@
         "-c",
         "import sys\nwant = [str(i) for i in range(10)]\ngot = open(sys.argv[1]).read().split('\\n')\ngot = [g for g in got if g != ''] if got and got[-1] == '' else got\nbad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 10), 10)) + list(range(10, len(got)))\nfor i in bad:\n    print(f'FAIL line {i + 1}: expected {want[i] if i < 10 else \"nothing\"}, got {got[i] if i < len(got) else \"nothing\"!r}')\nprint(f'{len(bad)} failing of 10')\nsys.exit(1 if bad else 0)",
         "{artifact}"
-      ],
-      "count_re": "(\\d+) failing"
+      ]
     }
   }
 }

@@ -220,7 +220,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   one, drop files or folders, delete one. A file the document names as `{home}/…` that the loop
   does not have is said to be missing, and a click writes it. **Configure**, on an application, reads its document back
   into the same form and saves it. What the form cannot say (a `world:`, its own stages or
-  settings, `params`, a `{build, test}` gate, a failure pattern, objectives with a stage or tie
+  settings, `params`, a failure pattern, objectives with a stage or tie
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,

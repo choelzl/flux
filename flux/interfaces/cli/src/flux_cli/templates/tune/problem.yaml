@@ -12,8 +12,7 @@ flow:
       block: [16, 32, 64, 128, 256]
       order: [ijk, ikj, jki]
   test:
-    test: "{python} {home}/check.py {block} {order}"
-    timeout_s: 60
+    test: {run: "{python} {home}/check.py {block} {order}", timeout_s: 60}
   measure:
     bench:
       command: "{python} {home}/bench.py {block} {order}"

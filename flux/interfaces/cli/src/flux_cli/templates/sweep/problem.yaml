@@ -15,8 +15,7 @@ flow:
       wheel: [0, 1]                         # skip even trial factors (list_sieve only; the others ignore it)
   generate: {command: "{python} {home}/render.py {artifact} {algorithm} {wheel}"}
   test:
-    test: "{python} {home}/check.py {artifact}"
-    timeout_s: 60
+    test: {run: "{python} {home}/check.py {artifact}", timeout_s: 60}
   measure:
     bench:
       command: "{python} {home}/bench.py {artifact}"

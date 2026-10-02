@@ -595,10 +595,11 @@ def _knob_subs(knobs: dict[str, Any]) -> dict[str, str]:
 DEFAULT_COUNT_RE = r"(\d+) failing"
 
 
-_GATE_HELP = ("`gate` needs a command (a string or a list of argv tokens), `{build, test}`, or a list of "
-              "named checks `[{name, run, count_re?, fail_re?, timeout_s?}, ...]`; `{artifact}`, "
-              "`{workdir}`, `{name}`, `{part}`, `{python}`, `{home}` are substituted; a `flux ...` "
-              "head runs this flux")
+_GATE_HELP = ("`flow.test` is a command (one check, `test`), or a map from each check's name to its command "
+              "or `{run, count_re?, fail_re?, timeout_s?}`, run in order -- a check named `build` refuses on any "
+              "non-zero exit; `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}`, `{home}` are substituted; "
+              "a `flux ...` head runs this flux")
+_CHECK_KEYS = ("run", "count_re", "fail_re", "timeout_s")
 
 
 def _patterns(doc: dict[str, Any], what: str) -> tuple[str | None, str | None]:
@@ -613,49 +614,48 @@ def _patterns(doc: dict[str, Any], what: str) -> tuple[str | None, str | None]:
 
 
 def _gate(doc: Any) -> Gate:
-    """A gate's checks (D652). The list is the general form; `gate: <command>` is one check
-    named `test`, `{build, test}` the checks `build` (any non-zero exit: did not build) and `test`."""
-    if isinstance(doc, list) and doc and all(isinstance(c, dict) for c in doc):
-        checks = []
-        for i, c in enumerate(doc):
-            name = c.get("name")
-            if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
-                raise TaskError(f"gate[{i}] needs a `name` (letters, digits, _ and -)")
-            bad = sorted(set(c) - {"name", "run", "count_re", "fail_re", "timeout_s"})
-            if bad:
-                raise TaskError(f"gate[{i}] ({name}): keys {bad} are not a check's; known: count_re, fail_re, name, run, timeout_s")
-            if not c.get("run"):
-                raise TaskError(f"gate[{i}] ({name}) needs `run`: its command")
-            count_re, fail_re = _patterns(c, f"gate[{i}]")
-            checks.append(Check(name, _command(c["run"], f"gate[{i}].run"), count_re, fail_re,
-                                float(c.get("timeout_s") or 120.0)))
-        if len({c.name for c in checks}) != len(checks):
-            raise TaskError("gate check names must be unique")
-        return Gate(checks)
+    """`flow.test` (D652, D789): a map by name like `flow.measure`, the checks in the order
+    written -- each a command or `{run, count_re, fail_re, timeout_s}`. A command alone is one
+    check named `test`; a check named `build` refuses on any non-zero exit (did not build)."""
     if isinstance(doc, (str, list)):
-        doc = {"test": doc}                             # `gate: <command>` is its test (D628)
-    if not isinstance(doc, dict) or not (doc.get("build") or doc.get("test")):
+        doc = {"test": doc}
+    if not isinstance(doc, dict) or not doc:
         raise TaskError(_GATE_HELP)
-    build, test = _command(doc.get("build"), "gate.build"), _command(doc.get("test"), "gate.test")
-    count_re, fail_re = _patterns(doc, "gate")
-    timeout = float(doc.get("timeout_s") or 120.0)
-    return Gate(([Check("build", build, timeout_s=timeout, builds=True)] if build else [])
-                + ([Check("test", test, count_re, fail_re, timeout)] if test else []))
+    loose = sorted(k for k in doc if k in _CHECK_KEYS)
+    if loose:
+        raise TaskError(f"flow.test: {', '.join(loose)} is a check's setting, said under its name "
+                        f"(test: {{run: ..., {loose[0]}: ...}}); flow.test is a map of checks by name")
+    checks = []
+    for name, c in doc.items():
+        name, where = str(name), f"flow.test.{name}"
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+            raise TaskError(f"{where}: a check's name is letters, digits, _ and -")
+        if isinstance(c, (str, list)):
+            c = {"run": c}
+        if not isinstance(c, dict):
+            raise TaskError(f"{where}: a command, or {{run, count_re, fail_re, timeout_s}}")
+        if "name" in c:
+            raise TaskError(f"{where}: a check's name is its key")
+        bad = sorted(set(c) - set(_CHECK_KEYS))
+        if bad:
+            raise TaskError(f"{where}: keys {bad} are not a check's; known: {', '.join(_CHECK_KEYS)}")
+        if not c.get("run"):
+            raise TaskError(f"{where} needs `run`: its command")
+        count_re, fail_re = _patterns(c, where) if name != "build" or c.get("count_re") or c.get("fail_re") else (None, None)
+        checks.append(Check(name, _command(c["run"], f"{where}.run"), count_re, fail_re,
+                            float(c.get("timeout_s") or 120.0), builds=name == "build"))
+    return Gate(checks)
 
 
 def _gate_doc(gate: Gate) -> Any:
-    """The gate as a document says it: the old `{build, test}` form when it is that, else the list."""
-    names = [c.name for c in gate]
-    if names in (["build"], ["test"], ["build", "test"]) and all(c.builds == (c.name == "build") for c in gate):
-        out: dict[str, Any] = {c.name: list(c.run) for c in gate}
-        test = gate.named("test")
-        if test is not None:
-            out.update({k: v for k, v in (("count_re", test.count_re), ("fail_re", test.fail_re)) if v is not None})
-        out["timeout_s"] = gate.timeout_s
-        return out
-    return [{"name": c.name, "run": list(c.run),
-             **({"count_re": c.count_re} if c.count_re and c.count_re != DEFAULT_COUNT_RE else {}),
-             **({"fail_re": c.fail_re} if c.fail_re else {}), "timeout_s": c.timeout_s} for c in gate]
+    """The gate as a document says it (D789): a map by name; a bare command when it is all."""
+    out: dict[str, Any] = {}
+    for c in gate:
+        settings = {**({"count_re": c.count_re} if c.count_re and c.count_re != DEFAULT_COUNT_RE else {}),
+                    **({"fail_re": c.fail_re} if c.fail_re else {}),
+                    **({"timeout_s": c.timeout_s} if c.timeout_s != 120.0 else {})}
+        out[c.name] = {"run": list(c.run), **settings} if settings else list(c.run)
+    return out
 
 
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is

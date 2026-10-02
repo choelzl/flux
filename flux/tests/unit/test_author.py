@@ -24,7 +24,7 @@ print(f"{bad} failing")
 DOC = {"statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
        "language": "text",
        "budget": {"steps": 1, "repair_attempts": 2, "prototype": False},
-       "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": '(\\d+) failing'}}}
+       "flow": {"test": "{python} {home}/check.py {artifact}"}}
 
 
 def _reply(files: dict, done: bool = False, why: str = "") -> str:
@@ -178,8 +178,7 @@ def test_a_golden_model_that_cannot_run_is_refused_before_the_loop(tmp_path):
     doc = {"statement": "negate",
            "language": "verilog",
            "budget": {"steps": 1, "prototype": False},
-           "flow": {"test": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
-                             "count_re": '(\\d+) failing'}}}
+           "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py"}}
     (work / "problem.yaml").write_text(yaml.safe_dump(doc))
     (work / "golden.py").write_text("PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8}, {'name': 'y', 'dir': 'out', 'bits': 8}]\n"
                                     "def golden(a):\n    return -a\n")

@@ -17,8 +17,8 @@ or `flow`. A changed ask opens its own record.
 
 ## 2. The gate and the stages: any command (stable)
 
-A gate and a stage are commands, so any language and any tool will do. A gate may be a list of
-named checks run in order (`[{name, run}, ...]`, D652); the first that fails refuses the design.
+A gate and a stage are commands, so any language and any tool will do. A gate may be several
+named checks run in order (`test: {lint: ..., golden: ...}`, D652, D789); the first that fails refuses the design.
 
 | command | prints | exit |
 |---|---|---|

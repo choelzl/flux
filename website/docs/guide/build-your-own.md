@@ -82,7 +82,7 @@ writes an HTML page of the whole search.
 | `language` | `systemverilog`, `verilog`, `python`, `c`, `cpp`, `text`, ...: the file type |
 | `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; each `goal` is a limit (at least / at most), the goal-less ones decide in order, `balance: true` ones as their knee; `{keep: 0.9, above: 1.0}` is a limit relative to the best |
 | `flow` | each box of [the loop](loop-shape.md): who fills it, and its own settings (below) |
-| `flow.test` | a command that prints `N failing` or exits non-zero; or a list of named checks, run in order |
+| `flow.test` | a command that prints `N failing` or exits non-zero; or a map of named checks, run in order |
 | `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
 | `flow.dse` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
 | `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers; `agent: opencode` digests them; `off` |
@@ -97,9 +97,9 @@ fails refuses the design, and the repair is told where it failed:
 
 ```yaml
 flow:
-  test:
-    - {name: lint, run: "flux rtl lint {artifact}"}
-    - {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py"}
+  test:                    # by name, run in the order written
+    lint: flux rtl lint {artifact}
+    golden: {run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 300}
 ```
 
 A stage's `cutoff` is its gate: `cutoff: {metric: fmax_mhz, at: 1000}` sends on only the designs

@@ -11,8 +11,7 @@ language: python
 
 flow:
   test:
-    test: "{python} {home}/check.py {artifact}"
-    timeout_s: 60
+    test: {run: "{python} {home}/check.py {artifact}", timeout_s: 60}
   measure:                                 # bench.py prints time_ms=<n>
     bench:
       command: "{python} {home}/bench.py {artifact}"

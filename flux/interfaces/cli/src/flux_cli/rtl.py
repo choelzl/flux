@@ -1,12 +1,13 @@
 """`flux rtl lint|test|proto|measure` (D579, D582, D653): the RTL tools as commands a document can name,
 so an RTL problem needs only a document and a Python golden model, no world package.
 
-    gate:
-      - {name: lint,   run: flux rtl lint {artifact}}
-      - {name: golden, run: flux rtl test {artifact} --golden {home}/golden.py}
-    stages:
-      - {name: screen,  command: flux rtl measure {artifact} --stage synth --clock-ps 1000}
-      - {name: confirm, command: flux rtl measure {artifact} --stage place --clock-ps 1000}
+    flow:
+      test:
+        lint: flux rtl lint {artifact}
+        golden: flux rtl test {artifact} --golden {home}/golden.py
+      measure:
+        screen: flux rtl measure {artifact} --stage synth --clock-ps 1000
+        confirm: flux rtl measure {artifact} --stage place --clock-ps 1000
 
 The golden model (`golden.py`) declares `PORTS` -- `[{name, dir, bits}, ...]`, ints, signed
 unless `unsigned: true` -- and `golden(**inputs) -> {output: value}`; optionally `VECTORS`,

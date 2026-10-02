@@ -149,7 +149,7 @@ def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeyp
 def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    doc = b"statement: make x\nlanguage: python\nflow:\n  test:\n    - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
+    doc = b"statement: make x\nlanguage: python\nflow:\n  test:\n    test: '{python} {home}/check.py {artifact}'\n" \
           b"  measure:\n    bench: {command: '{python} {home}/bench.py {artifact}', metrics: [time_ms]}\n" \
           b"objectives:\n  - {metric: time_ms, direction: minimize}\nparams: {n: 5}\n"
     files = [("files", ("x.problem.yaml", doc)), ("files", ("check.py", b"print('0 failing')\n")), ("files", ("bench.py", b"print('time_ms=1')\n"))]
