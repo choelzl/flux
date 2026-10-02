@@ -9,7 +9,7 @@ that answers it -- LocalAI, llama.cpp, Ollama's `/v1`, OpenRouter.
 
 Where the request goes: only `FLUX_LLM_REMOTE` sends anything off this machine. Set, requests
 go to `FLUX_REMOTE_BASE_URL` (OpenRouter by default) with `OPENROUTER_API_KEY` /
-`FLUX_REMOTE_API_KEY`, and the first prompt that leaves is announced; unset, to the local
+`FLUX_REMOTE_API_KEY`; unset, to the local
 Ollama's `/v1` (`OLLAMA_BASE_URL`). The hosted default without a key is refused at
 construction, never downgraded. The context window is the server's setting, not a request
 field; `reply.usage["input_tokens"]` shows what a prompt cost against it.
@@ -29,7 +29,7 @@ from .proposer import Reply
 from .text import default_local_model, local_llm_timeout_s
 from .tools import ToolBudget
 
-__all__ = ["DEFAULT_NUM_PREDICT", "OpenAIChatProposer", "announce_remote", "default_model",
+__all__ = ["DEFAULT_NUM_PREDICT", "OpenAIChatProposer", "default_model",
            "local_base_url", "remote_api_key", "remote_base_url", "remote_enabled", "remote_model",
            "set_think_override", "think_override"]
 
@@ -39,7 +39,6 @@ DEFAULT_NUM_PREDICT = 1200
 
 _REMOTE_BASE = "https://openrouter.ai/api/v1"
 _REMOTE_MODEL = "deepseek/deepseek-chat-v3-0324:free"
-_ANNOUNCED = False
 
 # Runtime override for `think`, set from the TUI's t key: None defers to each proposer's
 # setting; True/False wins for every future call.
@@ -145,20 +144,6 @@ def default_model() -> str:
     return remote_model() if remote_enabled() else default_local_model()
 
 
-def announce_remote(base: str, model: str, announce=print) -> None:
-    """Announce once per process, on the first prompt that actually goes out (not at
-    construction, which sends nothing)."""
-    global _ANNOUNCED
-    if _ANNOUNCED:
-        return
-    _ANNOUNCED = True
-    announce(f"\n!! SENDING PROMPTS OFF THIS MACHINE to {base} ({model}).\n"
-             "   The prompt carries this study's problem and its measured results.\n"
-             "   Unset FLUX_LLM_REMOTE to keep everything local.\n")
-
-
-
-
 class OpenAIChatProposer:
     """`propose(prompt, *, schema, tools, budget) -> Reply` against `<base>/chat/completions`.
 
@@ -171,8 +156,7 @@ class OpenAIChatProposer:
 
     def __init__(self, model: str | None = None, *, num_predict: int | None = DEFAULT_NUM_PREDICT,
                  timeout_s: float | None = None, think: bool = False,
-                 base_url: str | None = None, api_key: str | None = None,
-                 announce=print) -> None:
+                 base_url: str | None = None, api_key: str | None = None) -> None:
         self.hosted = remote_enabled() or base_url is not None
         self.model = model or (remote_model() if self.hosted else default_local_model())
         self.num_predict = num_predict
@@ -187,7 +171,6 @@ class OpenAIChatProposer:
             raise RuntimeError("no OPENROUTER_API_KEY / FLUX_REMOTE_API_KEY(_FILE) in the environment: the default "
                                "hosted server needs one (or name your own with FLUX_REMOTE_BASE_URL)")
         self._key = key
-        self._announce = announce
         self._context: int | None | bool = False      # False = not asked yet
         # the reply streams so the thinking shows live (via flux_profile.progress);
         # FLUX_LLM_STREAM=0 asks for one message
@@ -574,8 +557,6 @@ class OpenAIChatProposer:
         from flux_profile import phase
 
         prompt = messages[0].get("content", "") if messages else ""
-        if self.hosted:
-            announce_remote(self.base_url, self.model, self._announce)
         return phase(title, why=f"~{len(prompt) // 4} tok prompt", model=self.model,
                      num_predict=self._cap(prompt), think=think, prompt=prompt,
                      **{k: v for k, v in extra.items() if v})

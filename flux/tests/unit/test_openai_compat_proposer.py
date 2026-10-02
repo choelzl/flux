@@ -55,15 +55,12 @@ def _ok(content: str = "", reasoning: str | None = None, finish: str = "stop") -
 
 @pytest.fixture
 def hosted(monkeypatch):
-    import flux_llm.openai_compat as remote
-
     monkeypatch.setenv("FLUX_LLM_REMOTE", "1")
     monkeypatch.setenv("FLUX_REMOTE_API_KEY", "k-test")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("FLUX_REMOTE_BASE_URL", "https://localai.example")
     monkeypatch.setenv("FLUX_REMOTE_MODEL", "qwen-apex")
     monkeypatch.setenv("FLUX_LLM_STREAM", "0")        # these tests fake ONE message; streaming has its own
-    monkeypatch.setattr(remote, "_ANNOUNCED", True)  # the announcement has its own test
     from flux_llm import set_think_override
 
     set_think_override(None)
@@ -276,21 +273,6 @@ def test_the_base_url_always_names_the_v1_root(monkeypatch, given, expected):
 
     monkeypatch.setenv("FLUX_REMOTE_BASE_URL", given)
     assert remote_base_url() == expected
-
-
-def test_going_hosted_is_announced_once_on_the_first_prompt(monkeypatch, hosted):
-    import flux_llm.openai_compat as remote
-    from flux_llm import OpenAIChatProposer
-
-    monkeypatch.setattr(remote, "_ANNOUNCED", False)
-    _wire(monkeypatch, _ok("x"))
-    said: list[str] = []
-    p = OpenAIChatProposer(announce=said.append)
-    assert not said, "nothing has been sent yet"
-    p.propose("a")
-    p.propose("b")
-    assert len(said) == 1 and "SENDING PROMPTS OFF THIS MACHINE" in said[0]
-    assert "https://localai.example/v1" in said[0] and "qwen-apex" in said[0]
 
 
 def _server(monkeypatch, *, context: int | None, answers: list):
