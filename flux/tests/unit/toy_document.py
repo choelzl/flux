@@ -33,11 +33,25 @@ def landscape(k: dict[str, Any]) -> dict[str, float]:
 
 def toy(**kw: Any) -> dict[str, Any]:
     """The document, with sections replaced by `kw`."""
-    doc = {"id": "toy", "statement": "a table, its ways and a partner", "gate": {"test": ["true"]},
-           "space": dict(SPACE), "seeds": [dict(SEED)],
-           "stages": [{"name": "screen", "command": STAGE, "metrics": ["speedup", "bytes"]}],
+    doc = {"id": "toy",
+           "statement": "a table, its ways and a partner",
            "objectives": [{"metric": "speedup", "direction": "maximize"}, {"metric": "bytes", "direction": "minimize"}],
-           "budget": {"steps": 40, "finalists": 0, "prototype": False}}
+           "budget": {"steps": 40, "prototype": False},
+           "flow": {"test": {"test": ["true"]},
+                    "measure": {"screen": {"command": STAGE, "metrics": ["speedup", "bytes"]}},
+                    "dse": {"space": dict(SPACE), "seeds": [dict(SEED)]},
+                    "select": {"finalists": 0}}}
+    # D775: a box's choice beside the document's own settings; the search's policy, space and
+    # seeds are one `flow.dse`
+    flow, dse = dict(kw.pop("flow", {})), dict(doc["flow"]["dse"])
+    for key in ("space", "seeds"):
+        if key in kw:
+            dse[key] = kw.pop(key)
+    if "dse" in flow:
+        dse["policy"] = flow.pop("dse")
+    if "stages" in kw:
+        flow["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in kw.pop("stages")}
+    doc["flow"] = {**doc["flow"], **flow, "dse": dse}
     doc.update(kw)
     return doc
 

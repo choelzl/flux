@@ -10,14 +10,14 @@ contract: >-
   answers. It returns the exact count for every n >= 0.
 language: python
 
-gate:
-  test: "{python} {home}/check.py {artifact}"
-  timeout_s: 60
-
-stages:                                 # bench.py prints time_ms=<n>
-  - name: bench
-    command: "{python} {home}/bench.py {artifact}"
-    metrics: [time_ms]
+flow:
+  test:
+    test: "{python} {home}/check.py {artifact}"
+    timeout_s: 60
+  measure:                                 # bench.py prints time_ms=<n>
+    bench:
+      command: "{python} {home}/bench.py {artifact}"
+      metrics: [time_ms]
 
 objectives:
   - {metric: time_ms, direction: minimize}

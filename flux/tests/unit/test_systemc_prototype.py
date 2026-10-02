@@ -28,9 +28,12 @@ SC_MODULE(add4) {
 
 def _prototype(tmp_path):
     (tmp_path / "golden.py").write_text(GOLDEN)
-    doc = {"id": "add4", "statement": "An unsigned 4-bit adder: module `add4`, inputs `a`, `b`, output `s`.",
-           "language": "systemverilog", "gate": "flux rtl test {artifact} --golden {home}/golden.py",
-           "objectives": [{"metric": "area_um2", "direction": "minimize"}], "budget": {"prototype": "systemc"}}
+    doc = {"id": "add4",
+           "statement": "An unsigned 4-bit adder: module `add4`, inputs `a`, `b`, output `s`.",
+           "language": "systemverilog",
+           "objectives": [{"metric": "area_um2", "direction": "minimize"}],
+           "budget": {"prototype": "systemc"},
+           "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py"}}
     return PromptProblem(TaskSpec.from_dict(doc, base=tmp_path)).prototype()
 
 

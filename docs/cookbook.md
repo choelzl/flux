@@ -19,12 +19,14 @@ points in [extending.md](extending.md).
 ## Tuning: knobs into your own commands
 
 ```yaml
-space:
-  block: [16, 32, 64, 128, 256]
-  threads: [1, 2, 4, 8]
-gate: "{python} {home}/check.py {block} {threads}"
-stages:
-  - {name: bench, command: "./run.sh --block {block} --threads {threads}", metrics: [time_ms]}
+flow:
+  dse:
+    space:
+      block: [16, 32, 64, 128, 256]
+      threads: [1, 2, 4, 8]
+  test: "{python} {home}/check.py {block} {threads}"
+  measure:
+    bench: {command: "./run.sh --block {block} --threads {threads}", metrics: [time_ms]}
 objectives: [{metric: time_ms, direction: minimize}]
 budget: {workers: 1}
 ```
@@ -74,7 +76,7 @@ A policy of your own is a class in a file beside the document: `dse: my_search:M
 
 ## When a model writes the designs
 
-- **The model gets it wrong a lot.** Give it `knowledge: {files: [...]}` (a spec, reference
+- **The model gets it wrong a lot.** Give it `flow.knowledge: {files: [...]}` (a spec, reference
   code, a paper) and `skills:`. Read `flux log <record>` to see what it was told and what it
   said.
 - **Numeric hardware** (floating point, transcendentals, fixed point): `budget.prototype: true`

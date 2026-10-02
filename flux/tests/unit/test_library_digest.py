@@ -73,7 +73,10 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
 
     monkeypatch.setattr(dg, "library_documents", lambda index=None, standard_id="library": [("mentor/knowledge/library/PACE.pdf", "the paper's text")])
     db = str(tmp_path / "d.db")
-    doc = {"id": "t", "statement": "x", "parts": ["a", "b"], "gate": {"test": ["true"]}, "flow": {"knowledge": ["digest"], "extract": "mined"}}
+    doc = {"id": "t",
+           "statement": "x",
+           "parts": ["a", "b"],
+           "flow": {"knowledge": {"digest": True}, "extract": "mined", "test": {"test": ["true"]}}}
     task = TaskSpec.from_dict(doc)
     assert task.roles["knowledge"] == {"sources": {"names": ["mined", "digest"]}}
     prob = PromptProblem(task)
@@ -84,7 +87,7 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     assert "KEY POINTS FROM THE LIBRARY" in prefix and "PACE.pdf: a method" in prefix
     prompt, _schema = prob.plan_prompt(["a", "b"], state, None)
     assert "THE LIBRARY, one line per paper" in prompt and "[PACE.pdf] PACE.pdf: a method" in prompt
-    plain = PromptProblem(TaskSpec.from_dict({**doc, "flow": {}}))
+    plain = PromptProblem(TaskSpec.from_dict({**doc, "flow": {k: v for k, v in doc["flow"].items() if k != "knowledge"}}))
     assert plain.library_index(state) == []
 
 

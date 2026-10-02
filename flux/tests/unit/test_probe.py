@@ -18,8 +18,10 @@ GOOD = "\n".join(str(i) for i in range(10)) + "\n"
 
 
 def _task(tmp_path, **extra):
-    doc = {**json.loads(DIGITS.read_text()), **extra}
-    return TaskSpec.from_dict(doc, base=tmp_path)
+    doc = json.loads(DIGITS.read_text())
+    if "stages" in extra:                       # D775: the stages are flow.measure, by name
+        doc["flow"]["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in extra.pop("stages")}
+    return TaskSpec.from_dict({**doc, **extra}, base=tmp_path)
 
 
 def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
@@ -121,7 +123,7 @@ def test_a_loop_turn_hands_the_agent_its_probe_and_records_what_it_probed(tmp_pa
     fake = tmp_path / "agent.py"
     fake.write_text(PROBING_AGENT)
     doc = json.loads(DIGITS.read_text())
-    doc["flow"] = {"generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}}
+    doc["flow"] = {**doc.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}}
     doc["budget"] = {"steps": 1, "repair_attempts": 1, "prototype": False}
     task = TaskSpec.from_dict(doc, base=tmp_path)
     said = []

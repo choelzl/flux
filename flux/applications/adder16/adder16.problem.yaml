@@ -7,21 +7,18 @@ statement: >-
   smallest that makes 3000 MHz placed on ASAP7, chosen from the architectures gen.py spells.
 language: verilog
 
-space:
-  arch: [behavioral, ripple, carry_select, kogge_stone]
-  block: [2, 4, 8]             # the carry-select block size; the others ignore it
-
 flow:
-  dse: sweep
+  dse:
+    policy: sweep
+    space:
+      arch: [behavioral, ripple, carry_select, kogge_stone]
+      block: [2, 4, 8]             # the carry-select block size; the others ignore it
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-
-gate: flux rtl test {artifact} --golden {home}/golden.py
-
-stages:
-  - name: screen
-    command: flux rtl measure {artifact} --stage synth --clock-ps 300
-  - name: confirm
-    command: flux rtl measure {artifact} --stage place --clock-ps 300
+  test: flux rtl test {artifact} --golden {home}/golden.py
+  measure:
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 300
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 300
+  select: {finalists: 2}
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 3000}
@@ -29,5 +26,4 @@ objectives:
 
 budget:
   steps: 1
-  finalists: 2
   prototype: false

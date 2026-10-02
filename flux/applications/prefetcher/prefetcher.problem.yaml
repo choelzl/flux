@@ -15,18 +15,21 @@ contract: >-
   plus any partners. Only the knobs and values knobs.md allows; a knob left out takes its shipped
   value.
 
-knowledge:
-  files: [knobs.md, bingo_default.ini]
-
-# flow: {generate: {agent: opencode}}     # a coding agent writes the file, not the model
-
-gate: "{python} {home}/bingo.py check {artifact}"   # bingo.cc aborts on an illegal configuration
-
-stages:                     # 10M+15M instructions, then 100M+150M for the finalists
-  - {name: screen, command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000",
-     metrics: [geomean_speedup, storage_bytes], needs: [pythia]}
-  - {name: confirm, command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 100000000 --sim 150000000",
-     metrics: [geomean_speedup, storage_bytes], needs: [pythia]}
+flow:
+  knowledge:
+    files: [knobs.md, bingo_default.ini]
+  # generate: {agent: opencode}     # a coding agent writes the file, not the model
+  test: "{python} {home}/bingo.py check {artifact}"   # bingo.cc aborts on an illegal configuration
+  measure:                     # 10M+15M instructions, then 100M+150M for the finalists
+    screen:
+      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000"
+      metrics: [geomean_speedup, storage_bytes]
+      needs: [pythia]
+    confirm:
+      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 100000000 --sim 150000000"
+      metrics: [geomean_speedup, storage_bytes]
+      needs: [pythia]
+  select: {finalists: 4}
 
 objectives:
   - {metric: geomean_speedup, direction: maximize, keep: 0.9, above: 1.0}
@@ -34,4 +37,3 @@ objectives:
 
 budget:
   repair_attempts: 3        # an illegal file gets the check's reason
-  finalists: 4

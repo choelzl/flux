@@ -142,12 +142,13 @@ def test_a_task_document_can_declare_the_cutoff():
     """The cutoff rule can be declared without code (D454)."""
     from flux_loop import TaskError, TaskSpec
 
-    spec = TaskSpec.from_dict({
-        "id": "t", "statement": "s", "gate": {"test": ["true"]}, 
-        "stages": [{"name": "screen", "command": ["true"], "metrics_re": {"fmax": r"f=(\d+)"},
-                   "cutoff": {"metric": "fmax", "at": 400}},
-                  {"name": "place", "command": ["true"], "metrics_re": {"fmax": r"f=(\d+)"}}],
-    })
+    spec = TaskSpec.from_dict({"id": "t",
+                               "statement": "s",
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["true"],
+                                                               "metrics_re": {"fmax": 'f=(\\d+)'},
+                                                               "cutoff": {"metric": "fmax", "at": 400}},
+                                                    "place": {"command": ["true"], "metrics_re": {"fmax": 'f=(\\d+)'}}}}})
     assert spec.stages[0].cutoff == {"metric": "fmax", "at": 400}
     assert TaskSpec.from_dict(spec.to_dict()).stages[0].cutoff == spec.stages[0].cutoff
     for bad, why in (({"metric": "fmax"}, "exactly one"),
@@ -155,22 +156,26 @@ def test_a_task_document_can_declare_the_cutoff():
                      ({"metric": "fmax", "at": 1, "within": 0.5}, "exactly one"),
                      ({"metric": "fmax", "within": 2}, "fraction")):
         with pytest.raises(TaskError, match=why):
-            TaskSpec.from_dict({"id": "t", "statement": "s", "gate": {"test": ["true"]},
-                                "stages": [{"name": "screen", "command": ["true"],
-                                           "metrics_re": {"fmax": r"f=(\d+)"}, "cutoff": bad}]})
+            TaskSpec.from_dict({"id": "t",
+                                "statement": "s",
+                                "flow": {"test": {"test": ["true"]},
+                                         "measure": {"screen": {"command": ["true"],
+                                                                "metrics_re": {"fmax": 'f=(\\d+)'},
+                                                                "cutoff": bad}}}})
 
 
 def test_the_declared_cutoff_is_applied_by_the_document_problem():
     from flux_loop import PromptProblem, TaskSpec
     from flux_loop.types import Scored
 
-    spec = TaskSpec.from_dict({
-        "id": "t", "statement": "s", "gate": {"test": ["true"]}, 
-        "objectives": [{"metric": "area", "direction": "minimize"}],
-        "stages": [{"name": "screen", "command": ["true"], "metrics_re": {"area": r"a=(\d+)"},
-                   "cutoff": {"metric": "area", "within": 0.5}},
-                  {"name": "place", "command": ["true"], "metrics_re": {"area": r"a=(\d+)"}}],
-    })
+    spec = TaskSpec.from_dict({"id": "t",
+                               "statement": "s",
+                               "objectives": [{"metric": "area", "direction": "minimize"}],
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["true"],
+                                                               "metrics_re": {"area": 'a=(\\d+)'},
+                                                               "cutoff": {"metric": "area", "within": 0.5}},
+                                                    "place": {"command": ["true"], "metrics_re": {"area": 'a=(\\d+)'}}}}})
     problem = PromptProblem(spec)
     scored = [Scored(Candidate(name=f"d{a}"), "screen", {"area": float(a)})
               for a in (100, 150, 500)]

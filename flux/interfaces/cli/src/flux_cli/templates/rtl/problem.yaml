@@ -11,16 +11,15 @@ contract: >-
   and `output logic [8:0] s`. s must equal a + b for every input.
 language: systemverilog
 
-gate: flux rtl test {artifact} --golden {home}/golden.py
-
-stages:
-  - name: screen
-    command: flux rtl measure {artifact} --stage synth --clock-ps 500
-  - name: confirm
-    command: flux rtl measure {artifact} --stage place --clock-ps 500
+flow:
+  test: flux rtl test {artifact} --golden {home}/golden.py
+  measure:
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 500
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 500
+  select: {finalists: 2}
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 2000}
   - {metric: area_um2, direction: minimize}
 
-budget: {steps: 3, repair_attempts: 6, prototype: false, finalists: 2}   # prototype: true for a numeric function
+budget: {steps: 3, repair_attempts: 6, prototype: false}  # prototype: true for a numeric function

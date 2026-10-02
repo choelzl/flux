@@ -324,7 +324,7 @@ def test_maximising_fmax_at_a_fixed_clock_warns_unless_the_clock_is_searched(tmp
 
 def test_a_catalog_stage_without_run_writes_its_stage_shape(tmp_path):
     y = BUILT["evaluated"]["yaml"]
-    assert "evaluator: zigzag" in y and "command:" not in y.split("stages:")[1]
+    assert "evaluator: zigzag" in y and "command:" not in y.split("measure:")[1]
     t = _load(tmp_path, BUILT["evaluated"])
     assert t.stages[0].evaluator == "zigzag" and t.stages[0].command is None
     assert set(t.stages[0].metrics) == {"latency_cycles", "energy_pj"}
@@ -371,7 +371,7 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
     assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["extract"] == "none"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: none" in y and "critique: llm" in y and "test:" not in y.split("flow:")[1].split("gate:")[0]
+    assert "knowledge: off" in y and "critique: llm" in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
     p = BUILT["papers_by_agent"]

@@ -185,7 +185,7 @@ def test_a_campaign_is_keyed_by_its_document_name(tmp_path):
     # a document names its campaign (D524): the problem's `campaign_name` is the record's id
     from flux_loop import LoopRequest, PromptProblem, TaskSpec
 
-    prob = PromptProblem(TaskSpec.from_dict({"id": "nlu", "statement": "s", "gate": {"test": ["true"]}}))
+    prob = PromptProblem(TaskSpec.from_dict({"id": "nlu", "statement": "s", "flow": {"test": {"test": ["true"]}}}))
     req = LoopRequest(db=db)
     assert prob.campaign_name(req) == "nlu" and prob.objective(req) == {"study": "nlu"}
     assert prob.open_records(req, lambda _m: None).campaign_id == "nlu"

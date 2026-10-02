@@ -13,13 +13,12 @@ contract: >-
   tasks). p must equal a * w as signed integers for every input.
 language: systemverilog
 
-gate: flux rtl test {artifact} --golden {home}/golden.py
-
-stages:
-  - name: screen
-    command: flux rtl measure {artifact} --stage synth --clock-ps 1000
-  - name: confirm
-    command: flux rtl measure {artifact} --stage place --clock-ps 1000
+flow:
+  test: flux rtl test {artifact} --golden {home}/golden.py
+  measure:
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000
+  select: {finalists: 2}
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 1000}
@@ -29,4 +28,3 @@ budget:
   steps: 4
   repair_attempts: 6
   prototype: false
-  finalists: 2

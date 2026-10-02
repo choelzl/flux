@@ -21,10 +21,9 @@ TOOLS_JSON = FLUX.parent / "website" / "docs" / "assets" / "tools.json"
 
 # ---- the document
 def test_a_gate_list_is_its_checks_in_order():
-    task = TaskSpec.from_dict({"id": "t", "statement": "x", "gate": [
-        {"name": "lint", "run": "flux rtl lint {artifact}"},
-        {"name": "golden", "run": ["flux", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py"], "timeout_s": 300},
-        {"name": "suite", "run": "pytest -q", "fail_re": "FAILED"}]})
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "x",
+                               "flow": {"test": [{"name": "lint", "run": "flux rtl lint {artifact}"}, {"name": "golden", "run": ["flux", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py"], "timeout_s": 300}, {"name": "suite", "run": "pytest -q", "fail_re": "FAILED"}]}})
     lint, golden, suite = task.gate
     assert [c.name for c in task.gate] == ["lint", "golden", "suite"]
     assert lint.run[-3:] == ("rtl", "lint", "{artifact}") and lint.count_re == DEFAULT_COUNT_RE
@@ -35,14 +34,20 @@ def test_a_gate_list_is_its_checks_in_order():
 
 
 def test_the_old_forms_are_the_same_structure():
-    one = TaskSpec.from_dict({"id": "t", "statement": "x", "gate": "check {artifact}"}).gate
+    one = TaskSpec.from_dict({"id": "t", "statement": "x", "flow": {"test": "check {artifact}"}}).gate
     assert one == Gate([Check("test", ("check", "{artifact}"), DEFAULT_COUNT_RE)])
-    two = TaskSpec.from_dict({"id": "t", "statement": "x",
-                              "gate": {"build": "make {artifact}", "test": "run {artifact}", "fail_re": "BAD", "timeout_s": 9}}).gate
+    two = TaskSpec.from_dict({"id": "t",
+                              "statement": "x",
+                              "flow": {"test": {"build": "make {artifact}",
+                                                "test": "run {artifact}",
+                                                "fail_re": "BAD",
+                                                "timeout_s": 9}}}).gate
     assert [c.name for c in two] == ["build", "test"] and two.named("build").builds and not two.named("test").builds
     assert two.named("test").fail_re == "BAD" and all(c.timeout_s == 9 for c in two)
-    task = TaskSpec.from_dict({"id": "t", "statement": "x", "gate": {"build": "make {artifact}", "test": "run {artifact}"}})
-    assert task.to_dict()["gate"]["build"] == ["make", "{artifact}"], "the old form round-trips as itself"
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "x",
+                               "flow": {"test": {"build": "make {artifact}", "test": "run {artifact}"}}})
+    assert task.to_dict()["flow"]["test"]["build"] == ["make", "{artifact}"], "the old form round-trips as itself"
     assert TaskSpec.from_dict(task.to_dict()) == task
 
 
@@ -56,7 +61,7 @@ def test_the_old_forms_are_the_same_structure():
 ])
 def test_a_bad_check_is_named(gate, message):
     with pytest.raises(TaskError, match=message):
-        TaskSpec.from_dict({"id": "t", "statement": "x", "gate": gate})
+        TaskSpec.from_dict({"id": "t", "statement": "x", "flow": {"test": gate}})
 
 
 # ---- running it
@@ -72,9 +77,9 @@ _CHECK = ("import sys, pathlib\n"
 def _two_checks(tmp_path: Path) -> tuple[PromptProblem, LoopState, Path]:
     (tmp_path / "check.py").write_text(_CHECK)
     log = tmp_path / "ran.log"
-    doc = {"id": "d", "statement": "text", "gate": [
-        {"name": "lint", "run": ["{python}", "{home}/check.py", "LATCH", "{artifact}", str(log)]},
-        {"name": "golden", "run": ["{python}", "{home}/check.py", "WRONG", "{artifact}", str(log)]}]}
+    doc = {"id": "d",
+           "statement": "text",
+           "flow": {"test": [{"name": "lint", "run": ["{python}", "{home}/check.py", "LATCH", "{artifact}", str(log)]}, {"name": "golden", "run": ["{python}", "{home}/check.py", "WRONG", "{artifact}", str(log)]}]}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
     state = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None, workdir=str(tmp_path))
     return prob, state, log
@@ -111,9 +116,9 @@ def test_task_check_lists_the_checks_with_their_pass_rule(tmp_path, capsys):
 
     (tmp_path / "check.py").write_text(_CHECK)
     (tmp_path / "t.problem.yaml").write_text(
-        "id: t\nstatement: text\ngate:\n"
-        "  - {name: lint, run: '{python} {home}/check.py LATCH {artifact} log'}\n"
-        "  - {name: golden, run: '{python} {home}/check.py WRONG {artifact} log', fail_re: 'x[1-9]'}\n")
+        "id: t\nstatement: text\nflow:\n  test:\n"
+        "    - {name: lint, run: '{python} {home}/check.py LATCH {artifact} log'}\n"
+        "    - {name: golden, run: '{python} {home}/check.py WRONG {artifact} log', fail_re: 'x[1-9]'}\n")
     main(["task", "check", str(tmp_path / "t.problem.yaml")])
     out = capsys.readouterr().out
     assert "gate: 2 check(s) in order" in out
@@ -185,13 +190,13 @@ def test_every_catalog_command_loads_as_a_document(tmp_path):
         if "stage" in t:                  # an evaluator stage (D663): its keys, and the document's
             defaults = {k: str(p["default"]) for k, p in t["params"].items()}
             top = {k: re.sub(r"\{(\w+)\}", lambda m: defaults.get(m.group(1), m.group(0)), v) for k, v in t["document"].items()}
-            TaskSpec.from_dict({"id": "t", "statement": "x", "gate": "true", **top,
-                                "stages": [{"name": "s", **t["stage"], "metrics": list(t["metrics"])}]})
+            TaskSpec.from_dict({"id": "t", "statement": "x", **top,
+                                "flow": {"test": "true", "measure": {"s": {**t["stage"], "metrics": list(t["metrics"])}}}})
             continue
         run = fill(t["id"])
         if t["role"] == "check":
-            doc = {"gate": [{"name": "c", "run": run}]}
+            flow = {"test": [{"name": "c", "run": run}]}
         else:
-            doc = {"gate": "true", "stages": [{"name": "s", "command": run, "metrics": list(t["metrics"])}]}
-        TaskSpec.from_dict({"id": "t", "statement": "x", **doc})
+            flow = {"test": "true", "measure": {"s": {"command": run, "metrics": list(t["metrics"])}}}
+        TaskSpec.from_dict({"id": "t", "statement": "x", "flow": flow})
     json.dumps(TOOLS)

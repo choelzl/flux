@@ -131,7 +131,7 @@ index (`retrieval.py`, no embeddings or API key) over an ingested corpus whose p
 is kept on every chunk: five chapters of the RISC-V unprivileged ISA manual (CC BY 4.0, parsed
 from the upstream AsciiDoc) and the curated `design-guidance` corpus (original prose,
 [D244](decisions.md)/[D267](decisions.md): memory implementation, multi-port composition,
-datapath PPA, interconnect fabric selection). A document's `knowledge:` block and the
+datapath PPA, interconnect fabric selection). A document's `flow.knowledge` and the
 `knowledge` tool reach it. The sibling `mentor/records/` package (`flux_records.mining`)
 computes typed facts from the campaign and calibration stores, never ingested into the BM25
 index ([D243](decisions.md)), and renders them into prompts ([D245](decisions.md)). Not

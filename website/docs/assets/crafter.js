@@ -121,7 +121,7 @@
       critique: { llm: "a model adversary on the division, each admitted part and the decision" },
       calibrate: { on: "between every pair of stages, on the record" },
       feedback: { human: "the operator's notes, when a terminal is attached", none: "no notes are read, reloaded or waited for" },
-      knowledge: { "default": "on by default; `knowledge: none` turns it off", none: "the library is off" },
+      knowledge: { "default": "on by default; `flow.knowledge: off` turns it off", none: "the library is off" },
       extract: { none: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
       records: { on: "every candidate, measurement and refusal, read back on resume" },
     }[box] || {};
@@ -522,13 +522,13 @@
     return { checks: checks, stages: stages, objectives: objectives, document: docKeys };
   }
 
-  function flowValue(state, box) {
+  /** A box's value as the document holds it (D775: written into `flow` with its settings). */
+  function flowObj(state, box) {
     var v = state.flow[box];
     var raw = state.agentRaw && state.agentRaw[box];
-    if (raw && typeof v === "string" && v.indexOf("agent:") === 0) return JSON.stringify(raw);   // D728: as written
-    if (typeof v === "string" && v.indexOf("agent:") === 0) return "{agent: " + v.slice(6) + "}";
-    if (box === "generate" && v === "command") return "{command: " + JSON.stringify(String(state.generateCommand || "").trim()) + "}";
-
+    if (raw && typeof v === "string" && v.indexOf("agent:") === 0) return raw;      // D728: as written
+    if (typeof v === "string" && v.indexOf("agent:") === 0) return { agent: v.slice(6) };
+    if (box === "generate" && v === "command") return { command: String(state.generateCommand || "").trim() };
     return v;
   }
 
@@ -576,56 +576,11 @@
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
     if (language(state, true)) out += "language: " + q(language(state, true)) + "\n";
 
-    var kfiles = list(state.knowledgeFiles);
-    if (kfiles.length && own("knowledge")) out += "\nknowledge:\n  files: " + flowSeq(kfiles) + "\n";
-
     if (!own("parts")) { /* kept */ }
     else if (state.partsMode === "decompose") out += "\nparts: decompose\n";
     else if (state.partsMode === "list" && list(state.parts).length) out += "\nparts: " + flowSeq(list(state.parts)) + "\n";
 
-    var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && list(x.choices).length; });
-    if (space.length && own("space")) {
-      out += "\nspace:\n";
-      space.forEach(function (x) { out += "  " + q(x.knob.trim()) + ": " + flowSeq(list(x.choices).map(typed)) + "\n"; });
-    }
-
     for (var dk in r.document) if (own(dk)) out += "\n" + q(dk) + ": " + inline(r.document[dk][0].value, false) + "\n";   // an evaluator's own keys
-
-    var said = flowSaid(state);
-    if (said.length && own("flow")) {
-      out += "\nflow:\n";
-      said.forEach(function (b) { out += "  " + b + ": " + flowValue(state, b) + "\n"; });
-    }
-
-    var checks = r.checks.filter(function (c) { return c.run; });
-    if (checks.length && own("gate")) {
-      out += "\ngate:                       # each must pass, in order\n";
-      checks.forEach(function (c) {
-        var p = [["name", c.name], ["run", c.run]];
-        if (c.count_re) p.push(["count_re", c.count_re]);
-        if (c.timeout) p.push(["timeout_s", typed(c.timeout)]);
-        out += "  - " + flowMap(p) + "\n";
-      });
-    }
-
-    if (r.stages.length && own("stages")) {
-      out += "\nstages:                     # cheapest first\n";
-      r.stages.forEach(function (st) {
-        out += "  - name: " + q(st.name) + "\n";
-        if (st.shape) for (var key in st.shape) out += "    " + q(key) + ": " + inline(st.shape[key], false) + "\n";
-        else out += "    command: " + q(st.command || "(the command)") + "\n";
-        if (st.metrics.length) out += "    metrics: " + flowSeq(st.metrics) + "\n";
-        if (st.needs.length) out += "    needs: " + flowSeq(st.needs) + "\n";
-        if (st.estimate) {
-          var ep = [["kind", st.estimate.kind], ["margin", st.estimate.margin === null ? "?" : st.estimate.margin]];
-          if (st.estimate.kind === "command") ep.push(["command", st.estimate.command || "(the command)"]);
-          out += "    estimate: " + flowMap(ep) + "\n";                 // estimated first; a likely failure is skipped
-        }
-        if (st.timeout) out += "    timeout_s: " + scalar(typed(st.timeout)) + "\n";
-        if (st.gates.length === 1) out += "    cutoff: " + gateMap(st.gates[0]) + "\n";   // go on only if
-        else if (st.gates.length > 1) out += "    cutoff: [" + st.gates.map(gateMap).join(", ") + "]\n";
-      });
-    }
 
     if (r.objectives.length && own("objectives")) {
       out += "\nobjectives:                 # limits must hold; the rest decide, in order\n";
@@ -639,12 +594,94 @@
     }
 
     var b = state.budget || {}, bp = [];
-    ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers"].forEach(function (key) {
+    ["steps", "passes", "parallel", "batch", "repair_attempts", "workers"].forEach(function (key) {
       var v = String(b[key] || "").trim();
       if (v !== "") bp.push([key, typed(v)]);
     });
     if (b.prototype) bp.push(["prototype", typed(b.prototype)]);
     if (bp.length && own("budget")) out += "\nbudget: " + flowMap(bp) + "\n";
+
+    // D775: the flow, last -- who works each box, and each box's own settings beside it
+    var F = [], kf = state.keptFlow || {}, said = flowSaid(state), boxesKept = !own("flow.boxes");
+    var kb = boxesKept ? (kf["flow.boxes"] || {}) : null, SPECIAL = ["dse", "knowledge", "select"];
+    var boxVal = function (bx) { return boxesKept ? kb[bx] : said.indexOf(bx) >= 0 ? flowObj(state, bx) : undefined; };
+    (boxesKept ? Object.keys(kb) : said).forEach(function (bx) {
+      if (SPECIAL.indexOf(bx) < 0) F.push("  " + q(bx) + ": " + inline(boxVal(bx), false));
+    });
+
+    // dse: its policy or agent, the space it searches, where it starts
+    var dv = boxVal("dse"), D = [];
+    var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && list(x.choices).length; });
+    if (!own("flow.dse.space")) { if (kf["flow.dse.space"] !== undefined) D.push("    space: " + inline(kf["flow.dse.space"], false)); }
+    else if (space.length) {
+      D.push("    space:");
+      space.forEach(function (x) { D.push("      " + q(x.knob.trim()) + ": " + flowSeq(list(x.choices).map(typed))); });
+    }
+    if (kf["flow.dse.seeds"] !== undefined) D.push("    seeds: " + inline(kf["flow.dse.seeds"], false));
+    if (D.length) {
+      F.push("  dse:");
+      if (dv && typeof dv === "object" && !Array.isArray(dv)) Object.keys(dv).forEach(function (k) { F.push("    " + q(k) + ": " + inline(dv[k], false)); });
+      else if (dv !== undefined) F.push("    policy: " + inline(dv, false));
+      F = F.concat(D);
+    } else if (dv !== undefined) F.push("  dse: " + inline(dv, false));
+
+    // test: the checks, in order
+    var checks = r.checks.filter(function (c) { return c.run; });
+    if (!own("flow.test")) { if (kf["flow.test"] !== undefined) F.push("  test: " + inline(kf["flow.test"], false)); }
+    else if (checks.length) {
+      F.push("  test:                     # each must pass, in order");
+      checks.forEach(function (c) {
+        var p = [["name", c.name], ["run", c.run]];
+        if (c.count_re) p.push(["count_re", c.count_re]);
+        if (c.timeout) p.push(["timeout_s", typed(c.timeout)]);
+        F.push("    - " + flowMap(p));
+      });
+    }
+
+    // measure: each stage by its name, cheapest first
+    if (!own("flow.measure")) {
+      var km = kf["flow.measure"];
+      if (km && typeof km === "object") { F.push("  measure:"); Object.keys(km).forEach(function (n) { F.push("    " + q(n) + ": " + inline(km[n], false)); }); }
+    } else if (r.stages.length) {
+      F.push("  measure:                  # cheapest first");
+      r.stages.forEach(function (st) {
+        var L = [];
+        if (st.shape) for (var key in st.shape) L.push(q(key) + ": " + inline(st.shape[key], false));
+        else L.push("command: " + q(st.command || "(the command)"));
+        if (st.metrics.length) L.push("metrics: " + flowSeq(st.metrics));
+        if (st.needs.length) L.push("needs: " + flowSeq(st.needs));
+        if (st.estimate) {
+          var ep = [["kind", st.estimate.kind], ["margin", st.estimate.margin === null ? "?" : st.estimate.margin]];
+          if (st.estimate.kind === "command") ep.push(["command", st.estimate.command || "(the command)"]);
+          L.push("estimate: " + flowMap(ep));                // estimated first; a likely failure is skipped
+        }
+        if (st.timeout) L.push("timeout_s: " + scalar(typed(st.timeout)));
+        if (st.gates.length === 1) L.push("cutoff: " + gateMap(st.gates[0]));   // go on only if
+        else if (st.gates.length > 1) L.push("cutoff: [" + st.gates.map(gateMap).join(", ") + "]");
+        if (L.length === 1 && L[0].indexOf("command: ") === 0) F.push("    " + q(st.name) + ": " + L[0].slice(9));
+        else { F.push("    " + q(st.name) + ":"); L.forEach(function (l) { F.push("      " + l); }); }
+      });
+    }
+
+    // knowledge: what is read, and who digests it
+    if (!own("flow.knowledge")) { if (kf["flow.knowledge"] !== undefined) F.push("  knowledge: " + inline(kf["flow.knowledge"], false)); }
+    else {
+      var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
+      if (kfiles.length) K.files = kfiles;
+      if (kv === "none" || kv === "off") K = { off: true };
+      else if (kv && typeof kv === "object" && !Array.isArray(kv)) Object.keys(kv).forEach(function (k) { K[k] = kv[k]; });
+      if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
+      else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
+    }
+
+    // select: how many reach the last stage, and who chooses
+    var sv = boxVal("select"), S = sv && typeof sv === "object" && !Array.isArray(sv) ? Object.assign({}, sv) : {};
+    var fin = String(b.finalists || "").trim();
+    if (fin !== "") S.finalists = typed(fin);
+    if (Object.keys(S).length) F.push("  select: " + inline(S, false));
+    else if (sv !== undefined) F.push("  select: " + inline(sv, false));
+
+    if (F.length) out += "\nflow:\n" + F.join("\n") + "\n";
     return out;
   }
 
@@ -684,7 +721,7 @@
 
     // the checks
     var kept = state.kept || [];
-    if (!r.checks.length && kept.indexOf("gate") < 0) error("Add a check: a design that fails it goes no further.");
+    if (!r.checks.length && kept.indexOf("flow.test") < 0) error("Add a check: a design that fails it goes no further.");
     var seen = {};
     (state.checks || []).forEach(function (c, i) {
       var nm = r.checks[i].name, ty = checkType(c.type);
@@ -710,7 +747,7 @@
     });
 
     // the measurements
-    if (!r.stages.length && kept.indexOf("stages") < 0) error("Add a measurement: designs are compared on what it reports.");
+    if (!r.stages.length && kept.indexOf("flow.measure") < 0) error("Add a measurement: designs are compared on what it reports.");
     seen = {};
     var all = reported(state, cat);
     (state.stages || []).forEach(function (st, i) {
@@ -873,11 +910,105 @@
     return "custom";
   }
 
+  /** D775: a document of this layout in the shape the reader below reads: each box's settings
+      taken out of `flow` -- test the gate, measure the stages (a list), dse's space and seeds,
+      knowledge's files, select's finalists. */
+  function unlifted(doc) {
+    if (!doc || typeof doc !== "object") return doc;
+    var out = {}, k;
+    for (k in doc) if (k !== "flow") out[k] = doc[k];
+    var fl = doc.flow && typeof doc.flow === "object" && !Array.isArray(doc.flow) ? doc.flow : null;
+    if (!fl) return out;
+    var f = {};
+    for (k in fl) f[k] = fl[k];
+    if ("test" in f) { out.gate = f.test; delete f.test; }
+    if ("measure" in f) {
+      var m = f.measure || {};
+      out.stages = Object.keys(m).map(function (n) {
+        var v = m[n];
+        return typeof v === "string" || Array.isArray(v) ? { name: n, command: v } : Object.assign({ name: n }, v || {});
+      });
+      delete f.measure;
+    }
+    if (f.dse && typeof f.dse === "object" && !Array.isArray(f.dse) && ("space" in f.dse || "seeds" in f.dse || "policy" in f.dse)) {
+      var d = Object.assign({}, f.dse);
+      if ("space" in d) { out.space = d.space; delete d.space; }
+      if ("seeds" in d) { out.seeds = d.seeds; delete d.seeds; }
+      if ("policy" in d) f.dse = d.policy; else if (Object.keys(d).length) f.dse = d; else delete f.dse;
+    }
+    if ("knowledge" in f) {
+      var kn = f.knowledge;
+      if (kn === "off" || kn === false) f.knowledge = ["none"];          // YAML reads a bare `off` as false
+      else if (kn && typeof kn === "object" && !Array.isArray(kn)) {
+        var read = {};
+        ["files", "sheet", "text", "library"].forEach(function (x) { if (x in kn) read[x] = kn[x]; });
+        if (Object.keys(read).length) out.knowledge = read;
+        if (kn.agent !== undefined) f.knowledge = { agent: kn.agent };
+        else if (kn.off) f.knowledge = ["none"];
+        else if (kn.digest) f.knowledge = ["digest"];
+        else delete f.knowledge;
+      }
+    }
+    if (f.select && typeof f.select === "object" && !Array.isArray(f.select) && "finalists" in f.select) {
+      var sl = Object.assign({}, f.select);
+      out.budget = Object.assign({}, out.budget || {}, { finalists: sl.finalists });
+      delete sl.finalists;
+      if (Object.keys(sl).length) f.select = sl; else delete f.select;
+    }
+    if (Object.keys(f).length) out.flow = f;
+    return out;
+  }
+
+  /** D775: where a part the configurator keeps as written lives now. */
+  var KEPT_AT = { gate: "flow.test", stages: "flow.measure", space: "flow.dse.space", seeds: "flow.dse.seeds",
+                  knowledge: "flow.knowledge", flow: "flow.boxes" };
+
+  /** A kept flow part's value, from the document as written (this layout). */
+  function keptValue(doc, at) {
+    var fl = (doc && doc.flow) || {}, out, k;
+    if (at === "flow.test") return fl.test;
+    if (at === "flow.measure") return fl.measure;
+    if (at === "flow.knowledge") return fl.knowledge;
+    if (at === "flow.dse.space") return fl.dse && fl.dse.space;
+    if (at === "flow.dse.seeds") return fl.dse && fl.dse.seeds;
+    if (at === "flow.boxes") {                      // every box's choice, without what is kept or edited apart
+      out = {};
+      for (k in fl) {
+        if (["test", "measure"].indexOf(k) >= 0) continue;
+        var v = fl[k];
+        if (k === "knowledge") {                     // its choice (off, an agent, a digest); its files apart
+          if (v && typeof v === "object" && !Array.isArray(v)) {
+            v = Object.assign({}, v); ["files", "sheet", "text", "library"].forEach(function (x) { delete v[x]; });
+            if (!Object.keys(v).length) continue;
+          }
+        }
+        if (k === "dse" && v && typeof v === "object" && !Array.isArray(v)) {
+          v = Object.assign({}, v); delete v.space; delete v.seeds;
+          if (!Object.keys(v).length) continue;
+          if ("policy" in v && Object.keys(v).length === 1) v = v.policy;
+        }
+        if (k === "select" && v && typeof v === "object" && !Array.isArray(v)) {
+          v = Object.assign({}, v); delete v.finalists;
+          if (!Object.keys(v).length) continue;
+        }
+        out[k] = v;
+      }
+      return out;
+    }
+    return undefined;
+  }
+
   function fromDoc(raw, normal, cat) {
-    raw = raw || {}; normal = normal || raw;
+    var asWritten = raw || {};
+    raw = unlifted(raw || {}); normal = unlifted(normal) || raw;
     var s = base(), kept = [], notes = [];
+    s.keptFlow = {};
     function keep(key, why) {
-      if (kept.indexOf(key) < 0 && raw[key] !== undefined) { kept.push(key); notes.push("`" + key + "` is kept as written: " + why + "."); }
+      var at = KEPT_AT[key] || key;
+      if (kept.indexOf(at) < 0 && raw[key] !== undefined) {
+        kept.push(at); notes.push("`" + at + "` is kept as written: " + why + ".");
+        if (at.indexOf("flow.") === 0) s.keptFlow[at] = keptValue(asWritten, at);
+      }
     }
     s.id = String(raw.id || normal.id || "");
     s.statement = String(raw.statement || normal.statement || "").trim();
@@ -1015,10 +1146,13 @@
     var bu = raw.budget || {};
     if (Object.keys(bu).every(function (k) { return BUDGET_KEYS.indexOf(k) >= 0; }))
       BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
-    else keep("budget", "it sets " + Object.keys(bu).filter(function (k) { return BUDGET_KEYS.indexOf(k) < 0; }).join(", "));
+    else {
+      keep("budget", "it sets " + Object.keys(bu).filter(function (k) { return BUDGET_KEYS.indexOf(k) < 0; }).join(", "));
+      if (bu.finalists !== undefined && bu.finalists !== null) s.budget.finalists = String(bu.finalists);   // D775: flow.select's own
+    }
 
     Object.keys(raw).forEach(function (k) {
-      if (STATE_KEYS.indexOf(k) < 0 && k !== "workload") keep(k, "the configurator does not edit it");
+      if (STATE_KEYS.indexOf(k) < 0 && k !== "workload") keep(k, k === "seeds" ? "the search's starting points" : "the configurator does not edit it");
     });
     s.kept = kept;
     return { state: s, kept: kept, notes: notes };

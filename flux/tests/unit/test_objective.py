@@ -100,12 +100,14 @@ def test_the_frontier_axes_and_the_early_stop_come_from_the_first_objectives():
 def test_a_task_document_carries_the_full_objective_and_the_loop_derives_the_rest(tmp_path):
     from flux_loop import PromptProblem, TaskSpec
 
-    task = TaskSpec.from_dict({
-        "id": "t", "statement": "s", "language": "text", 
-        "gate": {"test": ["true"]},
-        "stages": [{"name": "screen", "command": ["echo", "fmax_mhz=1 area_um2=1"], "metrics_re": {"fmax_mhz": r"fmax_mhz=(\d+)", "area_um2": r"area_um2=(\d+)"}}],
-        "objectives": [{"metric": "fmax_mhz", "goal": ">= 800", "tie": 0.03}, {"metric": "area_um2", "direction": "minimize"}],
-    })
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "s",
+                               "language": "text",
+                               "objectives": [{"metric": "fmax_mhz", "goal": ">= 800", "tie": 0.03}, {"metric": "area_um2", "direction": "minimize"}],
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["echo", "fmax_mhz=1 area_um2=1"],
+                                                               "metrics_re": {"fmax_mhz": 'fmax_mhz=(\\d+)',
+                                                                              "area_um2": 'area_um2=(\\d+)'}}}}})
     assert task.objectives[0].goal == 800.0 and task.objectives[0].tie == 0.03
     assert task.to_dict()["objectives"][0] == {"metric": "fmax_mhz", "direction": "maximize", "goal": 800.0, "tie": 0.03,
                                                "stage": "deepest", "unit": "MHz"}

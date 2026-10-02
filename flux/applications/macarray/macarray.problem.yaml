@@ -24,16 +24,15 @@ objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 1000}
   - {metric: area_um2, direction: minimize}
 
-stages:
-  - {name: screen, metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
-  - {name: confirm, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad]}
-
 flow:
   dse: sweep
+  measure:
+    screen: {metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
+    confirm: {metrics: [fmax_mhz, area_um2, power_w], needs: [openroad]}
+  select: {finalists: 4}
 
 budget:
   steps: 4                    # 1 sweep + 3 invention rounds
   repair_attempts: 6
   prototype: false
-  finalists: 4
   workers: 0                  # 0 = the machine decides

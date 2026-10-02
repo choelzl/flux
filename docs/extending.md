@@ -27,7 +27,7 @@ named checks run in order (`[{name, run}, ...]`, D652); the first that fails ref
 | a stage's `command` | `name=value` tokens; the stage reads the `metrics` it lists | non-zero: the stage failed for that candidate |
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
-folder), `{workdir}`, `{name}`, `{part}`, `{python}`, and `{knob}` for each knob of `space`. A
+folder), `{workdir}`, `{name}`, `{part}`, `{python}`, and `{knob}` for each knob of `flow.dse.space`. A
 command starting with `flux` runs this Flux. A stage lists the tools it needs under `needs:`; a
 stage whose tools are missing is skipped and reported (`WILL SKIP` in `task check`, `NOT RUN`
 in the report).
@@ -36,7 +36,7 @@ in the report).
 
 `flow.generate`:
 - `model` (the default): the model writes it and repairs it from the gate's output.
-- `{command: "..."}`: a script renders it. With a `space`, the script runs once per point with
+- `{command: "..."}`: a script renders it. With a space (`flow.dse.space`), the script runs once per point with
   the knobs as placeholders (`flux new --kind sweep`).
 - `{agent: opencode|claude|codex}` or `{agent: {command: [...], timeout_s: N, questions:
   decide|model|operator}}`: a coding agent writes it in a work directory. It does not compile or
@@ -134,7 +134,7 @@ example its world's.
 A skill is a folder with a `SKILL.md` (a `name`, a `description`, then instructions) and any
 files it brings. `skills: [dir]` in a document, or `--skill DIR`, gives it to the loop's model
 (in every prompt, or through the `skill` tool for large libraries) and to coding agents (copied
-where they look for skills). `knowledge: {files: [...]}` puts specs, reference code and PDFs in
+where they look for skills). `flow.knowledge: {files: [...]}` puts specs, reference code and PDFs in
 every prompt. The agents keep their own tools and notes in `workbench/` beside the document,
 across runs; the loop never reads it (D677).
 

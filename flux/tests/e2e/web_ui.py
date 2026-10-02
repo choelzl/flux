@@ -692,7 +692,7 @@ def flows(r: Run) -> None:
         a check that fails), after (why a start stopped, a tool that broke), and around (a refused
         setting, a session that ended)."""
         r.login("bob")
-        text = "id: broken\nstatement: a gate whose checker is not installed\nlanguage: python\ngate: {test: [no-such-checker, '{artifact}']}\nobjectives: []\n"
+        text = "id: broken\nstatement: a gate whose checker is not installed\nlanguage: python\nflow: {test: {test: [no-such-checker, '{artifact}']}}\nobjectives: []\n"
         made = r.api("/apps/from-text", "POST", {"name": "broken", "filename": "broken.problem.yaml", "text": text})
         r.check("a loop whose check fails is made", made["status"] == 200, made["body"][:200])
         # before: Direct edit says a document that does not load, and asks

@@ -1,5 +1,5 @@
 """The generator of __NAME__: `render.py <out> <algorithm> <wheel>` writes one candidate for a
-point of the document's `space:`. Add an algorithm here and a value to the space to try it."""
+point of the document's `flow.dse.space`. Add an algorithm here and a value to the space to try it."""
 
 import sys
 

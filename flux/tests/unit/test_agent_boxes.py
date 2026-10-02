@@ -84,8 +84,8 @@ def test_the_box_s_own_rule_refuses_an_answer(tmp_path):
 
 
 def _doc(**flow):
-    return {"id": "boxes", "statement": "the word good", "gate": {"test": ["true"]},
-            "objectives": [{"metric": "m", "direction": "minimize"}], "flow": flow}
+    return {"id": "boxes", "statement": "the word good",
+            "objectives": [{"metric": "m", "direction": "minimize"}], "flow": {"test": {"test": ["true"]}, **flow}}
 
 
 def test_the_loader_takes_an_agent_only_where_one_may_answer():
@@ -132,11 +132,13 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
     from flux_loop import LoopRequest, run_loop
     from flux_loop.roles import AgentOrchestrator
 
-    doc = {"id": "orch", "statement": "write the word good", "gate": {"test": ["true"]},
+    doc = {"id": "orch",
+           "statement": "write the word good",
            "parts": [{"name": "one", "statement": "the word"}, {"name": "two", "statement": "the word again"}],
-           "stages": [{"name": "size", "command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": r"(\d+)"}}],
            "objectives": [{"metric": "bytes", "direction": "minimize"}],
-           "flow": {"orchestrate": {"agent": _agent(tmp_path, "good", {"pick": "two", "why": "two first"})}}}
+           "flow": {"orchestrate": {"agent": _agent(tmp_path, "good", {"pick": "two", "why": "two first"})},
+                    "test": {"test": ["true"]},
+                    "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, AgentOrchestrator) and prob.roles().orchestrator.coding
     said: list[str] = []
@@ -164,10 +166,12 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
 
     stage = ["{python}", "-c", "import sys; print(f'cost={int(sys.argv[1]) * 10 + len(sys.argv[2])}')", "{x}", "{y}"]
     answer = {"points": [{"x": 2, "y": "bb"}, {"x": 9, "y": "a"}], "why": "the corner"}
-    doc = {"id": "pts", "statement": "a grid", "space": {"x": [1, 2, 3], "y": ["a", "bb"]}, "gate": {"test": ["true"]},
-           "stages": [{"name": "run", "command": stage, "metrics": ["cost"]}],
+    doc = {"id": "pts",
+           "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"agent": _agent(tmp_path, "good", answer)}}}
+           "flow": {"dse": {"agent": _agent(tmp_path, "good", answer), "space": {"x": [1, 2, 3], "y": ["a", "bb"]}},
+                    "test": {"test": ["true"]},
+                    "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}
     said: list[str] = []
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
                    LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=said.append)
@@ -182,10 +186,13 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
     from flux_loop import LoopRequest, run_loop
 
     stage = ["{python}", "-c", "import sys; x = int(sys.argv[1]); print(f'speed={x}'); print(f'size={x * x}')", "{x}"]
-    doc = {"id": "front", "statement": "a trade", "space": {"x": [1, 2, 3]}, "gate": {"test": ["true"]},
-           "stages": [{"name": "run", "command": stage, "metrics": ["speed", "size"]}],
+    doc = {"id": "front",
+           "statement": "a trade",
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
-           "flow": {"dse": "sweep", "select": {"agent": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})}}}
+           "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
+                    "select": {"agent": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})},
+                    "test": {"test": ["true"]},
+                    "measure": {"run": {"command": stage, "metrics": ["speed", "size"]}}}}
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
                    LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=lambda _m: None)
     assert out.decision.name == "x=1" and "the agent chose x=1 among 3 ties: the smallest" in out.decided_by
@@ -199,10 +206,13 @@ def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path
     from flux_records import Records
 
     stage = ["{python}", "-c", "import sys; print(f'cost={int(sys.argv[1]) * 10}')", "{x}"]
-    doc = {"id": "rows", "statement": "a grid", "space": {"x": [1, 2, 3]}, "gate": {"test": ["true"]},
-           "stages": [{"name": "run", "command": stage, "metrics": ["cost"]}],
+    doc = {"id": "rows",
+           "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": "sweep", "extract": {"agent": "claude"}}}
+           "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
+                    "extract": {"agent": "claude"},
+                    "test": {"test": ["true"]},
+                    "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert [type(s).__name__ for s in prob.roles().knowledge.sources] == ["AgentLessons"]
     db = str(tmp_path / "r.db")
@@ -227,10 +237,13 @@ def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_p
     from flux_loop import LoopRequest, run_loop
 
     answer = {"methods": {"a": "a lookup table first", "b": "a formula"}, "why": "the record is empty"}
-    doc = {"id": "planned", "statement": "two words", "gate": {"test": ["true"]},
+    doc = {"id": "planned",
+           "statement": "two words",
            "parts": [{"name": "a", "statement": "one"}, {"name": "b", "statement": "two"}],
            "objectives": [{"metric": "m", "direction": "minimize"}],
-           "flow": {"orchestrate": "rules", "plan": {"agent": _agent(tmp_path, "good", answer)}}}
+           "flow": {"orchestrate": "rules",
+                    "plan": {"agent": _agent(tmp_path, "good", answer)},
+                    "test": {"test": ["true"]}}}
     model = ScriptedProposer(['{"artifact": "x", "why": "-"}'] * 4)
     said: list[str] = []
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),
@@ -255,10 +268,11 @@ def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):
 
     (tmp_path / "golden.py").write_text('PORTS = [{"name": "a", "dir": "in", "bits": 4, "unsigned": True}, '
                                         '{"name": "y", "dir": "out", "bits": 4}]\n\ndef golden(a):\n    return {"y": a}\n')
-    doc = {"id": "t", "statement": "module `t`", "language": "systemverilog",
-           "gate": "flux rtl test {artifact} --golden {home}/golden.py",
+    doc = {"id": "t",
+           "statement": "module `t`",
+           "language": "systemverilog",
            "objectives": [{"metric": "area_um2", "direction": "minimize"}],
-           "flow": {"generate": {"agent": "claude"}}}
+           "flow": {"generate": {"agent": "claude"}, "test": "flux rtl test {artifact} --golden {home}/golden.py"}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
     assert prob.prototype() is not None and prob.prototype_agent() is not None
 

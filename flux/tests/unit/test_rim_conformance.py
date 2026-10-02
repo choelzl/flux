@@ -103,7 +103,11 @@ def test_a_world_that_takes_the_loops_own_hook_is_refused():
     import sys
 
     sys.modules[__name__].Greedy = Greedy
-    doc = {"id": "g", "statement": "g", "parts": ["a"], "world": __name__ + ":Greedy",
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz"]}], "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}]}
+    doc = {"id": "g",
+           "statement": "g",
+           "parts": ["a"],
+           "world": __name__ + ":Greedy",
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
+           "flow": {"measure": {"screen": {"metrics": ["fmax_mhz"]}}}}
     with pytest.raises(TaskError, match="route is the loop's, not a world's hook"):
         PromptProblem(TaskSpec.from_dict(doc))

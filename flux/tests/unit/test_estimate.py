@@ -23,13 +23,14 @@ TOOL = ("import sys, pathlib; x = int(open(sys.argv[1]).read().split('=')[1]); "
 def _doc(tmp_path: Path, xs, estimate=None, **more) -> dict:
     (tmp_path / "gen.py").write_text(GEN)
     (tmp_path / "tool.py").write_text(TOOL)
-    stage = {"name": "place", "command": f"{{python}} {tmp_path}/tool.py {{artifact}} {tmp_path}/tool.log",
+    stage = {"command": f"{{python}} {tmp_path}/tool.py {{artifact}} {tmp_path}/tool.log",
              "metrics": ["cost"], "cutoff": {"metric": "cost", "below": 35}}
     if estimate is not None:
         stage["estimate"] = estimate
-    return {"id": "est", "statement": "the cheapest x", "language": "text", "space": {"x": list(xs)},
-            "flow": {"dse": "sweep", "generate": {"command": f"{{python}} {tmp_path}/gen.py {{artifact}} {{x}}"}},
-            "gate": {"test": ["true"]}, "stages": [stage],
+    return {"id": "est", "statement": "the cheapest x", "language": "text",
+            "flow": {"dse": {"policy": "sweep", "space": {"x": list(xs)}},
+                     "generate": {"command": f"{{python}} {tmp_path}/gen.py {{artifact}} {{x}}"},
+                     "test": {"test": ["true"]}, "measure": {"place": stage}},
             "objectives": [{"metric": "cost", "direction": "minimize"}], "budget": {"steps": 2, "batch": 100}, **more}
 
 
@@ -92,7 +93,7 @@ def test_a_command_estimator_skips_past_the_margin_and_its_estimate_is_on_the_ro
 
 def test_the_model_estimates_against_an_objective_limit_and_no_model_estimates_nothing(tmp_path):
     doc = _doc(tmp_path, [1, 2, 3], {"kind": "model", "margin": 0.0})
-    doc["stages"][0].pop("cutoff")
+    doc["flow"]["measure"]["place"].pop("cutoff")
     doc["objectives"] = [{"metric": "cost", "direction": "minimize", "goal": 25}]
     reply = json.dumps({"estimates": [{"index": 0, "cost": 10}, {"index": 1, "cost": 20}, {"index": 2, "cost": 90}]})
     model = ScriptedProposer([reply])
@@ -138,7 +139,7 @@ def test_the_flow_shows_each_stage_with_its_estimator_and_the_old_boxes_are_gone
 @pytest.mark.parametrize("dse", ["pareto", {"pareto": {"budget": 4}}, [{"policy": "sweep"}, {"policy": "pareto"}]])
 def test_pareto_with_one_objective_is_refused_at_load(tmp_path, dse):
     doc = _doc(tmp_path, [1, 2])
-    doc["flow"]["dse"] = dse
+    doc["flow"]["dse"] = {**doc["flow"]["dse"], "policy": dse}
     with pytest.raises(TaskError, match="pareto needs two objectives"):
         TaskSpec.from_dict(doc)
     doc["objectives"].append({"metric": "speed", "direction": "maximize"})
@@ -176,9 +177,10 @@ def test_a_coding_agent_plans_without_a_model(tmp_path):
 
 def test_finalists_apply_with_one_objective(tmp_path):
     doc = _doc(tmp_path, [1, 2, 3, 4])
-    doc["stages"][0].pop("cutoff")
-    doc["stages"].append({**doc["stages"][0], "name": "confirm"})
-    doc["budget"]["finalists"] = 2
+    measure = doc["flow"]["measure"]
+    measure["place"].pop("cutoff")
+    measure["confirm"] = dict(measure["place"])
+    doc["flow"]["select"] = {"finalists": 2}
     out, _p, _s = _run(tmp_path, doc)
     assert sorted(s.candidate.knobs["x"] for s in out.scored if s.stage == "confirm") == [1, 2]
 
@@ -188,7 +190,7 @@ def _box(lines, name):
 
 
 def test_the_flow_says_what_the_defaults_and_the_agents_do(tmp_path):
-    one = {"id": "d", "statement": "s", "gate": {"test": ["true"]}}
+    one = {"id": "d", "statement": "s", "flow": {"test": {"test": ["true"]}}}
     lines = describe_flow(TaskSpec.from_dict(one))
     assert _box(lines, "orchestrate") == (
         "orchestrate: default (one design, no part to pick; rules pick the kind of work: a design sent back is "
@@ -196,14 +198,14 @@ def test_the_flow_says_what_the_defaults_and_the_agents_do(tmp_path):
     parts = describe_flow(TaskSpec.from_dict({**one, "parts": ["a", "b"]}))
     assert _box(parts, "orchestrate").startswith(
         "orchestrate: default (the model picks the next part, the first one waiting without a model; rules pick")
-    assert _box(lines, "knowledge") == "knowledge: library (on by default; `knowledge: none` turns it off)"
+    assert _box(lines, "knowledge") == "knowledge: library (on by default; `flow.knowledge: off` turns it off)"
     assert _box(lines, "extract") == "extract: none (nothing is mined from the record) -- or: mined, agent"
     assert _box(lines, "records").startswith("records: always on")
-    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {"extract": {"agent": "opencode"}, "orchestrate": {"agent": "opencode"}}}))
+    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "extract": {"agent": "opencode"}, "orchestrate": {"agent": "opencode"}}}))
     assert _box(agents, "extract") == "extract: agent opencode (lessons from the record's rows, each citing its rows)"
     assert _box(agents, "orchestrate").startswith("orchestrate: agent opencode (a coding agent picks the next part")
-    model = describe_flow(TaskSpec.from_dict({**one, "flow": {"orchestrate": "agent"}}))
+    model = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "orchestrate": "agent"}}))
     assert _box(model, "orchestrate").startswith("orchestrate: agent (the model with tools picks the next part")
-    off = describe_flow(TaskSpec.from_dict({**one, "flow": {"knowledge": "none", "feedback": "none"}}))
-    assert _box(off, "knowledge") == "knowledge: none (the library is off)"
+    off = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "knowledge": "off", "feedback": "none"}}))
+    assert _box(off, "knowledge") == "knowledge: off (the library is off)"
     assert _box(off, "feedback") == "feedback: none (no notes are read, reloaded or waited for)"

@@ -99,5 +99,5 @@ on the `PATH`, give the path in `FLUX_CLAUDE_BIN` (or `FLUX_CODEX_BIN`, `FLUX_OP
 ## Asking something else
 
 Every setting is in the document. To ask a different question, copy the document, change its
-`objectives:` (or `space:`, `budget:`), and give the copy its own `id:` so it keeps its own
+`objectives:` (or `flow`, `budget:`), and give the copy its own `id:` so it keeps its own
 record.

@@ -174,13 +174,55 @@ def _library_line(task: Any, problem: Any) -> str:
             f"{'present' if st['pdftotext'] else 'missing'})"
             + (f", {own} of them the loop's own ({', '.join(Path(f).name + '/' for f in folders)})" if folders else ""))
     if not library_on(task):
-        return head + ", off (flow.knowledge: none)"
+        return head + ", off (flow.knowledge: off)"
     try:
         mentor = problem.knowledge()
         used = mentor is not None and hasattr(mentor, "source") and mentor.source("library") is not None
     except Exception:  # noqa: BLE001
         used = False
     return head + (", used by: prompts, plan, agents" if used else ", not read by this world's knowledge")
+
+
+def cmd_task_upgrade(args: argparse.Namespace) -> int:
+    """D775: documents of the earlier layout rewritten with each box's settings under `flow`
+    (gate, stages, space, seeds, knowledge, finalists, calibrate). The original is kept beside
+    as `<file>.orig` (YAML comments are not carried over); the result is loaded before it is
+    written. `--dry-run` prints it instead."""
+    import json as _json
+    from pathlib import Path
+
+    import yaml
+
+    from flux_loop import load_task
+    from flux_loop.document import upgrade
+
+    bad = 0
+    for f in args.files:
+        path = Path(f)
+        text = path.read_text()
+        doc = _json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+        new = upgrade(doc)
+        if new == doc:
+            print(f"{f}: already in the current layout")
+            continue
+        out = (_json.dumps(new, indent=2) + "\n" if path.suffix == ".json"
+               else yaml.safe_dump(new, sort_keys=False, allow_unicode=True, width=110, default_flow_style=None))
+        if args.dry_run:
+            print(f"# {f}\n{out}")
+            continue
+        tmp = path.with_name(f"{path.stem}.upgrading{path.suffix}")     # the loader reads by suffix
+        tmp.write_text(out)
+        try:
+            load_task(str(tmp))
+        except Exception as exc:  # noqa: BLE001 -- said, the original left alone
+            print(f"{f}: not upgraded, the result does not load: {exc}", file=sys.stderr)
+            tmp.unlink()
+            bad += 1
+            continue
+        path.with_name(path.name + ".orig").write_text(text)
+        tmp.replace(path)
+        print(f"{f}: upgraded (the original is {path.name}.orig; YAML comments are not carried over)")
+    return 1 if bad else 0
 
 
 def cmd_task_check(args: argparse.Namespace) -> int:
@@ -1019,7 +1061,7 @@ golden models (floats, clocks, tolerances).
     "rtl-sweep": """# {name}
 
 A hardware design-space sweep for Flux with no model, written by `flux new {name} --kind
-rtl-sweep`. `gen.py` spells one module per point of the document's `space:`; `flux rtl test`
+rtl-sweep`. `gen.py` spells one module per point of the document's `flow.dse.space`; `flux rtl test`
 proves each against `golden.py` on Verilator; `flux rtl measure` synthesises the survivors with
 Yosys and OpenSTA on ASAP7.
 
@@ -1029,15 +1071,15 @@ Yosys and OpenSTA on ASAP7.
 | `gen.py` | the generator: a 16-bit popcount as a sum, an adder tree, or small tables |
 | `golden.py` | what the module must compute |
 
-    flux task run {name}.problem.yaml --passes 6      # a pass a point of `space:` (D738)
+    flux task run {name}.problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
 
-Add an architecture to `gen.py` and its name to `space:`, or add knobs (widths, pipeline
+Add an architecture to `gen.py` and its name to `flow.dse.space`, or add knobs (widths, pipeline
 depth, table size). For placed numbers, add the `confirm` stage from `flux new --kind rtl`.
 """,
     "tune": """# {name}
 
 A tuning problem for Flux, written by `flux new {name} --kind tune`. No model and no generated
-code: every point of the document's `space:` is a setting, handed to the gate and the stage as
+code: every point of the document's `flow.dse.space` is a setting, handed to the gate and the stage as
 `{{knob}}` placeholders. `check.py` refuses a setting that breaks the result; `bench.py` measures
 the rest; the fastest wins.
 
@@ -1047,9 +1089,9 @@ the rest; the fastest wins.
 | `workload.py` | the program being tuned: a blocked matrix multiply (block size, loop order) |
 | `check.py` / `bench.py` | the gate (still correct?) and the stage (`time_ms=`) |
 
-    flux task run {name}.problem.yaml --passes 15      # a pass a point of `space:` (D738)
+    flux task run {name}.problem.yaml --passes 15      # a pass a point of `flow.dse.space` (D738)
 
-To tune your own program, replace `workload.py`, list its knobs under `space:`, and make the gate
+To tune your own program, replace `workload.py`, list its knobs under `flow.dse.space`, and make the gate
 and the stage run it with them. They can be any command: a build with flags, a solver with
 parameters, a training script with hyperparameters. For a space too big to sweep, set
 `flow.dse` to `gradient`, `anneal` or `genetic`; for a trade-off, add a second objective and use
@@ -1058,7 +1100,7 @@ parameters, a training script with hyperparameters. For a space too big to sweep
     "sweep": """# {name}
 
 A design-space sweep for Flux with no model, written by `flux new {name} --kind sweep`.
-`render.py` writes one candidate per point of the document's `space:`; `check.py` refuses a
+`render.py` writes one candidate per point of the document's `flow.dse.space`; `check.py` refuses a
 wrong one; `bench.py` times the survivors; the fastest wins.
 
 | file | what it is |
@@ -1067,11 +1109,11 @@ wrong one; `bench.py` times the survivors; the fastest wins.
 | `render.py` | the generator: one candidate per point (`render.py <out> <algorithm> <wheel>`) |
 | `check.py` / `bench.py` | the gate and the stage |
 
-    flux task run {name}.problem.yaml --passes 6      # a pass a point of `space:` (D738)
+    flux task run {name}.problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
 
-To try another idea, add a value to `space:` and its code to `render.py`; to search instead of
+To try another idea, add a value to `flow.dse.space` and its code to `render.py`; to search instead of
 sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
-`flow.generate: model` (and drop `space:`) to let a model write candidates instead.
+`flow.generate: model` (and drop `flow.dse`) to let a model write candidates instead.
 """,
 }
 

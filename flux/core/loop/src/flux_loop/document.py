@@ -35,7 +35,7 @@ from .types import (LoopRequest)
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 
-__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "world_hooks"]
+__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "upgrade", "world_hooks"]
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -258,6 +258,8 @@ class TaskSpec:
         document's own, when it was loaded from a file)."""
         if base is not None:
             _HOMES.append(str(Path(base).resolve()))       # D602: its modules resolve beside it
+        if isinstance(doc, dict):
+            doc = _lift(doc)                               # D775: each box's own settings under `flow`
         unknown = sorted(set(doc) - DOCUMENT_KEYS - _INTERNAL_KEYS) if isinstance(doc, dict) else []
         if unknown:
             import difflib
@@ -413,7 +415,7 @@ class TaskSpec:
                     raise TaskError("calibration is said twice: `flow.calibrate` and `budget.calibrate`")
                 budget["calibrate"] = False
             if "sheet" in (flow.get("knowledge") or ()) and not sheet:
-                raise TaskError("flow.knowledge names `sheet` but `knowledge: {sheet: file}` names none")
+                raise TaskError("flow.knowledge names `sheet` but no `sheet:` file")
         known = {f.name for f in fields(LoopRequest)} - {"db", "params"}
         bad = sorted(set(budget) - known)
         if bad:
@@ -493,16 +495,19 @@ class TaskSpec:
         }
 
     def to_dict(self) -> dict[str, Any]:
-        """The document, round-trippable: `flow:` says who fills each box (D542, D629)."""
+        """The document, round-trippable: `flow:` says who fills each box and how (D542, D629, D775)."""
         out = self._to_dict()
         if "calibrate" in self.flow and "budget" in out:
             out["budget"] = {k: v for k, v in out["budget"].items() if k != "calibrate"}
-        return out
+        return upgrade(out)
 
     @property
     def digest(self) -> str:
-        return hashlib.sha256(json.dumps(self.to_dict(), sort_keys=True, default=str)
-                              .encode()).hexdigest()[:16]
+        # the fields, not their layout: a document said the D775 way is the same document (its record agrees)
+        out = self._to_dict()
+        if "calibrate" in self.flow and "budget" in out:
+            out["budget"] = {k: v for k, v in out["budget"].items() if k != "calibrate"}
+        return hashlib.sha256(json.dumps(out, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
     def commands(self) -> list[tuple[str, tuple[str, ...]]]:
         out: list[tuple[str, tuple[str, ...]]] = []
@@ -575,7 +580,7 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
                 continue
             for m in _PLACEHOLDER.finditer(tok):
                 if m.group(1) not in known:
-                    raise TaskError(f"{what} says {{{m.group(1)}}}, which is neither a knob of `space:` "
+                    raise TaskError(f"{what} says {{{m.group(1)}}}, which is neither a knob of `flow.dse.space` "
                                     f"({', '.join(space) or 'none'}) nor the loop's ({', '.join(BUILTIN_SUBS)})")
 
 
@@ -763,6 +768,7 @@ def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     for key in _INHERITED:
         if key not in out and key in parent:
             out[key] = parent[key]
+    out["_inherited"] = True                               # D775: the parent's fields as the loop keeps them
     if child.get("id") and (parent.get("_record") or parent.get("id")):
         out["_record"] = f"{parent.get('_record') or parent.get('id')}/{child['id']}"
     return out
@@ -810,25 +816,26 @@ def _leaf(task_id: str) -> str:
 
 def _stage(i: int, doc: Any, world: bool = False) -> Stage:
     if not isinstance(doc, dict) or not isinstance(doc.get("name"), str) or not doc["name"]:
-        raise TaskError(f"stages[{i}] needs a `name`")
+        raise TaskError(f"flow.measure: stage {i + 1} needs a name")
+    at = f"flow.measure.{doc['name']}"                 # D775: a stage is said by its name
     cmd, ev = doc.get("command"), doc.get("evaluator")
     if cmd and ev:
-        raise TaskError(f"stages[{i}] ({doc['name']}) needs exactly one of `command` or `evaluator`, not both")
+        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`, not both")
     if not cmd and not ev and not world:
-        raise TaskError(f"stages[{i}] ({doc['name']}) needs exactly one of `command` or `evaluator` "
+        raise TaskError(f"{at} needs exactly one of `command` or `evaluator` "
                         "(a document with a `world` may leave both out: the world measures it)")
     needs = doc.get("needs")
     if needs is not None and (not isinstance(needs, list) or not all(isinstance(t, str) for t in needs)):
-        raise TaskError(f"stages[{i}].needs is a list of tool names")
+        raise TaskError(f"{at}.needs is a list of tool names")
     needs = list(needs or [])
-    cmd = _command(cmd, f"stages[{i}].command")
+    cmd = _command(cmd, f"{at}.command")
     rtl_tools = _flux_rtl_tools(cmd) if cmd else []
     for tool in rtl_tools if "needs" not in doc else ():    # D628: `flux rtl measure` says what it runs
         needs.append(tool)
     metrics = tuple(doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
                                            else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS))
     if not all(isinstance(m, str) for m in metrics):
-        raise TaskError(f"stages[{i}].metrics is a list of metric names")
+        raise TaskError(f"{at}.metrics is a list of metric names")
     metrics_re = dict(doc.get("metrics_re") or {})
     if cmd and not metrics_re and metrics:
         # `name=value` tokens (as `flux rtl measure` prints) need only the `metrics:` names
@@ -837,21 +844,21 @@ def _stage(i: int, doc: Any, world: bool = False) -> Stage:
     for m, pat in metrics_re.items():
         try:
             if re.compile(pat).groups < 1:
-                raise TaskError(f"stages[{i}].metrics_re[{m!r}] needs one capturing group")
+                raise TaskError(f"{at}.metrics_re[{m!r}] needs one capturing group")
         except re.error as exc:
-            raise TaskError(f"stages[{i}].metrics_re[{m!r}] is not a regex: {exc}") from exc
+            raise TaskError(f"{at}.metrics_re[{m!r}] is not a regex: {exc}") from exc
     if cmd and not metrics_re:
-        raise TaskError(f"stages[{i}] ({doc['name']}): a command stage needs `metrics` (names the command "
+        raise TaskError(f"{at}: a command stage needs `metrics` (names the command "
                         "prints as `name=value` lines) or `metrics_re` (a regex per metric)")
     raw = doc.get("cutoff") or {}
     if isinstance(raw, dict):
         cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = dict(raw)
-        named = [(f"stages[{i}].cutoff", cutoff)] if cutoff else []
+        named = [(f"{at}.cutoff", cutoff)] if cutoff else []
     elif isinstance(raw, list) and all(isinstance(c, dict) for c in raw):
         cutoff = tuple(dict(c) for c in raw)        # several gates, all must pass (D657)
-        named = [(f"stages[{i}].cutoff[{j}]", c) for j, c in enumerate(cutoff)]
+        named = [(f"{at}.cutoff[{j}]", c) for j, c in enumerate(cutoff)]
     else:
-        raise TaskError(f"stages[{i}].cutoff is one condition {{metric, at|below|within}} or a list of them")
+        raise TaskError(f"{at}.cutoff is one condition {{metric, at|below|within}} or a list of them")
     for where, rule in named:
         if not isinstance(rule.get("metric"), str):
             raise TaskError(f"{where} needs a `metric` naming one this stage measures")
@@ -867,15 +874,15 @@ def _stage(i: int, doc: Any, world: bool = False) -> Stage:
     return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
                 evaluator=ev, metrics=metrics or tuple(metrics_re),
                 timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs),
-                estimate=_estimator(i, doc.get("estimate")))
+                estimate=_estimator(at, doc.get("estimate")))
 
 
-def _estimator(i: int, raw: Any) -> Estimator | None:
-    """`stages[i].estimate` (D665): `{kind: surrogate|command|model, margin: 0.05, command: ...}`,
+def _estimator(at: str, raw: Any) -> Estimator | None:
+    """`flow.measure.<stage>.estimate` (D665): `{kind: surrogate|command|model, margin: 0.05, command: ...}`,
     `command` for kind command only."""
     if raw is None:
         return None
-    where = f"stages[{i}].estimate"
+    where = f"{at}.estimate"
     if not isinstance(raw, dict):
         raise TaskError(f"{where} is {{kind: {'|'.join(ESTIMATE_KINDS)}, margin: 0.05}}")
     bad = sorted(set(raw) - {"kind", "margin", "command"})
@@ -919,7 +926,7 @@ DOCUMENT_KEYS = frozenset({
     "skills", "workbench"})
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
-_INTERNAL_KEYS = frozenset({"_record"})
+_INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})
 
 #: the file extension a language's candidates are written with (D628); another language `x`
 #: writes `.x`
@@ -1066,6 +1073,189 @@ _FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("no
                "extract": ("none", "mined")}
 #: What `flow.knowledge` may name (D648): the library is on by default; `none` turns it off.
 _KNOWLEDGE_SOURCES = ("sheet", "library", "digest", "none")
+
+
+#: D775: what moved into `flow`, each beside its box -- the old top-level key and where it is now.
+MOVED = {"gate": "flow.test", "stages": "flow.measure", "space": "flow.dse.space", "seeds": "flow.dse.seeds",
+         "knowledge": "flow.knowledge"}
+_KNOWLEDGE_KEYS = ("files", "sheet", "text", "library", "off", "digest", "agent")
+
+
+def _moved(what: str, where: str) -> TaskError:
+    return TaskError(f"`{what}` is said as `{where}` now (D775); `flux task upgrade FILE` rewrites a document")
+
+
+def _lift(doc: dict[str, Any]) -> dict[str, Any]:
+    """D775: each box's own settings, said under `flow`, read into the fields the loop keeps:
+    `flow.test` the gate, `flow.measure` the stages (a map: a stage's name to its command or its
+    settings), `flow.dse` its space and seeds beside its policy, `flow.knowledge` what is read
+    and who digests it, `flow.select` its finalists. The old places are refused, saying where."""
+    if doc.get("_lifted"):
+        return doc
+    strict = not doc.get("_inherited")                     # an inherited parent's fields are the loop's already
+    if strict:
+        for key, where in MOVED.items():
+            if key in doc:
+                raise _moved(key, where)
+        if isinstance(doc.get("budget"), dict):
+            for key, where in (("finalists", "flow.select.finalists"), ("calibrate", "flow.calibrate")):
+                if key in doc["budget"]:
+                    raise _moved(f"budget.{key}", where)
+    doc = {**doc, "_lifted": True}
+    raw = doc.get("flow")
+    if not isinstance(raw, dict):
+        return doc
+    flow = dict(raw)
+    for box in ("test", "measure"):
+        if isinstance(flow.get(box), dict) and "agent" in flow[box]:
+            raise TaskError(f"flow.{box} is never delegated to an agent: it establishes facts (D460)")
+    if "test" in flow:
+        doc["gate"] = flow.pop("test")
+    if "measure" in flow:
+        m = flow.pop("measure")
+        if not isinstance(m, dict):
+            raise TaskError("flow.measure is a map: each stage's name to its command, or to its settings "
+                            "(command, metrics, needs, timeout_s, cutoff, estimate), in the order they run")
+        stages = []
+        for name, spec in m.items():
+            if isinstance(spec, (str, list)):
+                stages.append({"name": str(name), "command": spec})
+            elif isinstance(spec, dict):
+                if "name" in spec:
+                    raise TaskError(f"flow.measure.{name}: a stage's name is its key, not a `name:`")
+                stages.append({"name": str(name), **spec})
+            elif spec is None:
+                stages.append({"name": str(name)})
+            else:
+                raise TaskError(f"flow.measure.{name} is its command or its settings, not {spec!r}")
+        doc["stages"] = stages
+    if isinstance(flow.get("dse"), dict) and {"space", "seeds", "policy"} & set(flow["dse"]):
+        d = dict(flow["dse"])
+        if "space" in d:
+            doc["space"] = d.pop("space")
+        if "seeds" in d:
+            doc["seeds"] = d.pop("seeds")
+        if "policy" in d:
+            if len(d) > 1:
+                raise TaskError(f"flow.dse: a `policy` or an `agent`, not {sorted(d)}")
+            flow["dse"] = d.pop("policy")
+        elif d:
+            flow["dse"] = d
+        else:
+            flow.pop("dse")
+    if "knowledge" in flow:
+        k = flow["knowledge"]
+        if k == "off" or k is False:                       # YAML reads a bare `off` as false
+            flow["knowledge"] = ["none"]
+        elif isinstance(k, dict) and not (set(k) == {"agent"} and not strict):
+            k = dict(k)
+            bad = sorted(set(k) - set(_KNOWLEDGE_KEYS))
+            if bad:
+                raise TaskError(f"flow.knowledge keys {bad} are not known; known: {', '.join(_KNOWLEDGE_KEYS)}")
+            read = {x: k[x] for x in ("files", "sheet", "text", "library") if x in k}
+            if read:
+                doc["knowledge"] = read
+            if not isinstance(k.get("digest", False), bool):
+                raise TaskError(f"flow.knowledge.digest is true or false, not {k['digest']!r} (`agent:` names who digests)")
+            if k.get("off") and (k.get("agent") is not None or k.get("digest") or read):
+                raise TaskError("flow.knowledge `off: true` stands alone: it turns the reading off")
+            if k.get("agent") is not None:
+                flow["knowledge"] = {"agent": k["agent"]}
+            elif k.get("off"):
+                flow["knowledge"] = ["none"]
+            elif k.get("digest"):
+                flow["knowledge"] = ["digest"]
+            else:
+                flow.pop("knowledge")
+        elif strict and not isinstance(k, dict):
+            raise TaskError("flow.knowledge is `off` or an object: files, sheet, text, library (what is read), "
+                            f"digest: true, agent: <who digests> (D775), not {k!r}")
+    if isinstance(flow.get("select"), dict) and "finalists" in flow["select"]:
+        sel = dict(flow["select"])
+        doc["budget"] = {**(doc.get("budget") or {}), "finalists": sel.pop("finalists")}
+        if sel:
+            flow["select"] = sel
+        else:
+            flow.pop("select")
+    doc["flow"] = flow
+    if not flow:
+        doc.pop("flow")
+    return doc
+
+
+def upgrade(doc: Any) -> Any:
+    """D775: a document of the earlier layout -- `gate`, `stages`, `space`, `seeds`,
+    `knowledge` at the top, `budget.finalists`, `budget.calibrate` -- in this one, each under its
+    box in `flow`. `flux task upgrade` writes it; a document already upgraded comes back as it is."""
+    if not isinstance(doc, dict):
+        return doc
+    out = {k: v for k, v in doc.items() if k not in MOVED and k not in ("_lifted", "_inherited")}
+    flow = dict(doc.get("flow") or {})
+    budget = dict(doc["budget"]) if isinstance(doc.get("budget"), dict) else None
+    if flow.get("test") == "gate":
+        flow.pop("test")
+    if doc.get("gate") not in (None, "", [], {}):
+        flow["test"] = doc["gate"]
+    stages = doc.get("stages")
+    if isinstance(stages, list) and stages:
+        measure: dict[str, Any] = {}
+        for st in stages:
+            st = dict(st)
+            name = str(st.pop("name"))
+            if st.get("timeout_s") == 600:                 # the default, said by the writer
+                st.pop("timeout_s")
+            measure[name] = st["command"] if set(st) == {"command"} else (st or None)
+        flow["measure"] = measure
+    if doc.get("space") or doc.get("seeds"):
+        dse = flow.get("dse")
+        new: dict[str, Any] = {}
+        if isinstance(dse, dict):
+            new.update(dse)
+        elif dse is not None:
+            new["policy"] = dse
+        if doc.get("space"):
+            new["space"] = doc["space"]
+        if doc.get("seeds"):
+            new["seeds"] = doc["seeds"]
+        flow["dse"] = new
+    k, fk = doc.get("knowledge"), flow.get("knowledge")
+    know: dict[str, Any] = {}
+    if isinstance(k, str) and k:
+        know["text"] = k
+    elif isinstance(k, dict):
+        know.update({x: v for x, v in k.items() if x in ("files", "sheet", "text", "library") and v not in (None, "", [])})
+    if isinstance(fk, dict) and "agent" in fk:
+        know["agent"] = fk["agent"]
+    elif fk is not None and not isinstance(fk, dict):
+        srcs = [fk] if isinstance(fk, str) else list(fk)
+        if "none" in srcs or "off" in srcs:
+            know["off"] = True
+        if "digest" in srcs:
+            know["digest"] = True
+    elif isinstance(fk, dict):
+        know.update(fk)
+    if know:
+        flow["knowledge"] = "off" if know == {"off": True} else know
+    else:
+        flow.pop("knowledge", None)
+    if budget is not None and "finalists" in budget:
+        sel = flow.get("select")
+        flow["select"] = {**(sel if isinstance(sel, dict) else {}), "finalists": budget.pop("finalists")}
+    if budget is not None and "calibrate" in budget:
+        if budget.pop("calibrate") is False:
+            flow["calibrate"] = "off"
+    if budget is not None:
+        if budget:
+            out["budget"] = budget
+        else:
+            out.pop("budget", None)
+    if isinstance(out.get("subtasks"), list):
+        out["subtasks"] = [upgrade(c) for c in out["subtasks"]]
+    if flow:
+        out["flow"] = flow
+    else:
+        out.pop("flow", None)
+    return out
 
 
 def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1275,7 +1465,7 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
         except Exception:  # noqa: BLE001 -- a world may need more than an empty state
             space = {}
     if not space:
-        return "no space declared (the document's `space:` or the world's)"
+        return "no space declared (the document's `flow.dse.space` or the world's)"
     n = 1
     for vals in space.values():
         n *= max(1, len(vals))
@@ -1355,7 +1545,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     said = [] if isinstance(flow.get("knowledge"), dict) else list(flow.get("knowledge") or [])
     knowledge = (["sheet"] if task.knowledge else []) + (
         [] if not library_on(task) else ["library" + "".join(f" + {Path(f).name}/" for f in library_folders(task))
-                                         + " (on by default; `knowledge: none` turns it off)"])
+                                         + " (on by default; `flow.knowledge: off` turns it off)"])
     knowledge += ["digest"] if "digest" in said else []
     if isinstance(flow.get("knowledge"), dict):                # D773
         knowledge += [f"the papers digested by agent {_agent_name(flow['knowledge'])}"]
@@ -1386,7 +1576,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
         "feedback: " + ("none (no notes are read, reloaded or waited for)" if flow.get("feedback") == "none"
                         else "human (the operator's notes, when a terminal is attached)"),
-        "knowledge: " + (", ".join(knowledge) if knowledge else "none (the library is off)"),
+        "knowledge: " + (", ".join(knowledge) if knowledge else "off (the library is off)"),
         "extract: " + (f"agent {_agent_name(extract)} (lessons from the record's rows, each citing its rows)" if isinstance(extract, dict)
                        else "mined (facts mined from the record reach the prompts)" if extract == "mined"
                        else "none (nothing is mined from the record) -- or: mined, agent"),

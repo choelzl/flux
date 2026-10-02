@@ -22,20 +22,20 @@ params:
   certify_tiles: [[8, 4, 1], [4, 16, 1]]
   bank_bits: 5
 
+flow:
+  measure:
+    analytic: {metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, train_latency]}
+    phys: {metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps], needs: [yosys, openroad]}
+  select: {finalists: 6}
+
 objectives:                   # no goal, all four balanced: the decision is the front's knee (D658)
   - {metric: area_score, direction: minimize, unit: areaU, balance: true}
   - {metric: pad_fraction, direction: minimize, balance: true}
   - {metric: holdout_latency, direction: minimize, unit: cy, balance: true}
   - {metric: holdout_throughput, direction: maximize, unit: rows/cy, balance: true}
 
-stages:
-  - {name: analytic, metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, train_latency]}
-  - {name: phys, metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps],
-     needs: [yosys, openroad]}
-
 cache: false
 
 budget:
   steps: 4                    # 1 + llm_rounds + coordination_rounds + 1
-  finalists: 6
   prototype: false

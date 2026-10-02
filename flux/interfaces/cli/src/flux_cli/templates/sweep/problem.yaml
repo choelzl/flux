@@ -6,24 +6,22 @@ statement: >-
   The fastest way, among those render.py spells, to count the primes below n in Python.
 language: python
 
-space:
-  # list_sieve: a list of flags, crossed out one multiple at a time; slice_sieve: a bytearray,
-  # crossed out a slice at a time; odd_sieve: the same over odd numbers only (half the memory)
-  algorithm: [list_sieve, slice_sieve, odd_sieve]
-  wheel: [0, 1]                         # skip even trial factors (list_sieve only; the others ignore it)
-
 flow:
-  dse: sweep                            # or gradient, anneal, genetic, pareto
+  dse:
+    policy: sweep  # or gradient, anneal, genetic, pareto
+    space:
+      # list_sieve: a list of flags, crossed out one multiple at a time; slice_sieve: a bytearray,
+      # crossed out a slice at a time; odd_sieve: the same over odd numbers only (half the memory)
+      algorithm: [list_sieve, slice_sieve, odd_sieve]
+      wheel: [0, 1]                         # skip even trial factors (list_sieve only; the others ignore it)
   generate: {command: "{python} {home}/render.py {artifact} {algorithm} {wheel}"}
-
-gate:
-  test: "{python} {home}/check.py {artifact}"
-  timeout_s: 60
-
-stages:
-  - name: bench
-    command: "{python} {home}/bench.py {artifact}"
-    metrics: [time_ms]
+  test:
+    test: "{python} {home}/check.py {artifact}"
+    timeout_s: 60
+  measure:
+    bench:
+      command: "{python} {home}/bench.py {artifact}"
+      metrics: [time_ms]
 
 objectives:
   - {metric: time_ms, direction: minimize}

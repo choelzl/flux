@@ -35,9 +35,10 @@ def _doc(app: str, tmp_path: Path, **patch) -> Path:
     doc = yaml.safe_load(src.read_text())
     for key, value in patch.items():
         doc[key] = {**doc.get(key, {}), **value} if isinstance(value, dict) and isinstance(doc.get(key), dict) else value
-    sheet = (doc.get("knowledge") or {}).get("sheet") if isinstance(doc.get("knowledge"), dict) else None
+    know = (doc.get("flow") or {}).get("knowledge")
+    sheet = know.get("sheet") if isinstance(know, dict) else None
     if sheet and not os.path.isabs(sheet):
-        doc["knowledge"]["sheet"] = str(src.parent / sheet)  # read beside the ORIGINAL document
+        know["sheet"] = str(src.parent / sheet)  # read beside the ORIGINAL document
     out = tmp_path / f"{app}.problem.yaml"
     out.write_text(yaml.safe_dump(doc, sort_keys=False))
     return out

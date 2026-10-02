@@ -87,11 +87,15 @@ def test_describe_and_the_document_round_trip():
 
 
 def _spec(cutoff):
-    return TaskSpec.from_dict({
-        "id": "t", "statement": "s", "gate": {"test": ["true"]},
-        "objectives": [{"metric": "fmax_mhz"}, {"metric": "area_um2", "direction": "minimize"}],
-        "stages": [{"name": "screen", "command": ["true"], "metrics": ["fmax_mhz", "area_um2"], "cutoff": cutoff},
-                   {"name": "place", "command": ["true"], "metrics": ["fmax_mhz", "area_um2"]}]})
+    return TaskSpec.from_dict({"id": "t",
+                               "statement": "s",
+                               "objectives": [{"metric": "fmax_mhz"}, {"metric": "area_um2", "direction": "minimize"}],
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["true"],
+                                                               "metrics": ["fmax_mhz", "area_um2"],
+                                                               "cutoff": cutoff},
+                                                    "place": {"command": ["true"],
+                                                              "metrics": ["fmax_mhz", "area_um2"]}}}})
 
 
 def test_a_stage_with_two_gates_cuts_on_either_and_says_which():
@@ -99,7 +103,7 @@ def test_a_stage_with_two_gates_cuts_on_either_and_says_which():
     spec = _spec(gates)
     assert spec.stages[0].cutoffs == tuple(gates)
     assert TaskSpec.from_dict(spec.to_dict()).stages[0].cutoff == spec.stages[0].cutoff
-    assert spec.to_dict()["stages"][0]["cutoff"] == gates
+    assert spec.to_dict()["flow"]["measure"]["screen"]["cutoff"] == gates
     scored = [_sc("slow", "screen", fmax_mhz=900, area_um2=50), _sc("big", "screen", fmax_mhz=1200, area_um2=90),
               _sc("good", "screen", fmax_mhz=1100, area_um2=70)]
     kept, why = PromptProblem(spec).cutoff("screen", scored, None)
@@ -114,7 +118,7 @@ def test_a_stage_with_two_gates_cuts_on_either_and_says_which():
 def test_the_single_dict_gate_is_still_one_gate():
     spec = _spec({"metric": "fmax_mhz", "at": 1000})
     assert spec.stages[0].cutoff == {"metric": "fmax_mhz", "at": 1000} and len(spec.stages[0].cutoffs) == 1
-    assert spec.to_dict()["stages"][0]["cutoff"] == {"metric": "fmax_mhz", "at": 1000}
+    assert spec.to_dict()["flow"]["measure"]["screen"]["cutoff"] == {"metric": "fmax_mhz", "at": 1000}
     kept, why = PromptProblem(spec).cutoff("screen", [_sc("slow", "screen", fmax_mhz=900, area_um2=1),
                                                       _sc("fast", "screen", fmax_mhz=1100, area_um2=1)], None)
     assert [s.candidate.name for s in kept] == ["fast"] and why == "fmax_mhz below 1000"
@@ -128,11 +132,12 @@ def test_every_display_names_every_limit(tmp_path):
 
     stage = ["{python}", "-c", "import sys; x = int(sys.argv[1]); print(f'fmax_mhz={900 + 50 * x}'); "
              "print(f'area_um2={40 + 10 * x}')", "{x}"]
-    doc = {"id": "two", "statement": "s", "space": {"x": [0, 1, 2, 3]}, "gate": {"test": ["true"]},
-           "stages": [{"name": "run", "command": stage, "metrics": ["fmax_mhz", "area_um2"]}],
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000},
-                          {"metric": "area_um2", "direction": "minimize", "goal": 60}],
-           "flow": {"dse": "llm"}}
+    doc = {"id": "two",
+           "statement": "s",
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000}, {"metric": "area_um2", "direction": "minimize", "goal": 60}],
+           "flow": {"dse": {"policy": "llm", "space": {"x": [0, 1, 2, 3]}},
+                    "test": {"test": ["true"]},
+                    "measure": {"run": {"command": stage, "metrics": ["fmax_mhz", "area_um2"]}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     words = prob.objectives().describe()
     assert "fmax_mhz at least 1000" in words and "area_um2 at most 60" in words

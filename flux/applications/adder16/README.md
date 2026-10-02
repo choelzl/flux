@@ -10,7 +10,7 @@ run: it needs no model.
 
 | file | what it is |
 |---|---|
-| `adder16.problem.yaml` | the problem document: the statement, the `space:` (`arch` x `block`, 12 points), the generator command, the gate, the two stages, the objectives, the budget |
+| `adder16.problem.yaml` | the problem document: the statement, the `flow.dse.space` (`arch` x `block`, 12 points), the generator command, the gate, the two stages, the objectives, the budget |
 | `gen.py` | the generator: `gen.py <out> <arch> <block>` writes one adder as Verilog |
 | `golden.py` | the golden model: `PORTS` and `golden(a, b)`, what the adder must compute |
 

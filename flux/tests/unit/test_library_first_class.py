@@ -11,10 +11,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-DOC = {"id": "sq", "statement": "An integer square root unit using a non-restoring digit recurrence.",
+DOC = {"id": "sq",
+       "statement": "An integer square root unit using a non-restoring digit recurrence.",
        "contract": "The module isqrt takes a 16-bit radicand and returns an 8-bit root.",
        "parts": [{"name": "core", "statement": "the digit recurrence loop"}],
-       "gate": {"test": ["true"]}}
+       "flow": {"test": {"test": ["true"]}}}
 
 
 @pytest.fixture
@@ -43,12 +44,12 @@ def test_a_plain_document_reads_the_library_by_default_and_not_with_knowledge_no
     prefix = prob.prompt_prefix("core", _state(tmp_path))
     assert "[recurrence.md] A non-restoring digit recurrence" in prefix
     assert "[cordic.txt]" in prefix.split("the library's papers", 1)[1]     # the one-line index lists every paper
-    off = PromptProblem(TaskSpec.from_dict({**DOC, "flow": {"knowledge": "none"}}))
+    off = PromptProblem(TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": "off"}}))
     assert off.knowledge() is None and "recurrence.md" not in off.prompt_prefix("core", _state(tmp_path))
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="stands alone"):
-        TaskSpec.from_dict({**DOC, "flow": {"knowledge": ["none", "digest"]}})
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"off": True, "digest": True}}})
 
 
 def test_an_empty_library_adds_nothing(tmp_path, monkeypatch):
@@ -65,7 +66,7 @@ def test_a_document_s_own_folder_is_indexed_with_the_shared_one(lib, tmp_path):
     (home / "papers").mkdir(parents=True)
     (home / "papers" / "remainder.md").write_text(
         "The remainder register of the digit recurrence square root holds nine bits for a 16-bit radicand.\n")
-    task = TaskSpec.from_dict({**DOC, "knowledge": {"library": "papers"}}, base=home)
+    task = TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"library": "papers"}}}, base=home)
     assert task.library == str((home / "papers").resolve())
     prefix = PromptProblem(task).prompt_prefix("core", _state(tmp_path))
     assert "[remainder.md]" in prefix and "[recurrence.md]" in prefix
@@ -74,7 +75,7 @@ def test_a_document_s_own_folder_is_indexed_with_the_shared_one(lib, tmp_path):
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="knowledge.library 'nope' is not a folder"):
-        TaskSpec.from_dict({**DOC, "knowledge": {"library": "nope"}}, base=home)
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"library": "nope"}}}, base=home)
 
 
 def test_an_agent_brief_carries_the_library_section_with_paths(lib, tmp_path):

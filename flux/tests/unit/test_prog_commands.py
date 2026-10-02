@@ -98,12 +98,18 @@ def test_documents_name_what_the_new_stages_need():
     assert _flux_rtl_tools(py + ["prog", "count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
     assert _flux_rtl_tools(py + ["prog", "size"]) == ["size"] and _flux_rtl_tools(py + ["prog", "time"]) == []
     assert _flux_rtl_tools(py + ["rtl", "measure", "{artifact}", "--stage", "stat"]) == ["yosys"]
-    task = TaskSpec.from_dict({"id": "t", "statement": "x", "language": "systemverilog", "gate": "flux rtl lint {artifact}",
-                               "stages": [{"name": "stat", "command": "flux rtl measure {artifact} --stage stat"}]})
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "x",
+                               "language": "systemverilog",
+                               "flow": {"test": "flux rtl lint {artifact}",
+                                        "measure": {"stat": "flux rtl measure {artifact} --stage stat"}}})
     assert task.stages[0].metrics == ("area_um2", "cell_count") and task.stages[0].needs == ("yosys",)
-    prog = TaskSpec.from_dict({"id": "p", "statement": "x", "language": "c", "gate": "cc -fsyntax-only {artifact}",
-                               "stages": [{"name": "count", "metrics": ["instructions"],
-                                           "command": 'flux prog count --build "cc -O2 -o {out} {artifact}"'}]})
+    prog = TaskSpec.from_dict({"id": "p",
+                               "statement": "x",
+                               "language": "c",
+                               "flow": {"test": "cc -fsyntax-only {artifact}",
+                                        "measure": {"count": {"metrics": ["instructions"],
+                                                              "command": 'flux prog count --build "cc -O2 -o {out} {artifact}"'}}}})
     assert prog.stages[0].needs == ("valgrind",)
 
 
@@ -125,8 +131,8 @@ def test_an_evaluator_stage_reads_the_workload_beside_the_document(tmp_path):
     (tmp_path / "w.yaml").write_text("id: w\nops: []\n")
     for workload in ("{home}/w.yaml", "w.yaml"):
         (tmp_path / "t.problem.yaml").write_text(
-            f'id: t\nstatement: x\nlanguage: yaml\ngate: "true"\nworkload: "{workload}"\n'
-            "stages: [{name: m, evaluator: fake-d663, metrics: [latency_cycles]}]\n"
+            f'id: t\nstatement: x\nlanguage: yaml\nworkload: "{workload}"\n'
+            "flow: {test: 'true', measure: {m: {evaluator: fake-d663, metrics: [latency_cycles]}}}\n"
             "objectives: [{metric: latency_cycles, direction: minimize}]\n")
         task = load_task(str(tmp_path / "t.problem.yaml"))
         st = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None)

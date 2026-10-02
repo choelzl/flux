@@ -90,7 +90,7 @@ def test_a_coding_agent_finds_the_skills_where_it_looks(tmp_path):
                     "assert skill.is_file(), 'the skill is where Claude Code and OpenCode look'\n"
                     "art.write_text('\\n'.join(str(i) for i in range(10)) + '\\n')\n")
     doc = {**json.loads(DIGITS.read_text()), "skills": ["skills"],
-           "flow": {"generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}},
+           "flow": {**json.loads(DIGITS.read_text()).get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}},
            "budget": {"steps": 1, "repair_attempts": 1, "prototype": False}}
     task = TaskSpec.from_dict(doc, base=tmp_path)
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=None, log=lambda _m: None)
@@ -106,9 +106,11 @@ def test_the_asks_skills_go_to_the_author_and_into_the_problem(tmp_path):
     skills = workspace_skills([tmp_path / "given"], work)
     assert [s.name for s in skills] == ["digits"] and (work / "skills" / "digits" / "SKILL.md").is_file()
     check = "import sys\nprint('0 failing')\n"
-    doc = {"id": "digits", "statement": "digits", "language": "text", 
-           "gate": {"test": "{python} {home}/check.py {artifact}", "count_re": "(\\d+) failing"},
-           "budget": {"steps": 1, "prototype": False}}
+    doc = {"id": "digits",
+           "statement": "digits",
+           "language": "text",
+           "budget": {"steps": 1, "prototype": False},
+           "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": '(\\d+) failing'}}}
     reply = f"FILE problem.yaml\n```\n{yaml.safe_dump(doc)}```\nFILE check.py\n```\n{check}```\nWHY: ok\n"
     author = ScriptedProposer([reply])
     got = drive(Ask(prompt="digits", workdir=work, passes=1, skills=skills), proposer=author,
@@ -126,10 +128,14 @@ def test_flux_task_run_hands_the_skill_to_the_model(tmp_path, capsys):
 
     make_skill(tmp_path / "lib", "magic-word", "when a task asks for the magic word", "The magic word is PERIWINKLE-42.")
     (tmp_path / "check.py").write_text("import sys\nprint(('0' if open(sys.argv[1]).read().strip() == 'PERIWINKLE-42' else '1') + ' failing')\n")
-    (tmp_path / "magic.problem.yaml").write_text(yaml.safe_dump({
-        "id": "magic", "statement": "The magic word.", "language": "text", 
-        "gate": {"test": "{python} {home}/check.py {artifact}", "count_re": "(\\d+) failing"},
-        "budget": {"steps": 1, "repair_attempts": 1, "prototype": False}}))
+    (tmp_path / "magic.problem.yaml").write_text(yaml.safe_dump({"id": "magic",
+                                                                 "statement": "The magic word.",
+                                                                 "language": "text",
+                                                                 "budget": {"steps": 1,
+                                                                            "repair_attempts": 1,
+                                                                            "prototype": False},
+                                                                 "flow": {"test": {"test": "{python} {home}/check.py {artifact}",
+                                                                                   "count_re": '(\\d+) failing'}}}))
     seen: list[str] = []
     import flux_llm
 

@@ -46,15 +46,18 @@ def test_the_example_task_loads_and_round_trips():
     ({}, "`id`"),
     ({"id": "t"}, "`statement`"),
     ({"id": "t", "statement": "x"}, "`gate` needs"),
-    ({"id": "t", "statement": "x", "gate": {"test": 42}}, "gate.test must be"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"], "count_re": "("}}, "not a regex"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"]}, "parts": ["p", "p"]}, "unique"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"]}, "stages": [{"name": "r"}]}, "exactly one of"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"]}, "stages": [{"name": "r", "command": ["m"]}]},
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": 42}}}, "gate.test must be"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"], "count_re": "("}}}, "not a regex"),
+    ({"id": "t", "statement": "x", "parts": ["p", "p"], "flow": {"test": {"test": ["a"]}}}, "unique"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": None}}}, "exactly one of"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": ["m"]}}},
      "needs `metrics`"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"]}, "objectives": [{"metric": "m", "direction": "up"}]},
+    ({"id": "t",
+      "statement": "x",
+      "objectives": [{"metric": "m", "direction": "up"}],
+      "flow": {"test": {"test": ["a"]}}},
      "direction must be"),
-    ({"id": "t", "statement": "x", "gate": {"test": ["a"]}, "budget": {"turbo": 1}}, "not loop knobs"),
+    ({"id": "t", "statement": "x", "budget": {"turbo": 1}, "flow": {"test": {"test": ["a"]}}}, "not loop knobs"),
 ])
 def test_the_document_is_validated_with_named_reasons(doc, message):
     with pytest.raises(TaskError, match=message):
@@ -63,7 +66,7 @@ def test_the_document_is_validated_with_named_reasons(doc, message):
 
 def test_load_task_reads_yaml_too(tmp_path):
     p = tmp_path / "t.yaml"
-    p.write_text("id: y\nstatement: make it\ngate:\n  build: ['{python}', '-c', 'pass', '{artifact}']\n")
+    p.write_text("id: y\nstatement: make it\nflow:\n  test:\n    build: ['{python}', '-c', 'pass', '{artifact}']\n")
     task = load_task(p)
     assert task.id == "y" and task.gate.named("build").run[0] == "{python}"
     with pytest.raises(TaskError, match="a .yaml, .yml or .json file"):
@@ -78,11 +81,12 @@ def test_request_for_layers_the_budget_under_the_caller():
 
 
 def test_tools_missing_names_the_first_token_of_each_command():
-    task = TaskSpec.from_dict({"id": "t", "statement": "x",
-                               "gate": {"build": ["no-such-binary-xyz", "{artifact}"],
-                                        "test": ["{python}", "-c", "pass"]},
-                               "stages": [{"name": "r", "command": ["also-missing-abc"],
-                                          "metrics_re": {"m": r"(\d+)"}}]})
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "x",
+                               "flow": {"test": {"build": ["no-such-binary-xyz", "{artifact}"],
+                                                 "test": ["{python}", "-c", "pass"]},
+                                        "measure": {"r": {"command": ["also-missing-abc"],
+                                                          "metrics_re": {"m": '(\\d+)'}}}}})
     assert PromptProblem(task).tools_missing() == ["no-such-binary-xyz", "also-missing-abc"]
     assert PromptProblem(load_task(DIGITS)).tools_missing() == []
 
@@ -116,12 +120,13 @@ def test_parts_are_generated_one_at_a_time_and_composed_in_order(tmp_path):
               "got = [g for g in open(sys.argv[1]).read().split('\\n') if g != '']\n"
               "bad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 5), 5))\n"
               "print(f'{len(bad)} failing')\nsys.exit(1 if bad else 0)")
-    task = TaskSpec.from_dict({
-        "id": "digits-in-parts", "statement": "the digits, in two halves",
-        "parts": [{"name": "head", "statement": "0 to 4"}, {"name": "tail", "statement": "5 to 9"}],
-        "gate": {"test": ["{python}", "-c", script, "{artifact}", "{part}"], "count_re": r"(\d+) failing"},
-        "joiner": "\n", "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
-    })
+    task = TaskSpec.from_dict({"id": "digits-in-parts",
+                               "statement": "the digits, in two halves",
+                               "parts": [{"name": "head", "statement": "0 to 4"}, {"name": "tail", "statement": "5 to 9"}],
+                               "joiner": '\n',
+                               "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
+                               "flow": {"test": {"test": ["{python}", "-c", script, "{artifact}", "{part}"],
+                                                 "count_re": '(\\d+) failing'}}})
     problem = PromptProblem(task)
     assert problem.subgoals() == ["head", "tail"]
     # the default planner asks the model which part is next; a scripted planner answer first
@@ -135,18 +140,14 @@ def test_parts_are_generated_one_at_a_time_and_composed_in_order(tmp_path):
 
 
 def test_a_build_command_refuses_and_a_stage_command_measures(tmp_path):
-    task = TaskSpec.from_dict({
-        "id": "lengths", "statement": "a line of text",
-        "gate": {"build": ["{python}", "-c",
-                           "import sys; t=open(sys.argv[1]).read(); print('need two words') if len(t.split()) < 2 else None; sys.exit(0 if len(t.split()) >= 2 else 3)",
-                           "{artifact}"]},
-        "stages": [{"name": "screen", "command": ["{python}", "-c",
-                                                 "import sys; t=open(sys.argv[1]).read(); print(f'chars={len(t)} words={len(t.split())}')",
-                                                 "{artifact}"],
-                   "metrics_re": {"chars": r"chars=(\d+)", "words": r"words=(\d+)"}}],
-        "objectives": [{"metric": "words", "direction": "maximize"}, {"metric": "chars", "direction": "minimize"}],
-        "budget": {"steps": 1, "repair_attempts": 3, "prototype": False},
-    })
+    task = TaskSpec.from_dict({"id": "lengths",
+                               "statement": "a line of text",
+                               "objectives": [{"metric": "words", "direction": "maximize"}, {"metric": "chars", "direction": "minimize"}],
+                               "budget": {"steps": 1, "repair_attempts": 3, "prototype": False},
+                               "flow": {"test": {"build": ["{python}", "-c", "import sys; t=open(sys.argv[1]).read(); print('need two words') if len(t.split()) < 2 else None; sys.exit(0 if len(t.split()) >= 2 else 3)", "{artifact}"]},
+                                        "measure": {"screen": {"command": ["{python}", "-c", "import sys; t=open(sys.argv[1]).read(); print(f'chars={len(t)} words={len(t.split())}')", "{artifact}"],
+                                                               "metrics_re": {"chars": 'chars=(\\d+)',
+                                                                              "words": 'words=(\\d+)'}}}}})
     problem = PromptProblem(task)
     assert problem.frontier_axes() is not None and problem.stages() == ["screen"]
     # "one" is refused by the build; the patch turn gets a whole artifact instead of edits, so
@@ -209,12 +210,16 @@ def _decomposed_task(**extra):
               "got = [g for g in open(sys.argv[1]).read().split('\\n') if g != '']\n"
               "bad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 5), 5))\n"
               "print(f'{len(bad)} failing')\nsys.exit(1 if bad else 0)")
-    return TaskSpec.from_dict({
-        "id": "digits-decomposed", "statement": "the ten digits, one per line",
-        "parts": "decompose", "max_parts": 3,
-        "gate": {"test": ["{python}", "-c", script, "{artifact}", "{part}"], "count_re": r"(\d+) failing"},
-        "joiner": "\n", "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
-        **extra})
+    return TaskSpec.from_dict({"id": "digits-decomposed",
+                               "statement": "the ten digits, one per line",
+                               "parts": "decompose",
+                               "max_parts": 3,
+                               "joiner": '\n',
+                               "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
+                               **extra,
+                               "flow": {**extra.get("flow", {}),
+                                        "test": {"test": ["{python}", "-c", script, "{artifact}", "{part}"],
+                                                 "count_re": '(\\d+) failing'}}})
 
 
 def test_a_task_may_ask_the_orchestrator_to_decompose_it(tmp_path):
@@ -316,7 +321,7 @@ def _critic(ok: bool, *issues: str) -> str:
 
 
 def test_a_critic_sends_a_passing_candidate_back_once_then_the_gate_rules(tmp_path):
-    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "flow": {"critique": "llm"},
+    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "flow": {**load_task(DIGITS).to_dict().get("flow", {}), "critique": "llm"},
                                "budget": {"steps": 3, "repair_attempts": 2, "prototype": False}})
     assert task.critique and TaskSpec.from_dict(task.to_dict()) == task
     # design passes the gate; the critic objects; the patch turn carries the objection; the
@@ -369,7 +374,7 @@ def test_without_a_critic_nothing_changes(tmp_path):
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=proposer, log=lambda m: None)
     assert out.decision is not None and len(proposer.prompts) == 1
     assert not any("critique" in ln for ln in out.lessons + out.not_established)
-    task = TaskSpec.from_dict({**task.to_dict(), "flow": {"critique": "llm"}})
+    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "critique": "llm"}})
     out = run_loop(PromptProblem(task), request_for(task, db="", critique_rounds=0),
                    proposer=ScriptedProposer([_reply(GOOD)]), log=lambda m: None)
     assert out.decision is not None                            # critique_rounds=0: no critic asked
@@ -415,13 +420,15 @@ def test_a_document_names_a_world_and_binds_its_hooks(tmp_path):
     from flux_loop import Ladder, PromptProblem, TaskError, TaskSpec, task_report_lines
     from flux_records import Records
 
-    doc = {"id": "tiny", "statement": "a tiny thing", "parts": ["a"], "world": __name__ + ":_Tiny",
+    doc = {"id": "tiny",
+           "statement": "a tiny thing",
+           "parts": ["a"],
+           "world": __name__ + ":_Tiny",
            "params": {"ulp_budget": 2},
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "unit": "MHz"},
-                          {"metric": "area_um2", "direction": "minimize"}],
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
            "ladder": {"sweep": [2, 4], "redesigns": 1},
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]},
-                      {"name": "confirm", "metrics": ["fmax_mhz"], "needs": ["no-such-tool-xyz"]}]}
+           "flow": {"measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]},
+                                "confirm": {"metrics": ["fmax_mhz"], "needs": ["no-such-tool-xyz"]}}}}
     task = TaskSpec.from_dict(doc)
     prob = PromptProblem(task)
     assert isinstance(prob.world, _Tiny) and prob.ulp == 2                    # the world's state, through the problem
@@ -452,7 +459,7 @@ def test_a_document_names_a_world_and_binds_its_hooks(tmp_path):
     with pytest.raises(TaskError, match="world"):
         TaskSpec.from_dict({**doc, "world": "flux_loop.task"})
     with pytest.raises(TaskError, match="exactly one of"):
-        TaskSpec.from_dict({**{k: v for k, v in doc.items() if k != "world"}, "gate": {"test": ["true"]}})
+        TaskSpec.from_dict({**{k: v for k, v in doc.items() if k != "world"}, "flow": {**{k: v for k, v in doc.items() if k != 'world'}.get("flow", {}), "test": {"test": ["true"]}}})
 
 
 def test_a_world_document_runs_the_loop_end_to_end(tmp_path):
@@ -460,9 +467,12 @@ def test_a_world_document_runs_the_loop_end_to_end(tmp_path):
     from flux_llm import ScriptedProposer
     from flux_loop import LoopRequest, PromptProblem, TaskSpec, run_loop, task_report_lines
 
-    doc = {"id": "tiny", "statement": "a tiny thing", "parts": ["a"], "world": __name__ + ":_Tiny",
+    doc = {"id": "tiny",
+           "statement": "a tiny thing",
+           "parts": ["a"],
+           "world": __name__ + ":_Tiny",
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]}]}
+           "flow": {"measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "tiny.db"), steps=2, prototype=False, critique_rounds=0),
                    proposer=ScriptedProposer(['{"artifact": "ok", "why": "-"}']), log=lambda _m: None)
@@ -473,14 +483,14 @@ def test_a_world_document_runs_the_loop_end_to_end(tmp_path):
 
 def test_a_record_is_named_by_the_documents_id(tmp_path):
     """An edited document resumes its record: the record is named by the id, not the text (D628)."""
-    a = TaskSpec.from_dict({"id": "t", "statement": "count to ten", "gate": {"test": ["a"]}})
-    b = TaskSpec.from_dict({"id": "t", "statement": "count to twenty", "gate": {"test": ["a"]}})
+    a = TaskSpec.from_dict({"id": "t", "statement": "count to ten", "flow": {"test": {"test": ["a"]}}})
+    b = TaskSpec.from_dict({"id": "t", "statement": "count to twenty", "flow": {"test": {"test": ["a"]}}})
     ra, rb = (PromptProblem(x).campaign_name(request_for(x, db="x.db")) for x in (a, b))
     assert ra == rb == "t"
 
 def test_the_document_says_whether_it_wants_a_measurement_cache():
     """D541: `cache: false` -- a world that measures in microseconds keeps no sidecar."""
-    base = {"id": "t", "statement": "x", "gate": {"test": ["a"]}}
+    base = {"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}}}
     assert PromptProblem(TaskSpec.from_dict(base)).cache_suffix() == "t.json"
     assert PromptProblem(TaskSpec.from_dict({**base, "cache": False})).cache_suffix() is None
     assert PromptProblem(TaskSpec.from_dict({**base, "cache": "shared.json"})).cache_suffix() == "shared.json"
@@ -492,10 +502,10 @@ def test_the_document_says_whether_it_wants_a_measurement_cache():
 
 # ---- the flow (D542): one key per box of the drawing
 def _flow_doc(flow, **more):
-    return {"id": "t", "statement": "x", "gate": {"test": ["a"]},
-            "stages": [{"name": "screen", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}},
-                       {"name": "confirm", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}}],
-            "flow": flow, **more}
+    return {"id": "t", "statement": "x",
+            "flow": {"test": {"test": ["a"]},
+                     "measure": {"screen": {"command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}},
+                                 "confirm": {"command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}}}, **flow}, **more}
 
 
 def test_the_flow_block_folds_into_the_rig_and_reads_back():
@@ -521,11 +531,12 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
 
 
 @pytest.mark.parametrize("flow, more, message", [
-    ({"test": "llm"}, {}, "never delegated"),
+    ({"test": {"agent": "claude"}}, {}, "never delegated"),       # D775: flow.test is the gate itself
+    ({"measure": {"agent": "claude"}}, {}, "never delegated"),
     ({"validate": "model"}, {}, "one of rules, llm"),
     ({"dse": "hillclimb"}, {}, "no such DSE policy"),
     ({"analytical": ["screen"]}, {}, "not a box"),
-    ({"knowledge": ["sheet"]}, {}, "names none"),
+    ({"knowledge": ["sheet"]}, {}, "is `off` or an object"),
     ({"winner": "llm"}, {}, "not a box"),
 ])
 def test_a_flow_that_says_a_thing_twice_or_wrong_is_refused(flow, more, message):
@@ -539,13 +550,19 @@ def test_a_worlds_child_inherits_it_and_is_its_own_campaign(tmp_path):
     from flux_loop import PromptProblem, TaskSpec
     from flux_loop.roles import Roles, Rules
 
-    doc = {"id": "whole", "statement": "the whole", "world": __name__ + ":_Tiny", "params": {"ulp_budget": 3}, "flow": {"validate": "llm"},
+    doc = {"id": "whole",
+           "statement": "the whole",
+           "world": __name__ + ":_Tiny",
+           "params": {"ulp_budget": 3},
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]}],
-           "subtasks": [{"id": "left", "statement": "the left half", "parts": ["a"]},
-                        {"id": "right", "statement": "the right half", "parts": ["b"], "world": "",
-                         "gate": {"test": ["true"]},
-                         "stages": [{"name": "screen", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}}]}]}
+           "subtasks": [{"id": "left", "statement": "the left half", "parts": ["a"]}, {"id": "right",
+                                                                                       "statement": "the right half",
+                                                                                       "parts": ["b"],
+                                                                                       "world": "",
+                                                                                       "flow": {"test": {"test": ["true"]},
+                                                                                                "measure": {"screen": {"command": ["m"],
+                                                                                                                       "metrics_re": {"fmax_mhz": '(\\d+)'}}}}}],
+           "flow": {"validate": "llm", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
     task = TaskSpec.from_dict(doc)
     left, right = task.subtasks
     assert left.world == task.world and left.record == "whole/left" and left.flow.get("validate") == "llm"
@@ -580,11 +597,13 @@ def test_a_document_learns_its_margins_from_the_calibrations(tmp_path):
     from flux_loop import LoopRequest, LoopState, PromptProblem, TaskSpec
     from flux_loop.calibrate import Bias
 
-    doc = {"id": "m", "statement": "m", "gate": {"test": ["true"]},
-           "stages": [{"name": "screen", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}},
-                      {"name": "confirm", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}},
-                      {"name": "route", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}}],
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "margin": 0.03}]}
+    doc = {"id": "m",
+           "statement": "m",
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "margin": 0.03}],
+           "flow": {"test": {"test": ["true"]},
+                    "measure": {"screen": {"command": ["m"], "metrics_re": {"fmax_mhz": '(\\d+)'}},
+                                "confirm": {"command": ["m"], "metrics_re": {"fmax_mhz": '(\\d+)'}},
+                                "route": {"command": ["m"], "metrics_re": {"fmax_mhz": '(\\d+)'}}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     said = []
     state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
@@ -606,13 +625,14 @@ def test_a_command_is_a_string_or_a_list_and_a_flux_head_runs_this_flux():
 
     from flux_loop import TaskSpec
 
-    task = TaskSpec.from_dict({
-        "id": "t", "statement": "x",
-        "gate": {"test": "flux rtl test {artifact} --golden {home}/golden.py", "count_re": r"(\d+) failing"},
-        "stages": [{"name": "s", "command": "flux rtl measure {artifact} --stage synth",
-                    "metrics": ["fmax_mhz", "area_um2"]},
-                   {"name": "r", "command": ["{python}", "-c", "print('k=1')"], "metrics_re": {"k": "k=(\\d+)"}}],
-    })
+    task = TaskSpec.from_dict({"id": "t",
+                               "statement": "x",
+                               "flow": {"test": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
+                                                 "count_re": '(\\d+) failing'},
+                                        "measure": {"s": {"command": "flux rtl measure {artifact} --stage synth",
+                                                          "metrics": ["fmax_mhz", "area_um2"]},
+                                                    "r": {"command": ["{python}", "-c", "print('k=1')"],
+                                                          "metrics_re": {"k": 'k=(\\d+)'}}}}})
     assert task.gate.named("test").run == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py")
     s, r = task.stages
     assert s.command[:5] == ("{python}", "-W", "ignore", "-m", "flux_cli.main") and s.metrics == ("fmax_mhz", "area_um2")
@@ -631,18 +651,17 @@ def test_a_space_and_a_generator_command_are_a_dse_with_no_world(tmp_path):
     gen = tmp_path / "gen.py"
     gen.write_text("import sys\nout, width, fill = sys.argv[1], int(sys.argv[2]), sys.argv[3]\n"
                    "open(out, 'w').write(fill * width)\n")
-    task = TaskSpec.from_dict({
-        "id": "strings", "statement": "a string, as short as the gate allows",
-        "space": {"width": [4, 1, 2], "fill": ["a", "b"]},
-        "flow": {"dse": "sweep", "generate": {"command": "{python} " + str(gen) + " {artifact} {width} {fill}"}},
-        # the gate refuses the fill "b" and sees the knob it was made with
-        "gate": {"test": ["{python}", "-c", "import sys; bad = sys.argv[1] == 'b'; print(f'{int(bad)} failing')", "{fill}"],
-                 "count_re": r"(\d+) failing"},
-        "stages": [{"name": "screen", "metrics": ["size"],
-                    "command": ["{python}", "-c", "import sys; print('size=' + str(len(open(sys.argv[1]).read())))", "{artifact}"]}],
-        "objectives": [{"metric": "size", "direction": "minimize"}],
-        "budget": {"steps": 1, "prototype": False, "finalists": 0, "batch": 100},
-    })
+    task = TaskSpec.from_dict({"id": "strings",
+                               "statement": "a string, as short as the gate allows",
+                               "objectives": [{"metric": "size", "direction": "minimize"}],
+                               "budget": {"steps": 1, "prototype": False, "batch": 100},
+                               "flow": {"dse": {"policy": "sweep", "space": {"width": [4, 1, 2], "fill": ["a", "b"]}},
+                                        "generate": {"command": "{python} " + str(gen) + " {artifact} {width} {fill}"},
+                                        "test": {"test": ["{python}", "-c", "import sys; bad = sys.argv[1] == 'b'; print(f'{int(bad)} failing')", "{fill}"],
+                                                 "count_re": '(\\d+) failing'},
+                                        "measure": {"screen": {"metrics": ["size"],
+                                                               "command": ["{python}", "-c", "import sys; print('size=' + str(len(open(sys.argv[1]).read())))", "{artifact}"]}},
+                                        "select": {"finalists": 0}}})
     problem = PromptProblem(task)
     out = run_loop(problem, request_for(task, db=""), log=lambda m: None)
     assert out.decision is not None and out.decision.candidate.knobs == {"width": 1, "fill": "a"}
@@ -651,11 +670,14 @@ def test_a_space_and_a_generator_command_are_a_dse_with_no_world(tmp_path):
 
 def test_a_placeholder_that_is_no_knob_is_a_load_error():
     with pytest.raises(TaskError, match=r"\{widht\}.*neither a knob"):
-        TaskSpec.from_dict({"id": "t", "statement": "x", "space": {"width": [1, 2]},
-                            "gate": {"test": "check {artifact} --width {widht}"}})
+        TaskSpec.from_dict({"id": "t",
+                            "statement": "x",
+                            "flow": {"test": {"test": "check {artifact} --width {widht}"},
+                                     "dse": {"space": {"width": [1, 2]}}}})
     # a script's own braces (a token with spaces) are the script's business
-    TaskSpec.from_dict({"id": "t", "statement": "x",
-                        "gate": {"test": ["{python}", "-c", "print(f'{len(x)} failing') if x else None"]}})
+    TaskSpec.from_dict({"id": "t",
+                        "statement": "x",
+                        "flow": {"test": {"test": ["{python}", "-c", "print(f'{len(x)} failing') if x else None"]}}})
 
 
 def test_a_stage_whose_tool_is_missing_is_said_to_be_skipped(tmp_path, capsys):
@@ -665,8 +687,10 @@ def test_a_stage_whose_tool_is_missing_is_said_to_be_skipped(tmp_path, capsys):
     from flux_cli.main import main
     from flux_loop import PromptProblem, TaskSpec, task_report_lines
 
-    doc = {"id": "t", "statement": "x", "gate": {"test": ["true"]},
-           "stages": [{"name": "far", "command": "true", "metrics": ["m"], "needs": ["no-such-tool-for-flux"]}]}
+    doc = {"id": "t",
+           "statement": "x",
+           "flow": {"test": {"test": ["true"]},
+                    "measure": {"far": {"command": "true", "metrics": ["m"], "needs": ["no-such-tool-for-flux"]}}}}
     (tmp_path / "t.problem.yaml").write_text(yaml.safe_dump(doc))
     assert main(["task", "check", str(tmp_path / "t.problem.yaml")]) == 0
     out = capsys.readouterr().out
@@ -696,7 +720,7 @@ def test_every_load_failure_names_the_file_and_a_misspelled_key_is_refused(tmp_p
     with pytest.raises(TaskError, match=r"bad\.yaml: not valid YAML \(line \d+"):
         load_task(bad)
     typo = tmp_path / "typo.yaml"
-    typo.write_text("id: x\nstatement: y\ngate: {test: [true]}\nobjective: [{metric: m, direction: minimize}]\n")
+    typo.write_text("id: x\nstatement: y\nflow: {test: {test: [true]}}\nobjective: [{metric: m, direction: minimize}]\n")
     with pytest.raises(TaskError, match=r"typo\.yaml: keys a problem document does not have: objective \(did you mean objectives\?\)"):
         load_task(typo)
 
@@ -715,8 +739,10 @@ def test_a_test_that_exits_3_is_a_build_failure_run_once(tmp_path):
         "bad = sum(1 for i, ln in enumerate(t.split()) if ln != str(i))\n"
         "print(f'{bad} failing'); sys.exit(1 if bad else 0)\n")
     runs = tmp_path / "runs"
-    doc = {"id": "d", "statement": "the digits", "gate": {"test": ["{python}", "{home}/check.py", "{artifact}", str(runs)],
-                                                          "count_re": r"(\d+) failing"}}
+    doc = {"id": "d",
+           "statement": "the digits",
+           "flow": {"test": {"test": ["{python}", "{home}/check.py", "{artifact}", str(runs)],
+                             "count_re": '(\\d+) failing'}}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
     state = LoopState(request=LoopRequest(batch=WHOLE, db=""), say=lambda _m: None, proposer=None, feedback=None, workdir=str(tmp_path))
     broken = Candidate("b", "SYNTAX here")
@@ -786,11 +812,14 @@ def test_a_stage_that_does_not_measure_an_objective_is_refused():
     """Each stage ranks its own rows, so a stage lacking an objective could never pass a design on (D625)."""
     from flux_loop import PromptProblem, TaskSpec, request_for
 
-    doc = {"id": "t", "statement": "s", "language": "text", 
-           "gate": {"test": "true"},
-           "stages": [{"name": "cost", "command": "echo area_mm2=1", "metrics": ["area_mm2"]},
-                      {"name": "model", "command": "echo latency_cycles=1 area_mm2=1", "metrics": ["latency_cycles", "area_mm2"]}],
-           "objectives": [{"metric": "latency_cycles", "direction": "minimize"}, {"metric": "area_mm2", "direction": "minimize"}]}
+    doc = {"id": "t",
+           "statement": "s",
+           "language": "text",
+           "objectives": [{"metric": "latency_cycles", "direction": "minimize"}, {"metric": "area_mm2", "direction": "minimize"}],
+           "flow": {"test": {"test": "true"},
+                    "measure": {"cost": {"command": "echo area_mm2=1", "metrics": ["area_mm2"]},
+                                "model": {"command": "echo latency_cycles=1 area_mm2=1",
+                                          "metrics": ["latency_cycles", "area_mm2"]}}}}
     task = TaskSpec.from_dict(doc)
     wrong = PromptProblem(task).validate(request_for(task))
     assert len(wrong) == 1 and "the cost stage does not measure latency_cycles" in wrong[0]

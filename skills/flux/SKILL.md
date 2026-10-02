@@ -44,14 +44,17 @@ statement: >-            # the ask in prose: the model reads it
 contract: >-             # rules every candidate must follow: ports, names, what is forbidden
   One module named exactly `mul8`, ports ..., purely combinational.
 language: systemverilog
-gate: flux rtl test {artifact} --golden {home}/golden.py   # refuses before anything costs
-stages:                  # cheapest first; `flux rtl measure` knows its metrics and tools
-  - {name: screen,  command: "flux rtl measure {artifact} --stage synth --clock-ps 1000"}
-  - {name: confirm, command: "flux rtl measure {artifact} --stage place --clock-ps 1000"}
+
+flow:
+  test: flux rtl test {artifact} --golden {home}/golden.py   # refuses before anything costs
+  measure:                  # cheapest first; `flux rtl measure` knows its metrics and tools
+    screen: "flux rtl measure {artifact} --stage synth --clock-ps 1000"
+    confirm: "flux rtl measure {artifact} --stage place --clock-ps 1000"
+  select: {finalists: 2}
 objectives:              # the first is the goal; the second breaks ties among those meeting it
   - {metric: fmax_mhz, direction: maximize, goal: 1000}
   - {metric: area_um2, direction: minimize}
-budget: {steps: 4, repair_attempts: 6, prototype: false, finalists: 2}   # prototype: true for numeric functions (below)
+budget: {steps: 4, repair_attempts: 6, prototype: false}  # prototype: true for numeric functions (below)
 ```
 
 ## Run it
@@ -82,7 +85,7 @@ flux task run DOC --tui                  # the curses screen, for a person watch
 
 `flow:` says how the search goes; mix them per problem:
 - `generate: model` -- the model writes each candidate and repairs it against the gate's failures.
-- `space:` (knob -> ordered choices) + `generate: {command: "{python} {home}/render.py {knob} {artifact}"}`
+- `dse: {policy: sweep, space: {knob: [ordered choices]}}` + `generate: {command: "{python} {home}/render.py {knob} {artifact}"}`
   -- a script renders each point; no model needed.
 - `dse:` a policy (`sweep`, `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto`, `llm`) or a
   list of phases, each continuing from where the last ended:
@@ -90,7 +93,7 @@ flux task run DOC --tui                  # the curses screen, for a person watch
 - `generate: {agent: opencode|claude|codex}` -- a coding agent writes the candidate in a work
   directory; the loop still gates and measures it. `{agent: {preset: claude, questions: model}}`
   says who answers when the agent asks (`decide`, the default: nobody; `model`; `operator`).
-- Improving an existing design: put it (or the reference) in `knowledge: {files: [...]}` and say
+- Improving an existing design: put it (or the reference) in `flow.knowledge: {files: [...]}` and say
   in `statement` what must get better, and let the run go on: it keeps evolving until stopped.
 - `skills: [dir]` / `--skill DIR` gives the loop's model and agents extra instructions.
 
@@ -108,7 +111,7 @@ RTL directly rarely passes.
   work on the mantissa; one fixed-point format cannot span the range.
 - A prototype whose estimated hardware cost is over `budget.prototype_cost_max` (default 2,000,
   about 650 um2 on ASAP7) is made cheaper before anything is built.
-- A method note in `knowledge: {files: [...]}` (the method and measured facts, not a design)
+- A method note in `flow.knowledge: {files: [...]}` (the method and measured facts, not a design)
   helps a model most. `applications/gelu_fp16/` is a worked example.
 
 ## Read the answer

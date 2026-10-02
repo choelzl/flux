@@ -40,12 +40,12 @@ Edit `myproblem/myproblem.problem.yaml`:
 
 - `rtl`: edit `golden.py`: `PORTS` and a `golden(**inputs)` function returning the right outputs.
 - `python`, `sweep`, `tune`: edit `check.py` so it prints `N failing` (0 when correct).
-- For a knob search: list the knobs under `space:` and write each design in the generator script.
+- For a knob search: list the knobs under `flow.dse.space` and write each design in the generator script.
 
 Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
-problem on the machine) or in a folder beside the document named by `knowledge: {library: papers}`.
+problem on the machine) or in a folder beside the document named by `flow.knowledge: {library: papers}`.
 Excerpts that match the statement, contract and parts reach the model's prompts, and the coding
-agents get the file paths to open. `flow: {knowledge: none}` turns it off.
+agents get the file paths to open. `flow: {knowledge: off}` turns it off.
 
 ## 4. Check it
 
@@ -63,7 +63,7 @@ flux task run myproblem/myproblem.problem.yaml --passes 1
 ```
 
 Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen. A search
-(`space:` and `flow.dse`) tries one design a pass, the next picked from what the last ones
+(`flow.dse` with its `space`) tries one design a pass, the next picked from what the last ones
 measured: give it a pass per point, or `budget.batch: N` for N designs a pass.
 [Run a problem](run.md) has the options, stopping and resuming, and choosing the AI model.
 
@@ -80,25 +80,26 @@ writes an HTML page of the whole search.
 | `id` | a short name (letters, digits, `_`); names the record, so an edited document resumes it |
 | `statement`, `contract` | the request and its rules, in words |
 | `language` | `systemverilog`, `verilog`, `python`, `c`, `cpp`, `text`, ...: the file type |
-| `gate` | a command that prints `N failing` or exits non-zero; or a list of named checks, run in order |
-| `stages` | measurements, cheapest first: `{name, command}`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
 | `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; each `goal` is a limit (at least / at most), the goal-less ones decide in order, `balance: true` ones as their knee; `{keep: 0.9, above: 1.0}` is a limit relative to the best |
-| `space` | knob -> its choices, for a search |
-| `seeds` | settings measured before the search starts |
-| `knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers |
-| `flow` | who fills each box ([the loop](loop-shape.md)) |
-| `budget` | `steps`, `passes`, `repair_attempts`, `finalists`, `workers`, `prototype` |
+| `flow` | each box of [the loop](loop-shape.md): who fills it, and its own settings (below) |
+| `flow.test` | a command that prints `N failing` or exits non-zero; or a list of named checks, run in order |
+| `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
+| `flow.dse` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
+| `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers; `agent: opencode` digests them; `off` |
+| `flow.select` | `{finalists: 3}`: how many reach the costliest stage |
+| `budget` | `steps`, `passes`, `repair_attempts`, `workers`, `prototype` |
 
 In commands: `{artifact}` is the design file, `{home}` the document's folder, `{python}` the
-Python in use, and `{knob}` each knob of `space:`. A command starting with `flux` runs this Flux.
+Python in use, and `{knob}` each knob of `flow.dse.space`. A command starting with `flux` runs this Flux.
 
 A gate can be several checks, cheapest first. Each has a name and a command; the first that
 fails refuses the design, and the repair is told where it failed:
 
 ```yaml
-gate:
-  - {name: lint, run: "flux rtl lint {artifact}"}
-  - {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py"}
+flow:
+  test:
+    - {name: lint, run: "flux rtl lint {artifact}"}
+    - {name: golden, run: "flux rtl test {artifact} --golden {home}/golden.py"}
 ```
 
 A stage's `cutoff` is its gate: `cutoff: {metric: fmax_mhz, at: 1000}` sends on only the designs

@@ -93,7 +93,7 @@ produced a confidently wrong DSE winner from a sweep that reported no errors.
 The ABI is the interface for a candidate **the IR can express** — a Workload IR document, an
 Architecture IR document, an optional Mapping IR — which is what makes backends
 interchangeable: a search can swap `zigzag` for `timeloop` because both read the same
-documents. It is reached by NAME, from a problem document's `stages`
+documents. It is reached by NAME, from a problem document's `flow.measure`
 (`evaluator: openroad`, [decisions.md D430](decisions.md)) or `flux eval`.
 
 Several studies here measure something else. The macarray's candidate is generated

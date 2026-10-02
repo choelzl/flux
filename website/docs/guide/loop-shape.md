@@ -32,8 +32,8 @@ the step.
 | word | meaning |
 |---|---|
 | **document** | the `*.problem.yaml` file that describes one problem |
-| **check** | a command that refuses a wrong design: a lint, a test against the golden model, a script of yours. Together the checks are the **gate** (`gate:`) |
-| **measurement** | one **stage** (`stages:`), from cheap (synthesis, a formula) to costly (placement, a simulation) |
+| **check** | a command that refuses a wrong design: a lint, a test against the golden model, a script of yours. Together the checks are the **gate** (`flow.test`) |
+| **measurement** | one **stage** (`flow.measure`, by name), from cheap (synthesis, a formula) to costly (placement, a simulation) |
 | **objective** | what "better" means: a number, up or down, optionally with a limit to reach |
 | **round** | one **pass** of the loop; a run is a series of them |
 | **record** | the database of every design, number and refusal (`out/<id>.db`) |
@@ -57,12 +57,12 @@ flow:
 | Plan the round | `plan` | Optionally writes a plan for the round before any work starts. | `none`: step by step · `llm`: a model writes the plan · a coding agent |
 | Pick the next job | `orchestrate` | Decides what to work on next. | unsaid: the model picks the next part, rules pick the kind of work · `rules`: no model · `llm`: a model picks · `agent`: a model with tools picks · a coding agent. Left out when a search is on: the search picks. |
 | Your notes | `feedback` | Notes you type while it runs steer the next round. Typed in the live screen (`--tui`, then `f`). | `human` · `none` |
-| Search the settings | `dse` | Walks the list of settings (the space) to choose which to try. The settings are the document's `space:`. | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `llm`: a model proposes settings · a coding agent |
+| Search the settings | `dse` | Walks the list of settings (the space) to choose which to try. The settings are its `space` (`flow.dse: {policy: sweep, space: {...}}`). | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `llm`: a model proposes settings · a coding agent |
 | Make a design | `generate` | Writes each candidate design. | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
 | Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library · a coding agent: `{agent: opencode}` digests the papers in the Setup |
-| Check it works | `test` | Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's. | **fixed**: the document's `gate:` |
+| Check it works | `test` | Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's. | **fixed**: always your checks, said as `flow.test` |
 | Second opinion | `critique` | Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice. The three *Critic* boxes of the drawing. | `none` · `llm`: a model critic · a coding agent |
-| Measure | | Runs your measurements, cheapest first; a design that fails a gate is dropped. | **fixed**: the document's `stages:`. Each may `estimate:` first and skip a design that cannot pass. |
+| Measure | | Runs your measurements, cheapest first; a design that fails a gate is dropped. | **fixed**: always your measurements, said as `flow.measure`. Each may `estimate:` first and skip a design that cannot pass. |
 | Compare measures | `calibrate` | Checks how well the cheap measurement predicts the costly one. | `on` · `off`; never a model's or an agent's |
 | Choose the best | `select` | Picks the winner by your goals. | `objectives` · a coding agent breaks the ties they leave open |
 | Keep a record | | Every design, measurement and refusal is kept, and read back when you resume. | **fixed**: always on |
@@ -85,7 +85,7 @@ The loop crafter offers the choices above. A document written by hand can also s
 | `orchestrate` | `given` | take the parts in the order the document lists them, no model |
 | `dse` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
 | `generate` | `{catalog: [...]}` | a fixed list of designs, no model |
-| `knowledge` | `[digest]` | the model also reads a model's summary of the library |
+| `knowledge` | `{digest: true}` | the model also reads a model's summary of the library (`{agent: opencode}`: by that agent) |
 
 ## Parts
 
@@ -105,10 +105,11 @@ design estimated to fail a gate or a limit by more than the margin is skipped at
 | `model` | the AI model, from the design and the stage's past results |
 
 ```yaml
-stages:
-  - name: place
-    command: flux rtl measure {artifact} --stage place --clock-ps 1000
-    estimate: {kind: surrogate, margin: 0.05}
+flow:
+  measure:
+    place:
+      command: flux rtl measure {artifact} --stage place --clock-ps 1000
+      estimate: {kind: surrogate, margin: 0.05}
 ```
 
 ## Rules that never change

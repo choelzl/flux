@@ -10,9 +10,12 @@ from flux_records import Records
 
 
 def _doc(id_, part="p"):
-    return TaskSpec.from_dict({"id": id_, "statement": "x", "parts": [part], "gate": {"test": ["a"]},
-                               "stages": [{"name": "screen", "command": ["m"], "metrics_re": {"fmax_mhz": r"(\d+)"}}],
-                               "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}]})
+    return TaskSpec.from_dict({"id": id_,
+                               "statement": "x",
+                               "parts": [part],
+                               "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
+                               "flow": {"test": {"test": ["a"]},
+                                        "measure": {"screen": {"command": ["m"], "metrics_re": {"fmax_mhz": '(\\d+)'}}}}})
 
 
 def _sibling(db, objective, name, *, part="p", proto="def design(x): return x", rtl="module m; endmodule", fmax=700.0):

@@ -79,7 +79,7 @@ Measured in this project, with the hosted `qwen3.6-35b-a3b-apex` (a 35B mixture 
 | `mul8` (Booth or Baugh-Wooley, `a * w` not allowed) | one pass each on two dates (26 min, 4 drafts): the best that compiled failed 22 of 49 vectors, then all 49; it needs several passes or a stronger model |
 | a combinational FP16 GELU within 1 ULP, from a plain prompt, RTL directly | after hours and about 60 attempts, no draft compiled: SystemVerilog syntax and FP16 decoding were the walls |
 | the same GELU, the model writing a Python prototype (`prototype: true`) | the first to pass was a table of the answers; under the formula rules (D616) it stalled at 24,196 of 65,536 inputs wrong: one fixed-point format for every input, then x/2 across the middle range |
-| the same GELU, OpenCode writing the prototype, with a method note in `knowledge:` | 48,669 wrong, then 529, then 37 over about a day of turns (D618); the remaining misses are 2 ULP in the negative tail |
+| the same GELU, OpenCode writing the prototype, with a method note in `flow.knowledge` | 48,669 wrong, then 529, then 37 over about a day of turns (D618); the remaining misses are 2 ULP in the negative tail |
 | OpenCode writing the GELU's RTL directly | 115 attempts over 1.5 days, none passed the gate |
 | the NLU's operators (the same kind of function) | solved, with a Python prototype first, then translated to RTL, with the tools and the ladder |
 
@@ -87,7 +87,7 @@ The loop does not make a weak model strong. It keeps what passes, refuses what d
 turns every failure into the next prompt. For hard numeric RTL:
 - use a prototype stage (`budget.prototype: true` with a golden model). The algorithm is proven
   in Python on every input in seconds, and the loop spells the RTL itself (D611);
-- give it a method note (`knowledge: {files: [...]}`) with the method and facts, not a design.
+- give it a method note (`flow.knowledge: {files: [...]}`) with the method and facts, not a design.
   For the GELU, the note covered not putting a float into one fixed-point format, the function
   factored as x times a smooth h(x), the regions where the answer is x, -0 or a short Taylor
   series, and a polynomial per segment;

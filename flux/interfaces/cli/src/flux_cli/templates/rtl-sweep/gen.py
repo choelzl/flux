@@ -1,5 +1,5 @@
 """The generator of __NAME__: `gen.py <out> <arch> <chunk>` spells one 16-bit popcount per point
-of the document's `space:`. Add an architecture here and its name to the space to try it."""
+of the document's `flow.dse.space`. Add an architecture here and its name to the space to try it."""
 
 import sys
 

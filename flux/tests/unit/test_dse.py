@@ -128,9 +128,11 @@ def test_the_document_names_the_policy_on_its_dse_line():
     from flux_loop import PromptProblem, TaskError, TaskSpec
     from flux_loop.document import describe_flow
 
-    doc = {"id": "grid", "statement": "a grid", "space": {"x": [1, 2, 3], "y": ["a", "b"]},
-           "gate": {"test": ["true"]}, "flow": {"dse": {"montecarlo": {"samples": 4, "seed": 1}}},
-           "objectives": [{"metric": "cost", "direction": "minimize"}]}
+    doc = {"id": "grid",
+           "statement": "a grid",
+           "objectives": [{"metric": "cost", "direction": "minimize"}],
+           "flow": {"dse": {"montecarlo": {"samples": 4, "seed": 1}, "space": {"x": [1, 2, 3], "y": ["a", "b"]}},
+                    "test": {"test": ["true"]}}}
     task = TaskSpec.from_dict(doc)
     assert task.space == {"x": [1, 2, 3], "y": ["a", "b"]}
     prob = PromptProblem(task)
@@ -139,9 +141,9 @@ def test_the_document_names_the_policy_on_its_dse_line():
                for line in describe_flow(task, prob))
     assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
     with pytest.raises(TaskError, match="registered: anneal, control, genetic"):
-        TaskSpec.from_dict({**doc, "flow": {"dse": "hillclimb"}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": "hillclimb"}})
     with pytest.raises(TaskError, match="space.y: a non-empty list"):
-        TaskSpec.from_dict({**doc, "space": {"x": [1], "y": []}, "flow": {}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": {"space": {"x": [1], "y": []}}}})
 
 
 def test_the_model_names_the_next_points_and_bad_ones_are_dropped():
@@ -173,8 +175,10 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
     from flux_loop import PromptProblem, TaskSpec
     from flux_loop.document import describe_flow
 
-    doc = {"id": "g", "statement": "g", "space": {"x": [1, 2]}, "gate": {"test": ["true"]},
-           "objectives": [{"metric": "cost", "direction": "minimize"}], "flow": {"dse": {"llm": {"batch_size": 3}}}}
+    doc = {"id": "g",
+           "statement": "g",
+           "objectives": [{"metric": "cost", "direction": "minimize"}],
+           "flow": {"dse": {"llm": {"batch_size": 3}, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
     assert any(line.startswith("dse: llm {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
@@ -304,15 +308,18 @@ def test_the_pareto_tree_spends_its_budget_and_holds_a_front():
 def test_the_document_says_phases_and_a_typo_in_one_is_a_load_error():
     from flux_loop import PromptProblem, TaskError, TaskSpec
 
-    doc = {"id": "g", "statement": "a grid", "space": {"x": [1, 2, 3]}, "gate": {"test": ["true"]},
+    doc = {"id": "g",
+           "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": [{"name": "a", "wave": 2}, {"policy": "llm", "knobs": ["x"], "rounds": 1}, "control"]}}
+           "flow": {"dse": {"policy": [{"name": "a", "wave": 2}, {"policy": "llm", "knobs": ["x"], "rounds": 1}, "control"],
+                            "space": {"x": [1, 2, 3]}},
+                    "test": {"test": ["true"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert prob.roles().orchestrator.name == "phases" and len(prob.roles().orchestrator.phases) == 3
     with pytest.raises(TaskError, match=r"flow.dse\[0\]: gradient: wavee is not one of its fields"):
-        TaskSpec.from_dict({**doc, "flow": {"dse": [{"wavee": 2}]}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": [{"wavee": 2}]}})
     with pytest.raises(TaskError, match=r"flow.dse\[0\]: phase policy 'hill' is not one of"):
-        TaskSpec.from_dict({**doc, "flow": {"dse": [{"policy": "hill"}]}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": [{"policy": "hill"}]}})
 
 
 def test_the_models_phase_moves_only_its_knobs():

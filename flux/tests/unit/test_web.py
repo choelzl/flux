@@ -149,13 +149,13 @@ def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeyp
 def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    doc = b"id: x\nstatement: make x\nlanguage: python\ngate:\n  - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
-          b"stages:\n  - {name: bench, command: '{python} {home}/bench.py {artifact}', metrics: [time_ms]}\n" \
+    doc = b"id: x\nstatement: make x\nlanguage: python\nflow:\n  test:\n    - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
+          b"  measure:\n    bench: {command: '{python} {home}/bench.py {artifact}', metrics: [time_ms]}\n" \
           b"objectives:\n  - {metric: time_ms, direction: minimize}\nparams: {n: 5}\n"
     files = [("files", ("x.problem.yaml", doc)), ("files", ("check.py", b"print('0 failing')\n")), ("files", ("bench.py", b"print('time_ms=1')\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     v = bob.get("/api/apps/x/document").json()
-    assert v["document"] == "x.problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["gate"])
+    assert v["document"] == "x.problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["flow"]["test"])
     new = "id: x\nstatement: make x faster\nlanguage: python\n"
     r = bob.put("/api/apps/x/document", json={"text": new, "kept": ["params"]}, headers=H)
     assert r.status_code == 200, r.text

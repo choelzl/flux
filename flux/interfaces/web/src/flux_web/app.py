@@ -1628,7 +1628,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             normal = views(w.path(name, w.meta(name).get("document") or ""))["normal"] or {}
         except Exception:  # noqa: BLE001 -- the record's own order then, no cutoffs
             return []
-        return [st for st in normal.get("stages") or [] if st.get("name")]
+        measure = (normal.get("flow") or {}).get("measure") or {}          # D775: a map, name -> command or settings
+        return [{"name": n, **(v if isinstance(v, dict) else {})} for n, v in measure.items()]
 
     @app.get("/api/apps/{name}/design")
     def design(name: str, design: str, part: str = "", owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

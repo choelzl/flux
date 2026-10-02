@@ -18,8 +18,14 @@ params:
   test_rounds: 1            # the model's test-author rounds per pass
   evaluator: nlu@exhaustive-ulp
 
-knowledge:
-  sheet: knowledge/nlu-methods.md
+flow:
+  knowledge:
+    sheet: knowledge/nlu-methods.md
+  measure:
+    screen: {metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
+    confirm: {metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 1800}
+    route: {metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 7200}
+  select: {finalists: 3}
 
 objectives:                 # 3% margin on shallower stages, 3% tie band
   - {metric: fmax_mhz, direction: maximize, goal: 800, margin: 0.03, tie: 0.03}
@@ -28,17 +34,11 @@ objectives:                 # 3% margin on shallower stages, 3% tie band
 
 ladder: {alone: confirm}    # a part alone is placed; only the whole is routed
 
-stages:
-  - {name: screen, metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
-  - {name: confirm, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 1800}
-  - {name: route, metrics: [fmax_mhz, area_um2, power_w], needs: [openroad], timeout_s: 7200}
-
 budget:
   steps: 24
   repair_attempts: 20
   explore_every: 4
   cooldown_after: 3
-  finalists: 3
   prototype_attempts: 30
   prototype_patience: 8
   prototype_attempts_max: 90

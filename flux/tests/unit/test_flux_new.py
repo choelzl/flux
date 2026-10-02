@@ -60,7 +60,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
     doc_path = tmp_path / "m" / "mine.problem.yaml"
     for dse in ("every_other:EveryOther", [{"policy": "every_other:EveryOther", "stride": 3}]):
         doc = yaml.safe_load(doc_path.read_text())
-        doc["flow"]["dse"] = dse
+        doc["flow"]["dse"]["policy"] = dse
         doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
         answer = tmp_path / "a.json"
         assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer),

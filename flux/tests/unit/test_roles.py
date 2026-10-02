@@ -205,19 +205,18 @@ def test_an_answer_the_loop_cannot_use_falls_back_to_the_declared_work(tmp_path)
 
 # ------------------------------------------------------------------- the document
 def _doc(**kw):
-    doc = {"id": "rigged", "statement": "write the word good", 
-           "parts": [{"name": "one", "statement": "the word"},
-                     {"name": "two", "statement": "the word again"}],
-           "gate": {"test": ["true"]},
-           "stages": [{"name": "size", "command": ["wc", "-c", "{artifact}"],
-                      "metrics_re": {"bytes": r"(\d+)"}}],
-           "objectives": [{"metric": "bytes", "direction": "minimize"}]}
+    doc = {"id": "rigged",
+           "statement": "write the word good",
+           "parts": [{"name": "one", "statement": "the word"}, {"name": "two", "statement": "the word again"}],
+           "objectives": [{"metric": "bytes", "direction": "minimize"}],
+           "flow": {"test": {"test": ["true"]},
+                    "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}
     flow = {}                                      # a role is said as its box of the flow (D629)
     for role, spec in (kw.pop("roles", None) or {}).items():
         flow[{"orchestrator": "orchestrate", "generator": "generate"}.get(role, role)] = spec
     doc.update(kw)
     if flow:
-        doc["flow"] = flow
+        doc["flow"] = {**doc.get("flow", {}), **flow}
     return doc
 
 
@@ -226,7 +225,7 @@ def test_a_document_says_who_fills_a_role():
     assert task.roles == {"orchestrator": "rules"}
     problem = PromptProblem(task)
     assert problem.roles().orchestrator.name == "rules"
-    assert task.to_dict()["flow"] == {"orchestrate": "rules"}
+    assert task.to_dict()["flow"]["orchestrate"] == "rules"
 
 
 def test_a_role_a_document_cannot_mean_is_a_load_error():
@@ -436,13 +435,13 @@ def test_given_orders_the_documents_parts_and_never_names_its_own():
     list puts some first, an unknown name is refused (D566)."""
     from flux_loop import PromptProblem, TaskSpec
 
-    doc = {"id": "g", "statement": "g", "parts": ["a", "b", "c"], "gate": {"test": ["true"]}}
-    bare = PromptProblem(TaskSpec.from_dict({**doc, "flow": {"orchestrate": "given"}}))
+    doc = {"id": "g", "statement": "g", "parts": ["a", "b", "c"], "flow": {"test": {"test": ["true"]}}}
+    bare = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": "given"}}))
     assert bare.roles().orchestrator.divide(bare, None) == ["a", "b", "c"]
-    first = PromptProblem(TaskSpec.from_dict({**doc, "flow": {"orchestrate": {"given": {"parts": ["c"]}}}}))
+    first = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": {"given": {"parts": ["c"]}}}}))
     assert first.roles().orchestrator.divide(first, None) == ["c", "a", "b"]
     import pytest
 
-    stray = PromptProblem(TaskSpec.from_dict({**doc, "flow": {"orchestrate": {"given": {"parts": ["z"]}}}}))
+    stray = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": {"given": {"parts": ["z"]}}}}))
     with pytest.raises(ValueError, match="`given` names \\['z'\\], which the problem does not have"):
         stray.roles().orchestrator.divide(stray, None)

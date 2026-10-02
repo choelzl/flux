@@ -49,11 +49,37 @@ flux ask --tui                                           # the same, from a setu
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
   "review first" on, you read the checked problem and type `run`, `stop`, or a note.
 
+## The problem document
+
+A document says what to make (`id`, `statement`, `contract`, `language`), what better means
+(`objectives`), how much to spend (`budget`), and, under `flow`, each box of the loop -- who
+works it and its own settings (D775):
+
+```yaml
+flow:
+  dse:                                   # the search, its space and where it starts
+    policy: sweep
+    space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
+  generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
+  test: flux rtl test {artifact} --golden {home}/golden.py            # the gate
+  measure:                               # the stages, by name, cheapest first
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 300
+    confirm: {command: "flux rtl measure {artifact} --stage place --clock-ps 300", timeout_s: 1800}
+  knowledge: {files: [spec.md], agent: opencode}   # what is read; who digests the papers
+  select: {finalists: 2}
+```
+
+`flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. A document
+of the earlier layout (`gate:`, `stages:`, `space:`, `seeds:`, `knowledge:` at the top,
+`budget.finalists`) is refused with where each went; `flux task upgrade FILE...` rewrites it
+(the original kept as `FILE.orig`; YAML comments are not carried over; `--dry-run` prints it).
+
 ## Check and run a problem
 
 ```bash
 flux task check DOC          # what it needs, what it will skip; runs nothing
 flux task run DOC            # runs until stopped (Ctrl-C, flux stop, q in the TUI)
+flux task upgrade DOC...     # a document of the earlier layout, rewritten (D775)
 ```
 
 `task check` lists the parts, the roles each can be switched to, the stages and their
@@ -82,7 +108,7 @@ tools, and refuses a document that asks for what nothing measures.
 A run resumes from its record: what was measured is never paid for twice.
 
 **A search works between passes** (D738). A design is named by its settings (D743): a value that
-is a word stands alone, any other carries its knob (`list_sieve-wheel=1`). With `space:` and `flow.dse`, a pass tries one design, the
+is a word stands alone, any other carries its knob (`list_sieve-wheel=1`). With `flow.dse` and its `space`, a pass tries one design, the
 search's next pick from what the passes before it measured: a 6-point sweep is 6 passes
 (`--passes 6`), an anneal or a genetic population carries on from pass to pass. `budget.batch: N`
 lets one pass make, check and measure N of the search's picks side by side (worth it when the tools
@@ -107,14 +133,14 @@ flux knowledge digest --db DB     # the library's key points, digested once by t
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
 its own (D737): `library/` beside its document (papers and references, in any subfolders) and `inputs/`
 (what it was given: `flux ask`, and New loop › Agent, put their attachments there), and a folder
-`knowledge: {library: DIR}` names. Every prompt gets the excerpts nearest the problem and a line per paper,
+`flow.knowledge: {library: DIR}` names. Every prompt gets the excerpts nearest the problem and a line per paper,
 each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
 `pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
 The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
 model's digest of each paper, once per paper, which the plan reads. The loop's own papers are digested by
 its model once each, on their own, and their key points join every prompt (D753).
 The digest runs first in each pass's Setup (the tree's **Digest** leaf, before Reading; with an agent or
-`flow.knowledge: [digest]` the whole library, shared papers too, else the loop's own -- D774: how many new, by whom, how
+`flow.knowledge: {digest: true}` the whole library, shared papers too, else the loop's own -- D774: how many new, by whom, how
 many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
 

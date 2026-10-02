@@ -8,19 +8,16 @@ statement: >-
   makes 3000 MHz on the synthesis screen, among the architectures gen.py spells.
 language: systemverilog
 
-space:
-  arch: [behavioral, tree, lut]
-  chunk: [2, 4]                         # the table size for `lut` (the others ignore it)
-
 flow:
-  dse: sweep
+  dse:
+    policy: sweep
+    space:
+      arch: [behavioral, tree, lut]
+      chunk: [2, 4]                         # the table size for `lut` (the others ignore it)
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {chunk}"}
-
-gate: flux rtl test {artifact} --golden {home}/golden.py
-
-stages:
-  - name: screen
-    command: flux rtl measure {artifact} --stage synth --clock-ps 333
+  test: flux rtl test {artifact} --golden {home}/golden.py
+  measure:
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 333
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 3000}

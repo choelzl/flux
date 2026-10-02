@@ -190,8 +190,8 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
     d["statement"] = "module `sq`: y = (a*a) >> 4"
     d["contract"] = "module sq, input a (8 bits), output y (12 bits)"
     d["objectives"] = [{"metric": "area_um2", "direction": "minimize"}]
-    d["stages"] = [{"name": "screen", "command": "{python} -c \"print('area_um2=' + str(len(open('{artifact}').read())))\"",
-                    "metrics": ["area_um2"]}]
+    d["flow"]["measure"] = {"screen": {"command": "{python} -c \"print('area_um2=' + str(len(open('{artifact}').read())))\"",
+                                       "metrics": ["area_um2"]}}
     d["budget"].update(prototype=True, steps=2, prototype_table_max=256)   # the table is the costly one
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
     task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
@@ -220,10 +220,11 @@ def _sq_doc(tmp_path, cache=True, measures=True, **budget):
     d = yaml.safe_load(doc.read_text())
     d["statement"], d["contract"] = "module `sq`: y = (a*a) >> 4", "module sq, input a (8 bits), output y (12 bits)"
     d["objectives"] = [{"metric": "area_um2", "direction": "minimize"}]
-    d["stages"] = [{"name": "screen", "metrics": ["area_um2"],
-                    "command": "{python} -c \"open('" + str(ran) + "', 'a').write('x'); print('area_um2=' + str(len(open('{artifact}').read())))\""}]
+    screen = {"metrics": ["area_um2"],
+              "command": "{python} -c \"open('" + str(ran) + "', 'a').write('x'); print('area_um2=' + str(len(open('{artifact}').read())))\""}
     if not measures:                      # a stage that ran and reported nothing, as synthesis at its time cap
-        d["stages"][0]["command"] = d["stages"][0]["command"].replace("print('area_um2=' + ", "print('no metric ' + ")
+        screen["command"] = screen["command"].replace("print('area_um2=' + ", "print('no metric ' + ")
+    d["flow"]["measure"] = {"screen": screen}
     d["budget"].update(prototype=True, steps=2, prototype_table_max=256, **budget)
     d["cache"] = cache
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
@@ -351,7 +352,7 @@ def test_the_documents_knowledge_reaches_the_prototype_stage(tmp_path):
     from flux_loop.types import LoopRequest, LoopState
 
     task, _ = _sq_doc(tmp_path)
-    task = TaskSpec.from_dict({**task.to_dict(), "knowledge": {"text": "SQUARE BY SHIFT-AND-ADD"}}, base=tmp_path / "p")
+    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "knowledge": {"text": "SQUARE BY SHIFT-AND-ADD"}}}, base=tmp_path / "p")
     prob = PromptProblem(task)
     state = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None)
     assert "SQUARE BY SHIFT-AND-ADD" in prefix_for(prob, prob.prototype(), None, state)

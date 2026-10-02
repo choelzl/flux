@@ -51,16 +51,17 @@ contract: >-                      # rules every design must follow
   One module named exactly `isqrt`, purely combinational (no clock, no reset), ports
   `input logic [15:0] x` and `output logic [7:0] r`. r must equal floor(sqrt(x)) for every x.
 language: systemverilog
-gate: flux rtl test {artifact} --golden {home}/golden.py     # refuses a wrong design
-stages:                                                     # measurements, cheapest first
-  - name: screen                                            # Yosys synthesis: seconds
-    command: flux rtl measure {artifact} --stage synth --clock-ps 1000
-  - name: confirm                                           # OpenROAD placement: the quoted numbers
-    command: flux rtl measure {artifact} --stage place --clock-ps 1000
+
+flow:
+  test: flux rtl test {artifact} --golden {home}/golden.py     # refuses a wrong design
+  measure:                                                     # measurements, cheapest first
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000  # Yosys synthesis: seconds
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000  # OpenROAD placement: the quoted numbers
+  select: {finalists: 2}
 objectives:                       # reach 1000 MHz, then the smallest area
   - {metric: fmax_mhz, direction: maximize, goal: 1000}
   - {metric: area_um2, direction: minimize}
-budget: {steps: 3, repair_attempts: 6, finalists: 2}
+budget: {steps: 3, repair_attempts: 6}
 ```
 
 ## 4. Check it
@@ -103,7 +104,7 @@ No design reached 1000 MHz, and the report says so. Left running, the loop keeps
 | let the model pick the next step | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
 | let the model plan each pass | `--agent plan`, or `flow: {plan: llm}` |
 | let a coding agent write the design | `flow: {generate: {agent: opencode}}` (or `claude`, `codex`) |
-| give the model a method note | `knowledge: {files: [method-note.md]}` |
+| give the model a method note | `flow.knowledge: {files: [method-note.md]}` |
 | steer it while it runs | `--tui`, then `f` to type a note |
 
 Next: [build your own](build-your-own.md), or [the loop](loop-shape.md) for what each of these

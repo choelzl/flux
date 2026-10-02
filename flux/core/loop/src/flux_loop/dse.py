@@ -202,7 +202,7 @@ class Policy(Rules):
     def search(self, problem: Any, state: Any) -> Iterator[list[Candidate]] | None:
         space = {k: list(v) for k, v in dict(problem.space(state) or {}).items() if v}
         if not space:
-            state.say(f"  {self.name}: no `space:` is declared and the world names none; nothing to search")
+            state.say(f"  {self.name}: no `flow.dse.space` is declared and the world names none; nothing to search")
             return None
         self._space, self._when = space, dict(getattr(getattr(problem, "task", None), "when", None) or {})
         seeds = [dict(p) for p in (getattr(problem, "seeds", None) or (lambda _s: []))(state) or []]

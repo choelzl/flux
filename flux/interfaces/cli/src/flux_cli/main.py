@@ -16,7 +16,7 @@ from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_task_upgrade, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
 from flux_evaluator_abi import available_evaluators
 
 
@@ -174,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.add_argument("--no-sandbox", action="store_true",
                          help="Check on this machine, not in the sandbox (the check imports the document's code).")
     check_p.set_defaults(func=cmd_task_check)
+    up_p = task_sub.add_parser("upgrade", help="Rewrite documents of the earlier layout with each box's settings under flow (D775).")
+    up_p.add_argument("files", nargs="+", help="The .yaml/.json problem documents.")
+    up_p.add_argument("--dry-run", action="store_true", help="Print the upgraded documents; write nothing.")
+    up_p.set_defaults(func=cmd_task_upgrade)
     run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
     run_p.add_argument("file", help="Path to a .json/.yaml task document.")
     run_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, beside the document's own (repeatable).")

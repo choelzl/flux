@@ -37,7 +37,8 @@ def merged(text: str, raw: dict[str, Any], kept: list[str]) -> str:
     new = yaml.safe_load(text) or {}
     if not isinstance(new, dict):
         raise ValueError("the configurator's document is not a mapping")
-    keep = {k: raw[k] for k in kept if k in raw}
+    # D775: a kept part of `flow` (flow.test, flow.measure, ...) the configurator writes back itself, in place
+    keep = {k: raw[k] for k in kept if k in raw and not k.startswith("flow")}
     clash = sorted(set(keep) & set(new))
     if clash:
         raise ValueError(f"the configurator wrote {', '.join(clash)}, which it was to keep")

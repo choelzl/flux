@@ -21,10 +21,11 @@ bad = sum(1 for i, w in enumerate(want) if i >= len(got) or got[i] != w)
 print(f"{bad} failing")
 """
 
-DOC = {"id": "digits", "statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
-       "language": "text", 
-       "gate": {"test": "{python} {home}/check.py {artifact}", "count_re": "(\\d+) failing"},
-       "budget": {"steps": 1, "repair_attempts": 2, "prototype": False}}
+DOC = {"id": "digits",
+       "statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
+       "language": "text",
+       "budget": {"steps": 1, "repair_attempts": 2, "prototype": False},
+       "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": '(\\d+) failing'}}}
 
 
 def _reply(files: dict, done: bool = False, why: str = "") -> str:
@@ -69,7 +70,7 @@ def test_a_model_author_writes_the_problem_the_loop_runs_it_and_the_author_settl
                 run_pass=_run(None, [loop_digits]), say=said.append)
     assert not got["error"] and got["result"].decision is not None
     doc = yaml.safe_load((work / "problem.yaml").read_text())
-    assert doc["knowledge"]["files"] == ["inputs/spec.md"], "the input the author forgot is added"
+    assert doc["flow"]["knowledge"]["files"] == ["inputs/spec.md"], "the input the author forgot is added"
     # D593: DONE settles the document, it does not end the run -- the loop runs it again, and
     # the run ends here only because the scripted author has nothing more to say
     assert [h["turn"] for h in got["history"]] == ["write", "run", "revise", "run"]
@@ -121,12 +122,12 @@ def test_a_document_file_list_reads_its_inputs_into_knowledge(tmp_path):
     from flux_loop import TaskSpec
 
     (tmp_path / "ref.txt").write_text("REFERENCE: carry-save beats ripple here\n")
-    task = TaskSpec.from_dict({**DOC, "knowledge": {"files": ["ref.txt"]}}, base=tmp_path)
+    task = TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["ref.txt"]}}}, base=tmp_path)
     assert "FILE ref.txt:\nREFERENCE: carry-save" in task.knowledge
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="knowledge.files: 'nope.txt' is not a file"):
-        TaskSpec.from_dict({**DOC, "knowledge": {"files": ["nope.txt"]}}, base=tmp_path)
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["nope.txt"]}}}, base=tmp_path)
 
 
 def test_the_cli_writes_and_checks_without_running(tmp_path):
@@ -183,9 +184,12 @@ def test_a_golden_model_that_cannot_run_is_refused_before_the_loop(tmp_path):
         pytest.skip("the rtl tools are needed for `flux rtl test` to be on the tool list")
     work = tmp_path / "w"
     work.mkdir()
-    doc = {"id": "neg", "statement": "negate", "language": "verilog", 
-           "gate": {"test": "flux rtl test {artifact} --golden {home}/golden.py", "count_re": "(\\d+) failing"},
-           "budget": {"steps": 1, "prototype": False}}
+    doc = {"id": "neg",
+           "statement": "negate",
+           "language": "verilog",
+           "budget": {"steps": 1, "prototype": False},
+           "flow": {"test": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
+                             "count_re": '(\\d+) failing'}}}
     (work / "problem.yaml").write_text(yaml.safe_dump(doc))
     (work / "golden.py").write_text("PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8}, {'name': 'y', 'dir': 'out', 'bits': 8}]\n"
                                     "def golden(a):\n    return -a\n")

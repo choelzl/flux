@@ -147,7 +147,7 @@ def test_a_document_is_checked_before_it_is_saved(server):
     assert not bad["ok"] and bad["error"].startswith("not YAML")
     wrong = bob.post("/api/apps/x/validate", json={"text": "id: x\nstatment: typo\n"}, headers=H).json()
     assert not wrong["ok"] and "statment" in wrong["error"], wrong
-    good = "id: x\nstatement: s\nlanguage: python\ngate: {test: ['true']}\nobjectives: []\n"
+    good = "id: x\nstatement: s\nlanguage: python\nflow: {test: {test: ['true']}}\nobjectives: []\n"
     assert bob.post("/api/apps/x/validate", json={"text": good}, headers=H).json() == {"ok": True, "error": ""}
 
 

@@ -16,12 +16,30 @@ STAGE = ["{python}", "-c", "import sys; s, x, w = sys.argv[1:]; "
 
 
 def _doc(**kw):
-    doc = {"id": "space", "statement": "s", "gate": {"test": ["true"]},
-           "space": {"stack": ["a", "b"], "x": [1, 2, 3],
-                     "b_width": {"values": [0, 4, 8], "when": {"stack": ["b"]}}},
-           "stages": [{"name": "run", "command": STAGE, "metrics": ["speed", "size"]}],
+    doc = {"id": "space",
+           "statement": "s",
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
-           "budget": {"steps": 8, "finalists": 0, "prototype": False}}
+           "budget": {"steps": 8, "prototype": False},
+           "flow": {"test": {"test": ["true"]},
+                    "measure": {"run": {"command": STAGE, "metrics": ["speed", "size"]}},
+                    "dse": {"space": {"stack": ["a", "b"],
+                                      "x": [1, 2, 3],
+                                      "b_width": {"values": [0, 4, 8], "when": {"stack": ["b"]}}}},
+                    "select": {"finalists": 0}}}
+    flow = doc["flow"]                              # D775: the search's space and seeds, the stages, in flow
+    for key in ("space", "seeds"):
+        if key in kw:
+            flow["dse"][key] = kw.pop(key)
+    if "stages" in kw:
+        stages = kw.pop("stages")
+        flow["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in stages}
+        if not stages:
+            flow.pop("measure")
+    for box, value in kw.pop("flow", {}).items():
+        if box == "dse":
+            flow["dse"]["policy"] = value
+        else:
+            flow[box] = value
     doc.update(kw)
     return doc
 
@@ -88,7 +106,7 @@ def test_the_cache_is_keyed_on_the_tools_a_stage_needs(tmp_path, monkeypatch):
     real = flux_evaluator_abi.toolchain_fingerprint
     monkeypatch.setattr(flux_evaluator_abi, "toolchain_fingerprint", lambda tools=(): asked.append(tuple(tools)) or real(tools))
     doc = _doc(flow={"dse": "sweep"})
-    doc["stages"][0]["needs"] = ["sh"]
+    doc["flow"]["measure"]["run"]["needs"] = ["sh"]
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),
              LoopRequest(db=str(tmp_path / "c.db"), steps=2, finalists=0, screen_only=True, prototype=False),
              log=lambda _m: None)

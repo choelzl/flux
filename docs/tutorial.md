@@ -77,19 +77,20 @@ contract: >-                      # the rules every design must follow
 
 language: systemverilog
 
-gate: flux rtl test {artifact} --golden {home}/golden.py   # refuses a wrong design first
+flow:
 
-stages:                           # measurement, cheapest first
-  - name: screen                  # Yosys synthesis: seconds
-    command: flux rtl measure {artifact} --stage synth --clock-ps 1000
-  - name: confirm                 # OpenROAD placement: the numbers the report quotes
-    command: flux rtl measure {artifact} --stage place --clock-ps 1000
+  test: flux rtl test {artifact} --golden {home}/golden.py   # refuses a wrong design first
+
+  measure:                           # measurement, cheapest first
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000  # Yosys synthesis: seconds
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000  # OpenROAD placement: the numbers the report quotes
+  select: {finalists: 2}
 
 objectives:                       # a goal first, then what to minimise among those that meet it
   - {metric: fmax_mhz, direction: maximize, goal: 1000}
   - {metric: area_um2, direction: minimize}
 
-budget: {steps: 3, repair_attempts: 6, finalists: 2}
+budget: {steps: 3, repair_attempts: 6}
 ```
 
 Everything else is inferred: the file extension from `language`, the record's name from `id`,
@@ -158,7 +159,7 @@ Each of these is one flag or one line; mix them.
   `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
   `prototype: true` the agent writes the Python prototype, which the loop checks with
   `flux rtl proto` before it writes the RTL.
-- **Give it knowledge:** `knowledge: {files: [method-note.md]}`: a method, measured facts, a
+- **Give it knowledge:** `flow.knowledge: {files: [method-note.md]}`: a method, measured facts, a
   paper. Not a design. `applications/gelu_fp16/` shows a method note for a hard function.
 - **Steer it while it runs:** type a note in the TUI (`f`); it reaches the next prompt.
 
@@ -168,16 +169,16 @@ When the designs come from parameters rather than from a model, declare the knob
 search policy. A script writes each point, and the gate and the stages judge it as before:
 
 ```yaml
-space:
-  arch: [ripple, carry_select, kogge_stone]
-  block: [2, 4, 8]
 flow:
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
   dse:
+    space:
+      arch: [ripple, carry_select, kogge_stone]
+      block: [2, 4, 8]
     - {name: coarse, policy: sweep, knobs: [arch]}              # every architecture
     - {name: fine, policy: gradient, hold: [arch], steps: 10}   # then tune the block size
     - {name: ideas, policy: llm, rounds: 2}                     # then a model proposes points
-budget: {steps: 12}                # every batch is a step: enough for all three phases
+budget: {steps: 12}  # every batch is a step: enough for all three phases
 ```
 
 On the `rtl-sweep` template (its knobs are `arch` and `chunk`) with 12 steps, `coarse` swept

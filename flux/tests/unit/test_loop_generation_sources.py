@@ -192,14 +192,14 @@ def test_the_model_stays_the_default_and_can_be_named(tmp_path):
 
 # ------------------------------------------------------------------ the document
 def _doc(**kw):
-    doc = {"id": "drafted", "statement": "produce the word good", 
+    doc = {"id": "drafted",
+           "statement": "produce the word good",
            "parts": [{"name": "piece", "statement": "the word"}],
-           "gate": {"test": ["grep", "-q", "good", "{artifact}"]},
-           "stages": [{"name": "size", "command": ["wc", "-c", "{artifact}"],
-                      "metrics_re": {"bytes": r"(\d+)"}}],
-           "objectives": [{"metric": "bytes", "direction": "minimize"}]}
+           "objectives": [{"metric": "bytes", "direction": "minimize"}],
+           "flow": {"test": {"test": ["grep", "-q", "good", "{artifact}"]},
+                    "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}
     if "generator" in kw:                          # who drafts is the flow's `generate` box (D629)
-        doc["flow"] = {"generate": kw.pop("generator")}
+        doc["flow"] = {**doc.get("flow", {}), "generate": kw.pop("generator")}
     doc.update(kw)
     return doc
 

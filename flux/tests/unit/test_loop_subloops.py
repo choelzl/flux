@@ -176,13 +176,14 @@ def test_a_task_document_can_carry_the_division(tmp_path):
     """Sub-tasks are nested documents that inherit what they do not say, never `subtasks` itself."""
     from flux_loop import PromptProblem, TaskError, TaskSpec
 
-    spec = TaskSpec.from_dict({
-        "id": "top", "statement": "make a thing", "contract": "be careful",
-        "gate": {"test": ["true"]},
-        "stages": [{"name": "screen", "command": ["true"], "metrics_re": {"m": r"m=(\d+)"}}],
-        "subtasks": [{"id": "sim", "statement": "model it"},
-                     {"id": "arch", "statement": "build it", "gate": {"test": ["false"]}}],
-    })
+    spec = TaskSpec.from_dict({"id": "top",
+                               "statement": "make a thing",
+                               "contract": "be careful",
+                               "subtasks": [{"id": "sim", "statement": "model it"}, {"id": "arch",
+                                                                                     "statement": "build it",
+                                                                                     "flow": {"test": {"test": ["false"]}}}],
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["true"], "metrics_re": {"m": 'm=(\\d+)'}}}}})
     assert [c.id for c in spec.subtasks] == ["sim", "arch"]
     assert spec.subtasks[0].contract == "be careful" and spec.subtasks[0].gate.named("test").run == ("true",)
     assert spec.subtasks[1].gate.named("test").run == ("false",), "a child may say its own gate"
@@ -193,8 +194,11 @@ def test_a_task_document_can_carry_the_division(tmp_path):
     assert [w.name for w in work] == ["sim", "arch"]
     assert all(isinstance(w, SubLoop) for w in work)
     with pytest.raises(TaskError, match="cannot both"):
-        TaskSpec.from_dict({"id": "t", "statement": "s", "gate": {"test": ["true"]},
-                            "parts": "decompose", "subtasks": "decompose"})
+        TaskSpec.from_dict({"id": "t",
+                            "statement": "s",
+                            "parts": "decompose",
+                            "subtasks": "decompose",
+                            "flow": {"test": {"test": ["true"]}}})
 
 
 def test_a_document_can_ask_the_orchestrator_to_split_it():
@@ -202,10 +206,11 @@ def test_a_document_can_ask_the_orchestrator_to_split_it():
     from flux_loop import LoopState, PromptProblem, TaskSpec
     from flux_llm import ScriptedProposer
 
-    spec = TaskSpec.from_dict({
-        "id": "top", "statement": "make a thing", "gate": {"test": ["true"]},
-        "subtasks": "decompose", "max_subtasks": 3,
-    })
+    spec = TaskSpec.from_dict({"id": "top",
+                               "statement": "make a thing",
+                               "subtasks": "decompose",
+                               "max_subtasks": 3,
+                               "flow": {"test": {"test": ["true"]}}})
     problem = PromptProblem(spec)
     proposer = ScriptedProposer(['{"subtasks": [{"name": "front", "statement": "the front"},'
                                  ' {"name": "back", "statement": "the back"}], "why": "two ends"}'])

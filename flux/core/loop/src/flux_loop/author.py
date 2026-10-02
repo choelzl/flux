@@ -8,7 +8,7 @@ hands the author the report; the author revises it for another pass, or says it 
 The author writes the problem, never the design. The document is checked before anything runs
 (it loads, uses only document keys, every tool is on PATH, every named file exists); a refused
 document goes back to the author with the reason, up to `checks` times. Input files are copied
-under `<workdir>/inputs/` (D737: part of the loop's library, beside `library/`) and read through the document's `knowledge: {files: [...]}` (added
+under `<workdir>/inputs/` (D737: part of the loop's library, beside `library/`) and read through the document's `flow: {knowledge: {files: [...]}}` (added
 when the author forgot them).
 """
 
@@ -110,7 +110,7 @@ class Ask:
 def _inputs_block(ask: Ask, *, inline: bool) -> str:
     if not ask.inputs:
         return "INPUT FILES: none."
-    lines = ["INPUT FILES (in the working directory; name them in `knowledge: {files: [...]}` so every design "
+    lines = ["INPUT FILES (in the working directory; name them in `flow: {knowledge: {files: [...]}}` so every design "
              "prompt reads them, and use them -- a reference model, tests, a spec -- in the gate where they fit):"]
     lines += [f"  - {p}" for p in ask.inputs]
     if inline:
@@ -261,7 +261,7 @@ def _home_files(doc: dict[str, Any]) -> list[str]:
             for v in x:
                 walk(v)
 
-    walk({k: doc.get(k) for k in ("gate", "stages", "flow", "generator")})
+    walk({k: doc.get(k) for k in ("flow", "generator")})          # D775: the gate and the stages are in flow
     return sorted(set(tokens))
 
 
@@ -330,18 +330,25 @@ def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False)
         return None, None, f"`{DOCUMENT}` is not YAML: {exc}"
     if not isinstance(doc, dict):
         return None, None, f"`{DOCUMENT}` is not a mapping of keys"
+    from .document import MOVED
+
+    moved = [k for k in doc if k in MOVED]
+    if moved:
+        return None, None, "; ".join(f"`{k}` is said as `{MOVED[k]}` (under `flow`)" for k in moved)
     unknown = sorted(set(doc) - DOCUMENT_KEYS)
     if unknown:
-        return None, None, f"keys a document does not have: {', '.join(unknown)}; the keys are {', '.join(sorted(DOCUMENT_KEYS))}"
+        return None, None, (f"keys a document does not have: {', '.join(unknown)}; the keys are "
+                            f"{', '.join(sorted(DOCUMENT_KEYS - set(MOVED)))}")
     missing = [f for f in _home_files(doc) if not (workdir / f).is_file()]
     if missing:
         return None, None, f"the commands name {', '.join(missing)} beside the document, and it is not there: write it"
-    know = doc.get("knowledge") if isinstance(doc.get("knowledge"), dict) else ({"text": doc["knowledge"]} if doc.get("knowledge") else {})
+    flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
+    know = flow.get("knowledge") if isinstance(flow.get("knowledge"), dict) else {}
     named = set(know.get("files") or [])
     forgot = [str(p) for p in inputs if str(p) not in named]
     changed = False
-    if forgot:
-        doc["knowledge"] = {**know, "files": sorted(named | set(forgot))}
+    if forgot and flow.get("knowledge") != "off":     # D775: what is read is said in flow.knowledge
+        doc["flow"] = {**flow, "knowledge": {**know, "files": sorted(named | set(forgot))}}
         changed = True
     if skills and not doc.get("skills"):              # D588: the ask's skills go with the problem
         doc["skills"] = ["skills"]

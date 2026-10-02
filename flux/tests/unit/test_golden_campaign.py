@@ -33,13 +33,13 @@ class _Tiny:
 
 
 def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
-    doc = {"id": "golden", "statement": "two texts that name their part", "parts": ["front", "back"],
+    doc = {"id": "golden",
+           "statement": "two texts that name their part",
+           "parts": ["front", "back"],
            "world": __name__ + ":_Tiny",
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"},
-                          {"metric": "area_um2", "direction": "minimize"}],
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]}],
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
            "budget": {"steps": 6, "repair_attempts": 2, "critique_rounds": 0, "prototype": False},
-           "flow": {"orchestrate": "rules"}}   # the parts in the document's order, no plan turn
+           "flow": {"orchestrate": "rules", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}   # the parts in the document's order, no plan turn
     db = str(tmp_path / "golden.db")
     said: list[str] = []
     prob = PromptProblem(TaskSpec.from_dict(doc))
@@ -76,13 +76,13 @@ def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
 def test_a_campaign_at_rest_explores_and_keeps_the_goal(tmp_path):
     """After a rest, the next pass sends each admitted design back with its numbers and what
     better means from here; a better design passes the same gate and objectives (D593)."""
-    doc = {"id": "golden", "statement": "two texts that name their part", "parts": ["front", "back"],
+    doc = {"id": "golden",
+           "statement": "two texts that name their part",
+           "parts": ["front", "back"],
            "world": __name__ + ":_Tiny",
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"},
-                          {"metric": "area_um2", "direction": "minimize"}],
-           "stages": [{"name": "screen", "metrics": ["fmax_mhz", "area_um2"]}],
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
            "budget": {"steps": 6, "repair_attempts": 2, "critique_rounds": 0, "prototype": False},
-           "flow": {"orchestrate": "rules"}}
+           "flow": {"orchestrate": "rules", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
     db = str(tmp_path / "golden.db")
     req = LoopRequest(db=db, steps=6, repair_attempts=2, critique_rounds=0, prototype=False)
     first = ['{"artifact": "the front text is here, long enough to clear the goal", "why": "-"}',

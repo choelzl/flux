@@ -10,7 +10,8 @@ from flux_cli import sandbox
 from flux_loop import load_task
 from flux_loop.document import library_folders
 
-DOC = "id: kp\nstatement: the fastest\nlanguage: python\ngate: 'python3 check.py {artifact}'\nstages:\n  - {name: b, command: 'python3 b.py {artifact}', metrics: [t]}\nobjectives:\n  - {metric: t, direction: minimize}\n"
+DOC = ("id: kp\nstatement: the fastest\nlanguage: python\nobjectives:\n  - {metric: t, direction: minimize}\n"
+       "flow:\n  test: 'python3 check.py {artifact}'\n  measure:\n    b: {command: 'python3 b.py {artifact}', metrics: [t]}\n")
 
 
 def test_the_loops_library_folder_is_its_library(tmp_path, monkeypatch):
@@ -37,7 +38,7 @@ def test_the_sandbox_mounts_the_libraries_a_run_reads(tmp_path, monkeypatch):
     shared, outside, home = tmp_path / "shared-lib", tmp_path / "team-papers", tmp_path / "loop"
     for d in (shared, outside, home):
         d.mkdir()
-    (home / "kp.problem.yaml").write_text(DOC + f"knowledge: {{library: {outside}}}\n")
+    (home / "kp.problem.yaml").write_text(DOC + f"  knowledge: {{library: {outside}}}\n")
     monkeypatch.setenv("FLUX_LIBRARY", str(shared))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     args = types.SimpleNamespace(file=str(home / "kp.problem.yaml"), db=None, out=None, json=None)
@@ -58,8 +59,11 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
     (tmp_path / "shared/other.md").write_text("Another paper on caches, from the shared library, long enough to be a paper.\n")
     (tmp_path / "loop/library").mkdir(parents=True)
     (tmp_path / "loop/library/adders.md").write_text("Prefix adders: Kogge-Stone has log2(n) levels and fan-out 2. " * 20)
-    task = TaskSpec.from_dict({"id": "x", "statement": "an 8-bit adder", "language": "verilog", "gate": {"test": ["true"]},
-                               "objectives": []}, base=tmp_path / "loop")
+    task = TaskSpec.from_dict({"id": "x",
+                               "statement": "an 8-bit adder",
+                               "language": "verilog",
+                               "objectives": [],
+                               "flow": {"test": {"test": ["true"]}}}, base=tmp_path / "loop")
 
     class Model:
         def __init__(self):
@@ -87,11 +91,15 @@ def _adders(tmp_path, monkeypatch, knowledge=None, flow=None):
     (tmp_path / "shared").mkdir(exist_ok=True)
     (tmp_path / "loop/library").mkdir(parents=True, exist_ok=True)
     (tmp_path / "loop/library/adders.md").write_text("Prefix adders: Kogge-Stone has log2(n) levels and fan-out 2. " * 20)
-    doc = {"id": "x", "statement": "an 8-bit adder", "language": "verilog", "gate": {"test": ["true"]}, "objectives": []}
+    doc = {"id": "x",
+           "statement": "an 8-bit adder",
+           "language": "verilog",
+           "objectives": [],
+           "flow": {"test": {"test": ["true"]}}}
     if knowledge is not None:
-        doc["knowledge"] = knowledge
+        doc["flow"]["knowledge"] = knowledge
     if flow is not None:
-        doc["flow"] = flow
+        doc["flow"] = {**doc["flow"], **flow}
     return TaskSpec.from_dict(doc, base=tmp_path / "loop")
 
 
@@ -142,7 +150,7 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     assert type(oc).from_dict(oc.to_dict(), base=tmp_path / "loop").digest_by == "opencode", "written back as read"
     with pytest.raises(TaskError, match="flow.knowledge"):
         _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": "someone"}})
-    with pytest.raises(TaskError, match="knowledge keys"):
+    with pytest.raises(TaskError, match="flow.knowledge.digest is true or false"):
         _adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})
 
 
@@ -161,10 +169,14 @@ def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, mon
     fake = tmp_path / "agent.py"
     fake.write_text("import sys\nb = sys.stdin.read()\nprint('digest of ' + ('caches.md' if 'caches.md' in b else 'other'))\n")
     spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
-    doc = {"id": "x", "statement": "a cache", "language": "python", "gate": {"test": ["true"]}, "objectives": []}
+    doc = {"id": "x",
+           "statement": "a cache",
+           "language": "python",
+           "objectives": [],
+           "flow": {"test": {"test": ["true"]}}}
     plain = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path / "loop"))
     assert not plain.digesting(), "no papers of its own and no digest asked: nothing to digest"
-    problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {"knowledge": {"agent": spec}}}, base=tmp_path / "loop"))
+    problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "knowledge": {"agent": spec}}}, base=tmp_path / "loop"))
     assert problem.digesting()
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=None, say=lambda _m: None)
     got = problem.digest(state)

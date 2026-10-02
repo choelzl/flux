@@ -106,12 +106,12 @@ def test_both_halves_reach_the_prompt_together(tmp_path):
     """AND, not just OR: what a person fed in and what was mined from the data."""
     db = str(tmp_path / "c.db")
     _campaign(db)
-    doc = {"id": "rigged", "statement": "write the word good", 
-           "knowledge": "A person's own note: prefer the narrow design.",
-           "flow": {"extract": "mined"},
-           "gate": {"test": ["true"]},
-           "stages": [{"name": "size", "command": ["wc", "-c", "{artifact}"],
-                      "metrics_re": {"bytes": r"(\d+)"}}]}
+    doc = {"id": "rigged",
+           "statement": "write the word good",
+           "flow": {"extract": "mined",
+                    "test": {"test": ["true"]},
+                    "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}},
+                    "knowledge": {"text": "A person's own note: prefer the narrow design."}}}
     problem = PromptProblem(TaskSpec.from_dict(doc))
     state = _State(db)
     state.plans = {}

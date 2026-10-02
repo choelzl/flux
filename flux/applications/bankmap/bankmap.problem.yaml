@@ -20,11 +20,12 @@ params:
   llm_round: 6                # model-proposed mappings per round; 0 = solver only
   # also: max_xor_inputs, stage_capacities, lanes, stages, problem
 
+flow:
+  measure:
+    exhaustive: {metrics: [hardware_cost, clean_fraction]}
+
 objectives:
   - {metric: hardware_cost, direction: minimize, unit: XOR}
-
-stages:
-  - {name: exhaustive, metrics: [hardware_cost, clean_fraction]}
 
 cache: false
 

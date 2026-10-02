@@ -30,14 +30,14 @@ def test_the_loops_vocabulary_is_stage():
 def test_a_document_declares_stages():
     from flux_loop import PromptProblem, TaskSpec
 
-    task = TaskSpec.from_dict({
-        "id": "renamed", "statement": "write it", 
-        "gate": {"test": ["true"]},
-        "stages": [{"name": "size", "command": ["wc", "-c", "{artifact}"],
-                    "metrics_re": {"bytes": r"(\d+)"}}]})
+    task = TaskSpec.from_dict({"id": "renamed",
+                               "statement": "write it",
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"size": {"command": ["wc", "-c", "{artifact}"],
+                                                             "metrics_re": {"bytes": '(\\d+)'}}}}})
     assert [s.name for s in task.stages] == ["size"]
     assert PromptProblem(task).stages() == ["size"]
-    assert "stages" in task.to_dict() and "rungs" not in task.to_dict()
+    assert "measure" in task.to_dict()["flow"] and "stages" not in task.to_dict() and "rungs" not in task.to_dict()
 
 
 def test_the_old_word_is_gone_from_the_code_and_the_current_docs():
