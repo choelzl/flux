@@ -260,6 +260,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Long runs** (D759): Live › Tasks opens on the last 30 passes ("Earlier" loads the rest), the log on its
     last 2 MB ("Load all" for the rest). A run's journal keeps only its tasks' starts and ends; what runs now and the standings
     are `live.json` beside it, rewritten each second (D761), so an hour-long pass does not grow it.
+    Timeline and the Agents tab read their files as they grow (D779). A resumed loop keeps a design its
+    judge already admitted -- the gate, the files it names, the tools and Flux unchanged -- instead of
+    re-verifying it every pass (D778); any of them changed, it is re-verified once.
     The first look is also never more than 24 MB (D762): a start of a few passes of hours each opens on the
     oldest whole pass that fits, or on the newest pass's tail ("Earlier" says what was left out). `marks.jsonl`
     beside the journal says where each pass begins; a journal from before it is read back at most 88 MB.
