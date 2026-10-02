@@ -35,39 +35,31 @@ def test_drain_guidance_labels_accumulates_and_survives_on_note_failure():
     assert drain_guidance(None, []) is None
 
 
-def test_imapping_note_reaches_prompt_and_record(tmp_path):
-    from flux_records import Records
-    from imapping_fixtures import identity, run_study
-
-    prompts: list[str] = []
-
-    class Proposer:
-        def propose(self, prompt, *, schema=None, tools=None, budget=None):
-            prompts.append(prompt)
-            return Reply.of("not json")       # refused by the gate, which is fine: gates hold
-
-    db = str(tmp_path / "fb.db")
-    study = run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0,
-                      llm_rounds=1, proposer=Proposer(), db=db,
-                      feedback=FakeChannel("avoid deep pipelines"))
-    assert prompts and "HUMAN GUIDANCE" in prompts[0]
-    assert "avoid deep pipelines" in prompts[0]
-    assert study.notes == ["avoid deep pipelines"]          # echoed on the study
-    assert any("unparseable" in r for r in study.refused)   # advisory, gates unchanged
-    r = Records(db, objective=identity(study.problem, db), name=study.problem.task.id)
-    events = [e for e in r.store.events(r.campaign_id) if e.get("kind") == "human_note"]
-    assert [e["detail"]["text"] for e in events] == ["avoid deep pipelines"]
-    # the resumed run reloads the note (D403): no channel this time, yet the prompt
-    # still carries it, stamped as an earlier run's
-    prompts.clear()
-    run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0,
-              llm_rounds=1, proposer=Proposer(), db=db)
-    assert "avoid deep pipelines" in prompts[0] and "[earlier run]" in prompts[0]
-
-
 def test_imapping_model_free_run_still_records_the_note(tmp_path):
     from imapping_fixtures import run_study
 
     study = run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0,
                       feedback=FakeChannel("try banked crossbars"))
     assert study.notes == ["try banked crossbars"]
+
+
+def test_imapping_model_round_reads_the_operators_note(monkeypatch):
+    """D800: the model round runs inside the study's search command; the operator's notes reach
+    it through the search's history."""
+    import flux_llm
+    from flux_imapping import steps
+    from flux_imapping.model import Memory
+
+    prompts: list[str] = []
+
+    class Fake:
+        def propose(self, prompt, **kw):
+            prompts.append(prompt)
+            return Reply.of("not json")
+
+    monkeypatch.setattr(flux_llm, "OpenAIChatProposer", lambda *a, **k: Fake())
+    sol, why = steps.propose(1, {"measured": [], "guidance": "HUMAN GUIDANCE: avoid deep pipelines"},
+                             Memory(m=5), [], [])
+    assert sol is None and "unparseable" in why
+    assert prompts and "avoid deep pipelines" in prompts[0]
+
