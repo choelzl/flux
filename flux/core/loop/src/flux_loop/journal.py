@@ -7,6 +7,8 @@ run as the TUI does. Two files in the run's directory (D761):
   end's output is cut to END_MAX.
 - `live.json`, rewritten at most once a second: each running phase's latest fields, and the
   standings -- what is only ever read at its latest, never appended.
+- `marks.jsonl`, appended (D762): where in `events.jsonl` each start and each pass begins, so a
+  page opens a journal of gigabytes on its last passes without reading it backwards.
 
 Every text value is cut to its last TAIL characters. It never fails the run: a write that fails
 is dropped."""
@@ -19,7 +21,7 @@ import threading
 import time
 from typing import Any
 
-__all__ = ["Journal", "TAIL", "attach", "read_events", "window_start"]
+__all__ = ["Journal", "TAIL", "attach", "compact", "read_events", "window_start"]
 
 TAIL = 4000
 _ATTACHED: dict[str, "Journal"] = {}
@@ -71,6 +73,7 @@ class Journal:
     def __init__(self, path: str) -> None:
         self.path = path
         self.live_path = os.path.join(os.path.dirname(path), "live.json")
+        self.marks_path = os.path.join(os.path.dirname(path), "marks.jsonl")
         self._lock = threading.Lock()
         self._n = 0
         self._stacks: dict[int, list[int]] = {}
@@ -115,7 +118,11 @@ class Journal:
         try:
             line = json.dumps(row, default=str)
             with self._lock, open(self.path, "a") as fh:
+                at = fh.tell()
                 fh.write(line + "\n")
+                if row["ev"] == "hello" or (row["ev"] == "mark" and row.get("name") == "pass"):
+                    with open(self.marks_path, "a") as mf:
+                        mf.write(json.dumps({"at": at, "ev": "hello" if row["ev"] == "hello" else "pass", "n": _n_of(row)}) + "\n")
         except (OSError, TypeError, ValueError):
             pass
 
@@ -204,10 +211,72 @@ def read_events(path: str, offset: int = 0, limit: int | None = None) -> tuple[l
 
 
 
-def window_start(path: str, passes: int) -> tuple[int, int] | None:
-    """Where the latest start's last `passes` passes begin, read from the end backwards (D759): a
-    day-long journal is never read whole to open its latest passes. (byte offset, how many passes of
-    this start came before), or None when the start holds no more than that."""
+def compact(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """D762: a slice of the journal as the tree needs it -- a phase's updates (a run started
+    before D761 wrote every streamed field into the journal: gigabytes over an hour's pass)
+    merged into one, none for a phase that ended in it; a publish only at its latest."""
+    ended = {e.get("id") for e in events if e.get("ev") == "end"}
+    last_upd: dict[Any, int] = {}
+    last_pub: dict[Any, int] = {}
+    merged: dict[Any, dict] = {}
+    for i, e in enumerate(events):
+        if e.get("ev") == "update" and e.get("id") not in ended:
+            merged.setdefault(e.get("id"), {}).update(e.get("fields") or {})
+            last_upd[e.get("id")] = i
+        elif e.get("ev") == "publish":
+            last_pub[e.get("key")] = i
+    out = []
+    for i, e in enumerate(events):
+        ev = e.get("ev")
+        if ev == "update":
+            if last_upd.get(e.get("id")) == i:
+                out.append({**e, "fields": merged[e.get("id")]})
+        elif ev == "publish":
+            if last_pub.get(e.get("key")) == i:
+                out.append(e)
+        else:
+            out.append(e)
+    return out
+
+
+def _n_of(row: dict[str, Any]) -> int:
+    try:
+        return int(json.loads(row.get("why") or "{}").get("n") or 0)
+    except (ValueError, AttributeError, TypeError):
+        return 0
+
+
+def _choose(size: int, hello_at: int, marks: list[tuple[int, int]], passes: int, budget: int) -> tuple[int, int, int | None] | None:
+    """From the start's pass marks (offset, n), oldest first: the last `passes` passes, the oldest
+    of them whose whole is within `budget`; else the newest pass's last `budget` bytes, its mark."""
+    if size - hello_at <= budget and len(marks) <= passes:
+        return None
+    whole = [m for m in marks[-passes:] if size - m[0] <= budget]
+    if whole:
+        return whole[0][0], max(0, whole[0][1] - 1), None
+    return size - budget, max(0, marks[-1][1] - 1) if marks else 0, marks[-1][0] if marks else -1
+
+
+def _marks_of(path: str, size: int) -> tuple[int, list[tuple[int, int]]] | None:
+    """The latest start's offset and its passes from `marks.jsonl` (D762), None without one to trust."""
+    try:
+        with open(os.path.join(os.path.dirname(path), "marks.jsonl"), "rb") as fh:
+            rows = [json.loads(x) for x in fh.read().splitlines() if x.strip()]
+    except (OSError, ValueError):
+        return None
+    hello = max((i for i, r in enumerate(rows) if r.get("ev") == "hello"), default=-1)
+    if hello < 0 or int(rows[-1].get("at", size + 1)) > size:
+        return None                                           # another file's, or cut
+    return int(rows[hello]["at"]), [(int(r["at"]), int(r.get("n") or 0)) for r in rows[hello + 1:] if r.get("ev") == "pass"]
+
+
+def window_start(path: str, passes: int, budget: int = 24 << 20, reach: int = 64 << 20) -> tuple[int, int, int | None] | None:
+    """Where the page's first look at the latest start begins (D759): its last `passes` passes, and
+    never more than `budget` bytes (D762: a start of a few passes of hours each is gigabytes too).
+    (byte offset of a whole line, how many passes of this start came before, and -- when the window
+    begins inside a pass -- that pass's mark, said first, -1 when not found), or None when the whole start is within
+    both. From `marks.jsonl`; a journal without one is read backwards, at most `reach` bytes past
+    the budget (beyond, its pass is not named)."""
     PASS, HELLO = b'"ev": "mark", "name": "pass"', b'"ev": "hello"'
     try:
         size = os.path.getsize(path)
@@ -215,32 +284,50 @@ def window_start(path: str, passes: int) -> tuple[int, int] | None:
     except OSError:
         return None
     with fh:
-        found: list[int] = []                                  # line starts of pass marks, newest first
-        end, carry = size, b""
-        while end > 0:
-            begin = max(0, end - (4 << 20))
-            fh.seek(begin)
-            block = fh.read(end - begin) + carry
-            cut = block.find(b"\n") + 1 if begin > 0 else 0     # a partial first line waits for the next block
-            carry, body = block[:cut], block[cut:]
-            base = begin + cut
-            hello = body.rfind(HELLO)
-            marks = []
-            i = body.find(PASS)
-            while i >= 0:
-                if hello < 0 or i > hello:
-                    marks.append(base + body.rfind(b"\n", 0, i) + 1)
-                i = body.find(PASS, i + len(PASS))
-            found.extend(reversed(marks))
-            if len(found) > passes:
-                at = found[passes - 1]
-                fh.seek(at)
-                try:
-                    n = int(json.loads(json.loads(fh.readline()).get("why") or "{}").get("n") or 0)
-                except (ValueError, AttributeError):
-                    n = 0
-                return at, max(0, n - 1)
-            if hello >= 0:
-                return None                                    # the start is shorter than the window
-            end = begin
-        return None
+        known = _marks_of(path, size)
+        if known is not None:
+            got = _choose(size, known[0], known[1], passes, budget)
+        else:
+            found: list[tuple[int, int]] = []                  # (line start, n) of pass marks, newest first
+            end, carry, got, hello_at = size, b"", None, None
+            while end > 0 and size - end <= budget + reach:
+                begin = max(0, end - (4 << 20))
+                fh.seek(begin)
+                block = fh.read(end - begin) + carry
+                cut = block.find(b"\n") + 1 if begin > 0 else 0     # a partial first line waits for the next block
+                carry, body = block[:cut], block[cut:]
+                base = begin + cut
+                hello = body.rfind(HELLO)
+                marks = []
+                i = body.find(PASS)
+                while i >= 0:
+                    if hello < 0 or i > hello:
+                        at = base + body.rfind(b"\n", 0, i) + 1
+                        try:
+                            n = _n_of(json.loads(body[at - base:body.find(b"\n", i) % (len(body) + 1)]))
+                        except ValueError:
+                            n = 0                              # the line being written
+                        marks.append((at, n))
+                    i = body.find(PASS, i + len(PASS))
+                found.extend(reversed(marks))
+                if hello >= 0:
+                    hello_at = base + body.rfind(b"\n", 0, hello) + 1
+                    break
+                if len(found) > passes or (found and size - base > budget):
+                    break
+                end = begin
+            if hello_at is None and not found and size <= budget:
+                hello_at = 0
+            if hello_at is None and not (len(found) > passes or found and found[-1][0] < size - budget):
+                got = (size - budget, 0, -1)                   # beyond reach: the tail, its pass unnamed
+            else:
+                got = _choose(size, hello_at or 0, list(reversed(found)), passes, budget)
+        if got is None:
+            return None
+        at = got[0]
+        if got[2] is not None:
+            fh.seek(max(0, at - 1))                            # to the next whole line
+            if at > 0:
+                fh.readline()
+            at = fh.tell()
+        return at, got[1], got[2]

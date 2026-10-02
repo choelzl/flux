@@ -139,7 +139,8 @@ def test_a_long_starts_last_passes_are_found_from_the_end(tmp_path):
         rows += [{"t": 10 + n, "ev": "mark", "name": "pass", "why": json.dumps({"n": n, "explore": 0})},
                  {"t": 10 + n, "ev": "start", "id": n, "parent": None, "name": "DSE: batch", "why": "x" * 300, "params": {}}]
     p.write_text("".join(json.dumps(r) + "\n" for r in rows))
-    at, before = window_start(str(p), 30)
+    at, before, inside = window_start(str(p), 30)
+    assert inside is None
     assert before == 70
     events, _end = read_events(str(p), at)
     assert json.loads(events[0]["why"])["n"] == 71 and sum(e.get("name") == "pass" for e in events) == 30
@@ -167,3 +168,63 @@ def test_a_long_running_phase_keeps_one_live_snapshot_not_thousands(tmp_path):
     assert [e["ev"] for e in events] == ["start", "end"]
     assert len(json.dumps(events[1]["output"])) <= END_MAX, "an end's output is capped"
     assert (tmp_path / "events.jsonl").stat().st_size < 60_000
+
+
+def test_a_start_of_few_long_passes_opens_within_the_budget(tmp_path):
+    """D762: three passes of hours each are gigabytes though fewer than the window: the page's first
+    look stops at the budget -- at the oldest whole pass in it, or inside the newest, its mark said."""
+    from flux_loop.journal import window_start
+
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello"}]
+    for n in range(1, 4):
+        rows.append({"t": n, "ev": "mark", "name": "pass", "why": json.dumps({"n": n})})
+        rows += [{"t": n, "ev": "start", "id": n * 1000 + k, "parent": None, "name": "x", "why": "y" * 900, "params": {}}
+                 for k in range(200)]                                     # ~200 KB a pass
+    p.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert window_start(str(p), 30) is None, "within both: whole"
+    at, before, inside = window_start(str(p), 30, budget=450_000)
+    events, _ = read_events(str(p), at)
+    assert (before, inside) == (1, None) and json.loads(events[0]["why"])["n"] == 2, "two whole passes fit"
+    at, before, inside = window_start(str(p), 30, budget=50_000)
+    events, _ = read_events(str(p), at)
+    assert before == 2 and inside is not None and len(events) < 60, "inside the newest pass: its tail"
+    assert json.loads(read_events(str(p), inside, limit=2000)[0][0]["why"])["n"] == 3, "and its mark"
+    assert p.stat().st_size - at <= 50_000
+
+
+def test_a_slice_keeps_what_the_tree_needs():
+    """D762: a run from before D761 wrote each streamed field as an update -- a slice sends one
+    per running phase, merged, none for a phase that ended in it; a publish at its latest."""
+    from flux_loop.journal import compact
+
+    ev = [{"ev": "start", "id": 1}, {"ev": "start", "id": 2}]
+    ev += [{"ev": "update", "id": 1, "fields": {"text": "a" * i}} for i in range(500)]
+    ev += [{"ev": "update", "id": 2, "fields": {"tokens": i}} for i in range(500)] + [{"ev": "update", "id": 2, "fields": {"model": "m"}}]
+    ev += [{"ev": "publish", "key": "standings", "payload": i} for i in range(50)] + [{"ev": "end", "id": 1, "output": {}}]
+    got = compact(ev)
+    assert [e["ev"] for e in got] == ["start", "start", "update", "publish", "end"]
+    assert got[2] == {"ev": "update", "id": 2, "fields": {"tokens": 499, "model": "m"}} and got[3]["payload"] == 49
+
+
+
+def test_the_window_is_found_in_the_marks_index_as_by_reading_back(tmp_path):
+    """D762: a journal written now keeps `marks.jsonl` -- where each start and pass begins -- and
+    the window from it is the window read backwards from a journal without one."""
+    from flux_loop.journal import Journal, window_start
+
+    d = tmp_path / "run"
+    d.mkdir()
+    j = Journal(str(d / "events.jsonl"))
+    j._write({"ev": "hello", "pid": 1})
+    for n in range(1, 6):
+        j.mark("pass", json.dumps({"n": n}))
+        for k in range(100):
+            j._write({"ev": "start", "id": n * 1000 + k, "parent": None, "name": "x", "why": "y" * 900, "params": {}})
+    rows = [json.loads(x) for x in (d / "marks.jsonl").read_text().splitlines()]
+    assert [r["ev"] for r in rows] == ["hello"] + ["pass"] * 5 and [r["n"] for r in rows[1:]] == [1, 2, 3, 4, 5]
+    cases = [(3, 24 << 20), (30, 250_000), (30, 40_000), (30, 1 << 30)]
+    indexed = [window_start(str(d / "events.jsonl"), w, budget=b) for w, b in cases]
+    (d / "marks.jsonl").unlink()
+    assert indexed == [window_start(str(d / "events.jsonl"), w, budget=b) for w, b in cases]
+    assert indexed[0][1] == 2 and indexed[3] is None and indexed[2][2] is not None, indexed

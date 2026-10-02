@@ -1368,7 +1368,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     async def _follow(path_of, start_after, offset: int, request: Request, kind: str, preface: tuple[str, ...] = ()):
         """Server-sent events: each new line of a file, as it grows, from byte `offset`. For the
         journal, `start_after()` is when the loop's latest start began: its tree, not the last."""
-        from flux_loop.journal import read_events
+        from flux_loop.journal import compact, read_events
 
         ino, offset = offset
         yield "retry: 3000\n\n"
@@ -1387,7 +1387,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 if kind == "events":
                     events, new = read_events(path, offset, limit=4 << 20)       # D759: in slices
                     since = start_after()
-                    for e in events:
+                    for e in compact(events):
                         if e.get("t", 0) >= since:
                             yield f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n"
                 else:
@@ -1429,8 +1429,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             got = window_start(path, window)
             if got is not None:
                 at = (os.stat(path).st_ino, got[0])
-                said = {"ev": "window", "before": got[1], "t": 0}
+                said = {"ev": "window", "before": got[1], "t": 0, "cut": got[2] is not None}
                 preface = (f"event: events\ndata: {json.dumps(said)}\n\n",)
+                if got[2] is not None and got[2] >= 0:         # D762: inside a pass -- its mark first
+                    with open(path, "rb") as fh:
+                        fh.seek(got[2])
+                        preface += (f"event: events\ndata: {fh.readline().decode('utf-8', 'replace').strip()}\n\n",)
         stream = _follow(lambda: runs.events_path(latest()), lambda: (latest() or {"started": 0})["started"] - 1,
                          at, request, "events", preface)
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
