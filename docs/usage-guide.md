@@ -127,6 +127,9 @@ machine.
   application's cache `~/.cache/flux/apps/<id>/`. That cache is shared by the application's
   runs: `tmp/` holds its traces, `cache/` its caches. Tool scratch lives in the container's own
   `/tmp`, in memory and gone after the run (`FLUX_SANDBOX_TMP_SIZE` caps it).
+  The folder the run works in (the application's, for a run the web starts) is read-only to the
+  run, but under Podman a tool may write there (a `history/`, a `.lock`): its writes stay in the run and go
+  with it (D763; `FLUX_SANDBOX_CWD_LAYER=0` turns this off). What must last goes to `out/` or `workbench/`.
 - **HOME** is the application's (`apps/<id>/home`), holding the agents' sessions, their
   configuration and a copy of their login. Another application's cache is not there. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
   not there. The model settings and key come in through the environment.

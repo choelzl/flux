@@ -333,3 +333,17 @@ def test_no_value_is_on_the_containers_command_line(monkeypatch, tmp_path):
     env = sandbox.container_env(cmd)
     assert env["FLUX_REMOTE_API_KEY"] == "the-secret-key" and env["HOME"] == "/home/flux"
     assert "FLUX_MULTI" in cmd and env["FLUX_MULTI"] == "one\ntwo", "several lines: by name, from the environment"
+
+
+def test_where_the_run_works_takes_writes_that_go_with_the_run(monkeypatch, tmp_path):
+    """D763: a run the web starts works in its application's folder; a tool that keeps a `history/`
+    and its `.lock` there writes on a layer of the run's own (Podman), the folder stays as it is."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.chdir(tmp_path)
+    vols = lambda eng: [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"] if (cmd := sandbox.container_argv(  # noqa: E731
+        ["flux"], _args(tmp_path), "task run", "flux-t", None, eng)) else []
+    here = str(Path.cwd())
+    assert f"{here}:{here}:O" in vols("podman") and f"{here}:{here}:ro" not in vols("podman")
+    assert f"{here}:{here}:ro" in vols("docker"), "Docker has no such layer: read-only as before"
+    monkeypatch.setenv("FLUX_SANDBOX_CWD_LAYER", "0")
+    assert f"{here}:{here}:ro" in vols("podman")
