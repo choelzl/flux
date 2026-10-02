@@ -40,7 +40,7 @@ def test_a_plain_document_reads_the_library_by_default_and_not_with_knowledge_no
     from flux_loop import PromptProblem, TaskSpec
 
     prob = PromptProblem(TaskSpec.from_dict(DOC))
-    assert [s.key for s in prob.knowledge().sources] == ["library", "papers"]
+    assert [s.key for s in prob.knowledge().sources] == ["library", "papers", "digest"], "D791: digested unsaid"
     prefix = prob.prompt_prefix("core", _state(tmp_path))
     assert "[recurrence.md] A non-restoring digit recurrence" in prefix
     assert "[cordic.txt]" in prefix.split("the library's papers", 1)[1]     # the one-line index lists every paper
@@ -49,7 +49,7 @@ def test_a_plain_document_reads_the_library_by_default_and_not_with_knowledge_no
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="stands alone"):
-        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"off": True, "digest": True}}})
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"off": True, "agent": "opencode"}}})
 
 
 def test_an_empty_library_adds_nothing(tmp_path, monkeypatch):
@@ -63,19 +63,16 @@ def test_a_document_s_own_folder_is_indexed_with_the_shared_one(lib, tmp_path):
     from flux_loop import PromptProblem, TaskSpec
 
     home = tmp_path / "doc"
-    (home / "papers").mkdir(parents=True)
-    (home / "papers" / "remainder.md").write_text(
+    (home / "library").mkdir(parents=True)
+    (home / "library" / "remainder.md").write_text(
         "The remainder register of the digit recurrence square root holds nine bits for a 16-bit radicand.\n")
-    task = TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"library": "papers"}}}, base=home)
-    assert task.library == str((home / "papers").resolve())
+    task = TaskSpec.from_dict(DOC, base=home)
     prefix = PromptProblem(task).prompt_prefix("core", _state(tmp_path))
     assert "[remainder.md]" in prefix and "[recurrence.md]" in prefix
-    again = TaskSpec.from_dict(task.to_dict())
-    assert again.library == task.library
     from flux_loop import TaskError
 
-    with pytest.raises(TaskError, match="knowledge.library 'nope' is not a folder"):
-        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"library": "nope"}}}, base=home)
+    with pytest.raises(TaskError, match=r"flow.knowledge keys \['library'\] are not known"):    # D791: library/ alone
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"library": "papers"}}}, base=home)
 
 
 def test_an_agent_brief_carries_the_library_section_with_paths(lib, tmp_path):
@@ -102,7 +99,7 @@ def test_task_check_says_what_the_library_holds(lib, tmp_path, capsys, monkeypat
     assert "library: 2 documents (0 PDFs, pdftotext " in capsys.readouterr().out
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "empty"))
     main(["task", "check", str(doc)])
-    assert f"library: empty -- drop papers in library/ or inputs/ beside the document, or in {tmp_path / 'empty'}" in capsys.readouterr().out
+    assert f"library: empty -- drop papers in library/ beside the document, or in {tmp_path / 'empty'}" in capsys.readouterr().out
 
 
 def test_a_draft_s_row_names_the_papers_its_prompt_carried(lib, tmp_path):

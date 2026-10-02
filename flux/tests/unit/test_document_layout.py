@@ -20,7 +20,7 @@ NEW = {"id": "t", "statement": "x", "language": "python",
                 "measure": {"screen": {"command": "echo t=1", "metrics": ["t"]},
                             "confirm": {"command": ["echo", "t=2"], "metrics": ["t"], "timeout_s": 900}},
                 "dse": {"policy": "sweep", "space": {"n": [1, 2]}, "seeds": [{"n": 2}]},
-                "knowledge": {"text": "a note", "digest": True},
+                "knowledge": {"text": "a note", "agent": "opencode"},
                 "select": {"finalists": 3},
                 "calibrate": "off"}}
 
@@ -29,7 +29,7 @@ def test_each_box_is_read_into_the_loops_fields_and_written_back_as_read():
     new = TaskSpec.from_dict(NEW)
     assert [s.name for s in new.stages] == ["screen", "confirm"] and new.stages[1].timeout_s == 900
     assert new.space == {"n": [1, 2]} and new.seeds == ({"n": 2},) and new.budget["finalists"] == 3
-    assert new.knowledge == "a note" and new.flow["knowledge"] == ["digest"] and new.budget["calibrate"] is False
+    assert new.knowledge == "a note" and new.flow["knowledge"] == {"agent": "opencode"} and new.budget["calibrate"] is False
     assert TaskSpec.from_dict(new.to_dict()) == new and list(new.to_dict()["flow"]["measure"]) == ["screen", "confirm"], "as read"
 
 

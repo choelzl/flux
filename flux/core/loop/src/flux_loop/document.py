@@ -230,7 +230,6 @@ class TaskSpec:
     record: str = ""                     # the record's name: the id, `<parent>/<child>` for a sub-document
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
     knowledge_sheet: str = ""            # where `knowledge` was read from, for the report
-    library: str = ""                    # `knowledge: {library: dir}`, absolute: indexed with the shared one (D648)
     #: `flow: {knowledge: {agent: …}}` (D771, D773): who digests the papers in the Setup -- a
     #: coding agent's spec; None = the run's model.
     digest_by: Any = None
@@ -361,20 +360,13 @@ class TaskSpec:
                 raise TaskError(f"ladder keys {bad_ladder} are not the ladder's; known: {sorted(known_ladder)}")
         elif ladder not in (None, True, False):
             raise TaskError("`ladder` is true (the default ladder) or an object of its fields")
-        knowledge, sheet, library = doc.get("knowledge") or "", "", ""
+        knowledge, sheet = doc.get("knowledge") or "", ""
         # D773: `flow: {knowledge: {agent: …}}` -- that coding agent digests the papers in the Setup
         digest_by = flow["knowledge"]["agent"] if isinstance(flow.get("knowledge"), dict) else None
         if isinstance(knowledge, dict):
-            bad_keys = sorted(set(knowledge) - {"sheet", "text", "files", "library"})
+            bad_keys = sorted(set(knowledge) - {"sheet", "text", "files"})
             if bad_keys:
-                raise TaskError(f"knowledge keys {bad_keys} are not known; known: files, library, sheet, text")
-            if knowledge.get("library"):            # D648: the document's own papers
-                lib = Path(str(knowledge["library"]))
-                lib = lib if lib.is_absolute() or base is None else Path(base) / lib
-                if not lib.is_dir():
-                    raise TaskError(f"knowledge.library {knowledge['library']!r} is not a folder"
-                                    + (f" beside {base}" if base is not None else ""))
-                library = str(lib.resolve())
+                raise TaskError(f"knowledge keys {bad_keys} are not known; known: files, sheet, text")
             sheet = str(knowledge.get("sheet") or "")
             text = str(knowledge.get("text") or "")
             if sheet:
@@ -446,7 +438,7 @@ class TaskSpec:
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, hooks=hooks, record=record, ladder=ladder if ladder else None,
-            knowledge_sheet=sheet, library=library, digest_by=digest_by,
+            knowledge_sheet=sheet, digest_by=digest_by,
             skills=skills, workbench=workbench,
         )
 
@@ -474,7 +466,7 @@ class TaskSpec:
                        **({"estimate": r.estimate.to_doc()} if r.estimate else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
-            "knowledge": {"text": self.knowledge, "library": self.library} if self.library else self.knowledge,
+            "knowledge": self.knowledge,
             "joiner": self.joiner,
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: ({"values": list(v), "when": dict(self.when[k])} if k in self.when else list(v))
                                                                         for k, v in self.space.items()},
@@ -1127,10 +1119,12 @@ _FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("no
                "calibrate": ("on", "off"), "select": ("objectives",), "feedback": ("human", "none"),
                "extract": ("none", "mined")}
 #: What `flow.knowledge` may name (D648): the library is on by default; `none` turns it off.
-_KNOWLEDGE_SOURCES = ("sheet", "library", "digest", "none")
+_KNOWLEDGE_SOURCES = ("sheet", "library", "none")
 
 
-_KNOWLEDGE_KEYS = ("files", "sheet", "text", "library", "off", "digest", "agent")
+#: D791: what is read (files, sheet, text), who digests the library (agent), or off -- the
+#: library is the loop's `library/` folder and the operator's, digested whenever it is on.
+_KNOWLEDGE_KEYS = ("files", "sheet", "text", "off", "agent")
 
 
 def _lift(doc: dict[str, Any]) -> dict[str, Any]:
@@ -1199,24 +1193,20 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
             bad = sorted(set(k) - set(_KNOWLEDGE_KEYS))
             if bad:
                 raise TaskError(f"flow.knowledge keys {bad} are not known; known: {', '.join(_KNOWLEDGE_KEYS)}")
-            read = {x: k[x] for x in ("files", "sheet", "text", "library") if x in k}
+            read = {x: k[x] for x in ("files", "sheet", "text") if x in k}
             if read:
                 doc["knowledge"] = read
-            if not isinstance(k.get("digest", False), bool):
-                raise TaskError(f"flow.knowledge.digest is true or false, not {k['digest']!r} (`agent:` names who digests)")
-            if k.get("off") and (k.get("agent") is not None or k.get("digest") or read):
+            if k.get("off") and (k.get("agent") is not None or read):
                 raise TaskError("flow.knowledge `off: true` stands alone: it turns the reading off")
             if k.get("agent") is not None:
                 flow["knowledge"] = {"agent": k["agent"]}
             elif k.get("off"):
                 flow["knowledge"] = ["none"]
-            elif k.get("digest"):
-                flow["knowledge"] = ["digest"]
             else:
                 flow.pop("knowledge")
         elif strict and not isinstance(k, dict):
-            raise TaskError("flow.knowledge is `off` or an object: files, sheet, text, library (what is read), "
-                            f"digest: true, agent: <who digests> (D775), not {k!r}")
+            raise TaskError("flow.knowledge is `off` or an object: files, sheet, text (what is read), "
+                            f"agent: <who digests the library> (D791), not {k!r}")
     if isinstance(flow.get("select"), dict) and "finalists" in flow["select"]:
         sel = dict(flow["select"])
         doc["budget"] = {**(doc.get("budget") or {}), "finalists": sel.pop("finalists")}
@@ -1269,15 +1259,13 @@ def _layout(doc: Any) -> Any:
     if isinstance(k, str) and k:
         know["text"] = k
     elif isinstance(k, dict):
-        know.update({x: v for x, v in k.items() if x in ("files", "sheet", "text", "library") and v not in (None, "", [])})
+        know.update({x: v for x, v in k.items() if x in ("files", "sheet", "text") and v not in (None, "", [])})
     if isinstance(fk, dict) and "agent" in fk:
         know["agent"] = fk["agent"]
     elif fk is not None and not isinstance(fk, dict):
         srcs = [fk] if isinstance(fk, str) else list(fk)
         if "none" in srcs or "off" in srcs:
             know["off"] = True
-        if "digest" in srcs:
-            know["digest"] = True
     elif isinstance(fk, dict):
         know.update(fk)
     if know:
@@ -1430,8 +1418,8 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                 raise TaskError("flow.knowledge `none` stands alone: it turns the library off")
             flow["knowledge"] = list(sources)
     # the model-side knowledge: `digest` from the library, `mined` from the record (extract)
-    wanted = [s for s in ("mined", "digest") if (s == "mined" and flow.get("extract") == "mined")
-              or (s == "digest" and "digest" in (flow.get("knowledge") or ()))]
+    # the record's lessons (extract); the library's digest is the problem's own whenever it is on (D791)
+    wanted = ["mined"] if flow.get("extract") == "mined" else []
     lessons = flow["extract"]["agent"] if isinstance(flow.get("extract"), dict) else None
     if lessons is not None:                                    # the agent's lessons, beside the rest (D640)
         roles["knowledge"] = {"sources": {"names": [*wanted, "agent"], "agent": lessons}}
@@ -1441,24 +1429,19 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     return flow, doc
 
 
-#: D735-D737: a loop's own references, read without a word in the document: `library/` (papers and
-#: references) and `inputs/` (what it was given: `flux ask` puts its attachments there).
-LIBRARY_FOLDERS = ("library", "inputs")
+#: D735, D791: a loop's own papers and references, read without a word in the document: its
+#: `library/` (and `flux ask` puts its attachments there).
+LIBRARY_FOLDER = "library"
 
 
 def library_folders(task: "TaskSpec") -> tuple[str, ...]:
-    """The folders a document's library adds to the shared one (D648, D737): the one its
-    `knowledge: {library: ...}` names, and its own `library/` and `inputs/` beside it."""
-    out = [task.library] if task.library else []
-    if task.home:
-        out += [str((Path(task.home) / f).resolve()) for f in LIBRARY_FOLDERS if (Path(task.home) / f).is_dir()]
-    return tuple(dict.fromkeys(out))
+    """The folder a document's library adds to the shared one (D648, D791): its `library/`."""
+    lib = Path(task.home) / LIBRARY_FOLDER if task.home else None
+    return (str(lib.resolve()),) if lib is not None and lib.is_dir() else ()
 
 
 def own_library(task: "TaskSpec") -> tuple[str, ...]:
-    """The loop's own papers' folders, holding at least one document (D753): `library/`,
-    `inputs/` beside the document and a `knowledge: {library: ...}` it names -- what its
-    Background reading digests on its own."""
+    """The loop's own `library/`, when it holds a document (D753): what its Setup digests first."""
     from flux_knowledge.connectors.text import library_files as walk
 
     return tuple(f for f in library_folders(task) if any(True for _ in walk(Path(f))))
@@ -1588,11 +1571,9 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
             modelled = frozenset(problem.analytic_stages())
         except Exception:  # noqa: BLE001 -- a world that cannot say is a world with none
             pass
-    said = [] if isinstance(flow.get("knowledge"), dict) else list(flow.get("knowledge") or [])
     knowledge = (["sheet"] if task.knowledge else []) + (
         [] if not library_on(task) else ["library" + "".join(f" + {Path(f).name}/" for f in library_folders(task))
-                                         + " (on by default; `flow.knowledge: off` turns it off)"])
-    knowledge += ["digest"] if "digest" in said else []
+                                         + " (on by default, its papers digested; `flow.knowledge: off` turns it off)"])
     if isinstance(flow.get("knowledge"), dict):                # D773
         knowledge += [f"the papers digested by agent {_agent_name(flow['knowledge'])}"]
     extract = flow.get("extract", "none")

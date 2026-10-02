@@ -83,11 +83,10 @@
     knowledge: { title: "Background reading", says: "What the model reads with every request.",
       choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
                 { value: "none", half: "off", label: "None: no library" }] },
-    // D784: who sums the papers up, once each, in each pass's Setup -- not a flow key of its own:
-    // it is written into flow.knowledge (digest: true, or agent: ...)
-    digest: { title: "Digest the papers", says: "Optionally, each paper of the library is summed up once, in the Setup, and the summaries reach every prompt.",
-      choices: [{ value: "off", half: "off", label: "Off: the papers are read as they are" },
-                { value: "model", half: "model", label: "The model sums up each paper" }]
+    // D784, D791: who sums the papers up, once each, in each pass's Setup -- always, while the
+    // library is on; not a flow key of its own: an agent is written as flow.knowledge.agent
+    digest: { title: "Digest the papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt.",
+      choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
         .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
     extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
       choices: [{ value: "none", half: "off", label: "No lessons" },
@@ -103,7 +102,7 @@
   function defaultFlow() {
     var out = {};
     FLOW_BOXES.forEach(function (b) { out[b] = BOXES[b].choices[0].value; });
-    out.digest = "off";                                  // D784: a box of the drawing, written into knowledge
+    out.digest = "model";                                // D784: a box of the drawing, written into knowledge
     return out;
   }
 
@@ -127,7 +126,7 @@
       critique: { llm: "a model adversary on the division, each admitted part and the decision" },
       calibrate: { on: "between every pair of stages, on the record" },
       feedback: { human: "the operator's notes, when a terminal is attached", none: "no notes are read, reloaded or waited for" },
-      knowledge: { "default": "on by default; `flow.knowledge: off` turns it off", none: "the library is off" },
+      knowledge: { "default": "on by default, its papers digested; `flow.knowledge: off` turns it off", none: "the library is off" },
       extract: { none: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
       records: { on: "every candidate, measurement and refusal, read back on resume" },
     }[box] || {};
@@ -412,7 +411,7 @@
   // ------------------------------------------------------------------ the state
   function base() {
     return {
-      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "", knowledgeLibrary: "",
+      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
@@ -674,10 +673,8 @@
     else {
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
-      if (String(state.knowledgeLibrary || "").trim()) K.library = String(state.knowledgeLibrary).trim();   // D781
-      var dg = (state.flow || {}).digest;                  // D784: the Digest box
-      if (dg === "model") K.digest = true;
-      else if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.agent = dg.slice(6);
+      var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
+      if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.agent = dg.slice(6);
       if (kv === "none" || kv === "off") K = { off: true };
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
@@ -950,11 +947,10 @@
       if (kn === "off" || kn === false) f.knowledge = ["none"];          // YAML reads a bare `off` as false
       else if (kn && typeof kn === "object" && !Array.isArray(kn)) {
         var read = {};
-        ["files", "sheet", "text", "library"].forEach(function (x) { if (x in kn) read[x] = kn[x]; });
+        ["files", "sheet", "text"].forEach(function (x) { if (x in kn) read[x] = kn[x]; });
         if (Object.keys(read).length) out.knowledge = read;
         if (kn.agent !== undefined) f.knowledge = { agent: kn.agent };
         else if (kn.off) f.knowledge = ["none"];
-        else if (kn.digest) f.knowledge = ["digest"];
         else delete f.knowledge;
       }
     }
@@ -1026,11 +1022,10 @@
     if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
     else if (lang) { s.language = "other"; s.languageOther = lang; }
 
-    // knowledge: the files the model reads, a folder of papers (D781)
+    // knowledge: the files the model reads (the papers are library/'s, D791)
     var kn = raw.knowledge;
-    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files" || k === "library"; })) {
+    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files"; })) {
       if (kn.files) s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
-      if (kn.library) s.knowledgeLibrary = String(kn.library);
     } else if (kn) keep("knowledge", "a methods sheet or inline notes, which the configurator does not edit");
 
     // parts: decompose, or names alone
@@ -1057,7 +1052,6 @@
         var ls = Array.isArray(v) ? v : [v];
         if (v && typeof v === "object" && !Array.isArray(v) && typeof v.agent === "string" && choiceOf("digest", "agent:" + v.agent)) { s.flow.digest = "agent:" + v.agent; return; }   // D773, D784
         if (ls.length === 1 && ls[0] === "none") s.flow.knowledge = "none";
-        else if (ls.length === 1 && ls[0] === "digest") s.flow.digest = "model";          // D781, D784
         else if (!(ls.length === 0 || (ls.length === 1 && ls[0] === "library"))) flowOk = false;
         return;
       }
@@ -1464,14 +1458,11 @@
                 function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
           field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
                 function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
-        h("div", { class: "fc-line" }, [                    // D781: the papers, and who digests them
-          field("A folder of papers (optional)", function () { return state.knowledgeLibrary; },
-                function (v) { state.knowledgeLibrary = v; }, { compact: true, grow: true, placeholder: "papers",
-                  hint: "Beside the document; library/ and inputs/ are read without saying" }),
-          field("Digest the papers in the Setup", function () { return state.flow.digest || "off"; },
+        h("div", { class: "fc-line" }, [                    // D781, D791: who digests the papers of library/
+          field("Digest the papers in the Setup", function () { return state.flow.digest || "model"; },
                 function (v) { state.flow.digest = v; }, { compact: true, structural: true,
                   options: BOXES.digest.choices.map(function (c) { return [c.value, c.label.split(":")[0].replace(/^The /, "")]; }),
-                  hint: "Each paper summed up once; the same choice as the Digest box of step 2" })]),
+                  hint: "Papers go in library/ beside the document; each is summed up once" })]),
       ]);
       var kids = [what];
       if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));

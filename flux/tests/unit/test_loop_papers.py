@@ -1,5 +1,6 @@
-"""D735-D737: a loop's own references -- `library/` and `inputs/` beside its document -- join its
-library without a word in the document, and the sandbox mounts the libraries a run reads."""
+"""D735-D737, D791: a loop's own references -- its `library/` folder -- join its library without
+a word in the document, digested whenever the library is on, and the sandbox mounts the
+libraries a run reads."""
 
 from __future__ import annotations
 
@@ -19,37 +20,37 @@ def test_the_loops_library_folder_is_its_library(tmp_path, monkeypatch):
     for f in ("library/papers", "inputs", "research", "out"):
         (tmp_path / f).mkdir(parents=True)
     (tmp_path / "library/papers/sqrt.md").write_text("# Fast inverse square root\n\nA Newton step after a magic-constant guess halves the error.\n")
-    (tmp_path / "inputs/notes.txt").write_text("Booth recoding halves the partial products of a multiplier in hardware.\n")
+    (tmp_path / "library/notes.txt").write_text("Booth recoding halves the partial products of a multiplier in hardware.\n")
+    (tmp_path / "inputs/old.txt").write_text("Read by nobody: inputs/ is no library folder (D791).\n")
     (tmp_path / "research/a.pdf").write_bytes(b"%PDF-1.4 elsewhere")
     task = load_task(str(tmp_path / "kp.problem.yaml"))
-    assert library_folders(task) == (str((tmp_path / "library").resolve()), str((tmp_path / "inputs").resolve())), \
-        "library/ and inputs/, not research/ or out/"
+    assert library_folders(task) == (str((tmp_path / "library").resolve()),), "library/ alone, not inputs/, research/ or out/"
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "no-shared-library"))
     from flux_loop.task import PromptProblem
 
     mentor = PromptProblem(task).knowledge()
     assert mentor is not None, "an empty shared library: the loop's own library alone"
     papers = mentor.source("papers").render(None)
-    assert "sqrt.md" in papers and "notes.txt" in papers
+    assert "sqrt.md" in papers and "notes.txt" in papers and "old.txt" not in papers
     assert any("sqrt.md" in line for line in mentor.source("library").lookup("magic constant newton square root", k=2))
 
 
 def test_the_sandbox_mounts_the_libraries_a_run_reads(tmp_path, monkeypatch):
-    shared, outside, home = tmp_path / "shared-lib", tmp_path / "team-papers", tmp_path / "loop"
-    for d in (shared, outside, home):
+    shared, home = tmp_path / "shared-lib", tmp_path / "loop"
+    for d in (shared, home):
         d.mkdir()
-    (home / "kp.problem.yaml").write_text(DOC + f"  knowledge: {{library: {outside}}}\n")
+    (home / "kp.problem.yaml").write_text(DOC)
     monkeypatch.setenv("FLUX_LIBRARY", str(shared))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     args = types.SimpleNamespace(file=str(home / "kp.problem.yaml"), db=None, out=None, json=None)
     ro, _ = sandbox.mounts_for(args, "task run")
-    assert str(shared.resolve()) in ro and str(outside.resolve()) in ro
+    assert str(shared.resolve()) in ro
     assert Path(home).resolve().as_posix() in ro
 
 
-def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path, monkeypatch):
-    """D753: no `flux knowledge digest` to remember -- Background reading digests the loop's own
-    papers (library/, inputs/) with the run's model, once each, and keeps to them."""
+def test_the_library_is_digested_once_by_the_model_its_own_papers_first(tmp_path, monkeypatch):
+    """D753, D791: no `flux knowledge digest` to remember and no `digest:` to say -- the Setup
+    digests the library with the run's model, once each, the loop's own papers first."""
     from types import SimpleNamespace
 
     from flux_loop import PromptProblem, TaskSpec
@@ -79,10 +80,9 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
     digest.make_now(state)                         # the Setup's (D782: a prompt only reads)
     text = digest.render(state)
     assert "log2(n) levels, fan-out 2" in text and "[adders.md]" in text
-    assert len(model.prompts) == 1 and "adders.md" in model.prompts[0], "its own paper only, not the shared library"
-    assert "other.md" not in text
+    assert len(model.prompts) == 2 and "adders.md" in model.prompts[0], "its own paper first, then the shared library's"
     digest.make_now(state)
-    assert len(model.prompts) == 1, "once: the record keeps it"
+    assert len(model.prompts) == 2, "once: the record keeps it"
 
 
 def _adders(tmp_path, monkeypatch, knowledge=None, flow=None):
@@ -151,13 +151,13 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     assert type(oc).from_dict(oc.to_dict(), base=tmp_path / "loop").digest_by == "opencode", "written back as read"
     with pytest.raises(TaskError, match="flow.knowledge"):
         _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": "someone"}})
-    with pytest.raises(TaskError, match="flow.knowledge.digest is true or false"):
-        _adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})
+    with pytest.raises(TaskError, match=r"flow.knowledge keys \['digest'\] are not known"):
+        _adders(tmp_path, monkeypatch, {"digest": True})
 
 
 def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, monkeypatch):
-    """D774: with `flow.knowledge: {agent: …}` the shared library's papers are digested too -- a loop
-    whose papers are all in the shared library still has a Digest in its Setup."""
+    """D774, D791: the shared library's papers are digested too -- a loop whose papers are all in
+    the shared library still has a Digest in its Setup; `knowledge: off`, none."""
     import sys
     from types import SimpleNamespace
 
@@ -175,8 +175,9 @@ def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, mon
            "language": "python",
            "objectives": [],
            "flow": {"test": {"test": ["true"]}}}
-    plain = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path / "loop"))
-    assert not plain.digesting(), "no papers of its own and no digest asked: nothing to digest"
+    assert PromptProblem(TaskSpec.from_dict(doc, base=tmp_path / "loop")).digesting(), "D791: unsaid, the library is digested"
+    off = {**doc, "flow": {**doc["flow"], "knowledge": "off"}}
+    assert not PromptProblem(TaskSpec.from_dict(off, base=tmp_path / "loop")).digesting()
     problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "knowledge": {"agent": spec}}}, base=tmp_path / "loop"))
     assert problem.digesting()
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=None, say=lambda _m: None)

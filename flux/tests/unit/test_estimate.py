@@ -198,7 +198,7 @@ def test_the_flow_says_what_the_defaults_and_the_agents_do(tmp_path):
     parts = describe_flow(TaskSpec.from_dict({**one, "parts": ["a", "b"]}))
     assert _box(parts, "orchestrate").startswith(
         "orchestrate: default (the model picks the next part, the first one waiting without a model; rules pick")
-    assert _box(lines, "knowledge") == "knowledge: library (on by default; `flow.knowledge: off` turns it off)"
+    assert _box(lines, "knowledge") == "knowledge: library (on by default, its papers digested; `flow.knowledge: off` turns it off)"
     assert _box(lines, "extract") == "extract: none (nothing is mined from the record) -- or: mined, agent"
     assert _box(lines, "records").startswith("records: always on")
     agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "extract": {"agent": "opencode"}, "orchestrate": {"agent": "opencode"}}}))

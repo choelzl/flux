@@ -73,24 +73,28 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     from flux_loop.document import describe_flow
 
     monkeypatch.setattr(dg, "library_documents", lambda index=None, standard_id="library": [("mentor/knowledge/library/PACE.pdf", "the paper's text")])
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "shared" / "PACE.md").write_text("PACE: piecewise approximation of exp, 16 segments, 1 ULP at FP16.\n")
+    monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "shared"))
     db = str(tmp_path / "d.db")
     doc = {"id": "t",
            "statement": "x",
            "parts": ["a", "b"],
-           "flow": {"knowledge": {"digest": True}, "extract": "mined", "test": {"test": ["true"]}}}
+           "flow": {"knowledge": "off", "extract": "mined", "test": {"test": ["true"]}}}
+    doc["flow"].pop("knowledge")                   # D791: unsaid, the library is digested
     task = TaskSpec.from_dict(doc)
-    assert task.roles["knowledge"] == {"sources": {"names": ["mined", "digest"]}}
+    assert task.roles["knowledge"] == "mined"
     prob = PromptProblem(task)
-    assert [s.key for s in prob.knowledge().sources] == ["mined", "digest"]
-    assert any(line.startswith("knowledge: mined, digest") or "digest" in line for line in describe_flow(task, prob) if line.startswith("knowledge"))
+    assert [s.key for s in prob.knowledge().sources] == ["library", "papers", "digest", "mined"]
+    assert any("its papers digested" in line for line in describe_flow(task, prob) if line.startswith("knowledge"))
     state = LoopState(request=LoopRequest(db=db), say=lambda _m: None, proposer=_Model(), feedback=None)
     prob.digest(state)                             # the Setup's (D782: a prompt only reads)
     prefix = prob.prompt_prefix("a", state)
     assert "KEY POINTS FROM THE LIBRARY" in prefix and "PACE.pdf: a method" in prefix
     prompt, _schema = prob.plan_prompt(["a", "b"], state, None)
-    assert "THE LIBRARY, one line per paper" in prompt and "[PACE.pdf] PACE.pdf: a method" in prompt
-    plain = PromptProblem(TaskSpec.from_dict({**doc, "flow": {k: v for k, v in doc["flow"].items() if k != "knowledge"}}))
-    assert plain.library_index(state) == []
+    assert "THE LIBRARY, one line per paper" in prompt and "[PACE.md]" in prompt, "the papers source lists the library"
+    off = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc["flow"], "knowledge": "off"}}))
+    assert off.library_index(state) == []
 
 
 def test_the_cli_digests_and_shows(tmp_path, monkeypatch, capsys):

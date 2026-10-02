@@ -135,17 +135,14 @@ flux knowledge digest --db DB     # the library's key points, digested once by t
 ```
 
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
-its own (D737): `library/` beside its document (papers and references, in any subfolders) and `inputs/`
-(what it was given: `flux ask`, and New loop › Agent, put their attachments there), and a folder
-`flow.knowledge: {library: DIR}` names. Every prompt gets the excerpts nearest the problem and a line per paper,
+its own (D791): `library/` beside its document (papers and references, in any subfolders; `flux ask`
+puts its attachments there). Every prompt gets the excerpts nearest the problem and a line per paper,
 each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
 `pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
-The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
-model's digest of each paper, once per paper, which the plan reads. The loop's own papers are digested by
-its model once each, on their own, and their key points join every prompt (D753).
-The digest runs first in each pass's Setup (the tree's **Digest** leaf, before Reading; with an agent or
-`flow.knowledge: {digest: true}` the whole library, shared papers too, else the loop's own -- D774: how many new, by whom, how
-many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
+The sandbox mounts each library read-only. Every paper of the library is digested once -- the loop's own
+first, then the shared ones -- and the key points join every prompt; there is nothing to say for it, and
+`flow.knowledge: off` turns the library and its digest off (D791). The digest runs first in each pass's
+Setup (the tree's **Digest** leaf, before Reading: how many new, by whom, how many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
 
 ```yaml
@@ -153,7 +150,7 @@ flow:
   knowledge: {agent: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
 ```
 
-In the configurator's drawing it is the **Digest the papers** box (off, the model, a coding agent; D784). Its form also takes a folder of papers and whether the model digests them (D781). A Setup digests at most 8 new papers (`FLUX_DIGEST_PER_PASS`), the loop's own first;
+In the configurator's drawing it is the **Digest the papers** box (the model, or a coding agent; D784, D791). A Setup digests at most 8 new papers (`FLUX_DIGEST_PER_PASS`), the loop's own first;
 the rest follow in later passes, and a digester that fails three times in a row waits for the next pass (D782).
 An agent reads each paper from a `paper.txt` beside it; it needs a model served with room for its own
 prompt (OpenCode's alone is about 33,000 tokens) and working tool calls -- else digest with the model (D785).

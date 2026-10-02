@@ -43,7 +43,8 @@ Edit `myproblem/problem.yaml`:
 - For a knob search: list the knobs under `flow.dse.space` and write each design in the generator script.
 
 Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
-problem on the machine) or in a folder beside the document named by `flow.knowledge: {library: papers}`.
+problem on the machine) or in `library/` beside the document (this problem's own). Each paper is
+summed up once by the model (or `flow.knowledge: {agent: opencode}`).
 Excerpts that match the statement, contract and parts reach the model's prompts, and the coding
 agents get the file paths to open. `flow: {knowledge: off}` turns it off.
 
@@ -85,7 +86,7 @@ writes an HTML page of the whole search.
 | `flow.test` | a command that prints `N failing` or exits non-zero; or a map of named checks, run in order |
 | `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
 | `flow.dse` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
-| `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `{library: papers}` a folder of papers; `agent: opencode` digests them; `off` |
+| `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `agent: opencode` digests the library instead of the model; `off` |
 | `flow.select` | `{finalists: 3}`: how many reach the costliest stage |
 | `budget` | `steps`, `passes`, `repair_attempts`, `workers`, `prototype` |
 

@@ -70,11 +70,10 @@ Say only what is yours; the rest is inferred.
     bin, args}`: another executable, extra arguments such as `[--agent, flux]`; per machine
     `FLUX_OPENCODE_BIN` / `FLUX_OPENCODE_ARGS`).
   - `knowledge`: what the model reads with every prompt -- `files: [...]` (specs, reference code,
-    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `library: papers`
-    (a folder of papers beside the document, added to the operator's library), `digest: true` (the
-    library's papers digested by the model), `agent: opencode` (digested by that coding agent
-    instead), or `knowledge: off` (no library at all). The operator's library
-    (`mentor/knowledge/library/`) and the loop's own `library/` reach every document: excerpts
+    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `agent: opencode` (the
+    library's papers digested by that coding agent instead of the model), or `knowledge: off` (no
+    library at all). The operator's library (`mentor/knowledge/library/`) and the loop's own
+    `library/` folder reach every document, each paper digested once: excerpts
     for the statement, contract and parts, one line per paper, and the coding agents' briefs.
   - `select: {finalists: N}`: how many designs reach the costliest stage.
   - `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
