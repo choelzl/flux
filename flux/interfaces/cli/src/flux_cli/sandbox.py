@@ -371,11 +371,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
             pass                                              # no lookups seen; the proxy still filters
     cmd += ["-v", f"{home}:{HOME_IN}"]                            # HOME: the user's Flux home
     for p in ro:
-        # D763: where the run works (the application's folder, for a run the web starts) is read-only
-        # under a layer of the run's own -- a tool that keeps a `history/` and its `.lock` beside
-        # itself writes, the document stays as it is, and what was written goes with the run
-        over = p == os.getcwd() and eng == "podman" and os.environ.get("FLUX_SANDBOX_CWD_LAYER", "1") != "0"
-        cmd += ["-v", f"{p}:{p}:O" if over else f"{p}:{p}:ro"]
+        cmd += ["-v", f"{p}:{p}:ro"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
     env = _env()

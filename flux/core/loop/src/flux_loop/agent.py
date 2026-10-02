@@ -333,7 +333,9 @@ def workbench_section(bench: str) -> str:
             "facts you worked out, what the next agent should know. Start each with a one-line summary. Use "
             "what is there before rebuilding it; correct a note that turned out wrong. Before you end a turn in "
             "which you worked something out (a method, a number, why a draft failed), leave it there for the "
-            "next agent. The draft goes to its own path, not here. A tool may not run the design tools either.\n"
+            "next agent. The draft goes to its own path, not here. A tool may not run the design tools either. "
+            "Scratch that need not last goes to /tmp (gone when the run ends); everything else outside your "
+            "directory and the workbench is read-only.\n"
             f"What it holds now:\n{held}")
 
 
