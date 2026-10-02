@@ -1,6 +1,6 @@
 # A new C++ L2 prefetcher, written by the model and measured in ChampSim beside Bingo at its
 # shipped configuration (bingo_default.ini) on the three 5G baseband traces in traces/.
-#     flux task run applications/prefetcher_invent --db demo-invent.db --tui
+#     flux task run applications/prefetcher/invent.problem.yaml --db demo-invent.db --tui
 
 statement: >-
   An L2 cache prefetcher for 5G baseband workloads: FFT-heavy signal processing with large
@@ -47,14 +47,14 @@ flow:
   # generate: {agent: opencode}     # a coding agent writes the header, not the model
   test:
     build: flux champsim build {artifact}
-    test: flux champsim check {artifact} --traces {home}/../prefetcher/traces
+    test: flux champsim check {artifact} --traces {home}/traces
   measure:                     # 10M+15M instructions, then 100M+150M for the finalists
     screen:
-      command: "flux champsim run {artifact} --traces {home}/../prefetcher/traces --config {home}/../prefetcher/bingo_default.ini --warmup 10000000 --sim 15000000"
+      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 10000000 --sim 15000000"
       metrics: [geomean_speedup]
       needs: [pythia]
     confirm:
-      command: "flux champsim run {artifact} --traces {home}/../prefetcher/traces --config {home}/../prefetcher/bingo_default.ini --warmup 100000000 --sim 150000000"
+      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 100000000 --sim 150000000"
       metrics: [geomean_speedup]
       needs: [pythia]
 

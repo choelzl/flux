@@ -1,5 +1,5 @@
 """The prefetcher as a worldless document: `prefetcher.problem.yaml` on `bingo.py`, and
-`applications/prefetcher_invent/problem.yaml` on `flux champsim`. The loop runs against the FAKE ChampSim of
+`applications/prefetcher/invent.problem.yaml` on `flux champsim`. The loop runs against the FAKE ChampSim of
 test_champsim_generic.py, so nothing here needs the traces or the simulator."""
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def test_both_documents_load():
     task = load_task(APP / "problem.yaml")
     assert task.extension == ".ini" and not task.world and not task.space and task.gate.named("test")
     assert "bingo_pht_size" in task.knowledge and "l2c_prefetcher_types = bingo" in task.knowledge
-    assert load_task(APP.parent / "prefetcher_invent" / "problem.yaml").gate.named("build").builds
+    assert load_task(APP / "invent.problem.yaml").gate.named("build").builds
 
 
 def test_a_file_that_leaves_knobs_out_takes_the_shipped_ones(tmp_path, capsys):

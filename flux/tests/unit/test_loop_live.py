@@ -31,7 +31,7 @@ def flux(*args: str, timeout: float = 900.0) -> subprocess.CompletedProcess:
 def _doc(app: str, tmp_path: Path, **patch) -> Path:
     """A copy of the application's document with sections patched, written beside a scratch
     record so the world resolves as `flux task run` resolves it."""
-    src = APPS / app / f"{app}.problem.yaml"
+    src = APPS / app / "problem.yaml"
     doc = yaml.safe_load(src.read_text())
     for key, value in patch.items():
         doc[key] = {**doc.get(key, {}), **value} if isinstance(value, dict) and isinstance(doc.get(key), dict) else value
@@ -84,7 +84,7 @@ def test_the_digits_example_runs_through_the_cli_and_writes_its_artifact(tmp_pat
 @pytest.mark.heavy
 def test_every_application_document_passes_task_check():
     for app in sorted(p.name for p in APPS.iterdir() if p.is_dir()):
-        r = flux("task", "check", str(APPS / app / f"{app}.problem.yaml"), timeout=120)
+        r = flux("task", "check", str(APPS / app / "problem.yaml"), timeout=120)
         assert r.returncode in (0, 1), f"{app}: {r.stderr[-800:]}"
         assert "flow (D542)" in r.stdout or r.returncode == 1, f"{app}: {r.stdout[-800:]}"
 

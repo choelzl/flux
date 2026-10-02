@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 ASSETS = REPO / "website/docs/assets"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
-DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"),
+DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"), *REPO.glob("flux/applications/*/*.problem.yaml"),
                *REPO.glob("flux/interfaces/cli/src/flux_cli/templates/*/problem.yaml"),
                REPO / "flux/core/loop/examples/digits/problem.json"])
 COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts", "workload")
