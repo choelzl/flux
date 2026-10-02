@@ -110,7 +110,7 @@ def test_the_cache_is_keyed_on_the_tools_a_stage_needs(tmp_path, monkeypatch):
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),
              LoopRequest(db=str(tmp_path / "c.db"), steps=2, finalists=0, screen_only=True, prototype=False),
              log=lambda _m: None)
-    assert asked and "sh" in asked[0] and "yosys" in asked[0]
+    assert any("sh" in a and "yosys" in a for a in asked), asked    # the stage's tools (D778's judge asks too)
 
 
 def test_a_component_groups_its_knobs_and_an_optional_one_is_switched_on_or_off():
