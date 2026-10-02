@@ -207,7 +207,7 @@ def test_an_answer_the_loop_cannot_use_falls_back_to_the_declared_work(tmp_path)
 def _doc(**kw):
     doc = {"id": "rigged",
            "statement": "write the word good",
-           "parts": [{"name": "one", "statement": "the word"}, {"name": "two", "statement": "the word again"}],
+           "parts": {"one": "the word", "two": "the word again"},
            "objectives": [{"metric": "bytes", "direction": "minimize"}],
            "flow": {"test": {"test": ["true"]},
                     "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}

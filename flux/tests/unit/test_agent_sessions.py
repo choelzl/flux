@@ -137,8 +137,7 @@ def test_admission_drops_the_session_so_an_improve_starts_fresh(tmp_path):
 
 
 def test_a_second_part_starts_a_fresh_session(tmp_path):
-    task = _digits(_fake(tmp_path), parts=[{"name": "lo", "statement": "the digits, as the task says"},
-                                           {"name": "hi", "statement": "the digits again"}])
+    task = _digits(_fake(tmp_path), parts={"lo": "the digits, as the task says", "hi": "the digits again"})
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=None, log=lambda _m: None)
     assert set(out.admitted) == {"lo", "hi"}, out.refused
     turns = _turns(tmp_path)

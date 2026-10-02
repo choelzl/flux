@@ -190,7 +190,7 @@ class TaskSpec:
     extension: str = ".txt"
     parts: tuple[Part, ...] = ()
     decompose: bool = False              # "parts": "decompose" -- the orchestrator divides it
-    max_parts: int = 8
+    max_parts: int = 8                   # the most a model's division may make (D792: not a document key)
     #: Sub-tasks, each run as its own loop with its own gate, stages and record (D455): nested
     #: documents, or "decompose" to ask the orchestrator. A child inherits what it does not say
     #: (see `_INHERITED`) but never `subtasks`, so nesting is bounded by the documents.
@@ -211,7 +211,7 @@ class TaskSpec:
     stages: tuple[Stage, ...] = ()
     objectives: tuple[Objective, ...] = ()
     knowledge: str = ""
-    joiner: str = "\n\n"                 # how admitted parts compose, in `parts` order
+    joiner: str = "\n\n"                 # how admitted parts compose, in `parts` order (D792: fixed)
     budget: dict[str, Any] = field(default_factory=dict)      # LoopRequest overrides
     params: dict[str, Any] = field(default_factory=dict)      # the problem's own settings
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
@@ -277,12 +277,19 @@ class TaskSpec:
         listed = () if doc.get("parts") == "decompose" else (doc.get("parts") or ())
         if decompose and listed:
             raise TaskError("`parts` is either a list or \"decompose\", not both")
-        for i, p in enumerate(listed):
-            if isinstance(p, str):
-                p = {"name": p}
-            if not isinstance(p, dict) or not isinstance(p.get("name"), str) or not p["name"]:
-                raise TaskError(f"parts[{i}] needs a `name`")
-            parts.append(Part(p["name"], str(p.get("statement") or "")))
+        # D792: the parts' names in order, or a map from each name to what it is
+        if isinstance(listed, dict):
+            listed = [(str(k), v) for k, v in listed.items()]
+        elif isinstance(listed, (list, tuple)) and all(isinstance(p, str) and p for p in listed):
+            listed = [(p, "") for p in listed]
+        else:
+            raise TaskError('`parts` is "decompose", a list of names, or a map from each part\'s name to what it is')
+        for name, what in listed:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name) or name == "decompose":
+                raise TaskError(f"parts: {name!r} is no part's name (a letter, then letters, digits, _ and -)")
+            if what is not None and not isinstance(what, str):
+                raise TaskError(f"parts.{name}: what the part is, in words")
+            parts.append(Part(name, str(what or "")))
         names = [p.name for p in parts]
         if len(set(names)) != len(names):
             raise TaskError(f"part names must be unique, got {names}")
@@ -427,14 +434,14 @@ class TaskSpec:
         return cls(
             id=tid.strip(), statement=statement.strip(), contract=str(doc.get("contract") or ""),
             language=language, extension=ext,
-            parts=tuple(parts), decompose=decompose, max_parts=int(doc.get("max_parts") or 8),
+            parts=tuple(parts), decompose=decompose,
             generator=dict(generator), roles=dict(roles), flow=dict(flow),
             subtasks=tuple(subtasks), split=split,
             max_subtasks=int(doc.get("max_subtasks") or 4),
             brief=doc.get("brief") in ("propose", True),
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
-            knowledge=str(knowledge), joiner=str(doc.get("joiner") or "\n\n"),
+            knowledge=str(knowledge),
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, hooks=hooks, record=record, ladder=ladder if ladder else None,
@@ -448,8 +455,8 @@ class TaskSpec:
             "id": self.id, "statement": self.statement, "contract": self.contract,
             "language": self.language,
             "parts": ("decompose" if self.decompose
-                      else [{"name": p.name, "statement": p.statement} for p in self.parts]),
-            **({"max_parts": self.max_parts} if self.decompose else {}),
+                      else {p.name: p.statement for p in self.parts} if any(p.statement for p in self.parts)
+                      else [p.name for p in self.parts]),
             **({"flow": dict(self.flow)} if self.flow else {}),
             **({"subtasks": "decompose", "max_subtasks": self.max_subtasks} if self.split else
                {"subtasks": [c.to_dict() for c in self.subtasks]} if self.subtasks else {}),
@@ -467,7 +474,6 @@ class TaskSpec:
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
             "knowledge": self.knowledge,
-            "joiner": self.joiner,
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: ({"values": list(v), "when": dict(self.when[k])} if k in self.when else list(v))
                                                                         for k, v in self.space.items()},
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
@@ -645,7 +651,7 @@ def _gate_doc(gate: Gate) -> Any:
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
 _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
-              "params", "workload", "joiner", "budget", "brief", "space", "world", "hooks", "ladder",
+              "params", "workload", "budget", "brief", "space", "world", "hooks", "ladder",
               "flow")
 
 
@@ -888,9 +894,9 @@ def _estimator(at: str, raw: Any) -> Estimator | None:
 #: Every top-level key a problem document may say; any other is refused with the nearest
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
-    "statement", "contract", "language", "parts", "max_parts",
+    "statement", "contract", "language", "parts",
     "flow", "subtasks", "max_subtasks", "brief", "objectives",
-    "joiner", "budget", "params", "workload", "world", "hooks", "ladder",
+    "budget", "params", "workload", "world", "hooks", "ladder",
     "skills"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})

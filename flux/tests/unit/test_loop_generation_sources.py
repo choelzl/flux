@@ -194,7 +194,7 @@ def test_the_model_stays_the_default_and_can_be_named(tmp_path):
 def _doc(**kw):
     doc = {"id": "drafted",
            "statement": "produce the word good",
-           "parts": [{"name": "piece", "statement": "the word"}],
+           "parts": {"piece": "the word"},
            "objectives": [{"metric": "bytes", "direction": "minimize"}],
            "flow": {"test": {"test": ["grep", "-q", "good", "{artifact}"]},
                     "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}

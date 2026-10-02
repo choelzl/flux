@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -123,8 +124,7 @@ def test_parts_are_generated_one_at_a_time_and_composed_in_order(tmp_path):
               "print(f'{len(bad)} failing')\nsys.exit(1 if bad else 0)")
     task = TaskSpec.from_dict({"id": "digits-in-parts",
                                "statement": "the digits, in two halves",
-                               "parts": [{"name": "head", "statement": "0 to 4"}, {"name": "tail", "statement": "5 to 9"}],
-                               "joiner": '\n',
+                               "parts": {"head": "0 to 4", "tail": "5 to 9"},
                                "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
                                "flow": {"test": ["{python}", "-c", script, "{artifact}", "{part}"]}})
     problem = PromptProblem(task)
@@ -134,7 +134,7 @@ def test_parts_are_generated_one_at_a_time_and_composed_in_order(tmp_path):
                                  _reply("5\n6\n7\n8\n9\n")])
     out = run_loop(problem, request_for(task, db=""), proposer=proposer, log=lambda m: None)
     assert sorted(out.admitted) == ["head", "tail"]
-    assert out.decision is not None and out.decision.candidate.artifact == "0\n1\n2\n3\n4\n\n5\n6\n7\n8\n9\n"
+    assert out.decision is not None and out.decision.candidate.artifact == "0\n1\n2\n3\n4\n\n\n5\n6\n7\n8\n9\n"
     assert out.decision.candidate.knobs["parts"] == [out.admitted["head"].name, out.admitted["tail"].name]
     assert any("PART head" in p for p in proposer.prompts) and any("PART tail" in p for p in proposer.prompts)
 
@@ -210,20 +210,19 @@ def _decomposed_task(**extra):
               "got = [g for g in open(sys.argv[1]).read().split('\\n') if g != '']\n"
               "bad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 5), 5))\n"
               "print(f'{len(bad)} failing')\nsys.exit(1 if bad else 0)")
-    return TaskSpec.from_dict({"id": "digits-decomposed",
+    task = TaskSpec.from_dict({"id": "digits-decomposed",
                                "statement": "the ten digits, one per line",
                                "parts": "decompose",
-                               "max_parts": 3,
-                               "joiner": '\n',
                                "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
                                **extra,
                                "flow": {**extra.get("flow", {}),
                                         "test": ["{python}", "-c", script, "{artifact}", "{part}"]}})
+    return replace(task, max_parts=3)             # D792: the loop's own bound, not a document key
 
 
 def test_a_task_may_ask_the_orchestrator_to_decompose_it(tmp_path):
     task = _decomposed_task()
-    assert task.decompose and task.parts == () and TaskSpec.from_dict(task.to_dict()) == task
+    assert task.decompose and task.parts == () and replace(TaskSpec.from_dict(task.to_dict()), max_parts=3) == task
     decomposition = json.dumps({"parts": [{"name": "head", "statement": "digits 0 to 4"},
                                           {"name": "tail", "statement": "digits 5 to 9"}], "why": "two halves"})
     proposer = ScriptedProposer([decomposition, json.dumps({"next": "head"}),
@@ -234,7 +233,7 @@ def test_a_task_may_ask_the_orchestrator_to_decompose_it(tmp_path):
     assert [p.name for p in problem.parts] == ["head", "tail"]
     assert "Divide this task into 1 to 3 parts" in proposer.prompts[0]
     assert sorted(out.admitted) == ["head", "tail"] and out.decision is not None
-    assert out.decision.candidate.artifact == "0\n1\n2\n3\n4\n\n5\n6\n7\n8\n9\n"
+    assert out.decision.candidate.artifact == "0\n1\n2\n3\n4\n\n\n5\n6\n7\n8\n9\n"
     assert any("decompose: 2 part(s): head, tail" in ln for ln in log)
     # a resume reuses the recorded division even if the model would now answer differently
     other = ScriptedProposer([json.dumps({"parts": [{"name": "all", "statement": "everything"}]})])
@@ -257,7 +256,7 @@ def test_decompose_refuses_without_a_model_and_checks_the_division(tmp_path):
             run_loop(PromptProblem(task), request_for(task, db=""), proposer=ScriptedProposer([reply]),
                      log=lambda m: None)
     with pytest.raises(TaskError, match="does not have: decompose"):      # `parts: decompose` is the one spelling (D629)
-        TaskSpec.from_dict({**task.to_dict(), "parts": [{"name": "p"}], "decompose": True})
+        TaskSpec.from_dict({**task.to_dict(), "parts": ["p"], "decompose": True})
 
 
 def test_records_remember_and_recall_typed_decisions(tmp_path):

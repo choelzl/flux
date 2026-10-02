@@ -134,7 +134,7 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
 
     doc = {"id": "orch",
            "statement": "write the word good",
-           "parts": [{"name": "one", "statement": "the word"}, {"name": "two", "statement": "the word again"}],
+           "parts": {"one": "the word", "two": "the word again"},
            "objectives": [{"metric": "bytes", "direction": "minimize"}],
            "flow": {"orchestrate": {"agent": _agent(tmp_path, "good", {"pick": "two", "why": "two first"})},
                     "test": {"test": ["true"]},
@@ -239,7 +239,7 @@ def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_p
     answer = {"methods": {"a": "a lookup table first", "b": "a formula"}, "why": "the record is empty"}
     doc = {"id": "planned",
            "statement": "two words",
-           "parts": [{"name": "a", "statement": "one"}, {"name": "b", "statement": "two"}],
+           "parts": {"a": "one", "b": "two"},
            "objectives": [{"metric": "m", "direction": "minimize"}],
            "flow": {"orchestrate": "rules",
                     "plan": {"agent": _agent(tmp_path, "good", answer)},

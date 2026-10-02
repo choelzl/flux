@@ -14,7 +14,7 @@ import yaml
 DOC = {"id": "sq",
        "statement": "An integer square root unit using a non-restoring digit recurrence.",
        "contract": "The module isqrt takes a 16-bit radicand and returns an 8-bit root.",
-       "parts": [{"name": "core", "statement": "the digit recurrence loop"}],
+       "parts": {"core": "the digit recurrence loop"},
        "flow": {"test": {"test": ["true"]}}}
 
 

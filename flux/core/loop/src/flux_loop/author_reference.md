@@ -109,8 +109,9 @@ Say only what is yours; the rest is inferred.
   patching, plan_file, prototype_attempts, prototype_attempts_max, prototype_patience,
   prototype_shrink_attempts, prototype_unmeasured_stop, regenerate, regress_after,
   revert_after, screen_only, structured, tool_hops, tool_result_chars, tools.
-- Advanced keys: `parts` and `max_parts` (pieces of one artifact) and `subtasks`/`split`/`joiner`/
-  `max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
+- Advanced keys: `parts` (pieces of one artifact: their names in order, `[decoder, datapath]`,
+  or a map from each name to what it is, `{decoder: "...", datapath: "..."}`, or `decompose`),
+  `subtasks`/`max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
   package for what a document cannot say), `ladder`, `skills`, `brief`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's

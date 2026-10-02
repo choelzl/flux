@@ -91,8 +91,9 @@ The loop crafter offers the choices above. A document written by hand can also s
 ## Parts
 
 A large design can be made as several **parts**, each written and checked on its own, then
-composed and measured as one. List them (`parts: [decoder, datapath]`) or let the loop divide
-the statement (`parts: decompose`). The drawing then shows a *parts* stack beside the checks.
+composed and measured as one. List them (`parts: [decoder, datapath]`), say what each is
+(`parts: {decoder: "the opcode to control lines", datapath: "the ALU and the registers"}`) or let
+the loop divide the statement (`parts: decompose`). The drawing then shows a *parts* stack beside the checks.
 
 ## Measurements that estimate first
 
