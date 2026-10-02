@@ -226,9 +226,6 @@ class TaskSpec:
     #: The flow (D542): one key per box of the drawing naming its half, normalised; what it
     #: implies is folded into `roles`, `generator`, `critique`, `budget.calibrate`.
     flow: dict[str, Any] = field(default_factory=dict)
-    #: The measurement cache sidecar beside the record (D541): `true` = `<id>.json`, `false` =
-    #: none (a world that measures in microseconds, or owns its caching), a string = that name.
-    cache: bool | str = True
     hooks: dict[str, str] = field(default_factory=dict)       # hook name -> "module:callable" (problem, ...)
     record: str = ""                     # the record's name: the id, `<parent>/<child>` for a sub-document
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
@@ -237,9 +234,9 @@ class TaskSpec:
     #: `flow: {knowledge: {agent: …}}` (D771, D773): who digests the papers in the Setup -- a
     #: coding agent's spec; None = the run's model.
     digest_by: Any = None
-    #: The agents' workbench (D677), absolute; "" = none. Their tools and notes, kept across
-    #: runs beside the document; the loop provides it and never reads it. Where, like `home`,
-    #: not what: not compared, not in the digest (only `workbench: false` is written).
+    #: The agents' workbench (D677, D790): `workbench/` beside the document, absolute; "" for an
+    #: inline document. Their tools and notes, kept across runs; the loop provides it and never
+    #: reads it. Where, like `home`, not what: not compared, not in the digest.
     workbench: str = field(default="", compare=False)
     #: The directory the document was loaded from ("" inline); every artifact of a run lives
     #: under `<home>/out/`, never beside the source (D578).
@@ -340,9 +337,6 @@ class TaskSpec:
         space, when = _space(doc.get("space"))
         seeds = _seeds(doc.get("seeds"), space)
         world = str(doc.get("world") or "")
-        cache = doc.get("cache", True)
-        if not isinstance(cache, (bool, str)) or cache == "":
-            raise TaskError("`cache` is true (the loop's sidecar), false (none) or a file name")
         if world and ":" not in world:
             raise TaskError('`world` is "package.module:callable" -- what takes the problem and returns '
                             "the object whose methods are its hooks")
@@ -437,7 +431,7 @@ class TaskSpec:
             skills = tuple(str(sk.path) for sk in load_skills(skills_raw, base=Path(base) if base is not None else None))
         except SkillError as exc:
             raise TaskError(f"skills: {exc}") from exc
-        workbench = _workbench(doc.get("workbench", True), base)
+        workbench = str((Path(base) / "workbench").resolve()) if base is not None else ""
         return cls(
             id=tid.strip(), statement=statement.strip(), contract=str(doc.get("contract") or ""),
             language=language, extension=ext,
@@ -451,7 +445,7 @@ class TaskSpec:
             knowledge=str(knowledge), joiner=str(doc.get("joiner") or "\n\n"),
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
-            world=world, cache=cache, hooks=hooks, record=record, ladder=ladder if ladder else None,
+            world=world, hooks=hooks, record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, library=library, digest_by=digest_by,
             skills=skills, workbench=workbench,
         )
@@ -487,12 +481,10 @@ class TaskSpec:
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
             **({"workload": self.workload} if self.workload is not None else {}),
             **({"world": self.world} if self.world else {}),
-            **({"cache": self.cache} if self.cache is not True else {}),
             **({"hooks": dict(self.hooks)} if self.hooks else {}),
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),
-            **({"workbench": False} if not self.workbench and self.home else {}),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -660,9 +652,9 @@ def _gate_doc(gate: Gate) -> Any:
 
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
-_INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills", "workbench",
+_INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
               "params", "workload", "joiner", "budget", "brief", "space", "world", "hooks", "ladder",
-              "cache", "flow")
+              "flow")
 
 
 def _space(raw: Any) -> tuple[dict[str, list], dict[str, dict[str, list]]]:
@@ -763,7 +755,7 @@ def _flat_point(p: dict[str, Any], space: dict[str, list]) -> dict[str, Any]:
 
 def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     """The child's document with what it does not say taken from the parent (D455), including
-    a `world:` document's world, hooks, ladder, cache and flow (D555). A child of a named
+    a `world:` document's world, hooks, ladder and flow (D555). A child of a named
     campaign is its own campaign, `<parent>/<child>`, in the same record."""
     out = dict(child)
     for key in _INHERITED:
@@ -901,30 +893,13 @@ def _estimator(at: str, raw: Any) -> Estimator | None:
     return Estimator(kind, float(margin), cmd)
 
 
-def _workbench(value: Any, base: Any) -> str:
-    """`workbench:` (D677): true (the default) = `workbench/` beside the document, a path (beside
-    the document unless absolute), false = none. An inline document without a path has none."""
-    if value is False or value is None:
-        return ""
-    if value is True:
-        return str((Path(base) / "workbench").resolve()) if base is not None else ""
-    if not isinstance(value, str) or not value.strip():
-        raise TaskError("workbench is true, false, or a folder (beside the document unless absolute)")
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        if base is None:
-            return ""
-        path = Path(base) / path
-    return str(path.resolve())
-
-
 #: Every top-level key a problem document may say; any other is refused with the nearest
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
     "statement", "contract", "language", "parts", "max_parts",
     "flow", "subtasks", "max_subtasks", "brief", "objectives",
-    "joiner", "budget", "params", "workload", "world", "hooks", "ladder", "cache",
-    "skills", "workbench"})
+    "joiner", "budget", "params", "workload", "world", "hooks", "ladder",
+    "skills"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
 

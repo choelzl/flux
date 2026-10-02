@@ -20,8 +20,8 @@ def cache_lookup(problem: Problem, state: LoopState, cand: Candidate, stage: str
     cache = state.cache
     if cache is None:
         return None
-    key = f"{problem.name}/{stage}/{cand.key()}"
     try:
+        key = f"{problem.name}/{stage}/{problem.cache_key(cand, stage, state)}"
         return cache.get(key) if cache.holds(key) else None
     except Exception:  # noqa: BLE001
         return None

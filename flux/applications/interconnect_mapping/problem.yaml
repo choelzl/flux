@@ -33,7 +33,6 @@ objectives:                   # no goal, all four balanced: the decision is the 
   - {metric: holdout_latency, direction: minimize, unit: cy, balance: true}
   - {metric: holdout_throughput, direction: maximize, unit: rows/cy, balance: true}
 
-cache: false
 
 budget:
   steps: 4                    # 1 + llm_rounds + coordination_rounds + 1

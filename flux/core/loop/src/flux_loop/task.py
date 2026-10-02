@@ -1530,11 +1530,29 @@ class PromptProblem(Problem):
         return rules
 
     def cache_suffix(self) -> str | None:
-        """The document's `cache:` (D541): the loop's sidecar, none, or a name."""
-        cache = self.task.cache
-        if cache is False:
-            return None
-        return cache if isinstance(cache, str) else f"{self.task.id}.json"
+        """The loop's measurement cache (D541, D790): always on, beside the record."""
+        return f"{self.task.id}.json"
+
+    def cache_key(self, cand: Candidate, stage: str, state: LoopState) -> str:
+        """What makes a measurement the same one (D567, D790): the candidate, and what measures
+        it -- the stage's command or evaluator, the files under `{home}` the command names, the
+        document's params and workload. A changed clock, script or parameter measures again; a
+        world with its own key replaces this."""
+        import hashlib
+
+        spec = next((r for r in self.task.stages if r.name == stage), None)
+        if spec is None:
+            return cand.key()
+        h = hashlib.sha256(json.dumps([list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
+                                       self.task.params, self.task.workload], sort_keys=True, default=str).encode())
+        home = self.task.home
+        for token in spec.command or ():
+            if home and "{home}/" in token:
+                f = Path(token.split("{home}/", 1)[1].split()[0].replace("{home}", home))
+                f = f if f.is_absolute() else Path(home) / f
+                if f.is_file():
+                    h.update(f.read_bytes())
+        return f"{cand.key()}@{h.hexdigest()[:16]}"
 
 
 def _document(text: str) -> Any:

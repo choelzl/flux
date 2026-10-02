@@ -19,15 +19,11 @@ DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "d
 def test_the_document_says_where_and_the_default_is_beside_it(tmp_path):
     doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     assert TaskSpec.from_dict(doc, base=tmp_path).workbench == str((tmp_path / "workbench").resolve())
-    assert TaskSpec.from_dict({**doc, "workbench": "tools-and-notes"}, base=tmp_path).workbench.endswith("/tools-and-notes")
-    assert TaskSpec.from_dict({**doc, "workbench": "/abs/wb"}, base=tmp_path).workbench == "/abs/wb"
-    off = TaskSpec.from_dict({**doc, "workbench": False}, base=tmp_path)
-    assert off.workbench == "" and off.to_dict()["workbench"] is False
     assert TaskSpec.from_dict(doc).workbench == "", "an inline document has none"
     on = TaskSpec.from_dict(doc, base=tmp_path)
     assert "workbench" not in on.to_dict() and on.digest == TaskSpec.from_dict(doc, base=tmp_path / "x").digest
-    with pytest.raises(TaskError, match="workbench is"):
-        TaskSpec.from_dict({**doc, "workbench": 3}, base=tmp_path)
+    with pytest.raises(TaskError, match="keys a problem document does not have: workbench"):
+        TaskSpec.from_dict({**doc, "workbench": "elsewhere"}, base=tmp_path)    # D790: always workbench/
 
 
 def test_the_brief_lists_what_it_holds_and_the_link_reaches_it(tmp_path):

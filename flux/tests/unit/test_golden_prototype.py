@@ -209,7 +209,7 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
     assert second.decision is not None and "T_rom" not in second.decision.candidate.artifact
 
 
-def _sq_doc(tmp_path, cache=True, measures=True, **budget):
+def _sq_doc(tmp_path, measures=True, **budget):
     main(["new", "sq", "--kind", "rtl", "--dir", str(tmp_path / "p")])
     doc = tmp_path / "p" / "sq" / "problem.yaml"
     (tmp_path / "p" / "sq" / "golden.py").write_text(
@@ -226,7 +226,6 @@ def _sq_doc(tmp_path, cache=True, measures=True, **budget):
         screen["command"] = screen["command"].replace("print('area_um2=' + ", "print('no metric ' + ")
     d["flow"]["measure"] = {"screen": screen}
     d["budget"].update(prototype=True, steps=2, prototype_table_max=256, **budget)
-    d["cache"] = cache
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
     return load_task(doc), ran
 

@@ -26,7 +26,6 @@ flow:
 objectives:
   - {metric: hardware_cost, direction: minimize, unit: XOR}
 
-cache: false
 
 budget:
   steps: 4                    # baseline, solver, then two model rounds

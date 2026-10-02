@@ -77,7 +77,7 @@ tool inside its turn.
 ## The workbench
 
 The agents' own folder for tools and notes ([D677](decisions.md)): `workbench/` beside the
-document (`workbench: path` elsewhere, `workbench: false` for none). It is made on the first
+document, always (D790). It is made on the first
 agent turn with `tools/` and `notes/` and is kept across runs. Every agent of the problem
 (generate, prototype, every box) finds it as `workbench/` in its work directory, and its brief
 lists what the folder holds, one line per file. The agents build tools there (scripts that fit,

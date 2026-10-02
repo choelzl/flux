@@ -487,16 +487,27 @@ def test_a_record_is_named_by_the_documents_id(tmp_path):
     ra, rb = (PromptProblem(x).campaign_name(request_for(x, db="x.db")) for x in (a, b))
     assert ra == rb == "t"
 
-def test_the_document_says_whether_it_wants_a_measurement_cache():
-    """D541: `cache: false` -- a world that measures in microseconds keeps no sidecar."""
-    base = {"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}}}
-    assert PromptProblem(TaskSpec.from_dict(base)).cache_suffix() == "t.json"
-    assert PromptProblem(TaskSpec.from_dict({**base, "cache": False})).cache_suffix() is None
-    assert PromptProblem(TaskSpec.from_dict({**base, "cache": "shared.json"})).cache_suffix() == "shared.json"
-    task = TaskSpec.from_dict({**base, "cache": False})
-    assert TaskSpec.from_dict(task.to_dict()) == task
-    with pytest.raises(TaskError, match="`cache`"):
-        TaskSpec.from_dict({**base, "cache": 3})
+def test_the_cache_is_always_on_and_keyed_on_what_measures(tmp_path):
+    """D790: no `cache:` key -- the cache is always on, and a measurement is the same one only
+    for the same candidate measured the same way: the stage's command, the script it names under
+    `{home}`, the params. A changed clock measured from the cache was the bug."""
+    from flux_loop import Candidate
+
+    (tmp_path / "bench.py").write_text("print('t=1')\n")
+
+    def key(clock="800", params=None):
+        doc = {"id": "t", "statement": "x", "params": params or {}, "flow": {"test": "true", "measure": {
+            "s": {"command": "{python} {home}/bench.py {artifact} --clock-ps " + clock, "metrics": ["t"]}}}}
+        prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
+        assert prob.cache_suffix() == "t.json"
+        return prob.cache_key(Candidate("c", "module m; endmodule"), "s", None)
+
+    first = key()
+    assert key() == first and key(clock="1000") != first and key(params={"n": 2}) != first
+    (tmp_path / "bench.py").write_text("print('t=2')\n")
+    assert key() != first, "the script the stage runs is part of the measurement"
+    with pytest.raises(TaskError, match="keys a problem document does not have: cache"):
+        TaskSpec.from_dict({"id": "t", "statement": "x", "cache": False, "flow": {"test": "true"}})
 
 
 # ---- the flow (D542): one key per box of the drawing

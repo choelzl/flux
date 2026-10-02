@@ -112,7 +112,7 @@ Say only what is yours; the rest is inferred.
   revert_after, screen_only, structured, tool_hops, tool_result_chars, tools.
 - Advanced keys: `parts` and `max_parts` (pieces of one artifact) and `subtasks`/`split`/`joiner`/
   `max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
-  package for what a document cannot say), `ladder`, `cache`, `skills`, `brief`, `workload`.
+  package for what a document cannot say), `ladder`, `skills`, `brief`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.dse.space`. A command

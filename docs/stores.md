@@ -44,9 +44,9 @@ explicit `evaluator_prefix` (never inferred). A hit also requires the stored res
 every requested metric. `Result.from_dict()` is the exact inverse of `to_dict()`.
 
 **The loop's own cache** is different: `flux_cache.MeasurementCache` (`evaluator/cache`) is a
-JSON sidecar beside the record, keyed by the candidate's source and the tool fingerprints
-([D340](decisions.md), [D361](decisions.md)); the document's `cache:` key names it or turns it
-off ([D541](decisions.md)). The RTL harness keeps a third, `ToolResultCache`, keyed by a
+JSON sidecar beside the record, always on, keyed by the candidate's source, what the stage runs
+(its command, the scripts it names, the params) and the tool fingerprints
+([D340](decisions.md), [D361](decisions.md), [D790](decisions.md)). The RTL harness keeps a third, `ToolResultCache`, keyed by a
 content hash over exactly what Yosys reads ([D89](decisions.md)).
 
 ## The calibration store
