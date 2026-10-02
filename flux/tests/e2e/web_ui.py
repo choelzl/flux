@@ -302,7 +302,7 @@ def flows(r: Run) -> None:
     def new_loop_tabs():
         r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("New loop has four ways", tabs == ["Configurator", "Upload", "Example", "Agent"], str(tabs))
+        r.check("New loop has three ways (D767)", tabs == ["Configurator", "Upload", "Agent"], str(tabs))
         b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
         r.clean("New loop › Configurator")
         r.button("Agent", "#main .tabs")
@@ -317,16 +317,8 @@ def flows(r: Run) -> None:
                 not b.js("return [...document.querySelectorAll('#main label')].some(l => l.textContent.trim().startsWith('Application name'))"))
         r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.fc-checks .fc-error') && !!document.querySelector('.fc-checks .fc-todo')"))
         r.check("no command-line next steps", "Next steps" not in r.text())
-        r.check("the configurator has no examples (D723)", not b.js("return !!document.querySelector('.examples')"))
-        r.button("Example", "#main .tabs")
-        b.wait("document.querySelector('.examples .subtabs')", what="the Example tab")
-        r.check("the Example tab has its address", b.js("return location.hash") == "#/configure/example")
-        r.button("sweep", ".examples .subtabs")
-        b.type("#ex-name", "fromex")
-        r.button("Create from this example", ".examples")
-        b.wait("location.hash === '#/app/fromex/settings/problem' && document.querySelector('.flux-crafter .fc-form')", timeout=30, what="the new loop's Problem")
-        r.check("an example becomes a loop, opened at Settings › Problem", True)
-        r.clean("start from an example")
+        r.check("New loop has no Example tab (D767)", not b.js("return [...document.querySelectorAll('#main .tabs a, #main .tabs button')].some(t => t.textContent.trim() === 'Example')"))
+        r.check("nor a way to make a loop from an example", r.api("/apps/from-example", "POST", {"name": "x", "kind": "sweep"})["status"] in (404, 405))
     r.step("new loop tabs", new_loop_tabs)
 
     def upload():
@@ -624,12 +616,19 @@ def flows(r: Run) -> None:
     def passes_at_once():
         """D747, D752: two passes at once, each its own branch, "with" the other; then the Conclusion."""
         r.login("bob")
+        from flux_cli.commands import template_files
+
+        made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'fromex');
+            for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
+            fetch('/api/apps', {method: 'POST', headers: {'X-Flux': '1'}, body: f}).then(async r => done({status: r.status, body: await r.text()}));""",
+                     [[rel, text] for rel, text in template_files("fromex", "sweep")])
+        assert made["status"] == 200, f"the loop uploaded: {made}"
         info = r.api("/apps/fromex")
         assert info["status"] == 200, f"the loop: {info}"
         doc = json.loads(info["body"]).get("document")
         text = r.api(f"/apps/fromex/file?path={doc}")["body"]          # plain text
         text = re.sub(r"(?m)^budget:.*$", "budget: {steps: 1, parallel: 2}", text)
-        r.check("the example takes budget.parallel", r.api(f"/apps/fromex/file?path={doc}", "PUT", {"text": text})["status"] == 200)
+        r.check("the loop takes budget.parallel", r.api(f"/apps/fromex/file?path={doc}", "PUT", {"text": text})["status"] == 200)
         r.login("ada")
         r.check("an admin allows the loop parallel work", r.api("/apps/fromex/advanced?owner=bob", "PUT", {"parallel": True})["status"] == 200)
         r.login("bob")

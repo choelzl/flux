@@ -40,25 +40,6 @@ def test_views_still_refuses_a_document_that_is_not_a_mapping(tmp_path):
         raise AssertionError("a list is not a document")
 
 
-def test_a_new_loop_starts_from_an_example_with_its_files(tmp_path, monkeypatch):
-    """D719: `flux new`'s working problems, one call each, the files beside the document."""
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
-    store = Store(tmp_path / "data")
-    store.add_user("bob", "another long secret")
-    c = TestClient(create_app(tmp_path / "data", sandbox=False))
-    assert c.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H).status_code == 200
-    kinds = [x["kind"] for x in c.get("/api/examples").json()]
-    assert kinds[0] == "sweep" and {"python", "rtl", "tune", "rtl-sweep"} <= set(kinds)
-    r = c.post("/api/apps/from-example", json={"name": "primes", "kind": "sweep"}, headers=H)
-    assert r.status_code == 200 and r.json()["document"] == "primes.problem.yaml", r.text
-    names = {f["path"] for f in c.get("/api/apps/primes/files").json()}
-    assert {"primes.problem.yaml", "render.py", "check.py", "bench.py", "README.md"} <= names
-    assert "not valid" not in c.get("/api/apps/primes/document").json()["error"]
-    assert c.post("/api/apps/from-example", json={"name": "primes", "kind": "sweep"}, headers=H).status_code >= 400, "a name is one loop"
-    assert c.post("/api/apps/from-example", json={"name": "x-1", "kind": "sweep"}, headers=H).status_code == 400
-    assert c.post("/api/apps/from-example", json={"name": "y", "kind": "nope"}, headers=H).status_code == 400
-
-
 def test_the_page_and_its_scripts_are_asked_again_after_an_update(tmp_path, monkeypatch):
     """D719: no heuristic caching of app.js or crafter.js -- a browser revalidates them."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))

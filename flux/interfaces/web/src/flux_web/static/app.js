@@ -2335,12 +2335,12 @@ function filesPanel(name, yamlOf) {
 /** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
-const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", example: "Example", edit: "Direct edit", agent: "Agent" };
+const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
 async function configurePage(name, owner, mode = "configurator") {
   const show = pageShow();
   const isNew = !name;
   const host = h("div", {});
-  const sub = isNew ? "Build the problem with the configurator, upload one you have, start from a working example, or have an agent write it from what you tell it and the files you give it."
+  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
   show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
     head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
@@ -2351,7 +2351,7 @@ async function configurePage(name, owner, mode = "configurator") {
     loop's Settings › Problem (D713). `base`: the address the modes extend. */
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
-  const modes = isNew ? ["configurator", "upload", "example", "agent"] : ["configurator", "edit", "agent"];   // D723: the examples a tab of their own
+  const modes = isNew ? ["configurator", "upload", "agent"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
   const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
   function drawTabs() {
@@ -2363,39 +2363,12 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
     try {
       if (mode === "configurator") await crafterView(body, name, owner);
       else if (mode === "upload") body.replaceChildren(uploadForm());
-      else if (mode === "example") body.replaceChildren(await examplesCard());
       else if (mode === "edit") await directEdit(body, name);
       else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }
   if (barHost) { barHost.append(tabBar); host.replaceChildren(body); } else host.replaceChildren(tabBar, body);
   drawTabs(); draw();
-}
-
-/** Start from an example (D719): `flux new`'s working problems, each a loop at once with its
-    files -- then changed in its Settings › Problem. New loop's Example tab (D723), not the configurator's. */
-async function examplesCard() {
-  const list = await api("/examples").catch(() => []);
-  if (!list.length) return card(null, empty("No examples on this server."));
-  let kind = list[0].kind;
-  const name = h("input", { placeholder: "my_loop", id: "ex-name", style: "max-width:220px", "aria-label": "Its name" });
-  const about = h("p", { class: "muted small" });
-  const pick = h("div", { class: "subtabs", role: "tablist" });
-  const draw = () => {
-    pick.replaceChildren(...list.map(x => h("button", { type: "button", role: "tab", class: x.kind === kind ? "on" : "", "aria-selected": x.kind === kind ? "true" : "false",
-      onclick: () => { kind = x.kind; draw(); } }, x.kind)));
-    about.textContent = (list.find(x => x.kind === kind) || {}).about || "";
-  };
-  draw();
-  const go = act("Create from this example", async () => {
-    const n = name.value.trim();
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(n)) { toast("Name it first: a letter, then letters, digits or _.", "warn"); name.focus(); return; }
-    await api("/apps/from-example", { method: "POST", body: { name: n, kind } });
-    toast(`${n} created from the ${kind} example`, "ok");
-    location.hash = `#/app/${enc(n)}/settings/problem`;
-  }, { cls: "primary" });
-  return card("Start from an example", [h("p", { class: "muted" }, "A working loop with its files, to change from there."),
-    h("div", { class: "examples-body" }, pick, about, h("div", { class: "row" }, h("label", { class: "stack" }, "Its name", name), go))], { cls: "examples" });
 }
 
 /** The configurator (D686): the crafter, the loop's files beside it. */
@@ -2600,7 +2573,7 @@ async function adminPage(sub = "") {
   // D724: the kinds in groups; a kind not listed is Other
   const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password"]],
     ["Runs", ["start", "stop", "note", "stop all", "starts paused", "running limit", "kill container"]],
-    ["Loops and their files", ["new loop from an example", "loop by an agent", "configure", "write document", "problem revised by an agent",
+    ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
       "edit", "upload", "add files", "delete file", "delete app", "asked about a loop"]],
     ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings"]],
     ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed"]],

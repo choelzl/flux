@@ -158,11 +158,9 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
-- **New loop**, four ways (D704): **Configurator** (below; the form's **Loop name** is the loop's
+- **New loop**, three ways (D704; no Example since D767): **Configurator** (below; the form's **Loop name** is the loop's
   name and its problem's id; the checklist shows what is left to do; who does each step is folded),
-  **Upload** (a folder, files or a `.zip`), **Example** (D719, a tab of its own since D723: a working
-  loop of one of `flux new`'s kinds -- sweep, tune, python, rtl, rtl-sweep -- with its files, opened
-  in Settings › Problem), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
+  **Upload** (a folder, files or a `.zip`), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
   a reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex or Flux's own
   model; one not installed says so). The agent writes the problem document and the files it names
   -- `flux ask --no-run` in the sandbox, with your model settings -- and the document is checked;
