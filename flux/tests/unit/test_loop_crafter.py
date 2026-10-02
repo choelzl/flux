@@ -140,6 +140,9 @@ s.flow.knowledge = "none"; s.flow.critique = "llm";
 add("agents_everywhere", "rtl", s);
 s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_by_agent"; s.flow.knowledge = "agent:opencode";   // D773
 add("papers_by_agent", "rtl", s);
+s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_folder"; s.knowledgeLibrary = "papers"; s.knowledgeDigest = "model";   // D781
+add("papers_folder", "rtl", s);
+out.readback = {papers: c.fromDoc({id: "r", statement: "s", flow: {knowledge: {files: ["a.md"], library: "papers", digest: true}}}, null)};
 out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES[b].title, says: c.BOXES[b].says,
                                                                  flow: c.FLOW_BOXES.includes(b), values: c.BOXES[b].choices.map(x => x.value)}]));
 out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
@@ -216,6 +219,7 @@ def _load(tmp_path: Path, case: dict, pending: bool = False):
         (tmp_path / f).write_text((src / f).read_text().replace("__NAME__", doc_id))
     doc = tmp_path / f"{doc_id}.problem.yaml"
     doc.write_text(case["yaml"])
+    (tmp_path / "papers").mkdir(exist_ok=True)              # D781: a case's folder of papers
     try:
         return load_task(doc)
     except (TaskError, TypeError, ValueError) as exc:
@@ -377,6 +381,11 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     p = BUILT["papers_by_agent"]
     assert "knowledge: {agent: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
     assert _load(tmp_path, p).digest_by == "opencode", "D773: the configurator's Background reading by an agent loads as one"
+    f = BUILT["papers_folder"]
+    assert "knowledge: {library: papers, digest: true}" in f["yaml"], f["yaml"]
+    r = BUILT["readback"]["papers"]
+    assert (r["state"]["knowledgeFiles"], r["state"]["knowledgeLibrary"], r["state"]["knowledgeDigest"]) == ("a.md", "papers", "model")
+    assert not r["kept"], "D781: the folder and the digest are the configurator's own now"
 
 
 def test_pareto_needs_two_objectives_and_an_estimate_its_margin_and_command():

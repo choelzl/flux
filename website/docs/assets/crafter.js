@@ -406,7 +406,7 @@
   // ------------------------------------------------------------------ the state
   function base() {
     return {
-      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
+      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "", knowledgeLibrary: "", knowledgeDigest: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
@@ -668,6 +668,8 @@
     else {
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
+      if (String(state.knowledgeLibrary || "").trim()) K.library = String(state.knowledgeLibrary).trim();   // D781
+      if (state.knowledgeDigest === "model" && !(kv && typeof kv === "object")) K.digest = true;
       if (kv === "none" || kv === "off") K = { off: true };
       else if (kv && typeof kv === "object" && !Array.isArray(kv)) Object.keys(kv).forEach(function (k) { K[k] = kv[k]; });
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
@@ -1017,11 +1019,12 @@
     if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
     else if (lang) { s.language = "other"; s.languageOther = lang; }
 
-    // knowledge: a list of files only
+    // knowledge: the files the model reads, a folder of papers (D781)
     var kn = raw.knowledge;
-    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files"; }))
-      s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
-    else if (kn) keep("knowledge", "the configurator lists knowledge files only");
+    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files" || k === "library"; })) {
+      if (kn.files) s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
+      if (kn.library) s.knowledgeLibrary = String(kn.library);
+    } else if (kn) keep("knowledge", "a methods sheet or inline notes, which the configurator does not edit");
 
     // parts: decompose, or names alone
     var pa = raw.parts;
@@ -1047,6 +1050,7 @@
         var ls = Array.isArray(v) ? v : [v];
         if (v && typeof v === "object" && !Array.isArray(v) && typeof v.agent === "string" && choiceOf(box, "agent:" + v.agent)) { s.flow.knowledge = "agent:" + v.agent; return; }   // D773
         if (ls.length === 1 && ls[0] === "none") s.flow.knowledge = "none";
+        else if (ls.length === 1 && ls[0] === "digest") s.knowledgeDigest = "model";          // D781
         else if (!(ls.length === 0 || (ls.length === 1 && ls[0] === "library"))) flowOk = false;
         return;
       }
@@ -1453,6 +1457,13 @@
                 function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
           field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
                 function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
+        h("div", { class: "fc-line" }, [                    // D781: the papers, and who digests them
+          field("A folder of papers (optional)", function () { return state.knowledgeLibrary; },
+                function (v) { state.knowledgeLibrary = v; }, { compact: true, grow: true, placeholder: "papers",
+                  hint: "Beside the document; library/ and inputs/ are read without saying" }),
+          field("Digest the papers in the Setup", function () { return state.knowledgeDigest; },
+                function (v) { state.knowledgeDigest = v; }, { compact: true, options: [["", "No"], ["model", "Yes, by the model"]],
+                  hint: "Each paper summed up once; a coding agent instead: Background reading in the flow" })]),
       ]);
       var kids = [what];
       if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));

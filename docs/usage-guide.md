@@ -150,7 +150,7 @@ flow:
   knowledge: {agent: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
 ```
 
-The configurator's Background reading box offers it as "a coding agent".
+The configurator's Background reading box offers it as "a coding agent". Its form also takes a folder of papers and whether the model digests them (D781).
 
 ## The sandbox
 
