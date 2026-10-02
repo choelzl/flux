@@ -128,9 +128,11 @@ class Digest:
     title = "KEY POINTS FROM THE LIBRARY (each document digested once by a model; the excerpts below are the source)"
     static = True
 
-    def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = (), ask: Any = None) -> None:
+    def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = (), ask: Any = None,
+                 whole: bool = False) -> None:
         self.db = db
         self.make = make
+        self.whole = whole                                 # D774: the shared library's papers too, beside `folders`
         self.ask = ask                                     # D771: who digests, when not the run's model
         # D753: a loop's own papers (`library/`, `inputs/`): only those are digested and shown
         self.folders = tuple(str(f) for f in folders)
@@ -144,7 +146,7 @@ class Digest:
 
         mine = [str(Path(f).resolve()) for f in self.folders]
         return [(p, t) for p, t in library_documents(index_for(self.folders))
-                if any(absolute(p).startswith(f + "/") for f in mine)]
+                if self.whole or any(absolute(p).startswith(f + "/") for f in mine)]
 
     def make_now(self, state: Any) -> dict[str, Any]:
         """The documents not digested yet, digested now (D771: in the run's Setup) -- what was

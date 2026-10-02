@@ -49,3 +49,22 @@ def test_a_within_cutoff_is_judged_against_the_best_measured(tmp_path):
     by = {d["name"]: d for d in got["designs"]}
     assert not any("screen cutoff" in w for w in by["fast"]["why"])          # 1500 is the best
     assert any("within 90% of the best 1500" in w for w in by["slow"]["why"])
+
+
+def test_the_designs_are_kept_until_the_record_changes(tmp_path, monkeypatch):
+    """D774: a record is read once per change -- a list's look at a running loop not even that often."""
+    import flux_web.results as res
+
+    db = _record(tmp_path)
+    reads = []
+    real = res._designs
+    monkeypatch.setattr(res, "_designs", lambda *a: reads.append(1) or real(*a))
+    first = designs(db, STAGES, decision="fast")
+    assert designs(db, STAGES, decision="fast") is first and len(reads) == 1, "unchanged: kept"
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.trial({"name": "new", "artifact": "module new;"}, "t:new@screen", stage="screen", strategy="loop",
+              metrics={"fmax_mhz": 990.0, "area_um2": 9.0}, evaluator="screen")
+    rec.close("paused")
+    assert designs(db, STAGES, decision="fast", stale_s=30) is first, "changed, but a list may wait 30 s"
+    got = designs(db, STAGES, decision="fast")
+    assert len(reads) == 2 and any(d["name"] == "new" for d in got["designs"]), "changed: read again"

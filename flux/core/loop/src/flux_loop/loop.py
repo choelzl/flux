@@ -163,6 +163,9 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         _reload(problem, state, goals)
         todo = [] if "*" in state.admitted else [None]
     hunting = searching is not None
+    if depth == 0 and getattr(problem, "digesting", lambda: False)():   # D771: the papers digested in the Setup, before the Reading (D774)
+        with _phase("knowledge: digest", why="the library's papers, each once") as out:
+            out.update(problem.digest(state) or {})
     if depth == 0:            # a sub-loop does not own the live panels (D455)
         _publish(problem, state, todo, goals, "resumed", searching=hunting)
         _publish_mentor(problem, state)
@@ -171,9 +174,6 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         if isinstance(details, dict):                  # D487: what was prepared, in the task pane
             out.update({k: (str(v) if len(str(v)) <= 6000 else str(v)[:6000] + f"…(+{len(str(v)) - 6000} chars)")
                         for k, v in details.items()})
-    if depth == 0 and getattr(problem, "digesting", lambda: False)():   # D771: the papers digested in the Setup, not mid-prompt
-        with _phase("knowledge: digest", why="the library's papers, each once") as out:
-            out.update(problem.digest(state) or {})
     if depth == 0:
         _publish(problem, state, todo, goals, "prepared", searching=hunting)
         _publish_mentor(problem, state)

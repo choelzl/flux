@@ -113,7 +113,8 @@ each coding agent a LIBRARY section with the papers and the files nearest its qu
 The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
 model's digest of each paper, once per paper, which the plan reads. The loop's own papers are digested by
 its model once each, on their own, and their key points join every prompt (D753).
-The digest runs in each pass's Setup (the tree's **Digest** leaf, beside Reading: how many new, by whom, how
+The digest runs first in each pass's Setup (the tree's **Digest** leaf, before Reading; with an agent or
+`flow.knowledge: [digest]` the whole library, shared papers too, else the loop's own -- D774: how many new, by whom, how
 many in all), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
 
@@ -341,6 +342,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (no network) and is not seen.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
+  - **Slow answers** (D774): a request over half a second is said in the server's log (`flux serve: slow: GET /api/… 1.23 s`;
+    `FLUX_SLOW_S` sets the threshold) -- where to look when pages are slow.
   - **Leftovers** (D768): a login's or Test's container ends itself (Podman's `--timeout`); each minute the server removes
     a sandbox container no process runs any more (in the audit); an agent's turn ends with everything it started.
     A login that ends well is tested at once (Account shows "testing…", then the result).

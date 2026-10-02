@@ -144,3 +144,28 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
         _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": "someone"}})
     with pytest.raises(TaskError, match="knowledge keys"):
         _adders(tmp_path, monkeypatch, {"digest": {"agent": "opencode"}})
+
+
+def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, monkeypatch):
+    """D774: with `flow.knowledge: {agent: …}` the shared library's papers are digested too -- a loop
+    whose papers are all in the shared library still has a Digest in its Setup."""
+    import sys
+    from types import SimpleNamespace
+
+    from flux_loop import PromptProblem, TaskSpec
+
+    monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "shared"))
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "shared/caches.md").write_text("Caches: a victim cache of 4 lines removes most conflict misses. " * 10)
+    (tmp_path / "loop").mkdir()
+    fake = tmp_path / "agent.py"
+    fake.write_text("import sys\nb = sys.stdin.read()\nprint('digest of ' + ('caches.md' if 'caches.md' in b else 'other'))\n")
+    spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
+    doc = {"id": "x", "statement": "a cache", "language": "python", "gate": {"test": ["true"]}, "objectives": []}
+    plain = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path / "loop"))
+    assert not plain.digesting(), "no papers of its own and no digest asked: nothing to digest"
+    problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {"knowledge": {"agent": spec}}}, base=tmp_path / "loop"))
+    assert problem.digesting()
+    state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=None, say=lambda _m: None)
+    got = problem.digest(state)
+    assert got["digested"] >= 1 and "caches.md" in got["new"], got

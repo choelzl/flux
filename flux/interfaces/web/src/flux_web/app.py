@@ -168,12 +168,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     app.state.sample = lambda: _sample()
 
     # ---- guards
+    SLOW_S = float(os.environ.get("FLUX_SLOW_S", "0.5"))
     @app.middleware("http")
     async def csrf(request: Request, call_next):
         if request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             if request.headers.get("x-flux") != "1":
                 return JSONResponse({"detail": "missing the X-Flux header"}, status_code=403)
+        t0 = time.monotonic()
         resp = await call_next(request)
+        took = time.monotonic() - t0                      # D774: a slow answer is said in the server's log
+        if took > SLOW_S:
+            print(f"flux serve: slow: {request.method} {request.url.path} {took:.2f} s", file=sys.stderr, flush=True)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         if not request.url.path.endswith("/report"):
@@ -848,7 +853,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except (OSError, ValueError, WorkspaceError):
             decision = None
         try:
-            got = designs(run["db"], _stages(w, name), decision)
+            got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
         except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
             return {"designs": 0, "accepted": 0}
         out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"]}
@@ -1363,39 +1368,51 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     async def _follow(path_of, start_after, offset: int, request: Request, kind: str, preface: tuple[str, ...] = ()):
         """Server-sent events: each new line of a file, as it grows, from byte `offset`. For the
-        journal, `start_after()` is when the loop's latest start began: its tree, not the last."""
+        journal, `start_after()` is when the loop's latest start began: its tree, not the last.
+        D774: each look -- the run's record, the file, a slice read and parsed -- is a worker
+        thread's: the event loop that answers every other request never waits on a disk or the
+        store."""
         from flux_loop.journal import compact, read_events
 
-        ino, offset = offset
+        at = {"ino": offset[0], "offset": offset[1]}
+
+        def look() -> tuple[list[str], bool]:
+            path = path_of()
+            if not (path and os.path.exists(path)):
+                return [], False
+            st = os.stat(path)
+            ino, off = at["ino"], at["offset"]
+            if st.st_ino != ino or st.st_size < off:              # D694: another file (a new start's), or cut
+                if ino is not None or st.st_size < off:
+                    off = 0
+                ino = st.st_ino
+            out: list[str] = []
+            if kind == "events":
+                events, new = read_events(path, off, limit=4 << 20)       # D759: in slices
+                since = start_after()
+                out = [f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n" for e in compact(events) if e.get("t", 0) >= since]
+            else:
+                with open(path, "rb") as fh:
+                    fh.seek(off)
+                    chunk = fh.read(256 * 1024)
+                new = off + len(chunk)
+                if chunk:
+                    out = [f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(chunk.decode('utf-8', 'replace'))}\n\n"]
+            moved = new != off
+            at["ino"], at["offset"] = ino, new
+            return out, moved
+
         yield "retry: 3000\n\n"
         for p in preface:                                      # D759: what the window left out, said first
             yield p
         while True:
             if await request.is_disconnected():
                 return
-            path = path_of()
-            if path and os.path.exists(path):
-                st = os.stat(path)
-                if st.st_ino != ino or st.st_size < offset:      # D694: another file (a new start's), or cut
-                    if ino is not None or st.st_size < offset:
-                        offset = 0
-                    ino = st.st_ino
-                if kind == "events":
-                    events, new = read_events(path, offset, limit=4 << 20)       # D759: in slices
-                    since = start_after()
-                    for e in compact(events):
-                        if e.get("t", 0) >= since:
-                            yield f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n"
-                else:
-                    with open(path, "rb") as fh:
-                        fh.seek(offset)
-                        chunk = fh.read(256 * 1024)
-                    new = offset + len(chunk)
-                    if chunk:
-                        yield f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(chunk.decode('utf-8', 'replace'))}\n\n"
-                if new != offset:
-                    offset = new
-                    continue
+            out, moved = await asyncio.to_thread(look)
+            for line in out:
+                yield line
+            if moved:
+                continue
             yield ": keep-alive\n\n"
             await asyncio.sleep(1.0)
 
@@ -1411,7 +1428,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return None, 0
 
     @app.get("/api/apps/{name}/events")
-    async def events(name: str, request: Request, offset: str = "0", window: int = 0, owner: str | None = None,
+    def events(name: str, request: Request, offset: str = "0", window: int = 0, owner: str | None = None,
                      user: User = Depends(user_of)):
         """The latest start's journal; `window` (D759): only its last that many passes, a first
         `window` event saying how many came before -- a day-long run's tree opens at once."""
@@ -1436,40 +1453,45 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/live")
-    async def live(name: str, request: Request, owner: str | None = None, user: User = Depends(user_of)):
+    def live(name: str, request: Request, owner: str | None = None, user: User = Depends(user_of)):
         """The latest start's live state (D761): `live.json` -- each running phase's latest fields
         and the standings -- sent whole each time it changes."""
         _w, whose, _d, _run = loop_of(name, user, owner)
 
+        seen: list[Any] = [None]
+
+        def look() -> str | None:                            # D774: a worker thread's, not the event loop's
+            ev = runs.events_path(runs.latest(whose, name))
+            path = os.path.join(os.path.dirname(ev), "live.json") if ev else None
+            try:
+                st = os.stat(path) if path else None
+            except OSError:
+                st = None
+            if st is None or (st.st_ino, st.st_mtime_ns, st.st_size) == seen[0]:
+                return None
+            seen[0] = (st.st_ino, st.st_mtime_ns, st.st_size)
+            try:
+                with open(path) as fh:
+                    body = fh.read()
+                json.loads(body)
+                return body
+            except (OSError, ValueError):
+                seen[0] = None                                  # half written: read again
+                return None
+
         async def stream():
-            seen = None
             yield "retry: 3000\n\n"
             while True:
                 if await request.is_disconnected():
                     return
-                ev = runs.events_path(runs.latest(whose, name))
-                path = os.path.join(os.path.dirname(ev), "live.json") if ev else None
-                try:
-                    st = os.stat(path) if path else None
-                except OSError:
-                    st = None
-                if st is not None and (st.st_ino, st.st_mtime_ns, st.st_size) != seen:
-                    seen = (st.st_ino, st.st_mtime_ns, st.st_size)
-                    try:
-                        with open(path) as fh:
-                            body = fh.read()
-                        json.loads(body)
-                        yield f"event: live\ndata: {body}\n\n"
-                    except (OSError, ValueError):
-                        seen = None                              # half written: read again
-                else:
-                    yield ": keep-alive\n\n"
+                body = await asyncio.to_thread(look)
+                yield f"event: live\ndata: {body}\n\n" if body is not None else ": keep-alive\n\n"
                 await asyncio.sleep(1.0)
 
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/log")
-    async def log(name: str, request: Request, offset: str = "0", tail: int = 0, owner: str | None = None,
+    def log(name: str, request: Request, offset: str = "0", tail: int = 0, owner: str | None = None,
                   user: User = Depends(user_of)):
         """The loop's one log, every start in it; `tail` (D759): only its last that many bytes, a
         first `skipped` event saying how many came before."""

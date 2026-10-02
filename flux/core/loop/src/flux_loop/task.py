@@ -584,12 +584,16 @@ class PromptProblem(Problem):
                     from .document import own_library
 
                     own = own_library(self.task)
-                    if own and not any(type(s).__name__ == "Digest" for s in getattr(role, "sources", ())):
+                    rest = [x for x in getattr(role, "sources", ()) if type(x).__name__ != "Digest"]
+                    # D774: the whole library -- the shared papers and the loop's own -- when the document
+                    # asks for a digest (`flow.knowledge: [digest]`, or an agent for it); else its own papers (D753)
+                    whole = self.task.digest_by is not None or len(rest) < len(getattr(role, "sources", ()))
+                    if whole or own:
                         from flux_knowledge import Digest
 
-                        lib.append(Digest(folders=own))     # D753: the loop's own papers, digested once by its model
+                        lib.append(Digest(folders=folders if whole else own, whole=whole))
                     self._mentor = (Mentor(lib) if role is None else
-                                    Mentor([*lib, *role.sources], budget=role.budget, share=role.share))
+                                    Mentor([*lib, *rest], budget=role.budget, share=role.share))
         return self._mentor
 
     def digesting(self) -> bool:

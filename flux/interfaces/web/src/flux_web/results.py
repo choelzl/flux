@@ -15,6 +15,10 @@ latest answer's."""
 
 from __future__ import annotations
 
+import json
+import os
+import threading
+import time
 from typing import Any
 
 __all__ = ["designs", "thin"]
@@ -23,14 +27,27 @@ _NOT_MEASURED = ("gate", "admit", "prototype")
 
 
 def _objective_limits(db: str) -> list[dict[str, Any]]:
-    try:
-        from flux_loop.report import load
+    """The objectives with a limit, from the record's latest `decided:objectives` -- read alone
+    (D774), not with the whole record."""
+    import sqlite3
 
-        rep = load(db)
+    try:
+        from flux_loop.objective import Objectives
+
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        try:
+            row = con.execute("SELECT e.detail_json FROM campaign_events e WHERE e.kind = 'decided:objectives' "
+                              "AND e.campaign_id = (SELECT campaign_id FROM campaigns ORDER BY created_at DESC LIMIT 1) "
+                              "ORDER BY e.id DESC LIMIT 1").fetchone()
+        finally:
+            con.close()
+        if row is None:
+            return []
+        objectives = Objectives.from_doc((json.loads(row[0]) or {}).get("objectives") or [])
     except Exception:  # noqa: BLE001 -- a record without an objective: numbers without verdicts
         return []
     return [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage}
-            for o in rep.objectives if o.goal is not None]
+            for o in objectives if o.goal is not None]
 
 
 def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -43,8 +60,40 @@ def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, limit: int = 1000) -> dict[str, Any]:
-    """`stages`: the document's stages as the loader writes them (name, cutoff)."""
+_KEPT: dict[tuple, tuple[tuple, float, dict[str, Any]]] = {}
+_KEEPING = threading.Lock()
+
+
+def _signature(db: str) -> tuple:
+    """The record as it stands on disk: the file and its write-ahead log."""
+    out = []
+    for p in (db, db + "-wal"):
+        try:
+            st = os.stat(p)
+            out.append((st.st_size, st.st_mtime_ns))
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
+def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, limit: int = 1000,
+            stale_s: float = 0.0) -> dict[str, Any]:
+    """`stages`: the document's stages as the loader writes them (name, cutoff). D774: kept
+    while the record is unchanged; with `stale_s`, also while it changed less than that ago --
+    a running loop's line in a list need not be read again on every look."""
+    key = (db, json.dumps(stages, sort_keys=True, default=str), decision, limit)
+    sig = _signature(db)
+    with _KEEPING:
+        got = _KEPT.get(key)
+    if got is not None and (got[0] == sig or time.monotonic() - got[1] < stale_s):
+        return got[2]
+    out = _designs(db, stages, decision, limit)
+    with _KEEPING:                                     # as it stands after the read (opening it touches its log)
+        _KEPT[key] = (_signature(db), time.monotonic(), out)
+    return out
+
+
+def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit: int) -> dict[str, Any]:
     from flux_store import CampaignStore
 
     store = CampaignStore(db)
