@@ -1,6 +1,5 @@
 # The smallest accelerator for a two-layer feed-forward block that finishes it in 500 cycles:
 # a script writes each architecture from two knobs, ZigZag measures it, no model needed.
-id: npu_gemm
 statement: >-
   An accelerator for the feed-forward block in workload.yaml: a 1-D PE array and a global
   buffer. The fewest cycles first (at most 500), then the least area.

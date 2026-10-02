@@ -36,7 +36,7 @@ def test_a_runs_home_is_the_users_own_writable_and_nothing_of_the_machines(tmp_p
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("FLUX_SANDBOX_HOME", str(mine))
     args = types.SimpleNamespace(file=str(tmp_path / "x.problem.yaml"), db=None, out=None, json=None)
-    (tmp_path / "x.problem.yaml").write_text("id: x\nstatement: s\n")
+    (tmp_path / "x.problem.yaml").write_text("statement: s\n")
     cmd = sandbox.container_argv(["flux"], args, "task run", "flux-t", None, "docker")
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     envs = sandbox.container_env(cmd)
@@ -110,7 +110,7 @@ def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monk
             pass
 
     monkeypatch.setattr(sp, "AllowProxy", Proxy)
-    (tmp_path / "x.problem.yaml").write_text("id: x\nstatement: s\n")
+    (tmp_path / "x.problem.yaml").write_text("statement: s\n")
     args = types.SimpleNamespace(file=str(tmp_path / "x.problem.yaml"), db=None, out=None, json=None)
     sandbox.launch(["task", "run", "x"], args, "task run")
     cmd = seen["cmd"]
@@ -160,7 +160,7 @@ def test_only_an_admin_sets_the_sandbox_and_bad_entries_are_refused(tmp_path):
         assert ada.put("/api/admin/sandbox", json=bad, headers=H).status_code == 400, bad
     got = ada.get("/api/admin/sandbox").json()
     assert got["config"]["network"] == "allowlist" and isinstance(got["login_path"], list)
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     net = bob.get("/api/apps/x/preflight").json()["network"]
     assert net["network"] == "allowlist" and "allow" not in net, "D716: a user learns it is limited, not by which hosts"
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"allow": ["hf.co", "nope nope"]}, headers=H).status_code == 400

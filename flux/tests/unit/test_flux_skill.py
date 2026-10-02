@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from flux_loop import TaskSpec
+from flux_loop.document import task_in
 from flux_loop.skills import load_skills
 
 SKILL = Path(__file__).resolve().parents[3] / "skills" / "flux"
@@ -24,8 +24,10 @@ def test_the_example_document_in_the_skill_is_a_valid_problem(tmp_path):
     body = (SKILL / "SKILL.md").read_text()
     example = re.search(r"```yaml\n(.*?)```", body, re.S).group(1)
     doc = yaml.safe_load(example)
-    (tmp_path / "golden.py").write_text("PORTS = []\n")
-    task = TaskSpec.from_dict(doc, base=tmp_path)
+    home = tmp_path / "mul8"                       # D786: the folder is the id
+    home.mkdir()
+    (home / "golden.py").write_text("PORTS = []\n")
+    task = task_in(doc, home)
     assert task.id == "mul8" and [s.name for s in task.stages] == ["screen", "confirm"]
 
 

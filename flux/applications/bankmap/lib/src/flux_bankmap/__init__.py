@@ -1,6 +1,6 @@
 """Conflict-free bank mapping: the space, the checker, the solvers (D356).
 
-The study runs from `applications/bankmap/bankmap.problem.yaml`; `flux_bankmap.world.World`
+The study runs from `applications/bankmap/problem.yaml`; `flux_bankmap.world.World`
 is its world."""
 
 from .check import StrideVerdict, Verdict, check

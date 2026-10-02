@@ -5,7 +5,7 @@ units; tensors in 12 storage modes with runtime dims; tile accesses whose write 
 read tilings differ. Solutions = hash x placement x schedule x fabric, judged on a
 four-cost Pareto (area, padding, latency, throughput) with proofs by exhaustion for
 what is claimed conflict-free. The study runs from
-`applications/interconnect_mapping/interconnect_mapping.problem.yaml`;
+`applications/interconnect_mapping/problem.yaml`;
 `flux_imapping.world.World` is its world.
 """
 

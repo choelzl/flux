@@ -151,7 +151,7 @@ In Python:
 ```python
 from flux_loop import PromptProblem, TaskSpec, load_task, request_for, run_loop
 
-task = load_task("my.problem.yaml")
+task = load_task("my")                       # the folder: my/problem.yaml, id `my`
 problem = PromptProblem(task)
 out = run_loop(problem, request_for(task, db="my.db"), proposer=None)   # None: no model
 print(out.decision, out.frontier, out.refused)

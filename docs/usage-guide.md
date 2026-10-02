@@ -40,10 +40,11 @@ flux ask "what you want" --file spec.pdf                 # an author writes the 
 flux ask --tui                                           # the same, from a setup screen
 ```
 
-- `flux new` writes a document, its golden model or checker, and a README into `NAME/`. The
+- `flux new NAME` writes `NAME/problem.yaml`, its golden model or checker, and a README
+  (`--dir D`: into `D/NAME/`). The
   [cookbook](cookbook.md) says which kind fits which problem.
 - `flux ask` has an author (the model by default, or `--author opencode|claude|codex`) write
-  the document and its files into `./out/ask-<slug>/`. It checks the document, runs it, and
+  the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
   gives the author the report to revise for the next pass. Options: `--no-run` (write and
   check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`. The setup screen
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
@@ -51,7 +52,9 @@ flux ask --tui                                           # the same, from a setu
 
 ## The problem document
 
-A document says what to make (`id`, `statement`, `contract`, `language`), what better means
+A problem is a folder; its document is `problem.yaml` in it, and the folder's name is the
+problem's id -- the name of its record (`out/<id>.db`) -- so the document has no `id:` (D786).
+To ask something else, copy the folder. A document says what to make (`statement`, `contract`, `language`), what better means
 (`objectives`), how much to spend (`budget`), and, under `flow`, each box of the loop -- who
 works it and its own settings (D775):
 
@@ -76,7 +79,7 @@ document does not have, and `budget` takes no `finalists` or `calibrate`.
 ## Check and run a problem
 
 ```bash
-flux task check DOC          # what it needs, what it will skip; runs nothing
+flux task check DOC          # DOC: the folder, or its problem.yaml; what it needs, what it will skip; runs nothing
 flux task run DOC            # runs until stopped (Ctrl-C, flux stop, q in the TUI)
 ```
 
@@ -530,7 +533,7 @@ and conformance; [stores.md](stores.md) covers the record and the result store.
 ```python
 from flux_loop import PromptProblem, load_task, request_for, run_loop
 
-task = load_task("applications/adder16/adder16.problem.yaml")
+task = load_task("applications/adder16")        # its problem.yaml; the id is `adder16`
 result = run_loop(PromptProblem(task), request_for(task, db="adder16.db"), proposer=None)
 ```
 

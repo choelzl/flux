@@ -1,7 +1,6 @@
 # The FP16 non-linear unit: seven operators, 1 ULP, one mux. The world is `flux_nlu`.
-#     flux task run applications/nlu/nlu.problem.yaml --db demo-nlu.db --tui
+#     flux task run applications/nlu --db demo-nlu.db --tui
 
-id: nlu
 statement: >-
   An FP16 non-linear unit of seven operators (exp, log, sigmoid, tanh, gelu, recip, rsqrt):
   each within 1 ULP of the correctly rounded reference on ALL 65536 inputs, composed under

@@ -66,7 +66,7 @@ inputs and compares each output.
 ## 3. Say what you want: the problem document
 
 ```yaml
-id: isqrt
+# isqrt/problem.yaml -- the folder's name is the problem's id
 statement: >-                     # the ask, in words: the model reads it
   A combinational integer square root in SystemVerilog: module `isqrt`, input `x` (16 bits,
   unsigned), output `r` (8 bits), r = floor(sqrt(x)). As fast as possible on ASAP7, then as
@@ -105,7 +105,7 @@ bit. Asking a model for that RTL directly rarely passes. Every key a document ma
 ## 4. Check it
 
 ```bash
-flux task check isqrt/isqrt.problem.yaml
+flux task check isqrt
 ```
 
 It lists the parts, the roles you can switch, the stages and their tools, and the model it
@@ -115,7 +115,7 @@ something no stage measures.
 ## 5. Run it
 
 ```bash
-flux task run isqrt/isqrt.problem.yaml --passes 3 --agent tools --json answer.json
+flux task run isqrt --passes 3 --agent tools --json answer.json
 ```
 
 Without `--passes` a run goes on until you stop it (Ctrl-C, `flux stop`, or `q` in `--tui`).

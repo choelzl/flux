@@ -39,10 +39,10 @@ def golden(x: int) -> dict:
     return {"r": math.isqrt(x)}
 ```
 
-## 3. Say what you want: `isqrt/isqrt.problem.yaml`
+## 3. Say what you want: `isqrt/problem.yaml`
 
 ```yaml
-id: isqrt
+# the folder's name, isqrt, is the problem's id: the document does not say it
 statement: >-                     # the request, in words: the model reads it
   A combinational integer square root in SystemVerilog: module `isqrt`, input `x` (16 bits,
   unsigned), output `r` (8 bits), r = floor(sqrt(x)). As fast as possible on ASAP7, then as
@@ -67,7 +67,7 @@ budget: {steps: 3, repair_attempts: 6}
 ## 4. Check it
 
 ```bash
-flux task check isqrt/isqrt.problem.yaml
+flux task check isqrt
 ```
 
 It lists the stages, their tools, the model it would use, and says "ready" or why not.
@@ -75,7 +75,7 @@ It lists the stages, their tools, the model it would use, and says "ready" or wh
 ## 5. Run it
 
 ```bash
-flux task run isqrt/isqrt.problem.yaml --passes 3 --agent tools --json answer.json
+flux task run isqrt --passes 3 --agent tools --json answer.json
 ```
 
 `--agent tools` lets the model run checks inside its turns. What happened in a recorded run:

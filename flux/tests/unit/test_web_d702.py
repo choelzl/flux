@@ -43,7 +43,7 @@ def test_failures_from_one_place_do_not_lock_the_name_everywhere(server):
 def test_sharing_tells_the_user_who_may_leave_and_the_bell_watches_shared_loops(server):
     app, store = server
     bob, cy = _c(app, "bob"), _c(app, "cy")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     bob.put("/api/apps/x/shares", json={"user": "cy", "perm": "watch"}, headers=H)
     bob.put("/api/apps/x/shares", json={"user": "cy", "perm": "watch"}, headers=H)       # the same again: no second notice
     told = cy.get("/api/notices").json()

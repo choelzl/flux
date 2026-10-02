@@ -1,7 +1,6 @@
 # The model writes `count_primes`; check.py refuses a wrong one; bench.py times the rest.
-#     flux task run __NAME__.problem.yaml --passes 1
+#     flux task run __NAME__ --passes 1
 
-id: __NAME__
 statement: >-
   A Python function `count_primes(n: int) -> int` that returns how many primes are below n,
   as fast as possible for n up to 2,000,000.

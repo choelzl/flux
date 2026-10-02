@@ -131,7 +131,7 @@ def test_an_evaluator_stage_reads_the_workload_beside_the_document(tmp_path):
     (tmp_path / "w.yaml").write_text("id: w\nops: []\n")
     for workload in ("{home}/w.yaml", "w.yaml"):
         (tmp_path / "t.problem.yaml").write_text(
-            f'id: t\nstatement: x\nlanguage: yaml\nworkload: "{workload}"\n'
+            f'statement: x\nlanguage: yaml\nworkload: "{workload}"\n'
             "flow: {test: 'true', measure: {m: {evaluator: fake-d663, metrics: [latency_cycles]}}}\n"
             "objectives: [{metric: latency_cycles, direction: minimize}]\n")
         task = load_task(str(tmp_path / "t.problem.yaml"))

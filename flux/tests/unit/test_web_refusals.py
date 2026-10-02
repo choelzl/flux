@@ -68,7 +68,7 @@ def test_the_start_dialog_names_the_admins_hosts_to_an_admin_only(tmp_path, monk
     for who, pw in (("ada", "correct horse battery"), ("bob", "another long secret")):
         c = TestClient(app)
         assert c.post("/api/login", json={"name": who, "password": pw}, headers=H).status_code == 200
-        files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))]
+        files = [("files", ("x.problem.yaml", b"statement: s\n"))]
         assert c.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
         got[who] = c.get("/api/apps/x/preflight").json()["network"]
     assert got["ada"]["allow"] == ["llm.internal.example", "10.0.0.0/8"]

@@ -6,8 +6,8 @@ say precisely what is achievable when that is impossible.
 
 ```bash
 cd flux
-nix develop --command flux task run applications/bankmap/bankmap.problem.yaml --steps 2   # solver only, no model, seconds
-nix develop --command flux task run applications/bankmap/bankmap.problem.yaml --tui       # plus model rounds
+nix develop --command flux task run applications/bankmap --steps 2   # solver only, no model, seconds
+nix develop --command flux task run applications/bankmap --tui       # plus model rounds
 ```
 
 The record and the chosen mapping's Verilog go to `applications/bankmap/out/` (`bankmap.db`,
@@ -18,8 +18,8 @@ when no model is reachable.
 ## Changing the ask
 
 The request is the document's `params:`; there are no per-application flags. Copy
-`bankmap.problem.yaml`, edit `params:`, give the copy its own `id:`, and run
-the copy:
+the folder (its name is the copy's id, so its record is its own), edit `params:` in its
+`problem.yaml`, and run the copy:
 
 ```yaml
 params:

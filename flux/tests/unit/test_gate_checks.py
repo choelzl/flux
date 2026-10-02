@@ -116,7 +116,7 @@ def test_task_check_lists_the_checks_with_their_pass_rule(tmp_path, capsys):
 
     (tmp_path / "check.py").write_text(_CHECK)
     (tmp_path / "t.problem.yaml").write_text(
-        "id: t\nstatement: text\nflow:\n  test:\n"
+        "statement: text\nflow:\n  test:\n"
         "    - {name: lint, run: '{python} {home}/check.py LATCH {artifact} log'}\n"
         "    - {name: golden, run: '{python} {home}/check.py WRONG {artifact} log', fail_re: 'x[1-9]'}\n")
     main(["task", "check", str(tmp_path / "t.problem.yaml")])

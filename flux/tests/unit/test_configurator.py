@@ -20,9 +20,9 @@ REPO = Path(__file__).resolve().parents[3]
 ASSETS = REPO / "website/docs/assets"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
-DOCS = sorted([*REPO.glob("flux/applications/*/*.problem.yaml"),
+DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"),
                *REPO.glob("flux/interfaces/cli/src/flux_cli/templates/*/problem.yaml"),
-               REPO / "flux/core/loop/examples/digits.task.json"])
+               REPO / "flux/core/loop/examples/digits/problem.json"])
 COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts", "workload")
 
 JS = r"""
@@ -36,7 +36,7 @@ process.stdout.write(JSON.stringify({yaml: c.buildYaml(got.state), kept: got.kep
 
 
 def _round(path: Path, tmp: Path) -> tuple[dict, dict, list[str]]:
-    home = tmp / path.parent.name
+    home = tmp / path.parent.name.replace("-", "_")          # D786: the folder's name is the id
     shutil.copytree(path.parent, home, ignore=shutil.ignore_patterns("out", "__pycache__", "*.db"))
     src = home / path.name
     v = views(src)

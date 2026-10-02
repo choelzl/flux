@@ -5,20 +5,20 @@ hide:
 
 # Run a problem
 
-A problem is one document, `myproblem/myproblem.problem.yaml` here (from
+A problem is one document, `myproblem/problem.yaml` here (from
 [`flux new`](build-your-own.md) or the [loop crafter](loop-crafter.md)). Hardware problems run
 inside the tool shell (`nix develop`, see the [full install](../index.md#get-started)).
 
 1. See what the document needs and which tools are missing. This runs nothing:
 
     ```bash
-    flux task check myproblem/myproblem.problem.yaml
+    flux task check myproblem
     ```
 
 2. Run it:
 
     ```bash
-    flux task run myproblem/myproblem.problem.yaml --passes 1
+    flux task run myproblem --passes 1
     ```
 
 3. Read the report printed at the end, or write an HTML one from the record:
@@ -52,7 +52,7 @@ without `--passes` never stops by itself; when a pass finds nothing new, the nex
 For a run that outlives your terminal:
 
 ```bash
-flux run flux task run myproblem/myproblem.problem.yaml     # starts it detached, with a log
+flux run flux task run myproblem     # starts it detached, with a log
 flux status myproblem/out/myproblem.db                      # is it running, how many passes
 flux attach myproblem/out/myproblem.db                      # follow its log
 ```
@@ -98,6 +98,6 @@ on the `PATH`, give the path in `FLUX_CLAUDE_BIN` (or `FLUX_CODEX_BIN`, `FLUX_OP
 
 ## Asking something else
 
-Every setting is in the document. To ask a different question, copy the document, change its
-`objectives:` (or `flow`, `budget:`), and give the copy its own `id:` so it keeps its own
+Every setting is in the document. To ask a different question, copy the folder, change its
+`objectives:` (or `flow`, `budget:`); the copy's folder name is its id, so it keeps its own
 record.

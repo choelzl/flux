@@ -29,7 +29,7 @@ in the environment, never in a problem document or a repository:
 
 ```bash
 ollama pull qwen3.8:latest            # or any tag; then FLUX_LLM_MODEL=<tag>
-flux task run applications/primes/primes.problem.yaml --passes 1
+flux task run applications/primes --passes 1
 ```
 
 A 27B model on a CPU takes minutes per turn. Use a GPU, or a smaller model for the small problems.

@@ -215,11 +215,13 @@ def _load(tmp_path: Path, case: dict, pending: bool = False):
     (cutoff lists, objective limits) skips instead of failing."""
     src, files = FILES[case["files"]]
     doc_id = case["state"]["id"]
+    home = tmp_path / doc_id                                # D786: the folder is the id
+    home.mkdir(exist_ok=True)
     for f in files:
-        (tmp_path / f).write_text((src / f).read_text().replace("__NAME__", doc_id))
-    doc = tmp_path / f"{doc_id}.problem.yaml"
+        (home / f).write_text((src / f).read_text().replace("__NAME__", doc_id))
+    doc = home / "problem.yaml"
     doc.write_text(case["yaml"])
-    (tmp_path / "papers").mkdir(exist_ok=True)              # D781: a case's folder of papers
+    (home / "papers").mkdir(exist_ok=True)                  # D781: a case's folder of papers
     try:
         return load_task(doc)
     except (TaskError, TypeError, ValueError) as exc:

@@ -35,7 +35,7 @@ the rest and keeps a record of every design it tried.
     3. Run it:
 
         ```bash
-        .venv/bin/flux task run primes/primes.problem.yaml --passes 6
+        .venv/bin/flux task run primes --passes 6
         ```
 
     Flux times six ways of counting primes and prints the fastest (`odd_sieve`, about 6 ms here).
@@ -63,7 +63,7 @@ the rest and keeps a record of every design it tried.
     3. Run a first hardware search, no AI model needed (about three minutes):
 
         ```bash
-        flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 12
+        flux task run applications/adder16 --screen-only --passes 12
         ```
 
     Flux builds twelve 16-bit adders, proves each one correct, synthesises them and prints the

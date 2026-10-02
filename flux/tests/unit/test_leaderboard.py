@@ -37,8 +37,8 @@ def _result(evaluator: str, metric: str, value: float) -> Result:
 def repo_root(tmp_path):
     d = tmp_path / "repo"
     (d / "core/ir/workload/examples").mkdir(parents=True)
-    (d / "core/ir/workload/examples/w.yaml").write_text("id: w\nvalue: 1\n")
-    (d / "core/ir/workload/examples/other.yaml").write_text("id: other\nvalue: 2\n")
+    (d / "core/ir/workload/examples/w.yaml").write_text("value: 1\n")
+    (d / "core/ir/workload/examples/other.yaml").write_text("value: 2\n")
     return d
 
 

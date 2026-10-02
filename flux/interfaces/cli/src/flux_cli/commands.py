@@ -570,8 +570,8 @@ def cmd_ask(args: argparse.Namespace) -> int:
         args.passes, args.screen_only, args.dir = settings["passes"], settings["screen_only"], settings["workdir"]
         args.skill = settings.get("skills", args.skill)
         review = bool(settings["review"])
-    slug = _re.sub(r"[^a-z0-9]+", "-", args.prompt.lower()).strip("-")[:40] or "ask"
-    workdir = Path(args.dir or Path("out") / f"ask-{slug}").resolve()
+    slug = _re.sub(r"[^a-z0-9]+", "_", args.prompt.lower()).strip("_")[:40] or "ask"
+    workdir = Path(args.dir or Path("out") / f"ask_{slug}").resolve()       # D786: its name is the problem's id
     from flux_loop.author import workspace_skills
     from flux_loop.skills import SkillError
 
@@ -987,12 +987,12 @@ A Python problem for Flux, written by `flux new {name} --kind python`. The model
 
 | file | what it is |
 |---|---|
-| `{name}.problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
+| `problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
 | `check.py` | the gate: known cases against a reference, prints `N failing of M` |
 | `bench.py` | the stage: times the candidate, prints `time_ms=` |
 
-    flux task check {name}.problem.yaml
-    flux task run {name}.problem.yaml --passes 1      # one pass; without --passes it runs until stopped
+    flux task check problem.yaml
+    flux task run problem.yaml --passes 1      # one pass; without --passes it runs until stopped
 
 A model is needed: a local Ollama, or `FLUX_REMOTE_BASE_URL` / `FLUX_REMOTE_MODEL` for a server
 (README.md, "A run with a model"). To make it yours, change the statement and the contract,
@@ -1006,11 +1006,11 @@ it with Yosys and OpenSTA, then places it with OpenROAD on ASAP7 (the stages).
 
 | file | what it is |
 |---|---|
-| `{name}.problem.yaml` | the ask: statement, contract, gate, stages, objectives, budget |
+| `problem.yaml` | the ask: statement, contract, gate, stages, objectives, budget |
 | `golden.py` | what the module must compute: `PORTS` and `golden(**inputs)` |
 
-    flux task check {name}.problem.yaml
-    flux task run {name}.problem.yaml --passes 1 --screen-only    # synthesis only, one pass
+    flux task check problem.yaml
+    flux task run problem.yaml --passes 1 --screen-only    # synthesis only, one pass
 
 It needs the dev shell's tools and a model. To make it yours, change the statement, the
 contract and `golden.py`; `flux/core/loop/src/flux_loop/author_reference.md` has the rules for
@@ -1025,11 +1025,11 @@ Yosys and OpenSTA on ASAP7.
 
 | file | what it is |
 |---|---|
-| `{name}.problem.yaml` | the space, the search, the gate, the stage, the objectives |
+| `problem.yaml` | the space, the search, the gate, the stage, the objectives |
 | `gen.py` | the generator: a 16-bit popcount as a sum, an adder tree, or small tables |
 | `golden.py` | what the module must compute |
 
-    flux task run {name}.problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
+    flux task run problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
 
 Add an architecture to `gen.py` and its name to `flow.dse.space`, or add knobs (widths, pipeline
 depth, table size). For placed numbers, add the `confirm` stage from `flux new --kind rtl`.
@@ -1043,11 +1043,11 @@ the rest; the fastest wins.
 
 | file | what it is |
 |---|---|
-| `{name}.problem.yaml` | the knobs, the search, the gate, the stage, the objective |
+| `problem.yaml` | the knobs, the search, the gate, the stage, the objective |
 | `workload.py` | the program being tuned: a blocked matrix multiply (block size, loop order) |
 | `check.py` / `bench.py` | the gate (still correct?) and the stage (`time_ms=`) |
 
-    flux task run {name}.problem.yaml --passes 15      # a pass a point of `flow.dse.space` (D738)
+    flux task run problem.yaml --passes 15      # a pass a point of `flow.dse.space` (D738)
 
 To tune your own program, replace `workload.py`, list its knobs under `flow.dse.space`, and make the gate
 and the stage run it with them. They can be any command: a build with flags, a solver with
@@ -1063,11 +1063,11 @@ wrong one; `bench.py` times the survivors; the fastest wins.
 
 | file | what it is |
 |---|---|
-| `{name}.problem.yaml` | the ask: the space, the search, the gate, the stage, the objective |
+| `problem.yaml` | the ask: the space, the search, the gate, the stage, the objective |
 | `render.py` | the generator: one candidate per point (`render.py <out> <algorithm> <wheel>`) |
 | `check.py` / `bench.py` | the gate and the stage |
 
-    flux task run {name}.problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
+    flux task run problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
 
 To try another idea, add a value to `flow.dse.space` and its code to `render.py`; to search instead of
 sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
@@ -1088,13 +1088,13 @@ NEW_KINDS = {
 
 def template_files(name: str, kind: str) -> list[tuple[str, str]]:
     """`flux new`'s problem of `kind` named `name`: (file name, text) pairs, the document as
-    `<name>.problem.yaml`, and its README."""
+    `problem.yaml` (D786: in a folder named `name`, its id), and its README."""
     from pathlib import Path
 
     if kind not in NEW_KINDS:
         raise ValueError(f"a kind is one of {', '.join(NEW_KINDS)}")
     source = Path(__file__).with_name("templates") / kind
-    out = [(f"{name}.problem.yaml" if f.name == "problem.yaml" else f.name, f.read_text().replace("__NAME__", name))
+    out = [(f.name, f.read_text().replace("__NAME__", name))
            for f in sorted(source.iterdir()) if f.is_file()]
     return [*out, ("README.md", _NEW_README[kind].format(name=name))]
 
@@ -1109,16 +1109,16 @@ def cmd_new(args: argparse.Namespace) -> int:
     if not _re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
         print(f"flux new: {name!r} is not a name (a letter, then letters, digits or _)")
         return 2
-    target = Path(args.dir or name)
+    target = Path(args.dir) / name if args.dir else Path(name)     # D786: the folder is the problem, its name the id
     if target.exists() and any(target.iterdir()):
-        print(f"flux new: {target} exists and is not empty; choose another --dir")
+        print(f"flux new: {target} exists and is not empty; choose another name or --dir")
         return 2
     target.mkdir(parents=True, exist_ok=True)
     written = []
     for rel, text in template_files(name, args.kind):
         (target / rel).write_text(text)
         written.append(rel)
-    doc = target / f"{name}.problem.yaml"
+    doc = target
     print(f"wrote {target}/: {', '.join(written)}")
     points = {"sweep": 6, "rtl-sweep": 6, "tune": 15}.get(args.kind, 1)     # D738: a pass a point
     print(f"next:\n  flux task check {doc}\n  flux task run {doc} --passes {points}"

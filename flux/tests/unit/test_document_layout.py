@@ -75,7 +75,7 @@ def test_each_box_says_its_settings_in_the_forms_it_has():
 
 
 def test_every_application_is_in_the_layout():
-    for doc in sorted(APPS.glob("*/*.problem.yaml")):
+    for doc in sorted(APPS.glob("*/problem.yaml")):
         raw = yaml.safe_load(doc.read_text())
         assert not set(raw) & {"gate", "stages", "space", "seeds", "knowledge"}, doc
         load_task(str(doc))

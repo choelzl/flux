@@ -23,7 +23,7 @@ def _loop(tmp_path):
     loop = tmp_path / "x"
     (loop / "out").mkdir(parents=True)
     (loop / "runs").mkdir()
-    (loop / "x.problem.yaml").write_text("id: x\nstatement: an adder\n")
+    (loop / "x.problem.yaml").write_text("statement: an adder\n")
     (loop / ".flux-app.json").write_text('{"document": "x.problem.yaml", "id": "x"}')
     (loop / "runs" / "loop.log").write_text("line one\nDECISION d1\n")
     db = sqlite3.connect(loop / "out" / "x.db")
@@ -88,7 +88,7 @@ def _c(app, n, pw):
 def test_a_question_about_a_loop_is_answered_and_kept_with_it(server, monkeypatch):
     app, store, tmp = server
     bob, cy = _c(app, "bob", "another long secret"), _c(app, "cy", "cy has a long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     r = bob.post("/api/apps/x/asks", json={"question": "what is best?", "author": "opencode"}, headers=H)
     assert r.status_code == 200, r.text
     assert bob.post("/api/apps/x/asks", json={"question": "another", "author": "opencode"}, headers=H).status_code == 409

@@ -11,14 +11,14 @@ import yaml
 from flux_cli.main import main
 from flux_codegen_rtl_harness import golden_vectors
 from flux_llm import ScriptedProposer
-from flux_loop import TaskSpec
+from flux_loop import TaskSpec, load_task
 from flux_loop.author import write_golden
 from flux_loop.golden_proto import capability, check, exhaustive, golden_path, load
 
 
 def _rtl(tmp_path: Path, **budget) -> Path:
     assert main(["new", "add8", "--kind", "rtl", "--dir", str(tmp_path / "p")]) == 0
-    doc = tmp_path / "p" / "add8.problem.yaml"
+    doc = tmp_path / "p" / "add8" / "problem.yaml"
     if budget:
         d = yaml.safe_load(doc.read_text())
         d["budget"].update(budget)
@@ -59,7 +59,7 @@ def test_the_check_runs_the_prototype_on_the_golden_vectors(tmp_path):
 
 def test_a_document_with_a_golden_gate_has_the_stage(tmp_path, capsys):
     doc = _rtl(tmp_path)
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     cap = capability(task)
     assert cap is not None and cap.extra["signature"] == "design(a, b)" and cap.domain_size > 0
     assert "def golden" in cap.contract and cap.language == "python"
@@ -71,7 +71,7 @@ def test_a_document_with_a_golden_gate_has_the_stage(tmp_path, capsys):
 def test_a_missing_golden_is_written_by_the_model_and_checked(tmp_path, capsys):
     doc = _rtl(tmp_path)
     (doc.parent / "golden.py").unlink()
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     capsys.readouterr()
     main(["task", "check", str(doc)])
     assert "golden.py does not exist -- the model writes it" in capsys.readouterr().out
@@ -95,7 +95,7 @@ def test_the_prototype_is_proven_then_transcribed(tmp_path, monkeypatch):
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     doc = _rtl(tmp_path, prototype=True, steps=1)
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     wrong = json.dumps({"prototype": "def design(a, b):\n    return {'s': a - b}\n", "why": "first"})
     proto = json.dumps({"edits": [{"find": "a - b", "replace": "a + b"}], "why": "the sum"})
     rtl = json.dumps({"artifact": "module add8(input logic [7:0] a, input logic [7:0] b, output logic [8:0] s);\n"
@@ -181,8 +181,8 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     main(["new", "sq", "--kind", "rtl", "--dir", str(tmp_path / "p")])
-    doc = tmp_path / "p" / "sq.problem.yaml"
-    (tmp_path / "p" / "golden.py").write_text(
+    doc = tmp_path / "p" / "sq" / "problem.yaml"
+    (tmp_path / "p" / "sq" / "golden.py").write_text(
         "PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"
         "         {'name': 'y', 'dir': 'out', 'bits': 12, 'unsigned': True}]\n"
         "COUNT = 64\n\ndef golden(a):\n    return {'y': (a * a) >> 4}\n")
@@ -194,7 +194,7 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
                                        "metrics": ["area_um2"]}}
     d["budget"].update(prototype=True, steps=2, prototype_table_max=256)   # the table is the costly one
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     costly = json.dumps({"prototype": "T = [(i * i) >> 4 for i in range(256)]\ndef design(a):\n    return {'y': T[a]}\n"})
     cheap = json.dumps({"prototype": "def design(a):\n    return {'y': (a * a) >> 4}\n", "why": "REWRITE: arithmetic, no table"})
     db = str(tmp_path / "d.db")
@@ -211,8 +211,8 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
 
 def _sq_doc(tmp_path, cache=True, measures=True, **budget):
     main(["new", "sq", "--kind", "rtl", "--dir", str(tmp_path / "p")])
-    doc = tmp_path / "p" / "sq.problem.yaml"
-    (tmp_path / "p" / "golden.py").write_text(
+    doc = tmp_path / "p" / "sq" / "problem.yaml"
+    (tmp_path / "p" / "sq" / "golden.py").write_text(
         "PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"
         "         {'name': 'y', 'dir': 'out', 'bits': 12, 'unsigned': True}]\n"
         "COUNT = 64\n\ndef golden(a):\n    return {'y': (a * a) >> 4}\n")
@@ -228,7 +228,7 @@ def _sq_doc(tmp_path, cache=True, measures=True, **budget):
     d["budget"].update(prototype=True, steps=2, prototype_table_max=256, **budget)
     d["cache"] = cache
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
-    return TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent), ran
+    return load_task(doc), ran
 
 
 COSTLY = json.dumps({"prototype": "T = [(i * i) >> 4 for i in range(256)]\ndef design(a):\n    return {'y': T[a]}\n"})
@@ -332,13 +332,13 @@ def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, mo
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     _sq_doc(tmp_path)
-    doc = tmp_path / "p" / "sq.problem.yaml"
+    doc = tmp_path / "p" / "sq" / "problem.yaml"
     d = yaml.safe_load(doc.read_text())
     fake = tmp_path / "agent.py"
     fake.write_text(AGENT)
     d.setdefault("flow", {})["generate"] = {"agent": {"command": ["{python}", str(fake), "{prompt_file}", "{artifact}"]}}
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
                    log=said.append)
@@ -352,7 +352,7 @@ def test_the_documents_knowledge_reaches_the_prototype_stage(tmp_path):
     from flux_loop.types import LoopRequest, LoopState
 
     task, _ = _sq_doc(tmp_path)
-    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "knowledge": {"text": "SQUARE BY SHIFT-AND-ADD"}}}, base=tmp_path / "p")
+    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "knowledge": {"text": "SQUARE BY SHIFT-AND-ADD"}}}, base=tmp_path / "p" / "sq")
     prob = PromptProblem(task)
     state = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None)
     assert "SQUARE BY SHIFT-AND-ADD" in prefix_for(prob, prob.prototype(), None, state)
@@ -396,7 +396,7 @@ def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, mon
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
     _sq_doc(tmp_path)
-    doc = tmp_path / "p" / "sq.problem.yaml"
+    doc = tmp_path / "p" / "sq" / "problem.yaml"
     d = yaml.safe_load(doc.read_text())
     fake = tmp_path / "agent.py"
     fake.write_text(RESUMING)
@@ -404,7 +404,7 @@ def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, mon
         "command": ["{python}", str(fake), "first", "{prompt_file}", "{artifact}"],
         "resume": ["{python}", str(fake), "resume", "{session}", "{answer}", "{artifact}"], "output": "opencode"}}
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
-    task = TaskSpec.from_dict(yaml.safe_load(doc.read_text()), base=doc.parent)
+    task = load_task(doc)
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
                    log=said.append)

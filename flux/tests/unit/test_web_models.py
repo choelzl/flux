@@ -81,13 +81,13 @@ def test_without_web_settings_a_run_keeps_the_machines_own(server, monkeypatch):
 def test_the_configurator_lists_edits_and_deletes_the_loops_own_files(server):
     app, _store = server
     bob = _client(app, "bob", "another long secret")
-    files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n")), ("files", ("check.py", b"print(1)\n")), ("files", ("lib/util.py", b"u\n"))]
+    files = [("files", ("x.problem.yaml", b"statement: s\n")), ("files", ("check.py", b"print(1)\n")), ("files", ("lib/util.py", b"u\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     assert bob.put("/api/apps/x/file", params={"path": "bench.sh"}, json={"text": "echo t=1\n"}, headers=H).status_code == 200
     got = {f["path"]: f["document"] for f in bob.get("/api/apps/x/inputs").json()}
-    assert got == {"x.problem.yaml": True, "check.py": False, "lib/util.py": False, "bench.sh": False}
+    assert got == {"problem.yaml": True, "check.py": False, "lib/util.py": False, "bench.sh": False}
     assert bob.delete("/api/apps/x/file", params={"path": "lib/util.py"}, headers=H).status_code == 200
     assert "lib/util.py" not in {f["path"] for f in bob.get("/api/apps/x/inputs").json()}
-    assert bob.delete("/api/apps/x/file", params={"path": "x.problem.yaml"}, headers=H).status_code == 400, "not the document"
+    assert bob.delete("/api/apps/x/file", params={"path": "problem.yaml"}, headers=H).status_code == 400, "not the document"
     assert bob.delete("/api/apps/x/file", params={"path": "../../x"}, headers=H).status_code == 400
     assert bob.delete("/api/apps/x/file", params={"path": "runs/loop.log"}, headers=H).status_code == 400

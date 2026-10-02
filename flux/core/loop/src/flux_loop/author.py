@@ -31,21 +31,16 @@ FLUX_ROOT = HERE.parents[3]
 from .document import DOCUMENT_KEYS  # noqa: E402 -- the loader's own list (D590)
 
 #: The worked examples every author reads, live from the repository so they never drift.
-EXAMPLES = (("mul8", ("mul8.problem.yaml", "golden.py")),
-            ("adder16", ("adder16.problem.yaml", "golden.py", "gen.py")))
+EXAMPLES = (("mul8", ("problem.yaml", "golden.py")),
+            ("adder16", ("problem.yaml", "golden.py", "gen.py")))
 
 DOCUMENT = "problem.yaml"
 DONE = "done.txt"
 
 
 def document_path(workdir: Path) -> Path:
-    """The authored document: `problem.yaml`, or the one `*.problem.yaml` an author named after
-    the examples -- the newest when several."""
-    exact = workdir / DOCUMENT
-    if exact.is_file():
-        return exact
-    named = sorted(workdir.glob("*.problem.yaml"), key=lambda p: p.stat().st_mtime)
-    return named[-1] if named else exact
+    """The authored document: `problem.yaml`, the one name a document has (D786)."""
+    return workdir / DOCUMENT
 
 
 def reference() -> str:
@@ -233,13 +228,6 @@ def _agent_turn(ask: Ask, text: str, say: Callable[[str], None]) -> tuple[bool, 
                             answer=lambda _q: (DECIDE, "decide"), say=say)
     if not turn.ok:
         return False, f"the author {spec.tool} exited {turn.rc}: {(turn.stderr or turn.text)[-300:]}"
-    if target.is_file():
-        # an agent that first named its document after the examples, then wrote `problem.yaml`
-        # when nudged, leaves a copy: drop the one that says the same thing
-        same = " ".join(target.read_text().split())
-        for other in ask.workdir.glob("*.problem.yaml"):
-            if " ".join(other.read_text().split()) == same:
-                other.unlink()
     found = document_path(ask.workdir)
     now = found.read_text() if found.is_file() else None
     if done.is_file() and "DONE" in done.read_text().upper():
@@ -318,7 +306,7 @@ def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False)
     Input files the document forgot are added to its `knowledge.files`."""
     import yaml
 
-    from .document import TaskError, TaskSpec
+    from .document import TaskError, task_in
     from .task import PromptProblem
 
     path = document_path(workdir)
@@ -350,7 +338,7 @@ def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False)
     if changed:
         path.write_text(yaml.safe_dump(doc, sort_keys=False))
     try:
-        task = TaskSpec.from_dict(doc, base=workdir)
+        task = task_in(doc, workdir)
         problem = PromptProblem(task)
     except (TaskError, ValueError) as exc:
         return None, None, f"the document does not load: {exc}"

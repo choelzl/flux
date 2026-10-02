@@ -1,4 +1,3 @@
-id: isqrt
 statement: >-
   A combinational integer square root in SystemVerilog: module `isqrt`, input `x` (16 bits,
   unsigned), output `r` (8 bits), r = floor(sqrt(x)). As fast as possible on ASAP7, then as

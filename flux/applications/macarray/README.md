@@ -19,10 +19,10 @@ multiply-and-sum every silicon number this repo pinned before was measured on.
 
 ```bash
 cd flux
-nix develop --command flux task check applications/macarray/macarray.problem.yaml   # tools present? what it will search
-nix develop --command flux task run applications/macarray/macarray.problem.yaml --passes 1 --steps 1   # the screen and placement, no model
-nix develop --command flux task run applications/macarray/macarray.problem.yaml --passes 1 --steps 1 --screen-only   # synthesis only
-nix develop --command flux task run applications/macarray/macarray.problem.yaml   # with invention rounds, until `flux stop`
+nix develop --command flux task check applications/macarray   # tools present? what it will search
+nix develop --command flux task run applications/macarray --passes 1 --steps 1   # the screen and placement, no model
+nix develop --command flux task run applications/macarray --passes 1 --steps 1 --screen-only   # synthesis only
+nix develop --command flux task run applications/macarray   # with invention rounds, until `flux stop`
 ```
 
 The document says `budget.passes: 0`, so a plain run keeps going until `flux stop` (or `q` in
@@ -35,13 +35,13 @@ fingerprints and the exact source.
 ## Changing the ask
 
 There are no per-application flags: the knobs are the document's `params:`. Copy the
-document, edit the copy, give it its own `id:` so its record and
-measurements do not mix with the original's, and run the copy:
+folder -- its name is the copy's id, so its record and measurements do not mix with
+the original's -- edit the copy, and run it:
 
 ```bash
-cp applications/macarray/macarray.problem.yaml applications/macarray/mac16.problem.yaml
-# edit mac16.problem.yaml: id: mac16, params.lanes: 16, params.target_mhz: 1500
-nix develop --command flux task run applications/macarray/mac16.problem.yaml --passes 1
+cp -r applications/macarray applications/mac16
+# edit applications/mac16/problem.yaml: params.lanes: 16, params.target_mhz: 1500
+nix develop --command flux task run applications/mac16 --passes 1
 ```
 
 | `params:` key | default | what it does |
@@ -79,7 +79,7 @@ themselves skipped and the screen's decision stands.
 
 ## Layout
 
-`macarray.problem.yaml` is the ask: the statement, `params:`, the objectives, the two stages,
+`problem.yaml` is the ask: the statement, `params:`, the objectives, the two stages,
 the search (`flow: dse: sweep`) and the budget. `lib/src/flux_macarray/` is the world the
 document names (`world: flux_macarray.world:World`): `config` (the space and the shape), `rtl`
 (the generator), `verify` (golden vectors and the Verilator verdict), `measure` (the two

@@ -1,8 +1,7 @@
 # A MAC processing element: every multiplier, reducer and pipeline depth the generator spells,
 # plus multipliers a model invents. The world is `flux_macarray`.
-#     flux task run applications/macarray/macarray.problem.yaml --db demo-macarray.db
+#     flux task run applications/macarray --db demo-macarray.db
 
-id: macarray
 statement: >-
   One MAC processing element, 8 lanes at the workload's precision: the smallest PE that
   makes 1000 MHz placed on ASAP7, chosen from every combination of multiplier, reducer,

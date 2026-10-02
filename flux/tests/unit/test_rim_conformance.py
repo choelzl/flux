@@ -18,9 +18,9 @@ APPLICATIONS = sorted(p.name for p in (FLUX_ROOT / "applications").iterdir() if 
 
 
 def test_every_application_is_a_document():
-    assert APPLICATIONS == ["adder16", "bankmap", "gelu_fp16", "interconnect_mapping", "macarray", "mul8", "nlu", "npu_gemm", "prefetcher", "primes"]
+    assert APPLICATIONS == ["adder16", "bankmap", "gelu_fp16", "interconnect_mapping", "macarray", "mul8", "nlu", "npu_gemm", "prefetcher", "prefetcher_invent", "primes"]
     for app in APPLICATIONS:
-        doc = FLUX_ROOT / "applications" / app / f"{app}.problem.yaml"
+        doc = FLUX_ROOT / "applications" / app / "problem.yaml"
         assert doc.is_file(), f"{app}: no problem document"
         assert not (FLUX_ROOT / "applications" / app / "demo.py").exists(), f"{app}: a demo beside the document"
 
@@ -29,7 +29,7 @@ def test_every_application_is_a_document():
 def test_the_document_loads_and_names_its_campaign_and_gate(app):
     from flux_loop import PromptProblem, load_task
 
-    task = load_task(FLUX_ROOT / "applications" / app / f"{app}.problem.yaml")
+    task = load_task(FLUX_ROOT / "applications" / app / "problem.yaml")
     assert task.id == app
     assert task.record == app, f"{app}: the campaign is not named after the document"
     assert task.stages, f"{app}: no stages"
@@ -77,7 +77,7 @@ def test_the_world_contract_is_small_legible_and_complete():
     for app in APPLICATIONS:
         from flux_loop import load_task, PromptProblem
 
-        task = load_task(FLUX_ROOT / "applications" / app / f"{app}.problem.yaml")
+        task = load_task(FLUX_ROOT / "applications" / app / "problem.yaml")
         world = PromptProblem(task).world
         if world is None:
             continue                      # D579: a document with no world fills nothing

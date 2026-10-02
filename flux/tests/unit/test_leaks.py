@@ -15,7 +15,7 @@ from flux_web import admin
 def _args(tmp_path):
     (tmp_path / "p").mkdir(exist_ok=True)
     doc = tmp_path / "p" / "x.problem.yaml"
-    doc.write_text("id: x\n")
+    doc.write_text("")
     return types.SimpleNamespace(file=str(doc), db=str(tmp_path / "rec" / "x.db"), out=None, json=None, plan=None,
                                  replies=None, author_replies=None, skill=None, app_dir=None)
 

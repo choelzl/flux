@@ -1,4 +1,4 @@
-"""The FP16 world (D519): what `applications/nlu/nlu.problem.yaml` names as its `world:` --
+"""The FP16 world (D519): what `applications/nlu/problem.yaml` names as its `world:` --
 everything about a non-linear unit a document cannot say, as the hooks of one object.
 
     the prototype stage    the toolkit of FP16 blocks, the harness, the exhaustive ULP judge,

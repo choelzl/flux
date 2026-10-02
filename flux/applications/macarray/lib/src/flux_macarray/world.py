@@ -1,4 +1,4 @@
-"""The MAC-PE world named by `applications/macarray/macarray.problem.yaml` as its `world:`:
+"""The MAC-PE world named by `applications/macarray/problem.yaml` as its `world:`:
 the search path, with the space as the first batch and each invention round as the next (D533).
 
     prepare    the three tools, the workload's shape, the cache, the invented multipliers

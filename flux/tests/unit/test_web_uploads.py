@@ -13,14 +13,14 @@ from flux_web.store import Store
 from flux_web.workspace import MAX_FILES, Workspace, WorkspaceError
 
 H = {"X-Flux": "1"}
-DOC = b"id: x\nstatement: s\n"
+DOC = b"statement: s\n"
 
 
 @pytest.fixture()
 def server(tmp_path, monkeypatch):
     apps = tmp_path / "applications"
     (apps / "adder").mkdir(parents=True)
-    (apps / "adder" / "adder.problem.yaml").write_text("id: adder\nstatement: Make an adder that is small.\n")
+    (apps / "adder" / "adder.problem.yaml").write_text("statement: Make an adder that is small.\n")
     (apps / "adder" / "golden.py").write_text("print(1)\n")
     (apps / "adder" / "out").mkdir()
     (apps / "adder" / "out" / "old.db").write_text("not the loop's")

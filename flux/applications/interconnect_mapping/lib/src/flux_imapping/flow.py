@@ -1,5 +1,5 @@
 """The interconnect_mapping study's arithmetic: evaluation, little loops, certificates and
-conclusion, used by the hooks of `world.World` (built from `interconnect_mapping.problem.yaml`).
+conclusion, used by the hooks of `world.World` (built from `applications/interconnect_mapping/problem.yaml`).
 
 Shape (D378):
 1. Curated field (`solutions.catalog`) measured on train workloads.

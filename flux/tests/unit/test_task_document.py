@@ -19,7 +19,7 @@ from flux_loop import (LoopRequest, PromptProblem, TaskError, TaskSpec, load_tas
 WHOLE = 10_000
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
-DIGITS = FLUX_ROOT / "core/loop/examples/digits.task.json"
+DIGITS = FLUX_ROOT / "core/loop/examples/digits/problem.json"
 
 GOOD = "\n".join(str(i) for i in range(10)) + "\n"
 WRONG = GOOD.replace("3", "X")
@@ -65,8 +65,9 @@ def test_the_document_is_validated_with_named_reasons(doc, message):
 
 
 def test_load_task_reads_yaml_too(tmp_path):
-    p = tmp_path / "t.yaml"
-    p.write_text("id: y\nstatement: make it\nflow:\n  test:\n    build: ['{python}', '-c', 'pass', '{artifact}']\n")
+    p = tmp_path / "y" / "t.yaml"
+    p.parent.mkdir()
+    p.write_text("statement: make it\nflow:\n  test:\n    build: ['{python}', '-c', 'pass', '{artifact}']\n")
     task = load_task(p)
     assert task.id == "y" and task.gate.named("build").run[0] == "{python}"
     with pytest.raises(TaskError, match="a .yaml, .yml or .json file"):
@@ -199,7 +200,7 @@ def test_flux_task_check_rejects_a_bad_document(tmp_path, capsys):
     from flux_cli.main import main
 
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps({"id": "b", "statement": "x"}))
+    bad.write_text(json.dumps({"statement": "x"}))
     assert main(["task", "check", str(bad)]) == 2
     assert "bad.json: `gate` needs" in capsys.readouterr().out
 
@@ -687,15 +688,14 @@ def test_a_stage_whose_tool_is_missing_is_said_to_be_skipped(tmp_path, capsys):
     from flux_cli.main import main
     from flux_loop import PromptProblem, TaskSpec, task_report_lines
 
-    doc = {"id": "t",
-           "statement": "x",
+    doc = {"statement": "x",
            "flow": {"test": {"test": ["true"]},
                     "measure": {"far": {"command": "true", "metrics": ["m"], "needs": ["no-such-tool-for-flux"]}}}}
     (tmp_path / "t.problem.yaml").write_text(yaml.safe_dump(doc))
     assert main(["task", "check", str(tmp_path / "t.problem.yaml")]) == 0
     out = capsys.readouterr().out
     assert "WILL SKIP stage far: needs no-such-tool-for-flux" in out
-    prob = PromptProblem(TaskSpec.from_dict(doc))
+    prob = PromptProblem(TaskSpec.from_dict({**doc, "id": "t"}))
     assert prob.skipped_stages() == [("far", ["no-such-tool-for-flux"])]
 
     class Out:
@@ -716,11 +716,11 @@ def test_every_load_failure_names_the_file_and_a_misspelled_key_is_refused(tmp_p
     with pytest.raises(TaskError, match=r"nope\.yaml: no such file"):
         load_task(tmp_path / "nope.yaml")
     bad = tmp_path / "bad.yaml"
-    bad.write_text("id: x\nstatement: [unclosed\n")
+    bad.write_text("statement: [unclosed\n")
     with pytest.raises(TaskError, match=r"bad\.yaml: not valid YAML \(line \d+"):
         load_task(bad)
     typo = tmp_path / "typo.yaml"
-    typo.write_text("id: x\nstatement: y\nflow: {test: {test: [true]}}\nobjective: [{metric: m, direction: minimize}]\n")
+    typo.write_text("statement: y\nflow: {test: {test: [true]}}\nobjective: [{metric: m, direction: minimize}]\n")
     with pytest.raises(TaskError, match=r"typo\.yaml: keys a problem document does not have: objective \(did you mean objectives\?\)"):
         load_task(typo)
 

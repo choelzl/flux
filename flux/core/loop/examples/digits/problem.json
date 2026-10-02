@@ -1,5 +1,4 @@
 {
-  "id": "digits",
   "statement": "Write the ten decimal digits 0 through 9, one per line, in ascending order, and nothing else.",
   "contract": "Plain text. Exactly ten lines. No blank lines, no spaces, no trailing text.",
   "language": "text",

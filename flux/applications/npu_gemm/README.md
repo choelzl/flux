@@ -9,7 +9,7 @@ No model is needed.
 
 | file | what it is |
 |---|---|
-| `npu_gemm.problem.yaml` | the document: the space (PE array width, global buffer size), the gate, the stage, the objectives |
+| `problem.yaml` | the document: the space (PE array width, global buffer size), the gate, the stage, the objectives |
 | `workload.yaml` | what runs on the accelerator, as Workload IR |
 | `render.py` | writes one architecture from `pe_x` and `gbuf_kb` |
 | `check.py` | the gate: the architecture is valid Architecture IR |
@@ -18,7 +18,7 @@ No model is needed.
 ## Run it
 
 ```bash
-nix develop --command flux task run applications/npu_gemm/npu_gemm.problem.yaml --passes 1
+nix develop --command flux task run applications/npu_gemm --passes 1
 ```
 
 About 30 seconds for the 15 points. The front, on this workload:

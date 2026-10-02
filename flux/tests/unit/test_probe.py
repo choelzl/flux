@@ -13,12 +13,12 @@ from flux_loop import PromptProblem, TaskSpec, request_for, run_loop
 from flux_loop.agent import DENIED, agent_spec, agent_brief
 from flux_loop.probe import probe, probe_context, probe_line, probes_done
 
-DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits.task.json"
+DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits" / "problem.json"
 GOOD = "\n".join(str(i) for i in range(10)) + "\n"
 
 
 def _task(tmp_path, **extra):
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     if "stages" in extra:                       # D775: the stages are flow.measure, by name
         doc["flow"]["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in extra.pop("stages")}
     return TaskSpec.from_dict({**doc, **extra}, base=tmp_path)
@@ -122,7 +122,7 @@ print("written")
 def test_a_loop_turn_hands_the_agent_its_probe_and_records_what_it_probed(tmp_path):
     fake = tmp_path / "agent.py"
     fake.write_text(PROBING_AGENT)
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     doc["flow"] = {**doc.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}}
     doc["budget"] = {"steps": 1, "repair_attempts": 1, "prototype": False}
     task = TaskSpec.from_dict(doc, base=tmp_path)

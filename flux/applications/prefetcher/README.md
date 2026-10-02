@@ -5,11 +5,11 @@ the three traces in `traces/` (not in git; see `traces/README.md`).
 
 | file | what it is |
 |---|---|
-| `prefetcher.problem.yaml` | the configuration: the model writes a ChampSim `.ini` -- Bingo, the partners beside it and every knob |
+| `problem.yaml` | the configuration: the model writes a ChampSim `.ini` -- Bingo, the partners beside it and every knob |
 | `knobs.md` | what an `.ini` may say: the stack, each knob's meaning, range and shipped value, legality, storage |
 | `bingo_default.ini` | Bingo at its shipped configuration |
 | `bingo.py` | `check` (legality, `--max-storage`) and `measure` (`flux champsim` + the storage model) |
-| `invent.problem.yaml` | a new C++ prefetcher, written by the model, measured beside Bingo |
+| `../prefetcher_invent/problem.yaml` | a new C++ prefetcher, written by the model, measured beside Bingo (its own folder: a folder is one problem) |
 
 **The configuration.** The model reads `knobs.md` and `bingo_default.ini` and writes a knob
 file. A knob it leaves out takes its shipped value. `bingo.py check` refuses an illegal file
@@ -23,9 +23,9 @@ back with their numbers and asks for better ones.
 one that issues no prefetches, and the stages measure it beside Bingo's shipped configuration.
 
 ```bash
-flux task check applications/prefetcher/prefetcher.problem.yaml
-flux task run applications/prefetcher/prefetcher.problem.yaml --db demo-prefetcher.db --tui
-flux task run applications/prefetcher/invent.problem.yaml --db demo-invent.db --tui
+flux task check applications/prefetcher
+flux task run applications/prefetcher --db demo-prefetcher.db --tui
+flux task run applications/prefetcher_invent --db demo-invent.db --tui
 ```
 
 A coding agent can write either file instead of the model: `flow: {generate: {agent: opencode}}`.

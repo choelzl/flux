@@ -29,7 +29,7 @@ def _c(app, n):
 def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
     app, tmp = server
     bob, cy, dee, ada = _c(app, "bob"), _c(app, "cy"), _c(app, "dee"), _c(app, "ada")
-    files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n")), ("files", ("check.py", b"print(1)\n"))]
+    files = [("files", ("x.problem.yaml", b"statement: s\n")), ("files", ("check.py", b"print(1)\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     O = {"owner": "bob"}                                            # noqa: N806
     assert cy.get("/api/apps/x", params=O).status_code == 403, "not shared: not seen"
@@ -52,8 +52,8 @@ def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
     assert cy.get("/api/apps/x/preflight", params=O).status_code == 403
     for method, path, kw in (("post", "/api/apps/x/files", {"files": [("files", ("y.txt", b"1"))]}),
                              ("put", "/api/apps/x/part", {"params": {**O, "path": "y.bin", "offset": 0, "final": True}, "content": b"1"}),
-                             ("put", "/api/apps/x/document", {"json": {"text": "id: x\nstatement: t\n"}}),
-                             ("post", "/api/apps/x/document/preview", {"json": {"text": "id: x\nstatement: t\n"}}),
+                             ("put", "/api/apps/x/document", {"json": {"text": "statement: t\n"}}),
+                             ("post", "/api/apps/x/document/preview", {"json": {"text": "statement: t\n"}}),
                              ("post", "/api/apps/x/check", {}),
                              ("delete", "/api/apps/x/file", {"params": {**O, "path": "check.py"}})):
         kw = {"params": O, **kw}

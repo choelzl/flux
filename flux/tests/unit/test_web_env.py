@@ -31,7 +31,7 @@ def _client(app, name, password):
 def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
     app, store = server
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     assert bob.put("/api/admin/env", json={"name": "A", "value": "1"}, headers=H).status_code == 403
     assert ada.put("/api/admin/env", json={"name": "LEVEL", "value": "server"}, headers=H).status_code == 200
     assert ada.put("/api/admin/env", json={"name": "HF_TOKEN", "value": "hf-secret", "secret": True}, headers=H).status_code == 200
@@ -59,7 +59,7 @@ def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
 def test_only_an_admin_takes_a_loop_out_of_the_sandbox_or_limits_it(server):
     app, store = server
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     assert bob.put("/api/apps/x/advanced", json={"sandbox": False}, headers=H).status_code == 403
     r = ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"sandbox": True, "memory": "16g", "cpus": "8", "pids": 2048}, headers=H)
     assert r.status_code == 200 and r.json()["advanced"] == {"memory": "16g", "cpus": "8", "pids": 2048}
@@ -84,7 +84,7 @@ def test_a_loop_works_one_thing_at_a_time_unless_an_admin_allows_parallel_work(s
     """D741: an admin allows parallel work per loop; how much is the document's."""
     app, _store = server
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     assert bob.put("/api/apps/x/advanced", json={"parallel": True}, headers=H).status_code == 403
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": True}, headers=H).json()["advanced"] == {"parallel": True}
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": False}, headers=H).json()["advanced"] == {}
@@ -142,12 +142,12 @@ def test_a_document_is_checked_before_it_is_saved(server):
     """D757: Direct edit asks whether the text loads before it writes it."""
     app, _store = server
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     bad = bob.post("/api/apps/x/validate", json={"text": "id: [unclosed\nstatement: x"}, headers=H).json()
     assert not bad["ok"] and bad["error"].startswith("not YAML")
-    wrong = bob.post("/api/apps/x/validate", json={"text": "id: x\nstatment: typo\n"}, headers=H).json()
+    wrong = bob.post("/api/apps/x/validate", json={"text": "statment: typo\n"}, headers=H).json()
     assert not wrong["ok"] and "statment" in wrong["error"], wrong
-    good = "id: x\nstatement: s\nlanguage: python\nflow: {test: {test: ['true']}}\nobjectives: []\n"
+    good = "statement: s\nlanguage: python\nflow: {test: {test: ['true']}}\nobjectives: []\n"
     assert bob.post("/api/apps/x/validate", json={"text": good}, headers=H).json() == {"ok": True, "error": ""}
 
 

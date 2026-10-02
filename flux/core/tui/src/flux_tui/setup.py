@@ -8,7 +8,7 @@ opens the loop TUI.
     │ Files        spec.pdf  ref.sv  + type a path, Enter to add          │
     │ Author       < model >                                              │
     │ Passes       until stopped   Screen only [ ]  Review first [x]      │
-    │ Directory    out/ask-a-signed-8x8-multiplier                        │
+    │ Directory    out/ask_a_signed_8x8_multiplier                        │
     │                                        [ Start ]   [ Quit ]         │
     └─────────────────────────────────────────────────────────────────────┘
 
@@ -42,7 +42,7 @@ F5 = curses.KEY_F5
 
 
 def slug(prompt: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", prompt.lower()).strip("-")[:40] or "ask"
+    return re.sub(r"[^a-z0-9]+", "_", prompt.lower()).strip("_")[:40] or "ask"
 
 
 @dataclass
@@ -54,7 +54,7 @@ class SetupForm:
     passes: int = 0                           # D593: 0 = until stopped; N caps the passes
     screen_only: bool = False
     review: bool = True
-    workdir: str = ""                         # empty: out/ask-<slug of the prompt>
+    workdir: str = ""                         # empty: out/ask_<slug of the prompt> (its name: the id, D786)
     focus: int = 0
     path_input: str = ""                      # the path being typed into the files field
     message: str = ""                         # the last thing the form said (a refused path, a missing prompt)
@@ -64,7 +64,7 @@ class SetupForm:
         return FIELDS[self.focus]
 
     def directory(self) -> str:
-        return self.workdir or str(Path("out") / f"ask-{slug(self.prompt)}")
+        return self.workdir or str(Path("out") / f"ask_{slug(self.prompt)}")
 
     def settings(self) -> dict[str, Any]:
         return {"prompt": self.prompt.strip(), "files": list(self.files), "skills": list(self.skills), "author": self.author,

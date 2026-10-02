@@ -10,7 +10,7 @@ from flux_cli import sandbox
 from flux_loop import load_task
 from flux_loop.document import library_folders
 
-DOC = ("id: kp\nstatement: the fastest\nlanguage: python\nobjectives:\n  - {metric: t, direction: minimize}\n"
+DOC = ("statement: the fastest\nlanguage: python\nobjectives:\n  - {metric: t, direction: minimize}\n"
        "flow:\n  test: 'python3 check.py {artifact}'\n  measure:\n    b: {command: 'python3 b.py {artifact}', metrics: [t]}\n")
 
 

@@ -1,8 +1,7 @@
 # A banked L1's map policy and switching fabric, as a Pareto front over four costs on holdout
 # traffic. The world is `flux_imapping`.
-#     flux task run applications/interconnect_mapping/interconnect_mapping.problem.yaml --db demo-imapping.db --tui
+#     flux task run applications/interconnect_mapping --db demo-imapping.db --tui
 
-id: interconnect_mapping
 statement: >-
   A banked L1 -- 32 single-ported banks of 128-bit rows under 28 read and 24 write ports --
   serving tensors in twelve storage modes, written with one tile shape and read with another:

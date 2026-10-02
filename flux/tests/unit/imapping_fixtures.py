@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 IMAPPING_DOC = (Path(__file__).resolve().parents[2] / "applications" / "interconnect_mapping"
-                / "interconnect_mapping.problem.yaml")
+                / "problem.yaml")
 
 
 def imapping_problem(**params: Any):

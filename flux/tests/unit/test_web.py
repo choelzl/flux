@@ -68,21 +68,21 @@ def test_admins_manage_users_and_users_do_not(server):
 def test_uploads_are_checked_and_users_are_apart(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    files = [("files", ("sw/sw.problem.yaml", b"id: sw\nstatement: x\n")), ("files", ("sw/golden.py", b"def golden(a): return {}\n"))]
+    files = [("files", ("sw/sw.problem.yaml", b"statement: x\n")), ("files", ("sw/golden.py", b"def golden(a): return {}\n"))]
     r = bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H)
-    assert r.status_code == 200 and r.json()["document"] == "sw.problem.yaml" and r.json()["id"] == "sw", r.text
+    assert r.status_code == 200 and r.json()["document"] == "problem.yaml" and r.json()["id"] == "sw", r.text
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 400, "exists"
     assert bob.get("/api/apps/sw/file", params={"path": "golden.py"}).text.startswith("def golden")
     for bad in ("../../../etc/passwd", "/etc/passwd", "a/../../x"):
         assert bob.get("/api/apps/sw/file", params={"path": bad}).status_code == 400, bad
     zbuf = io.BytesIO()
     with zipfile.ZipFile(zbuf, "w") as z:
-        z.writestr("x.problem.yaml", "id: x\n")
+        z.writestr("x.problem.yaml", "")
         z.writestr("../evil.py", "boom")
     assert bob.post("/api/apps", data={"name": "zz"}, files=[("files", ("a.zip", zbuf.getvalue()))], headers=H).status_code == 400
     lbuf = io.BytesIO()
     with zipfile.ZipFile(lbuf, "w") as z:
-        z.writestr("x.problem.yaml", "id: x\n")
+        z.writestr("x.problem.yaml", "")
         info = zipfile.ZipInfo("link")
         info.external_attr = (0o120777 << 16)
         z.writestr(info, "/etc/passwd")
@@ -96,27 +96,27 @@ def test_uploads_are_checked_and_users_are_apart(server):
 def test_files_are_added_to_an_existing_application(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))]
+    files = [("files", ("x.problem.yaml", b"statement: s\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     r = bob.post("/api/apps/x/files", data={"folder": "notes"}, files=[("files", ("a.md", b"# a")), ("files", ("b.md", b"# b"))], headers=H)
     assert r.status_code == 200 and r.json()["written"] == ["notes/a.md", "notes/b.md"], r.text
     assert bob.get("/api/apps/x/file", params={"path": "notes/b.md"}).text == "# b"
     assert bob.post("/api/apps/x/files", files=[("files", (".flux-app.json", b"{}"))], headers=H).status_code == 400
     assert bob.post("/api/apps/x/files", data={"folder": "../.."}, files=[("files", ("e", b"x"))], headers=H).status_code == 400
-    r = bob.post("/api/apps/x/files", files=[("files", ("x.problem.yaml", b"id: renamed\n"))], headers=H)
-    assert r.status_code == 200 and bob.get("/api/apps").json()[0]["id"] == "renamed", "a new document, a new id"
+    r = bob.post("/api/apps/x/files", files=[("files", ("x.problem.yaml", b""))], headers=H)
+    assert r.status_code == 200 and bob.get("/api/apps").json()[0]["id"] == "x", "the folder is the id (D786)"
 
 
 def test_an_admin_sees_every_application_read_only(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b""))], headers=H)
     ada = _client(app, "ada", "correct horse battery")
     everyone = ada.get("/api/admin/apps").json()
     assert [(a["owner"], a["name"]) for a in everyone] == [("bob", "x")]
     info = ada.get("/api/apps/x", params={"owner": "bob"}).json()
     assert info["owner"] == "bob" and info["mine"] is False
-    assert ada.get("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}).text == "id: x\n"
+    assert ada.get("/api/apps/x/file", params={"path": "problem.yaml", "owner": "bob"}).text == ""
     assert bob.get("/api/apps/x", params={"owner": "ada"}).status_code == 403, "users read only their own"
     assert bob.get("/api/admin/apps").status_code == 403
 
@@ -149,17 +149,17 @@ def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeyp
 def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    doc = b"id: x\nstatement: make x\nlanguage: python\nflow:\n  test:\n    - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
+    doc = b"statement: make x\nlanguage: python\nflow:\n  test:\n    - {name: test, run: '{python} {home}/check.py {artifact}'}\n" \
           b"  measure:\n    bench: {command: '{python} {home}/bench.py {artifact}', metrics: [time_ms]}\n" \
           b"objectives:\n  - {metric: time_ms, direction: minimize}\nparams: {n: 5}\n"
     files = [("files", ("x.problem.yaml", doc)), ("files", ("check.py", b"print('0 failing')\n")), ("files", ("bench.py", b"print('time_ms=1')\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     v = bob.get("/api/apps/x/document").json()
-    assert v["document"] == "x.problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["flow"]["test"])
-    new = "id: x\nstatement: make x faster\nlanguage: python\n"
+    assert v["document"] == "problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["flow"]["test"])
+    new = "statement: make x faster\nlanguage: python\n"
     r = bob.put("/api/apps/x/document", json={"text": new, "kept": ["params"]}, headers=H)
     assert r.status_code == 200, r.text
-    text = bob.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).text
+    text = bob.get("/api/apps/x/file", params={"path": "problem.yaml"}).text
     assert "make x faster" in text and "Kept as written" in text and "n: 5" in text
     assert bob.put("/api/apps/x/document", json={"text": "params: {n: 1}\n", "kept": ["params"]}, headers=H).status_code == 400, \
         "a kept key the configurator also wrote is refused"
@@ -173,7 +173,7 @@ def test_before_a_start_the_check_is_known_for_the_inputs_as_they_are(server, tm
     from flux_cli.main import main
 
     app, _ = server
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path / "sw")]) == 0
+    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path)]) == 0
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
@@ -187,7 +187,7 @@ def test_before_a_start_the_check_is_known_for_the_inputs_as_they_are(server, tm
     assert not bob.get("/api/apps/sw/preflight").json()["checked"], "an added file: the check is unknown again"
     doc = bob.get("/api/apps/sw/document").json()["document"]
     before = bob.get("/api/apps/sw/file", params={"path": doc}).text
-    p = bob.post("/api/apps/sw/document/preview", json={"text": "id: sw\nstatement: other\n", "kept": []}, headers=H).json()
+    p = bob.post("/api/apps/sw/document/preview", json={"text": "statement: other\n", "kept": []}, headers=H).json()
     assert p["before"] == before and "statement: other" in p["after"] and p["document"] == doc
     assert bob.get("/api/apps/sw/file", params={"path": doc}).text == before, "a preview writes nothing"
 
@@ -240,7 +240,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     from flux_loop.journal import read_events
 
     app, _ = server
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path / "sw")]) == 0
+    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path)]) == 0
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
@@ -277,7 +277,7 @@ def test_notes_reach_a_running_loop_through_its_inbox(server):
 
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     assert bob.post("/api/apps/x/notes", json={"text": "early"}, headers=H).status_code == 409, "not running"
     proc, rid, d = _fake_start(app, "bob", "x")
     try:
@@ -299,7 +299,7 @@ def test_a_user_can_neither_see_nor_use_another_users_loops(server):
     store = app.state.store
     store.add_user("cy", "a third long secret")
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     proc, _rid, _d = _fake_start(app, "bob", "x")
     try:
         cy = _client(app, "cy", "a third long secret")
@@ -311,7 +311,7 @@ def test_a_user_can_neither_see_nor_use_another_users_loops(server):
         assert cy.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).status_code == 400
         for method, path, kw in (("post", "/api/apps/x/start", {"json": {"passes": 1}}), ("post", "/api/apps/x/check", {}),
                                  ("post", "/api/apps/x/stop", {"json": {"now": True}}), ("post", "/api/apps/x/notes", {"json": {"text": "hi"}}),
-                                 ("put", "/api/apps/x/document", {"json": {"text": "id: y\n"}}),
+                                 ("put", "/api/apps/x/document", {"json": {"text": ""}}),
                                  ("put", "/api/apps/x/file", {"params": {"path": "x.problem.yaml"}, "json": {"text": "id: y"}}),
                                  ("delete", "/api/apps/x", {})):
             r = getattr(cy, method)(path, headers=H, **kw)
@@ -336,7 +336,7 @@ def test_the_workbench_the_log_download_and_an_open_question(server):
 
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n")),
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n")),
                                                      ("files", ("workbench/notes/adders.md", b"# Carry-select wins above 3 GHz\n")),
                                                      ("files", ("workbench/tools/fit.py", b'"""Fit a cubic per segment."""\n'))], headers=H)
     wb = bob.get("/api/apps/x/workbench").json()
@@ -384,7 +384,7 @@ def test_the_turns_are_read_as_they_grow_and_one_from_its_place(server, tmp_path
 
     app, _ = server
     bob = _client(app, "bob", "another long secret")
-    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     proc, _rid, d = _fake_start(app, "bob", "x")
     try:
         rundir = tmp_path / "run"

@@ -38,27 +38,27 @@ refusals. The
 designer prompt also reads the operator's paper library
 (`mentor/knowledge/library/`) through the local BM25 index.
 
-The NLU is a PROBLEM DOCUMENT: `nlu.problem.yaml` says the parts, the objectives,
+The NLU is a PROBLEM DOCUMENT: `problem.yaml` says the parts, the objectives,
 the ladder, the stages, the knowledge sheet and the budget, and names
 the FP16 world (`flux_nlu.world.World`: the toolkit, the transpiler, the exhaustive gate, the
 op mux, the yosys/OpenROAD flows) once. `flux task run` is the demo; another ask in this world
-is a copy of the document with its own numbers and `id:`.
+is a copy of the folder (its name is the id) with its own numbers.
 
 It needs a model: the operators are designed by it (see "Choose a model" in the
 [usage guide](../../../docs/usage-guide.md)).
 
 ```bash
 cd flux
-nix develop --command flux task check applications/nlu/nlu.problem.yaml
-nix develop --command flux task run applications/nlu/nlu.problem.yaml --tui --think
-nix develop --command flux task run applications/nlu/nlu.problem.yaml --agent all   # the agent also calls tools, orchestrates and plans the pass
-nix develop --command flux task run applications/nlu/nlu.problem.yaml   # headless, until `flux stop` or Ctrl-C
+nix develop --command flux task check applications/nlu
+nix develop --command flux task run applications/nlu --tui --think
+nix develop --command flux task run applications/nlu --agent all   # the agent also calls tools, orchestrates and plans the pass
+nix develop --command flux task run applications/nlu   # headless, until `flux stop` or Ctrl-C
 ```
 
 The knobs are the document: `params:` (`ulp_budget`, `clock_period_ps`, `seed`, `test_rounds`),
 the operators as `parts:`, the clock goal in `objectives:` and the loop's budget under
 `budget:`. Another ask -- other operators, a 2-ULP budget, a 1 GHz clock -- is a copy of
-`nlu.problem.yaml` with those changed and its own `id:`. Routing
+the folder (its name is its id) with those changed. Routing
 the composed unit takes over an hour; `--screen-only` stops at synthesis. The record of the
 earlier demo campaigns is `demo-nlu.db` beside the document; `--db
 applications/nlu/demo-nlu.db` resumes from it instead of starting a new record.

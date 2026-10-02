@@ -95,8 +95,7 @@ def brief(question: str, loop: Path, out: Path, record: Path | None, *, inline: 
     except (OSError, ValueError):
         pass
     if not doc:
-        named = sorted(loop.glob("*.problem.yaml")) or sorted(loop.glob("problem.yaml"))
-        doc = named[0].name if named else ""
+        doc = "problem.yaml" if (loop / "problem.yaml").is_file() else ""
     parts = [
         "YOU ANSWER A QUESTION ABOUT A DESIGN LOOP. You read; you change nothing in the loop. A Flux loop "
         "generates candidate designs, checks each with its gate, measures the survivors at its stages and decides "

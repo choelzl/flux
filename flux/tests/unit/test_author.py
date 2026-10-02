@@ -21,8 +21,7 @@ bad = sum(1 for i, w in enumerate(want) if i >= len(got) or got[i] != w)
 print(f"{bad} failing")
 """
 
-DOC = {"id": "digits",
-       "statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
+DOC = {"statement": "The digits 0 to 9, one per line, as the spec in inputs/spec.md says.",
        "language": "text",
        "budget": {"steps": 1, "repair_attempts": 2, "prototype": False},
        "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": '(\\d+) failing'}}}
@@ -53,7 +52,7 @@ def _run(problem_task, loop_replies):
 def test_the_reference_carries_the_guide_and_the_live_examples():
     ref = reference()
     assert "YOU WRITE" not in ref and "## Keys" in ref and "flux rtl test" in ref
-    assert "`mul8/mul8.problem.yaml`" in ref and "`adder16/gen.py`" in ref
+    assert "`mul8/problem.yaml`" in ref and "`adder16/gen.py`" in ref
 
 
 def test_a_model_author_writes_the_problem_the_loop_runs_it_and_the_author_settles_it(tmp_path):
@@ -96,7 +95,7 @@ def test_a_refused_document_goes_back_with_the_reason(tmp_path):
 
 
 def test_a_document_that_never_loads_ends_with_the_reason(tmp_path):
-    author = ScriptedProposer([_reply({"problem.yaml": "id: x\nstatement: y\n"})])
+    author = ScriptedProposer([_reply({"problem.yaml": "statement: y\n"})])
     got = drive(Ask(prompt="x", workdir=tmp_path / "w", passes=1, checks=1), proposer=author,
                 run_pass=lambda t, p: pytest.fail("nothing runs"), say=lambda _m: None)
     assert got["error"] and "does not load" in got["error"]
@@ -122,12 +121,12 @@ def test_a_document_file_list_reads_its_inputs_into_knowledge(tmp_path):
     from flux_loop import TaskSpec
 
     (tmp_path / "ref.txt").write_text("REFERENCE: carry-save beats ripple here\n")
-    task = TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["ref.txt"]}}}, base=tmp_path)
+    task = TaskSpec.from_dict({**DOC, "id": "digits", "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["ref.txt"]}}}, base=tmp_path)
     assert "FILE ref.txt:\nREFERENCE: carry-save" in task.knowledge
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="knowledge.files: 'nope.txt' is not a file"):
-        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["nope.txt"]}}}, base=tmp_path)
+        TaskSpec.from_dict({**DOC, "id": "digits", "flow": {**DOC.get("flow", {}), "knowledge": {"files": ["nope.txt"]}}}, base=tmp_path)
 
 
 def test_the_cli_writes_and_checks_without_running(tmp_path):
@@ -140,14 +139,6 @@ def test_the_cli_writes_and_checks_without_running(tmp_path):
     assert rc == 0 and (tmp_path / "w" / "problem.yaml").is_file()
     task, problem, why = check_document(tmp_path / "w")
     assert task is not None and not why
-
-
-def test_an_author_may_name_the_document_after_the_examples(tmp_path):
-    work = tmp_path / "w"
-    author = ScriptedProposer([_reply({"digits.problem.yaml": yaml.safe_dump(DOC), "check.py": CHECK})])
-    got = drive(Ask(prompt="digits", workdir=work, passes=1), proposer=author,
-                run_pass=_run(None, [json.dumps({"artifact": "0\n"})]), say=lambda _m: None)
-    assert not got["error"] and got["document"].endswith("digits.problem.yaml")
 
 
 def test_a_review_note_goes_back_to_the_author_before_the_loop_runs(tmp_path):
@@ -184,8 +175,7 @@ def test_a_golden_model_that_cannot_run_is_refused_before_the_loop(tmp_path):
         pytest.skip("the rtl tools are needed for `flux rtl test` to be on the tool list")
     work = tmp_path / "w"
     work.mkdir()
-    doc = {"id": "neg",
-           "statement": "negate",
+    doc = {"statement": "negate",
            "language": "verilog",
            "budget": {"steps": 1, "prototype": False},
            "flow": {"test": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
@@ -223,20 +213,3 @@ def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
 
     assert "never sets the top bit of output `s` (9 bits)" in check("(a + b) & 0xFF")
     assert check("a + b") == ""
-
-
-def test_an_agent_authors_copy_under_another_name_is_dropped(tmp_path):
-    """An agent that wrote `x.problem.yaml`, then `problem.yaml` when nudged, leaves one document (D627)."""
-    import sys
-
-    from flux_loop.author import Ask, _agent_turn, document_path
-
-    fake = tmp_path / "agent.py"
-    fake.write_text("import pathlib, sys\nd = pathlib.Path(sys.argv[1]).parent\n"
-                    "(d / 'popcount.problem.yaml').write_text('id: popcount\\n')\n"
-                    "(d / 'problem.yaml').write_text('id:   popcount\\n')\nprint('written')\n")
-    work = tmp_path / "ask"
-    work.mkdir()
-    ask = Ask(prompt="p", workdir=work, author={"command": [sys.executable, str(fake), "{artifact}"]})
-    _agent_turn(ask, "brief", say=lambda _m: None)
-    assert document_path(work).name == "problem.yaml" and not (work / "popcount.problem.yaml").exists()

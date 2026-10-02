@@ -125,11 +125,11 @@ def test_the_frontier_is_fmax_against_area():
 
 
 def macarray_problem(**params):
-    """The MAC-PE problem from `applications/macarray/macarray.problem.yaml`, built as `flux task run` builds it (D533)."""
+    """The MAC-PE problem from `applications/macarray/problem.yaml`, built as `flux task run` builds it (D533)."""
     import yaml
     from flux_loop import PromptProblem, TaskSpec
 
-    doc_path = FLUX_ROOT / "applications" / "macarray" / "macarray.problem.yaml"
+    doc_path = FLUX_ROOT / "applications" / "macarray" / "problem.yaml"
     doc = yaml.safe_load(doc_path.read_text())
     doc["params"] = {**doc["params"], **params}
     if params.get("target_mhz"):

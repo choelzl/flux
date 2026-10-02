@@ -21,7 +21,7 @@ from flux_cli.sandbox_proxy import AllowProxy, allowed
 def _args(tmp_path, **kw):
     doc = tmp_path / "p" / "x.problem.yaml"
     doc.parent.mkdir(exist_ok=True)
-    doc.write_text("id: x\n")
+    doc.write_text("")
     base = dict(file=str(doc), db=str(tmp_path / "rec" / "x.db"), out=None, json=None, plan=None, replies=None,
                 skill=[], no_sandbox=False)
     return types.SimpleNamespace(**{**base, **kw})

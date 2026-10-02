@@ -1,4 +1,4 @@
-"""The bank-mapping world named by `applications/bankmap/bankmap.problem.yaml` (D539): the
+"""The bank-mapping world named by `applications/bankmap/problem.yaml` (D539): the
 D356 chain as one search generator on the loop (D446).
 
 The chain, cheapest and most certain first; each stage is a batch the loop gates with the same

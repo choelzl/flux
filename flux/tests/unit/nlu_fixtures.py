@@ -243,12 +243,12 @@ FIXTURES = {
 
 
 # ---- the NLU as a document (D519) ----------------------------------------------------------
-NLU_DOC = Path(__file__).resolve().parents[2] / "applications" / "nlu" / "nlu.problem.yaml"
+NLU_DOC = Path(__file__).resolve().parents[2] / "applications" / "nlu" / "problem.yaml"
 
 
 def nlu_problem(*, ops: tuple[str, ...], ulp_budget: int = 1, clock_period_ps: float = 1250.0,
                 target_mhz: float | None = None, test_rounds: int = 1, seed: int = 0):
-    """The NLU problem from `applications/nlu/nlu.problem.yaml` with these operators, gate and
+    """The NLU problem from `applications/nlu/problem.yaml` with these operators, gate and
     clock, built as `flux task run` builds it. `ops` is the RTL's operator order and the
     campaign identity's; the parts keep the document's order."""
     import yaml

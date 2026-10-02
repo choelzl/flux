@@ -1,4 +1,4 @@
-"""The problem document (D519): what a `*.problem.yaml` says, how it is loaded and
+"""The problem document (D519): what a `problem.yaml` says, how it is loaded and
 checked, and the vocabulary of its `flow:` -- a statement, a contract, parts, a gate (how a
 candidate is checked), costed stages (how it is measured), objectives (what "better" means), a
 budget, a `space:` of knobs, a `world:` for what prose and numbers cannot say.
@@ -260,7 +260,8 @@ class TaskSpec:
             _HOMES.append(str(Path(base).resolve()))       # D602: its modules resolve beside it
         if isinstance(doc, dict):
             doc = _lift(doc)                               # D775: each box's own settings under `flow`
-        unknown = sorted(set(doc) - DOCUMENT_KEYS - _INTERNAL_KEYS - _LIFTED_KEYS) if isinstance(doc, dict) else []
+        # D786: `id` is the folder's in a file (load_task), the caller's in a document built in code
+        unknown = sorted(set(doc) - DOCUMENT_KEYS - _INTERNAL_KEYS - _LIFTED_KEYS - {"id"}) if isinstance(doc, dict) else []
         if unknown:
             import difflib
 
@@ -920,7 +921,7 @@ def _workbench(value: Any, base: Any) -> str:
 #: Every top-level key a problem document may say; any other is refused with the nearest
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
-    "id", "statement", "contract", "language", "parts", "max_parts",
+    "statement", "contract", "language", "parts", "max_parts",
     "flow", "subtasks", "max_subtasks", "brief", "objectives",
     "joiner", "budget", "params", "workload", "world", "hooks", "ladder", "cache",
     "skills", "workbench"})
@@ -937,11 +938,18 @@ EXTENSIONS = {"systemverilog": ".sv", "verilog": ".v", "vhdl": ".vhd", "python":
               "markdown": ".md", "shell": ".sh", "bash": ".sh", "chisel": ".scala", "scala": ".scala"}
 
 
+#: D786: a problem is a folder; its document is this file in it, and the folder's name is its id.
+DOCUMENT_FILE = "problem.yaml"
+
+
 def load_task(path: str | Path) -> TaskSpec:
-    """A task from a `.json` / `.yaml` / `.yml` file. Every way it can fail is a TaskError
-    that names the file (D590): a missing file, a syntax error with its line, a key no
-    document has, and whatever the document itself gets wrong."""
+    """A task from its folder (its `problem.yaml`) or the document file itself. The id is the
+    folder's name (D786): a document does not say it. Every way it can fail is a TaskError that
+    names the file (D590): a missing file, a syntax error with its line, a key no document has,
+    and whatever the document itself gets wrong."""
     p = Path(path)
+    if p.is_dir():
+        p = p / DOCUMENT_FILE if (p / DOCUMENT_FILE).exists() or not (p / "problem.json").exists() else p / "problem.json"
     if p.suffix not in (".json", ".yaml", ".yml"):
         raise TaskError(f"{p}: a problem document is a .yaml, .yml or .json file")
     if not p.is_file():
@@ -961,11 +969,21 @@ def load_task(path: str | Path) -> TaskSpec:
         raise TaskError(f"{p}: not valid {'JSON' if p.suffix == '.json' else 'YAML'}{where}: "
                         f"{getattr(exc, 'problem', None) or getattr(exc, 'msg', None) or exc}") from exc
     if not isinstance(doc, dict):
-        raise TaskError(f"{p}: a problem document is a mapping of keys (id, statement, gate, ...)")
+        raise TaskError(f"{p}: a problem document is a mapping of keys (statement, language, flow, ...)")
     try:
-        return TaskSpec.from_dict(doc, base=p.parent)
+        return task_in(doc, p.parent)
     except TaskError as exc:
         raise TaskError(f"{p}: {exc}") from exc
+
+
+def task_in(doc: dict[str, Any], home: Path) -> TaskSpec:
+    """The task a document says in its folder `home`: the folder's name is its id (D786)."""
+    folder = Path(home).resolve().name
+    if "id" in doc:
+        raise TaskError(f"a document does not say its `id`: it is its folder's name ({folder}) (D786)")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", folder):
+        raise TaskError(f"the folder's name {folder!r} is the problem's id: letters, digits, _, . or - (D786)")
+    return TaskSpec.from_dict({**doc, "id": folder}, base=home)
 
 
 def request_for(task: TaskSpec, **overrides: Any) -> LoopRequest:

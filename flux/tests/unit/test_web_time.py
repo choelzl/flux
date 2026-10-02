@@ -115,7 +115,7 @@ def test_a_restarted_server_finds_a_running_loop_and_stops_it(tmp_path):
     app = create_app(tmp_path / "data", sandbox=False)
     c = TestClient(app)
     c.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers={"X-Flux": "1"})
-    files = [("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))]
+    files = [("files", ("x.problem.yaml", b"statement: s\n"))]
     assert c.post("/api/apps", data={"name": "x"}, files=files, headers={"X-Flux": "1"}).status_code == 200
     d = tmp_path / "data" / "users" / "bob" / "apps" / "x"
     lf = loop_files(d)

@@ -1,7 +1,6 @@
 # A conflict-free address-to-bank mapping, or the proof there is none. The world is `flux_bankmap`.
-#     flux task run applications/bankmap/bankmap.problem.yaml --db demo-bankmap.db --tui
+#     flux task run applications/bankmap --db demo-bankmap.db --tui
 
-id: bankmap
 statement: >-
   An address-to-bank mapping for a memory of 8 banks that is conflict-free for 4 concurrent
   accesses at each of the strides 1, 8 and 16, for every start address of a 20-bit space:

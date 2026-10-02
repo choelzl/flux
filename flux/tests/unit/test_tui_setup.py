@@ -54,7 +54,7 @@ def test_the_form_takes_a_prompt_files_and_choices_and_starts(tmp_path):
     f.handle(32)
     assert f.screen_only is True
     s = f.settings()
-    assert s["workdir"] == "out/ask-an-8-bit-popcount-at-2-ghz" and s["files"] == [str(spec)] and s["review"] is True
+    assert s["workdir"] == "out/ask_an_8_bit_popcount_at_2_ghz" and s["files"] == [str(spec)] and s["review"] is True
     while f.field != "start":
         f.handle(curses.KEY_DOWN)
     assert f.handle(10) == "start"

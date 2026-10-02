@@ -28,7 +28,7 @@ it tried. Website: <https://choelzl.github.io/flux/>.
 
    ```bash
    .venv/bin/flux new primes --kind sweep
-   .venv/bin/flux task run primes/primes.problem.yaml --passes 6    # a pass a point
+   .venv/bin/flux task run primes --passes 6    # a pass a point
    ```
 
 Extras: `pip install -e "./flux[bankmap]"` (z3), `[nlu]` (scipy), `[zigzag]`, `[all]`.
@@ -54,7 +54,7 @@ Extras: `pip install -e "./flux[bankmap]"` (z3), `[nlu]` (scipy), `[zigzag]`, `[
 4. Run a first hardware search, no AI model needed (about three minutes):
 
    ```bash
-   flux task run applications/adder16/adder16.problem.yaml --screen-only --passes 12
+   flux task run applications/adder16 --screen-only --passes 12
    ```
 
 ### Add an AI model
@@ -68,7 +68,7 @@ model writes:
 export FLUX_REMOTE_BASE_URL=http://my-server:8080
 export FLUX_REMOTE_MODEL=<model name on that server>
 export FLUX_REMOTE_API_KEY=<key>                   # only if the server wants one
-flux task run applications/primes/primes.problem.yaml --passes 3
+flux task run applications/primes --passes 3
 ```
 
 To set them once for this machine, put the same lines (without `export`) in
@@ -142,8 +142,8 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 
 ```bash
 flux new myproblem --kind rtl        # or python, sweep, rtl-sweep, tune
-flux task check myproblem/myproblem.problem.yaml
-flux task run myproblem/myproblem.problem.yaml --passes 1
+flux task check myproblem
+flux task run myproblem --passes 1
 ```
 
 Edit the statement, the contract and the golden model (or `check.py`) to make it yours. Prefer a

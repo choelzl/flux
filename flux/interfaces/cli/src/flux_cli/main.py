@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Flux: an AI-driven design-space exploration loop for hardware. A model or a coding agent "
                     "proposes designs, real tools check and measure them, the loop decides and keeps a record.",
         epilog="start with:\n  flux new myproblem --kind python|rtl|sweep|tune|rtl-sweep\n"
-               "  flux task check <doc.problem.yaml>\n  flux task run <doc.problem.yaml>\n"
+               "  flux task check <folder>\n  flux task run <folder>\n"
                "  flux ask \"what you want\" --file spec.pdf\ndocs: README.md and docs/usage-guide.md",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(
@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("--file", "-f", action="append", default=[], help="An input: a spec, code, a reference, a PDF, tests (repeatable; a folder is copied whole).")
     ask_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, for the author and the designers (repeatable).")
     ask_p.add_argument("--author", default="model", help="Who writes the problem: model (default), a coding agent preset (opencode, claude, codex), or a JSON agent spec.")
-    ask_p.add_argument("--dir", default=None, help="The working directory (default: ./out/ask-<slug>).")
+    ask_p.add_argument("--dir", default=None, help="The working directory (default: ./out/ask_<slug>; its name is the problem's id).")
     ask_p.add_argument("--passes", type=int, default=0, help="Stop after N passes (default: run until stopped -- `flux stop`, Ctrl-C, the TUI).")
     ask_p.add_argument("--checks", type=int, default=3, help="Repairs of a refused document per pass (default 3).")
     ask_p.add_argument("--no-run", action="store_true", help="Write and check the document; run nothing.")

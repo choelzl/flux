@@ -1,4 +1,4 @@
-"""The interconnect_mapping world (D539): the `world:` of `interconnect_mapping.problem.yaml`,
+"""The interconnect_mapping world (D539): the `world:` of `applications/interconnect_mapping/problem.yaml`,
 the banked-L1 conflict study as document-problem hooks, one search generator over the cycle law.
 
   batch 1     stage A finds interconnects (`interconnect_loop`); stage B builds the policy

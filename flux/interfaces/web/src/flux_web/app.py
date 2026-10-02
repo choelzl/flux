@@ -51,7 +51,7 @@ class UserChange(BaseModel):
 
 class DocText(BaseModel):
     name: str
-    filename: str = "problem.problem.yaml"
+    filename: str = "problem.yaml"
     text: str
 
 
@@ -1256,14 +1256,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         """Whether a document, not yet saved, loads (D757): what Direct edit says before it writes."""
         import yaml
 
-        from flux_loop import TaskSpec
+        from flux_loop.document import task_in
 
         d = editor(user, owner, name)[0].app(name)
         try:
             raw = yaml.safe_load(body.text)
             if not isinstance(raw, dict):
-                return {"ok": False, "error": "the document is not a mapping of keys (id:, statement:, ...)"}
-            TaskSpec.from_dict(raw, base=d)
+                return {"ok": False, "error": "the document is not a mapping of keys (statement:, flow:, ...)"}
+            task_in(raw, d)
         except yaml.YAMLError as exc:
             return {"ok": False, "error": f"not YAML: {' '.join(str(exc).split())[:300]}"}
         except Exception as exc:  # noqa: BLE001 -- what the loader says is what the user reads

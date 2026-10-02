@@ -13,11 +13,11 @@ import pytest
 from flux_loop import TaskError, TaskSpec
 from flux_loop.agent import AgentSpec, agent_spec, run_turn, workbench_link, workbench_section
 
-DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits.task.json"
+DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits" / "problem.json"
 
 
 def test_the_document_says_where_and_the_default_is_beside_it(tmp_path):
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     assert TaskSpec.from_dict(doc, base=tmp_path).workbench == str((tmp_path / "workbench").resolve())
     assert TaskSpec.from_dict({**doc, "workbench": "tools-and-notes"}, base=tmp_path).workbench.endswith("/tools-and-notes")
     assert TaskSpec.from_dict({**doc, "workbench": "/abs/wb"}, base=tmp_path).workbench == "/abs/wb"

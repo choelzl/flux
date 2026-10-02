@@ -18,15 +18,15 @@ def test_a_document_that_is_not_yaml_is_said_with_the_loaders_words(tmp_path, mo
     store.add_user("bob", "another long secret")
     c = TestClient(create_app(tmp_path / "data", sandbox=False))
     assert c.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H).status_code == 200
-    files = [("files", ("x.problem.yaml", b"id: x\nstatement: >-\n  s\n"))]
+    files = [("files", ("x.problem.yaml", b"statement: >-\n  s\n"))]
     assert c.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     assert "not valid YAML" not in c.get("/api/apps/x/document").json()["error"], "YAML, if not yet a whole problem"
-    put = c.put("/api/apps/x/file?path=x.problem.yaml", json={"text": "id: x\nstatement: >- broken\n  s\n"}, headers=H)
+    put = c.put("/api/apps/x/file?path=problem.yaml", json={"text": "statement: >- broken\n  s\n"}, headers=H)
     assert put.status_code == 200
     got = c.get("/api/apps/x/document")
     assert got.status_code == 200, got.text
     v = got.json()
-    assert v["raw"] is None and v["normal"] is None and "not valid YAML (line 2" in v["error"]
+    assert v["raw"] is None and v["normal"] is None and "not valid YAML (line 1" in v["error"]
 
 
 def test_views_still_refuses_a_document_that_is_not_a_mapping(tmp_path):

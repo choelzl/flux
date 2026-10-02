@@ -61,22 +61,23 @@ def _replies(tmp_path: Path, replies: list[str]) -> Path:
 def test_the_digits_example_runs_through_the_cli_and_writes_its_artifact(tmp_path):
     replies = _replies(tmp_path, ["\n".join(str(i) for i in range(10)) + "\n"])
     out = tmp_path / "digits.txt"
-    r = flux("task", "run", str(FLUX / "core/loop/examples/digits.task.json"), "--db", str(tmp_path / "d.db"),
+    r = flux("task", "run", str(FLUX / "core/loop/examples/digits/problem.json"), "--db", str(tmp_path / "d.db"),
              "--replies", str(replies), "--out", str(out), timeout=300)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
     assert "ADMITTED digits: digits#1" in r.stdout and "DECISION digits#1 [gate" in r.stdout
     assert "WHAT THIS RUN ESTABLISHED" in r.stdout
     assert out.read_text().split() == [str(i) for i in range(10)]
-    again = flux("task", "run", str(FLUX / "core/loop/examples/digits.task.json"), "--db", str(tmp_path / "d.db"),
+    again = flux("task", "run", str(FLUX / "core/loop/examples/digits/problem.json"), "--db", str(tmp_path / "d.db"),
                  "--replies", str(replies), timeout=300)
     assert again.returncode == 0 and "digits#1" in again.stdout               # resumed from the record
     # with no --out the artifact lands beside the document, under out/, never in the cwd (D578)
     import shutil as _sh
 
-    doc = tmp_path / "digits.task.json"
-    _sh.copy(FLUX / "core/loop/examples/digits.task.json", doc)
-    r = flux("task", "run", str(doc), "--replies", str(replies), timeout=300)
-    assert r.returncode == 0 and (tmp_path / "out" / "digits.txt").is_file() and (tmp_path / "out" / "digits.db").is_file()
+    home = tmp_path / "digits"                       # D786: the folder is the problem, its name the id
+    home.mkdir()
+    _sh.copy(FLUX / "core/loop/examples/digits/problem.json", home / "problem.json")
+    r = flux("task", "run", str(home), "--replies", str(replies), timeout=300)
+    assert r.returncode == 0 and (home / "out" / "digits.txt").is_file() and (home / "out" / "digits.db").is_file()
     assert not (FLUX / "digits.txt").exists() and not (FLUX / "digits.db").exists()
 
 
@@ -161,7 +162,7 @@ def test_the_prefetcher_document_runs_when_its_simulator_and_traces_are_there(tm
 @pytest.mark.heavy
 def test_the_mul8_example_runs_with_no_code_of_its_own(tmp_path):
     """A document with a prompt, a golden model and the rtl commands as gate and stages, a scripted model writing the module (D579)."""
-    doc = FLUX / "applications/mul8/mul8.problem.yaml"
+    doc = FLUX / "applications/mul8/problem.yaml"
     if not _tools_ok(doc):
         pytest.skip("verilator/yosys/openroad are not on PATH")
     module = ("module mul8(input logic signed [7:0] a, input logic signed [7:0] w, output logic signed [15:0] p);\n"
@@ -175,7 +176,7 @@ def test_the_mul8_example_runs_with_no_code_of_its_own(tmp_path):
 @pytest.mark.heavy
 def test_the_adder16_dse_runs_with_no_world(tmp_path):
     """Every point of a generated space is proved and screened, and the decision is one of them (D581)."""
-    doc = FLUX / "applications/adder16/adder16.problem.yaml"
+    doc = FLUX / "applications/adder16/problem.yaml"
     if not _tools_ok(doc):
         pytest.skip("verilator/yosys are not on PATH")
     # one pass: a sweep with no model waits once every point is measured (D593), so cap it
@@ -189,7 +190,7 @@ def test_the_adder16_dse_runs_with_no_world(tmp_path):
 @pytest.mark.heavy
 def test_the_npu_gemm_sweep_picks_the_smallest_array_that_makes_its_cycles(tmp_path):
     """An accelerator sized by ZigZag from a document (D625): 32 PEs is the least area at <= 500 cycles."""
-    doc = FLUX / "applications/npu_gemm/npu_gemm.problem.yaml"
+    doc = FLUX / "applications/npu_gemm/problem.yaml"
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "n.db"), "--passes", "1",
              "--out", str(tmp_path / "n.yaml"), timeout=900)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]

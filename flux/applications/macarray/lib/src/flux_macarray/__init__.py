@@ -1,5 +1,5 @@
 """MAC processing-element microarchitecture study (docs/decisions.md D365, D533): the world
-`applications/macarray/macarray.problem.yaml` names, and the pieces it is made of."""
+`applications/macarray/problem.yaml` names, and the pieces it is made of."""
 
 from .config import DEFAULT, MULTIPLIERS, PIPELINES, REDUCERS, PeConfig, Shape
 from .invent import INVENTED_DIR, Invention, library

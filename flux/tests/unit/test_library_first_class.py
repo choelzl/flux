@@ -95,8 +95,9 @@ def test_an_agent_brief_carries_the_library_section_with_paths(lib, tmp_path):
 def test_task_check_says_what_the_library_holds(lib, tmp_path, capsys, monkeypatch):
     from flux_cli.main import main
 
-    doc = tmp_path / "sq.problem.yaml"
-    doc.write_text(yaml.safe_dump(DOC))
+    doc = tmp_path / "sq" / "problem.yaml"
+    doc.parent.mkdir()
+    doc.write_text(yaml.safe_dump({k: v for k, v in DOC.items() if k != "id"}))
     main(["task", "check", str(doc)])
     assert "library: 2 documents (0 PDFs, pdftotext " in capsys.readouterr().out
     monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "empty"))

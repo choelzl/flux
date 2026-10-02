@@ -14,7 +14,7 @@ from flux_loop import PromptProblem, TaskError, TaskSpec, request_for, run_loop
 from flux_loop.agent import DECIDE, agent_spec, missing_agent, question_in
 from flux_loop.document import describe_flow
 
-DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits.task.json"
+DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits" / "problem.json"
 
 FAKE_AGENT = '''
 import sys, re
@@ -42,7 +42,7 @@ elif mode == "fail":
 def _doc(tmp_path: Path, mode: str) -> dict:
     fake = tmp_path / "agent.py"
     fake.write_text(FAKE_AGENT)
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     doc["flow"] = {**doc.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), mode, "{prompt_file}", "{artifact}"], "timeout_s": 60}}}
     doc["budget"] = {"steps": 2, "repair_attempts": 2, "prototype": False}
     return doc
@@ -101,8 +101,8 @@ def test_the_presets_and_the_missing_binary():
     with pytest.raises(ValueError, match="quetions is not one of"):
         agent_spec({"preset": "opencode", "quetions": "model"})
     with pytest.raises(TaskError, match="flow.generate.agent"):
-        TaskSpec.from_dict({**json.loads(DIGITS.read_text()), "flow": {**json.loads(DIGITS.read_text()).get("flow", {}), "generate": {"agent": "cursor"}}})
-    doc = {**json.loads(DIGITS.read_text()), "flow": {**json.loads(DIGITS.read_text()).get("flow", {}), "generate": {"agent": "claude"}}}
+        TaskSpec.from_dict({**{"id": "digits", **json.loads(DIGITS.read_text())}, "flow": {**{"id": "digits", **json.loads(DIGITS.read_text())}.get("flow", {}), "generate": {"agent": "cursor"}}})
+    doc = {**{"id": "digits", **json.loads(DIGITS.read_text())}, "flow": {**{"id": "digits", **json.loads(DIGITS.read_text())}.get("flow", {}), "generate": {"agent": "claude"}}}
     task = TaskSpec.from_dict(doc)
     assert task.generator == {"agent": "claude"}
     missing = PromptProblem(task).tools_missing()
@@ -147,7 +147,7 @@ else:
 def _asking(tmp_path: Path, mode: str, questions: str, **extra) -> dict:
     fake = tmp_path / "ask.py"
     fake.write_text(ASKING_AGENT)
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     doc["flow"] = {**doc.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), mode, "{prompt_file}", "{artifact}"],
                                                 "timeout_s": 60, "questions": questions, **extra}}}
     doc["budget"] = {"steps": 1, "repair_attempts": 1, "prototype": False}
@@ -219,7 +219,7 @@ def test_an_agent_that_keeps_asking_is_refused_after_max_questions(tmp_path):
 def test_the_answer_resumes_the_agents_own_session(tmp_path):
     fake = tmp_path / "resume.py"
     fake.write_text(RESUMING_AGENT)
-    doc = json.loads(DIGITS.read_text())
+    doc = {"id": "digits", **json.loads(DIGITS.read_text())}
     doc["flow"] = {**doc.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), "first", "{artifact}"],
                                                 "resume": ["{python}", str(fake), "resume", "{session}", "{answer}", "{artifact}"],
                                                 "output": "opencode", "timeout_s": 60}}}

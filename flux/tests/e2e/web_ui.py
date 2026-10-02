@@ -273,7 +273,7 @@ class Run:
 def flows(r: Run) -> None:
     b = r.b
     # a loop to upload: a sweep, no model needed
-    subprocess.run(["flux", "new", "--kind", "sweep", "sw", "--dir", str(r.files / "sw")], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["flux", "new", "--kind", "sweep", "sw", "--dir", str(r.files)], check=True, stdout=subprocess.DEVNULL)
 
     def login_refused():
         b.go(f"{r.url}/#/login")
@@ -330,9 +330,9 @@ def flows(r: Run) -> None:
         b.attach("#main input[type=file]:not([webkitdirectory])", "\n".join(paths))   # several at once: one per line
         r.button("Upload")
         b.wait("location.hash === '#/app/sw'", timeout=30, what="the new loop's page")
-        head = b.wait("document.querySelector('.page-head') && document.querySelector('.page-head').innerText.includes('sw.problem.yaml')"
+        head = b.wait("document.querySelector('.page-head') && document.querySelector('.page-head').innerText.includes('problem.yaml')"
                       " && document.querySelector('.page-head').innerText", what="the loop's own header")
-        r.check("uploaded: the loop's page with its document", "sw.problem.yaml" in head, head)
+        r.check("uploaded: the loop's page with its document", "problem.yaml" in head, head)
         r.clean("upload")
     r.step("upload", upload)
 
@@ -405,7 +405,7 @@ def flows(r: Run) -> None:
         r.dialog_button("Save")
         b.wait("!document.querySelector('dialog.dlg[open]')")
         for _ in range(50):                                              # the save may still be on its way
-            got = r.api("/apps/sw/file?path=sw.problem.yaml")
+            got = r.api("/apps/sw/file?path=problem.yaml")
             if "timeout_s: 90" in got["body"]:
                 break
             time.sleep(0.2)
@@ -692,8 +692,8 @@ def flows(r: Run) -> None:
         a check that fails), after (why a start stopped, a tool that broke), and around (a refused
         setting, a session that ended)."""
         r.login("bob")
-        text = "id: broken\nstatement: a gate whose checker is not installed\nlanguage: python\nflow: {test: {test: [no-such-checker, '{artifact}']}}\nobjectives: []\n"
-        made = r.api("/apps/from-text", "POST", {"name": "broken", "filename": "broken.problem.yaml", "text": text})
+        text = "statement: a gate whose checker is not installed\nlanguage: python\nflow: {test: {test: [no-such-checker, '{artifact}']}}\nobjectives: []\n"
+        made = r.api("/apps/from-text", "POST", {"name": "broken", "filename": "problem.yaml", "text": text})
         r.check("a loop whose check fails is made", made["status"] == 200, made["body"][:200])
         # before: Direct edit says a document that does not load, and asks
         r.page("#/app/broken/settings/problem/edit", "document.querySelector('#main textarea')", "Direct edit")

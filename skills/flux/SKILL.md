@@ -8,7 +8,7 @@ description: Drive Flux, the AI-driven design-space exploration loop for hardwar
 Flux runs one loop: a generator proposes candidates (a model, a script over knobs, or a coding
 agent), a **gate** refuses the wrong ones with a real test, **stages** measure the survivors
 cheapest first, and the loop **decides** against the objectives and keeps a **record**. What a
-run does is said by a **problem document** (`*.problem.yaml`). You never write the design
+run does is said by a **problem document** (`<folder>/problem.yaml`; the folder's name is its id). You never write the design
 yourself inside Flux's loop: you write or pick the problem, run it, and read the answer.
 
 ## Where it runs
@@ -27,10 +27,10 @@ yourself inside Flux's loop: you write or pick the problem, run it, and read the
 
 1. **An existing document** (the ask matches one): `applications/` holds adder16, mul8
    (RTL with a golden model), bankmap, interconnect_mapping, macarray, nlu, prefetcher. Copy the
-   document next to it (or anywhere) and change `params:`, `objectives:`, `budget:`, `flow:` to
+   folder (its name is the copy's id) and change `params:`, `objectives:`, `budget:`, `flow:` to
    ask a different question; a changed ask opens its own record.
 2. **A prompt and files, and let Flux write the problem**:
-   `flux ask "what you want" --file spec.pdf --file ref.sv [--author model|opencode|claude|codex] [--dir out/ask-x] [--passes N] [--no-run]`.
+   `flux ask "what you want" --file spec.pdf --file ref.sv [--author model|opencode|claude|codex] [--dir out/ask_x] [--passes N] [--no-run]`.
    The author writes `problem.yaml` + its golden model/scripts, Flux checks the document, runs
    it, and the author revises between passes. Use `--no-run` to review the document first.
 3. **Write the document yourself** (you know exactly what is wanted): read
@@ -38,7 +38,7 @@ yourself inside Flux's loop: you write or pick the problem, run it, and read the
    reference and the rules for golden models. Minimal RTL shape:
 
 ```yaml
-id: mul8
+# mul8/problem.yaml -- the folder's name is the problem's id; the document does not say it
 statement: >-            # the ask in prose: the model reads it
   A combinational signed 8x8 -> 16-bit multiplier ...
 contract: >-             # rules every candidate must follow: ports, names, what is forbidden

@@ -20,6 +20,7 @@ LOOP_FILES = 100_000
 PART_BYTES = 64 * 1024 * 1024           # one part of a file sent in parts
 TEXT_MAX = 2 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
+DOCUMENT_FILE = "problem.yaml"            # D786: a loop's document; the loop's name is its id
 DOC_SUFFIXES = (".problem.yaml", ".problem.yml", ".task.json", ".task.yaml", ".yaml", ".yml", ".json")
 
 
@@ -87,20 +88,22 @@ class Workspace:
             rels = [str(PurePosixPath(*PurePosixPath(r).parts[1:])) for r in rels]
         doc = _pick_document(rels)
         if doc is None:
-            raise WorkspaceError("no problem document among the files (a *.problem.yaml or *.task.json)")
+            raise WorkspaceError("no problem document among the files (problem.yaml)")
+        rels = [DOCUMENT_FILE if r == doc else r for r in rels]          # D786: a loop's document is its problem.yaml
+        doc = DOCUMENT_FILE
         d.mkdir(parents=True, exist_ok=True)
         for rel, (_p, content) in zip(rels, files):
             target = d / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
-        meta = {"document": doc, "id": _doc_id(d / doc) or name}
+        meta = {"document": doc, "id": name}                          # D786: the loop's name is the problem's id
         (d / ".flux-app.json").write_text(json.dumps(meta))
         return meta
 
     def add(self, name: str, files: list[tuple[str, bytes]], sub: str = "") -> list[str]:
         """Files added to (or replacing files in) an existing application, under `sub`; a single
         .zip is unpacked. The same checks as a new one."""
-        d = self.app(name)
+        self.app(name)                                     # it exists
         unzipped = len(files) == 1 and files[0][0].lower().endswith(".zip")
         if unzipped:
             files = _unzip(files[0][1])
@@ -121,10 +124,6 @@ class Workspace:
             target.unlink(missing_ok=True)                # D700: a linked file is replaced, not written through
             target.write_bytes(content)
             written.append(rel)
-        meta = self.meta(name)
-        if meta.get("document") in written:
-            meta["id"] = _doc_id(d / meta["document"]) or meta.get("id")
-            (d / ".flux-app.json").write_text(json.dumps(meta))
         return written
 
     def _check_room(self, name: str, more_bytes: int, more_files: int) -> None:
@@ -208,7 +207,7 @@ class Workspace:
             except OSError:
                 shutil.copy2(src / rel, target)
                 copied += 1
-        meta = {**(self.meta(name) if replace else {}), "document": doc, "id": _doc_id(d / doc) or name, "source": str(src)}
+        meta = {**(self.meta(name) if replace else {}), "document": doc, "id": name, "source": str(src)}
         (d / ".flux-app.json").write_text(json.dumps(meta))
         return {**meta, "linked": linked, "copied": copied}
 
@@ -222,10 +221,8 @@ class Workspace:
         return d
 
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
-        rel = safe_rel(filename)
-        if not rel.endswith(DOC_SUFFIXES):
-            raise WorkspaceError("the document's name ends in .problem.yaml or .task.json")
-        return self.create(name, [(rel, text.encode())], replace=(self.root / name).exists())
+        """A loop from a document's text; whatever its file was called, it is the loop's problem.yaml (D786)."""
+        return self.create(name, [(DOCUMENT_FILE, text.encode())], replace=(self.root / name).exists())
 
     def delete(self, name: str) -> None:
         shutil.rmtree(self.app(name))
@@ -373,10 +370,6 @@ class Workspace:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.unlink(missing_ok=True)                      # D700: a linked file is replaced, not written through
         p.write_text(text)
-        meta = self.meta(name)
-        if rel == meta.get("document"):
-            meta["id"] = _doc_id(p) or meta.get("id")
-            (self.app(name) / ".flux-app.json").write_text(json.dumps(meta))
 
 
 def _unzip(data: bytes) -> list[tuple[str, bytes]]:
@@ -408,6 +401,8 @@ def _check_batch(files: list[tuple[str, bytes]], unzipped: bool = False) -> None
 
 def _pick_document(rels: list[str]) -> str | None:
     top = [r for r in rels if "/" not in r]
+    if DOCUMENT_FILE in top:                                 # D786: the document is problem.yaml
+        return DOCUMENT_FILE
     for suffixes in ((".problem.yaml", ".problem.yml"), (".task.json", ".task.yaml")):
         hits = [r for r in top if r.endswith(suffixes)]
         if hits:
@@ -416,16 +411,3 @@ def _pick_document(rels: list[str]) -> str | None:
     return sorted(hits)[0] if len(hits) == 1 else None
 
 
-def _doc_id(path: Path) -> str | None:
-    """The document's `id`, read as data (nothing of it runs here)."""
-    try:
-        text = path.read_text()
-        if path.suffix == ".json":
-            doc = json.loads(text)
-        else:
-            import yaml
-
-            doc = yaml.safe_load(text)
-        return str(doc.get("id")) if isinstance(doc, dict) and doc.get("id") else None
-    except Exception:  # noqa: BLE001 -- a document `flux task check` will explain
-        return None

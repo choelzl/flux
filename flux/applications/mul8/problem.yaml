@@ -1,7 +1,6 @@
 # A signed 8x8 multiplier from a prompt and a golden model; no code of its own.
-#     flux task run applications/mul8/mul8.problem.yaml [--screen-only]
+#     flux task run applications/mul8 [--screen-only]
 
-id: mul8
 statement: >-
   A combinational signed 8x8 -> 16-bit multiplier in SystemVerilog: module `mul8` with inputs
   `a` and `w` (`input logic signed [7:0]`) and output `p` (`output logic signed [15:0]`), the

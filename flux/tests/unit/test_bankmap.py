@@ -27,7 +27,7 @@ def _req(strides, n, banks=8, bits=12, **kw):
                           z3_seconds=20, **kw)
 
 
-BANKMAP_DOC = Path(__file__).resolve().parents[2] / "applications" / "bankmap" / "bankmap.problem.yaml"
+BANKMAP_DOC = Path(__file__).resolve().parents[2] / "applications" / "bankmap" / "problem.yaml"
 
 
 def _problem(**params):
@@ -421,7 +421,7 @@ def test_explicit_stages_do_not_inherit_the_crossbar_note(tmp_path):
     from flux_llm import ScriptedProposer
     from flux_loop import PromptProblem, TaskSpec, request_for, run_loop
 
-    path = Path(__file__).resolve().parents[2] / "applications/bankmap/bankmap.problem.yaml"
+    path = Path(__file__).resolve().parents[2] / "applications/bankmap/problem.yaml"
     doc = yaml.safe_load(path.read_text())
     doc["params"] = {**doc.get("params", {}), "strides": [1], "concurrent": 2, "banks": 8, "z3_seconds": 2, "llm_round": 0,
                      "topology": None, "stages": [{"bits": [1, 2], "capacity": 1, "lanes": 2, "lane_key": "mod"}]}

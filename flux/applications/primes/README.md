@@ -6,12 +6,12 @@ A Python problem for Flux, written by `flux new primes --kind python`. The model
 
 | file | what it is |
 |---|---|
-| `primes.problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
+| `problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
 | `check.py` | the gate: known cases against a reference, prints `N failing of M` |
 | `bench.py` | the stage: times the candidate, prints `time_ms=` |
 
-    flux task check primes.problem.yaml
-    flux task run primes.problem.yaml --passes 1      # one pass; without --passes it runs until stopped
+    flux task check applications/primes
+    flux task run applications/primes --passes 1      # one pass; without --passes it runs until stopped
 
 A model is needed: a local Ollama, or `FLUX_REMOTE_BASE_URL` / `FLUX_REMOTE_MODEL` for a server
 (README.md, "A run with a model"). To make it yours, change the statement and the contract,

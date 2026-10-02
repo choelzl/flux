@@ -481,12 +481,12 @@ async function sendFiles(name, entries, { create = false, folder = "", onProgres
   // the paths as given: a dropped folder's name is gone already (dropZone), a chosen folder's is taken off by its caller
   let list = entries.map(e => ({ file: e.file, path: String(e.path || e.file.name).replace(/^\/+/, "") }));
   if (folder) list = list.map(e => ({ ...e, path: `${folder.replace(/^\/+|\/+$/g, "")}/${e.path}` }));
-  const isDoc = (e) => !e.path.includes("/") && /\.(problem\.ya?ml|task\.(json|ya?ml))$/i.test(e.path);
+  const isDoc = (e) => !e.path.includes("/") && /(^|\.)(problem\.ya?ml|task\.(json|ya?ml))$/i.test(e.path);   // D786: problem.yaml
   list.sort((a, b) => (isDoc(b) ? 1 : 0) - (isDoc(a) ? 1 : 0));
   const total = list.reduce((n, e) => n + e.file.size, 0);
   let sent = 0, written = 0, made = !create;
   const small = list.filter(e => e.file.size <= BATCH_BYTES), big = list.filter(e => e.file.size > BATCH_BYTES);
-  if (create && !small.some(isDoc)) throw new Error("No problem document (a *.problem.yaml) at the top of the upload.");
+  if (create && !small.some(isDoc)) throw new Error("No problem document (problem.yaml) at the top of the upload.");
   for (let i = 0; i < small.length;) {
     const batch = [];
     let bytes = 0;
@@ -636,7 +636,7 @@ function uploadForm() {
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
     }
   }, { cls: "primary" });
-  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A loop you already have: its problem document (a *.problem.yaml) and the files it runs, as a folder, files or a .zip."),
+  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A loop you already have: its problem.yaml and the files it runs, as a folder, files or a .zip. The loop's name is the problem's id."),
     h("label", { class: "stack" }, "Name", name), dz, said,
     h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)),
     h("div", { class: "form-actions" }, go)));
@@ -784,7 +784,7 @@ async function appsPage() {
 async function newPage() {
   const show = pageShow();
   const name = h("input", { placeholder: "application name", required: true });
-  const file = h("input", { value: "problem.problem.yaml", size: 28 });
+  const file = h("input", { value: "problem.yaml", size: 28 });
   const ed = codeEditor("", "yaml");
   ed.textarea.placeholder = "id: my_problem\nstatement: >-\n  What the design must do.\n...";
   const text = ed.textarea;
@@ -2427,7 +2427,7 @@ async function crafterView(body, name, owner) {
     save: async (yaml, state) => {
       const name = String(state.id || "").trim();
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error("Give the loop a name first (1. What do you want? › Loop name): a letter, then letters, digits or _.");
-      await api("/apps/from-text", { method: "POST", body: { name, filename: `${name}.problem.yaml`, text: yaml } });
+      await api("/apps/from-text", { method: "POST", body: { name, filename: "problem.yaml", text: yaml } });
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
       toast(`${name} created${n ? ` with ${n} file(s)` : ""}`, "ok");
@@ -2459,7 +2459,7 @@ async function directEdit(body, name) {
     const r = await fetch(`/api${owned(`/apps/${enc(name)}/file?path=${enc(doc)}`)}`, { credentials: "same-origin" });
     before = r.ok ? await r.text() : "";
   }
-  const fileIn = h("input", { value: doc || "problem.problem.yaml", class: "mono", style: "width:280px", readonly: doc ? true : null });
+  const fileIn = h("input", { value: doc || "problem.yaml", class: "mono", style: "width:280px", readonly: doc ? true : null });
   var ed = codeEditor(before, "yaml");
   const save = act("Save", async () => {
     const text = ed.textarea.value, file = fileIn.value.trim();

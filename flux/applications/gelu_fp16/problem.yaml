@@ -1,6 +1,5 @@
 # An FP16 GELU as a formula: a coding agent writes the Python prototype, the loop spells the RTL.
 
-id: gelu_fp16
 statement: >-
   A purely combinational SystemVerilog module `gelu_fp16` computing the tanh form of the
   Gaussian Error Linear Unit for IEEE 754 binary16 (FP16) inputs:

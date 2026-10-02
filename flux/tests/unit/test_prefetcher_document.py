@@ -1,5 +1,5 @@
 """The prefetcher as a worldless document: `prefetcher.problem.yaml` on `bingo.py`, and
-`invent.problem.yaml` on `flux champsim`. The loop runs against the FAKE ChampSim of
+`applications/prefetcher_invent/problem.yaml` on `flux champsim`. The loop runs against the FAKE ChampSim of
 test_champsim_generic.py, so nothing here needs the traces or the simulator."""
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ def _bingo():
 
 
 def test_both_documents_load():
-    task = load_task(APP / "prefetcher.problem.yaml")
+    task = load_task(APP / "problem.yaml")
     assert task.extension == ".ini" and not task.world and not task.space and task.gate.named("test")
     assert "bingo_pht_size" in task.knowledge and "l2c_prefetcher_types = bingo" in task.knowledge
-    assert load_task(APP / "invent.problem.yaml").gate.named("build").builds
+    assert load_task(APP.parent / "prefetcher_invent" / "problem.yaml").gate.named("build").builds
 
 
 def test_a_file_that_leaves_knobs_out_takes_the_shipped_ones(tmp_path, capsys):
@@ -51,11 +51,11 @@ def test_the_model_writes_the_file_and_it_is_measured_on_a_fake_champsim(fake, t
 
     home = tmp_path / "app"
     home.mkdir()
-    for f in ("prefetcher.problem.yaml", "bingo.py", "knobs.md", "bingo_default.ini"):
+    for f in ("problem.yaml", "bingo.py", "knobs.md", "bingo_default.ini"):
         shutil.copy(APP / f, home / f)
     shutil.copytree(fake["traces"], home / "traces")
     monkeypatch.setenv("PATH", f"{fake['exe'].parent}:{__import__('os').environ['PATH']}")   # `needs: [pythia]`
-    task = load_task(home / "prefetcher.problem.yaml")
+    task = load_task(home / "problem.yaml")
     model = ScriptedProposer(['{"artifact": "l2c_prefetcher_types = bingo\\nbingo_l2c_thresh = 0.6\\n", "why": "-"}'])
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "r.db"), steps=1, passes=1,
                                                    screen_only=True, workers=1), proposer=model, log=lambda _m: None)

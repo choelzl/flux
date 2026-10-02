@@ -10,7 +10,7 @@ latency (C), throughput (D)?
 
 ```bash
 cd flux
-nix develop --command flux task run applications/interconnect_mapping/interconnect_mapping.problem.yaml \
+nix develop --command flux task run applications/interconnect_mapping \
     --screen-only                                            # no model, about two minutes
 # model-proposed hashes: copy the document, set `params.llm_rounds: 6`, run it with a model
 ```
@@ -19,7 +19,7 @@ The record goes to `applications/interconnect_mapping/out/interconnect_mapping.d
 `--db` says otherwise. The knobs are the document's `params:` -- `seed`, `ops`,
 `vu_probability`, `dma_probability` (the traffic), `climb_rounds` (the XOR-tap hill-climb),
 `llm_rounds` (0 = no model), `coordination_rounds`, `certify_tiles`, `bank_bits`. Another
-seed or regime is other traffic, so a copy that changes them needs its own `id:`.
+seed or regime is other traffic, so a copy that changes them is a copy of the folder: its name is its id.
 
 ## Two little loops, one big loop
 

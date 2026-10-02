@@ -15,7 +15,7 @@ import pytest
 from flux_loop import PromptProblem, TaskError, TaskSpec, request_for, run_loop
 from flux_loop.agent import agent_spec
 
-DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits.task.json"
+DIGITS = Path(__file__).resolve().parents[2] / "core" / "loop" / "examples" / "digits" / "problem.json"
 
 FAKE = r'''import json, os, sys
 from pathlib import Path
@@ -76,7 +76,7 @@ def _turns(tmp_path: Path) -> list[dict]:
 
 
 def _digits(fake: Path, role: str = "gen", resume: bool = True, **doc) -> TaskSpec:
-    d = json.loads(DIGITS.read_text())
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
     d["flow"] = {**d.get("flow", {}), "generate": {"agent": _agent(fake, role, resume)}}
     d["budget"] = {"steps": 3, "repair_attempts": 2, "prototype": False}
     d.update(doc)
@@ -104,7 +104,7 @@ def test_a_gate_repair_resumes_the_parts_session_with_a_short_message(tmp_path):
 
 def test_a_critique_send_back_resumes_the_session_and_admission_ends_it(tmp_path):
     fake = _fake(tmp_path)
-    d = json.loads(DIGITS.read_text())
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
     d["flow"] = {**d.get("flow", {}), "generate": {"agent": _agent(fake, "genok")}, "critique": {"agent": _agent(fake, "critic")}}
     d["budget"] = {"steps": 3, "repair_attempts": 1, "prototype": False, "critique_rounds": 1}
     task = TaskSpec.from_dict(d)
@@ -160,14 +160,14 @@ def test_an_agent_that_cannot_resume_gets_the_full_brief_again(tmp_path):
 
 
 def test_generate_refuses_a_session_option():
-    d = json.loads(DIGITS.read_text())
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
     d["flow"] = {**d.get("flow", {}), "generate": {"agent": {"preset": "opencode", "session": "pass"}}}
     with pytest.raises(TaskError, match="one session per part until the part is admitted"):
         TaskSpec.from_dict(d)
     with pytest.raises(ValueError, match="session is one of turn, pass"):
         agent_spec({"preset": "opencode", "session": "run"})
     assert agent_spec("opencode").session == "turn" and agent_spec({"preset": "claude", "session": "pass"}).session == "pass"
-    d["flow"] = {**json.loads(DIGITS.read_text())["flow"], "critique": {"agent": {"preset": "opencode", "session": "pass"}}}
+    d["flow"] = {**{"id": "digits", **json.loads(DIGITS.read_text())}["flow"], "critique": {"agent": {"preset": "opencode", "session": "pass"}}}
     task = TaskSpec.from_dict(d)
     from flux_loop.document import describe_flow
 

@@ -9,8 +9,9 @@ agent writes them), gates each one, measures the survivors stage by stage and de
 
 Say only what is yours; the rest is inferred.
 
-- `id` (a short name, letters, digits, `_`) and `statement` (the ask in prose: the model reads
-  it). The record is named by `id`, so an edited document resumes it.
+- `statement` (the ask in prose: the model reads it). The document is `problem.yaml` and has no
+  `id`: the problem's id is its folder's name, which also names its record, so an edited
+  document resumes it.
 - `contract` (optional): rules every candidate must follow, in prose -- ports, naming, what is
   forbidden. The model reads it with the statement.
 - `language`: the artifact's language (`systemverilog`, `verilog`, `python`, `c`, `cpp`,

@@ -1,7 +1,6 @@
 # Tuning: every point of `space:` is a setting passed to the gate and the stage as `{knob}`.
-#     flux task run __NAME__.problem.yaml --passes 15      # a pass a point (D738)
+#     flux task run __NAME__ --passes 15      # a pass a point (D738)
 
-id: __NAME__
 statement: >-
   The fastest block size and loop order for the blocked matrix multiply in workload.py.
 language: text

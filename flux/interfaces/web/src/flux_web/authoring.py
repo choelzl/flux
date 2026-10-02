@@ -174,9 +174,7 @@ class Authoring:
             doc = app_dir / revise
         ok = rc in (0, None) and doc.is_file()                     # None: it ended while the server was away
         if doc.is_file():
-            from .workspace import _doc_id
-
-            workspace.set_meta(name, document=doc.name, id=_doc_id(doc) or name)
+            workspace.set_meta(name, document=doc.name, id=name)      # D786: the loop's name is the id
         shutil.rmtree(app_dir / ATTACHED, ignore_errors=True)
         st.update(ended=time.time(), rc=rc, ok=ok, document=doc.name if doc.is_file() else None,
                   after=doc.read_text(errors="replace") if doc.is_file() else "")

@@ -568,16 +568,16 @@
     return flowMap(p);
   }
 
-  /** The problem document for `state`, as the text of a `.problem.yaml`. */
+  /** The problem document for `state`, as the text of a `problem.yaml` (D786: in a folder named by its id). */
   function buildYaml(state, cat) {
     var r = resolve(state, cat);
     var kept = state.kept || [];                     // kept as written: the server appends them (D686)
     function own(key) { return kept.indexOf(key) < 0; }
     var id = String(state.id || "").trim() || "my_problem";
-    var out = "# " + id + ": made with the Flux problem builder.\n" +
-              "#     flux task check " + id + ".problem.yaml\n" +
-              "#     flux task run " + id + ".problem.yaml            # until stopped; --passes N for N\n\n";
-    out += "id: " + q(id) + "\n";
+    // D786: the document is the folder's problem.yaml; the folder's name is the id, not said here
+    var out = "# " + id + "/problem.yaml: made with the Flux problem builder.\n" +
+              "#     flux task check " + id + "\n" +
+              "#     flux task run " + id + "            # until stopped; --passes N for N\n\n";
     out += prose("statement", String(state.statement || "").trim() || "(say what you want made)");
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
     if (language(state, true)) out += "language: " + q(language(state, true)) + "\n";
@@ -1835,7 +1835,7 @@
     function renderOutput() {
       renderGoalWords();
       var yaml = buildYaml(state), id = String(state.id || "").trim() || "my_problem";
-      var file = id + ".problem.yaml";
+      var file = id + "/problem.yaml";
       parts.code.textContent = yaml;
       parts.file.textContent = file;
       var msgs = check(state);

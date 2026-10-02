@@ -45,4 +45,4 @@ resumes from the record and re-measures nothing.
   `gradient`, `genetic` or `llm` (a model names the next points) are one word each.
 - **Another width:** change `N` in `gen.py`, the port widths in `golden.py`, and the statement.
 
-For a copy that should keep its own record, change `id:` too.
+For a copy that keeps its own record, copy the folder: its name is the id.

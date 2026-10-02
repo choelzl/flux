@@ -29,7 +29,7 @@ is. For larger complete problems to copy from, see the repository's
 
 ## 2. Say what you want
 
-Edit `myproblem/myproblem.problem.yaml`:
+Edit `myproblem/problem.yaml`:
 
 - `statement`: the request in plain words. The model reads it.
 - `contract`: rules every design must follow (names, ports, what is forbidden).
@@ -50,7 +50,7 @@ agents get the file paths to open. `flow: {knowledge: off}` turns it off.
 ## 4. Check it
 
 ```bash
-flux task check myproblem/myproblem.problem.yaml
+flux task check myproblem
 ```
 
 It runs nothing. It lists the loop's boxes, the stages and their tools, the library, and says
@@ -59,7 +59,7 @@ what is missing.
 ## 5. Run it
 
 ```bash
-flux task run myproblem/myproblem.problem.yaml --passes 1
+flux task run myproblem --passes 1
 ```
 
 Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen. A search
