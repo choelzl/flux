@@ -498,7 +498,7 @@ fieldset.set-group { align-content: start; }
 .live-wrap { display: grid; gap: 0; }
 .logview.mini { max-height: 300px; min-height: 160px; font-size: 11.8px; }
 .livelog-card .card-head { margin-bottom: 6px; }
-.composer { position: sticky; bottom: 0; z-index: 5; margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+.composer { position: static; margin-top: 4px; background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; box-shadow: 0 -4px 18px rgba(0, 0, 0, .08); padding: 8px 10px; display: grid; gap: 6px; }
 .composer.asking { border-color: var(--warn); box-shadow: 0 -4px 18px color-mix(in srgb, var(--warn) 25%, transparent); }
 .composer-row { display: flex; gap: 8px; align-items: flex-end; }
@@ -730,3 +730,7 @@ body:has(.composer) .toasts { bottom: 150px; }
 .why-failed { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
 .why-failed h2 { color: var(--bad); }
 .why-lines { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; font-size: 12.5px; }
+.drawer .composer { box-shadow: none; }
+.drawer-sub { margin: 14px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ask-fab.asking { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
+.composer-hist { border-bottom: none; border-top: 1px solid var(--line); margin-top: 8px; }

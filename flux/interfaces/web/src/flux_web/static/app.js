@@ -856,13 +856,15 @@ function envEditor(rows, save, scope) {
   secret.addEventListener("change", () => { valIn.type = secret.checked ? "password" : "text"; });
   const list = rows.length ? h("table", { class: "list compact env" }, h("tbody", {}, rows.map(x => h("tr", {}, h("td", { class: "mono" }, x.name),
       h("td", { class: "mono" }, x.secret ? h("span", { class: "muted" }, "secret · set") : x.value),
-      h("td", { class: "right" }, save ? act("Remove", () => save({ name: x.name, value: null }), { cls: "small" }) : "")))))
+      h("td", { class: "right" }, save ? act("Remove", async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }, { cls: "small" }) : "")))))
     : h("p", { class: "muted" }, "None yet.");
   if (!save) return list;
   return h("div", {}, list, h("div", { class: "row env-add" }, nameIn, valIn, h("label", { class: "check" }, secret, "secret"),
     act("Add", async () => {
       if (!nameIn.value.trim()) { toast("Name the variable.", "warn"); return; }
-      await save({ name: nameIn.value.trim(), value: valIn.value, secret: secret.checked });
+      const n = nameIn.value.trim();
+      await save({ name: n, value: valIn.value, secret: secret.checked });
+      toast(`${n} saved: from the next start`, "ok");                 // D758: an action says it happened
     }, { cls: "primary small" })));
 }
 /** A loop's advanced settings (D697): only an admin changes them; everyone sees them. */
@@ -985,7 +987,8 @@ async function loopPage(name, owner, path = "") {
   }
   function drawBanner() {
     composer.update();
-    if (!question || !st.running || (tab === "Live" && !curSub())) { banner.replaceChildren(); return; }
+    askFab.classList.toggle("asking", !!(question && st.running));   // D758: the agent waits: the button says so
+    if (!question || !st.running) { banner.replaceChildren(); return; }
     const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
     const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
     banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
@@ -1000,8 +1003,6 @@ async function loopPage(name, owner, path = "") {
     const sendBtn = h("button", { class: "primary", type: "button" }, "Send");
     const ask = h("div", { class: "composer-ask" });
     const hist = h("div", { class: "composer-hist", hidden: true }, noteList);
-    const histBtn = h("button", { class: "small", type: "button", title: "The notes sent so far",
-      onclick: () => { hist.hidden = !hist.hidden; if (!hist.hidden) drawNotes(); } }, "Notes");
     const grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 180) + "px"; };
     async function send() {
       const text = ta.value.trim();
@@ -1012,7 +1013,8 @@ async function loopPage(name, owner, path = "") {
     ta.addEventListener("input", grow);
     ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
     sendBtn.addEventListener("click", send);
-    const el = h("div", { class: "composer" }, ask, hist, h("div", { class: "composer-row" }, histBtn, ta, sendBtn));
+    hist.hidden = false;                              // D758: in the drawer, the notes sent so far show under the line
+    const el = h("div", { class: "composer" }, ask, h("div", { class: "composer-row" }, ta, sendBtn), hist);
     function update() {
       const open = question && st.running;
       el.classList.toggle("asking", !!open);
@@ -1334,9 +1336,11 @@ async function loopPage(name, owner, path = "") {
   let askTimer = null;
   cleanup.push(() => clearTimeout(askTimer));
   const askBox = h("div", { class: "drawer-body" });
-  const drawer = h("aside", { class: "drawer", "aria-label": "Ask about this loop" },
-    h("div", { class: "drawer-head" }, h("h2", {}, "Ask about this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
-  const askFab = h("button", { class: "ask-fab", type: "button", title: "Ask an agent about this loop: it reads it and answers", onclick: () => setAsk(!askOpen) }, "Ask");
+  // D758: one place to talk to a loop -- a note to it while it runs (an answer when its agent asks), and a
+  // question to an agent about it -- the drawer, from every tab; no bar docked under Live any more
+  const drawer = h("aside", { class: "drawer", "aria-label": "Talk to this loop" },
+    h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
+  const askFab = h("button", { class: "ask-fab", type: "button", title: "Notes to the running loop, and questions to an agent about it", onclick: () => setAsk(!askOpen) }, "Talk");
   function setAsk(open) {
     askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
     if (open) { askBox.replaceChildren(skeleton(4)); askView(); } else clearTimeout(askTimer);
@@ -1350,7 +1354,13 @@ async function loopPage(name, owner, path = "") {
     const busy = list.some(a => a.running);
     clearTimeout(askTimer);
     if (busy) askTimer = setTimeout(() => { if (askOpen && !askBox.contains(document.activeElement)) askView(); else if (askOpen) askTimer = setTimeout(askView, 3000); }, 3000);
-    let form = "";
+    let form = "", steer = "";
+    if (mine && st.running) {                       // D758: the running loop's notes, and its agent's open question
+      composer.update();
+      drawNotes();
+      steer = card("A note to the running loop", [h("p", { class: "muted" }, "It joins the loop's next prompt; when its agent asks, it is the answer."),
+        composer.el], { cls: "steer-card" });
+    }
     if (mine) {
       const q = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
       const who = await agentSelect("ask-who");
@@ -1370,9 +1380,10 @@ async function loopPage(name, owner, path = "") {
           mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : ""),
           h("pre", { class: "log small author-log" }, (a.log || []).join("\n") || "…")]
         : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))],
-      mine && !a.running ? h("div", { class: "form-actions" }, act("Forget", async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); askView(); }, { cls: "small" })) : ""],
+      mine && !a.running ? h("div", { class: "form-actions" }, act("Forget", async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); toast("The question and its answer are forgotten", "ok"); askView(); }, { cls: "small" })) : ""],
       { cls: "ask-card" });
-    askBox.replaceChildren(form, ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
+    askBox.replaceChildren(steer, mine ? h("h3", { class: "drawer-sub" }, "Ask an agent about it") : "", form,
+      ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
   }
   /** The loop's settings (D697): its environment variables over the user's and the server's, and
       what only an admin sets -- the sandbox and its limits. */
@@ -1531,7 +1542,7 @@ async function loopPage(name, owner, path = "") {
       body.replaceChildren(h("div", { class: "live-wrap" },
         h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Not running: the last start's tree."), live.tree], { cls: "tree-card" }),
           h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
-        st.running && mine ? composer.el : ""));
+        ""));
       live.draw(); liveLog.fill(); composer.update();
     } else if (tab === "Live" && curSub() === "timeline") {
       body.replaceChildren(card(null, skeleton(7)));

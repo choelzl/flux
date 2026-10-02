@@ -218,6 +218,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
+  - **Talk** (D758): the button on every loop page opens the drawer -- a note to the running loop (it joins the
+    next prompt, or answers its agent's open question; the notes so far under it) and questions to an agent about it.
   - **When something is wrong** (D757): a failed start's Overview says why (its log's own lines, with the log a
     click away); Direct edit says before saving that a document does not load; a tool that broke fails its leaf;
     an ended session is said on the way to the login.
