@@ -22,4 +22,4 @@ objectives:
   - {metric: latency_cycles, direction: minimize, goal: 500, stage: model}
   - {metric: area_mm2, direction: minimize}
 
-budget: {steps: 2}
+budget: {steps: 2, batch: 15}           # the whole space in one pass

@@ -156,7 +156,7 @@ def test_the_loop_records_each_dse_phase_by_name(tmp_path):
     from toy_document import run_toy, toy
 
     db = tmp_path / "loop.db"
-    run_toy(toy(flow={"dse": [{"name": "climb", "knobs": ["table"], "wave": 2, "patience": 1, "budget": 4},
+    run_toy(toy(flow={"orchestrate": [{"name": "climb", "knobs": ["table"], "wave": 2, "patience": 1, "budget": 4},
                               {"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6, "patience": 1}]}),
             db=str(db))
     with sqlite3.connect(db) as con:

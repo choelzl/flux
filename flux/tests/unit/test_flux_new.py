@@ -110,7 +110,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
     doc_path = tmp_path / "t" / "mm/problem.yaml"
     doc = yaml.safe_load(doc_path.read_text())
-    doc["flow"]["orchestrate"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
+    doc["flow"]["orchestrate"]["policy"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
                           {"name": "fine", "policy": "gradient", "hold": ["block"], "steps": 4}]
     doc["budget"]["steps"] = 4
     doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))

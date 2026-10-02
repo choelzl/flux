@@ -335,7 +335,7 @@ def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, mo
     d = yaml.safe_load(doc.read_text())
     fake = tmp_path / "agent.py"
     fake.write_text(AGENT)
-    d.setdefault("flow", {})["generate"] = {"agent": {"command": ["{python}", str(fake), "{prompt_file}", "{artifact}"]}}
+    d.setdefault("flow", {})["generate"] = {"by": {"command": ["{python}", str(fake), "{prompt_file}", "{artifact}"]}}
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
     task = load_task(doc)
     said: list[str] = []
@@ -399,7 +399,7 @@ def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, mon
     d = yaml.safe_load(doc.read_text())
     fake = tmp_path / "agent.py"
     fake.write_text(RESUMING)
-    d.setdefault("flow", {})["generate"] = {"agent": {
+    d.setdefault("flow", {})["generate"] = {"by": {
         "command": ["{python}", str(fake), "first", "{prompt_file}", "{artifact}"],
         "resume": ["{python}", str(fake), "resume", "{session}", "{answer}", "{artifact}"], "output": "opencode"}}
     doc.write_text(yaml.safe_dump(d, sort_keys=False))

@@ -94,7 +94,7 @@ def test_the_bankmap_document_runs_solver_only(tmp_path):
     doc = _doc("bankmap", tmp_path, budget={"steps": 2})
     if not _tools_ok(doc):
         pytest.skip("the bank-mapping study's tools are not on PATH")
-    r = flux("task", "run", str(doc), "--db", str(tmp_path / "b.db"), "--replies", str(_replies(tmp_path, ["{}"])))
+    r = flux("task", "run", str(doc), "--db", str(tmp_path / "b.db"), "--passes", "3")      # a round a pass (D799)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
     assert "DECISION" in r.stdout and "WHAT THIS RUN ESTABLISHED" in r.stdout
 
@@ -128,8 +128,8 @@ def test_the_macarray_document_screens_one_pe_end_to_end(tmp_path):
 
 @pytest.mark.heavy
 def test_the_prefetcher_document_runs_when_its_simulator_and_traces_are_there(tmp_path):
-    doc = _doc("prefetcher", tmp_path, budget={"steps": 2, "finalists": 0},
-               flow={"generate": {"catalog": [str(APPS / "prefetcher" / "bingo_default.ini")]}})   # no model
+    doc = _doc("prefetcher", tmp_path, budget={"steps": 2},
+               flow={"generate": {"catalog": [str(APPS / "prefetcher" / "bingo_default.ini")]}, "select": {"finalists": 0}})   # no model
     short = re.sub(r"--warmup \d+ --sim \d+", "--warmup 100000 --sim 1000000", doc.read_text())   # minutes, not hours
     doc.write_text(short)
     for f in ("bingo.py", "knobs.md", "bingo_default.ini"):
@@ -177,4 +177,4 @@ def test_the_npu_gemm_sweep_picks_the_smallest_array_that_makes_its_cycles(tmp_p
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "n.db"), "--passes", "1",
              "--out", str(tmp_path / "n.yaml"), timeout=900)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]
-    assert "DECISION 32-16" in r.stdout and "latency_cycles=341" in r.stdout, r.stdout[-3000:]
+    assert "DECISION pe_x=32-gbuf_kb=16" in r.stdout and "latency_cycles=341" in r.stdout, r.stdout[-3000:]
