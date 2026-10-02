@@ -218,6 +218,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
+  - **When something is wrong** (D757): a failed start's Overview says why (its log's own lines, with the log a
+    click away); Direct edit says before saving that a document does not load; a tool that broke fails its leaf;
+    an ended session is said on the way to the login.
   - **Live:** the loop as it ran (D739, D742): this start's **Setup**, a branch per **Pass** (named by
     the design it made) whose leaves are the configurator's boxes in a word each, in the order they
     ran -- Search, Design, Check, Measure, Choose, Critic … (the box's full name on hover; ×N when it

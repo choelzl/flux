@@ -47,7 +47,11 @@ async function api(path, { method = "GET", body, form } = {}) {
   try { r = await fetch("/api" + path, opt); }
   catch (x) { offline(true); throw new Error("The server cannot be reached."); }
   offline(false);
-  if (r.status === 401 && path !== "/login") { me = null; location.hash = "#/login"; throw new Error("log in"); }
+  if (r.status === 401 && path !== "/login") {
+    // D757: a session that ended (logged out elsewhere, expired) is said, not a silent jump to the login
+    if (me && location.hash !== "#/login") toast("Your session ended: log in again.", "warn", { timeout: 8000 });
+    me = null; location.hash = "#/login"; throw new Error("log in");
+  }
   const type = r.headers.get("content-type") || "";
   const data = type.includes("json") ? await r.json() : await r.text();
   if (!r.ok) {
@@ -1462,6 +1466,10 @@ async function loopPage(name, owner, path = "") {
           use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",
           use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agents")) : "",
         stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
+      // D757: a failed start says why, in its log's own words, where the loop is opened
+      st.failed && (st.error || []).length ? h("section", { class: "card why-failed", role: "alert" }, h("div", { class: "card-head" }, h("h2", {}, "Why it stopped"),
+        h("button", { class: "small", onclick: () => goTab("Live", "log") }, "The log")),
+        h("pre", { class: "why-lines" }, st.error.join("\n"))) : "",
       q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
       h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
@@ -2413,19 +2421,24 @@ async function crafterView(body, name, owner) {
 }
 
 /** The changes of a save, shown before it writes (D693): true to write. */
-async function confirmDiff(file, before, after) {
+async function confirmDiff(file, before, after, problem = "") {
   const ops = lineDiff(before, after);
   const plus = ops.filter(o => o[0] === "+").length, minus = ops.filter(o => o[0] === "-").length;
-  return dialog(`Save ${file}?`, h("div", {}, h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
-    [["Cancel", false], ["Save", true, "primary"]]);
+  // D757: a document that does not load is said before it is written, not after a start fails
+  return dialog(`Save ${file}?`, h("div", {},
+    problem ? h("div", { class: "callout bad" }, h("strong", {}, "This document does not load: "), problem,
+      h("p", { class: "small" }, "A start or a check of it will be refused until it is fixed.")) : "",
+    h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
+    [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
 
 /** Direct edit (D704): the document's YAML as written, saved with its diff shown; its files beside. */
 async function directEdit(body, name) {
   const info = await api(`/apps/${enc(name)}`);
   const doc = info.document;
-  const panel = filesPanel(name, () => ed.textarea.value);
   let before = "";
+  // D757: the panel may ask for the text while the document is still on its way -- the editor is not made yet
+  const panel = filesPanel(name, () => (ed ? ed.textarea.value : before));
   if (doc) {
     const r = await fetch(`/api${owned(`/apps/${enc(name)}/file?path=${enc(doc)}`)}`, { credentials: "same-origin" });
     before = r.ok ? await r.text() : "";
@@ -2435,7 +2448,8 @@ async function directEdit(body, name) {
   const save = act("Save", async () => {
     const text = ed.textarea.value, file = fileIn.value.trim();
     if (text === before) { toast("Nothing changes.", "info"); return; }
-    if (!await confirmDiff(file, before, text)) return;
+    const v = file === doc ? await api(`/apps/${enc(name)}/validate`, { method: "POST", body: { text } }).catch(() => ({ ok: true })) : { ok: true };
+    if (!await confirmDiff(file, before, text, v.ok ? "" : v.error)) return;
     await api(`/apps/${enc(name)}/file?path=${enc(file)}`, { method: "PUT", body: { text } });
     before = text; panel.draw();
     const err = await loaderSays();

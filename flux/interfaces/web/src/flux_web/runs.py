@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -381,6 +382,25 @@ class RunManager:
         cid, rdir = list(pointer.items())[-1]
         return cid, rdir
 
+    #: A log line that says what went wrong (D757), as the page's own log marks problems.
+    _PROBLEM = re.compile(r"\b(error|errors|traceback|exception|failed|failure|refused|missing|cannot|not answerable|"
+                          r"did not build|timed out|killed|no such|not found|not on path|not installed|exited \d)\b", re.I)
+
+    def failure(self, run: dict[str, Any], n: int = 4) -> list[str]:
+        """The last lines of a failed start's log that say what went wrong (its last lines when
+        none does), without their time stamps."""
+        try:
+            with open(run["log"], "rb") as fh:
+                fh.seek(max(0, os.path.getsize(run["log"]) - 64 * 1024))
+                tail = fh.read().decode("utf-8", "replace").splitlines()
+        except (OSError, KeyError, TypeError):
+            return []
+        at = max((i for i, ln in enumerate(tail) if "── started" in ln), default=-1)
+        lines = [re.sub(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ", "", ln).rstrip() for ln in tail[at + 1:]]
+        lines = [ln for ln in lines if ln.strip() and not re.match(r"flux [a-z ]+: in the \w+ sandbox ", ln)]   # where it ran, not why
+        said = [ln for ln in lines if self._PROBLEM.search(ln)]
+        return [ln[:400] for ln in (said or lines)[-n:]]
+
     def state(self, user: User, app: str) -> dict[str, Any]:
         """The loop's state: running or not, since when, its last activity, and while it runs its
         pass, whether a stop is asked, its sandbox and an open question."""
@@ -396,6 +416,8 @@ class RunManager:
                     last_active=(time.time() if running else (run.get("ended") or run["started"])),
                     failed=(not running and run.get("rc") not in (0, None, 130)), stopped=(not running and run.get("rc") == 130),
                     options=json.loads(run.get("options") or "{}"))
+        if info["failed"]:
+            info["error"] = self.failure(run)              # D757: why, in the run's own words
         cid, rdir = self.campaign(run)
         info["campaign"] = cid
         if cid and running:

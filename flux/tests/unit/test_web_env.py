@@ -118,3 +118,34 @@ def test_admin_agents_sets_each_agents_program_login_files_and_hosts(server, tmp
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
     machine_env(env, sandbox_config(store), {}, [])
     assert env["FLUX_SANDBOX_ALLOW"].split(",")[:2] == ["a.example", "ai.corp.example"], "its hosts join the allowlist"
+
+
+def test_a_failed_start_says_why_in_its_logs_words(tmp_path, server):
+    """D757: Overview's "Why it stopped" -- the last lines of this start's log that say what went
+    wrong, without stamps nor where it ran; the last lines when none does."""
+    from flux_web.runs import RunManager
+
+    _app, store = server
+    log = tmp_path / "loop.log"
+    log.write_text("── started 2026-10-01 10:00:00 by bob · 1 pass(es) ──\nan old ERROR from the start before\n"
+                   "── started 2026-10-02 10:00:00 by bob · 1 pass(es) ──\n"
+                   "2026-10-02 10:00:01.000 flux task run: in the podman sandbox flux-abc\n"
+                   "2026-10-02 10:00:02.000 roles: orchestrator=sweep\n"
+                   "2026-10-02 10:00:03.000 no-such-checker not on PATH; `flux task check` lists what the task needs\n")
+    rm = RunManager(store, sandbox=True)
+    assert rm.failure({"log": str(log)}) == ["no-such-checker not on PATH; `flux task check` lists what the task needs"]
+    log.write_text("── started x ──\nall quiet\nthe end\n")
+    assert rm.failure({"log": str(log)}) == ["all quiet", "the end"], "nothing said wrong: its last lines"
+
+
+def test_a_document_is_checked_before_it_is_saved(server):
+    """D757: Direct edit asks whether the text loads before it writes it."""
+    app, _store = server
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    bad = bob.post("/api/apps/x/validate", json={"text": "id: [unclosed\nstatement: x"}, headers=H).json()
+    assert not bad["ok"] and bad["error"].startswith("not YAML")
+    wrong = bob.post("/api/apps/x/validate", json={"text": "id: x\nstatment: typo\n"}, headers=H).json()
+    assert not wrong["ok"] and "statment" in wrong["error"], wrong
+    good = "id: x\nstatement: s\nlanguage: python\ngate: {test: ['true']}\nobjectives: []\n"
+    assert bob.post("/api/apps/x/validate", json={"text": good}, headers=H).json() == {"ok": True, "error": ""}

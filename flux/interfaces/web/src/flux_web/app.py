@@ -1240,6 +1240,25 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output})   # D693
         return {"ok": ok, "output": output}
 
+    @app.post("/api/apps/{name}/validate")
+    def validate_text(name: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """Whether a document, not yet saved, loads (D757): what Direct edit says before it writes."""
+        import yaml
+
+        from flux_loop import TaskSpec
+
+        d = editor(user, owner, name)[0].app(name)
+        try:
+            raw = yaml.safe_load(body.text)
+            if not isinstance(raw, dict):
+                return {"ok": False, "error": "the document is not a mapping of keys (id:, statement:, ...)"}
+            TaskSpec.from_dict(raw, base=d)
+        except yaml.YAMLError as exc:
+            return {"ok": False, "error": f"not YAML: {' '.join(str(exc).split())[:300]}"}
+        except Exception as exc:  # noqa: BLE001 -- what the loader says is what the user reads
+            return {"ok": False, "error": " ".join(str(exc).split())[:400]}
+        return {"ok": True, "error": ""}
+
     @app.get("/api/apps/{name}/preflight")
     def preflight(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Before a start (D693): did the inputs change since the last start, and was the check

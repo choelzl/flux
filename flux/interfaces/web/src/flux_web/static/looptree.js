@@ -21,7 +21,14 @@
       var p = e.parent != null && m.nodes.get(e.parent);
       if (p) { n.parent = p; p.kids.push(n); } else m.roots.push(n);
     } else if (e.ev === "update") { var u = m.nodes.get(e.id); if (u) Object.assign(u.fields, e.fields); }
-    else if (e.ev === "end") { var d = m.nodes.get(e.id); if (d) { d.t1 = e.t; d.seconds = e.seconds; d.failed = e.failed; d.output = e.output; } }
+    else if (e.ev === "end") {
+      var d = m.nodes.get(e.id);
+      if (d) {
+        d.t1 = e.t; d.seconds = e.seconds; d.output = e.output;
+        // D757: a tool that exited with an error failed, though its step went on
+        d.failed = e.failed || (String(d.name).indexOf("tool:") === 0 && e.output && e.output.exit != null && e.output.exit !== 0);
+      }
+    }
     else if (e.ev === "publish") m.standings.set(e.key, e.payload);
     else if (e.ev === "mark" && e.name === "question") { try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; } }
     else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {

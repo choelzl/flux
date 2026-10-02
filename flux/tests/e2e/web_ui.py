@@ -422,7 +422,9 @@ def flows(r: Run) -> None:
         # a document the loader refuses: said on saving, not first at Start
         b.js(edit, "statement: >-", "statement: >- broken")
         r.button("Save")
-        r.dialog_button("Save")
+        said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText", what="the save dialog")
+        r.check("before saving, a document that does not load is said (D757)", "does not load" in said, said[:200])
+        r.dialog_button("Save anyway")
         b.wait("document.querySelector('#main .callout.bad')", what="the loader's refusal")
         r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .callout.bad').textContent"))
         b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
@@ -677,6 +679,60 @@ def flows(r: Run) -> None:
         r.clean("Admin › Agents")
         r.clean("agent test")
     r.step("agent test", agent_test)
+
+    def error_feedback():
+        """D757: what a user is told when something is wrong -- before (a document that does not load,
+        a check that fails), after (why a start stopped, a tool that broke), and around (a refused
+        setting, a session that ended)."""
+        r.login("bob")
+        text = "id: broken\nstatement: a gate whose checker is not installed\nlanguage: python\ngate: {test: [no-such-checker, '{artifact}']}\nobjectives: []\n"
+        made = r.api("/apps/from-text", "POST", {"name": "broken", "filename": "broken.problem.yaml", "text": text})
+        r.check("a loop whose check fails is made", made["status"] == 200, made["body"][:200])
+        # before: Direct edit says a document that does not load, and asks
+        r.page("#/app/broken/settings/problem/edit", "document.querySelector('#main textarea')", "Direct edit")
+        b.js("const ta = document.querySelector('#main textarea'); ta.value = 'id: [unclosed\\nstatement: x'; ta.dispatchEvent(new Event('input', {bubbles: true})); return 1")
+        r.button("Save")
+        said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText", what="the save dialog")
+        r.check("saving a document that does not load says so, and asks", "does not load" in said and "Save anyway" in said, said[:200])
+        r.dialog_button("Cancel")
+        # before: the start dialog says the check fails
+        r.page("#/app/broken", "document.querySelector('.page-head')", "the broken loop")
+        r.button("Start", ".page-head")
+        bad = b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.bad') && document.querySelector('dialog.dlg[open]').innerText", timeout=90, what="the check, failed")
+        r.check("the start dialog says the check fails and offers to start anyway", "check fails" in bad and "Start anyway" in bad, bad[:200])
+        t0 = time.time()
+        r.dialog_button("Start anyway")
+        end = time.time() + 120
+        st = {}
+        while time.time() < end:
+            st = json.loads(r.api("/apps/broken/state")["body"])
+            if not st.get("running") and (st.get("last_active") or 0) >= t0 - 1:
+                break
+            time.sleep(2)
+        # after: Overview says why it stopped, in the log's words
+        r.page("#/app/broken", "document.querySelector('.page-head')", "the failed loop")
+        why = b.wait("document.querySelector('.why-failed') && document.querySelector('.why-failed').innerText", timeout=20, what="why it stopped")
+        r.check("a failed start says why on its Overview", "no-such-checker" in why and "sandbox" not in why, why[:300])
+        b.js("[...document.querySelectorAll('.why-failed button')].find(x => x.textContent === 'The log').click(); return 1")
+        b.wait("location.hash.endsWith('/live/log')", timeout=10, what="the log, from Why it stopped")
+        r.check("Why it stopped opens the log", True)
+        # around: a setting refused says why
+        r.login("ada")
+        b.js("window.__e2e.bad.splice(0); return 1")
+        r.page("#/u/bob/app/broken/settings/loop", "document.querySelector('#adv-memory')", "Advanced, as the admin")
+        b.js("const m = document.querySelector('#adv-memory'); m.value = 'lots'; return 1")
+        b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent.trim() === 'Save' && x.closest('.card') && x.closest('.card').textContent.includes('Advanced')).click(); return 1")
+        said = b.wait("window.__e2e.bad.length && window.__e2e.bad.join(' ')", timeout=10, what="the refusal")
+        r.check("a refused setting says what it takes", "16g" in said, said)
+        b.js("window.__e2e.bad.splice(0); return 1")
+        r.clean("error feedback")
+        # around: a session that ended is said, not a silent jump to the login
+        b.ajs("const d = arguments[arguments.length - 1]; fetch('/api/logout', {method: 'POST', headers: {'X-Flux': '1'}}).then(() => d(1))")
+        b.js("window.__seen = []; new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && n.classList.contains('toast')) window.__seen.push(n.textContent); }).observe(document.body, {childList: true, subtree: true}); return 1")
+        b.js("location.hash = '#/app/sw'; return 1")
+        seen = b.wait("location.hash === '#/login' && window.__seen.join(' ')", timeout=10, what="the login, with a word")
+        r.check("an ended session is said on the way to the login", "session ended" in seen, seen)
+    r.step("error feedback", error_feedback)
 
     def phone():
         """At a phone's width nothing scrolls sideways (D754): a list's rows stack, tabs and logs wrap."""

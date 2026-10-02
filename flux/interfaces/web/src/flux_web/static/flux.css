@@ -727,3 +727,6 @@ body:has(.composer) .toasts { bottom: 150px; }
   table.list .actions { justify-content: flex-start; flex-wrap: wrap; }
 }
 .agent-found { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }
+.why-failed { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.why-failed h2 { color: var(--bad); }
+.why-lines { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; font-size: 12.5px; }
