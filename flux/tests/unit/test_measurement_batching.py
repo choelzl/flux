@@ -25,14 +25,14 @@ def _spied(doc, monkeypatch, **request):
 
 
 def test_designs_with_different_stacks_share_one_batch(monkeypatch):
-    compose = toy(flow={"dse": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6, "patience": 1}]})
+    compose = toy(flow={"orchestrate": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6, "patience": 1}]})
     widths, out = _spied(compose, monkeypatch)
     assert widths == [1, 2], "the seed, then every other stack at once"
     assert {point_of(s.candidate)["stack"] for s in out.scored} == set(SPACE["stack"])
 
 
 def test_designs_with_different_partner_knobs_share_one_batch_and_keep_their_own_numbers(monkeypatch):
-    tune = toy(seeds=[{"stack": "a,b"}], flow={"dse": [{"name": "tune", "knobs": ["degree"], "reach": "any", "wave": 6, "patience": 1}]})
+    tune = toy(seeds=[{"stack": "a,b"}], flow={"orchestrate": [{"name": "tune", "knobs": ["degree"], "reach": "any", "wave": 6, "patience": 1}]})
     widths, out = _spied(tune, monkeypatch)
     assert widths == [1, 3]
     assert sorted(point_of(s.candidate)["degree"] for s in out.scored) == [1, 2, 4, 8]
@@ -42,7 +42,7 @@ def test_designs_with_different_partner_knobs_share_one_batch_and_keep_their_own
 
 def test_a_failed_design_is_refused_without_taking_the_batch_with_it(monkeypatch):
     space = {**SPACE, "stack": ["a", "a,b", "crash", "a,c"]}
-    widths, out = _spied(toy(space=space, flow={"dse": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6,
+    widths, out = _spied(toy(space=space, flow={"orchestrate": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6,
                                                             "patience": 1}]}), monkeypatch)
     assert widths == [1, 3]
     assert {point_of(s.candidate)["stack"] for s in out.scored if "speedup" in s.metrics} == {"a", "a,b", "a,c"}
@@ -52,7 +52,7 @@ def test_a_failed_design_is_refused_without_taking_the_batch_with_it(monkeypatch
 def test_a_design_measured_once_is_not_measured_again_on_the_same_record(tmp_path, monkeypatch):
     log = tmp_path / "runs.log"
     monkeypatch.setenv("FLUX_TOY_LOG", str(log))
-    doc = toy(flow={"dse": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6, "patience": 1}]})
+    doc = toy(flow={"orchestrate": [{"name": "compose", "knobs": ["stack"], "reach": "any", "wave": 6, "patience": 1}]})
     run_toy(doc, db=str(tmp_path / "r.db"))
     first = log.read_text().splitlines()
     assert len(first) == 3

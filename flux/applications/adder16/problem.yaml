@@ -7,7 +7,7 @@ statement: >-
 language: verilog
 
 flow:
-  dse:
+  orchestrate:
     policy: sweep
     space:
       arch: [behavioral, ripple, carry_select, kogge_stone]

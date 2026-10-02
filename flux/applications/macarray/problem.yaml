@@ -24,7 +24,7 @@ objectives:
   - {metric: area_um2, direction: minimize}
 
 flow:
-  dse: sweep
+  orchestrate: sweep
   measure:
     screen: {metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
     confirm: {metrics: [fmax_mhz, area_um2, power_w], needs: [openroad]}

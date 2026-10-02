@@ -140,8 +140,8 @@ declaration; a source that cannot change during a run is read once.
 When a part waits while a search runs, the orchestrator (rules or a model) picks which goes
 next.
 
-**Design-space exploration.** A document's `flow.dse.space` lists knobs and their choices. A DSE
-policy under `flow: {dse: ...}` searches it: `sweep`, `montecarlo`, `anneal`, `gradient`,
+**Design-space exploration.** A document's `flow.orchestrate.space` lists knobs and their choices. A DSE
+policy under `flow: {orchestrate: ...}` searches it: `sweep`, `montecarlo`, `anneal`, `gradient`,
 `genetic`, `pareto`, or `model` (the model names the next points). A list of *phases* runs
 several policies in order, each starting where the last one ended.
 

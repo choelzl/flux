@@ -6,7 +6,7 @@ statement: >-
 language: python
 
 flow:
-  dse:
+  orchestrate:
     policy: sweep  # or gradient, anneal, genetic, pareto
     space:
       # list_sieve: a list of flags, crossed out one multiple at a time; slice_sieve: a bytearray,

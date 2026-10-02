@@ -46,7 +46,7 @@ key per box; a box you do not name keeps its default, the first choice listed.
 
 ```yaml
 flow:
-  dse: sweep                     # Search the settings: try every combination
+  orchestrate: sweep                     # Search the settings: try every combination
   generate: {by: claude}      # Make a design: a coding agent writes it
   critique: model                  # Second opinion: a model critic
 ```
@@ -57,7 +57,7 @@ flow:
 | Plan the round | `plan` | Optionally writes a plan for the round before any work starts. | `off`: step by step · `model`: a model writes the plan · a coding agent |
 | Pick the next job | `orchestrate` | Decides what to work on next. | unsaid: the model picks the next part, rules pick the kind of work · `rules`: no model · `model`: a model picks · `tools`: a model with tools picks · a coding agent. Left out when a search is on: the search picks. |
 | Your notes | `feedback` | Notes you type while it runs steer the next round. Typed in the live screen (`--tui`, then `f`). | `human` · `off` |
-| Search the settings | `dse` | Walks the list of settings (the space) to choose which to try. The settings are its `space` (`flow.dse: {policy: sweep, space: {...}}`). | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
+| Search the settings | `orchestrate` | Walks the list of settings (the space) to choose which to try. With a space, the orchestrator picks points, not parts (D797). The settings are its `space` (`flow.orchestrate: {policy: sweep, space: {...}}`). | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
 | Make a design | `generate` | Writes each candidate design. | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
 | Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library |
 | Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt. Always, while the library is on. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {by: opencode}` |
@@ -85,7 +85,7 @@ The loop crafter offers the choices above. A document written by hand can also s
 | key | value | meaning |
 |---|---|---|
 | `orchestrate` | `given` | take the parts in the order the document lists them, no model |
-| `dse` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
+| `orchestrate` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
 | `generate` | `{catalog: [...]}` | a fixed list of designs, no model |
 | `knowledge` | `{by: opencode}` | that coding agent sums up the library's papers instead of the model |
 

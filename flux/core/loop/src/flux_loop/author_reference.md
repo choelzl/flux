@@ -53,7 +53,7 @@ Say only what is yours; the rest is inferred.
     the record's rows on that stage (nothing until 3 are measured); `command: "..."` (kind command
     only) runs a script with the stage's placeholders that prints the same `name=value` metrics;
     `model` asks the model with the design and the stage's measured rows (no model, no estimate).
-  - `dse`: the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|model` (the model proposes points)
+  - `orchestrate` with a space (D797) is the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|model` (the model proposes points)
     or a list of phases, or, with its space, `{policy: sweep, space: {...}, seeds: [...]}`.
     `space`: knob -> its choices, in a meaningful order. A knob that only matters for some
     choices of another: `{values: [...], when: {stack: [b, c]}}`; elsewhere it stays at its first
@@ -119,7 +119,7 @@ Say only what is yours; the rest is inferred.
   package for what a document cannot say), `ladder`, `skills`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
-directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.dse.space`. A command
+directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command
 starting with `flux` runs this Flux.
 
 ## The RTL tools

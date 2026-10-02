@@ -6,7 +6,7 @@ statement: >-
 language: text
 
 flow:
-  dse:
+  orchestrate:
     policy: sweep  # or gradient, anneal, genetic, pareto
     space:
       block: [16, 32, 64, 128, 256]

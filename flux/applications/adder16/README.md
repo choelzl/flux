@@ -10,7 +10,7 @@ run: it needs no model.
 
 | file | what it is |
 |---|---|
-| `adder16.problem.yaml` | the problem document: the statement, the `flow.dse.space` (`arch` x `block`, 12 points), the generator command, the gate, the two stages, the objectives, the budget |
+| `adder16.problem.yaml` | the problem document: the statement, the `flow.orchestrate.space` (`arch` x `block`, 12 points), the generator command, the gate, the two stages, the objectives, the budget |
 | `gen.py` | the generator: `gen.py <out> <arch> <block>` writes one adder as Verilog |
 | `golden.py` | the golden model: `PORTS` and `golden(a, b)`, what the adder must compute |
 
@@ -41,7 +41,7 @@ resumes from the record and re-measures nothing.
   the table at the bottom of `gen.py`, and add its name to `space.arch` in the document.
 - **Another target:** change the `goal` of the `fmax_mhz` objective, and `--clock-ps` in the two
   stage commands to match.
-- **Another search:** `flow: {dse: sweep}` tries every point; `montecarlo`, `anneal`,
+- **Another search:** `flow: {orchestrate: sweep}` tries every point; `montecarlo`, `anneal`,
   `gradient`, `genetic` or `llm` (a model names the next points) are one word each.
 - **Another width:** change `N` in `gen.py`, the port widths in `golden.py`, and the statement.
 

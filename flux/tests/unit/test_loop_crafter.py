@@ -435,7 +435,8 @@ def test_the_loop_page_lists_the_crafters_boxes():
     assert sorted(rows) == sorted(b["title"] for b in boxes.values())
     for key, box in boxes.items():
         _, flow_key, does, choices = rows[box["title"]]
-        assert flow_key == (f"`{key}`" if box["flow"] else ""), key
+        written = {"dse": "orchestrate"}.get(key, key)        # D797: the search is said as `orchestrate`
+        assert flow_key == (f"`{written}`" if box["flow"] else ""), key
         assert does.startswith(box["says"]), (key, does)
         said = set(re.findall(r"`\{?(\w+)", choices))
         for value in box["values"]:

@@ -69,7 +69,7 @@ def test_a_shrink_under_a_relative_floor_refuses_and_the_goal_keeps_a_share_of_t
     flow = [{"name": "climb", "knobs": ["table"], "reach": "any", "wave": 8, "patience": 1, "budget": 8},
             {"name": "shrink", "metric": "bytes", "direction": "minimize", "knobs": ["table", "ways"],
              "floor": {"metric": "speedup", "keep": 0.9, "above": 1.0}, "wave": 8, "patience": 2, "budget": 24}]
-    _prob, out = run_toy(toy(flow={"dse": flow}, objectives=[
+    _prob, out = run_toy(toy(flow={"orchestrate": flow}, objectives=[
         {"metric": "speedup", "direction": "maximize", "keep": 0.9, "above": 1.0},
         {"metric": "bytes", "direction": "minimize"}]))
     assert any(line.startswith("[shrink] bytes 32768 -> 8192") for line in out.lessons), out.lessons
@@ -84,7 +84,7 @@ def test_finalists_are_spread_along_the_frontier_not_the_top_by_speed():
 
     doc = toy(stages=[{"name": "screen", "command": STAGE, "metrics": ["speedup", "bytes"]},
                       {"name": "confirm", "command": STAGE, "metrics": ["speedup", "bytes"]}],
-              flow={"dse": [{"name": "climb", "reach": "any", "wave": 6, "budget": 18, "patience": 3}]})
+              flow={"orchestrate": [{"name": "climb", "reach": "any", "wave": 6, "budget": 18, "patience": 3}]})
     _prob, out = run_toy(doc, finalists=3, screen_only=False)
     screened = [s for s in out.scored if s.stage == "screen"]
     front = frontier(screened, better=lambda s: s.metrics["speedup"], cost=lambda s: s.metrics["bytes"])

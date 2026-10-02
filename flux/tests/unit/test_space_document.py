@@ -22,22 +22,22 @@ def _doc(**kw):
            "budget": {"steps": 8, "prototype": False},
            "flow": {"test": {"test": ["true"]},
                     "measure": {"run": {"command": STAGE, "metrics": ["speed", "size"]}},
-                    "dse": {"space": {"stack": ["a", "b"],
+                    "orchestrate": {"space": {"stack": ["a", "b"],
                                       "x": [1, 2, 3],
                                       "b_width": {"values": [0, 4, 8], "when": {"stack": ["b"]}}}},
                     "select": {"finalists": 0}}}
     flow = doc["flow"]                              # D775: the search's space and seeds, the stages, in flow
     for key in ("space", "seeds"):
         if key in kw:
-            flow["dse"][key] = kw.pop(key)
+            flow["orchestrate"][key] = kw.pop(key)
     if "stages" in kw:
         stages = kw.pop("stages")
         flow["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in stages}
         if not stages:
             flow.pop("measure")
     for box, value in kw.pop("flow", {}).items():
-        if box == "dse":
-            flow["dse"]["policy"] = value
+        if box == "orchestrate":
+            flow["orchestrate"]["policy"] = value
         else:
             flow[box] = value
     doc.update(kw)
@@ -59,7 +59,7 @@ def test_a_knob_moves_only_when_its_condition_holds():
 def test_a_sweep_measures_a_conditional_knob_only_where_it_does_something():
     """2 stacks x 3 x, and b_width only under b: 3 + 9 = 12 points, not 18."""
     said: list[str] = []
-    out = run_loop(PromptProblem(TaskSpec.from_dict(_doc(flow={"dse": "sweep"}))),
+    out = run_loop(PromptProblem(TaskSpec.from_dict(_doc(flow={"orchestrate": "sweep"}))),
                    LoopRequest(steps=4, finalists=0, screen_only=True, prototype=False), log=said.append)
     points = {tuple(sorted(s.candidate.knobs.items())) for s in out.frontier or []} | set()
     assert any("sweep: 12 point(s) of 12" in m for m in said), said
@@ -105,7 +105,7 @@ def test_the_cache_is_keyed_on_the_tools_a_stage_needs(tmp_path, monkeypatch):
     asked: list[tuple] = []
     real = flux_evaluator_abi.toolchain_fingerprint
     monkeypatch.setattr(flux_evaluator_abi, "toolchain_fingerprint", lambda tools=(): asked.append(tuple(tools)) or real(tools))
-    doc = _doc(flow={"dse": "sweep"})
+    doc = _doc(flow={"orchestrate": "sweep"})
     doc["flow"]["measure"]["run"]["needs"] = ["sh"]
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),
              LoopRequest(db=str(tmp_path / "c.db"), steps=2, finalists=0, screen_only=True, prototype=False),

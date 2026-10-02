@@ -12,7 +12,7 @@ real tools and are never delegated: the gate, the measurements and the record.
 flow:
   orchestrate: {by: claude}          # picks the next work item, every pick on the ledger
   plan:        {by: claude}          # writes the pass's plan, checked by check_plan
-  dse:         {by: codex}           # proposes points in `flow.dse.space`
+  orchestrate:         {by: codex}           # proposes points in `flow.orchestrate.space`
   generate:    {by: opencode}        # writes the artifact (exists: D575)
   critique:    {by: claude}          # objects to a division, a part or a decision
   knowledge:   {lessons: {by: claude}}   # lessons mined from the record, citing its rows
@@ -74,7 +74,7 @@ instead of artifacts.
 | validate | objections to the document, each with the key it concerns | keys exist; advisory only, never refuses | rules |
 | orchestrate | the next item, chosen from the menu, with a reason | the item is on the menu | rules |
 | plan | a plan (parts, order, method, budgets) | `check_plan`, as today | the document's order |
-| dse | points in the space, with the reason for each | every knob and value is in `flow.dse.space`; not measured before; count ≤ the batch | the phase's policy |
+| dse | points in the space, with the reason for each | every knob and value is in `flow.orchestrate.space`; not measured before; count ≤ the batch | the phase's policy |
 | generate | the artifact | build, gate, repair (exists) | the model |
 | critique | `{ok, why}` on a division, a part or a decision | an objection is not a veto: `critique_rounds` bounds it (D433) | no critique |
 | extract | lessons, each citing record rows by id | every cited row exists and says what the lesson claims about its metric | mined |
@@ -116,12 +116,12 @@ Nothing here is specific to RTL. For a C/C++ kernel:
 - `language: cpp`
 - the gate is the kernel's tests
 - the stages are the compile, then a timed benchmark (`workers: 1`)
-- `flow.dse.space` holds the knobs: unroll factor, tile sizes, loop order, `#pragma omp` schedule,
+- `flow.orchestrate.space` holds the knobs: unroll factor, tile sizes, loop order, `#pragma omp` schedule,
   branch hints, vector width
 
 Two boxes do the work:
 
-- `dse: {by: ...}` proposes points in that space.
+- `orchestrate: {by: ...}` proposes points in that space.
 - `generate: {by: ...}` does the rewrites a knob cannot say: fusing loops, swapping
   instructions, making a branch branch-free.
 

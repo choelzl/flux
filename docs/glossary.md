@@ -65,7 +65,7 @@ provides it and never reads it.
 floating-point numbers. "Within 1 ULP" means the design's answer is at most one step away
 from the exact result, for every input. The NLU's gate uses this.
 
-**DSE, phases.** Design-space exploration: searching a space (`flow.dse.space`) of knobs and their choices
+**DSE, phases.** Design-space exploration: searching a space (`flow.orchestrate.space`) of knobs and their choices
 for the best designs. A DSE policy (`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`,
 `pareto`, or `model`) picks which points to try. *Phases* are a list of such searches run in
 order, each starting where the last one ended, each with its own knobs.

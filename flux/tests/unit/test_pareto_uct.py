@@ -127,7 +127,7 @@ def _front_of(flow: list) -> tuple[list, list]:
     from flux_frontier import frontier
     from toy_document import run_toy, toy
 
-    _prob, out = run_toy(toy(flow={"dse": flow}))
+    _prob, out = run_toy(toy(flow={"orchestrate": flow}))
     scored = [s for s in out.scored if "speedup" in s.metrics]
     return scored, frontier(scored, better=lambda s: s.metrics["speedup"], cost=lambda s: s.metrics["bytes"])
 

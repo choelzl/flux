@@ -131,7 +131,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
     doc = {"id": "grid",
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"montecarlo": {"samples": 4, "seed": 1}, "space": {"x": [1, 2, 3], "y": ["a", "b"]}},
+           "flow": {"orchestrate": {"montecarlo": {"samples": 4, "seed": 1}, "space": {"x": [1, 2, 3], "y": ["a", "b"]}},
                     "test": {"test": ["true"]}}}
     task = TaskSpec.from_dict(doc)
     assert task.space == {"x": [1, 2, 3], "y": ["a", "b"]}
@@ -140,14 +140,14 @@ def test_the_document_names_the_policy_on_its_dse_line():
     assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 point(s): x[3] x y[2]")
                for line in describe_flow(task, prob))
     assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
-    with pytest.raises(TaskError, match="registered: anneal, control, genetic"):
-        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": "hillclimb"}})
+    with pytest.raises(TaskError, match="available: agent, anneal, control, genetic"):
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": "hillclimb"}})
     with pytest.raises(TaskError, match="space.y: a non-empty list"):
-        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": {"space": {"x": [1], "y": []}}}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": {"space": {"x": [1], "y": []}}}})
 
 
 def test_the_model_names_the_next_points_and_bad_ones_are_dropped():
-    """`flow: {dse: {by: model}}`: the model names new points each round; out-of-space or repeated points
+    """`flow: {orchestrate: {by: model}}`: the model names new points each round; out-of-space or repeated points
     are dropped and said; an unusable round is retried once, then the walk ends (D554)."""
     import json
 
@@ -178,7 +178,7 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
     doc = {"id": "g",
            "statement": "g",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
+           "flow": {"orchestrate": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
     assert any(line.startswith("dse: model {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
@@ -311,15 +311,15 @@ def test_the_document_says_phases_and_a_typo_in_one_is_a_load_error():
     doc = {"id": "g",
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"policy": [{"name": "a", "wave": 2}, {"policy": "llm", "knobs": ["x"], "rounds": 1}, "control"],
+           "flow": {"orchestrate": {"policy": [{"name": "a", "wave": 2}, {"policy": "llm", "knobs": ["x"], "rounds": 1}, "control"],
                             "space": {"x": [1, 2, 3]}},
                     "test": {"test": ["true"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert prob.roles().orchestrator.name == "phases" and len(prob.roles().orchestrator.phases) == 3
     with pytest.raises(TaskError, match=r"flow.dse\[0\]: gradient: wavee is not one of its fields"):
-        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": [{"wavee": 2}]}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": [{"wavee": 2}]}})
     with pytest.raises(TaskError, match=r"flow.dse\[0\]: phase policy 'hill' is not one of"):
-        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "dse": [{"policy": "hill"}]}})
+        TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": [{"policy": "hill"}]}})
 
 
 def test_the_models_phase_moves_only_its_knobs():

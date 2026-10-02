@@ -27,7 +27,7 @@ named checks run in order (`test: {lint: ..., golden: ...}`, D652, D789); the fi
 | a stage's `command` | `name=value` tokens; the stage reads the `metrics` it lists | non-zero: the stage failed for that candidate |
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
-folder), `{workdir}`, `{name}`, `{part}`, `{python}`, and `{knob}` for each knob of `flow.dse.space`. A
+folder), `{workdir}`, `{name}`, `{part}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A
 command starting with `flux` runs this Flux. A stage lists the tools it needs under `needs:`; a
 stage whose tools are missing is skipped and reported (`WILL SKIP` in `task check`, `NOT RUN`
 in the report).
@@ -36,7 +36,7 @@ in the report).
 
 `flow.generate`:
 - `model` (the default): the model writes it and repairs it from the gate's output.
-- `{command: "..."}`: a script renders it. With a space (`flow.dse.space`), the script runs once per point with
+- `{command: "..."}`: a script renders it. With a space (`flow.orchestrate.space`), the script runs once per point with
   the knobs as placeholders (`flux new --kind sweep`).
 - `{by: opencode|claude|codex}` or `{by: {command: [...]}, timeout_s: N, questions:
   decide|model|operator}`: a coding agent writes it in a work directory. It does not compile or
@@ -69,7 +69,7 @@ and the loop checks it with `flux rtl proto FILE --golden golden.py`, the stage'
 
 ## 4. How the search goes (stable names, evolving fields)
 
-`flow.dse` names a policy: `sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, `pareto`,
+`flow.orchestrate` names a policy: `sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, `pareto`,
 `control`, or `model` (the model proposes points from what was measured). It can also be a list of
 phases, each starting from where the last ended:
 `[{name: walk, policy: gradient, budget: 12}, {name: propose, policy: model, rounds: 1}]`. The
@@ -96,7 +96,7 @@ class EveryOther(Policy):
 
 ```yaml
 flow:
-  dse: every_other:EveryOther                              # or, as a phase:
+  orchestrate: every_other:EveryOther                              # or, as a phase:
   # dse: [{policy: "every_other:EveryOther", stride: 3}]
 ```
 

@@ -40,7 +40,7 @@ Edit `myproblem/problem.yaml`:
 
 - `rtl`: edit `golden.py`: `PORTS` and a `golden(**inputs)` function returning the right outputs.
 - `python`, `sweep`, `tune`: edit `check.py` so it prints `N failing` (0 when correct).
-- For a knob search: list the knobs under `flow.dse.space` and write each design in the generator script.
+- For a knob search: list the knobs under `flow.orchestrate.space` and write each design in the generator script.
 
 Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
 problem on the machine) or in `library/` beside the document (this problem's own). Each paper is
@@ -64,7 +64,7 @@ flux task run myproblem --passes 1
 ```
 
 Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen. A search
-(`flow.dse` with its `space`) tries one design a pass, the next picked from what the last ones
+(`flow.orchestrate` with its `space`) tries one design a pass, the next picked from what the last ones
 measured: give it a pass per point, or `budget.batch: N` for N designs a pass.
 [Run a problem](run.md) has the options, stopping and resuming, and choosing the AI model.
 
@@ -85,13 +85,13 @@ writes an HTML page of the whole search.
 | `flow` | each box of [the loop](loop-shape.md): who fills it, and its own settings (below) |
 | `flow.test` | a command that prints `N failing` or exits non-zero; or a map of named checks, run in order |
 | `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
-| `flow.dse` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
+| `flow.orchestrate` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
 | `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `agent: opencode` digests the library instead of the model; `off` |
 | `flow.select` | `{finalists: 3}`: how many reach the costliest stage |
 | `budget` | `steps`, `passes`, `repair_attempts`, `workers`, `prototype` |
 
 In commands: `{artifact}` is the design file, `{home}` the document's folder, `{python}` the
-Python in use, and `{knob}` each knob of `flow.dse.space`. A command starting with `flux` runs this Flux.
+Python in use, and `{knob}` each knob of `flow.orchestrate.space`. A command starting with `flux` runs this Flux.
 
 A gate can be several checks, cheapest first. Each has a name and a command; the first that
 fails refuses the design, and the repair is told where it failed:

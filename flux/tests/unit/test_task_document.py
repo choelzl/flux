@@ -501,7 +501,8 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
     ({"test": {"agent": "claude"}}, {}, "never delegated"),       # D775: flow.test is the gate itself
     ({"measure": {"agent": "claude"}}, {}, "never delegated"),
     ({"validate": "llm"}, {}, r"flow.validate is rules \| model"),
-    ({"dse": "hillclimb"}, {}, "no such DSE policy"),
+    ({"dse": "sweep"}, {}, "flow.dse is `orchestrate`"),
+    ({"orchestrate": "hillclimb"}, {}, "available:"),
     ({"analytical": ["screen"]}, {}, "not a box"),
     ({"knowledge": ["sheet"]}, {}, "is `off` or an object"),
     ({"winner": "llm"}, {}, "not a box"),
@@ -622,7 +623,7 @@ def test_a_space_and_a_generator_command_are_a_dse_with_no_world(tmp_path):
                                "statement": "a string, as short as the gate allows",
                                "objectives": [{"metric": "size", "direction": "minimize"}],
                                "budget": {"steps": 1, "prototype": False, "batch": 100},
-                               "flow": {"dse": {"policy": "sweep", "space": {"width": [4, 1, 2], "fill": ["a", "b"]}},
+                               "flow": {"orchestrate": {"policy": "sweep", "space": {"width": [4, 1, 2], "fill": ["a", "b"]}},
                                         "generate": {"command": "{python} " + str(gen) + " {artifact} {width} {fill}"},
                                         "test": ["{python}", "-c", "import sys; bad = sys.argv[1] == 'b'; print(f'{int(bad)} failing')", "{fill}"],
                                         "measure": {"screen": {"metrics": ["size"],
@@ -639,7 +640,7 @@ def test_a_placeholder_that_is_no_knob_is_a_load_error():
         TaskSpec.from_dict({"id": "t",
                             "statement": "x",
                             "flow": {"test": {"test": "check {artifact} --width {widht}"},
-                                     "dse": {"space": {"width": [1, 2]}}}})
+                                     "orchestrate": {"space": {"width": [1, 2]}}}})
     # a script's own braces (a token with spaces) are the script's business
     TaskSpec.from_dict({"id": "t",
                         "statement": "x",

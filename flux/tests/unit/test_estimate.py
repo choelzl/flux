@@ -28,7 +28,7 @@ def _doc(tmp_path: Path, xs, estimate=None, **more) -> dict:
     if estimate is not None:
         stage["estimate"] = estimate
     return {"id": "est", "statement": "the cheapest x", "language": "text",
-            "flow": {"dse": {"policy": "sweep", "space": {"x": list(xs)}},
+            "flow": {"orchestrate": {"policy": "sweep", "space": {"x": list(xs)}},
                      "generate": {"command": f"{{python}} {tmp_path}/gen.py {{artifact}} {{x}}"},
                      "test": {"test": ["true"]}, "measure": {"place": stage}},
             "objectives": [{"metric": "cost", "direction": "minimize"}], "budget": {"steps": 2, "batch": 100}, **more}
@@ -139,7 +139,7 @@ def test_the_flow_shows_each_stage_with_its_estimator_and_the_old_boxes_are_gone
 @pytest.mark.parametrize("dse", ["pareto", {"pareto": {"budget": 4}}, [{"policy": "sweep"}, {"policy": "pareto"}]])
 def test_pareto_with_one_objective_is_refused_at_load(tmp_path, dse):
     doc = _doc(tmp_path, [1, 2])
-    doc["flow"]["dse"] = {**doc["flow"]["dse"], "policy": dse}
+    doc["flow"]["orchestrate"] = {**doc["flow"]["orchestrate"], "policy": dse}
     with pytest.raises(TaskError, match="pareto needs two objectives"):
         TaskSpec.from_dict(doc)
     doc["objectives"].append({"metric": "speed", "direction": "maximize"})

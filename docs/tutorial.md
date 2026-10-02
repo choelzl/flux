@@ -16,7 +16,7 @@ pre-written rules:
 | generator | write each design, repair it from the failures, make it cheaper | `flow: {generate: model}` (the default), or `{by: opencode}` |
 | orchestrator | pick the next piece of work, with its reasons on the record | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
 | planner | write the plan of a pass: parts, order, method, budgets | `--agent plan`, or `flow: {plan: model}` |
-| search | propose the next points of a knob space from what was measured | `flow: {dse: {by: model}}`, or a `model` phase |
+| search | propose the next points of a knob space from what was measured | `flow: {orchestrate: {by: model}}`, or a `model` phase |
 
 With `--agent tools`, a model turn can also call tools inside the turn: run Python, run the
 problem's own check on a draft, read the history. Two things are never handed to a model: the
@@ -171,7 +171,7 @@ search policy. A script writes each point, and the gate and the stages judge it 
 ```yaml
 flow:
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  dse:
+  orchestrate:
     space:
       arch: [ripple, carry_select, kogge_stone]
       block: [2, 4, 8]

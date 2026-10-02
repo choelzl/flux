@@ -85,9 +85,9 @@ flux task run DOC --tui                  # the curses screen, for a person watch
 
 `flow:` says how the search goes; mix them per problem:
 - `generate: model` -- the model writes each candidate and repairs it against the gate's failures.
-- `dse: {policy: sweep, space: {knob: [ordered choices]}}` + `generate: {command: "{python} {home}/render.py {knob} {artifact}"}`
+- `orchestrate: {policy: sweep, space: {knob: [ordered choices]}}` + `generate: {command: "{python} {home}/render.py {knob} {artifact}"}`
   -- a script renders each point; no model needed.
-- `dse:` a policy (`sweep`, `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto`, `model`) or a
+- `orchestrate:` with a space, a search (D797): a policy (`sweep`, `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto`, `model`) or a
   list of phases, each continuing from where the last ended:
   `[{name: walk, policy: gradient, budget: 12}, {name: propose, policy: model, rounds: 1, batch: 4}]`.
 - `generate: {by: opencode|claude|codex}` -- a coding agent writes the candidate in a work

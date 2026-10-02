@@ -63,7 +63,7 @@ works it and its own settings (D775):
 
 ```yaml
 flow:
-  dse:                                   # the search, its space and where it starts
+  orchestrate:                                   # the search, its space and where it starts
     policy: sweep
     space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
@@ -75,7 +75,7 @@ flow:
   select: {finalists: 2}
 ```
 
-Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`.
 
@@ -112,7 +112,7 @@ tools, and refuses a document that asks for what nothing measures.
 A run resumes from its record: what was measured is never paid for twice.
 
 **A search works between passes** (D738). A design is named by its settings (D743): a value that
-is a word stands alone, any other carries its knob (`list_sieve-wheel=1`). With `flow.dse` and its `space`, a pass tries one design, the
+is a word stands alone, any other carries its knob (`list_sieve-wheel=1`). With `flow.orchestrate` and its `space`, a pass tries one design, the
 search's next pick from what the passes before it measured: a 6-point sweep is 6 passes
 (`--passes 6`), an anneal or a genetic population carries on from pass to pass. `budget.batch: N`
 lets one pass make, check and measure N of the search's picks side by side (worth it when the tools

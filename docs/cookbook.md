@@ -20,7 +20,7 @@ points in [extending.md](extending.md).
 
 ```yaml
 flow:
-  dse:
+  orchestrate:
     space:
       block: [16, 32, 64, 128, 256]
       threads: [1, 2, 4, 8]
@@ -40,7 +40,7 @@ budget: {workers: 1}
 
 ## Searching: how many points you can afford
 
-| the space | `flow.dse` | fields worth setting |
+| the space | `flow.orchestrate` | fields worth setting |
 |---|---|---|
 | up to a few hundred points | `sweep` (the default) | `batch_size` |
 | large, and one step at a time finds better neighbours | `gradient` | `steps`, `wave` (knobs moved per round), `patience`, `budget`, `reach: adjacent\|any` |
@@ -56,20 +56,20 @@ improvement smaller than this is none). Phases run in order, each from where the
 
 ```yaml
 flow:
-  dse:
+  orchestrate:
     - {name: coarse, policy: sweep, knobs: [block]}
     - {name: fine, policy: gradient, hold: [block], steps: 20}
     - {name: ideas, policy: model, rounds: 2}
 ```
 
-A policy of your own is a class in a file beside the document: `dse: my_search:MySearch`
+A policy of your own is a class in a file beside the document: `orchestrate: my_search:MySearch`
 ([extending.md](extending.md), section 4).
 
 ## Trade-offs and constraints
 
 - **One goal, then the rest**: `objectives` in order. With a `goal` on the first, the decision is
   the best on the second among those that meet it: "the smallest that makes 1 GHz".
-- **A true trade-off**: two objectives without a goal and `dse: pareto`. The report shows the
+- **A true trade-off**: two objectives without a goal and `orchestrate: pareto`. The report shows the
   front.
 - **A hard limit**: make it a gate (refuse what exceeds it) or a phase `floor`
   (`{metric: storage_bytes, at: 98304}`).

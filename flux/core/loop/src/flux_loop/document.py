@@ -1168,7 +1168,13 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
     record's lessons are `knowledge.lessons`, kept inside as the `extract` box."""
     if "extract" in flow:
         raise TaskError("flow.extract is `knowledge: {lessons: mined}` (or `{lessons: claude}`) (D796)")
+    if "dse" in flow:
+        raise TaskError("flow.dse is `orchestrate`: `orchestrate: {policy: sweep, space: {...}}` (D797)")
     flow = dict(flow)
+    o = flow.get("orchestrate")                            # D797: a search is the orchestrator's choice
+    if isinstance(o, list) or (isinstance(o, str) and o in _dse_words()) \
+            or (isinstance(o, dict) and ({"policy", "space", "seeds"} & set(o) or set(o) & set(_dse_words()))):
+        flow["dse"] = flow.pop("orchestrate")
     k = flow.get("knowledge")
     if isinstance(k, dict) and "lessons" in k:
         k = dict(k)
@@ -1255,6 +1261,13 @@ def _by_doc(spec: Any, more: dict[str, Any]) -> Any:
     return who["by"] if len(who) == 1 and not more and isinstance(who["by"], str) else {**who, **more}
 
 
+def _dse_words() -> tuple[str, ...]:
+    """The search policies a document names by word (D797: as its `orchestrate`)."""
+    from .roles import available_roles
+
+    return tuple(n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent", "model"))
+
+
 def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
     """D795: the boxes as the loop keeps them, written the way a document says them; D796: the
     `extract` box as `knowledge.lessons`."""
@@ -1269,8 +1282,8 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
             out[box] = {"by": got} if box == "dse" and isinstance(got, str) else got      # a dse word is a policy
         elif box == "dse" and value == "llm":
             out[box] = {"by": "model"}
-        elif box == "dse" and isinstance(value, dict) and set(value) == {"llm"}:
-            out[box] = {"by": "model", **(value["llm"] or {})}
+        elif box == "dse" and isinstance(value, dict) and "llm" in value:      # the model's search, its options
+            out[box] = {"by": "model", **(value["llm"] or {}), **{k: x for k, x in value.items() if k != "llm"}}
         elif box == "dse" and isinstance(value, dict) and isinstance(value.get("policy"), dict) and set(value["policy"]) == {"llm"}:
             out[box] = {"by": "model", **(value["policy"]["llm"] or {}), **rest}
         elif box == "dse" and isinstance(value, dict) and value.get("policy") == "llm":
@@ -1280,6 +1293,9 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
             out[box] = {"by": got} if isinstance(got, str) else got
         else:
             out[box] = value
+    if "dse" in out:                                       # D797: the search, as the orchestrator
+        dse = out.pop("dse")
+        out["orchestrate"] = {"by": "model"} if dse == "model" else dse
     lessons = out.pop("extract", "off")
     if lessons != "off":
         k = out.get("knowledge")

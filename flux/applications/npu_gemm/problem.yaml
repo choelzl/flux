@@ -6,7 +6,7 @@ statement: >-
 language: yaml
 
 flow:
-  dse:
+  orchestrate:
     policy: sweep
     space:
       pe_x: [4, 8, 16, 32, 64]          # MACs in the array

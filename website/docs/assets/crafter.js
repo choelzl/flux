@@ -626,11 +626,11 @@
     }
     if (kf["flow.dse.seeds"] !== undefined) D.push("    seeds: " + inline(kf["flow.dse.seeds"], false));
     if (D.length) {
-      F.push("  dse:");
+      F.push("  orchestrate:                # a search: the points it tries (D797)");
       if (dv && typeof dv === "object" && !Array.isArray(dv)) Object.keys(dv).forEach(function (k) { F.push("    " + q(k) + ": " + inline(dv[k], false)); });
       else if (dv !== undefined) F.push("    policy: " + inline(dv, false));
       F = F.concat(D);
-    } else if (dv !== undefined) F.push("  dse: " + inline(dv, false));
+    } else if (dv !== undefined) F.push("  orchestrate: " + inline(dv, false));
 
     // test: the checks, in order
     var checks = r.checks.filter(function (c) { return c.run; });
@@ -960,6 +960,13 @@
     return plain && box !== "dse" ? who.by : Object.assign(who, rest);
   }
 
+  /** D797: whether an `orchestrate` value is a search -- a policy's word, phases, or a space. */
+  function isSearch(v) {
+    if (Array.isArray(v)) return true;
+    if (typeof v === "string") return DSE_POLICIES.indexOf(v) >= 0 || ["control", "phases"].indexOf(v) >= 0;
+    return !!v && typeof v === "object" && ("space" in v || "seeds" in v || "policy" in v);
+  }
+
   function unlifted(doc) {
     if (!doc || typeof doc !== "object") return doc;
     var out = {}, k;
@@ -967,7 +974,10 @@
     var fl = doc.flow && typeof doc.flow === "object" && !Array.isArray(doc.flow) ? doc.flow : null;
     if (!fl) return out;
     var f = {};
-    for (k in fl) f[k] = ["test", "measure"].indexOf(k) >= 0 ? fl[k] : toInner(k, fl[k]);     // D795
+    for (k in fl) {
+      var key = k === "orchestrate" && isSearch(fl[k]) ? "dse" : k;            // D797: a search is the orchestrator's
+      f[key] = ["test", "measure"].indexOf(k) >= 0 ? fl[k] : toInner(key, fl[k]);   // D795
+    }
     if ("test" in f) { out.gate = f.test; delete f.test; }
     if ("measure" in f) {
       var m = f.measure || {};
@@ -1020,13 +1030,15 @@
     if (at === "flow.test") return fl.test;
     if (at === "flow.measure") return fl.measure;
     if (at === "flow.knowledge") return fl.knowledge;
-    if (at === "flow.dse.space") return fl.dse && fl.dse.space;
-    if (at === "flow.dse.seeds") return fl.dse && fl.dse.seeds;
+    var search = isSearch(fl.orchestrate) ? fl.orchestrate : null;      // D797: the search is orchestrate's
+    if (at === "flow.dse.space") return search && search.space;
+    if (at === "flow.dse.seeds") return search && search.seeds;
     if (at === "flow.boxes") {                      // every box's choice, without what is kept or edited apart
       out = {};
       for (k in fl) {
         if (["test", "measure"].indexOf(k) >= 0) continue;
         var v = fl[k];
+        if (k === "orchestrate" && isSearch(v)) k = "dse";
         if (k === "knowledge") {                     // its choice (off, an agent, a digest); its files apart
           if (v && typeof v === "object" && !Array.isArray(v)) {
             v = Object.assign({}, v); ["files", "sheet", "text", "library"].forEach(function (x) { delete v[x]; });

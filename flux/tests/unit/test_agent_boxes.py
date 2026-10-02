@@ -160,7 +160,7 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
 
 
 def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
-    """`flow: {dse: {by: ...}}`: the agent's points are checked against the space; a point
+    """`flow: {orchestrate: {by: ...}}`: the agent's points are checked against the space; a point
     outside it is dropped, the rest are measured (D640)."""
     from flux_loop import LoopRequest, run_loop
 
@@ -169,7 +169,7 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
     doc = {"id": "pts",
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"by": _agent(tmp_path, "good", answer), "space": {"x": [1, 2, 3], "y": ["a", "bb"]}},
+           "flow": {"orchestrate": {"by": _agent(tmp_path, "good", answer), "space": {"x": [1, 2, 3], "y": ["a", "bb"]}},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}
     said: list[str] = []
@@ -189,7 +189,7 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
     doc = {"id": "front",
            "statement": "a trade",
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
-           "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
+           "flow": {"orchestrate": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
                     "select": {"by": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["speed", "size"]}}}}
@@ -209,7 +209,7 @@ def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path
     doc = {"id": "rows",
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
+           "flow": {"orchestrate": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
                     "knowledge": {"lessons": {"by": "claude"}},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}

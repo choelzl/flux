@@ -38,9 +38,9 @@ changing ZigZag's numbers here.
 
 - **Another workload:** replace `workload.yaml` (see `core/ir/workload/examples/` and
   [docs/ir.md](../../../docs/ir.md)).
-- **More of the architecture:** add knobs to `flow.dse.space` and to `render.py` (a 2-D array, another
+- **More of the architecture:** add knobs to `flow.orchestrate.space` and to `render.py` (a 2-D array, another
   memory level).
-- **A bigger space:** `flow: {dse: gradient}` or a list of phases, or `llm` to let a model
+- **A bigger space:** `flow: {orchestrate: gradient}` or a list of phases, or `llm` to let a model
   propose points ([docs/cookbook.md](../../../docs/cookbook.md)).
 - **Another cost model:** `make_evaluator("timeloop")` in `measure.py` (it needs Docker, or
   `nix develop .#timeloop`).

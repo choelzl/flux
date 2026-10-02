@@ -60,7 +60,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
     doc_path = tmp_path / "m" / "mine/problem.yaml"
     for dse in ("every_other:EveryOther", [{"policy": "every_other:EveryOther", "stride": 3}]):
         doc = yaml.safe_load(doc_path.read_text())
-        doc["flow"]["dse"]["policy"] = dse
+        doc["flow"]["orchestrate"]["policy"] = dse
         doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
         answer = tmp_path / "a.json"
         assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer),
@@ -68,7 +68,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
         got = json.loads(answer.read_text())
         assert len(got["frontier"]) == (3 if isinstance(dse, str) else 2), got["frontier"]
     doc = yaml.safe_load(doc_path.read_text())
-    doc["flow"]["dse"] = "every_other:Nope"
+    doc["flow"]["orchestrate"] = "every_other:Nope"
     doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
     capsys.readouterr()
     assert main(["task", "check", str(doc_path)]) == 2
@@ -132,7 +132,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
     doc_path = tmp_path / "t" / "mm/problem.yaml"
     doc = yaml.safe_load(doc_path.read_text())
-    doc["flow"]["dse"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
+    doc["flow"]["orchestrate"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
                           {"name": "fine", "policy": "gradient", "hold": ["block"], "steps": 4}]
     doc["budget"]["steps"] = 4
     doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))

@@ -39,19 +39,19 @@ def toy(**kw: Any) -> dict[str, Any]:
            "budget": {"steps": 40, "prototype": False},
            "flow": {"test": {"test": ["true"]},
                     "measure": {"screen": {"command": STAGE, "metrics": ["speedup", "bytes"]}},
-                    "dse": {"space": dict(SPACE), "seeds": [dict(SEED)]},
+                    "orchestrate": {"space": dict(SPACE), "seeds": [dict(SEED)]},
                     "select": {"finalists": 0}}}
     # D775: a box's choice beside the document's own settings; the search's policy, space and
-    # seeds are one `flow.dse`
-    flow, dse = dict(kw.pop("flow", {})), dict(doc["flow"]["dse"])
+    # seeds are one `flow.orchestrate` (D797)
+    flow, dse = dict(kw.pop("flow", {})), dict(doc["flow"]["orchestrate"])
     for key in ("space", "seeds"):
         if key in kw:
             dse[key] = kw.pop(key)
-    if "dse" in flow:
-        dse["policy"] = flow.pop("dse")
+    if "orchestrate" in flow:
+        dse["policy"] = flow.pop("orchestrate")
     if "stages" in kw:
         flow["measure"] = {st["name"]: {k: v for k, v in st.items() if k != "name"} for st in kw.pop("stages")}
-    doc["flow"] = {**doc["flow"], **flow, "dse": dse}
+    doc["flow"] = {**doc["flow"], **flow, "orchestrate": dse}
     doc.update(kw)
     return doc
 

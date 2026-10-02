@@ -8,7 +8,7 @@ statement: >-
 language: systemverilog
 
 flow:
-  dse:
+  orchestrate:
     policy: sweep
     space:
       arch: [behavioral, tree, lut]

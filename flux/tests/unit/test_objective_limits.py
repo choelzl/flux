@@ -135,7 +135,7 @@ def test_every_display_names_every_limit(tmp_path):
     doc = {"id": "two",
            "statement": "s",
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000}, {"metric": "area_um2", "direction": "minimize", "goal": 60}],
-           "flow": {"dse": {"by": "model", "space": {"x": [0, 1, 2, 3]}},
+           "flow": {"orchestrate": {"by": "model", "space": {"x": [0, 1, 2, 3]}},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["fmax_mhz", "area_um2"]}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
