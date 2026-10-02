@@ -596,6 +596,30 @@ class PromptProblem(Problem):
                                     Mentor([*lib, *rest], budget=role.budget, share=role.share))
         return self._mentor
 
+    def versions(self) -> dict[str, str]:
+        """D778: a document's judge, as a version (D510) -- its gate (`flow.test`), the files beside
+        it the gate names (a golden model, a checker), the measuring tools and this Flux. A design
+        admitted under the same judge is kept as it stands at a reload; any of them changed, it is
+        re-verified once and recorded again. A world's own `versions` replaces this one."""
+        if "_judge" not in self.__dict__:
+            import hashlib
+
+            from flux_evaluator_abi import toolchain_fingerprint
+
+            from .provenance import git_revision
+
+            gate = (self.task.to_dict().get("flow") or {}).get("test")
+            home = Path(self.task.home) if self.task.home else None
+            files = {}
+            for rel in sorted(set(re.findall(r"\{home\}/([^\s\"']+)", json.dumps(gate, default=str)))):
+                path = home / rel if home is not None else None
+                files[rel] = (hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+                              if path is not None and path.is_file() else "missing")
+            said = json.dumps({"gate": gate, "files": files, "tools": toolchain_fingerprint(), "flux": git_revision()},
+                              sort_keys=True, default=str)
+            self._judge = hashlib.sha256(said.encode()).hexdigest()[:16] if gate else ""
+        return {"judge": self._judge} if self._judge else {}
+
     def digesting(self) -> bool:
         """Whether this loop digests papers at all (D771): its own, or the library's by `flow.knowledge`."""
         return any(type(x).__name__ == "Digest" for x in getattr(self.knowledge(), "sources", ()))

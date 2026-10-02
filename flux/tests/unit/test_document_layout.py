@@ -107,3 +107,37 @@ def test_flux_task_upgrade_rewrites_a_document_and_keeps_the_original(tmp_path, 
     assert yaml.safe_load((tmp_path / "t.problem.yaml.orig").read_text()) == OLD
     assert load_task(str(path)) == TaskSpec.from_dict(NEW)
     assert main(["task", "upgrade", str(path)]) == 0 and "already in the current layout" in capsys.readouterr().out
+
+
+def test_a_design_admitted_under_todays_judge_is_not_judged_again(tmp_path):
+    """D778: a document's judge is a version -- its gate, the files the gate names, the tools and
+    this Flux. A resumed run keeps what today's judge admitted; a changed checker re-verifies it once."""
+    import json
+
+    from flux_llm import ScriptedProposer
+    from flux_loop import LoopRequest, PromptProblem, run_loop
+
+    (tmp_path / "check.py").write_text(
+        "import sys\ngot = open(sys.argv[1]).read().split()\nprint(f'{int(got != [str(i) for i in range(10)])} failing')\n")
+    doc = {"id": "j", "statement": "the ten digits, one per line", "language": "text",
+           "budget": {"steps": 1, "prototype": False},
+           "flow": {"test": {"test": "{python} {home}/check.py {artifact}", "count_re": r"(\d+) failing"}}}
+    db = str(tmp_path / "j.db")
+    good = json.dumps({"artifact": "\n".join(str(i) for i in range(10)) + "\n", "why": "as asked"})
+
+    def run():
+        said: list[str] = []
+        problem = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
+        assert problem.versions()["judge"]
+        run_loop(problem, LoopRequest(db=db, steps=1, prototype=False), proposer=ScriptedProposer([good] * 4),
+                 log=said.append)
+        return said
+
+    run()
+    second = run()
+    assert any("kept frozen (its row was made by today's" in m for m in second), second
+    assert not any("re-verified" in m for m in second)
+    (tmp_path / "check.py").write_text((tmp_path / "check.py").read_text() + "# stricter now\n")
+    third = run()
+    assert any("re-verified" in m for m in third), third
+    assert not any("re-verified" in m for m in run()), "once: recorded with today's judge"
