@@ -34,7 +34,8 @@ _MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC
 #: The logins kept as settings (D748): a person's, so whoever starts a run lends theirs.
 _LOGIN_SETTINGS = ("CLAUDE_CODE_OAUTH_TOKEN",)
 #: The agents' folders in the server account's environment, never a run's (D748): each user's are in their home.
-_OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
+_OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
+                "XDG_CACHE_HOME")
 
 
 def home_ready(store: Store, user: User) -> Path:
@@ -107,6 +108,8 @@ def run_env(store: Store, user: User, app: str | None = None, home_for: User | N
     for agent, a in (store.server_get("agents") or {}).items():   # D756: the admin's extra arguments for an agent
         if a.get("args"):
             env[f"FLUX_{agent.upper()}_ARGS"] = f"{a['args']} {env.get(f'FLUX_{agent.upper()}_ARGS', '')}".strip()
+        if a.get("login_files"):                                   # D760: where its login is kept
+            env[f"FLUX_{agent.upper()}_LOGIN_FILES"] = ",".join(a["login_files"])
     _agents(env, web)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like

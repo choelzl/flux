@@ -307,7 +307,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     says how many (`budget.workers`, `parallel_parts`). Only an admin changes the advanced
     settings (also when creating a loop); everyone sees them.
 - **Agents (Admin › Agents, D756):** per coding agent: found on this server or not, and its version; its
-  program, login command, extra arguments; the files every home starts with for it; the hosts it needs on the
+  program, login command, extra arguments, where a build of its own keeps its login (D760: e.g. `.cache/nga/auth.json`;
+  `~/.cache` is the user's own); the files every home starts with for it; the hosts it needs on the
   allowlist; whom it is ready for (each user's Test).
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With

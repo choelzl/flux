@@ -135,6 +135,7 @@ class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's
     args: str = Field(default="", max_length=1024)
     home: list[str] = Field(default_factory=list)
     hosts: list[str] = Field(default_factory=list)
+    login_files: list[str] = Field(default_factory=list)     # D760: where its login is kept, when not the agent's usual
 
 
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
@@ -360,7 +361,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
-        have = logged_in(store.home_of(user))
+        have = logged_in(store.home_of(user), {a: (c or {}).get("login_files") or [] for a, c in (store.server_get("agents") or {}).items()})
         mine = store.settings(user)
         have["claude"] = have["claude"] or bool(mine.get("CLAUDE_CODE_OAUTH_TOKEN"))      # D748: a printed token, kept
         cmds = store.server_settings(reveal=True)
@@ -683,6 +684,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             out.append({"id": agent, "label": AUTHORS.get(agent, agent), "bin": settings.get(f"FLUX_{up}_BIN") or "",
                         "login": settings.get(f"FLUX_{up}_LOGIN") or "", "login_default": LOGIN_DEFAULTS[agent],
                         "args": mine.get("args") or "", "home": mine.get("home") or [], "hosts": mine.get("hosts") or [],
+                        "login_files": mine.get("login_files") or [],
                         "found": found, "version": version, "users": users})
         return {"agents": out}
 
@@ -693,18 +695,26 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         exe = body.bin.strip()
         if exe and not (exe.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", exe)):
             raise HTTPException(400, "the program: an absolute path, or a name found on PATH")
-        home = []
+        home, login_files = [], []
+        for rel in body.login_files:
+            r = rel.strip().removeprefix("~/")
+            if r.startswith("/") or ".." in r.split("/"):            # before the slashes go: /etc/passwd is not in a home
+                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .local/share/nga/auth.json")
+            r = r.strip("/")
+            if r:
+                login_files.append(r)
         for rel in body.home:
-            r = rel.strip().removeprefix("~/").strip("/")
-            if r and (r.startswith("/") or ".." in r.split("/")):
+            r = rel.strip().removeprefix("~/")
+            if r.startswith("/") or ".." in r.split("/"):
                 raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .config/opencode")
+            r = r.strip("/")
             if r:
                 home.append(r)
         up = agent.upper()
         store.set_server_setting(f"FLUX_{up}_BIN", exe or None)
         store.set_server_setting(f"FLUX_{up}_LOGIN", body.login.strip() or None)
         cfg = store.server_get("agents") or {}
-        cfg[agent] = {"args": body.args.strip(), "home": home, "hosts": _rules(body.hosts)}
+        cfg[agent] = {"args": body.args.strip(), "home": home, "hosts": _rules(body.hosts), "login_files": login_files}
         store.server_set("agents", cfg)
         store.audit(a.name, "agent settings", f"{agent}: program {exe or '(on PATH)'}; login {body.login.strip() or '(default)'}; "
                     f"{len(home)} home path(s), {len(cfg[agent]['hosts'])} host(s)")

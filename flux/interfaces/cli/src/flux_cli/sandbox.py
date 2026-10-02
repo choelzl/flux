@@ -6,7 +6,7 @@ real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux s
 executables on PATH. Writable: the record's folder, the problem's `out/` and `workbench/`, the
 places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
 cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
-agents' directories) and `cache/` (XDG_CACHE_HOME); and HOME (D744): the user's own Flux home,
+agents' directories); and HOME (D744): the user's own Flux home,
 writable, at `/home/flux` -- their agents' configuration, logins and sessions, kept from run to
 run and refreshed in place. Another application's traces and caches, another user's home, the
 real home (`~/.ssh`, other repositories) and the Docker socket are not there.
@@ -166,7 +166,7 @@ def app_dir(args: Any, command: str) -> Path:
     ident = os.environ.get("FLUX_SANDBOX_APP") or ident
     key = re.sub(r"[^A-Za-z0-9_.-]+", "_", ident)[:80] or "unnamed"
     d = _cache() / "apps" / key
-    for sub in ("tmp", "cache"):
+    for sub in ("tmp",):
         (d / sub).mkdir(parents=True, exist_ok=True)
     return d
 
@@ -200,7 +200,7 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
                     if target.exists() and not any(str(target).startswith(s) for s in SYSTEM):
                         ro.append(str(target.parent))
     app = app_dir(args, command)
-    rw += [str(app / "tmp"), str(app / "cache")]              # the application's own, nothing shared (D681)
+    rw += [str(app / "tmp")]                                  # the application's own, nothing shared (D681)
     for flag in ("db", "out", "json"):
         v = getattr(args, flag, None)
         if v and v not in (":memory:", "-"):
@@ -382,7 +382,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         if bundle:
             env["NODE_EXTRA_CA_CERTS"] = bundle
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
-               FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=str(app / "cache"))
+               FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=f"{HOME_IN}/.cache")
     if proxy_dir:
         cmd += ["-v", f"{proxy_dir}:{proxy_dir}"]
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))

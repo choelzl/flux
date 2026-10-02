@@ -106,7 +106,8 @@ def check_agent(name: str, *, live: bool = False, env: dict[str, str] | None = N
     except (OSError, subprocess.TimeoutExpired):
         pass
     home = Path(env.get("HOME") or Path.home())
-    files = [p for p in LOGIN_FILES[name] if (home / p).is_file() and (home / p).stat().st_size > 0]
+    known = [*LOGIN_FILES[name], *[f.strip() for f in env.get(f"FLUX_{name.upper()}_LOGIN_FILES", "").split(",") if f.strip()]]
+    files = [p for p in known if (home / p).is_file() and (home / p).stat().st_size > 0]   # D760: a build of its own keeps its own
     keys = [k for k in LOGIN_KEYS[name] if env.get(k)]
     if not step("login", bool(files or keys),
                 (f"logged in ({', '.join(files)})" if files else f"a key in the settings ({', '.join(keys)})") if files or keys

@@ -47,7 +47,7 @@ def test_the_problem_is_read_only_its_out_workbench_and_record_writable(monkeypa
     assert home in ro and f"{home}/out" in rw and f"{home}/workbench" in rw
     app = sandbox.app_dir(args, "task run")
     assert app == tmp_path / "cache" / "flux" / "apps" / "x", "the application's id"
-    assert str(tmp_path / "rec") in rw and str(app / "tmp") in rw and str(app / "cache") in rw
+    assert str(tmp_path / "rec") in rw and str(app / "tmp") in rw and str(app / "cache") not in rw
     assert str(tmp_path / "cache" / "flux") not in rw, "nothing shared between applications (D681)"
     (tmp_path / "elsewhere").mkdir()
     assert sandbox.app_dir(_args(tmp_path / "elsewhere"), "task run") == app, "one id: one cache, whatever the run"
@@ -78,7 +78,7 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
         "D744: HOME is the user's Flux home"
     assert env["TMPDIR"] == "/tmp" and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces"), \
         "scratch on the container's own /tmp (abc hangs on a mounted one), traces in the cache"
-    assert env["XDG_CACHE_HOME"] == str(app / "cache")
+    assert env["XDG_CACHE_HOME"] == "/home/flux/.cache", "D760: the user's own cache: a login kept there is their runs' too"
     assert not any("docker.sock" in v for v in vols) and not any(v.startswith(f"{Path.home()}/.config/flux") for v in vols)
     for flag in ("--read-only", "--rm", "no-new-privileges", "ALL"):
         assert flag in cmd

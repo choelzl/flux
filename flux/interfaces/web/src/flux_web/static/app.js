@@ -2844,6 +2844,7 @@ async function adminAgents(body) {
     const bin = f("bin", a.bin, a.id), login = f("login", a.login, a.login_default), args = f("args", a.args, "none");
     const home = h("textarea", { id: `ag-${a.id}-home`, rows: 2, class: "mono", placeholder: { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" }[a.id] || "", value: lines(a.home) });
     const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
+    const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     return card(a.label, [
       h("div", { class: "agent-found" },
@@ -2853,14 +2854,14 @@ async function adminAgents(body) {
         h("label", { class: "stack" }, "Program (a path, or a name on PATH)", bin),
         h("label", { class: "stack" }, "Login command", login),
         h("label", { class: "stack" }, "Extra arguments, every run", args),
-        h("div", {}),
+        h("label", { class: "stack", title: "Where a login of this build is kept, in a user's home: what says they are logged in" }, "Login files (when not its usual)", creds),
         h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
         h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts)),
       h("p", { class: "small" }, h("strong", {}, "Ready for: "), ready.length ? ready.join(", ") : "nobody yet",
         failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
         h("span", { class: "muted" }, " (each user tests it on their Account page)")),
       h("div", { class: "form-actions" }, act("Save", async () => {
-        await api(`/admin/agents/${a.id}`, { method: "PUT", body: { bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts) } });
+        await api(`/admin/agents/${a.id}`, { method: "PUT", body: { bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) } });
         toast(`${a.label} saved: from the next start, login and test`, "ok"); route();
       }, { cls: "primary" }))]);
   }));

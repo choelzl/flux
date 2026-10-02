@@ -149,3 +149,31 @@ def test_a_document_is_checked_before_it_is_saved(server):
     assert not wrong["ok"] and "statment" in wrong["error"], wrong
     good = "id: x\nstatement: s\nlanguage: python\ngate: {test: ['true']}\nobjectives: []\n"
     assert bob.post("/api/apps/x/validate", json={"text": good}, headers=H).json() == {"ok": True, "error": ""}
+
+
+def test_a_corporate_builds_login_file_says_its_user_is_logged_in(server, tmp_path, monkeypatch):
+    """D760: a build of its own (`nga auth login`) keeps its login where the admin says; Account and
+    the agent's Test read it there."""
+    from flux_loop.agent_check import check_agent
+    from flux_web.runs import run_env
+
+    app, store = server
+    monkeypatch.setenv("HOME", str(tmp_path / "server-home"))
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    assert ada.put("/api/admin/agents/opencode", json={"login": "nga auth login", "login_files": ["/etc/passwd"]}, headers=H).status_code == 400
+    assert ada.put("/api/admin/agents/opencode", json={"bin": "nga", "login": "nga auth login",
+                                                        "login_files": [".local/share/nga/auth.json"]}, headers=H).status_code == 200
+    home = store.home_of(store.user(name="bob"))
+    assert not {a["id"]: a["logged_in"] for a in bob.get("/api/logins").json()["agents"]}["opencode"]
+    (home / ".local/share/nga").mkdir(parents=True)
+    (home / ".local/share/nga/auth.json").write_text('{"token": "x"}')
+    assert {a["id"]: a["logged_in"] for a in bob.get("/api/logins").json()["agents"]}["opencode"], "its own file: logged in"
+    env = run_env(store, store.user(name="bob"), "x")
+    assert env["FLUX_OPENCODE_LOGIN_FILES"] == ".local/share/nga/auth.json"
+    env = {k: v for k, v in env.items() if k != "OPENCODE_CONFIG_CONTENT"}
+    fake = tmp_path / "nga"
+    fake.write_text("#!/bin/sh\necho nga 1.0\n")
+    fake.chmod(0o755)
+    got = check_agent("opencode", env={**env, "HOME": str(home), "FLUX_OPENCODE_BIN": str(fake)})
+    login = next(s for s in got["steps"] if s["step"] == "login")
+    assert login["ok"] and "nga/auth.json" in login["said"]

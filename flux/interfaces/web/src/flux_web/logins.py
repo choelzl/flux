@@ -38,8 +38,10 @@ _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\
 LIMIT_S = 15 * 60
 
 
-def logged_in(home: Path) -> dict[str, bool]:
-    return {a: any((home / p).is_file() and (home / p).stat().st_size > 0 for p in ps) for a, ps in CREDENTIALS.items()}
+def logged_in(home: Path, extra: dict[str, list[str]] | None = None) -> dict[str, bool]:
+    """Each agent logged in: its own login file in `home`, or one the admin names for it (D760)."""
+    return {a: any((home / p).is_file() and (home / p).stat().st_size > 0 for p in [*ps, *((extra or {}).get(a) or [])])
+            for a, ps in CREDENTIALS.items()}
 
 
 class _Session:
