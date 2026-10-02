@@ -375,3 +375,34 @@ def test_a_name_typed_on_a_phone_is_the_same_name(server):
         app.state.store.add_user("BOB", "yet another secret")
     app.state.store.set_user("Bob", password="a changed secret")
     assert app.state.store.login("bob", "a changed secret")
+
+
+def test_the_turns_are_read_as_they_grow_and_one_from_its_place(server, tmp_path):
+    """D779: the turn list parses only what was added since the last look; a line being written
+    waits; turn `k` is read from its byte offset, whole."""
+    import json as _json
+
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"id: x\nstatement: s\n"))], headers=H)
+    proc, _rid, d = _fake_start(app, "bob", "x")
+    try:
+        rundir = tmp_path / "run"
+        rundir.mkdir()
+        (d / "out").mkdir(exist_ok=True)
+        (d / "out" / "x.db.runs.json").write_text(_json.dumps({"c1": str(rundir)}))
+        turns = rundir / "turns.jsonl"
+        long = "y" * 5000
+        turns.write_text("".join(_json.dumps({"kind": "turn", "prompt": f"p{i} " + long, "hops": [1, 2]}) + "\n" for i in range(3)))
+        got = bob.get("/api/apps/x/turns").json()
+        assert [t["k"] for t in got["turns"]] == [1, 2, 3] and got["total"] == 3
+        assert got["turns"][0]["prompt"].endswith("...") and got["turns"][0]["hops"] == 2, "summed up"
+        with turns.open("a") as fh:
+            fh.write(_json.dumps({"kind": "turn", "prompt": "p3"}) + "\n" + '{"kind": "turn", "prom')   # the last one half written
+        got = bob.get("/api/apps/x/turns").json()
+        assert [t["k"] for t in got["turns"]] == [1, 2, 3, 4], "the half-written line waits"
+        one = bob.get("/api/apps/x/turns?k=2").json()["turns"]
+        assert one[0]["k"] == 2 and one[0]["prompt"] == "p1 " + long and one[0]["hops"] == [1, 2], "whole, from its place"
+        assert bob.get("/api/apps/x/turns?k=9").json()["turns"] == []
+    finally:
+        proc.kill()

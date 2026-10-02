@@ -1579,27 +1579,60 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return FileResponse(path, media_type="text/plain; charset=utf-8",
                             headers={"Content-Disposition": f'attachment; filename="{name}.log"'})
 
-    @app.get("/api/apps/{name}/turns")
-    def turns(name: str, k: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        """The loop's model and agent turns, all of them, newest last."""
-        _w, _whose, _d, run = loop_of(name, user, owner)
-        path = runs.turns_path(run)
-        out: list[dict[str, Any]] = []
-        if path and os.path.exists(path):
-            with open(path) as fh:
-                for n, line in enumerate(fh, 1):
+    turn_index: dict[str, tuple[int, int, list[int], list[dict[str, Any]]]] = {}   # path -> (inode, read, offsets, summaries)
+    turn_lock = threading.Lock()
+
+    def _turn_summaries(path: str) -> tuple[list[int], list[dict[str, Any]]]:
+        """D779: each turn's byte offset and its summary (long text cut, hops and steps counted),
+        read as the file grows -- a day's turns are not parsed again on every look."""
+        st = os.stat(path)
+        with turn_lock:
+            got = turn_index.get(path)
+            ino, read, offsets, rows = got if got is not None and got[0] == st.st_ino and got[1] <= st.st_size \
+                else (st.st_ino, 0, [], [])
+            if read < st.st_size:
+                with open(path, "rb") as fh:
+                    fh.seek(read)
+                    data = fh.read()
+                at = 0
+                while True:
+                    nl = data.find(b"\n", at)
+                    if nl < 0:
+                        break                                # a line being written waits
+                    line = data[at:nl]
+                    offsets.append(read + at)
                     try:
                         t = json.loads(line)
-                    except ValueError:
-                        continue
-                    if k is None:
                         t = {key: (v[:300] + "..." if isinstance(v, str) and len(v) > 300 else v)
                              for key, v in t.items() if key not in ("hops", "steps")} | {"hops": len(t.get("hops") or []),
                                                                                          "steps": len(t.get("steps") or [])}
-                    elif n != k:
-                        continue
-                    out.append({"k": n, **t})
-        return {"turns": out[-500:] if k is None else out}
+                    except ValueError:
+                        t = None
+                    rows.append(t)
+                    at = nl + 1
+                read += at
+            turn_index[path] = (ino, read, offsets, rows)
+            return list(offsets), list(rows)
+
+    @app.get("/api/apps/{name}/turns")
+    def turns(name: str, k: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The loop's model and agent turns, newest last: the last 500 summed up, or turn `k` whole."""
+        _w, _whose, _d, run = loop_of(name, user, owner)
+        path = runs.turns_path(run)
+        if not (path and os.path.exists(path)):
+            return {"turns": []}
+        offsets, rows = _turn_summaries(path)
+        if k is None:
+            listed = [{"k": n, **t} for n, t in enumerate(rows, 1) if t is not None]
+            return {"turns": listed[-500:], "total": len(listed)}
+        if not 1 <= k <= len(offsets):
+            return {"turns": []}
+        with open(path, "rb") as fh:                         # the one turn, read from its place
+            fh.seek(offsets[k - 1])
+            try:
+                return {"turns": [{"k": k, **json.loads(fh.readline())}]}
+            except ValueError:
+                return {"turns": []}
 
     @app.get("/api/apps/{name}/timeline")
     def loop_timeline(name: str, start: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

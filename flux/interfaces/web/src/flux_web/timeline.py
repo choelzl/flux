@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from typing import Any
 
 __all__ = ["kind_of", "starts", "timeline"]
 
-_CACHE: dict[str, tuple[tuple[int, float], list[list[dict[str, Any]]]]] = {}
+_CACHE: dict[str, tuple[int, int, list[list[dict[str, Any]]]]] = {}   # path -> (inode, bytes read, starts)
+_READING = threading.Lock()
+_KEPT = ("ev", "t", "id", "parent", "name", "why", "failed")
 
 
 def kind_of(name: str) -> str | None:
@@ -45,29 +48,39 @@ def kind_of(name: str) -> str | None:
 
 
 def starts(path: str) -> list[list[dict[str, Any]]]:
-    """The journal's events, one list per start (process), cached while the file is unchanged."""
+    """The journal's events, one list per start (process). D779: read as it grows -- the file is
+    only appended to, so a running loop's next look parses only what was added since the last,
+    and each event keeps only what the bars need (not an end's output). A new file (a new
+    inode) or a cut one is read afresh."""
     try:
         st = os.stat(path)
     except OSError:
         return []
-    key = (st.st_size, st.st_mtime)
-    got = _CACHE.get(path)
-    if got and got[0] == key:
-        return got[1]
-    out: list[list[dict[str, Any]]] = []
-    with open(path, "rb") as fh:
-        for raw in fh:
-            if b'"ev": "update"' in raw or b'"ev": "publish"' in raw:
-                continue                                   # live fields and standings: not the bars
-            try:
-                e = json.loads(raw)
-            except ValueError:
-                continue
-            if e.get("ev") == "hello" or not out:
-                out.append([])
-            out[-1].append(e)
-    _CACHE[path] = (key, out)
-    return out
+    with _READING:
+        got = _CACHE.get(path)
+        if got is not None and got[0] == st.st_ino and got[1] <= st.st_size:
+            _ino, offset, out = got
+        else:
+            offset, out = 0, []
+        if offset < st.st_size:
+            with open(path, "rb") as fh:
+                fh.seek(offset)
+                data = fh.read()
+            end = data.rfind(b"\n") + 1                     # a line being written waits for the next look
+            for raw in data[:end].splitlines():
+                if b'"ev": "update"' in raw or b'"ev": "publish"' in raw:
+                    continue                               # live fields and standings: not the bars
+                try:
+                    e = json.loads(raw)
+                except ValueError:
+                    continue
+                if e.get("ev") == "hello" or not out:
+                    out.append([])
+                out[-1].append({k: (str(v)[:200] if k == "why" else v) for k, v in e.items() if k in _KEPT})
+            offset += end
+        _CACHE[path] = (st.st_ino, offset, out)
+        # the earlier starts are done; the last may still grow under another look
+        return [*out[:-1], list(out[-1])] if out else []
 
 
 def _union(spans: list[tuple[float, float]]) -> float:

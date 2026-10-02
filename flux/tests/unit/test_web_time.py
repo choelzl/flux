@@ -134,3 +134,27 @@ def test_a_restarted_server_finds_a_running_loop_and_stops_it(tmp_path):
         assert c2.get("/api/apps/x/state").json()["running"] is False
     finally:
         proc.kill()
+
+
+def test_the_timeline_reads_the_journal_as_it_grows(tmp_path):
+    """D779: a running loop's next look parses only what was added; a half-written line waits; a
+    new file is read afresh; an end's output is not kept."""
+    import json as _json
+
+    from flux_web.timeline import _CACHE, starts
+
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 1, "ev": "hello"}, {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "simulation: screen", "why": "x" * 900},
+            {"t": 3, "ev": "end", "id": 1, "seconds": 1, "failed": False, "output": {"big": "z" * 10000}}]
+    p.write_text("".join(_json.dumps(r) + "\n" for r in rows))
+    first = starts(str(p))
+    assert len(first) == 1 and len(first[0]) == 3 and "output" not in first[0][2] and len(first[0][1]["why"]) == 200
+    read = _CACHE[str(p)][1]
+    with p.open("a") as fh:
+        fh.write(_json.dumps({"t": 4, "ev": "hello"}) + "\n" + '{"t": 5, "ev": "sta')
+    again = starts(str(p))
+    assert len(again) == 2 and len(again[1]) == 1 and _CACHE[str(p)][1] > read, "only the new bytes"
+    assert first[0] is not again[0] or len(first[0]) == 3, "a returned start is not changed under its reader"
+    p.unlink()
+    p.write_text(_json.dumps({"t": 9, "ev": "hello"}) + "\n")
+    assert len(starts(str(p))) == 1, "a new file: read afresh"
