@@ -8,9 +8,9 @@ what to build, how to check it (the gate), how to measure it (the stages), what 
 (the objectives), and the budget. `flux task check <doc>` validates it; `flux task run <doc>`
 runs it.
 
-**World.** A Python package a problem document names under `world:`, for what a document
-cannot say: a generator that invents across rounds, a composition of parts, a simulator or a
-proof of its own. Many problems have no world (`applications/adder16/`, `applications/mul8/`).
+**Step command.** A command a document names for what it cannot say in prose or numbers -- a
+check, a measurement, a generator, a search (`orchestrate: {command}`), a composition -- often
+`python -m flux_<app>.steps ...` from a package beside it. There are no worlds (D803).
 
 **Gate.** The correctness check every candidate must pass before it is measured: golden
 vectors, an exhaustive check over every input, or a proof. The gate is always code, never a

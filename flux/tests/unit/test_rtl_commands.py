@@ -47,7 +47,7 @@ def test_the_example_document_loads_and_names_the_two_commands():
     assert "{home}/golden.py" in task.gate.named("test").run and task.home.endswith("mul8")
     assert [s.name for s in task.stages] == ["screen", "confirm"]
     prob = PromptProblem(task)
-    assert prob.world is None and prob.subgoals() == []
+    assert prob.subgoals() == []
     assert any(line.startswith("test: gate (never delegated) -- the document's commands") for line in describe_flow(task, prob))
 
 

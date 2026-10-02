@@ -181,7 +181,7 @@ keep API keys in the environment, never in a document.
 - [docs/tutorial.md](docs/tutorial.md): a problem of your own, step by step.
 - [docs/usage-guide.md](docs/usage-guide.md): every command and option.
 - [docs/cookbook.md](docs/cookbook.md): which recipe for which problem.
-- [docs/extending.md](docs/extending.md): your own checker, search policy or world.
+- [docs/extending.md](docs/extending.md): your own checker, search policy or search command.
 - [docs/models.md](docs/models.md): models and coding agents.
 - [docs/architecture.md](docs/architecture.md), [docs/glossary.md](docs/glossary.md),
   [docs/decisions.md](docs/decisions.md): how it is built, the words, the design decisions.

@@ -17,8 +17,7 @@ flux task run   applications/mul8/mul8.problem.yaml --json answer.json
 
 `flux task run DOC --json FILE` writes what the pass decided ([D591](decisions.md)): the
 decision with its metrics and artifact path, the frontier, what was refused and why, what is
-not established, the lessons, the report's lines, and the application's own answer (its
-world's `result` hook) under `result`. The record (`--db`) keeps everything else, readable with
+not established, the lessons and the report's lines. The record (`--db`) keeps everything else, readable with
 `flux report`. To ask a different question of the same problem, copy the document and change
 its `params`, `objectives`, `budget` or `flow`; a changed ask opens its own record.
 

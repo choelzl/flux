@@ -125,8 +125,7 @@ Say only what is yours; the rest is inferred.
   `subtasks` (child problems, each its own loop: folders beside the document, `[ops/recip, ops/exp]`,
   each folder's `problem.yaml` saying only what differs -- its `flow`, `budget` and `params` merge key
   by key over the parent's, so a child that says `test:` keeps the parent's stages; the parent's
-  `generate: {command: "... {parts} {artifact}"}` composes their answers into the whole, D801), `world`/`params`/`hooks` (a Python
-  package for what a document cannot say), `ladder`, `skills`, `workload`.
+  `generate: {command: "... {parts} {artifact}"}` composes their answers into the whole, D801), `params` (the document's settings, any command reads them as `{params}`), `ladder`, `skills`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command

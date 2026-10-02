@@ -1,7 +1,7 @@
 """The problem document (D519): what a `problem.yaml` says, how it is loaded and
 checked, and the vocabulary of its `flow:` -- a statement, a contract, parts, a gate (how a
 candidate is checked), costed stages (how it is measured), objectives (what "better" means), a
-budget, a `space:` of knobs, a `world:` for what prose and numbers cannot say.
+budget, a `space:` of knobs. What a document cannot say is a command beside it (D798-D803).
 
 Commands carry placeholders: `{artifact}` (the candidate written to a file), `{home}` (the
 document's folder), `{workdir}`, `{name}`, `{part}`, `{python}` (this interpreter), and `{knob}`
@@ -10,10 +10,7 @@ for each knob of `space:`. A gate is named checks run in order (D652); each prin
 and a non-zero exit with nothing counted is one failure. A check that exits 3 says the candidate
 did not build (D594).
 
-A world holds what a document cannot say (blocks, a transpiler, an exhaustive judge, how parts
-compose or are measured): `world: module:World`, a callable taking the problem and returning an
-object whose methods are `Problem` hooks (`contract_lines` lists them by box).
-`hooks: {judge: module:callable}` replaces one hook. `flux_loop.task.PromptProblem` runs a document.
+`flux_loop.task.PromptProblem` runs a document.
 """
 
 from __future__ import annotations
@@ -27,7 +24,6 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
-from .problem import Problem
 from .estimate import KINDS as ESTIMATE_KINDS, Estimator
 from .objective import Objective, Objectives
 from .types import (LoopRequest)
@@ -35,7 +31,7 @@ from .types import (LoopRequest)
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 
-__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_OWNED", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "contract_lines", "describe_flow", "load_task", "loop_owned", "read_input", "request_for", "resolve", "world_hooks"]
+__all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "describe_flow", "load_task", "read_input", "request_for", "resolve"]
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -214,7 +210,7 @@ class TaskSpec:
     budget: dict[str, Any] = field(default_factory=dict)      # LoopRequest overrides
     params: dict[str, Any] = field(default_factory=dict)      # the problem's own settings
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
-    #: policy searches; a world may compute its own instead (`space(state)`).
+    #: policy searches.
     space: dict[str, list] = field(default_factory=dict)
     #: D801: the folder a sub-task was read from, as its parent wrote it ("" inline)
     from_path: str = field(default="", compare=False)
@@ -225,12 +221,9 @@ class TaskSpec:
     seeds: tuple[dict[str, Any], ...] = ()     # points measured before the walk; the rest from the first choices
     skills: tuple[str, ...] = ()                  # D588: skill folders (absolute), for the model and the agents
     workload: Any = None                 # for evaluator stages: a Workload IR document or path
-    # the world the document runs in (D519)
-    world: str = ""                      # "package.module:World" -- (problem) -> an object of hooks
     #: The flow (D542): one key per box of the drawing naming its half, normalised; what it
     #: implies is folded into `roles`, `generator`, `critique`, `budget.calibrate`.
     flow: dict[str, Any] = field(default_factory=dict)
-    hooks: dict[str, str] = field(default_factory=dict)       # hook name -> "module:callable" (problem, ...)
     record: str = ""                     # the record's name: the id, `<parent>/<child>` for a sub-document
     ladder: Any = None                   # True, or the `flux_loop.Ladder` fields; None = no ladder
     knowledge_sheet: str = ""            # where `knowledge` was read from, for the report
@@ -353,19 +346,6 @@ class TaskSpec:
                 "their own loop, not both: with both, what the parent composes is ambiguous")
         space, when, space_from = _space(doc.get("space"), base)
         seeds = _seeds(doc.get("seeds"), space)
-        world = str(doc.get("world") or "")
-        if world and ":" not in world:
-            raise TaskError('`world` is "package.module:callable" -- what takes the problem and returns '
-                            "the object whose methods are its hooks")
-        hooks = dict(doc.get("hooks") or {})
-        allowed = set(world_hooks()) | {"prototype", "tools_missing"}
-        bad_hooks = sorted(h for h in hooks if h not in allowed)
-        if bad_hooks:
-            raise TaskError(f"hooks {bad_hooks} are not loop hooks a document may replace; known: "
-                            + ", ".join(sorted(allowed)))
-        for h, spec in hooks.items():
-            if not isinstance(spec, str) or ":" not in spec:
-                raise TaskError(f'hooks.{h} is "module:callable"')
         # the record is named by the document's id, a sub-document's by `<parent>/<child>` (D628)
         record = str(doc.get("_record") or doc.get("id") or "").strip()
         ladder = doc.get("ladder")
@@ -404,8 +384,8 @@ class TaskSpec:
                 text = (text + "\n\n" if text else "") + f"FILE {path.name}:\n{body}"
             knowledge = text
         # a parent whose work is its sub-loops judges nothing itself (D801)
-        gate = _gate(doc.get("gate")) if doc.get("gate") or not (world or subtasks or split) else Gate()
-        stages = [_stage(i, r, world=bool(world)) for i, r in enumerate(doc.get("stages") or ())]
+        gate = _gate(doc.get("gate")) if doc.get("gate") or not (subtasks or split) else Gate()
+        stages = [_stage(i, r) for i, r in enumerate(doc.get("stages") or ())]
         if len({r.name for r in stages}) != len(stages):
             raise TaskError("stage names must be unique")
         try:
@@ -413,7 +393,7 @@ class TaskSpec:
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
         budget = dict(doc.get("budget") or {})
-        if "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2 and not (world and not objectives):
+        if "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2:
             raise TaskError(f"flow.dse: pareto needs two objectives; this document has {len(objectives)}")
         if flow:
             if flow.get("calibrate") == "off":
@@ -455,7 +435,7 @@ class TaskSpec:
             knowledge=str(knowledge),
             budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
-            world=world, hooks=hooks, record=record, ladder=ladder if ladder else None,
+            record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
             skills=skills, workbench=workbench,
         )
@@ -487,8 +467,6 @@ class TaskSpec:
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: _knob_doc(k, v, self.when.get(k), self.space_from.get(k)) for k, v in self.space.items()},
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
             **({"workload": self.workload} if self.workload is not None else {}),
-            **({"world": self.world} if self.world else {}),
-            **({"hooks": dict(self.hooks)} if self.hooks else {}),
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),
@@ -660,7 +638,7 @@ def _gate_doc(gate: Gate) -> Any:
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
 _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
-              "params", "workload", "budget", "space", "world", "hooks", "ladder",
+              "params", "workload", "budget", "space", "ladder",
               "flow")
 
 
@@ -784,7 +762,7 @@ def _flat_point(p: dict[str, Any], space: dict[str, list]) -> dict[str, Any]:
 
 def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     """The child's document with what it does not say taken from the parent (D455), including
-    a `world:` document's world, hooks, ladder and flow (D555). A child of a named
+    its ladder and flow (D555). A child of a named
     campaign is its own campaign, `<parent>/<child>`, in the same record. D801: `flow`,
     `budget` and `params` merge key by key -- a child that says only `test:` keeps the
     parent's stages, objectives' search and knowledge."""
@@ -878,16 +856,15 @@ def _leaf(task_id: str) -> str:
     return task_id.rsplit("/", 1)[-1]
 
 
-def _stage(i: int, doc: Any, world: bool = False) -> Stage:
+def _stage(i: int, doc: Any) -> Stage:
     if not isinstance(doc, dict) or not isinstance(doc.get("name"), str) or not doc["name"]:
         raise TaskError(f"flow.measure: stage {i + 1} needs a name")
     at = f"flow.measure.{doc['name']}"                 # D775: a stage is said by its name
     cmd, ev = doc.get("command"), doc.get("evaluator")
     if cmd and ev:
         raise TaskError(f"{at} needs exactly one of `command` or `evaluator`, not both")
-    if not cmd and not ev and not world:
-        raise TaskError(f"{at} needs exactly one of `command` or `evaluator` "
-                        "(a document with a `world` may leave both out: the world measures it)")
+    if not cmd and not ev:
+        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`")
     needs = doc.get("needs")
     if needs is not None and (not isinstance(needs, list) or not all(isinstance(t, str) for t in needs)):
         raise TaskError(f"{at}.needs is a list of tool names")
@@ -969,7 +946,7 @@ def _estimator(at: str, raw: Any) -> Estimator | None:
 DOCUMENT_KEYS = frozenset({
     "statement", "contract", "language", "parts",
     "flow", "subtasks", "max_subtasks", "objectives",
-    "budget", "params", "workload", "world", "hooks", "ladder",
+    "budget", "params", "workload", "ladder",
     "skills"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
@@ -1133,65 +1110,13 @@ def _substitute(cmd: Iterable[str], subs: dict[str, str]) -> list[str]:
     return [_PLACEHOLDER.sub(lambda m: subs.get(m.group(1), m.group(0)), tok) for tok in cmd]
 
 
-#: What the document says itself (D519); every other public `Problem` method is a hook a
-#: world may fill. `prototype` and `tools_missing` are bound by hand (the problem's own
-#: check may replace the world's; the document's commands and the world's tools add up).
-DOCUMENT_OWNED = frozenset({"objective", "objectives", "subgoals", "ladder", "stages", "roles", "campaign_name",
-                            "cache_suffix", "validate", "chained", "role_cutoff", "role_measure",
-                            "role_analytic", "role_evaluator_name", "prototype", "tools_missing"})
-
-
-#: The world contract (D561): what a world's object may fill, by box of the drawing. `CORE`
-#: is what a world usually fills; the rest are extensions. Everything else on `Problem` is the
-#: loop's or the document's, and a world that defines it is refused at load.
-CONTRACT: dict[str, tuple[str, ...]] = {
-    "knowledge": ("prepare", "knowledge", "mentor_sections", "versions", "from_record", "open_records"),
-    "orchestrate": ("review", "next_work", "plan_prompt", "standing"),
-    "dse": ("search", "space", "instantiate", "seeds", "moves"),
-    "generate": ("design_prompt", "parse_design", "rewrite_prompt", "patch_prompt", "prompt_prefix",
-                 "tools", "apply_tools", "transpile", "redesign_note"),
-    "test": ("build", "fast_check", "judge", "describe_failure"),
-    "evaluate": ("measure", "measure_batch", "cache_key", "compose", "analytic_stages", "analytic_metrics", "evaluator_name"),
-    "select": ("frontier", "finalists", "frontier_axes", "decide", "conclusion"),
-}
-CORE = ("prepare", "knowledge", "review", "search", "design_prompt", "parse_design", "build", "fast_check",
-        "judge", "measure", "frontier", "finalists", "decide", "conclusion")
-
-
-def world_hooks() -> tuple[str, ...]:
-    """The `Problem` hooks a world's object may carry, by name: the contract's, sorted."""
-    return tuple(sorted(n for names in CONTRACT.values() for n in names))
-
-
-def loop_owned() -> frozenset[str]:
-    """`Problem`'s public methods that are neither the contract's nor the document's: the
-    loop's own machinery (routing, cutoffs, the improve loop, the plan, ...)."""
-    public = {n for n in dir(Problem) if not n.startswith("_") and callable(getattr(Problem, n, None))}
-    return frozenset(public - set(world_hooks()) - DOCUMENT_OWNED)
-
-
-def contract_lines(filled: "set[str] | None" = None) -> list[str]:
-    """The contract by box, one line each, marking the core hooks and (given `filled`) what
-    a world fills -- what `flux task check` prints (D561)."""
-    out = []
-    for box, names in CONTRACT.items():
-        parts = []
-        for n in names:
-            mark = ("*" if n in CORE else "") + n
-            if filled is not None:
-                mark = f"[{mark}]" if n in filled else mark
-            parts.append(mark)
-        out.append(f"{box}: " + ", ".join(parts))
-    return out
-
-
 #: The folders of the documents loaded in this process (D602). A module a document names that
 #: is not installed is looked for beside the document, appended to the path on a miss so it
 #: never shadows an installed one.
 _HOMES: list[str] = []
 
 
-def resolve(spec: str, what: str = "world") -> Any:
+def resolve(spec: str, what: str = "policy") -> Any:
     """`package.module:attr` -> the attribute; a TaskError names what is missing."""
     import importlib
 
@@ -1793,7 +1718,7 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
         except Exception:  # noqa: BLE001 -- a world may need more than an empty state
             space = {}
     if not space:
-        return "no space declared (the document's `flow.dse.space` or the world's)"
+        return "no space declared (the document's `flow.orchestrate.space`)"
     n = 1
     for vals in space.values():
         n *= max(1, len(vals))
@@ -1843,7 +1768,7 @@ def describe_orchestrate(task: "TaskSpec") -> str:
 def describe_stage(stage: "Stage", modelled: bool = False) -> str:
     """One stage's line: how it is measured, its cutoffs and its estimator (D665)."""
     how = ("its command" if stage.command else f"evaluator {stage.evaluator}" if stage.evaluator
-           else "the world's measure")
+           else "nothing")
     cut = "; ".join(f"{c['metric']} " + (f">= {c['at']:g}" if "at" in c else f"<= {c['below']:g}" if "below" in c
                                         else f"within {c['within']:.0%} of the best") for c in stage.cutoffs if c)
     return (f"stage {stage.name}: {how}" + (", modelled" if modelled else "")
@@ -1888,10 +1813,10 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
                     "model (the pass is planned first: parts, order, the method per part, budgets; the plan on the record, D577)"
                     if "plan" in (task.budget.get("agent") or ()) else "off (the orchestrator picks step by step)"),
         "dse: " + (f"{_dse_name(flow.get('dse'))} over {_space_size(task, problem)}" if flow.get("dse") not in (None, "none")
-                   else "none (the world's own search, if it has one)")
+                   else "none")
         + f" -- registered: {', '.join(policies)}",
         f"generate: {generate}",
-        "test: gate (never delegated)" + (" -- the world's judge" if task.world else " -- the document's commands"),
+        "test: gate (never delegated) -- the document's commands",
         "critique: " + (f"agent {_agent_name(flow['critique'])} (on the division, each admitted part and the decision, D640)"
                         if isinstance(flow.get("critique"), dict) else
                         "model (a model adversary on the division, each admitted part and the decision)" if task.critique else "off"),

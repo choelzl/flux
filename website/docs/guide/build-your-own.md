@@ -114,21 +114,22 @@ the RTL from it). Use `false` for plain logic such as adders.
 Every key is in the
 [author reference](https://github.com/choelzl/flux/blob/main/flux/core/loop/src/flux_loop/author_reference.md).
 
-## When you need code: a world
+## When you need code: commands beside the document
 
-When a document cannot say it (a solver, a simulator, a custom search), write a Python class and
-name it once: `world: flux_toy.world:World`. The loop calls the methods it has and keeps its
-defaults for the rest. The usual ones:
+When a document cannot say it in prose or numbers (a solver, a simulator, a search of its own),
+write a script and name it in the box it belongs to:
 
-| method | job |
-|---|---|
-| `judge(built, cand, subgoal, state) -> Verdict` | the gate: `Verdict(ok, score, why)` |
-| `measure(cand, stage, state) -> dict` | one stage: metric name -> number |
-| `search(state)` | a generator yielding batches of candidates |
-| `design_prompt`, `parse_design` | how a model is asked for a design, and how its reply becomes one |
+| what the document cannot say | the command beside it | what it reads and writes |
+|---|---|---|
+| a check of your own | `flow.test: {name: "{python} {home}/check.py {artifact}"}` | prints `N failing`; exit 3 = did not build |
+| a measurement | `flow.measure: {name: {command: ..., metrics: [...]}}` | prints `name=value` |
+| a generator over a space | `flow.generate: {command: "... {knob} {artifact}"}` or `{point}` | writes `{artifact}` |
+| a search of your own -- a solver, a proof, a model it asks itself | `flow.orchestrate: {command: "... {history} {state} {params}"}` | reads what was measured and refused, keeps its state, prints the next candidates, lessons, a conclusion (D799) |
+| a composition of sub-loops | the parent's `flow.generate: {command: "... {parts} {artifact}"}` | reads each sub-loop's answer, writes the whole (D801) |
+| settings | `params:` | `{params}`: a JSON file any command reads |
 
-The world's settings are the document's `params:`. `flux task check` lists every method a world
-may fill. Worked examples:
-[bankmap](https://github.com/choelzl/flux/tree/main/flux/applications/bankmap),
+Worked examples:
 [macarray](https://github.com/choelzl/flux/tree/main/flux/applications/macarray),
-[nlu](https://github.com/choelzl/flux/tree/main/flux/applications/nlu).
+[bankmap](https://github.com/choelzl/flux/tree/main/flux/applications/bankmap),
+[interconnect_mapping](https://github.com/choelzl/flux/tree/main/flux/applications/interconnect_mapping),
+[nlu](https://github.com/choelzl/flux/tree/main/flux/applications/nlu) (seven sub-loops in folders).

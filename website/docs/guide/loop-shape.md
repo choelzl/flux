@@ -128,8 +128,8 @@ flow:
 - **Nothing is measured twice.** The record keys every measurement by the tools and the exact
   source.
 
-## The world (optional)
+## Code a document cannot hold
 
-When a problem needs code a document cannot hold (a solver, a simulator, a special search), the
-document names a Python class once: `world: package.module:World`. The loop calls the methods it
-has and uses its own defaults for the rest. See [build your own](build-your-own.md#when-you-need-code-a-world).
+When a problem needs code (a solver, a simulator, a special search), it is a command the box
+names -- `orchestrate: {command: ...}` for a search of its own, the parent's `generate` for a
+composition of sub-loops. See [build your own](build-your-own.md#when-you-need-code-commands-beside-the-document).

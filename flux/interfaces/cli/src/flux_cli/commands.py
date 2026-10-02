@@ -257,15 +257,6 @@ def cmd_task_check(args: argparse.Namespace) -> int:
     from flux_loop import Objectives
 
     print("  objectives: " + (Objectives(task.objectives).describe() or "none"))    # limits, then what decides (D658)
-    if task.world:
-        from flux_loop.document import contract_lines
-
-        bound = {n for n in problem.__dict__ if callable(problem.__dict__[n]) and not n.startswith("_")}
-        print(f"  world: {task.world} -- fills {len(bound)} hook(s) of the contract ([filled], *core; D561):")
-        for line in contract_lines(bound):
-            print(f"    {line}")
-    for name, spec in sorted(task.hooks.items()):
-        print(f"  hook {name}: {spec}")
     print(f"  record: {task.record}")
     if task.ladder:
         print("  ladder: " + ("the default" if task.ladder is True else ", ".join(f"{k}={v}" for k, v in task.ladder.items())))
@@ -511,7 +502,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
 
     objectives = problem.objectives().describe()       # every limit, then what decides (D660)
     info = {"db": db, "parts": " ".join(problem.subgoals()) or "(one artifact)",
-            "objectives": objectives or "the gate", "world": task.world or "the document alone",
+            "objectives": objectives or "the gate",
             "budget": f"{request.steps} steps x {request.repair_attempts} generation attempts",
             "model": model_name + (" (reasoning on)" if getattr(args, "think", False) else ""),
             "agent": (", ".join(halves) + (f" ({request.tool_hops} hops)" if "tools" in halves else "")
@@ -572,9 +563,6 @@ def _answer(task, db: str, out, problem, artifact: Any) -> dict[str, Any]:
         "refused": [{"name": n, "why": why} for n, why in out.refused],
         "not_established": list(out.not_established), "lessons": list(out.lessons),
         "report": task_report_lines(task, out, problem)}
-    world = getattr(problem, "world", None)
-    if world is not None and callable(getattr(world, "result", None)):
-        answer["result"] = world.result(out)
     return answer
 
 

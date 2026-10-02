@@ -75,28 +75,6 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
     assert "every_other:Nope" in capsys.readouterr().out
 
 
-def test_a_world_of_your_own_beside_the_document(tmp_path, monkeypatch):
-    """`world: module:World` resolves beside the document, and its `result(out)` reaches `--json` (D602)."""
-    import yaml
-
-    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "w", "--kind", "sweep", "--dir", str(tmp_path / "w")])
-    (tmp_path / "w" / "w" / "tinyworld.py").write_text(
-        "class World:\n"
-        "    def __init__(self, problem):\n"
-        "        self.problem = problem\n\n"
-        "    def result(self, out):\n"
-        "        return {'fastest': out.decision.candidate.name if out.decision else None}\n")
-    doc_path = tmp_path / "w" / "w/problem.yaml"
-    doc = yaml.safe_load(doc_path.read_text())
-    doc["world"] = "tinyworld:World"
-    doc_path.write_text(yaml.safe_dump(doc, sort_keys=False))
-    answer = tmp_path / "a.json"
-    assert main(["task", "run", str(doc_path), "--passes", "20", "--json", str(answer)]) == 0
-    got = json.loads(answer.read_text())
-    assert got["result"]["fastest"] == got["decision"]["name"]
-
-
 def test_the_tune_kind_runs_to_a_decision_without_a_model(tmp_path, monkeypatch):
     """Knobs go straight into the gate's and stage's commands, measured one at a time (D608)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))

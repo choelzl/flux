@@ -336,105 +336,10 @@ def test_without_a_critic_nothing_changes(tmp_path):
     assert out.decision is not None                            # critique_rounds=0: no critic asked
 
 
-# ---- a document names a world (D519) ----------------------------------------------------
-class _Tiny:
-    """A world of two hooks and one state: what a package provides so a document can run."""
-
-    def __init__(self, problem):
-        self.problem = problem
-        self.built: list[str] = []
-        self.ulp = int(problem.task.params.get("ulp_budget", 0))
-
-    def build(self, cand, subgoal, state):
-        self.built.append(cand.name)
-        return cand.artifact
-
-    def judge(self, built, cand, subgoal, state):
-        from flux_loop import Verdict
-
-        return Verdict(built == "ok", 0.0 if built == "ok" else 1.0, "" if built == "ok" else "not ok")
-
-    def measure(self, cand, stage, state):
-        return {"fmax_mhz": 900.0, "area_um2": 1.0}
-
-    def standing(self, state):
-        return {"goal": f"within {self.ulp} ULP", "now": "-", "parts": {}}
-
-    def report(self, out):
-        return ["  the tiny world's line"]
-
-
 def _tiny_judge(problem, built, cand, subgoal, state):
     from flux_loop import Verdict
 
     return Verdict(True, 0.0, "the hook's own judge")
-
-
-def test_a_document_names_a_world_and_binds_its_hooks(tmp_path):
-    """A `world:` document runs that package's hooks, falling back to the document problem's;
-    `hooks:`, `campaign:`, `ladder:`, `needs:` and `stage: deepest` are read (D519)."""
-    from flux_loop import Ladder, PromptProblem, TaskError, TaskSpec, task_report_lines
-    from flux_records import Records
-
-    doc = {"id": "tiny",
-           "statement": "a tiny thing",
-           "parts": ["a"],
-           "world": __name__ + ":_Tiny",
-           "params": {"ulp_budget": 2},
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 800, "stage": "deepest", "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
-           "ladder": {"sweep": [2, 4], "redesigns": 1},
-           "flow": {"measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]},
-                                "confirm": {"metrics": ["fmax_mhz"], "needs": ["no-such-tool-xyz"]}}}}
-    task = TaskSpec.from_dict(doc)
-    prob = PromptProblem(task)
-    assert isinstance(prob.world, _Tiny) and prob.ulp == 2                    # the world's state, through the problem
-    assert prob.build.__self__ is prob.world and prob.judge.__self__ is prob.world
-    assert prob.validate(None) == []                                           # world stages declare their metrics
-    assert prob.stages() == ["screen"], "confirm needs a tool that is not on PATH"
-    assert prob.objectives()[0].stage == "screen" and prob.objectives()[0].unit == "MHz"
-    assert prob.ladder() == Ladder(sweep=(2, 4), redesigns=1)
-    req = LoopRequest(batch=WHOLE, db=str(tmp_path / "t.db"))
-    assert prob.objective(req) == {"study": "tiny"}
-    assert prob.standing(None)["goal"] == "within 2 ULP"
-    from flux_loop import Candidate, Scored
-    from types import SimpleNamespace
-
-    out = SimpleNamespace(decision=Scored(Candidate("a#1", "ok", subgoal="a"), stage="screen", metrics={"fmax_mhz": 900.0}),
-                          decided_by="the most fmax_mhz", confirmed=[], frontier=[], admitted={}, lessons=[],
-                          not_established=[], refused=[], notes=[])
-    assert "  the tiny world's line" in task_report_lines(task, out, prob)
-    # a hook of the document's own replaces the world's, and takes the problem first
-    task2 = TaskSpec.from_dict({**doc, "hooks": {"judge": __name__ + ":_tiny_judge"}})
-    prob2 = PromptProblem(task2)
-    assert prob2.judge("anything", None, "a", None).why == "the hook's own judge"
-    # what a document cannot say
-    with pytest.raises(TaskError, match="hooks"):
-        TaskSpec.from_dict({**doc, "hooks": {"objectives": "x:y"}})
-    with pytest.raises(TaskError, match="ladder keys"):
-        TaskSpec.from_dict({**doc, "ladder": {"steps_per_day": 3}})
-    with pytest.raises(TaskError, match="world"):
-        TaskSpec.from_dict({**doc, "world": "flux_loop.task"})
-    with pytest.raises(TaskError, match="exactly one of"):
-        TaskSpec.from_dict({**{k: v for k, v in doc.items() if k != "world"}, "flow": {**{k: v for k, v in doc.items() if k != 'world'}.get("flow", {}), "test": {"test": ["true"]}}})
-
-
-def test_a_world_document_runs_the_loop_end_to_end(tmp_path):
-    """The tiny world through `run_loop`: built and judged by the world, screened by its measurement, reported with its line."""
-    from flux_llm import ScriptedProposer
-    from flux_loop import LoopRequest, PromptProblem, TaskSpec, run_loop, task_report_lines
-
-    doc = {"id": "tiny",
-           "statement": "a tiny thing",
-           "parts": ["a"],
-           "world": __name__ + ":_Tiny",
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
-           "flow": {"measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
-    prob = PromptProblem(TaskSpec.from_dict(doc))
-    out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "tiny.db"), steps=2, prototype=False, critique_rounds=0),
-                   proposer=ScriptedProposer(['{"artifact": "ok", "why": "-"}']), log=lambda _m: None)
-    assert prob.world.built and out.admitted["a"].artifact == "ok"
-    assert out.decision is not None and out.decision.metrics["fmax_mhz"] == 900.0
-    assert "  the tiny world's line" in task_report_lines(prob.task, out, prob)
 
 
 def test_a_record_is_named_by_the_documents_id(tmp_path):
@@ -511,36 +416,6 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
 def test_a_flow_that_says_a_thing_twice_or_wrong_is_refused(flow, more, message):
     with pytest.raises(TaskError, match=message):
         TaskSpec.from_dict(_flow_doc(flow, **more))
-
-
-def test_a_worlds_child_inherits_it_and_is_its_own_campaign(tmp_path):
-    """A `subtasks:` child of a `world:` document inherits its world, hooks, ladder, cache and
-    flow and is named `<parent>/<child>` (D555)."""
-    from flux_loop import PromptProblem, TaskSpec
-    from flux_loop.roles import Roles, Rules
-
-    doc = {"id": "whole",
-           "statement": "the whole",
-           "world": __name__ + ":_Tiny",
-           "params": {"ulp_budget": 3},
-           "objectives": [{"metric": "fmax_mhz", "direction": "maximize"}],
-           "subtasks": [{"id": "left", "statement": "the left half", "parts": ["a"]}, {"id": "right",
-                                                                                       "statement": "the right half",
-                                                                                       "parts": ["b"],
-                                                                                       "world": "",
-                                                                                       "flow": {"test": {"test": ["true"]},
-                                                                                                "measure": {"screen": {"command": ["m"],
-                                                                                                                       "metrics_re": {"fmax_mhz": '(\\d+)'}}}}}],
-           "flow": {"validate": "model", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
-    task = TaskSpec.from_dict(doc)
-    left, right = task.subtasks
-    assert left.world == task.world and left.record == "whole/left" and left.flow.get("validate") == "llm"
-    assert right.world == "" and right.record == "whole/right"   # named by the ids (D628)
-    mine = Rules(name="mine")
-    parent = PromptProblem(task, roles=Roles(orchestrator=mine))
-    kids = {sub.name: sub.problem for sub in parent.subproblems(None)}
-    assert isinstance(kids["left"].world, _Tiny) and kids["left"].ulp == 3
-    assert kids["left"].roles().orchestrator is mine and kids["right"].roles().orchestrator is mine
 
 
 def test_validate_llm_lets_the_model_object_before_a_step_is_spent(tmp_path):
@@ -788,3 +663,11 @@ def test_a_stage_that_does_not_measure_an_objective_is_refused():
     task = TaskSpec.from_dict(doc)
     wrong = PromptProblem(task).validate(request_for(task))
     assert len(wrong) == 1 and "the cost stage does not measure latency_cycles" in wrong[0]
+
+
+@pytest.mark.parametrize("key, value", [("world", "pkg.mod:World"), ("hooks", {"judge": "pkg.mod:judge"})])
+def test_a_world_or_a_hook_is_no_key_of_a_document(key, value):
+    """D803: what a document cannot say is a command beside it -- a search, a check, a stage, a
+    composition -- not a Python object bound to the loop."""
+    with pytest.raises(TaskError, match=f"keys a problem document does not have: {key}"):
+        TaskSpec.from_dict({"id": "t", "statement": "x", "flow": {"test": "true"}, key: value})

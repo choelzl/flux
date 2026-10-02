@@ -39,17 +39,16 @@ commands, the objectives, the budget, and who fills each role. Many problems are
 and nothing else: `applications/mul8/` is a document plus a golden model, and
 `applications/adder16/` adds a design space and a generator script.
 
-A **world** is a Python package the document names under `world:`. It is for what a document
-cannot say: a generator that invents across rounds, a composition of parts, a simulator of
-its own, a proof. A world implements only the hooks it needs: `judge` (the gate), `measure`
-(the tools), `search` (its own design space), `transpile` (prototype to target), `prepare`,
-`knowledge`, `report`, and others. `flux task check` prints which hooks a world fills.
+What a document cannot say is a **command beside it**, in the box it belongs to: a check
+(`flow.test`), a measurement (`flow.measure`), a generator (`flow.generate`), a search of its own
+(`flow.orchestrate: {command}`, D799), a composition of sub-loops (the parent's `generate`, D801);
+`params:` reach any of them as `{params}`. There are no worlds (D803).
 
 ## Design principles
 
 1. **One loop.** Every problem runs on `core/loop` (`flux_loop`). There is no second engine.
-2. **The document says what, the world says how.** Whatever a document can say, no world
-   codes.
+2. **The document says what; a command beside it says how.** Whatever a document can say, no
+   code says.
 3. **Every number carries its provenance.** A row on the record names the revision, the tool
    versions, the prompt's hash, the seconds and the tokens. A result is labelled measured or
    analytic.
@@ -84,7 +83,7 @@ its own, a proof. A world implements only the hooks it needs: `judge` (the gate)
 │                prototype stage, the ladder, the chain, calibration, the       │
 │                record and its reload, the report                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ APPLICATIONS   applications/<name>: a document, and a world if it needs one   │
+│ APPLICATIONS   applications/<name>: a document, and the commands it names     │
 │                -- adder16, mul8, gelu_fp16, primes, npu_gemm, nlu, macarray,  │
 │                prefetcher, bankmap, interconnect_mapping                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -172,7 +171,7 @@ stage, translation and repair), `Template` (a command), `Catalog`, `Solver`, or 
 `mined`, `digest`. Evaluation: the document's stages, each with an optional estimate before its
 tool (`estimate:`, D665) that may skip a design, never choose one.
 
-**The prototype stage.** In the worlds that use it (the NLU is the main one), a part is first
+**The prototype stage.** In the documents that use it (each NLU operator), a part is first
 written as a Python-integer prototype (`flux_loop.pyint`: vectorised, rule-checked) and proven
 on every input, then translated mechanically to SystemVerilog. The model never writes that RTL
 by hand. Tools such as `error_map`, `quantisation`, `compare`, `family` and `timing` give it

@@ -151,6 +151,6 @@ stage-aware two-XOR fold in 3.4 s that the bank-only search's answer would have 
 
 `lib/src/flux_bankmap/`: `problem` (request/result), `mapping` (Modulo, XorFold, Expr — each
 with cost, description and Verilog), `check` (the exhaustive checker), `impossible` (the
-pigeonhole proof), `solve_z3` (CEGIS over folds), `propose` (the model's DSL and prompt), `topology` (the networks as stages), `world` (the hooks the loop calls). It runs
-as a document: `flux task run`; with `--json FILE` the answer's `result` carries the mapping's
-Verilog.
+pigeonhole proof), `solve_z3` (CEGIS over folds), `propose` (the model's DSL and prompt), `topology` (the networks as stages), `steps` (the document's commands: the search, the check,
+the cost). It runs as a document: `flux task run`; the decided mapping's Verilog is the run's
+artifact (`out/bankmap.v`).

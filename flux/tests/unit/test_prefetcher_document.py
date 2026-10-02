@@ -24,7 +24,7 @@ def _bingo():
 
 def test_both_documents_load():
     task = load_task(APP / "problem.yaml")
-    assert task.extension == ".ini" and not task.world and not task.space and task.gate.named("test")
+    assert task.extension == ".ini" and not task.space and task.gate.named("test")
     assert "bingo_pht_size" in task.knowledge and "l2c_prefetcher_types = bingo" in task.knowledge
     assert load_task(APP / "invent.problem.yaml").gate.named("build").builds
 

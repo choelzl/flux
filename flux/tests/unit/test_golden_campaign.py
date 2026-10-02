@@ -1,5 +1,5 @@
-"""The golden campaign (D531): a two-part document in a tiny world, scripted replies and a fake
-measurer; pins which design stands, why, and that a second pass rests. No tool on PATH needed."""
+"""The golden campaign (D531): a two-part document with a tiny check and measurer beside it,
+scripted replies; pins which design stands, why, and that a second pass rests. No tool on PATH needed."""
 
 from __future__ import annotations
 
@@ -7,42 +7,32 @@ from flux_llm import ScriptedProposer
 from flux_loop import LoopRequest, PromptProblem, TaskSpec, Verdict, run_loop
 
 
-class _Tiny:
-    """Two parts, `front` and `back`, each a short text; a design passes when it says its
-    part's name; the whole is the two joined; a design's "fmax" is its length, its "area"
-    the count of vowels -- measured, never modelled."""
+def _home(tmp_path):
+    """Two parts, `front` and `back`, each a short text; a design passes when it says its part's
+    name; the whole is the two joined; its "fmax" is its length, its "area" its vowels -- the
+    gate and the stage as scripts beside the document (D803)."""
+    (tmp_path / "check.py").write_text(
+        "import sys\nprint(int(sys.argv[2] not in open(sys.argv[1]).read()), 'failing')\n")
+    (tmp_path / "measure.py").write_text(
+        "import sys\nt = open(sys.argv[1]).read()\n"
+        "print(f'fmax_mhz={len(t) * 10} area_um2={sum(t.count(v) for v in \"aeiou\")}')\n")
+    return tmp_path
 
-    def __init__(self, problem):
-        self.problem = problem
-        self.measured: list[str] = []
 
-    def build(self, cand, subgoal, state):
-        return cand.artifact
-
-    def judge(self, built, cand, subgoal, state):
-        ok = subgoal in built
-        return Verdict(ok, 0.0 if ok else 1.0, "" if ok else f"the text does not say {subgoal}")
-
-    def measure(self, cand, stage, state):
-        self.measured.append(f"{cand.name}@{stage}")
-        text = cand.artifact
-        return {"fmax_mhz": float(len(text)) * 10, "area_um2": float(sum(text.count(v) for v in "aeiou"))}
-
-    def report(self, out):
-        return [f"  the tiny world measured {len(self.measured)} time(s)"]
+_FLOW = {"orchestrate": "rules", "test": "{python} {home}/check.py {artifact} {part}",
+         "measure": {"screen": {"command": "{python} {home}/measure.py {artifact}", "metrics": ["fmax_mhz", "area_um2"]}}}
 
 
 def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
     doc = {"id": "golden",
            "statement": "two texts that name their part",
            "parts": ["front", "back"],
-           "world": __name__ + ":_Tiny",
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
            "budget": {"steps": 6, "repair_attempts": 2, "critique_rounds": 0, "prototype": False},
-           "flow": {"orchestrate": "rules", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}   # the parts in the document's order, no plan turn
+           "flow": _FLOW}   # the parts in the document's order, no plan turn
     db = str(tmp_path / "golden.db")
     said: list[str] = []
-    prob = PromptProblem(TaskSpec.from_dict(doc))
+    prob = PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path)))
     replies = ['{"artifact": "the front text is here, long enough to clear the goal", "why": "-"}',
                '{"artifact": "back", "why": "-"}']
     req = LoopRequest(db=db, steps=6, repair_attempts=2, critique_rounds=0, prototype=False)
@@ -62,7 +52,7 @@ def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
     rec.close("paused")
     # a second pass changes nothing and says so (D518): the parts reload frozen, nothing is due
     said2: list[str] = []
-    prob2 = PromptProblem(TaskSpec.from_dict(doc))
+    prob2 = PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path)))
     out2 = run_loop(prob2, req, proposer=ScriptedProposer([]), log=said2.append)
     assert out2.at_rest and out2.stopped.startswith("at rest: nothing was due on any part")
     assert sorted(out2.admitted) == ["back", "front"] and out2.decision.candidate.artifact == out.decision.candidate.artifact
@@ -70,7 +60,7 @@ def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
     from flux_loop import task_report_lines
 
     lines = task_report_lines(prob2.task, out2, prob2)
-    assert lines[0].startswith("TASK golden") and any("the tiny world measured" in ln for ln in lines)
+    assert lines[0].startswith("TASK golden") and any(ln.startswith("  DECISION") for ln in lines)
 
 
 def test_a_campaign_at_rest_explores_and_keeps_the_goal(tmp_path):
@@ -79,22 +69,21 @@ def test_a_campaign_at_rest_explores_and_keeps_the_goal(tmp_path):
     doc = {"id": "golden",
            "statement": "two texts that name their part",
            "parts": ["front", "back"],
-           "world": __name__ + ":_Tiny",
            "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 500, "unit": "MHz"}, {"metric": "area_um2", "direction": "minimize"}],
            "budget": {"steps": 6, "repair_attempts": 2, "critique_rounds": 0, "prototype": False},
-           "flow": {"orchestrate": "rules", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
+           "flow": _FLOW}
     db = str(tmp_path / "golden.db")
     req = LoopRequest(db=db, steps=6, repair_attempts=2, critique_rounds=0, prototype=False)
     first = ['{"artifact": "the front text is here, long enough to clear the goal", "why": "-"}',
              '{"artifact": "back", "why": "-"}']
-    out = run_loop(PromptProblem(TaskSpec.from_dict(doc)), req, proposer=ScriptedProposer(first), log=lambda _m: None)
-    rest = run_loop(PromptProblem(TaskSpec.from_dict(doc)), req, proposer=ScriptedProposer([]), log=lambda _m: None)
+    out = run_loop(PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path))), req, proposer=ScriptedProposer(first), log=lambda _m: None)
+    rest = run_loop(PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path))), req, proposer=ScriptedProposer([]), log=lambda _m: None)
     assert rest.at_rest and rest.explorable, "a model drafts for this campaign: at rest is where exploring starts"
     import dataclasses
 
     said: list[str] = []
     model = ScriptedProposer(['{"artifact": "front back ' + "x" * 45 + '", "why": "fewer vowels, as long"}'])
-    explored = run_loop(PromptProblem(TaskSpec.from_dict(doc)), dataclasses.replace(req, explore=1),
+    explored = run_loop(PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path))), dataclasses.replace(req, explore=1),
                         proposer=model, log=said.append)
     assert any("exploring: 2 design(s) go back" in m for m in said)
     asked = "\n".join(model.prompts)

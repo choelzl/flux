@@ -10,13 +10,9 @@ Commands carry placeholders: `{artifact}` (the candidate written to a file), `{w
 exit with nothing counted is one failure. Exit 3 means the candidate did not build (D594): a
 build failure, not a score, so "best so far" is always a design that compiles.
 
-A world (D519), `world: package.module:World`, supplies what a document cannot say in prose
-or numbers (toolkit, transpiler, exhaustive judge, composition, measurement): a callable that
-takes the problem and returns an object whose methods are bound as `Problem` hooks.
-`hooks: {name: module:callable}` replaces one hook with a callable taking the problem first.
-The document still owns parts, objectives, ladder, stages (a stage with no command and no
-evaluator is the world's; `needs:` names required tools on PATH, else it is skipped),
-knowledge, budget and the world's `params:`; the record is named by the id.
+What a document cannot say in prose or numbers is a command beside it -- a search, a check,
+a stage, a composition (D798-D803); `needs:` names a stage's tools on PATH, else it is
+skipped; `params:` reach any command as `{params}`. The record is named by the id.
 """
 
 from __future__ import annotations
@@ -40,8 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 from .gradient import CHECK_WEIGHT
 from .document import (BUILD_FAILED, Part, TaskError, TaskSpec, _digest_of, _flux_rtl_tools,
-                        _knob_subs, _leaf, _point_name, _rig_for, _write_point, _substitute, contract_lines, describe_flow, loop_owned,
-                        resolve, world_hooks)
+                        _knob_subs, _leaf, _point_name, _rig_for, _write_point, _substitute, describe_flow)
 
 __all__ = ["PromptProblem", "model_use", "task_report_lines"]
 
@@ -83,23 +78,6 @@ class PromptProblem(Problem):
         self._children: tuple[TaskSpec, ...] | None = None
         self._roles = _rig_for(task, roles)
         self._caller_roles = roles                     # caller overrides reach the children (D555)
-        #: The world's object of hooks (D519), or None for a document that runs on its own.
-        self.world: Any = None
-        if task.world:
-            self.world = resolve(task.world)(self)
-            owned = loop_owned()
-            taken = sorted(n for n in owned if callable(getattr(self.world, n, None)) and n in type(self.world).__dict__)
-            if taken:
-                raise TaskError(f"world {task.world}: {', '.join(taken)} is the loop's, not a world's hook (D561); "
-                                "a world fills the contract: " + "; ".join(contract_lines()))
-            for name in world_hooks():
-                fn = getattr(self.world, name, None)
-                if callable(fn):
-                    setattr(self, name, fn)
-        import functools
-
-        for name, spec in task.hooks.items():
-            setattr(self, name, functools.partial(resolve(spec, f"hooks.{name}"), self))
         from .skills import load_skills, skill_index
 
         self._skills = load_skills(list(task.skills)) if task.skills else []
@@ -122,14 +100,7 @@ class PromptProblem(Problem):
         """The document's skills (D588): what the `skill` tool loads and the agents receive."""
         return list(self.__dict__.get("_skills") or [])
 
-    def __getattr__(self, name: str) -> Any:
-        """Fall back to the world's attributes (D519), so its own state is reachable here."""
-        world = self.__dict__.get("world")
-        if world is None or name.startswith("__"):
-            raise AttributeError(name)
-        return getattr(world, name)
-
-    # ---- what the document says, and what the world fills (D519)
+    # ---- what the document says
     def ladder(self):
         """The document's `ladder:` (D517): true is the default ladder, an object its fields."""
         doc = self.task.ladder
@@ -142,18 +113,13 @@ class PromptProblem(Problem):
         return Ladder(**{k: tuple(v) if isinstance(v, list) else v for k, v in doc.items()})
 
     def prototype(self):
-        """The world's prototype stage (D515), using this problem's own check when one was put
-        on the instance (D516); otherwise the loop's skeleton runs the world's judge."""
-        world = self.__dict__.get("world")
-        proto = getattr(world, "prototype", None)
-        cap = proto() if callable(proto) else None
-        if cap is None and world is None:
-            # a gate that names a golden model gives any document the prototype stage (D604)
-            if "_golden_cap" not in self.__dict__:
-                from .golden_proto import capability
+        """The prototype stage (D604): a gate that names a golden model gives a document one,
+        using this problem's own check when one was put on the instance (D516)."""
+        if "_golden_cap" not in self.__dict__:
+            from .golden_proto import capability
 
-                self.__dict__["_golden_cap"] = capability(self.task)
-            return self.__dict__["_golden_cap"]
+            self.__dict__["_golden_cap"] = capability(self.task)
+        cap = self.__dict__["_golden_cap"]
         own = self.__dict__.get("prototype_check")
         if cap is not None and own is not None and cap.check is None:
             return replace(cap, check=own)
@@ -517,7 +483,7 @@ class PromptProblem(Problem):
                         f"objective {objective.metric!r} names a metric no stage "
                         f"measures (this task measures: "
                         f"{', '.join(sorted(produced)) or 'nothing'})")
-        if self.task.stages and not unknown and not self.task.world:
+        if self.task.stages and not unknown:
             # each stage ranks its own rows by the objectives (D351): a stage that lacks one has
             # no front, so nothing climbs from it and nothing is decided on it (D625)
             wanted = [o.metric for o in self.task.objectives]
@@ -546,9 +512,6 @@ class PromptProblem(Problem):
 
     def _tools_missing(self) -> list[str]:
         missing: list[str] = []
-        world_missing = getattr(self.__dict__.get("world"), "tools_missing", None)
-        if callable(world_missing):
-            missing.extend(world_missing())
         declared = {f"stage {r.name}" for r in self.task.stages if r.needs}   # skipped, not missing
         for _label, cmd in self.task.commands():
             head = _substitute(cmd[:1], {"python": sys.executable, "home": self.task.home or "."})[0]
@@ -1610,12 +1573,6 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
                 lines.append(f"    {name:<12} {cd.name} [{cd.stage}; {child.decided_by}]" + (f": {metrics}" if metrics else ""))
     else:
         lines.append("  NO CANDIDATE SURVIVED -- see NOT ESTABLISHED below")
-    report = getattr(getattr(problem, "world", None), "report", None)
-    if callable(report):
-        try:
-            lines.extend(report(out))
-        except Exception as exc:  # noqa: BLE001
-            lines.append(f"  (the world's report could not be made: {exc!s:.120})")
     pool = out.confirmed or out.frontier
     if len(pool) > 1:
         lines.append(f"  frontier ({len(pool)} point(s)):")
@@ -1646,9 +1603,7 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
 
 def model_use(task: "TaskSpec") -> str:
     """Why this document needs a model, or "" when it does not (D608), so a banner names a
-    model only when one is used. A world may call one in ways the document does not show."""
-    if task.world:
-        return "its world may ask one"
+    model only when one is used."""
     flow = dict(task.flow or {})
     gen = dict(task.generator or {})
     reasons = []

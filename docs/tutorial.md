@@ -198,4 +198,4 @@ asked the model. With the template's `steps: 1` only the first phase runs.
 | only a description and some files | `flux ask "what you want" --file spec.pdf` |
 | an accelerator architecture for a workload | `applications/npu_gemm/`: a script writes the architecture, ZigZag measures it |
 
-For a search policy, a checker or a whole world of your own, see [extending.md](extending.md).
+For a search policy, a checker or a search command of your own, see [extending.md](extending.md).

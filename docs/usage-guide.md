@@ -10,7 +10,7 @@ Every `flux` command and what it is for. Run them from `flux/` inside `nix devel
 | pick a recipe for your problem | [cookbook.md](cookbook.md) |
 | every key of a problem document | [author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md) |
 | drive Flux from a script or an agent | [agent-surface.md](agent-surface.md) |
-| extend it: a policy, a world, a role | [extending.md](extending.md) |
+| extend it: a policy, a search command, a role | [extending.md](extending.md) |
 
 ## Environment
 
@@ -75,7 +75,7 @@ flow:
   select: {finalists: 2}
 ```
 
-A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`.
 
@@ -158,7 +158,7 @@ prompt (OpenCode's alone is about 33,000 tokens) and working tool calls -- else 
 ## The sandbox
 
 `flux task run` and `flux ask` run in a container (D680), so neither an agent nor a
-document's code (its commands, `golden.py`, scripts, `world:` hooks) can touch the rest of the
+document's code (its commands, `golden.py`, scripts) can touch the rest of the
 machine.
 
 - **It sees:** the host read-only, meaning the system, `/nix/store`, the flux source, the
@@ -216,7 +216,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   it** lists the loop's own files (scripts, golden models, specs): open one to edit it, write a new
   one, drop files or folders, delete one. A file the document names as `{home}/…` that the loop
   does not have is said to be missing, and a click writes it. **Configure**, on an application, reads its document back
-  into the same form and saves it. What the form cannot say (a `world:`, its own stages or
+  into the same form and saves it. What the form cannot say (its own stages or
   settings, `params`, a failure pattern, objectives with a stage or tie
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
@@ -537,5 +537,5 @@ task = load_task("applications/adder16")        # its problem.yaml; the id is `a
 result = run_loop(PromptProblem(task), request_for(task, db="adder16.db"), proposer=None)
 ```
 
-A world is a class taking the problem, with the hooks it chooses to implement
-([extending.md](extending.md)).
+What a document cannot say is a command beside it -- a check, a measurement, a search
+(`orchestrate: {command}`), a composition -- ([extending.md](extending.md)).
