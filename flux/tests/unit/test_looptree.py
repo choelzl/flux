@@ -61,7 +61,8 @@ def test_passes_at_once_each_their_own_branch_and_the_conclusion():
     assert whys[1].endswith("with 2, 3") and whys[2].endswith("with 1, 3") and whys[5].endswith("with 4, 6"), whys
     made = [w.split(" · ")[0] for w in whys.values()]
     assert len(set(made)) == 6 and not any("," in d for d in made), "six passes, six designs, one each"
-    assert branch(t, "Conclusion")["why"] == "over every pass" and "Choose" in titles(branch(t, "Conclusion")["kids"])
+    assert branch(t, "Conclusion")["why"] == "over every pass"
+    assert titles(branch(t, "Conclusion")["kids"]) == ["Setup", "Choose", "Critic"], "its re-checks fold into its setup (D755)"
 
 
 def test_an_agent_writing_the_design_is_said_on_its_leaf():

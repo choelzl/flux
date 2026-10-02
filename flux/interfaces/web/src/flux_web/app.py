@@ -1357,7 +1357,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         path = runs.events_path(run)
         if not path or not os.path.exists(path):
             return {"starts": [], "start": None, "bars": [], "kinds": [], "passes": []}
-        return timeline(path, start)
+        return timeline(path, start, running=bool(runs.live(run)) if run else False)
 
     @app.get("/api/apps/{name}/usage")
     def loop_usage(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

@@ -81,6 +81,7 @@
   }
 
   var SETUP_BOXES = new Set(["validate", "knowledge", "records", "feedback"]);
+  var WORK = new Set(["orchestrate", "plan", "dse", "generate"]);
   var isDivide = function (n) { return /^propose: decompose/.test(String(n.name)); };
   var isSetup = function (n) { return SETUP_BOXES.has(boxOf(n)) || isDivide(n); };
   var partOf = function (n) { for (var p = n; p; p = p.parent) { var v = p.params && p.params.part; if (v) return String(v); } return ""; };
@@ -181,6 +182,13 @@
     var passBody = function (p, vs, key) {          // a pass's leaves: its own setup as one leaf, then the boxes
       var i = 0;
       while (i < vs.length && isSetup(vs[i])) i++;
+      // D755: a resumed pass first re-checks and re-measures what the record holds, then works --
+      // all of that before its first pick, search or design is its setup, one leaf
+      var w = vs.findIndex(function (v) { return WORK.has(boxOf(v)); });
+      if (w < 0) {                                   // no new work (the Conclusion): all before its decision
+        for (var k = vs.length - 1; k >= 0; k--) if (boxOf(vs[k]) === "select" && /^decide\b/.test(String(vs[k].name))) { w = k; break; }
+      }
+      if (w > i) i = w;
       var lead = vs.slice(0, i), rest = vs.slice(i);
       if (p === order[0]) { setupLeaves.push.apply(setupLeaves, leavesOf(lead, "setup")); return leavesOf(rest, key); }
       var pre = lead.length ? [{ leaf: true, box: "validate", title: "Setup", tasks: lead, key: key + "/setup" }] : [];

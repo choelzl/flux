@@ -1465,11 +1465,12 @@ async function loopPage(name, owner, path = "") {
       q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
       h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
-        card("Latest notes", notes.length ? h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
-          h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text)))) : empty(st.running && mine ? "No note yet: send one from the Live tab." : "No note yet.")),
-        card("Agents' workbench", bench.length ? h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
+        // D755: a card with nothing in it is not drawn -- a quiet loop's Overview is its decision and charts
+        notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
+          h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text))))) : "",
+        bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
           h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
-          b.first ? h("div", { class: "first" }, b.first) : ""))) : empty("Empty."))),
+          b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
         h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart.")),
           lastPass(r))));
   }

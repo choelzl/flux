@@ -19,6 +19,10 @@ from typing import Any, Callable, Iterable
 __all__ = ["ConclusionRow", "Records", "RefusalRow", "TrialRow"]
 
 
+#: The records whose path this process has said (D755).
+_SAID: set[tuple[str, str]] = set()
+
+
 @dataclass(frozen=True)
 class TrialRow:
     """One measured candidate as the record holds it: the candidate document, its
@@ -70,8 +74,10 @@ class Records:
             self.store = CampaignStore(db)
             self.campaign_id, created = self.store.start_campaign(objective, digest, campaign_id=name or None)
             self.resumed = not created
-            say(f"campaign {self.campaign_id[:12]} "
-                f"({'new' if created else 'resumed'}) in {db}")
+            if (db, self.campaign_id) not in _SAID:      # D755: once per run, not once per pass (passes at once said it twice)
+                _SAID.add((db, self.campaign_id))
+                say(f"campaign {self.campaign_id[:12]} "
+                    f"({'new' if created else 'resumed'}) in {db}")
         except Exception as exc:  # noqa: BLE001
             say(f"  (no campaign record: {type(exc).__name__}: {exc!s:.90})")
             self.store = None

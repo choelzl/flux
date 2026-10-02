@@ -81,7 +81,8 @@ def _union(spans: list[tuple[float, float]]) -> float:
     return total
 
 
-def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: float | None = None) -> dict[str, Any]:
+def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: float | None = None,
+             running: bool | None = None) -> dict[str, Any]:
     """One start's bars (the latest by default) and where its time went."""
     every = starts(path)
     if not every:
@@ -101,6 +102,8 @@ def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: flo
             ph[p["parent"]]["kids"] += 1
     last_t = max([float(e.get("t", 0)) for e in events] or [now])
     alive = idx == len(every) - 1 and now - last_t < 3600    # the latest start, heard from lately: still going
+    if running is not None:                                 # D755: the server knows: an ended loop is not running
+        alive = alive and running
     bars = []
     for p in ph.values():
         if p["kids"]:

@@ -223,7 +223,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     ran -- Search, Design, Check, Measure, Choose, Critic … (the box's full name on hover; ×N when it
     ran several times in a row) -- each with what it produced, and an **End** (Reason, Decision,
     Lessons, Established, Design file, Answer file); a loop in parts has a branch per **Part** (its
-    passes inside) and **Whole**. A leaf opens its work in tabs -- Live or Output, Input, Log, Every
+    passes inside) and **Whole**. A resumed pass's re-checks of what the record holds are its Setup leaf (D755). A leaf opens its work in tabs -- Live or Output, Input, Log, Every
     field -- and lists its tasks when it has several. From the run's journal `events.jsonl`, or as a
     graph (**Tree | Graph**, remembered per browser; D726: the graph is the loop's own drawing, as
     the configurator draws its document, unused boxes dimmed, a running one pulsing; D727: a step

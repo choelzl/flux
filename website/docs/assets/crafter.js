@@ -569,7 +569,7 @@
     var id = String(state.id || "").trim() || "my_problem";
     var out = "# " + id + ": made with the Flux problem builder.\n" +
               "#     flux task check " + id + ".problem.yaml\n" +
-              "#     flux task run " + id + ".problem.yaml --passes 1\n\n";
+              "#     flux task run " + id + ".problem.yaml            # until stopped; --passes N for N\n\n";
     out += "id: " + q(id) + "\n";
     out += prose("statement", String(state.statement || "").trim() || "(say what you want made)");
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
