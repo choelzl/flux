@@ -1,0 +1,60 @@
+{"ev": "hello", "pid": 7, "t": 1790895342.312}
+{"ev": "start", "id": 1, "name": "propose: decompose", "params": {}, "parent": null, "t": 1790895342.314, "why": "the parts this pass works on"}
+{"ev": "end", "failed": false, "id": 1, "name": "propose: decompose", "output": {}, "seconds": 0.0, "t": 1790895342.315}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"part": "add8cl", "state": "not yet tried"}]}, "t": 1790895342.324}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790895345.872}
+{"ev": "start", "id": 2, "name": "knowledge: prepare add8cl", "params": {}, "parent": null, "t": 1790895345.873, "why": "suite, inputs, cache"}
+{"ev": "end", "failed": false, "id": 2, "name": "knowledge: prepare add8cl", "output": {}, "seconds": 0.0, "t": 1790895345.874}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"part": "add8cl", "state": "not yet tried"}]}, "t": 1790895345.883}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790895345.884}
+{"ev": "start", "id": 3, "name": "propose: brief add8cl", "params": {"part": ""}, "parent": null, "t": 1790895345.897, "why": "once per part"}
+{"ev": "end", "failed": false, "id": 3, "name": "propose: brief add8cl", "output": {}, "seconds": 0.0, "t": 1790895345.898}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"part": "add8cl", "state": "trying", "via": ""}]}, "t": 1790895345.907}
+{"ev": "start", "id": 4, "name": "generation: add8cl", "params": {}, "parent": null, "t": 1790895345.908, "why": "LLM-gen, test, repair"}
+{"ev": "start", "id": 5, "name": "generation: agent:claude draft 1", "params": {}, "parent": 4, "t": 1790895345.909, "why": "add8cl"}
+{"ev": "start", "id": 6, "name": "agent: claude", "params": {}, "parent": 5, "t": 1790895346.644, "why": "add8cl#1"}
+{"ev": "end", "failed": false, "id": 6, "name": "agent: claude", "output": {}, "seconds": 9.665, "t": 1790895356.311}
+{"ev": "end", "failed": false, "id": 5, "name": "generation: agent:claude draft 1", "output": {}, "seconds": 10.415, "t": 1790895356.324}
+{"ev": "start", "id": 7, "name": "generation: build add8cl#1", "params": {}, "parent": 4, "t": 1790895356.325, "why": "agent:claude"}
+{"ev": "start", "id": 8, "name": "tool:python3", "params": {}, "parent": 7, "t": 1790895356.329, "why": "test add8cl#1"}
+{"ev": "end", "failed": false, "id": 8, "name": "tool:python3", "output": {}, "seconds": 12.268, "t": 1790895368.597}
+{"ev": "end", "failed": false, "id": 7, "name": "generation: build add8cl#1", "output": {}, "seconds": 12.273, "t": 1790895368.599}
+{"ev": "start", "id": 9, "name": "test: fast check add8cl#1", "params": {}, "parent": 4, "t": 1790895368.6, "why": "agent:claude"}
+{"ev": "end", "failed": false, "id": 9, "name": "test: fast check add8cl#1", "output": {}, "seconds": 0.0, "t": 1790895368.601}
+{"ev": "end", "failed": false, "id": 4, "name": "generation: add8cl", "output": {}, "seconds": 22.694, "t": 1790895368.602}
+{"ev": "start", "id": 10, "name": "test: judge add8cl", "params": {}, "parent": null, "t": 1790895368.603, "why": "add8cl#1"}
+{"ev": "start", "id": 11, "name": "tool:python3", "params": {}, "parent": 10, "t": 1790895368.606, "why": "test add8cl#1"}
+{"ev": "end", "failed": false, "id": 11, "name": "tool:python3", "output": {}, "seconds": 12.003, "t": 1790895380.609}
+{"ev": "end", "failed": false, "id": 10, "name": "test: judge add8cl", "output": {"verdict": "ADMITTED, score 0"}, "seconds": 12.007, "t": 1790895380.611}
+{"ev": "start", "id": 12, "name": "critique: add8cl", "params": {}, "parent": null, "t": 1790895380.612, "why": "add8cl#1"}
+{"ev": "end", "failed": false, "id": 12, "name": "critique: add8cl", "output": {"verdict": "no objection"}, "seconds": 0.0, "t": 1790895380.613}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"artifact": "module add8 (\n  input  logic [7:0] a, b,\n  output logic [8:0] s\n);\n  assign s = {1'b0, a} + {1'b0, b};\nendmodule\n", "name": "add8cl#1", "part": "add8cl", "report": "admitted: 0 over on every input", "state": "proven"}]}, "t": 1790895380.633}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790895380.634}
+{"ev": "start", "id": 13, "name": "evaluation", "params": {}, "parent": null, "t": 1790895380.643, "why": "compose, chain, cutoffs, routing"}
+{"ev": "start", "id": 14, "name": "template-fill: compose", "params": {}, "parent": 13, "t": 1790895380.647, "why": "1 part(s)"}
+{"ev": "end", "failed": false, "id": 14, "name": "template-fill: compose", "output": {}, "seconds": 0.0, "t": 1790895380.648}
+{"ev": "start", "id": 15, "name": "simulation: screen", "params": {}, "parent": 13, "t": 1790895380.649, "why": "1 candidate(s)"}
+{"ev": "start", "id": 16, "name": "tool:python3", "params": {}, "parent": 15, "t": 1790895380.652, "why": "stage screen add8cl#1"}
+{"ev": "end", "failed": false, "id": 16, "name": "tool:python3", "output": {}, "seconds": 1.034, "t": 1790895381.687}
+{"ev": "end", "failed": false, "id": 15, "name": "simulation: screen", "output": {"candidates": "add8cl#1"}, "seconds": 1.039, "t": 1790895381.689}
+{"ev": "start", "id": 17, "name": "frontier", "params": {}, "parent": 13, "t": 1790895381.692, "why": "1 on screen"}
+{"ev": "end", "failed": false, "id": 17, "name": "frontier", "output": {}, "seconds": 0.016, "t": 1790895381.71}
+{"ev": "start", "id": 18, "name": "propose: finalists", "params": {}, "parent": 13, "t": 1790895381.711, "why": "1 on the frontier"}
+{"ev": "end", "failed": false, "id": 18, "name": "propose: finalists", "output": {}, "seconds": 0.004, "t": 1790895381.716}
+{"ev": "start", "id": 19, "name": "simulation: confirm", "params": {}, "parent": 13, "t": 1790895381.717, "why": "1 candidate(s)"}
+{"ev": "start", "id": 20, "name": "tool:python3", "params": {}, "parent": 19, "t": 1790895381.72, "why": "stage confirm add8cl#1"}
+{"ev": "end", "failed": false, "id": 20, "name": "tool:python3", "output": {}, "seconds": 1.065, "t": 1790895382.785}
+{"ev": "end", "failed": false, "id": 19, "name": "simulation: confirm", "output": {"candidates": "add8cl#1"}, "seconds": 1.07, "t": 1790895382.788}
+{"ev": "end", "failed": false, "id": 13, "name": "evaluation", "output": {}, "seconds": 2.147, "t": 1790895382.791}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"artifact": "module add8 (\n  input  logic [7:0] a, b,\n  output logic [8:0] s\n);\n  assign s = {1'b0, a} + {1'b0, b};\nendmodule\n", "name": "add8cl#1", "part": "add8cl", "report": "admitted: 0 over on every input", "state": "proven"}]}, "t": 1790895382.806}
+{"ev": "start", "id": 21, "name": "decide", "params": {}, "parent": null, "t": 1790895382.807, "why": "frontier, decision, conclusion"}
+{"ev": "start", "id": 22, "name": "frontier", "params": {}, "parent": 21, "t": 1790895382.812, "why": "1 on confirm"}
+{"ev": "end", "failed": false, "id": 22, "name": "frontier", "output": {}, "seconds": 0.003, "t": 1790895382.816}
+{"ev": "start", "id": 23, "name": "decide", "params": {}, "parent": 21, "t": 1790895382.816, "why": "1 in the pool"}
+{"ev": "end", "failed": false, "id": 23, "name": "decide", "output": {"decided by": "the least area_um2 at fmax_mhz >= 2000", "decision": "add8cl#1"}, "seconds": 0.012, "t": 1790895382.829}
+{"ev": "start", "id": 24, "name": "critique: decision", "params": {}, "parent": 21, "t": 1790895382.829, "why": "add8cl#1"}
+{"ev": "end", "failed": false, "id": 24, "name": "critique: decision", "output": {"verdict": "no objection"}, "seconds": 0.0, "t": 1790895382.83}
+{"ev": "end", "failed": false, "id": 21, "name": "decide", "output": {}, "seconds": 0.028, "t": 1790895382.836}
+{"ev": "publish", "key": "standings", "payload": {"parts": [{"artifact": "module add8 (\n  input  logic [7:0] a, b,\n  output logic [8:0] s\n);\n  assign s = {1'b0, a} + {1'b0, b};\nendmodule\n", "name": "add8cl#1", "part": "add8cl", "report": "admitted: 0 over on every input", "state": "proven"}]}, "t": 1790895382.852}
+{"ev": "mark", "name": "ended", "t": 1790895382.853, "why": "{\"why\": \"1 pass done\"}"}
+{"ev": "mark", "name": "outputs", "t": 1790895382.878, "why": "{\"stopped\": \"nothing left to do\", \"decided_by\": \"the least area_um2 at fmax_mhz >= 2000\", \"decision\": {\"name\": \"add8cl#1\", \"stage\": \"confirm\", \"metrics\": {\"fmax_mhz\": 4242.32, \"area_um2\": 3.0, \"power_w\": 6.61e-06, \"cell_count\": 32.0}}, \"front\": 1, \"refused\": 0, \"lessons\": [\"[confirm] decision add8cl#1: fmax_mhz=4242.32, area_um2=3, power_w=6.61e-06, cell_count=32 (the least area_um2 at fmax_mhz >= 2000)\"], \"established\": [\"- [confirm] decision add8cl#1: fmax_mhz=4242.32, area_um2=3, power_w=6.61e-06, cell_count=32 (the least area_um2 at fmax_mhz >= 2000)\"], \"not_established\": [], \"design\": \"out/add8cl.sv\", \"answer\": \"runs/answer.json\"}"}

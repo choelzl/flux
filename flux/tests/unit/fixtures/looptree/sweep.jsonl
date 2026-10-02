@@ -1,0 +1,118 @@
+{"ev": "hello", "pid": 7, "t": 1790888371.849}
+{"ev": "start", "id": 1, "name": "propose: decompose", "params": {}, "parent": null, "t": 1790888371.85, "why": "the parts this pass works on"}
+{"ev": "end", "failed": false, "id": 1, "name": "propose: decompose", "output": {}, "seconds": 0.0, "t": 1790888371.851}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888371.852}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888375.316}
+{"ev": "start", "id": 2, "name": "knowledge: prepare sw4", "params": {}, "parent": null, "t": 1790888375.319, "why": "suite, inputs, cache"}
+{"ev": "end", "failed": false, "id": 2, "name": "knowledge: prepare sw4", "output": {}, "seconds": 0.0, "t": 1790888375.319}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888375.32}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888375.321}
+{"ev": "start", "id": 3, "name": "DSE: batch", "params": {}, "parent": null, "t": 1790888375.33, "why": "the search policy proposes, the gate and the first stage measure"}
+{"ev": "start", "id": 4, "name": "tool:python3", "params": {}, "parent": 3, "t": 1790888375.334, "why": "generate list_sieve-0"}
+{"ev": "end", "failed": false, "id": 4, "name": "tool:python3", "output": {}, "seconds": 0.033, "t": 1790888375.367}
+{"ev": "start", "id": 5, "name": "test: gate", "params": {}, "parent": 3, "t": 1790888375.369, "why": "1 candidate(s)"}
+{"ev": "start", "id": 6, "name": "tool:python3", "params": {}, "parent": 5, "t": 1790888375.373, "why": "test list_sieve-0"}
+{"ev": "end", "failed": false, "id": 6, "name": "tool:python3", "output": {}, "seconds": 0.165, "t": 1790888375.538}
+{"ev": "end", "failed": false, "id": 5, "name": "test: gate", "output": {}, "seconds": 0.17, "t": 1790888375.54}
+{"ev": "start", "id": 7, "name": "simulation: bench", "params": {}, "parent": 3, "t": 1790888375.541, "why": "1 candidate(s)"}
+{"ev": "start", "id": 8, "name": "tool:python3", "params": {}, "parent": 7, "t": 1790888375.544, "why": "stage bench list_sieve-0"}
+{"ev": "end", "failed": false, "id": 8, "name": "tool:python3", "output": {}, "seconds": 0.466, "t": 1790888376.011}
+{"ev": "end", "failed": false, "id": 7, "name": "simulation: bench", "output": {"candidates": "list_sieve-0"}, "seconds": 0.471, "t": 1790888376.013}
+{"ev": "end", "failed": false, "id": 3, "name": "DSE: batch", "output": {"candidates": 1}, "seconds": 0.7, "t": 1790888376.031}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.033}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.034}
+{"ev": "start", "id": 9, "name": "evaluation", "params": {}, "parent": null, "t": 1790888376.035, "why": "compose, chain, cutoffs, routing"}
+{"ev": "start", "id": 10, "name": "template-fill: compose", "params": {}, "parent": 9, "t": 1790888376.036, "why": "0 part(s)"}
+{"ev": "end", "failed": false, "id": 10, "name": "template-fill: compose", "output": {}, "seconds": 0.0, "t": 1790888376.037}
+{"ev": "end", "failed": false, "id": 9, "name": "evaluation", "output": {}, "seconds": 0.002, "t": 1790888376.038}
+{"ev": "start", "id": 11, "name": "decide", "params": {}, "parent": null, "t": 1790888376.039, "why": "frontier, decision, conclusion"}
+{"ev": "start", "id": 12, "name": "frontier", "params": {}, "parent": 11, "t": 1790888376.04, "why": "1 on bench"}
+{"ev": "end", "failed": false, "id": 12, "name": "frontier", "output": {}, "seconds": 0.0, "t": 1790888376.04}
+{"ev": "start", "id": 13, "name": "decide", "params": {}, "parent": 11, "t": 1790888376.041, "why": "1 in the pool"}
+{"ev": "end", "failed": false, "id": 13, "name": "decide", "output": {"decided by": "the smallest time_ms", "decision": "list_sieve-0"}, "seconds": 0.0, "t": 1790888376.042}
+{"ev": "start", "id": 14, "name": "critique: decision", "params": {}, "parent": 11, "t": 1790888376.043, "why": "list_sieve-0"}
+{"ev": "end", "failed": false, "id": 14, "name": "critique: decision", "output": {"verdict": "no objection"}, "seconds": 0.0, "t": 1790888376.044}
+{"ev": "end", "failed": false, "id": 11, "name": "decide", "output": {}, "seconds": 0.01, "t": 1790888376.05}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.051}
+{"ev": "mark", "name": "pass", "t": 1790888376.053, "why": "{\"n\": 2, \"explore\": 0}"}
+{"ev": "start", "id": 15, "name": "gate: tools", "params": {}, "parent": null, "t": 1790888376.054, "why": "refuse loudly before spending anything"}
+{"ev": "end", "failed": false, "id": 15, "name": "gate: tools", "output": {"verdict": "every tool the problem names is on PATH"}, "seconds": 0.0, "t": 1790888376.055}
+{"ev": "start", "id": 16, "name": "gate: the problem", "params": {}, "parent": null, "t": 1790888376.055, "why": "is what was asked answerable"}
+{"ev": "end", "failed": false, "id": 16, "name": "gate: the problem", "output": {"verdict": "answerable as posed"}, "seconds": 0.0, "t": 1790888376.057}
+{"ev": "start", "id": 17, "name": "propose: decompose", "params": {}, "parent": null, "t": 1790888376.066, "why": "the parts this pass works on"}
+{"ev": "end", "failed": false, "id": 17, "name": "propose: decompose", "output": {}, "seconds": 0.0, "t": 1790888376.067}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.068}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.069}
+{"ev": "start", "id": 18, "name": "knowledge: prepare sw4", "params": {}, "parent": null, "t": 1790888376.07, "why": "suite, inputs, cache"}
+{"ev": "end", "failed": false, "id": 18, "name": "knowledge: prepare sw4", "output": {}, "seconds": 0.0, "t": 1790888376.071}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.072}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.073}
+{"ev": "start", "id": 19, "name": "DSE: batch", "params": {}, "parent": null, "t": 1790888376.074, "why": "the search policy proposes, the gate and the first stage measure"}
+{"ev": "start", "id": 20, "name": "tool:python3", "params": {}, "parent": 19, "t": 1790888376.077, "why": "generate list_sieve-1"}
+{"ev": "end", "failed": false, "id": 20, "name": "tool:python3", "output": {}, "seconds": 0.033, "t": 1790888376.11}
+{"ev": "start", "id": 21, "name": "test: gate", "params": {}, "parent": 19, "t": 1790888376.113, "why": "1 candidate(s)"}
+{"ev": "start", "id": 22, "name": "tool:python3", "params": {}, "parent": 21, "t": 1790888376.117, "why": "test list_sieve-1"}
+{"ev": "end", "failed": false, "id": 22, "name": "tool:python3", "output": {}, "seconds": 0.165, "t": 1790888376.282}
+{"ev": "end", "failed": false, "id": 21, "name": "test: gate", "output": {}, "seconds": 0.17, "t": 1790888376.284}
+{"ev": "start", "id": 23, "name": "simulation: bench", "params": {}, "parent": 19, "t": 1790888376.285, "why": "1 candidate(s)"}
+{"ev": "start", "id": 24, "name": "tool:python3", "params": {}, "parent": 23, "t": 1790888376.288, "why": "stage bench list_sieve-1"}
+{"ev": "end", "failed": false, "id": 24, "name": "tool:python3", "output": {}, "seconds": 0.516, "t": 1790888376.804}
+{"ev": "end", "failed": false, "id": 23, "name": "simulation: bench", "output": {"candidates": "list_sieve-1"}, "seconds": 0.521, "t": 1790888376.806}
+{"ev": "end", "failed": false, "id": 19, "name": "DSE: batch", "output": {"candidates": 1}, "seconds": 0.734, "t": 1790888376.809}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.81}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.811}
+{"ev": "start", "id": 25, "name": "evaluation", "params": {}, "parent": null, "t": 1790888376.812, "why": "compose, chain, cutoffs, routing"}
+{"ev": "start", "id": 26, "name": "template-fill: compose", "params": {}, "parent": 25, "t": 1790888376.813, "why": "0 part(s)"}
+{"ev": "end", "failed": false, "id": 26, "name": "template-fill: compose", "output": {}, "seconds": 0.0, "t": 1790888376.814}
+{"ev": "end", "failed": false, "id": 25, "name": "evaluation", "output": {}, "seconds": 0.001, "t": 1790888376.814}
+{"ev": "start", "id": 27, "name": "decide", "params": {}, "parent": null, "t": 1790888376.815, "why": "frontier, decision, conclusion"}
+{"ev": "start", "id": 28, "name": "frontier", "params": {}, "parent": 27, "t": 1790888376.816, "why": "2 on bench"}
+{"ev": "end", "failed": false, "id": 28, "name": "frontier", "output": {}, "seconds": 0.0, "t": 1790888376.816}
+{"ev": "start", "id": 29, "name": "decide", "params": {}, "parent": 27, "t": 1790888376.817, "why": "2 in the pool"}
+{"ev": "end", "failed": false, "id": 29, "name": "decide", "output": {"decided by": "the smallest time_ms", "decision": "list_sieve-0"}, "seconds": 0.0, "t": 1790888376.818}
+{"ev": "start", "id": 30, "name": "critique: decision", "params": {}, "parent": 27, "t": 1790888376.819, "why": "list_sieve-0"}
+{"ev": "end", "failed": false, "id": 30, "name": "critique: decision", "output": {"verdict": "no objection"}, "seconds": 0.0, "t": 1790888376.819}
+{"ev": "end", "failed": false, "id": 27, "name": "decide", "output": {}, "seconds": 0.008, "t": 1790888376.824}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.825}
+{"ev": "mark", "name": "pass", "t": 1790888376.826, "why": "{\"n\": 3, \"explore\": 0}"}
+{"ev": "start", "id": 31, "name": "gate: tools", "params": {}, "parent": null, "t": 1790888376.827, "why": "refuse loudly before spending anything"}
+{"ev": "end", "failed": false, "id": 31, "name": "gate: tools", "output": {"verdict": "every tool the problem names is on PATH"}, "seconds": 0.0, "t": 1790888376.828}
+{"ev": "start", "id": 32, "name": "gate: the problem", "params": {}, "parent": null, "t": 1790888376.829, "why": "is what was asked answerable"}
+{"ev": "end", "failed": false, "id": 32, "name": "gate: the problem", "output": {"verdict": "answerable as posed"}, "seconds": 0.0, "t": 1790888376.83}
+{"ev": "start", "id": 33, "name": "propose: decompose", "params": {}, "parent": null, "t": 1790888376.837, "why": "the parts this pass works on"}
+{"ev": "end", "failed": false, "id": 33, "name": "propose: decompose", "output": {}, "seconds": 0.0, "t": 1790888376.838}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.839}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.84}
+{"ev": "start", "id": 34, "name": "knowledge: prepare sw4", "params": {}, "parent": null, "t": 1790888376.841, "why": "suite, inputs, cache"}
+{"ev": "end", "failed": false, "id": 34, "name": "knowledge: prepare sw4", "output": {}, "seconds": 0.0, "t": 1790888376.841}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888376.842}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888376.843}
+{"ev": "start", "id": 35, "name": "DSE: batch", "params": {}, "parent": null, "t": 1790888376.844, "why": "the search policy proposes, the gate and the first stage measure"}
+{"ev": "start", "id": 36, "name": "tool:python3", "params": {}, "parent": 35, "t": 1790888376.847, "why": "generate slice_sieve-0"}
+{"ev": "end", "failed": false, "id": 36, "name": "tool:python3", "output": {}, "seconds": 0.033, "t": 1790888376.88}
+{"ev": "start", "id": 37, "name": "test: gate", "params": {}, "parent": 35, "t": 1790888376.883, "why": "1 candidate(s)"}
+{"ev": "start", "id": 38, "name": "tool:python3", "params": {}, "parent": 37, "t": 1790888376.886, "why": "test slice_sieve-0"}
+{"ev": "end", "failed": false, "id": 38, "name": "tool:python3", "output": {}, "seconds": 0.065, "t": 1790888376.951}
+{"ev": "end", "failed": false, "id": 37, "name": "test: gate", "output": {}, "seconds": 0.07, "t": 1790888376.953}
+{"ev": "start", "id": 39, "name": "simulation: bench", "params": {}, "parent": 35, "t": 1790888376.954, "why": "1 candidate(s)"}
+{"ev": "start", "id": 40, "name": "tool:python3", "params": {}, "parent": 39, "t": 1790888376.956, "why": "stage bench slice_sieve-0"}
+{"ev": "end", "failed": false, "id": 40, "name": "tool:python3", "output": {}, "seconds": 0.115, "t": 1790888377.071}
+{"ev": "end", "failed": false, "id": 39, "name": "simulation: bench", "output": {"candidates": "slice_sieve-0"}, "seconds": 0.119, "t": 1790888377.073}
+{"ev": "end", "failed": false, "id": 35, "name": "DSE: batch", "output": {"candidates": 1}, "seconds": 0.232, "t": 1790888377.077}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888377.078}
+{"ev": "publish", "key": "mentor", "payload": {}, "t": 1790888377.079}
+{"ev": "start", "id": 41, "name": "evaluation", "params": {}, "parent": null, "t": 1790888377.08, "why": "compose, chain, cutoffs, routing"}
+{"ev": "start", "id": 42, "name": "template-fill: compose", "params": {}, "parent": 41, "t": 1790888377.081, "why": "0 part(s)"}
+{"ev": "end", "failed": false, "id": 42, "name": "template-fill: compose", "output": {}, "seconds": 0.0, "t": 1790888377.082}
+{"ev": "end", "failed": false, "id": 41, "name": "evaluation", "output": {}, "seconds": 0.002, "t": 1790888377.083}
+{"ev": "start", "id": 43, "name": "decide", "params": {}, "parent": null, "t": 1790888377.084, "why": "frontier, decision, conclusion"}
+{"ev": "start", "id": 44, "name": "frontier", "params": {}, "parent": 43, "t": 1790888377.084, "why": "3 on bench"}
+{"ev": "end", "failed": false, "id": 44, "name": "frontier", "output": {}, "seconds": 0.0, "t": 1790888377.085}
+{"ev": "start", "id": 45, "name": "decide", "params": {}, "parent": 43, "t": 1790888377.086, "why": "3 in the pool"}
+{"ev": "end", "failed": false, "id": 45, "name": "decide", "output": {"decided by": "the smallest time_ms", "decision": "slice_sieve-0"}, "seconds": 0.0, "t": 1790888377.087}
+{"ev": "start", "id": 46, "name": "critique: decision", "params": {}, "parent": 43, "t": 1790888377.088, "why": "slice_sieve-0"}
+{"ev": "end", "failed": false, "id": 46, "name": "critique: decision", "output": {"verdict": "no objection"}, "seconds": 0.0, "t": 1790888377.089}
+{"ev": "end", "failed": false, "id": 43, "name": "decide", "output": {}, "seconds": 0.01, "t": 1790888377.094}
+{"ev": "publish", "key": "standings", "payload": {}, "t": 1790888377.095}
+{"ev": "mark", "name": "ended", "t": 1790888377.096, "why": "{\"why\": \"3 passes done\"}"}
+{"ev": "mark", "name": "outputs", "t": 1790888377.106, "why": "{\"stopped\": \"\", \"decided_by\": \"the smallest time_ms\", \"decision\": {\"name\": \"slice_sieve-0\", \"stage\": \"bench\", \"metrics\": {\"time_ms\": 11.091}}, \"front\": 3, \"refused\": 0, \"lessons\": [\"[bench] decision slice_sieve-0: time_ms=11.091 (the smallest time_ms)\"], \"established\": [\"- [bench] decision slice_sieve-0: time_ms=11.091 (the smallest time_ms)\"], \"not_established\": [], \"design\": \"out/sw4.py\", \"answer\": \"runs/answer.json\"}"}

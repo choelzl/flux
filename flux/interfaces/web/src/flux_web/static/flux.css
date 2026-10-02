@@ -711,3 +711,8 @@ body:has(.composer) .toasts { bottom: 150px; }
 .agent-steps { margin: 0; padding-left: 4px; list-style: none; display: grid; gap: 2px; color: var(--muted); }
 .agent-steps li.bad { color: var(--bad); }
 .agent-test-row td { border-top: none; padding-top: 0; }
+
+/* D752: on a phone a list wider than the screen scrolls in its own box, never the page */
+@media (max-width: 640px) {
+  #main table.list { display: block; max-width: 100%; overflow-x: auto; }
+}

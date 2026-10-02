@@ -1749,13 +1749,11 @@ function logView(base, qs) {
            problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
 
-/** The journal's marks the loop tree hangs on (D739). */
-const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
-
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
 function liveTree(base, qs, onQuestion) {
-  const nodes = new Map(), roots = [], standings = new Map(), marks = [];
+  const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
+  const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
   let selected = null, selLeafKey = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
   const follow = h("input", { type: "checkbox", checked: true });
@@ -1763,27 +1761,12 @@ function liveTree(base, qs, onQuestion) {
   const search = h("input", { placeholder: "search tasks", class: "filter" });
   const treeBox = h("div", { class: "tree" }), graphBox = h("div", { class: "tgraph" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
   function onEvent(e) {
-    if (e.ev === "hello") {                        // a new start: its tree begins afresh (D689)
-      nodes.clear(); roots.length = 0; standings.clear(); open.clear(); marks.length = 0; selected = null; selLeafKey = null; dirty = true;
-      return;
-    }
-    if (e.ev === "start") {
-      const n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, fields: {}, kids: [], parent: null };
-      nodes.set(e.id, n);
-      const p = e.parent != null && nodes.get(e.parent);
-      if (p) { n.parent = p; p.kids.push(n); } else roots.push(n);
-    } else if (e.ev === "update") { const n = nodes.get(e.id); if (n) Object.assign(n.fields, e.fields); }
-    else if (e.ev === "end") { const n = nodes.get(e.id); if (n) { n.t1 = e.t; n.seconds = e.seconds; n.failed = e.failed; n.output = e.output; } }
-    else if (e.ev === "publish") standings.set(e.key, e.payload);
-    else if (e.ev === "mark" && e.name === "question") { try { onQuestion(JSON.parse(e.why)); } catch (_) {} }
-    else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {            // D739: passes, the end, what was written
-      let d = {}; try { d = JSON.parse(e.why || "{}") || {}; } catch (_) {}
-      marks.push({ ...d, name: e.name, t: e.t });
-    }
+    const r = LT.apply(mdl, e);
+    if (r.reset) { open.clear(); selected = null; selLeafKey = null; }
+    if (r.question) onQuestion(r.question);
     dirty = true;
   }
-  const running = (n) => n.t1 == null;
-  const failedBelow = (n) => n.failed || n.kids.some(failedBelow);
+  const running = LT.running, failedBelow = LT.failedBelow;
   function followTarget() {                              // the deepest running task, an agent first
     let best = null, bestDepth = -1;
     const walk = (n, d) => {
@@ -1819,148 +1802,12 @@ function liveTree(base, qs, onQuestion) {
   for (const [k, b] of Object.entries(modeBtns)) b.addEventListener("click", () => setMode(k));
   function matches(n, q) { return (n.name + " " + (n.why || "")).toLowerCase().includes(q); }
   function visibleUnder(n, q) { return matches(n, q) || n.kids.some(k => visibleUnder(k, q)); }
-  /** The loop as it ran (D739): this start is one branch -- its setup, a branch per pass whose
-      leaves are the loop crafter's boxes in the order they ran, then its end. A loop split into
-      parts has a branch per part (its passes inside) and one for the whole. A leaf is a box's
-      stretch of work: ×N when it ran several times in a row; its tasks open in the detail. */
-  const SETUP_BOXES = new Set(["validate", "knowledge", "records", "feedback"]);
-  const isDivide = (n) => /^propose: decompose/.test(String(n.name));
-  const isSetup = (n) => SETUP_BOXES.has(boxOfTask(n)) || isDivide(n);
-  const partOf = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.part; if (v) return String(v); } return ""; };
-  const passTag = (n) => { for (let p = n; p; p = p.parent) { const v = p.params && p.params.pass; if (v != null && v !== "") return Number(v); } return null; };   // D747
-  const rootOf = (n) => { let p = n; while (p.parent) p = p.parent; return p; };
-  const within = (v, n) => { for (let p = n; p; p = p.parent) if (p === v) return true; return false; };
-  // D742: a leaf's name is a word; the crafter's box name is its tooltip
-  const LEAF_NAME = { validate: "Checks", knowledge: "Reading", records: "Record", feedback: "Notes", orchestrate: "Pick", plan: "Plan",
-    dse: "Search", generate: "Design", test: "Check", measure: "Measure", calibrate: "Calibrate", select: "Choose", extract: "Lessons",
-    "crit-division": "Critic", "crit-part": "Critic", "crit-decision": "Critic", parts: "Compose" };
-  function leafTitle(b, v) {
-    if (isDivide(v)) return "Divide";
-    if (/^propose: finalists/.test(String(v.name))) return "Finalists";
-    return LEAF_NAME[b] || b;
-  }
-  function boxName(it) {
-    const C = window.FluxCrafter;
-    return it.title === "Divide" ? "Divide into parts" : it.title === "Finalists" ? "Choose the finalists" : it.title === "Compose" ? "Put the parts together"
-      : it.title === "Setup" ? "The pass's own setup" : (C && C.boxTitle ? C.boxTitle(it.box) : null) || it.title;
-  }
-  function leavesOf(vs, key) {
-    const out = [];
-    for (const v of vs) {
-      const b = boxOfTask(v), title = leafTitle(b, v), last = out[out.length - 1];
-      if (last && last.title === title) last.tasks.push(v);
-      else out.push({ leaf: true, box: b, title, tasks: [v], key: `${key}/${out.length}` });
-    }
-    return out;
-  }
-  const designsOf = (vs) => {                    // what a pass worked on: the designs its tools made or built
-    const names = [];
-    const walk = (n) => {
-      const m = /^generate (.+)$/.exec(String(n.why || "")) || /^generation: build (.+)$/.exec(String(n.name));
-      if (m && String(n.name).match(/^(tool:|generation: build)/) && !names.includes(m[1])) names.push(m[1]);
-      n.kids.forEach(walk);
-    };
-    vs.forEach(walk);
-    return names;
-  };
-  function branch(key, title, why, kids) { return { key, title, why, kids }; }
-  function loopTree() {
-    boxCache.clear();
-    const passMarks = marks.filter(m => m.name === "pass");
-    const passAt = (t) => { let k = 1; for (const m of passMarks) if (m.t <= t + 1e-3) k = Number(m.n) || k; return k; };
-    const visits = [];
-    for (const n of nodes.values()) {
-      const b = boxOfTask(n);
-      if (!b || (n.parent && boxOfTask(n.parent) === b)) continue;
-      visits.push(n);
-    }
-    visits.sort((a, b) => a.t0 - b.t0 || a.id - b.id);
-    const named = new Set(visits.map(partOf).filter(Boolean));
-    const hasParts = named.size > 0;
-    // the pick of the next part belongs to the part it picked
-    const partOfVisit = (v) => partOf(v) || (/^propose: what next/.test(String(v.name)) && v.output && named.has(String(v.output.picked)) ? String(v.output.picked) : "");
-    const passes = new Map();
-    for (const m of passMarks) if (!passes.has(Number(m.n))) passes.set(Number(m.n), { n: Number(m.n), explore: Number(m.explore || 0), conclude: !!m.conclude, visits: [] });
-    for (const v of visits) {
-      if (!hasParts && boxOfTask(v) === "parts") continue;              // nothing to put together
-      const k = passTag(v) ?? passAt(rootOf(v).t0);                       // D747: passes at once say whose they are
-      if (!passes.has(k)) passes.set(k, { n: k, explore: 0, visits: [] });
-      passes.get(k).visits.push(v);
-    }
-    const order = [...passes.values()].filter(p => p.visits.length).sort((a, b) => a.n - b.n);
-    // D747: the passes that ran at the same time as each, from their own times
-    const span = (p) => { const ts = subtree(p.visits); return [Math.min(...ts.map(t => t.t0)), Math.max(...ts.map(t => t.t1 ?? Infinity))]; };
-    for (const p of order) p.span = span(p);
-    for (const p of order) p.with = order.filter(q => q !== p && q.span[0] < p.span[1] && p.span[0] < q.span[1]).map(q => q.n);
-    const out = [];
-    const setupLeaves = [];
-    const passBody = (p, vs, key) => {            // a pass's leaves: its own setup as one leaf, then the boxes
-      let i = 0;
-      while (i < vs.length && isSetup(vs[i])) i++;
-      const lead = vs.slice(0, i), rest = vs.slice(i);
-      if (p === order[0]) { setupLeaves.push(...leavesOf(lead, "setup")); return leavesOf(rest, key); }
-      const pre = lead.length ? [{ leaf: true, box: "validate", title: "Setup", tasks: lead, key: `${key}/setup` }] : [];
-      return [...pre, ...leavesOf(rest, key)];
-    };
-    const passWhy = (p, vs) => {
-      const made = designsOf(vs);
-      return [made.length ? (made.length > 3 ? `${made.slice(0, 3).join(", ")} +${made.length - 3}` : made.join(", ")) : "", p.explore ? "exploring" : "",
-        p.with && p.with.length ? `with ${p.with.join(", ")}` : ""].filter(Boolean).join(" · ");
-    };
-    if (!hasParts) {
-      for (const p of order) out.push(branch(`pass:${p.n}`, p.conclude ? "Conclusion" : `Pass ${p.n}`, p.conclude ? "over every pass" : passWhy(p, p.visits), passBody(p, p.visits, `pass:${p.n}`)));
-    } else {
-      const byPart = new Map(), whole = [];
-      for (const p of order) {
-        const own = new Map();
-        for (const v of p.visits) { const k = partOfVisit(v); if (!own.has(k)) own.set(k, []); own.get(k).push(v); }
-        for (const [k, vs] of own) {
-          if (!k) { const kids = passBody(p, vs, `whole/pass:${p.n}`); if (kids.length) whole.push(branch(`whole/pass:${p.n}`, `Pass ${p.n}`, passWhy(p, vs), kids)); continue; }
-          if (!byPart.has(k)) byPart.set(k, []);
-          byPart.get(k).push(branch(`part:${k}/pass:${p.n}`, `Pass ${p.n}`, passWhy(p, vs), leavesOf(vs, `part:${k}/pass:${p.n}`)));
-        }
-      }
-      const st = standings.get("standings") || {};
-      const partState = new Map((Array.isArray(st.parts) ? st.parts : []).map(x => [String(x.part), x.state]));
-      for (const [k, kids] of byPart) out.push(branch(`part:${k}`, `Part ${k}`, partState.get(k) || "", kids));
-      if (whole.length) out.push(branch("whole", "Whole", "", whole));
-    }
-    if (setupLeaves.length) out.unshift(branch("setup", "Setup", "", setupLeaves));
-    for (const it of out) if (it.why == null) it.why = "";
-    const end = endLeaves();
-    const dec = end.find(l => l.title === "Decision");
-    if (end.length) out.push(branch("end", "End", ((dec || end[0]).tasks[0].why || "").split(" · ")[0], end));
-    return out;
-  }
-  function endLeaves() {
-    const last = (name) => [...marks].reverse().find(m => m.name === name);
-    const ended = last("ended"), outs = last("outputs"), waiting = last("waiting");
-    const lastPass = [...marks].reverse().find(m => m.name === "pass");
-    const at = (m) => m && (!lastPass || m.t >= lastPass.t);
-    const leaves = [];
-    const pseudo = (key, title, why, output, t, live = false) => leaves.push({ leaf: true, box: "end", title, key: `end/${key}`,
-      tasks: [{ id: `end:${key}`, name: title, why, params: {}, fields: {}, output, kids: [], parent: null, t0: t, t1: live ? null : t, seconds: 0, pseudo: true }] });
-    if (at(waiting) && !ended) pseudo("waiting", "Waiting", waiting.why || "for a note or a stop", {}, waiting.t, true);
-    if (ended) pseudo("why", "Reason", ended.why || "", { why: ended.why }, ended.t);
-    if (outs) {
-      const d = outs.decision;
-      const nums = d && d.metrics ? Object.entries(d.metrics).map(([k, v]) => `${k}=${typeof v === "number" ? Number(v.toPrecision(5)) : v}`).join(", ") : "";
-      pseudo("decision", "Decision", d ? `${d.name}${nums ? " · " + nums : ""}` : "none",
-        { decision: d, "decided by": outs.decided_by, "the front": outs.front, refused: outs.refused, stopped: outs.stopped }, outs.t);
-      if (outs.lessons && outs.lessons.length) pseudo("lessons", "Lessons", String(outs.lessons.length), { lessons: outs.lessons }, outs.t);
-      if ((outs.established || []).length || (outs.not_established || []).length)
-        pseudo("established", "Established", `${(outs.established || []).length}${(outs.not_established || []).length ? ` · ${outs.not_established.length} not` : ""}`,
-          { established: outs.established, "not established": outs.not_established }, outs.t);
-      const base = (f) => String(f).split("/").pop();
-      if (outs.design) pseudo("design", "Design file", base(outs.design), { file: outs.design }, outs.t);
-      if (outs.answer) pseudo("answer", "Answer file", base(outs.answer), { file: outs.answer }, outs.t);
-    }
-    return leaves;
-  }
-  const itemTasks = (it) => it.leaf ? it.tasks : it.kids.flatMap(itemTasks);
+  /** The loop as it ran (D739): built in looptree.js (D752); here only drawn and selected in. */
+  const within = LT.within, itemTasks = LT.itemTasks, itemHas = LT.itemHas;
+  const loopTree = () => LT.build(mdl);
+  const boxName = (it) => LT.boxName(it, window.FluxCrafter && window.FluxCrafter.boxTitle);
   const itemRunning = (it) => itemTasks(it).some(running);
   const itemFailed = (it) => itemTasks(it).some(failedBelow);
-  const itemHas = (it, n) => n && itemTasks(it).some(v => within(v, n));
   function itemMatches(it, q) {
     if (it.title.toLowerCase().includes(q)) return true;
     return it.leaf ? it.tasks.some(v => visibleUnder(v, q)) : it.kids.some(k => itemMatches(k, q));
@@ -1982,37 +1829,7 @@ function liveTree(base, qs, onQuestion) {
     drawStandings();
     dirty = false;
   }
-  /** A leaf's line (D742): what it produced, short -- the designs it made or checked, the stage
-      it measured on, the decision, a critic's verdict -- not the code's own wording. */
-  const subtree = (vs) => { const all = []; const walk = (n) => { all.push(n); n.kids.forEach(walk); }; vs.forEach(walk); return all; };
-  const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-  const listed = (xs) => xs.length > 3 ? `${xs.slice(0, 3).join(", ")} +${xs.length - 3}` : xs.join(", ");
-  function leafLine(it) {
-    if (it.tasks[0].pseudo) return it.tasks[0].why || "";
-    const all = subtree(it.tasks), latest = it.tasks.reduce((a, x) => (x.t0 >= a.t0 ? x : a));
-    const toolWhy = (re) => uniq(all.filter(n => String(n.name).startsWith("tool:")).map(n => (re.exec(String(n.why || "")) || [])[1]));
-    const agent = all.find(n => String(n.name).startsWith("agent:"));
-    switch (it.box) {
-      case "dse": return listed(designsOf(it.tasks)) || (latest.output && latest.output.candidates != null ? String(latest.output.candidates) : "");
-      case "generate": {
-        const made = uniq([...toolWhy(/^generate (.+)$/), ...all.map(n => (/^generation: build (.+)$/.exec(String(n.name)) || [])[1])]);
-        return [agent ? String(agent.name).replace(/^agent:\s*/, "") : "", listed(made)].filter(Boolean).join(" · ");
-      }
-      case "test": return listed(toolWhy(/^test (.+)$/)) || String(latest.why || "").replace(/candidate\(s\)/, "design(s)");
-      case "measure": {
-        const stages = uniq(it.tasks.map(n => String(n.name).replace(/^[^:]+:\s*/, "").replace(/\s*\(.*\)$/, "").replace(/ alone$/, "")));
-        const what = toolWhy(/^stage \S+ (.+)$/);
-        return [stages.join(", "), listed(what)].filter(Boolean).join(" · ");
-      }
-      case "select": { const d = all.map(n => n.output && n.output.decision).filter(Boolean).pop(); return d ? String(d) : String(latest.why || ""); }
-      case "crit-decision": case "crit-part": case "crit-division": {
-        const v = latest.output && latest.output.verdict;
-        return [String(latest.why || ""), v ? (/^no objection/.test(v) ? "no objection" : "objects") : ""].filter(Boolean).join(" · ");
-      }
-      case "orchestrate": { const p = all.map(n => n.output && n.output.picked).filter(Boolean).pop(); return p ? String(p) : ""; }
-      default: return it.title === "Setup" || SETUP_BOXES.has(it.box) ? "" : String(latest.why || "");
-    }
-  }
+  const leafLine = LT.leafLine;
   function drawLoopTree(now, q) {
     const items = loopTree();
     shownItems = items;
@@ -2061,28 +1878,7 @@ function liveTree(base, qs, onQuestion) {
   /** The tasks as the loop's own drawing (D726, after D723): the configurator's diagram of this
       loop's document, read-only, each task placed on its box by its name -- how often the box
       ran, for how long, running or failed; a box selects its latest task. */
-  const BOX_BY_WORD = { validate: "validate", propose: "orchestrate", orchestrate: "orchestrate", plan: "plan", dse: "dse",
-    generation: "generate", generate: "generate", "llm-gen": "generate", "template-fill": "generate", template: "generate", prototype: "generate",
-    patch: "generate", repair: "generate", rewrite: "generate", design: "generate", oracle: "generate", invent: "generate", compute: "generate",
-    test: "test", build: "test", gate: "test", judge: "test", admitted: "test", verify: "test",
-    simulation: "measure", physical: "measure", analytical: "measure", measure: "measure", screen: "measure", confirm: "measure", estimate: "measure",
-    calibrate: "calibrate", decide: "select", frontier: "select", decision: "select", select: "select",
-    records: "records", knowledge: "knowledge", feedback: "feedback", extract: "extract" };
-  const boxCache = new Map();
-  function boxOfTask(n) {
-    if (boxCache.has(n)) return boxCache.get(n);
-    const name = String(n.name).toLowerCase(), why = String(n.why || "").toLowerCase();
-    let b = null;
-    if (name.startsWith("critique")) b = /decision/.test(name + why) ? "crit-decision" : /division|decompos/.test(name + why) ? "crit-division" : "crit-part";
-    else if (name.startsWith("tool:")) b = /^generate/.test(why) ? "generate" : /^(stage|estimate)/.test(why) ? "measure" : /^(test|lint|golden|build|compile)/.test(why) ? "test" : null;
-    else if (/^gate: (tools|the problem)\b/.test(name)) b = "validate";        // D739: the document's own checks
-    else if (/^generation: build\b/.test(name)) b = "test";                  // the gate's build of a draft
-    else if (/^evaluation\b|: compose\b/.test(name)) b = "parts";                  // proven parts composed (drawn when it has parts)
-    else if (!name.startsWith("agent:")) b = BOX_BY_WORD[name.split(/[\s:]/)[0]] || null;
-    if (!b) b = n.parent ? boxOfTask(n.parent) : name.startsWith("agent:") ? "generate" : null;   // an agent or a tool: its step's box
-    boxCache.set(n, b);
-    return b;
-  }
+  const boxOfTask = LT.boxOf;
   let drawingHandle = null, drawingTried = false, latestOf = {}, visits = [];
   // D727: a bar to go through the boxes' visits in order -- the drawing says which box, the
   // detail panel what it did; following keeps it on the newest
@@ -2104,19 +1900,7 @@ function liveTree(base, qs, onQuestion) {
     if (e.target === stepRange) return;
     if (e.key === "ArrowLeft") { e.preventDefault(); goStep(stepAt() - 1); } else if (e.key === "ArrowRight") { e.preventDefault(); goStep(stepAt() + 1); }
   });
-  /** What worked in a visit, for the detail (D728): what runs now, else the agent's or the model's
-      turn, else a tool, else the visit itself -- "Make a design" opens the agent at work, not
-      the generation around it. Only tasks of the visit's own box. */
-  function focusOf(v) {
-    const b = boxOfTask(v), all = [];
-    const walk = (n) => { for (const k of n.kids) if (boxOfTask(k) === b) { all.push(k); walk(k); } };
-    walk(v);
-    const latest = (xs) => xs.reduce((a, x) => (!a || x.t0 >= a.t0 ? x : a), null);
-    const live = all.filter(running);
-    const worker = (n) => /^(agent:|llm|model|tool:)/.test(String(n.name));
-    return latest(live.filter(worker)) || latest(live) || latest(all.filter(n => String(n.name).startsWith("agent:")))
-      || latest(all.filter(n => /^(llm|model)/.test(String(n.name)))) || latest(all.filter(worker)) || v;
-  }
+  const focusOf = LT.focusOf, visitOf = LT.visitOf;
   /** The selected run's own tasks (D730), top to bottom as an indented tree under the step bar --
       it fits the column: a line per task (state, its whole name, what for, time), same-named
       siblings past three grouped as one ("tool:python3 ×6", opening the latest); a click opens
@@ -2153,11 +1937,6 @@ function liveTree(base, qs, onQuestion) {
     lay({ n: run }, 0, true);
     runBox.replaceChildren(h("div", { class: "run-graph-head muted small" }, "This run's tasks", count >= MAX ? ` (the first ${MAX})` : ""), h("div", { class: "run-graph-rows" }, rows));
   }
-  /** The visit a task belongs to: itself or the ancestor that began its box's stretch. */
-  function visitOf(n) {
-    for (let p = n; p; p = p.parent) { const b = boxOfTask(p); if (b && !(p.parent && boxOfTask(p.parent) === b)) return p; }
-    return null;
-  }
   async function loadDrawing() {
     drawingTried = true;
     const C = window.FluxCrafter;
@@ -2175,7 +1954,6 @@ function liveTree(base, qs, onQuestion) {
   }
   function drawGraph(now) {
     if (!drawingHandle) { if (!drawingTried) { graphBox.replaceChildren(skeleton(6)); loadDrawing(); } return; }
-    boxCache.clear();
     latestOf = {};
     visits = [];
     const used = {};

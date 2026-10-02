@@ -611,6 +611,85 @@ def flows(r: Run) -> None:
         b.js("localStorage.setItem('flux-theme', 'system'); return true;")
     r.step("dark", dark)
 
+    def passes_at_once():
+        """D747, D752: two passes at once, each its own branch, "with" the other; then the Conclusion."""
+        r.login("bob")
+        info = r.api("/apps/fromex")
+        assert info["status"] == 200, f"the loop: {info}"
+        doc = json.loads(info["body"]).get("document")
+        text = r.api(f"/apps/fromex/file?path={doc}")["body"]          # plain text
+        text = re.sub(r"(?m)^budget:.*$", "budget: {steps: 1, parallel: 2}", text)
+        r.check("the example takes budget.parallel", r.api(f"/apps/fromex/file?path={doc}", "PUT", {"text": text})["status"] == 200)
+        r.login("ada")
+        r.check("an admin allows the loop parallel work", r.api("/apps/fromex/advanced?owner=bob", "PUT", {"parallel": True})["status"] == 200)
+        r.login("bob")
+        t0 = time.time()
+        r.check("started for 4 passes", r.api("/apps/fromex/start", "POST", {"passes": 4})["status"] == 200)
+        end = time.time() + 180
+        while time.time() < end:                          # until this start has ended
+            st = json.loads(r.api("/apps/fromex/state")["body"])
+            if not st.get("running") and (st.get("last_active") or 0) >= t0 - 1:
+                break
+            time.sleep(2)
+        r.check("the run ended", not st.get("running"), str(st)[:200])
+        try:
+            b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
+        except RuntimeError:
+            pass
+        r.page("#/app/fromex/live", "document.querySelector('.tree .node.branch')", "the tree of passes at once")
+        b.wait("[...document.querySelectorAll('.tree .node.branch .nm')].some(x => x.textContent === 'Conclusion')", timeout=30, what="the Conclusion")
+        names = b.js("return [...document.querySelectorAll('.tree .node.branch .nm')].map(x => x.textContent)")
+        whys = b.js("return [...document.querySelectorAll('.tree .node.branch .why')].map(x => x.textContent)")
+        r.check("passes at once are their own branches, then the Conclusion",
+                [n for n in names if n.startswith("Pass")] == ["Pass 1", "Pass 2", "Pass 3", "Pass 4"] and "Conclusion" in names, str(names))
+        r.check("a pass says which ran with it", any("with " in w for w in whys), str(whys))
+        r.clean("passes at once")
+    r.step("passes at once", passes_at_once)
+
+    def agent_test():
+        """D751: an agent is used once its test passed -- a stand-in Codex, no quota spent."""
+        fake = r.files / "fake-codex"
+        fake.write_text("#!/usr/bin/env python3\nimport sys\na = sys.argv[1:]\n"
+                        "if a[:1] == ['--version']: print('codex-cli 0.0-e2e')\n"
+                        "elif a[:2] == ['login', 'status']: print('Logged in (e2e)')\n"
+                        "else: sys.stdin.read(); print('FLUX-OK')\n")
+        fake.chmod(0o755)
+        r.login("ada")
+        r.check("the admin names the agent's program", r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_BIN": str(fake)}})["status"] == 200)
+        r.login("bob")
+        r.api("/settings", "PUT", {"values": {"OPENAI_API_KEY": "sk-e2e-not-a-key"}})
+        refused = r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})
+        r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "Agent logins" in refused["body"], refused["body"][:200])
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "Account")
+        b.wait("[...document.querySelectorAll('.card tr')].some(t => t.textContent.includes('Codex') && t.textContent.includes('not tested'))", timeout=20, what="Codex, not tested")
+        b.js("const row = [...document.querySelectorAll('.card tr')].find(t => t.children[0] && t.children[0].textContent === 'Codex'); [...row.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test').click(); return 1")
+        b.wait("[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Codex' && t.textContent.includes('ready'))",
+               timeout=120, what="Codex ready")
+        steps = b.js("return [...document.querySelectorAll('.agent-steps li')].map(x => x.textContent)")
+        r.check("the test says each step, the answer last", any("answer" in x and "FLUX-OK" in x for x in steps), str(steps))
+        r.check("tested, the agent is accepted", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 200)
+        r.clean("agent test")
+    r.step("agent test", agent_test)
+
+    def phone():
+        """At a phone's width every main page fits: no sideways scroll, no error."""
+        b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 844})
+        try:
+            for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/results", "#/app/sw/files", "#/app/sw/settings", "#/account"):
+                r.page(h, "document.querySelector('#main')", h)
+                b.wait("!document.querySelector('#main .skeleton')", timeout=20)
+                time.sleep(0.5)
+                wide = b.js("return [document.documentElement.scrollWidth, window.innerWidth]")
+                over = b.js("""return [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect();
+                    return r.width > 0 && r.right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed'
+                      && !e.closest('pre, table, .scroll-x, .tree, .run-graph-rows, .cm-editor, .flux-crafter svg, .fc-drawing, .tasks-drawing, .diff'); })
+                    .slice(0, 3).map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right))""")
+                r.check(f"phone {h}: no sideways scroll", wide[0] <= wide[1] + 1, f"{wide} {over}")
+                r.clean(f"phone {h}")
+        finally:
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+    r.step("phone", phone)
+
 
 def main() -> int:
     if not shutil.which("firefox"):
