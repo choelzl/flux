@@ -44,3 +44,37 @@ def test_the_sandbox_mounts_the_libraries_a_run_reads(tmp_path, monkeypatch):
     ro, _ = sandbox.mounts_for(args, "task run")
     assert str(shared.resolve()) in ro and str(outside.resolve()) in ro
     assert Path(home).resolve().as_posix() in ro
+
+
+def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path, monkeypatch):
+    """D753: no `flux knowledge digest` to remember -- Background reading digests the loop's own
+    papers (library/, inputs/) with the run's model, once each, and keeps to them."""
+    from types import SimpleNamespace
+
+    from flux_loop import PromptProblem, TaskSpec
+
+    monkeypatch.setenv("FLUX_LIBRARY", str(tmp_path / "shared"))
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "shared/other.md").write_text("Another paper on caches, from the shared library, long enough to be a paper.\n")
+    (tmp_path / "loop/library").mkdir(parents=True)
+    (tmp_path / "loop/library/adders.md").write_text("Prefix adders: Kogge-Stone has log2(n) levels and fan-out 2. " * 20)
+    task = TaskSpec.from_dict({"id": "x", "statement": "an 8-bit adder", "language": "verilog", "gate": {"test": ["true"]},
+                               "objectives": []}, base=tmp_path / "loop")
+
+    class Model:
+        def __init__(self):
+            self.prompts = []
+
+        def propose(self, prompt):
+            self.prompts.append(prompt)
+            return SimpleNamespace(text="Kogge-Stone prefix adder notes\nlog2(n) levels, fan-out 2")
+
+    model = Model()
+    digest = next(s for s in PromptProblem(task).knowledge().sources if type(s).__name__ == "Digest")
+    state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
+    text = digest.render(state)
+    assert "log2(n) levels, fan-out 2" in text and "[adders.md]" in text
+    assert len(model.prompts) == 1 and "adders.md" in model.prompts[0], "its own paper only, not the shared library"
+    assert "other.md" not in text
+    digest.render(state)
+    assert len(model.prompts) == 1, "once: the record keeps it"

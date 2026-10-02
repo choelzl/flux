@@ -581,6 +581,13 @@ class PromptProblem(Problem):
                 if library_files(folders):
                     lib = [Library(lambda _s: library_queries(self.task, self.parts), folders=folders),
                            Papers(folders=folders)]
+                    from .document import own_library
+
+                    own = own_library(self.task)
+                    if own and not any(type(s).__name__ == "Digest" for s in getattr(role, "sources", ())):
+                        from flux_knowledge import Digest
+
+                        lib.append(Digest(folders=own))     # D753: the loop's own papers, digested once by its model
                     self._mentor = (Mentor(lib) if role is None else
                                     Mentor([*lib, *role.sources], budget=role.budget, share=role.share))
         return self._mentor

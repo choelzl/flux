@@ -111,7 +111,8 @@ its own (D737): `library/` beside its document (papers and references, in any su
 each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
 `pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
 The sandbox mounts each library read-only. `flow: {knowledge: [digest]}` (or `flux knowledge digest`) adds a
-model's digest of each paper, once per paper, which the plan reads.
+model's digest of each paper, once per paper, which the plan reads. The loop's own papers are digested by
+its model once each, on their own, and their key points join every prompt (D753).
 
 ## The sandbox
 

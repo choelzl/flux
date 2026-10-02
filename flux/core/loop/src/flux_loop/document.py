@@ -1202,6 +1202,15 @@ def library_folders(task: "TaskSpec") -> tuple[str, ...]:
     return tuple(dict.fromkeys(out))
 
 
+def own_library(task: "TaskSpec") -> tuple[str, ...]:
+    """The loop's own papers' folders, holding at least one document (D753): `library/`,
+    `inputs/` beside the document and a `knowledge: {library: ...}` it names -- what its
+    Background reading digests on its own."""
+    from flux_knowledge.connectors.text import library_files as walk
+
+    return tuple(f for f in library_folders(task) if any(True for _ in walk(Path(f))))
+
+
 def library_on(task: "TaskSpec") -> bool:
     """Whether the library reaches this document's prompts and agents: always, unless
     `flow.knowledge` says `none` (D648)."""

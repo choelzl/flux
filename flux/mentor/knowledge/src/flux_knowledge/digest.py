@@ -118,9 +118,22 @@ class Digest:
     title = "KEY POINTS FROM THE LIBRARY (each document digested once by a model; the excerpts below are the source)"
     static = True
 
-    def __init__(self, db: str = "", make: bool = True) -> None:
+    def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = ()) -> None:
         self.db = db
         self.make = make
+        # D753: a loop's own papers (`library/`, `inputs/`): only those are digested and shown
+        self.folders = tuple(str(f) for f in folders)
+
+    def _documents(self) -> list[tuple[str, str]] | None:
+        if not self.folders:
+            return None                                    # the shared library's, as before
+        from pathlib import Path
+
+        from .library import absolute, index_for
+
+        mine = [str(Path(f).resolve()) for f in self.folders]
+        return [(p, t) for p, t in library_documents(index_for(self.folders))
+                if any(absolute(p).startswith(f + "/") for f in mine)]
 
     def render(self, state: Any) -> str:
         db = self.db or str(getattr(getattr(state, "request", None), "db", "") or "")
@@ -128,12 +141,16 @@ class Digest:
             return ""
         proposer = getattr(state, "proposer", None)
         say = getattr(state, "say", None) or (lambda _m: None)
+        documents = self._documents()
         if self.make and proposer is not None:
             try:
-                digest_library(db, proposer, say=say)
+                digest_library(db, proposer, say=say, documents=documents)
             except Exception as exc:  # noqa: BLE001 -- the library stays what it is
                 say(f"  digest: could not digest the library ({exc!s:.100})")
         have = digests_in(db)
+        if documents is not None:                          # D753: the loop's own papers' digests
+            own = {p for p, _t in documents}
+            have = {p: d for p, d in have.items() if p in own}
         if not have:
             return ""
         return "\n\n".join(f"[{path.rsplit('/', 1)[-1]}]\n{d['digest']}" for path, d in sorted(have.items()))
