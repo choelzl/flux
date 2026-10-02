@@ -103,6 +103,19 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _signals_as_they_were():
+    """A test that runs a process entry point in this process (`flux_web.stamp.main` ignores
+    SIGINT) leaves it ignored for every later test -- and every child process inherits an ignored
+    signal across exec, so a later "stop now" reaches nothing. Each test's handlers are undone."""
+    import signal
+
+    kept = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+    yield
+    for s, handler in kept.items():
+        signal.signal(s, handler)
+
+
+@pytest.fixture(autouse=True)
 def _own_trace_root(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Every test registers its runs and traces under its own root, so parallel tests do not race (D531)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path_factory.mktemp("traces")))
