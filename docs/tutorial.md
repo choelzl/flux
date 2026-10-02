@@ -13,10 +13,10 @@ pre-written rules:
 
 | role | what a model can do there | how you turn it on |
 |---|---|---|
-| generator | write each design, repair it from the failures, make it cheaper | `flow: {generate: model}` (the default), or `{agent: opencode}` |
+| generator | write each design, repair it from the failures, make it cheaper | `flow: {generate: model}` (the default), or `{by: opencode}` |
 | orchestrator | pick the next piece of work, with its reasons on the record | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
-| planner | write the plan of a pass: parts, order, method, budgets | `--agent plan`, or `flow: {plan: llm}` |
-| search | propose the next points of a knob space from what was measured | `flow: {dse: llm}`, or a `llm` phase |
+| planner | write the plan of a pass: parts, order, method, budgets | `--agent plan`, or `flow: {plan: model}` |
+| search | propose the next points of a knob space from what was measured | `flow: {dse: {by: model}}`, or a `model` phase |
 
 With `--agent tools`, a model turn can also call tools inside the turn: run Python, run the
 problem's own check on a draft, read the history. Two things are never handed to a model: the
@@ -153,9 +153,9 @@ Each of these is one flag or one line; mix them.
 
 - **Let a model steer the work:** `--agent orchestrate` (or `flow: {orchestrate: agent}`). The
   model reads the standings and the record with tools, picks the next step, and records why.
-- **Let a model plan each pass:** `--agent plan` (or `flow: {plan: llm}`): the parts, the order,
+- **Let a model plan each pass:** `--agent plan` (or `flow: {plan: model}`): the parts, the order,
   the method to try first, the budgets. It is checked against the problem before it applies.
-- **Hand the writing to a coding agent:** `flow: {generate: {agent: opencode}}` (or `claude`,
+- **Hand the writing to a coding agent:** `flow: {generate: {by: opencode}}` (or `claude`,
   `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
   `prototype: true` the agent writes the Python prototype, which the loop checks with
   `flux rtl proto` before it writes the RTL.
@@ -177,7 +177,7 @@ flow:
       block: [2, 4, 8]
     - {name: coarse, policy: sweep, knobs: [arch]}              # every architecture
     - {name: fine, policy: gradient, hold: [arch], steps: 10}   # then tune the block size
-    - {name: ideas, policy: llm, rounds: 2}                     # then a model proposes points
+    - {name: ideas, policy: model, rounds: 2}                     # then a model proposes points
 budget: {steps: 12}  # every batch is a step: enough for all three phases
 ```
 
@@ -185,7 +185,7 @@ On the `rtl-sweep` template (its knobs are `arch` and `chunk`) with 12 steps, `c
 the architectures, `fine` moved `chunk` and raised fmax from 3,166 to 3,577 MHz, then `ideas`
 asked the model. With the template's `steps: 1` only the first phase runs.
 `flux new NAME --kind rtl-sweep` starts from this shape. The policies are `sweep`,
-`gradient`, `anneal`, `genetic`, `montecarlo`, `pareto` and `llm`. The
+`gradient`, `anneal`, `genetic`, `montecarlo`, `pareto` and `model` (the model proposes). The
 [cookbook](cookbook.md) says which suits which space.
 
 ## 9. Other kinds of problem

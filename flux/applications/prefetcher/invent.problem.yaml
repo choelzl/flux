@@ -44,7 +44,7 @@ contract: |
     memory bounded: it runs for 250 million instructions. Under 70 lines.
 
 flow:
-  # generate: {agent: opencode}     # a coding agent writes the header, not the model
+  # generate: {by: opencode}     # a coding agent writes the header, not the model
   test:
     build: flux champsim build {artifact}
     test: flux champsim check {artifact} --traces {home}/traces

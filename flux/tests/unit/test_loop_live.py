@@ -133,7 +133,7 @@ def test_the_nlu_document_runs_one_part_with_a_scripted_model(tmp_path):
 
     doc = _doc("nlu", tmp_path, parts=["exp"],
                params={"ops": ["exp"], "test_rounds": 0, "seed": 1},
-               flow={"orchestrate": "rules", "critique": "none"},
+               flow={"orchestrate": "rules", "critique": "off"},
                budget={"steps": 3, "repair_attempts": 1, "prototype_attempts": 2, "finalists": 0})
     if not _tools_ok(doc):
         pytest.skip("verilator/yosys are not on PATH")

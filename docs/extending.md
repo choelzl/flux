@@ -38,8 +38,8 @@ in the report).
 - `model` (the default): the model writes it and repairs it from the gate's output.
 - `{command: "..."}`: a script renders it. With a space (`flow.dse.space`), the script runs once per point with
   the knobs as placeholders (`flux new --kind sweep`).
-- `{agent: opencode|claude|codex}` or `{agent: {command: [...], timeout_s: N, questions:
-  decide|model|operator}}`: a coding agent writes it in a work directory. It does not compile or
+- `{by: opencode|claude|codex}` or `{by: {command: [...]}, timeout_s: N, questions:
+  decide|model|operator}`: a coding agent writes it in a work directory. It does not compile or
   test: the loop runs the gate and brings a failure back to its session (D673, D674).
 - `{catalog: [files]}`: designs that already exist.
 
@@ -64,15 +64,15 @@ oversized is built (D615): a prototype costing more than `budget.prototype_cost_
 spelled nor synthesised. If the document
 names a `golden.py` that does not exist, the model writes it first from the statement and the
 contract. That golden is checked (it imports, makes its vectors, answers every output port),
-but read it before trusting a decision made against it. With `flow.generate: {agent: ...}`, a coding agent writes the prototype
+but read it before trusting a decision made against it. With `flow.generate: {by: ...}`, a coding agent writes the prototype
 and the loop checks it with `flux rtl proto FILE --golden golden.py`, the stage's own check (D618).
 
 ## 4. How the search goes (stable names, evolving fields)
 
 `flow.dse` names a policy: `sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, `pareto`,
-`control`, or `llm` (the model proposes points from what was measured). It can also be a list of
+`control`, or `model` (the model proposes points from what was measured). It can also be a list of
 phases, each starting from where the last ended:
-`[{name: walk, policy: gradient, budget: 12}, {name: propose, policy: llm, rounds: 1}]`. The
+`[{name: walk, policy: gradient, budget: 12}, {name: propose, policy: model, rounds: 1}]`. The
 fields each policy takes are listed by the error a wrong one gets.
 
 **A policy of your own** (evolving, D602) is a `flux_loop.dse.Policy` subclass in a file beside

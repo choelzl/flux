@@ -167,8 +167,8 @@ def test_an_agent_is_enabled_for_a_user_by_a_passed_test(tmp_path, monkeypatch):
            "statement": "s",
            "language": "python",
            "objectives": [],
-           "flow": {"generate": {"agent": "codex"},
-                    "critique": {"agent": {"preset": "claude", "timeout_s": 60}},
+           "flow": {"generate": {"by": "codex"},
+                    "critique": {"by": {"preset": "claude", "timeout_s": 60}},
                     "test": {"test": ["true"]}}}
     assert agents_used(TaskSpec.from_dict(doc)) == ["codex", "claude"]
     store = _store(tmp_path)
@@ -176,7 +176,7 @@ def test_an_agent_is_enabled_for_a_user_by_a_passed_test(tmp_path, monkeypatch):
     ian = TestClient(app)
     assert ian.post("/api/login", json={"name": "ian", "password": "ian has a long secret"}, headers=H).status_code == 200
     ian.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml",
-             b"statement: s\nlanguage: python\nflow: {generate: {agent: codex}, test: {test: ['true']}}\n"))], headers=H)
+             b"statement: s\nlanguage: python\nflow: {generate: {by: codex}, test: {test: ['true']}}\n"))], headers=H)
     r = ian.post("/api/apps/x/start", json={"passes": 1}, headers=H)
     assert r.status_code == 409 and "Codex not set up for ian" in r.json()["detail"]
     assert ian.post("/api/apps/x/asks", json={"question": "why?", "author": "claude"}, headers=H).status_code == 409
@@ -233,7 +233,7 @@ def test_a_shared_loop_runs_on_its_owners_agents(tmp_path, monkeypatch):
 
     ian, old = client("ian", "ian has a long secret"), client("old", "old has a long secret")
     ian.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml",
-             b"statement: s\nlanguage: python\nflow: {generate: {agent: codex}, test: {test: ['true']}}\n"))], headers=H)
+             b"statement: s\nlanguage: python\nflow: {generate: {by: codex}, test: {test: ['true']}}\n"))], headers=H)
     assert ian.put("/api/apps/x/shares", json={"user": "old", "perm": "edit"}, headers=H).status_code == 200
     r = old.post("/api/apps/x/start?owner=ian", json={"passes": 1}, headers=H)
     assert r.status_code == 409 and "Codex not set up for ian" in r.json()["detail"], r.text

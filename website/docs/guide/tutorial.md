@@ -102,8 +102,8 @@ No design reached 1000 MHz, and the report says so. Left running, the loop keeps
 | to | add |
 |---|---|
 | let the model pick the next step | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
-| let the model plan each pass | `--agent plan`, or `flow: {plan: llm}` |
-| let a coding agent write the design | `flow: {generate: {agent: opencode}}` (or `claude`, `codex`) |
+| let the model plan each pass | `--agent plan`, or `flow: {plan: model}` |
+| let a coding agent write the design | `flow: {generate: {by: opencode}}` (or `claude`, `codex`) |
 | give the model a method note | `flow.knowledge: {files: [method-note.md]}` |
 | steer it while it runs | `--tui`, then `f` to type a note |
 

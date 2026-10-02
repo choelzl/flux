@@ -90,7 +90,7 @@ def test_a_coding_agent_finds_the_skills_where_it_looks(tmp_path):
                     "assert skill.is_file(), 'the skill is where Claude Code and OpenCode look'\n"
                     "art.write_text('\\n'.join(str(i) for i in range(10)) + '\\n')\n")
     doc = {**{"id": "digits", **json.loads(DIGITS.read_text())}, "skills": ["skills"],
-           "flow": {**{"id": "digits", **json.loads(DIGITS.read_text())}.get("flow", {}), "generate": {"agent": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}},
+           "flow": {**{"id": "digits", **json.loads(DIGITS.read_text())}.get("flow", {}), "generate": {"by": {"command": ["{python}", str(fake), "{artifact}"], "timeout_s": 60}}},
            "budget": {"steps": 1, "repair_attempts": 1, "prototype": False}}
     task = TaskSpec.from_dict(doc, base=tmp_path)
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=None, log=lambda _m: None)

@@ -319,7 +319,7 @@ def _critic(ok: bool, *issues: str) -> str:
 
 
 def test_a_critic_sends_a_passing_candidate_back_once_then_the_gate_rules(tmp_path):
-    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "flow": {**load_task(DIGITS).to_dict().get("flow", {}), "critique": "llm"},
+    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "flow": {**load_task(DIGITS).to_dict().get("flow", {}), "critique": "model"},
                                "budget": {"steps": 3, "repair_attempts": 2, "prototype": False}})
     assert task.critique and TaskSpec.from_dict(task.to_dict()) == task
     # design passes the gate; the critic objects; the patch turn carries the objection; the
@@ -346,7 +346,7 @@ def test_a_critic_sends_a_passing_candidate_back_once_then_the_gate_rules(tmp_pa
 
 
 def test_a_critic_sends_a_division_back_and_only_the_accepted_one_is_remembered(tmp_path):
-    task = _decomposed_task(flow={"critique": "llm"})
+    task = _decomposed_task(flow={"critique": "model"})
     first = json.dumps({"parts": [{"name": "all", "statement": "everything"}], "why": "one"})
     second = json.dumps({"parts": [{"name": "head", "statement": "0-4"}, {"name": "tail", "statement": "5-9"}]})
     # one critique round: the re-division stands without a second critique; then the
@@ -372,7 +372,7 @@ def test_without_a_critic_nothing_changes(tmp_path):
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=proposer, log=lambda m: None)
     assert out.decision is not None and len(proposer.prompts) == 1
     assert not any("critique" in ln for ln in out.lessons + out.not_established)
-    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "critique": "llm"}})
+    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "critique": "model"}})
     out = run_loop(PromptProblem(task), request_for(task, db="", critique_rounds=0),
                    proposer=ScriptedProposer([_reply(GOOD)]), log=lambda m: None)
     assert out.decision is not None                            # critique_rounds=0: no critic asked
@@ -524,16 +524,16 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
         return next(l for l in lines if l.startswith(name + ":"))
 
     task = TaskSpec.from_dict(_flow_doc({"orchestrate": "rules", "generate": {"catalog": ["a.txt"]},
-                                         "critique": "llm", "calibrate": "off",
-                                         "extract": "mined", "feedback": "none", "test": "gate"}))
+                                         "critique": "model", "calibrate": "off",
+                                         "extract": "mined", "feedback": "off", "test": "gate"}))
     assert task.roles == {"orchestrator": "rules", "knowledge": "mined"}
     assert task.generator == {"catalog": ["a.txt"]} and task.critique is True
     assert task.budget["calibrate"] is False
     assert TaskSpec.from_dict(task.to_dict()) == task
     lines = describe_flow(task)
     assert box(lines, "orchestrate").startswith("orchestrate: rules") and box(lines, "generate").startswith("generate: catalog of 1")
-    assert box(lines, "critique").startswith("critique: llm") and box(lines, "stages") == "stages: screen, confirm"
-    assert box(lines, "calibrate") == "calibrate: off" and box(lines, "feedback").startswith("feedback: none")
+    assert box(lines, "critique").startswith("critique: model") and box(lines, "stages") == "stages: screen, confirm"
+    assert box(lines, "calibrate") == "calibrate: off" and box(lines, "feedback").startswith("feedback: off")
     plain = describe_flow(TaskSpec.from_dict(_flow_doc({})))
     assert box(plain, "stage confirm") == "stage confirm: its command -- estimate: none (the tool runs on every design)"
     assert box(plain, "calibrate").startswith("calibrate: on")
@@ -542,11 +542,12 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
 @pytest.mark.parametrize("flow, more, message", [
     ({"test": {"agent": "claude"}}, {}, "never delegated"),       # D775: flow.test is the gate itself
     ({"measure": {"agent": "claude"}}, {}, "never delegated"),
-    ({"validate": "model"}, {}, "one of rules, llm"),
+    ({"validate": "llm"}, {}, r"flow.validate is rules \| model"),
     ({"dse": "hillclimb"}, {}, "no such DSE policy"),
     ({"analytical": ["screen"]}, {}, "not a box"),
     ({"knowledge": ["sheet"]}, {}, "is `off` or an object"),
     ({"winner": "llm"}, {}, "not a box"),
+    ({"test": {"by": "claude"}}, {}, "never delegated"),
 ])
 def test_a_flow_that_says_a_thing_twice_or_wrong_is_refused(flow, more, message):
     with pytest.raises(TaskError, match=message):
@@ -571,7 +572,7 @@ def test_a_worlds_child_inherits_it_and_is_its_own_campaign(tmp_path):
                                                                                        "flow": {"test": {"test": ["true"]},
                                                                                                 "measure": {"screen": {"command": ["m"],
                                                                                                                        "metrics_re": {"fmax_mhz": '(\\d+)'}}}}}],
-           "flow": {"validate": "llm", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
+           "flow": {"validate": "model", "measure": {"screen": {"metrics": ["fmax_mhz", "area_um2"]}}}}
     task = TaskSpec.from_dict(doc)
     left, right = task.subtasks
     assert left.world == task.world and left.record == "whole/left" and left.flow.get("validate") == "llm"
@@ -584,18 +585,18 @@ def test_a_worlds_child_inherits_it_and_is_its_own_campaign(tmp_path):
 
 
 def test_validate_llm_lets_the_model_object_before_a_step_is_spent(tmp_path):
-    """`flow: {validate: llm}` objections are said and kept as lessons but never stop the run (D556)."""
+    """`flow: {validate: model}` objections are said and kept as lessons but never stop the run (D556)."""
     import json
 
     from flux_llm import ScriptedProposer
     from flux_loop import LoopRequest, LoopState, PromptProblem, TaskSpec
 
-    task = TaskSpec.from_dict(_flow_doc({"validate": "llm"}))
+    task = TaskSpec.from_dict(_flow_doc({"validate": "model"}))
     prob = PromptProblem(task)
     proposer = ScriptedProposer([json.dumps({"ok": False, "objections": ["fmax_mhz has no goal", "one stage measures nothing new"]})])
     state = LoopState(request=LoopRequest(batch=WHOLE), say=lambda _m: None, proposer=proposer, feedback=None)
     assert prob.objections(state) == ["fmax_mhz has no goal", "one stage measures nothing new"]
-    assert "THE DOCUMENT:" in proposer.prompts[0] and '"validate": "llm"' in proposer.prompts[0] and "validate: llm" in proposer.prompts[0]
+    assert "THE DOCUMENT:" in proposer.prompts[0] and '"validate": "model"' in proposer.prompts[0] and "validate: model" in proposer.prompts[0]
     assert PromptProblem(TaskSpec.from_dict(_flow_doc({}))).objections(state) == []        # rules only: no call
     assert prob.objections(LoopState(request=LoopRequest(batch=WHOLE), say=lambda _m: None, proposer=None, feedback=None)) == []
 

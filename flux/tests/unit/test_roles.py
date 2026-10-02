@@ -236,7 +236,7 @@ def test_a_role_a_document_cannot_mean_is_a_load_error():
 
 
 def test_a_caller_switches_one_role_of_a_document_it_did_not_write():
-    task = TaskSpec.from_dict(_doc(roles={"orchestrator": "llm", "extract": "mined"}))
+    task = TaskSpec.from_dict(_doc(roles={"orchestrator": "model", "extract": "mined"}))
     problem = PromptProblem(task, roles=Roles(orchestrator=Rules()))
     assert problem.roles().orchestrator.name == "rules", "the caller's choice won"
     assert problem.roles().knowledge is not None, "and the document's other choice stood"

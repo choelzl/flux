@@ -155,7 +155,7 @@ def test_feedback_none_reloads_no_notes_and_hands_the_passes_no_channel(tmp_path
     heard, _p, _s = _run(tmp_path, _doc(tmp_path, [1]))
     assert heard.notes == ["OLD"]
     doc = _doc(tmp_path, [1])
-    doc["flow"]["feedback"] = "none"
+    doc["flow"]["feedback"] = "off"
     deaf, _p, _s = _run(tmp_path, doc, db="deaf.db")
     assert deaf.notes == []
     seen = []
@@ -170,7 +170,7 @@ def test_a_coding_agent_plans_without_a_model(tmp_path):
     agent.write_text("import sys, pathlib; pathlib.Path(sys.argv[1]).with_name('SEEN').write_text('x'); "
                      "open(sys.argv[2], 'w').write('{\"why\": \"PLANNED\"}')")
     doc = _doc(tmp_path, [1, 2])
-    doc["flow"]["plan"] = {"agent": {"command": ["{python}", str(agent), "{prompt_file}", "{artifact}"], "timeout_s": 60}}
+    doc["flow"]["plan"] = {"by": {"command": ["{python}", str(agent), "{prompt_file}", "{artifact}"], "timeout_s": 60}}
     _out, _p, said = _run(tmp_path, doc, proposer=None)
     assert any("plan (the agent)" in m or "plan (the defaults + the agent)" in m for m in said), said
 
@@ -194,18 +194,18 @@ def test_the_flow_says_what_the_defaults_and_the_agents_do(tmp_path):
     lines = describe_flow(TaskSpec.from_dict(one))
     assert _box(lines, "orchestrate") == (
         "orchestrate: default (one design, no part to pick; rules pick the kind of work: a design sent back is "
-        "improved first, then the parts, then the search) -- or: rules, given, llm, agent")
+        "improved first, then the parts, then the search) -- or: rules, given, model, tools, an agent")
     parts = describe_flow(TaskSpec.from_dict({**one, "parts": ["a", "b"]}))
     assert _box(parts, "orchestrate").startswith(
         "orchestrate: default (the model picks the next part, the first one waiting without a model; rules pick")
     assert _box(lines, "knowledge") == "knowledge: library (on by default, its papers digested; `flow.knowledge: off` turns it off)"
-    assert _box(lines, "extract") == "extract: none (nothing is mined from the record) -- or: mined, agent"
+    assert _box(lines, "extract") == "extract: off (nothing is mined from the record) -- or: mined, an agent"
     assert _box(lines, "records").startswith("records: always on")
-    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "extract": {"agent": "opencode"}, "orchestrate": {"agent": "opencode"}}}))
+    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "extract": {"by": "opencode"}, "orchestrate": {"by": "opencode"}}}))
     assert _box(agents, "extract") == "extract: agent opencode (lessons from the record's rows, each citing its rows)"
     assert _box(agents, "orchestrate").startswith("orchestrate: agent opencode (a coding agent picks the next part")
-    model = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "orchestrate": "agent"}}))
-    assert _box(model, "orchestrate").startswith("orchestrate: agent (the model with tools picks the next part")
-    off = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "knowledge": "off", "feedback": "none"}}))
+    model = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "orchestrate": "tools"}}))
+    assert _box(model, "orchestrate").startswith("orchestrate: tools (the model with tools picks the next part")
+    off = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "knowledge": "off", "feedback": "off"}}))
     assert _box(off, "knowledge") == "knowledge: off (the library is off)"
-    assert _box(off, "feedback") == "feedback: none (no notes are read, reloaded or waited for)"
+    assert _box(off, "feedback") == "feedback: off (no notes are read, reloaded or waited for)"

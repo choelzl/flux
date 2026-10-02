@@ -48,7 +48,7 @@ budget: {workers: 1}
 | large, and good settings combine | `genetic` | `population`, `generations`, `mutation`, `seed` |
 | just a feel for the space | `montecarlo` | `samples`, `seed` |
 | two objectives traded against each other | `pareto` (and a second objective) | `budget`, `reference`, `scale` |
-| a model proposes points from what was measured | `llm` | `rounds`, `batch_size`, `shown` |
+| a model proposes points from what was measured | `model` | `rounds`, `batch_size`, `shown` |
 
 Every policy also takes `knobs` (move only these) or `hold` (keep these at the incumbent),
 `metric` and `direction` (its own objective), `floor` (refuse below a bar) and `margin` (an
@@ -59,7 +59,7 @@ flow:
   dse:
     - {name: coarse, policy: sweep, knobs: [block]}
     - {name: fine, policy: gradient, hold: [block], steps: 20}
-    - {name: ideas, policy: llm, rounds: 2}
+    - {name: ideas, policy: model, rounds: 2}
 ```
 
 A policy of your own is a class in a file beside the document: `dse: my_search:MySearch`
@@ -93,7 +93,7 @@ A policy of your own is a class in a file beside the document: `dse: my_search:M
   held. `flux report <record>` shows how it moved.
 - **Steer it.** Type a note in the TUI (`f`, or a line on the terminal of a run without it); it reaches the next
   prompt.
-- **A coding agent instead of a model turn**: `flow.generate: {agent: opencode|claude|codex}`.
+- **A coding agent instead of a model turn**: `flow.generate: {by: opencode|claude|codex}`.
   It gets a work directory and writes the file; the loop runs the gate and brings a failure back
   to the same session. With `budget.prototype: true` it writes the Python prototype instead, which
   the loop checks with `flux rtl proto` (every input in seconds). The loop spells the RTL. For hard numeric functions this

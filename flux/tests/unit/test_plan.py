@@ -227,12 +227,12 @@ def test_the_document_asks_for_the_plan_with_one_word():
     from flux_loop import TaskSpec
     from flux_loop.document import describe_flow
 
-    doc = {"id": "p", "statement": "p", "parts": ["a"], "flow": {"plan": "llm", "test": {"test": ["true"]}}}
+    doc = {"id": "p", "statement": "p", "parts": ["a"], "flow": {"plan": "model", "test": {"test": ["true"]}}}
     task = TaskSpec.from_dict(doc)
     assert task.budget["agent"] == ["plan"]
-    assert any(line.startswith("plan: llm (the pass is planned first") for line in describe_flow(task))
-    assert any(line.startswith("plan: none") for line in describe_flow(TaskSpec.from_dict({**doc, "flow": {"test": doc["flow"]["test"]}})))
-    with pytest.raises(Exception, match="flow.plan is one of none, llm"):
+    assert any(line.startswith("plan: model (the pass is planned first") for line in describe_flow(task))
+    assert any(line.startswith("plan: off") for line in describe_flow(TaskSpec.from_dict({**doc, "flow": {"test": doc["flow"]["test"]}})))
+    with pytest.raises(Exception, match=r"flow.plan is off \| model"):
         TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "plan": "given"}})
 
 

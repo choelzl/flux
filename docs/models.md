@@ -96,7 +96,7 @@ turns every failure into the next prompt. For hard numeric RTL:
 
 ## Coding agents
 
-A document can hand generation to a coding agent (`flow: {generate: {agent: opencode}}`), and
+A document can hand generation to a coding agent (`flow: {generate: {by: opencode}}`), and
 `flux ask --author opencode|claude|codex` hands it the writing of the problem itself. The agent
 uses its own model and configuration. The loop gives it a work directory, a brief and a time
 limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, simulate,
@@ -132,7 +132,7 @@ FLUX_OPENCODE_BIN=~/.local/bin/opencode-dev     # also FLUX_CLAUDE_BIN, FLUX_COD
 FLUX_OPENCODE_ARGS=--agent flux                 # an OpenCode agent defined in its config
 ```
 
-`flow: {generate: {agent: {preset: opencode, bin: oc, args: [--agent, flux]}}}` does the same in a
+`flow: {generate: {by: opencode, bin: oc, args: [--agent, flux]}}}` does the same in a
 document (it wins). The executable must be a program on PATH or a path; a shell alias is not one.
 
 The presets send the brief on the agent's stdin, and a resumed session's message too, so a brief

@@ -89,15 +89,15 @@ def _doc(**flow):
 
 
 def test_the_loader_takes_an_agent_only_where_one_may_answer():
-    task = TaskSpec.from_dict(_doc(critique={"agent": "claude"}, validate={"agent": {"preset": "opencode"}}))
+    task = TaskSpec.from_dict(_doc(critique={"by": "claude"}, validate={"by": {"preset": "opencode"}}))
     assert task.critique and task.flow["validate"] == {"agent": {"preset": "opencode"}}
     with pytest.raises(TaskError, match="never delegated"):
-        TaskSpec.from_dict(_doc(test={"agent": "claude"}))
-    assert TaskSpec.from_dict(_doc(plan={"agent": "codex"})).budget["agent"] == ["plan"]
+        TaskSpec.from_dict(_doc(test={"by": "claude"}))
+    assert TaskSpec.from_dict(_doc(plan={"by": "codex"})).budget["agent"] == ["plan"]
     with pytest.raises(TaskError, match="not a box an agent answers"):
-        TaskSpec.from_dict(_doc(feedback={"agent": "claude"}))
-    with pytest.raises(TaskError, match="flow.critique.agent"):
-        TaskSpec.from_dict(_doc(critique={"agent": "cursor"}))
+        TaskSpec.from_dict(_doc(feedback={"by": "claude"}))
+    with pytest.raises(TaskError, match="flow.critique.by"):
+        TaskSpec.from_dict(_doc(critique={"by": "cursor"}))
     from flux_loop.document import describe_flow
 
     lines = describe_flow(task)
@@ -110,23 +110,23 @@ def test_the_agent_critic_objects_and_its_fallback_passes(tmp_path):
 
     cand = Candidate("c1", "module m; endmodule")
     agent = _agent(tmp_path, "good", {"ok": False, "issues": ["no carry out"], "why": "incomplete"})
-    prob = PromptProblem(TaskSpec.from_dict(_doc(critique={"agent": agent})))
+    prob = PromptProblem(TaskSpec.from_dict(_doc(critique={"by": agent})))
     st = _state(tmp_path)
     v = prob.critique("candidate", cand, st)
     assert not v.ok and "no carry out" in v.why
     (tmp_path / "q").mkdir()
-    quiet = PromptProblem(TaskSpec.from_dict(_doc(critique={"agent": _agent(tmp_path / "q", "fail")})))
+    quiet = PromptProblem(TaskSpec.from_dict(_doc(critique={"by": _agent(tmp_path / "q", "fail")})))
     assert quiet.critique("candidate", cand, _state(tmp_path)).ok, "a critic that fails does not veto"
 
 
 def test_the_agent_reads_the_document_and_objects(tmp_path):
     agent = _agent(tmp_path, "good", {"ok": False, "objections": ["no stage measures m"]})
-    prob = PromptProblem(TaskSpec.from_dict(_doc(validate={"agent": agent})))
+    prob = PromptProblem(TaskSpec.from_dict(_doc(validate={"by": agent})))
     assert prob.objections(_state(tmp_path)) == ["no stage measures m"]
 
 
 def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
-    """`flow: {orchestrate: {agent: ...}}`: the agent picks the next part from the menu; the loop
+    """`flow: {orchestrate: {by: ...}}`: the agent picks the next part from the menu; the loop
     drafts, gates and records it; an off-menu pick would be refused (D640)."""
     from flux_llm import ScriptedProposer
     from flux_loop import LoopRequest, run_loop
@@ -136,7 +136,7 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
            "statement": "write the word good",
            "parts": {"one": "the word", "two": "the word again"},
            "objectives": [{"metric": "bytes", "direction": "minimize"}],
-           "flow": {"orchestrate": {"agent": _agent(tmp_path, "good", {"pick": "two", "why": "two first"})},
+           "flow": {"orchestrate": {"by": _agent(tmp_path, "good", {"pick": "two", "why": "two first"})},
                     "test": {"test": ["true"]},
                     "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
@@ -160,7 +160,7 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
 
 
 def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
-    """`flow: {dse: {agent: ...}}`: the agent's points are checked against the space; a point
+    """`flow: {dse: {by: ...}}`: the agent's points are checked against the space; a point
     outside it is dropped, the rest are measured (D640)."""
     from flux_loop import LoopRequest, run_loop
 
@@ -169,7 +169,7 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
     doc = {"id": "pts",
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"agent": _agent(tmp_path, "good", answer), "space": {"x": [1, 2, 3], "y": ["a", "bb"]}},
+           "flow": {"dse": {"by": _agent(tmp_path, "good", answer), "space": {"x": [1, 2, 3], "y": ["a", "bb"]}},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}
     said: list[str] = []
@@ -181,7 +181,7 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
 
 
 def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_path):
-    """`flow: {select: {agent: ...}}`: with no goal, every point of a speed/size front is a choice
+    """`flow: {select: {by: ...}}`: with no goal, every point of a speed/size front is a choice
     the vector leaves open; the agent's pick and its reason become the decision (D640)."""
     from flux_loop import LoopRequest, run_loop
 
@@ -190,7 +190,7 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
            "statement": "a trade",
            "objectives": [{"metric": "speed", "direction": "maximize"}, {"metric": "size", "direction": "minimize"}],
            "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
-                    "select": {"agent": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})},
+                    "select": {"by": _agent(tmp_path, "good", {"pick": "x=1", "why": "the smallest"})},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["speed", "size"]}}}}
     out = run_loop(PromptProblem(TaskSpec.from_dict(doc)),
@@ -199,7 +199,7 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
 
 
 def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path):
-    """`flow: {extract: {agent: ...}}`: once a pass the agent reads the measured rows; a lesson
+    """`flow: {extract: {by: ...}}`: once a pass the agent reads the measured rows; a lesson
     citing a row that does not exist is refused (D640)."""
     from flux_loop import LoopRequest, run_loop
     from flux_loop.boxes import AgentLessons
@@ -210,7 +210,7 @@ def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
            "flow": {"dse": {"policy": "sweep", "space": {"x": [1, 2, 3]}},
-                    "extract": {"agent": "claude"},
+                    "extract": {"by": "claude"},
                     "test": {"test": ["true"]},
                     "measure": {"run": {"command": stage, "metrics": ["cost"]}}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
@@ -231,7 +231,7 @@ def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path
 
 
 def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_path):
-    """`flow: {plan: {agent: ...}}`: the agent's plan is checked by check_plan and applied; each
+    """`flow: {plan: {by: ...}}`: the agent's plan is checked by check_plan and applied; each
     part's method reaches the generator's prompt (D640)."""
     from flux_llm import ScriptedProposer
     from flux_loop import LoopRequest, run_loop
@@ -242,7 +242,7 @@ def test_a_coding_agent_plans_the_pass_and_its_methods_brief_the_generator(tmp_p
            "parts": {"a": "one", "b": "two"},
            "objectives": [{"metric": "m", "direction": "minimize"}],
            "flow": {"orchestrate": "rules",
-                    "plan": {"agent": _agent(tmp_path, "good", answer)},
+                    "plan": {"by": _agent(tmp_path, "good", answer)},
                     "test": {"test": ["true"]}}}
     model = ScriptedProposer(['{"artifact": "x", "why": "-"}'] * 4)
     said: list[str] = []
@@ -272,7 +272,7 @@ def test_with_the_prototype_off_the_coding_agent_writes_the_target(tmp_path):
            "statement": "module `t`",
            "language": "systemverilog",
            "objectives": [{"metric": "area_um2", "direction": "minimize"}],
-           "flow": {"generate": {"agent": "claude"}, "test": "flux rtl test {artifact} --golden {home}/golden.py"}}
+           "flow": {"generate": {"by": "claude"}, "test": "flux rtl test {artifact} --golden {home}/golden.py"}}
     prob = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
     assert prob.prototype() is not None and prob.prototype_agent() is not None
 

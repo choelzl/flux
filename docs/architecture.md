@@ -142,7 +142,7 @@ next.
 
 **Design-space exploration.** A document's `flow.dse.space` lists knobs and their choices. A DSE
 policy under `flow: {dse: ...}` searches it: `sweep`, `montecarlo`, `anneal`, `gradient`,
-`genetic`, `pareto`, or `llm` (the model names the next points). A list of *phases* runs
+`genetic`, `pareto`, or `model` (the model names the next points). A list of *phases* runs
 several policies in order, each starting where the last one ended.
 
 **The ladder.** A part that already stands is improved by declared steps: `sweep` (sweep the
@@ -165,10 +165,10 @@ second edge goes back to the generator with the numbers and the critical path, s
 draft can fix what was slow. `validate` refuses a badly posed run before anything is spent.
 
 **Roles are swappable components.** `flux_loop.roles` holds the registry (`make_role`,
-`available_roles`, `register_role`). Orchestration: `rules`, `given`, a DSE policy, `llm`, or
+`available_roles`, `register_role`). Orchestration: `rules`, `given`, a DSE policy, `model`, or
 `agent` (a model with tools, every pick on the ledger). Generation: `Model` (the prototype
 stage, translation and repair), `Template` (a command), `Catalog`, `Solver`, or a coding agent
-(`flow: {generate: {agent: opencode}}`). Knowledge: a `Mentor` over declared sources,
+(`flow: {generate: {by: opencode}}`). Knowledge: a `Mentor` over declared sources,
 `mined`, `digest`. Evaluation: the document's stages, each with an optional estimate before its
 tool (`estimate:`, D665) that may skip a design, never choose one.
 

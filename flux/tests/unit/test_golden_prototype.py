@@ -325,7 +325,7 @@ print("written")
 
 
 def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, monkeypatch):
-    """With `flow.generate: {agent: ...}` and `prototype: true`, the agent writes the prototype, the loop
+    """With `flow.generate: {by: ...}` and `prototype: true`, the agent writes the prototype, the loop
     checks it (D673) and spells the RTL (D618)."""
     from flux_loop import PromptProblem, request_for, run_loop
 

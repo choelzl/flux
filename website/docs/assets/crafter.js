@@ -38,17 +38,17 @@
   var BOXES = {
     validate: { title: "Check the document", says: "Before anything runs, the document is read for mistakes.",
       choices: [{ value: "rules", half: "rules", label: "Built-in checks" },
-                { value: "llm", half: "model", label: "Built-in checks, then a model reads it and objects" }]
+                { value: "model", half: "model", label: "Built-in checks, then a model reads it and objects" }]
         .concat(agentChoices("A coding agent reads the document and objects")) },
     orchestrate: { title: "Pick the next job", says: "Decides what to work on next.",
       choices: [{ value: "default", half: "model", label: "Standard: the model picks the next part, rules pick the kind of work" },
                 { value: "rules", half: "rules", label: "Rules only" },
-                { value: "llm", half: "model", label: "A model picks" },
-                { value: "agent", half: "model", label: "A model with tools picks" }]
+                { value: "model", half: "model", label: "A model picks" },
+                { value: "tools", half: "model", label: "A model with tools picks" }]
         .concat(agentChoices("A coding agent picks")) },
     plan: { title: "Plan the round", says: "Optionally writes a plan for the round before any work starts.",
-      choices: [{ value: "none", half: "rules", label: "No plan: step by step" },
-                { value: "llm", half: "model", label: "A model writes the plan" }]
+      choices: [{ value: "off", half: "rules", label: "No plan: step by step" },
+                { value: "model", half: "model", label: "A model writes the plan" }]
         .concat(agentChoices("A coding agent writes the plan")) },
     dse: { title: "Search the settings", says: "Walks the list of settings (the space) to choose which to try.",
       choices: [{ value: "none", half: "off", label: "No search" }]
@@ -57,7 +57,7 @@
             anneal: "Annealing", gradient: "Step towards better", genetic: "Genetic (breed the best)",
             pareto: "Trade-off front" }[p] + " (" + p + ")" };
         }))
-        .concat([{ value: "llm", half: "model", label: "A model proposes settings" }])
+        .concat([{ value: "model", half: "model", label: "A model proposes settings" }])
         .concat(agentChoices("A coding agent proposes settings")) },
     generate: { title: "Make a design", says: "Writes each candidate design.",
       choices: [{ value: "model", half: "model", label: "A model writes it" },
@@ -67,8 +67,8 @@
       fixed: "Configured in the Checks list above.",
       choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
     critique: { title: "Second opinion", says: "Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice.",
-      choices: [{ value: "none", half: "off", label: "No critic" },
-                { value: "llm", half: "model", label: "A model critic" }]
+      choices: [{ value: "off", half: "off", label: "No critic" },
+                { value: "model", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
     measure: { title: "Measure", says: "Runs your measurements, cheapest first; a design that fails a gate is dropped.",
       fixed: "Configured in the Measurements list above (each may estimate first).",
@@ -79,7 +79,7 @@
       choices: [{ value: "objectives", half: "rules", label: "By the goals" }]
         .concat(agentChoices("By the goals; a coding agent breaks ties")) },
     feedback: { title: "Your notes", says: "Notes you type while it runs steer the next round.",
-      choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "none", half: "off", label: "No notes" }] },
+      choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "off", half: "off", label: "No notes" }] },
     knowledge: { title: "Background reading", says: "What the model reads with every request.",
       choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
                 { value: "none", half: "off", label: "None: no library" }] },
@@ -89,7 +89,7 @@
       choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
         .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
     extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
-      choices: [{ value: "none", half: "off", label: "No lessons" },
+      choices: [{ value: "off", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
         .concat(agentChoices("A coding agent writes lessons from the results")) },
     records: { title: "Keep a record", says: "Every design, measurement and refusal is kept, and read back when you resume.",
@@ -114,20 +114,20 @@
     var v = ((state || {}).flow || {})[box];
     var parts = state && (state.partsMode === "decompose" || (state.partsMode === "list" && list(state.parts).length > 0));
     var words = {
-      validate: { rules: "the loader's checks", llm: "the loader's checks, then the model reads the document and objects, D556" },
+      validate: { rules: "the loader's checks", model: "the loader's checks, then the model reads the document and objects, D556" },
       orchestrate: { "default": parts ? "the model picks the next part, the first one waiting without a model; " + KIND_OF_WORK
                                       : "one design, no part to pick; " + KIND_OF_WORK,
                      rules: "the first part waiting, no model; " + KIND_OF_WORK,
-                     llm: "the model picks the next part; " + KIND_OF_WORK,
-                     agent: "the model with tools picks the next part and the kind of work, its reasons on the record, D505" },
-      plan: { none: "the orchestrator picks step by step" },
+                     model: "the model picks the next part; " + KIND_OF_WORK,
+                     tools: "the model with tools picks the next part and the kind of work, its reasons on the record, D505" },
+      plan: { off: "the orchestrator picks step by step" },
       dse: { none: "the world's own search, if it has one" },
       generate: { model: "the prototype stage, transpile, repair" },
-      critique: { llm: "a model adversary on the division, each admitted part and the decision" },
+      critique: { model: "a model adversary on the division, each admitted part and the decision" },
       calibrate: { on: "between every pair of stages, on the record" },
-      feedback: { human: "the operator's notes, when a terminal is attached", none: "no notes are read, reloaded or waited for" },
+      feedback: { human: "the operator's notes, when a terminal is attached", off: "no notes are read, reloaded or waited for" },
       knowledge: { "default": "on by default, its papers digested; `flow.knowledge: off` turns it off", none: "the library is off" },
-      extract: { none: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
+      extract: { off: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
       records: { on: "every candidate, measurement and refusal, read back on resume" },
     }[box] || {};
     if (box === "records") v = "on";
@@ -611,11 +611,11 @@
     var kb = boxesKept ? (kf["flow.boxes"] || {}) : null, SPECIAL = ["dse", "knowledge", "select"];
     var boxVal = function (bx) { return boxesKept ? kb[bx] : said.indexOf(bx) >= 0 ? flowObj(state, bx) : undefined; };
     (boxesKept ? Object.keys(kb) : said).forEach(function (bx) {
-      if (SPECIAL.indexOf(bx) < 0) F.push("  " + q(bx) + ": " + inline(boxVal(bx), false));
+      if (SPECIAL.indexOf(bx) < 0) F.push("  " + q(bx) + ": " + inline(boxesKept ? boxVal(bx) : toSurface(bx, boxVal(bx)), false));
     });
 
     // dse: its policy or agent, the space it searches, where it starts
-    var dv = boxVal("dse"), D = [];
+    var dv = boxesKept ? boxVal("dse") : toSurface("dse", boxVal("dse")), D = [];
     var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && list(x.choices).length; });
     if (!own("flow.dse.space")) { if (kf["flow.dse.space"] !== undefined) D.push("    space: " + inline(kf["flow.dse.space"], false)); }
     else if (space.length) {
@@ -674,7 +674,7 @@
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
       var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
-      if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.agent = dg.slice(6);
+      if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.by = dg.slice(6);
       if (kv === "none" || kv === "off") K = { off: true };
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
@@ -684,8 +684,9 @@
     var sv = boxVal("select"), S = sv && typeof sv === "object" && !Array.isArray(sv) ? Object.assign({}, sv) : {};
     var fin = String(b.finalists || "").trim();
     if (fin !== "") S.finalists = typed(fin);
-    if (Object.keys(S).length) F.push("  select: " + inline(S, false));
-    else if (sv !== undefined) F.push("  select: " + inline(sv, false));
+    if (!boxesKept) S = toSurface("select", S);                          // D795: {by: claude, finalists: 2}
+    if (typeof S === "string" || Object.keys(S).length) F.push("  select: " + inline(S, false));
+    else if (sv !== undefined) F.push("  select: " + inline(boxesKept ? sv : toSurface("select", sv), false));
 
     if (F.length) out += "\nflow:\n" + F.join("\n") + "\n";
     return out;
@@ -919,6 +920,42 @@
   /** D775: a document of this layout in the shape the reader below reads: each box's settings
       taken out of `flow` -- test the gate, measure the stages (a list), dse's space and seeds,
       knowledge's files, select's finalists. */
+  /** D795: who works a box, as a document says it (`model`, `off`, `{by: claude, ...}`) and as
+      the configurator holds it (the loop's inside words: llm, none, {agent: ...}). */
+  var BY_WORDS = {};                     // the configurator holds the document's own words; only agents differ
+  var PRESETS = ["opencode", "claude", "codex"];
+  var AGENT_OPTS = ["session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow", "output", "resume", "name"];
+  function toInner(box, v) {
+    var words = BY_WORDS[box] || {};
+    if (v === false) v = "off";
+    if (typeof v === "string") {
+      if (box === "dse") return v;
+      if (PRESETS.indexOf(v) >= 0) return { agent: v };
+      return words[v] !== undefined ? words[v] : v;
+    }
+    if (!v || typeof v !== "object" || Array.isArray(v) || !("by" in v)) return v;
+    var rest = {}, opts = {}, k;
+    for (k in v) if (k !== "by") (AGENT_OPTS.indexOf(k) >= 0 ? opts : rest)[k] = v[k];
+    if (v.by === "model") {
+      if (box === "dse") return Object.keys(rest).length ? Object.assign(rest, { policy: "model" }) : "model";
+      return Object.keys(rest).length ? rest : (words.model || "model");
+    }
+    var spec = typeof v.by === "object" ? Object.assign({}, v.by, opts) : Object.keys(opts).length ? Object.assign({ preset: v.by }, opts) : v.by;
+    return Object.assign(rest, { agent: spec });
+  }
+  function toSurface(box, v) {
+    var words = BY_WORDS[box] || {}, back = {}, k;
+    for (k in words) back[words[k]] = k;
+    if (typeof v === "string") return box === "dse" ? (v === "llm" ? { by: "model" } : v) : (back[v] !== undefined ? back[v] : v);
+    if (!v || typeof v !== "object" || Array.isArray(v) || !("agent" in v)) return v;
+    var rest = {}, a = v.agent;
+    for (k in v) if (k !== "agent") rest[k] = v[k];
+    var who = a && typeof a === "object" && a.preset ? Object.assign({ by: a.preset }, a) : { by: a };
+    delete who.preset;
+    var plain = Object.keys(who).length === 1 && typeof who.by === "string" && !Object.keys(rest).length;
+    return plain && box !== "dse" ? who.by : Object.assign(who, rest);
+  }
+
   function unlifted(doc) {
     if (!doc || typeof doc !== "object") return doc;
     var out = {}, k;
@@ -926,7 +963,7 @@
     var fl = doc.flow && typeof doc.flow === "object" && !Array.isArray(doc.flow) ? doc.flow : null;
     if (!fl) return out;
     var f = {};
-    for (k in fl) f[k] = fl[k];
+    for (k in fl) f[k] = ["test", "measure"].indexOf(k) >= 0 ? fl[k] : toInner(k, fl[k]);     // D795
     if ("test" in f) { out.gate = f.test; delete f.test; }
     if ("measure" in f) {
       var m = f.measure || {};

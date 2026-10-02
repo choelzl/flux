@@ -68,7 +68,7 @@ def test_a_template_is_editable_whole(kind, tmp_path):
 
 
 def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
-    """D728: `generate: {agent: {preset: opencode, bin, args}}` and a custom-command critic were not
+    """D728: `generate: {by: opencode, bin, args}` and a custom-command critic were not
     the configurator's choices, so the whole flow fell back to its defaults ("a model") and was
     kept aside. Now each is its agent -- drawn as one -- and written back as it was."""
     src = REPO / "flux/interfaces/cli/src/flux_cli/templates/python"
@@ -77,8 +77,8 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     doc = home / "problem.yaml"
     raw = yaml.safe_load(doc.read_text())
     raw["flow"] = {**(raw.get("flow") or {}),
-                   "generate": {"agent": {"preset": "opencode", "bin": "oc-mod", "args": ["--agent", "flux"], "timeout_s": 900}},
-                   "critique": {"agent": {"command": "my-critic {prompt_file}", "output": "text"}}}
+                   "generate": {"by": "opencode", "bin": "oc-mod", "args": ["--agent", "flux"], "timeout_s": 900},
+                   "critique": {"by": {"command": "my-critic {prompt_file}", "output": "text"}}}
     doc.write_text(yaml.safe_dump(raw, sort_keys=False))
     v = views(doc)
     assert v["normal"] is not None, v["error"]

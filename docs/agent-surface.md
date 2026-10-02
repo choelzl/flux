@@ -39,9 +39,9 @@ Any document can hand generation to a coding agent instead of the model
 
 ```yaml
 flow:
-  generate: {agent: opencode}                  # a preset: opencode, claude, codex
-  # generate: {agent: {preset: claude, questions: model, max_questions: 2}}
-  # generate: {agent: {command: [my-agent, "{prompt_file}", "{artifact}"], timeout_s: 900}}
+  generate: {by: opencode}                  # a preset: opencode, claude, codex
+  # generate: {by: claude, questions: model, max_questions: 2}}
+  # generate: {by: {command: [my-agent, "{prompt_file}", "{artifact}"], timeout_s: 900}}
 ```
 
 One session per part (D669): the first draft reads the whole brief; a repair or a critic's
@@ -105,8 +105,8 @@ With a model that makes tool calls, the loop offers three agentic halves
 
 What none of the halves may decide: admission. The gate stays the exhaustive test's.
 
-A coding agent can also answer any box but the gate and the stages: `flow: {critique: {agent:
-claude}}`, `{orchestrate: {agent: opencode}}`, `{dse: {agent: codex}}`, and so on. The loop writes
+A coding agent can also answer any box but the gate and the stages: `flow: {critique: {by:
+claude}}` (or `critique: claude`), `{orchestrate: {by: opencode}}`, `{dse: {by: codex}}`, and so on. The loop writes
 the question, checks the agent's `out.json`, sends a refused answer back once, then falls back to
 the rules half; every turn is on the record ([design-agent-loop.md](design-agent-loop.md), D640).
 

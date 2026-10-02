@@ -136,7 +136,7 @@ for (const kind of ["surrogate", "command", "model"]) {
 // every box that can be a coding agent, and the library off
 s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "agents_everywhere";
 for (const b of c.DELEGABLE) if (b !== "dse") s.flow[b] = "agent:claude";
-s.flow.knowledge = "none"; s.flow.critique = "llm";
+s.flow.knowledge = "none"; s.flow.critique = "model";
 add("agents_everywhere", "rtl", s);
 s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "papers_by_agent"; s.flow.digest = "agent:opencode";   // D773
 add("papers_by_agent", "rtl", s);
@@ -156,7 +156,7 @@ out.explained = {};
 add("empty_problem", "rtl", s, {partial: true}); out.explained.empty_problem = explained(s);
 s = JSON.parse(JSON.stringify(s)); s.id = "empty_parts"; s.partsMode = "decompose";
 add("empty_parts", "rtl", s, {partial: true}); out.explained.empty_parts = explained(s);
-s = JSON.parse(JSON.stringify(out.empty_problem.state)); s.id = "empty_off"; s.flow.feedback = "none"; s.flow.knowledge = "none";
+s = JSON.parse(JSON.stringify(out.empty_problem.state)); s.id = "empty_off"; s.flow.feedback = "off"; s.flow.knowledge = "none";
 add("empty_off", "rtl", s, {partial: true}); out.explained.empty_off = explained(s);
 s = JSON.parse(JSON.stringify(out.rtl_one_gate.state)); s.id = "estimates_said";
 s.stages[0].estimate = {kind: "surrogate", margin: "5", command: ""};
@@ -373,13 +373,13 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert BUILT["fixed"] == {"test": True, "measure": True, "records": True, "select": False, "critique": False, "calibrate": False}
     assert "analytical" not in BUILT["defaults"]["flowBoxes"] and "simulation" not in BUILT["defaults"]["flowBoxes"]
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
-    assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["extract"] == "none"
+    assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["extract"] == "off"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: off" in y and "critique: llm" in y and "test: {agent" not in y
+    assert "knowledge: off" in y and "critique: model" in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
     p = BUILT["papers_by_agent"]
-    assert "knowledge: {agent: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
+    assert "knowledge: {by: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
     assert _load(tmp_path, p).digest_by == "opencode", "D773: the configurator's Background reading by an agent loads as one"
     assert "digest" not in BUILT["rtl_one_gate"]["yaml"], "D791: the model digests unsaid"
     r = BUILT["readback"]["papers"]

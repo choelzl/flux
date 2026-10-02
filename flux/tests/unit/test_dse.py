@@ -147,7 +147,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
 
 
 def test_the_model_names_the_next_points_and_bad_ones_are_dropped():
-    """`flow: {dse: llm}`: the model names new points each round; out-of-space or repeated points
+    """`flow: {dse: {by: model}}`: the model names new points each round; out-of-space or repeated points
     are dropped and said; an unusable round is retried once, then the walk ends (D554)."""
     import json
 
@@ -178,10 +178,10 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
     doc = {"id": "g",
            "statement": "g",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"dse": {"llm": {"batch_size": 3}, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
+           "flow": {"dse": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
-    assert any(line.startswith("dse: llm {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
+    assert any(line.startswith("dse: model {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
     said = []
     state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
     assert list(prob.search(state)) == [] and any("this run has none" in m for m in said)

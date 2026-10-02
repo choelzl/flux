@@ -20,7 +20,7 @@ NEW = {"id": "t", "statement": "x", "language": "python",
                 "measure": {"screen": {"command": "echo t=1", "metrics": ["t"]},
                             "confirm": {"command": ["echo", "t=2"], "metrics": ["t"], "timeout_s": 900}},
                 "dse": {"policy": "sweep", "space": {"n": [1, 2]}, "seeds": [{"n": 2}]},
-                "knowledge": {"text": "a note", "agent": "opencode"},
+                "knowledge": {"text": "a note", "by": "opencode"},
                 "select": {"finalists": 3},
                 "calibrate": "off"}}
 
@@ -61,17 +61,17 @@ def test_each_box_says_its_settings_in_the_forms_it_has():
         flow(measure=[{"name": "a", "command": "x"}])
     for agent_box in ("test", "measure"):
         with pytest.raises(TaskError, match="never delegated"):
-            flow(**{agent_box: {"agent": "claude"}})
-    assert flow(dse={"agent": "claude", "space": {"n": [1, 2]}}).space == {"n": [1, 2]}
+            flow(**{agent_box: {"by": "claude"}})
+    assert flow(dse={"by": "claude", "space": {"n": [1, 2]}}).space == {"n": [1, 2]}
     assert flow(knowledge="off").flow["knowledge"] == ["none"]
     assert yaml.safe_load("k: off")["k"] is False and flow(knowledge=False).flow["knowledge"] == ["none"], \
         "YAML reads a bare off as false"
-    assert flow(knowledge={"files": [], "agent": "opencode"}).digest_by == "opencode"
+    assert flow(knowledge={"files": [], "by": "opencode"}).digest_by == "opencode"
     with pytest.raises(TaskError, match="stands alone"):
-        flow(knowledge={"off": True, "agent": "opencode"})
+        flow(knowledge={"off": True, "by": "opencode"})
     with pytest.raises(TaskError, match="flow.knowledge keys"):
         flow(knowledge={"papers": "x"})
-    assert flow(select={"agent": "claude", "finalists": 1}).flow["select"] == {"agent": "claude"}
+    assert flow(select={"by": "claude", "finalists": 1}).flow["select"] == {"agent": "claude"}
 
 
 def test_every_application_is_in_the_layout():

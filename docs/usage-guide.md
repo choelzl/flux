@@ -75,7 +75,7 @@ flow:
   select: {finalists: 2}
 ```
 
-`flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`.
 
@@ -147,7 +147,7 @@ itself (a PDF's tables and figures too) and is gated by its Test like any agent 
 
 ```yaml
 flow:
-  knowledge: {agent: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
+  knowledge: {by: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
 ```
 
 In the configurator's drawing it is the **Digest the papers** box (the model, or a coding agent; D784, D791). A Setup digests at most 8 new papers (`FLUX_DIGEST_PER_PASS`), the loop's own first;

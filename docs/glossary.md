@@ -44,7 +44,7 @@ of the NLU's seven. `parts:` lists them; `decompose` lets the model divide the g
 
 **Generator.** Whatever drafts candidates: a model, a script run once per design point
 (`flow: {generate: {command: ...}}`), a catalog of existing designs, a solver, or a coding
-agent (`flow: {generate: {agent: opencode}}`).
+agent (`flow: {generate: {by: opencode}}`).
 
 **Author.** In `flux ask`, the one who writes the problem document and its golden model from
 your prompt and files: the model by default, or a coding agent (`--author
@@ -67,7 +67,7 @@ from the exact result, for every input. The NLU's gate uses this.
 
 **DSE, phases.** Design-space exploration: searching a space (`flow.dse.space`) of knobs and their choices
 for the best designs. A DSE policy (`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`,
-`pareto`, or `llm`) picks which points to try. *Phases* are a list of such searches run in
+`pareto`, or `model`) picks which points to try. *Phases* are a list of such searches run in
 order, each starting where the last one ended, each with its own knobs.
 
 **Ladder.** The steps that improve a part that already works: `sweep` (pipeline registers),
@@ -86,7 +86,7 @@ pre-written half; `--role` swaps them.
 
 **Coding agent.** A terminal tool that takes a brief and writes files: Claude Code, Codex CLI,
 OpenCode or any command. One can be the author in `flux ask` or the generator of any document
-(`flow: {generate: {agent: opencode}}`); scripts and agents alike read a run's answer with
+(`flow: {generate: {by: opencode}}`); scripts and agents alike read a run's answer with
 `flux task run --json` ([agent-surface.md](agent-surface.md)).
 
 **ASAP7.** A free, predictive 7 nm process design kit from Arizona State University, used

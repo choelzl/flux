@@ -53,7 +53,7 @@ Say only what is yours; the rest is inferred.
     the record's rows on that stage (nothing until 3 are measured); `command: "..."` (kind command
     only) runs a script with the stage's placeholders that prints the same `name=value` metrics;
     `model` asks the model with the design and the stage's measured rows (no model, no estimate).
-  - `dse`: the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|llm`
+  - `dse`: the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|model` (the model proposes points)
     or a list of phases, or, with its space, `{policy: sweep, space: {...}, seeds: [...]}`.
     `space`: knob -> its choices, in a meaningful order. A knob that only matters for some
     choices of another: `{values: [...], when: {stack: [b, c]}}`; elsewhere it stays at its first
@@ -66,22 +66,26 @@ Say only what is yours; the rest is inferred.
     switched on. A phase's `knobs`, `hold` and `keep` take globs (`bingo.*`, `"*.on"`).
     `pareto` needs two objectives.
   - `generate`: `model` (the default), `{command: "..."}` (a script renders each candidate; with a
-    space, once per point, knobs as `{knob}`), `{agent: opencode|claude|codex}` (or `{preset,
-    bin, args}`: another executable, extra arguments such as `[--agent, flux]`; per machine
+    space, once per point, knobs as `{knob}`), `{by: opencode|claude|codex}` (with `bin`,
+    `args` beside: another executable, extra arguments such as `[--agent, flux]`; per machine
     `FLUX_OPENCODE_BIN` / `FLUX_OPENCODE_ARGS`).
   - `knowledge`: what the model reads with every prompt -- `files: [...]` (specs, reference code,
-    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `agent: opencode` (the
+    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `by: opencode` (the
     library's papers digested by that coding agent instead of the model), or `knowledge: off` (no
     library at all). The operator's library (`mentor/knowledge/library/`) and the loop's own
     `library/` folder reach every document, each paper digested once: excerpts
     for the statement, contract and parts, one line per paper, and the coding agents' briefs.
   - `select: {finalists: N}`: how many designs reach the costliest stage.
-  - `orchestrate: rules|llm|agent`, `plan: llm`, `critique: llm`, `validate: llm`,
-    `extract: mined` (lessons mined from the record), `feedback: none` (no operator notes),
-    `calibrate: off`.
-  - On any box but test and measure, `{agent: opencode|claude|codex}`: a coding agent answers
-    that box, checked by the loop, falling back to the rules half (docs/design-agent-loop.md);
-    `{agent: {preset: opencode, session: pass}}` keeps one agent session per box for the pass
+  - `orchestrate: rules|given|model|tools` (`tools`: the model with tools), `plan: model`,
+    `critique: model`, `validate: model`, `extract: mined` (lessons mined from the record),
+    `feedback: off` (no operator notes), `calibrate: off`.
+  - Every box says who works it the same way (D795): a word (`rules`, `model`, `off`, ...), an
+    agent's name (`critique: claude`), or `{by: <who>, ...}` with the box's settings and the
+    agent's options beside (`plan: {by: claude, session: pass}`, `select: {by: claude,
+    finalists: 2}`, `knowledge: {by: opencode, files: [...]}`); an agent of your own is
+    `by: {command: [...], output: text}`. A coding agent answers any box but test and measure,
+    checked by the loop, falling back to the rules half (docs/design-agent-loop.md);
+    `session: pass` keeps one agent session per box for the pass
     (resumed turn after turn), `session: turn` (the default) is a fresh agent every turn. A
     generate agent's span is fixed, not set: one session per part until the part is admitted
     (repairs and critique send-backs resume it with a short message; an improve starts fresh;

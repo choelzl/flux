@@ -1,6 +1,6 @@
 # A loop driven by agents
 
-Status: built (D640), on the design of D630. Every delegable box takes `{agent: ...}`.
+Status: built (D640), on the design of D630. Every delegable box takes `{by: <agent>, ...}` (D795).
 
 ## The idea
 
@@ -10,13 +10,13 @@ real tools and are never delegated: the gate, the measurements and the record.
 
 ```yaml
 flow:
-  orchestrate: {agent: claude}          # picks the next work item, every pick on the ledger
-  plan:        {agent: claude}          # writes the pass's plan, checked by check_plan
-  dse:         {agent: codex}           # proposes points in `flow.dse.space`
-  generate:    {agent: opencode}        # writes the artifact (exists: D575)
-  critique:    {agent: claude}          # objects to a division, a part or a decision
-  extract:     {agent: claude}          # mines lessons from the record, citing its rows
-  select:      {agent: claude}          # chooses among designs that tie on the objective vector
+  orchestrate: {by: claude}          # picks the next work item, every pick on the ledger
+  plan:        {by: claude}          # writes the pass's plan, checked by check_plan
+  dse:         {by: codex}           # proposes points in `flow.dse.space`
+  generate:    {by: opencode}        # writes the artifact (exists: D575)
+  critique:    {by: claude}          # objects to a division, a part or a decision
+  extract:     {by: claude}          # mines lessons from the record, citing its rows
+  select:      {by: claude}          # chooses among designs that tie on the objective vector
   test: gate                            # never delegated (D460)
 ```
 
@@ -121,8 +121,8 @@ Nothing here is specific to RTL. For a C/C++ kernel:
 
 Two boxes do the work:
 
-- `dse: {agent: ...}` proposes points in that space.
-- `generate: {agent: ...}` does the rewrites a knob cannot say: fusing loops, swapping
+- `dse: {by: ...}` proposes points in that space.
+- `generate: {by: ...}` does the rewrites a knob cannot say: fusing loops, swapping
   instructions, making a branch branch-free.
 
 The gate keeps every rewrite equal to the reference.

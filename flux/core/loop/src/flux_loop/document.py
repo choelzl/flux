@@ -1133,6 +1133,146 @@ _KNOWLEDGE_SOURCES = ("sheet", "library", "none")
 _KNOWLEDGE_KEYS = ("files", "sheet", "text", "off", "agent")
 
 
+
+#: D795: every box says who works it the same way -- a word (`rules`, `model`, `off`, ...) or
+#: `{by: <who>, ...its settings}`, `by` a word, an agent preset (opencode, claude, codex) or an
+#: agent of one's own (`{command: [...]}`), the agent's options (session, timeout_s, ...) beside.
+AGENT_PRESETS = ("opencode", "claude", "codex")
+_DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select", "knowledge"})
+_AGENT_OPTS = ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow",
+               "output", "resume", "name")
+#: the words each box takes on the surface, and what the loop calls them inside
+_BY_WORDS = {"validate": {"rules": "rules", "model": "llm"},
+             "orchestrate": {"rules": "rules", "given": "given", "model": "llm", "tools": "agent"},
+             "plan": {"off": "none", "model": "llm"},
+             "critique": {"off": "none", "model": "llm"},
+             "generate": {"model": "model"},
+             "select": {"objectives": "objectives"},
+             "extract": {"off": "none", "mined": "mined"},
+             "feedback": {"human": "human", "off": "none"},
+             "calibrate": {"on": "on", "off": "off"},
+             "knowledge": {"off": "off", "model": None}}
+_BY_SETTINGS = {"generate": ("command", "catalog"), "select": ("finalists",), "dse": ("policy", "space", "seeds"),
+                "knowledge": ("files", "sheet", "text", "off")}
+
+
+def _who(box: str, by: Any, opts: dict[str, Any]) -> Any:
+    """An agent spec from `by` and the options beside it, or the box's inside word for a word."""
+    if isinstance(by, dict):
+        return {**by, **opts}
+    if by in AGENT_PRESETS:
+        return {"preset": by, **opts} if opts else by
+    raise TaskError(f"flow.{box}.by is " + " | ".join([*(_BY_WORDS.get(box) or {}), *AGENT_PRESETS])
+                    + f" or an agent of your own ({{command: [...]}}), not {by!r}")
+
+
+def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
+    """D795: the boxes as a document says them, read into the forms the loop keeps."""
+    out = dict(flow)
+    for box, value in flow.items():
+        if box in ("test", "measure") or box not in FLOW_BOXES:
+            continue                                           # the loader says what is no box
+        words = _BY_WORDS.get(box, {})
+        if value is False:                                   # YAML reads a bare `off` as false
+            value = "off"
+        if isinstance(value, str):
+            if box == "dse":
+                if value in ("llm", "agent"):
+                    raise TaskError("flow.dse: a model or an agent proposing points is `{by: model}` or `{by: claude}` (D795)")
+                continue                                       # a policy's name
+            if value in AGENT_PRESETS:
+                value = {"by": value}
+            elif box == "orchestrate" and value not in ("llm", "agent", "none") and value not in words:
+                continue                                       # a registered orchestrator; the roles say if not
+            elif value not in words:
+                raise TaskError(f"flow.{box} is " + " | ".join([*words, *(AGENT_PRESETS if box in _DELEGABLE else ())])
+                                + (" or {by: ..., ...}" if box in _DELEGABLE else "") + f", not {value!r} (D795)")
+            else:
+                inner = words[value]
+                if inner is None:
+                    out.pop(box)
+                else:
+                    out[box] = inner
+                continue
+        if isinstance(value, list):
+            continue                                           # dse phases
+        if box == "dse" and isinstance(value, dict) and ("llm" in value or value.get("policy") == "llm"):
+            raise TaskError("flow.dse: the model proposing points is `{by: model, ...its options}` (D795)")
+        if not isinstance(value, dict):
+            continue
+        if "agent" in value:
+            raise TaskError(f"flow.{box}: who works it is `by` -- {{by: {value['agent'] if isinstance(value['agent'], str) else 'claude'}}} (D795)")
+        if "by" not in value:
+            continue                                           # its settings alone (generate's command, dse's space, ...)
+        v = dict(value)
+        by = v.pop("by")
+        settings = {k: v.pop(k) for k in list(v) if k in _BY_SETTINGS.get(box, ())}
+        if box == "dse" and by == "model" and v:           # the model's search, with its own options
+            cfg, v = dict(v), {}
+            out[box] = {**settings, "policy": {"llm": cfg}}
+            continue
+        opts = {k: v.pop(k) for k in list(v) if k in _AGENT_OPTS}
+        if v:
+            raise TaskError(f"flow.{box}: {', '.join(sorted(v))} is not a setting of this box or an agent's")
+        if by == "model" or (isinstance(by, str) and by in words):
+            if opts:
+                raise TaskError(f"flow.{box}: {', '.join(sorted(opts))} is an agent's option, not {by}'s")
+            inner = words.get(by)
+            if box == "dse":
+                out[box] = {**settings, "policy": "llm"}
+            elif settings:                                     # the reading, the finalists: the word is the default
+                out[box] = settings
+            elif inner is None:
+                out.pop(box)
+            else:
+                out[box] = inner
+            continue
+        if box not in _DELEGABLE:
+            raise TaskError(f"flow.{box} is not a box an agent answers; those are {', '.join(sorted(_DELEGABLE))}")
+        spec = _who(box, by, opts)
+        if box == "dse":
+            out[box] = {**settings, **({"policy": {"agent": spec}} if settings else {"agent": spec})}
+        else:
+            out[box] = {**settings, "agent": spec}
+    return out
+
+
+def _by_doc(spec: Any, more: dict[str, Any]) -> Any:
+    """An agent spec written as `by` (D795): the preset's name alone when that is all."""
+    if isinstance(spec, dict) and spec.get("preset"):
+        who = {"by": spec["preset"], **{k: x for k, x in spec.items() if k != "preset"}}
+    else:
+        who = {"by": spec}
+    return who["by"] if len(who) == 1 and not more and isinstance(who["by"], str) else {**who, **more}
+
+
+def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
+    """D795: the boxes as the loop keeps them, written the way a document says them."""
+    out: dict[str, Any] = {}
+    for box, value in flow.items():
+        words = {inner: word for word, inner in (_BY_WORDS.get(box) or {}).items() if inner is not None}
+        rest = {k: x for k, x in value.items() if k not in ("agent", "policy")} if isinstance(value, dict) else {}
+        if isinstance(value, str) and box != "dse" and value in words:
+            out[box] = words[value]
+        elif isinstance(value, dict) and "agent" in value:
+            got = _by_doc(value["agent"], rest)
+            out[box] = {"by": got} if box == "dse" and isinstance(got, str) else got      # a dse word is a policy
+        elif box == "dse" and value == "llm":
+            out[box] = {"by": "model"}
+        elif box == "dse" and isinstance(value, dict) and set(value) == {"llm"}:
+            out[box] = {"by": "model", **(value["llm"] or {})}
+        elif box == "dse" and isinstance(value, dict) and isinstance(value.get("policy"), dict) and set(value["policy"]) == {"llm"}:
+            out[box] = {"by": "model", **(value["policy"]["llm"] or {}), **rest}
+        elif box == "dse" and isinstance(value, dict) and value.get("policy") == "llm":
+            out[box] = {"by": "model", **rest}
+        elif box == "dse" and isinstance(value, dict) and isinstance(value.get("policy"), dict) and "agent" in value["policy"]:
+            got = _by_doc(value["policy"]["agent"], rest)
+            out[box] = {"by": got} if isinstance(got, str) else got
+        else:
+            out[box] = value
+    return out
+
+
 def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     """D775: each box's own settings, said under `flow`, read into the fields the loop keeps:
     `flow.test` the gate, `flow.measure` the stages (a map: a stage's name to its command or its
@@ -1152,9 +1292,9 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     raw = doc.get("flow")
     if not isinstance(raw, dict):
         return doc
-    flow = dict(raw)
+    flow = _by_surface(raw) if strict else dict(raw)
     for box in ("test", "measure"):
-        if isinstance(flow.get(box), dict) and "agent" in flow[box]:
+        if isinstance(raw.get(box), dict) and ("agent" in raw[box] or "by" in raw[box]):
             raise TaskError(f"flow.{box} is never delegated to an agent: it establishes facts (D460)")
     if "test" in flow:
         doc["gate"] = flow.pop("test")
@@ -1292,7 +1432,7 @@ def _layout(doc: Any) -> Any:
     if isinstance(out.get("subtasks"), list):
         out["subtasks"] = [_layout(c) for c in out["subtasks"]]
     if flow:
-        out["flow"] = flow
+        out["flow"] = _by_layout(flow)
     else:
         out.pop("flow", None)
     return out
@@ -1483,10 +1623,14 @@ def _agent_tool(spec: Any) -> str:
 
 
 def _dse_name(value: Any) -> str:
+    """A search as a document names it (D795: the model's half is `model`, an agent's by its name)."""
+    if isinstance(value, dict) and "agent" in value:
+        return f"agent {_agent_name(value)}"
     if isinstance(value, dict):
         (name, cfg), = value.items()
+        name = "model" if name == "llm" else name
         return f"{name} {cfg}" if cfg else str(name)
-    return str(value)
+    return "model" if value == "llm" else str(value)
 
 
 def _space_size(task: "TaskSpec", problem: Any) -> str:
@@ -1534,13 +1678,13 @@ def describe_orchestrate(task: "TaskSpec") -> str:
         return (f"agent {_agent_name(raw)} (a coding agent picks the next part and the kind of work, "
                 "its reasons on the record, D640)")
     if name == "agent":
-        return "agent (the model with tools picks the next part and the kind of work, its reasons on the record, D505)"
+        return "tools (the model with tools picks the next part and the kind of work, its reasons on the record, D505)"
     if name == "rules":
         return "rules (the first part waiting, no model; " + _KIND_OF_WORK + ")"
     if name == "given":
         return "given (the parts in the order given, no model; " + _KIND_OF_WORK + ")"
     if name == "llm":
-        return "llm (the model picks the next part; " + _KIND_OF_WORK + ")"
+        return "model (the model picks the next part; " + _KIND_OF_WORK + ")"
     if parts:
         return ("default (the model picks the next part, the first one waiting without a model; "
                 + _KIND_OF_WORK + ")")
@@ -1586,14 +1730,14 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     lines = [
         ("validate: " + (f"agent {_agent_name(flow['validate'])} (the loader's checks, then the agent reads the document and objects, D640)"
                          if isinstance(flow.get("validate"), dict) else
-                         "llm (the loader's checks, then the model reads the document and objects, D556)" if flow.get("validate") == "llm"
+                         "model (the loader's checks, then the model reads the document and objects, D556)" if flow.get("validate") == "llm"
                          else "rules (the loader's checks)")),
         "orchestrate: " + describe_orchestrate(task)
-        + " -- or: " + ", ".join(n for n in ("rules", "given", "llm", "agent") if n != orch_name),
+        + " -- or: " + ", ".join(n for n in ("rules", "given", "model", "tools", "an agent") if n != {"llm": "model", "agent": "tools"}.get(orch_name, orch_name)),
         "plan: " + (f"agent {_agent_name(flow['plan'])} (the pass is planned first, checked by check_plan, D640)"
                     if isinstance(flow.get("plan"), dict) else
-                    "llm (the pass is planned first: parts, order, the method per part, budgets; the plan on the record, D577)"
-                    if "plan" in (task.budget.get("agent") or ()) else "none (the orchestrator picks step by step)"),
+                    "model (the pass is planned first: parts, order, the method per part, budgets; the plan on the record, D577)"
+                    if "plan" in (task.budget.get("agent") or ()) else "off (the orchestrator picks step by step)"),
         "dse: " + (f"{_dse_name(flow.get('dse'))} over {_space_size(task, problem)}" if flow.get("dse") not in (None, "none")
                    else "none (the world's own search, if it has one)")
         + f" -- registered: {', '.join(policies)}",
@@ -1601,18 +1745,18 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         "test: gate (never delegated)" + (" -- the world's judge" if task.world else " -- the document's commands"),
         "critique: " + (f"agent {_agent_name(flow['critique'])} (on the division, each admitted part and the decision, D640)"
                         if isinstance(flow.get("critique"), dict) else
-                        "llm (a model adversary on the division, each admitted part and the decision)" if task.critique else "none"),
+                        "model (a model adversary on the division, each admitted part and the decision)" if task.critique else "off"),
         "stages: " + (", ".join(r.name for r in task.stages) if task.stages else "none declared (the gate decides)"),
         *[describe_stage(r, r.name in modelled) for r in task.stages],
         "calibrate: " + ("off" if task.budget.get("calibrate") is False else "on (between every pair of stages, on the record)"),
         "select: objectives (" + (Objectives(task.objectives).describe() or "none") + ")"
         + (f"; agent {_agent_name(flow['select'])} breaks the ties they leave open (D640)" if isinstance(flow.get("select"), dict) else ""),
-        "feedback: " + ("none (no notes are read, reloaded or waited for)" if flow.get("feedback") == "none"
+        "feedback: " + ("off (no notes are read, reloaded or waited for)" if flow.get("feedback") == "none"
                         else "human (the operator's notes, when a terminal is attached)"),
         "knowledge: " + (", ".join(knowledge) if knowledge else "off (the library is off)"),
         "extract: " + (f"agent {_agent_name(extract)} (lessons from the record's rows, each citing its rows)" if isinstance(extract, dict)
                        else "mined (facts mined from the record reach the prompts)" if extract == "mined"
-                       else "none (nothing is mined from the record) -- or: mined, agent"),
+                       else "off (nothing is mined from the record) -- or: mined, an agent"),
         "records: always on (every candidate, measurement and refusal, read back on resume)",
     ]
     return lines

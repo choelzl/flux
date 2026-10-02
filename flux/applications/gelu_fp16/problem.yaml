@@ -16,8 +16,7 @@ objectives:
 - {metric: fmax_mhz, direction: maximize, goal: 500}
 - {metric: area_um2, direction: minimize}
 flow:
-  generate:
-    agent: {preset: opencode, timeout_s: 3600}
+  generate: {by: opencode, timeout_s: 3600}
   test: flux rtl test {artifact} --golden {home}/golden.py
   measure:
     synth:
