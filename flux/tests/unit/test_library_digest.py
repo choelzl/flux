@@ -80,8 +80,7 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     doc = {"id": "t",
            "statement": "x",
            "parts": ["a", "b"],
-           "flow": {"knowledge": "off", "extract": "mined", "test": {"test": ["true"]}}}
-    doc["flow"].pop("knowledge")                   # D791: unsaid, the library is digested
+           "flow": {"knowledge": {"lessons": "mined"}, "test": {"test": ["true"]}}}   # D791: the digest unsaid
     task = TaskSpec.from_dict(doc)
     assert task.roles["knowledge"] == "mined"
     prob = PromptProblem(task)

@@ -271,48 +271,6 @@ def test_records_remember_and_recall_typed_decisions(tmp_path):
     assert Records(str(tmp_path / "nodir" / "x.db"), objective={"s": 1}).recall("plan") == []
 
 
-# ---- propose: brief (D432)
-def test_the_orchestrator_briefs_a_part_and_sets_its_budget(tmp_path):
-    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "brief": "propose",
-                               "budget": {"steps": 1, "repair_attempts": 2, "prototype": False}})
-    assert task.brief and TaskSpec.from_dict(task.to_dict()) == task
-    brief = json.dumps({"brief": "Ten lines, digits 0-9 ascending, newline-terminated, nothing else.",
-                        "repair_attempts": 1, "why": "trivial"})
-    # one design, then patches that never fix it: the inner loop spends the brief's budget (1),
-    # not the request's 2
-    proposer = ScriptedProposer([brief, _reply(WRONG), _patch("X", "Y"), _patch("Y", "Z")])
-    log: list[str] = []
-    problem = PromptProblem(task)
-    out = run_loop(problem, request_for(task, db=str(tmp_path / "b.db")), proposer=proposer, log=log.append)
-    assert "You are briefing the writer" in proposer.prompts[0]
-    assert "BRIEF (from the orchestrator):\nTen lines" in proposer.prompts[1]      # in the static prefix
-    assert any("brief for digits: 1 line(s), 1 repair attempts" in ln for ln in log)
-    assert out.decision is None and len(proposer.prompts) == 3         # brief, design, ONE repair
-    # a resume reuses the brief without asking
-    other = ScriptedProposer([_reply(GOOD)])
-    out2 = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "b.db")), proposer=other,
-                    log=log.append)
-    assert out2.decision is not None and "BRIEF (from the orchestrator)" in other.prompts[0]
-    assert any("resumed from the record" in ln for ln in log)
-
-
-def test_a_brief_is_help_not_a_gate():
-    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "brief": "propose"})
-    # no model: no brief, and the task still runs when handed a scripted writer later
-    problem = PromptProblem(task)
-    from flux_loop import LoopState
-    state = LoopState(request=request_for(task, db=""), say=lambda m: None, proposer=None, feedback=None)
-    assert problem.plan_part(None, state) == {}
-    # a reply without a brief: the statement stays the brief, nothing is remembered
-    state = LoopState(request=request_for(task, db=""), say=lambda m: None,
-                      proposer=ScriptedProposer(['{"why": "no brief"}']), feedback=None)
-    assert problem.plan_part(None, state) == {}
-    # an oversized budget is clamped to twice the request's
-    state = LoopState(request=request_for(task, db="", repair_attempts=3), say=lambda m: None,
-                      proposer=ScriptedProposer([json.dumps({"brief": "b", "repair_attempts": 99})]), feedback=None)
-    assert problem.plan_part(None, state) == {"brief": "b", "repair_attempts": 6}
-
-
 # ---- critique (D433)
 def _critic(ok: bool, *issues: str) -> str:
     return json.dumps({"ok": ok, "issues": list(issues), "why": "critic"})
@@ -525,7 +483,7 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
 
     task = TaskSpec.from_dict(_flow_doc({"orchestrate": "rules", "generate": {"catalog": ["a.txt"]},
                                          "critique": "model", "calibrate": "off",
-                                         "extract": "mined", "feedback": "off", "test": "gate"}))
+                                         "knowledge": {"lessons": "mined"}, "feedback": "off", "test": "gate"}))
     assert task.roles == {"orchestrator": "rules", "knowledge": "mined"}
     assert task.generator == {"catalog": ["a.txt"]} and task.critique is True
     assert task.budget["calibrate"] is False

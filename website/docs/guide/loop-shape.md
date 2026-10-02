@@ -67,7 +67,7 @@ flow:
 | Compare measures | `calibrate` | Checks how well the cheap measurement predicts the costly one. | `on` · `off`; never a model's or an agent's |
 | Choose the best | `select` | Picks the winner by your goals. | `objectives` · a coding agent breaks the ties they leave open |
 | Keep a record | | Every design, measurement and refusal is kept, and read back when you resume. | **fixed**: always on |
-| Learn from results | `extract` | Optionally turns past results into lessons for the next round. | `off` · `mined`: lessons mined from the record · a coding agent |
+| Learn from results | | Optionally turns past results into lessons for the next round, read with the library. | `off` · `mined`: lessons mined from the record, written `knowledge: {lessons: mined}` · a coding agent, `knowledge: {lessons: claude}` |
 
 A coding agent is written `{by: claude}` (or `codex`, `opencode`). The loop checks its answer
 and falls back to the rules when the answer is unusable. An agent that writes designs keeps one

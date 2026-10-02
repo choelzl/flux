@@ -108,10 +108,9 @@ def test_both_halves_reach_the_prompt_together(tmp_path):
     _campaign(db)
     doc = {"id": "rigged",
            "statement": "write the word good",
-           "flow": {"extract": "mined",
-                    "test": {"test": ["true"]},
+           "flow": {"test": {"test": ["true"]},
                     "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}},
-                    "knowledge": {"text": "A person's own note: prefer the narrow design."}}}
+                    "knowledge": {"text": "A person's own note: prefer the narrow design.", "lessons": "mined"}}}
     problem = PromptProblem(TaskSpec.from_dict(doc))
     state = _State(db)
     state.plans = {}

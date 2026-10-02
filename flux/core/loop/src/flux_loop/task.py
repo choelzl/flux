@@ -813,58 +813,6 @@ class PromptProblem(Problem):
             self._remember_division(state)
         return Verdict(ok, 0.0 if ok else 1.0, why, {"issues": issues})
 
-    def plan_part(self, subgoal: str | None, state: LoopState) -> dict[str, Any]:
-        """The part's brief (D432): with `"brief": "propose"` the model writes it and may set the
-        repair budget (clamped to twice the request's). Remembered for resume; empty with no
-        model."""
-        t = self.task
-        if not t.brief:
-            return {}
-        key = subgoal or "*"
-        records = state.records
-        earlier = [d for d in (records.recall("brief") if records is not None else [])
-                   if d.get("part") == key]
-        if earlier:
-            state.say(f"brief for {subgoal or t.id}: resumed from the record")
-            return {k: v for k, v in earlier[-1].items() if k in ("brief", "repair_attempts")}
-        if state.proposer is None:
-            return {}
-        from .model import _ask, _json
-
-        part = self._part(subgoal)
-        gate = t.gate.line()
-        prompt = "\n\n".join(x for x in (
-            f"TASK {t.id}: {t.statement}",
-            f"PART {part.name}: {part.statement}" if part is not None else "",
-            f"CONTRACT:\n{t.contract}" if t.contract else "",
-            f"KNOWLEDGE:\n{t.knowledge}" if t.knowledge else "",
-            f"HOW IT IS JUDGED: the gate runs `{gate}` and counts failures; zero admits." if gate else "",
-            "You are briefing the writer of this part. Write a BRIEF of at most 12 lines: exactly "
-            "what the part must contain, the constraints most likely to be missed, what the gate "
-            "will check, and the smallest correct approach. Do not write the part itself. Then "
-            f"say how many repair attempts it deserves (1 to {2 * state.request.repair_attempts}; "
-            f"{state.request.repair_attempts} is the default).",
-            'Reply with ONLY JSON: {"brief": "<text>", "repair_attempts": <int>, "why": "<one line>"}',
-        ) if x)
-        schema = {"type": "object",
-                  "properties": {"brief": {"type": "string"},
-                                 "repair_attempts": {"type": "integer", "minimum": 1},
-                                 "why": {"type": "string"}},
-                  "required": ["brief"]}
-        doc = _json(_ask(state, prompt, schema).text)
-        if not isinstance(doc, dict) or not isinstance(doc.get("brief"), str) or not doc["brief"].strip():
-            state.say(f"brief for {subgoal or t.id}: the reply carried no brief; the statement is the brief")
-            return {}
-        plan: dict[str, Any] = {"brief": doc["brief"].strip()[:2000]}
-        ra = doc.get("repair_attempts")
-        if isinstance(ra, int) and ra > 0:
-            plan["repair_attempts"] = max(1, min(ra, 2 * state.request.repair_attempts))
-        if records is not None:
-            records.remember("brief", {"part": key, **plan, "why": str(doc.get("why") or "")[:200]})
-        state.say(f"brief for {subgoal or t.id}: {len(plan['brief'].splitlines())} line(s)"
-                  + (f", {plan['repair_attempts']} repair attempts" if "repair_attempts" in plan else ""))
-        return plan
-
     def _check_decomposition(self, doc: Any) -> str:
         if not isinstance(doc, dict) or not isinstance(doc.get("parts"), list) or not doc["parts"]:
             return "the reply carried no parts"

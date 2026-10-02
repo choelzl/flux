@@ -205,7 +205,6 @@ class TaskSpec:
     #: {"parts": [...]}}}`, ... -- one of `flux_loop.available_roles(role)` per role. The
     #: generation slot is the `generator` field above; saying it in both places is refused.
     roles: dict[str, Any] = field(default_factory=dict)
-    brief: bool = False                  # "brief": "propose" -- the orchestrator briefs each part
     critique: bool = False               # flow critique: llm -- a model critic judges (D433)
     gate: Gate = field(default_factory=Gate)
     stages: tuple[Stage, ...] = ()
@@ -438,7 +437,6 @@ class TaskSpec:
             generator=dict(generator), roles=dict(roles), flow=dict(flow),
             subtasks=tuple(subtasks), split=split,
             max_subtasks=int(doc.get("max_subtasks") or 4),
-            brief=doc.get("brief") in ("propose", True),
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
@@ -460,7 +458,6 @@ class TaskSpec:
             **({"flow": dict(self.flow)} if self.flow else {}),
             **({"subtasks": "decompose", "max_subtasks": self.max_subtasks} if self.split else
                {"subtasks": [c.to_dict() for c in self.subtasks]} if self.subtasks else {}),
-            **({"brief": "propose"} if self.brief else {}),
             "gate": gate,
             "stages": [{"name": r.name,
                        **({"command": list(r.command)} if r.command else {}),
@@ -651,7 +648,7 @@ def _gate_doc(gate: Gate) -> Any:
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
 _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
-              "params", "workload", "budget", "brief", "space", "world", "hooks", "ladder",
+              "params", "workload", "budget", "space", "world", "hooks", "ladder",
               "flow")
 
 
@@ -895,7 +892,7 @@ def _estimator(at: str, raw: Any) -> Estimator | None:
 #: real key (D590).
 DOCUMENT_KEYS = frozenset({
     "statement", "contract", "language", "parts",
-    "flow", "subtasks", "max_subtasks", "brief", "objectives",
+    "flow", "subtasks", "max_subtasks", "objectives",
     "budget", "params", "workload", "world", "hooks", "ladder",
     "skills"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
@@ -1167,7 +1164,19 @@ def _who(box: str, by: Any, opts: dict[str, Any]) -> Any:
 
 
 def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
-    """D795: the boxes as a document says them, read into the forms the loop keeps."""
+    """D795: the boxes as a document says them, read into the forms the loop keeps. D796: the
+    record's lessons are `knowledge.lessons`, kept inside as the `extract` box."""
+    if "extract" in flow:
+        raise TaskError("flow.extract is `knowledge: {lessons: mined}` (or `{lessons: claude}`) (D796)")
+    flow = dict(flow)
+    k = flow.get("knowledge")
+    if isinstance(k, dict) and "lessons" in k:
+        k = dict(k)
+        flow["extract"] = k.pop("lessons")
+        if k:
+            flow["knowledge"] = k
+        else:
+            flow.pop("knowledge")
     out = dict(flow)
     for box, value in flow.items():
         if box in ("test", "measure") or box not in FLOW_BOXES:
@@ -1247,7 +1256,8 @@ def _by_doc(spec: Any, more: dict[str, Any]) -> Any:
 
 
 def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
-    """D795: the boxes as the loop keeps them, written the way a document says them."""
+    """D795: the boxes as the loop keeps them, written the way a document says them; D796: the
+    `extract` box as `knowledge.lessons`."""
     out: dict[str, Any] = {}
     for box, value in flow.items():
         words = {inner: word for word, inner in (_BY_WORDS.get(box) or {}).items() if inner is not None}
@@ -1270,6 +1280,16 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
             out[box] = {"by": got} if isinstance(got, str) else got
         else:
             out[box] = value
+    lessons = out.pop("extract", "off")
+    if lessons != "off":
+        k = out.get("knowledge")
+        if k is None:
+            k = {}
+        elif k == "off":
+            k = {"off": True}
+        elif isinstance(k, str):
+            k = {"by": k}
+        out["knowledge"] = {**k, "lessons": lessons}
     return out
 
 
@@ -1754,7 +1774,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         "feedback: " + ("off (no notes are read, reloaded or waited for)" if flow.get("feedback") == "none"
                         else "human (the operator's notes, when a terminal is attached)"),
         "knowledge: " + (", ".join(knowledge) if knowledge else "off (the library is off)"),
-        "extract: " + (f"agent {_agent_name(extract)} (lessons from the record's rows, each citing its rows)" if isinstance(extract, dict)
+        "lessons: " + (f"agent {_agent_name(extract)} (lessons from the record's rows, each citing its rows)" if isinstance(extract, dict)
                        else "mined (facts mined from the record reach the prompts)" if extract == "mined"
                        else "off (nothing is mined from the record) -- or: mined, an agent"),
         "records: always on (every candidate, measurement and refusal, read back on resume)",

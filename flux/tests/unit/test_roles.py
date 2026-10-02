@@ -213,7 +213,10 @@ def _doc(**kw):
                     "measure": {"size": {"command": ["wc", "-c", "{artifact}"], "metrics_re": {"bytes": '(\\d+)'}}}}}
     flow = {}                                      # a role is said as its box of the flow (D629)
     for role, spec in (kw.pop("roles", None) or {}).items():
-        flow[{"orchestrator": "orchestrate", "generator": "generate"}.get(role, role)] = spec
+        if role == "extract":                      # D796: the record's lessons are knowledge's
+            flow["knowledge"] = {"lessons": spec}
+        else:
+            flow[{"orchestrator": "orchestrate", "generator": "generate"}.get(role, role)] = spec
     doc.update(kw)
     if flow:
         doc["flow"] = {**doc.get("flow", {}), **flow}

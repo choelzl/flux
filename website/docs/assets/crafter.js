@@ -18,12 +18,12 @@
   /** The registered DSE policies a document names by word (dse.py), and the model's half. */
   var DSE_POLICIES = ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"];
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
-  var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select"];
+  var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
   var NEVER = ["test", "calibrate"];
   /** The boxes a document may say a half for, in flow order (document.py FLOW_BOXES, less the
       ones the loop no longer takes as settings: analytical, simulation, records). */
   var FLOW_BOXES = ["validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "calibrate",
-                    "select", "feedback", "knowledge", "extract"];
+                    "select", "feedback", "knowledge"];
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
                       "prompt", "prompt_file", "point"];
 
@@ -88,7 +88,8 @@
     digest: { title: "Digest the papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt.",
       choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
         .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
-    extract: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round.",
+    // D796: the record's lessons, written into flow.knowledge as `lessons:` -- not a flow key of its own
+    lessons: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round, read with the library.",
       choices: [{ value: "off", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
         .concat(agentChoices("A coding agent writes lessons from the results")) },
@@ -103,6 +104,7 @@
     var out = {};
     FLOW_BOXES.forEach(function (b) { out[b] = BOXES[b].choices[0].value; });
     out.digest = "model";                                // D784: a box of the drawing, written into knowledge
+    out.lessons = "off";                                 // D796: likewise, as knowledge.lessons
     return out;
   }
 
@@ -127,7 +129,7 @@
       calibrate: { on: "between every pair of stages, on the record" },
       feedback: { human: "the operator's notes, when a terminal is attached", off: "no notes are read, reloaded or waited for" },
       knowledge: { "default": "on by default, its papers digested; `flow.knowledge: off` turns it off", none: "the library is off" },
-      extract: { off: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
+      lessons: { off: "nothing is mined from the record", mined: "facts mined from the record reach the prompts" },
       records: { on: "every candidate, measurement and refusal, read back on resume" },
     }[box] || {};
     if (box === "records") v = "on";
@@ -675,7 +677,9 @@
       if (kfiles.length) K.files = kfiles;
       var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
       if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.by = dg.slice(6);
-      if (kv === "none" || kv === "off") K = { off: true };
+      var ls = (state.flow || {}).lessons;                 // D796: the Learn box
+      if (ls && ls !== "off") K.lessons = typeof ls === "string" && ls.indexOf("agent:") === 0 ? { by: ls.slice(6) } : ls;
+      if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
     }
@@ -978,6 +982,11 @@
       if ("space" in d) { out.space = d.space; delete d.space; }
       if ("seeds" in d) { out.seeds = d.seeds; delete d.seeds; }
       if ("policy" in d) f.dse = d.policy; else if (Object.keys(d).length) f.dse = d; else delete f.dse;
+    }
+    if (f.knowledge && typeof f.knowledge === "object" && !Array.isArray(f.knowledge) && "lessons" in f.knowledge) {
+      f.lessons = toInner("lessons", f.knowledge.lessons);                  // D796: the Learn box
+      f.knowledge = Object.assign({}, f.knowledge); delete f.knowledge.lessons;
+      if (!Object.keys(f.knowledge).length) delete f.knowledge;
     }
     if ("knowledge" in f) {
       var kn = f.knowledge;
@@ -1524,7 +1533,7 @@
         at("test", "test", C, 3), at("crit-part", "critique", C + (W - SW) / 2, 4, true),
         at("measure", "measure", C, 5), at("calibrate", "calibrate", C, 6),
         at("select", "select", C, 7), at("crit-decision", "critique", S + (W - SW) / 2, 7, true),
-        at("records", "records", C, 8), at("extract", "extract", S, 8), at("digest", "digest", S, 3)];
+        at("records", "records", C, 8), at("lessons", "lessons", S, 8), at("digest", "digest", S, 3)];
       if (hasParts()) out.push(at("parts", "parts", L - 44, 4, true));
       return out;
     }
@@ -1561,8 +1570,8 @@
         { d: down("calibrate", "select") },
         { d: "M" + right("select") + " " + cy("select") + " H" + left("crit-decision") },
         { d: down("select", "records") },
-        { d: "M" + right("records") + " " + cy("records") + " H" + left("extract"), side: true },
-        { d: "M" + right("extract") + " " + cy("extract") + " H" + (LAYOUT.width - 12) + " V" + (cy("knowledge") + 6) + " H" + right("knowledge"), side: true },
+        { d: "M" + right("records") + " " + cy("records") + " H" + left("lessons"), side: true },
+        { d: "M" + right("lessons") + " " + cy("lessons") + " H" + (LAYOUT.width - 12) + " V" + (cy("knowledge") + 6) + " H" + right("knowledge"), side: true },
         { d: "M" + left("records") + " " + cy("records") + " H22 V" + cy("plan") + " H" + left("plan"), back: true,
           label: { x: 14, y: (cy("plan") + cy("records")) / 2, text: "at rest → explore", rotate: true } },
         // the refusals, red and dotted

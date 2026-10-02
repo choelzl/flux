@@ -15,7 +15,7 @@ flow:
   dse:         {by: codex}           # proposes points in `flow.dse.space`
   generate:    {by: opencode}        # writes the artifact (exists: D575)
   critique:    {by: claude}          # objects to a division, a part or a decision
-  extract:     {by: claude}          # mines lessons from the record, citing its rows
+  knowledge:   {lessons: {by: claude}}   # lessons mined from the record, citing its rows
   select:      {by: claude}          # chooses among designs that tie on the objective vector
   test: gate                            # never delegated (D460)
 ```

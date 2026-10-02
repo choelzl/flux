@@ -77,7 +77,7 @@ Say only what is yours; the rest is inferred.
     for the statement, contract and parts, one line per paper, and the coding agents' briefs.
   - `select: {finalists: N}`: how many designs reach the costliest stage.
   - `orchestrate: rules|given|model|tools` (`tools`: the model with tools), `plan: model`,
-    `critique: model`, `validate: model`, `extract: mined` (lessons mined from the record),
+    `critique: model`, `validate: model`, `knowledge: {lessons: mined}` (lessons mined from the record, or `{lessons: claude}`),
     `feedback: off` (no operator notes), `calibrate: off`.
   - Every box says who works it the same way (D795): a word (`rules`, `model`, `off`, ...), an
     agent's name (`critique: claude`), or `{by: <who>, ...}` with the box's settings and the
@@ -116,7 +116,7 @@ Say only what is yours; the rest is inferred.
 - Advanced keys: `parts` (pieces of one artifact: their names in order, `[decoder, datapath]`,
   or a map from each name to what it is, `{decoder: "...", datapath: "..."}`, or `decompose`),
   `subtasks`/`max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
-  package for what a document cannot say), `ladder`, `skills`, `brief`, `workload`.
+  package for what a document cannot say), `ladder`, `skills`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.dse.space`. A command

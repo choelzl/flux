@@ -82,7 +82,7 @@ agent turn with `tools/` and `notes/` and is kept across runs. Every agent of th
 (generate, prototype, every box) finds it as `workbench/` in its work directory, and its brief
 lists what the folder holds, one line per file. The agents build tools there (scripts that fit,
 tabulate or analyse) and keep notes (the method, what failed and why). This is knowledge built
-inside the loop, beside the lessons that `extract` draws from measured results between passes.
+inside the loop, beside the lessons that `knowledge.lessons` draws from measured results between passes.
 The loop provides the folder and never reads it. Commit it with the application if it is worth
 keeping.
 

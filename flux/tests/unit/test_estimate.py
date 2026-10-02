@@ -199,10 +199,10 @@ def test_the_flow_says_what_the_defaults_and_the_agents_do(tmp_path):
     assert _box(parts, "orchestrate").startswith(
         "orchestrate: default (the model picks the next part, the first one waiting without a model; rules pick")
     assert _box(lines, "knowledge") == "knowledge: library (on by default, its papers digested; `flow.knowledge: off` turns it off)"
-    assert _box(lines, "extract") == "extract: off (nothing is mined from the record) -- or: mined, an agent"
+    assert _box(lines, "lessons") == "lessons: off (nothing is mined from the record) -- or: mined, an agent"
     assert _box(lines, "records").startswith("records: always on")
-    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "extract": {"by": "opencode"}, "orchestrate": {"by": "opencode"}}}))
-    assert _box(agents, "extract") == "extract: agent opencode (lessons from the record's rows, each citing its rows)"
+    agents = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "knowledge": {"lessons": {"by": "opencode"}}, "orchestrate": {"by": "opencode"}}}))
+    assert _box(agents, "lessons") == "lessons: agent opencode (lessons from the record's rows, each citing its rows)"
     assert _box(agents, "orchestrate").startswith("orchestrate: agent opencode (a coding agent picks the next part")
     model = describe_flow(TaskSpec.from_dict({**one, "flow": {**one.get("flow", {}), "orchestrate": "tools"}}))
     assert _box(model, "orchestrate").startswith("orchestrate: tools (the model with tools picks the next part")

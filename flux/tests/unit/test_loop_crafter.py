@@ -145,10 +145,10 @@ out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES
                                                                  flow: c.FLOW_BOXES.includes(b), values: c.BOXES[b].choices.map(x => x.value)}]));
 out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
 out.defaults = {orchestrate: c.BOXES.orchestrate.choices[0].label, knowledge: c.BOXES.knowledge.choices[0].label,
-                extract: c.BOXES.extract.choices[0].value, flowBoxes: c.FLOW_BOXES};
+                lessons: c.BOXES.lessons.choices[0].value, flowBoxes: c.FLOW_BOXES};
 
 // the defaults, as `flux task check` says them: an otherwise empty problem with one check
-const BOXES_EXPLAINED = ["validate", "orchestrate", "plan", "generate", "critique", "calibrate", "feedback", "knowledge", "extract", "records"];
+const BOXES_EXPLAINED = ["validate", "orchestrate", "plan", "generate", "critique", "calibrate", "feedback", "knowledge", "lessons", "records"];
 const explained = st => Object.fromEntries(BOXES_EXPLAINED.map(b => [b, c.explain(b, st)]));
 s = c.base(); s.id = "defaults"; s.statement = "Anything."; s.checks.push(c.newCheck(s, "custom"));
 s.checks[0].params.command = "{python} {home}/golden.py";
@@ -373,9 +373,9 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert BUILT["fixed"] == {"test": True, "measure": True, "records": True, "select": False, "critique": False, "calibrate": False}
     assert "analytical" not in BUILT["defaults"]["flowBoxes"] and "simulation" not in BUILT["defaults"]["flowBoxes"]
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
-    assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["extract"] == "off"
+    assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["lessons"] == "off"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: off" in y and "critique: model" in y and "test: {agent" not in y
+    assert "knowledge: {\"off\": true, lessons: {by: claude}}" in y and "critique: model" in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
     p = BUILT["papers_by_agent"]
