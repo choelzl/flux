@@ -1214,6 +1214,8 @@ class PromptProblem(Problem):
         from .sources import from_file
 
         self._count += 1
+        if isinstance(item, str) and self.task.home and not Path(item).is_absolute():
+            item = str(Path(self.task.home) / item)            # D801: beside the document that names it
         cand, why = from_file(item, attempt,
                               name=f"{_leaf(self.task.id)}#{self._count}")
         if cand is None:
@@ -1328,6 +1330,9 @@ class PromptProblem(Problem):
             ordered = [admitted[n] for n in names if n in admitted]
             if not ordered or len(ordered) != len(names):
                 return None
+            command = (self.task.generator or {}).get("command")
+            if command:                                 # D801: the parent's generate composes them
+                return self._composed(dict(zip(names, ordered)), tuple(command), state)
             return Candidate(self.task.id, self.task.joiner.join(c.artifact for c in ordered),
                              knobs={"task": self.task.id, "subtasks": names})
         if not self.parts:
@@ -1337,6 +1342,29 @@ class PromptProblem(Problem):
             return None
         return Candidate(self.task.id, self.task.joiner.join(c.artifact for c in ordered),
                          knobs={"task": self.task.id, "parts": [c.name for c in ordered]})
+
+    def _composed(self, parts: dict[str, Candidate], command: tuple[str, ...], state: LoopState) -> Candidate | None:
+        """The whole, as the parent's `generate: {command}` writes it from its sub-loops'
+        decisions (D801): `{parts}` is a JSON file of each part's name and the path of its
+        artifact; the command writes `{artifact}`."""
+        workdir = Path(state.workdir or ".") / "compose"
+        workdir.mkdir(parents=True, exist_ok=True)
+        files = {}
+        for name, cand in parts.items():
+            f = workdir / f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', name)}{self.task.extension}"
+            f.write_text(cand.artifact)
+            files[name] = str(f)
+        (workdir / "parts.json").write_text(json.dumps(files, indent=1))
+        path = workdir / f"{_leaf(self.task.id)}{self.task.extension}"
+        path.unlink(missing_ok=True)
+        subs = {"artifact": str(path), "workdir": str(workdir), "name": _leaf(self.task.id), "parts": str(workdir / "parts.json"),
+                "part": "", "python": sys.executable, "home": self.task.home or ".", "point": ""}
+        run = self._run(command, subs, self.task.gate.timeout_s, "generate: compose")
+        if not run.ok or not path.is_file():
+            tail = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-300:]
+            state.not_established.append(f"the parts were not composed: the generate command exited {run.returncode}: {tail}")
+            return None
+        return Candidate(self.task.id, path.read_text(), knobs={"task": self.task.id, "subtasks": list(parts)})
 
     def cutoff(self, stage: str, scored, state):
         """The stage's declared cutoff (D454): a floor, a budget or a band around this run's best,
@@ -1618,8 +1646,8 @@ def model_use(task: "TaskSpec") -> str:
     reasons = []
     searched = flow.get("dse")
     by_command = isinstance(searched, dict) and "command" in searched     # D799: the command writes them
-    if not gen and not task.space and not by_command:
-        reasons.append("it writes the candidates")
+    if not gen and not task.space and not by_command and not task.subtasks and not task.split:
+        reasons.append("it writes the candidates")                   # D801: sub-loops write their own
     phases = flow.get("dse")
     specs = phases if isinstance(phases, list) else [phases] if phases else []
     if any((s if isinstance(s, str) else (s or {}).get("policy", "")) in ("llm", "model") for s in specs):

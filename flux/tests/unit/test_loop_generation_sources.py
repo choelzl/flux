@@ -253,10 +253,11 @@ def test_a_generator_the_document_cannot_mean_is_a_load_error():
     assert TaskSpec.from_dict(_doc(generator="model")).generator == {}, "the default, said out loud"
 
 
-def test_a_sub_task_inherits_who_drafts():
+def test_a_parents_generate_composes_and_is_not_the_sub_tasks_drafter():
+    """D801: with sub-tasks, the parent's `generate` composes their answers; a child drafts its own."""
     parent = _doc(generator={"command": ["true"]})
     parent.pop("parts")
     parent["subtasks"] = [{"id": "child", "statement": "the child's own artifact"}]
     task = TaskSpec.from_dict(parent)
-    assert task.subtasks[0].generator == {"command": ["true"]}
+    assert task.subtasks[0].generator == {} and task.generator == {"command": ["true"]}
     assert json.loads(json.dumps(task.to_dict()))["flow"]["generate"] == {"command": ["true"]}

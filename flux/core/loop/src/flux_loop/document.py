@@ -41,7 +41,7 @@ __all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "DOCUMENT_O
 #: a name neither is stays as written (a script's own braces are its business)
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
 BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                "prompt", "prompt_file", "point", "params", "history", "state")
+                "prompt", "prompt_file", "point", "params", "history", "state", "parts")
 
 
 class TaskError(ValueError):
@@ -216,6 +216,8 @@ class TaskSpec:
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
     #: policy searches; a world may compute its own instead (`space(state)`).
     space: dict[str, list] = field(default_factory=dict)
+    #: D801: the folder a sub-task was read from, as its parent wrote it ("" inline)
+    from_path: str = field(default="", compare=False)
     #: D798: knob -> (its written choices, a glob beside the document) for a knob whose choices
     #: also come from files -- read at each load; written back as said, not as found.
     space_from: dict[str, tuple[tuple, str]] = field(default_factory=dict, compare=False)
@@ -304,8 +306,11 @@ class TaskSpec:
         subtasks: list["TaskSpec"] = []
         if not split:
             for i, child in enumerate(raw_subtasks or ()):
+                if isinstance(child, str):                 # D801: a folder beside the document
+                    subtasks.append(_subtask_at(doc, child, base))
+                    continue
                 if not isinstance(child, dict):
-                    raise TaskError(f"subtasks[{i}] is a task document (an object)")
+                    raise TaskError(f"subtasks[{i}] is a folder beside the document, or a task document (an object)")
                 subtasks.append(cls.from_dict(_inherited(doc, child), base))
         if len({c.id for c in subtasks}) != len(subtasks):
             raise TaskError(f"subtask ids must be unique, got {[c.id for c in subtasks]}")
@@ -394,7 +399,8 @@ class TaskSpec:
                 body = read_input(path)
                 text = (text + "\n\n" if text else "") + f"FILE {path.name}:\n{body}"
             knowledge = text
-        gate = _gate(doc.get("gate")) if doc.get("gate") or not world else Gate()
+        # a parent whose work is its sub-loops judges nothing itself (D801)
+        gate = _gate(doc.get("gate")) if doc.get("gate") or not (world or subtasks or split) else Gate()
         stages = [_stage(i, r, world=bool(world)) for i, r in enumerate(doc.get("stages") or ())]
         if len({r.name for r in stages}) != len(stages):
             raise TaskError("stage names must be unique")
@@ -460,7 +466,7 @@ class TaskSpec:
                       else [p.name for p in self.parts]),
             **({"flow": dict(self.flow)} if self.flow else {}),
             **({"subtasks": "decompose", "max_subtasks": self.max_subtasks} if self.split else
-               {"subtasks": [c.to_dict() for c in self.subtasks]} if self.subtasks else {}),
+               {"subtasks": [c.from_path or c.to_dict() for c in self.subtasks]} if self.subtasks else {}),
             "gate": gate,
             "stages": [{"name": r.name,
                        **({"command": list(r.command)} if r.command else {}),
@@ -775,15 +781,50 @@ def _flat_point(p: dict[str, Any], space: dict[str, list]) -> dict[str, Any]:
 def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     """The child's document with what it does not say taken from the parent (D455), including
     a `world:` document's world, hooks, ladder and flow (D555). A child of a named
-    campaign is its own campaign, `<parent>/<child>`, in the same record."""
+    campaign is its own campaign, `<parent>/<child>`, in the same record. D801: `flow`,
+    `budget` and `params` merge key by key -- a child that says only `test:` keeps the
+    parent's stages, objectives' search and knowledge."""
     out = dict(child)
     for key in _INHERITED:
         if key not in out and key in parent:
             out[key] = parent[key]
+        elif key in ("flow", "budget", "params") and isinstance(parent.get(key), dict) and isinstance(out.get(key), dict):
+            out[key] = {**parent[key], **out[key]}
+    if parent.get("subtasks") and isinstance(out.get("flow"), dict) and "generate" in out["flow"] \
+            and out["flow"]["generate"] is (parent.get("flow") or {}).get("generate"):
+        out["flow"] = {k: v for k, v in out["flow"].items() if k != "generate"}   # D801: the parent's compose step
     out["_inherited"] = True                               # D775: the parent's fields as the loop keeps them
     if child.get("id") and (parent.get("_record") or parent.get("id")):
         out["_record"] = f"{parent.get('_record') or parent.get('id')}/{child['id']}"
     return out
+
+
+def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
+    """A sub-task in a folder beside the parent (D801): its `problem.yaml` says only what
+    differs; its id is the folder's name, its home the folder (its golden model, library/, ...)."""
+    import yaml
+
+    if base is None:
+        raise TaskError(f"subtasks: {rel!r} is a folder beside the document; an inline document has none")
+    home = (Path(base) / rel).resolve()
+    path = home / DOCUMENT_FILE
+    if not path.is_file():
+        raise TaskError(f"subtasks: no {DOCUMENT_FILE} in {rel!r}")
+    try:
+        raw = yaml.safe_load(path.read_text()) or {}
+    except yaml.YAMLError as exc:
+        raise TaskError(f"subtasks: {rel}/{DOCUMENT_FILE} is not valid YAML: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise TaskError(f"subtasks: {rel}/{DOCUMENT_FILE} is a mapping of keys")
+    if "id" in raw:
+        raise TaskError(f"subtasks: {rel}/{DOCUMENT_FILE} does not say its `id`: it is its folder's name (D786)")
+    from dataclasses import replace
+
+    try:
+        own = _lift({**raw, "id": home.name})              # its own surface, read before it inherits
+        return replace(TaskSpec.from_dict(_inherited(parent, own), home), from_path=rel)
+    except TaskError as exc:
+        raise TaskError(f"subtasks: {rel}: {exc}") from exc
 
 
 def _rig_for(task: TaskSpec, caller: "Roles | None") -> "Roles":

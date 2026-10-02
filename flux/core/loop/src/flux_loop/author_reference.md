@@ -122,7 +122,10 @@ Say only what is yours; the rest is inferred.
   revert_after, screen_only, structured, tool_hops, tool_result_chars, tools.
 - Advanced keys: `parts` (pieces of one artifact: their names in order, `[decoder, datapath]`,
   or a map from each name to what it is, `{decoder: "...", datapath: "..."}`, or `decompose`),
-  `subtasks`/`max_subtasks` (child documents, each its own loop), `world`/`params`/`hooks` (a Python
+  `subtasks` (child problems, each its own loop: folders beside the document, `[ops/recip, ops/exp]`,
+  each folder's `problem.yaml` saying only what differs -- its `flow`, `budget` and `params` merge key
+  by key over the parent's, so a child that says `test:` keeps the parent's stages; the parent's
+  `generate: {command: "... {parts} {artifact}"}` composes their answers into the whole, D801), `world`/`params`/`hooks` (a Python
   package for what a document cannot say), `ladder`, `skills`, `workload`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
