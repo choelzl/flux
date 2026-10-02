@@ -47,7 +47,7 @@ def test_a_document_is_digested_once_and_kept_in_the_store(tmp_path):
     assert [d["source"].rsplit("/", 1)[-1] for d in again] == ["PACE.pdf"], "a changed document is digested again, an unchanged one is not"
 
 
-def test_the_source_makes_the_missing_digests_when_the_run_has_a_model_and_says_so_otherwise(tmp_path, monkeypatch):
+def test_the_setup_makes_the_missing_digests_when_the_run_has_a_model_and_says_so_otherwise(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     import flux_knowledge.digest as dg
@@ -58,6 +58,7 @@ def test_the_source_makes_the_missing_digests_when_the_run_has_a_model_and_says_
     no_model = SimpleNamespace(request=SimpleNamespace(db=db), proposer=None, say=said.append)
     assert Digest().render(no_model) == ""                                     # nothing stored, no model to make it
     with_model = SimpleNamespace(request=SimpleNamespace(db=db), proposer=_Model(), say=said.append)
+    Digest().make_now(with_model)                  # the Setup's (D782): a prompt only reads
     text = Digest().render(with_model)
     assert text.startswith("[PACE.pdf]\nPACE.pdf: a method") and any("1 library document(s) to digest" in m for m in said)
     assert Digest().render(no_model) == text, "the next run reads the store, model or not"
@@ -83,6 +84,7 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     assert [s.key for s in prob.knowledge().sources] == ["mined", "digest"]
     assert any(line.startswith("knowledge: mined, digest") or "digest" in line for line in describe_flow(task, prob) if line.startswith("knowledge"))
     state = LoopState(request=LoopRequest(db=db), say=lambda _m: None, proposer=_Model(), feedback=None)
+    prob.digest(state)                             # the Setup's (D782: a prompt only reads)
     prefix = prob.prompt_prefix("a", state)
     assert "KEY POINTS FROM THE LIBRARY" in prefix and "PACE.pdf: a method" in prefix
     prompt, _schema = prob.plan_prompt(["a", "b"], state, None)
@@ -108,3 +110,26 @@ def test_the_cli_digests_and_shows(tmp_path, monkeypatch, capsys):
     assert main(["knowledge", "show", "--db", db]) == 0
     out = capsys.readouterr().out
     assert "== mentor/knowledge/library/PACE.pdf" in out and "PACE: a method" in out and "1 digest(s)" in out
+
+
+def test_a_setup_digests_a_few_its_own_papers_first_and_stops_when_the_digester_fails(tmp_path, monkeypatch):
+    """D782: a library of hundreds of files is digested a few a pass -- the loop's own papers
+    first, papers before sources -- and a digester that keeps failing ends the pass's share,
+    saying why, instead of failing on every file."""
+    docs = [(f"mentor/knowledge/library/src/f{i}.cpp", f"code {i}") for i in range(5)] + \
+           [("mentor/knowledge/library/z.pdf", "a shared paper"), ("/loop/library/mine.md", "the loop's own")]
+    db = str(tmp_path / "d.db")
+    said: list[str] = []
+    made = digest_library(db, _Model(), documents=docs, limit=3, first=["/loop/library"], say=said.append)
+    assert [d["source"].rsplit("/", 1)[-1] for d in made] == ["mine.md", "z.pdf", "f0.cpp"]
+    assert any("3 now, 4 in the passes after" in m for m in said), said
+    nxt = digest_library(db, _Model(), documents=docs, limit=3)
+    assert [d["source"].rsplit("/", 1)[-1] for d in nxt] == ["f1.cpp", "f2.cpp", "f3.cpp"], "the rest, a few a pass"
+
+    def broken(path, prompt):
+        raise RuntimeError("opencode exited 1: An authentication key is required")
+
+    said.clear()
+    assert digest_library(str(tmp_path / "e.db"), None, documents=docs, ask=broken, say=said.append) == []
+    assert sum("not digested" in m for m in said) == 3, "three tries, not one a file"
+    assert any("3 failures in a row" in m and "authentication key" in m for m in said), said

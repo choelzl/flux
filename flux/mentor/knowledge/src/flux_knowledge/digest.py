@@ -69,22 +69,43 @@ def digests_in(db: str) -> dict[str, dict[str, Any]]:
     return {d["source"]: d for d in rows if d.get("recipe") == RECIPE and d.get("source")}
 
 
+#: D782: what one Setup digests at most -- the rest in the passes after, so a library of
+#: hundreds of files never holds a pass up for hours.
+PER_PASS = 8
+#: papers before sources: what a designer reads first
+PAPERS = (".pdf", ".md", ".txt", ".tex", ".rst", ".html", ".htm")
+_GIVE_UP = 3                                   # failures in a row: the digester is not working today
+
+
 def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: None,
-                   documents: Iterable[tuple[str, str]] | None = None, ask: Any = None) -> list[dict[str, Any]]:
-    """Digest every library document the store does not hold yet (by content), one model
-    call each -- or one `ask(path, prompt) -> (text, by)` each (D771) -- and store the
-    digests. Returns the digests made this call."""
+                   documents: Iterable[tuple[str, str]] | None = None, ask: Any = None,
+                   limit: int | None = None, first: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """Digest the library documents the store does not hold yet (by content), one model call
+    each -- or one `ask(path, prompt) -> (text, by)` each (D771) -- and store the digests.
+    D782: at most `limit` this call (the rest in the next), those under `first` (the loop's own
+    folders) first and papers before sources; three failures in a row end the call, saying
+    why. Returns the digests made this call."""
+    import os
+
     have = digests_in(db)
     made: list[dict[str, Any]] = []
     docs = list(documents) if documents is not None else library_documents(index)
-    todo = [(p, t) for p, t in docs if not t.strip() or have.get(p, {}).get("hash") != _key(t)]
-    todo = [(p, t) for p, t in todo if t.strip()]
+    todo = [(p, t) for p, t in docs if t.strip() and have.get(p, {}).get("hash") != _key(t)]
     if not todo:
         say(f"  digest: every library document is digested ({len(have)})")
         return made
-    say(f"  digest: {len(todo)} library document(s) to digest, one {'agent' if ask else 'model'} call each")
+    from .library import absolute
+
+    mine = tuple(str(f).rstrip("/") + "/" for f in first)
+    todo.sort(key=lambda pt: (not absolute(pt[0]).startswith(mine) if mine else False,
+                              os.path.splitext(pt[0])[1].lower() not in PAPERS, pt[0]))
+    limit = len(todo) if limit is None else max(0, int(limit))
+    now, later = todo[:limit], len(todo) - min(limit, len(todo))
+    say(f"  digest: {len(todo)} library document(s) to digest, one {'agent' if ask else 'model'} call each"
+        + (f"; {len(now)} now, {later} in the passes after" if later else ""))
     store = _store(db)
-    for path, text in todo:
+    failed: list[str] = []
+    for path, text in now:
         name = path.rsplit("/", 1)[-1]
         cut = f" (the first {MAX_DOC_CHARS:,} characters of {len(text):,})" if len(text) > MAX_DOC_CHARS else ""
         prompt = BRIEF.format(name=name, cut=cut, text=text[:MAX_DOC_CHARS])
@@ -96,11 +117,16 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
             else:
                 got = (proposer.propose(prompt).text or "").strip()
         except Exception as exc:  # noqa: BLE001 -- one document's failure is not the library's
-            say(f"  digest: {name} not digested ({exc!s:.100})")
+            say(f"  digest: {name} not digested ({exc!s:.300})")
+            failed.append(f"{exc!s:.300}")
+            if len(failed) >= _GIVE_UP and not made:
+                say(f"  digest: {_GIVE_UP} failures in a row -- the rest wait for the next pass ({failed[-1]})")
+                break
             continue
         if not got:
             say(f"  digest: {name}: the model wrote nothing")
             continue
+        failed.clear()
         doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
                "model": by, "digest": got[:2000]}
         store.results.put_document("digest", doc)
@@ -129,10 +155,11 @@ class Digest:
     static = True
 
     def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = (), ask: Any = None,
-                 whole: bool = False) -> None:
+                 whole: bool = False, own: Iterable[str] = ()) -> None:
         self.db = db
         self.make = make
         self.whole = whole                                 # D774: the shared library's papers too, beside `folders`
+        self.own = tuple(str(f) for f in own)              # D782: the loop's own folders, digested first
         self.ask = ask                                     # D771: who digests, when not the run's model
         # D753: a loop's own papers (`library/`, `inputs/`): only those are digested and shown
         self.folders = tuple(str(f) for f in folders)
@@ -157,15 +184,23 @@ class Digest:
             return {}
         say = getattr(state, "say", None) or (lambda _m: None)
         documents = self._documents()
+        import os
+
         try:
-            made = digest_library(db, proposer, say=say, documents=documents, ask=self.ask)
+            limit = int(os.environ.get("FLUX_DIGEST_PER_PASS") or PER_PASS)
+        except ValueError:
+            limit = PER_PASS
+        try:
+            made = digest_library(db, proposer, say=say, documents=documents, ask=self.ask, limit=limit,
+                                  first=self.own)
         except Exception as exc:  # noqa: BLE001 -- the library stays what it is
             say(f"  digest: could not digest the library ({exc!s:.100})")
             return {"error": f"{exc!s:.300}"}
         have = digests_in(db)
         if documents is not None:
             have = {p: d for p, d in have.items() if p in {q for q, _t in documents}}
-        return {"digested": len(made), "in all": len(have),
+        total = len(documents) if documents is not None else None
+        return {"digested": len(made), "in all": len(have), **({"to do": total - len(have)} if total is not None else {}),
                 "new": ", ".join(d["source"].rsplit("/", 1)[-1] for d in made)[:600],
                 "by": ", ".join(sorted({d["model"] for d in made if d.get("model")}))}
 
@@ -173,8 +208,7 @@ class Digest:
         db = self.db or str(getattr(getattr(state, "request", None), "db", "") or "")
         if not db:
             return ""
-        documents = self._documents()
-        self.make_now(state)                               # nothing left to do after the Setup's
+        documents = self._documents()                      # D782: the Setup digests; a prompt only reads
         have = digests_in(db)
         if documents is not None:                          # D753: the loop's own papers' digests
             own = {p for p, _t in documents}

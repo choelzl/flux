@@ -150,7 +150,8 @@ flow:
   knowledge: {agent: opencode}  # or claude, codex, or a full agent spec; unsaid = the loop's model (D773)
 ```
 
-The configurator's Background reading box offers it as "a coding agent". Its form also takes a folder of papers and whether the model digests them (D781).
+The configurator's Background reading box offers it as "a coding agent". Its form also takes a folder of papers and whether the model digests them (D781). A Setup digests at most 8 new papers (`FLUX_DIGEST_PER_PASS`), the loop's own first;
+the rest follow in later passes, and a digester that fails three times in a row waits for the next pass (D782).
 
 ## The sandbox
 

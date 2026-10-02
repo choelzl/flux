@@ -591,7 +591,7 @@ class PromptProblem(Problem):
                     if whole or own:
                         from flux_knowledge import Digest
 
-                        lib.append(Digest(folders=folders if whole else own, whole=whole))
+                        lib.append(Digest(folders=folders if whole else own, whole=whole, own=own))
                     self._mentor = (Mentor(lib) if role is None else
                                     Mentor([*lib, *rest], budget=role.budget, share=role.share))
         return self._mentor
@@ -1676,8 +1676,9 @@ def _agent_digest(spec: Any):
             subs = {"prompt": brief, "prompt_file": str(work / "BRIEF.md"), "artifact": str(work / "digest.md"),
                     "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work)}
             turn = run_turn(agent, agent.argv, subs, workdir=work)
-            if not turn.ok:
-                raise RuntimeError(f"{agent.tool} exited {turn.rc}: {' '.join((turn.stderr or '').split())[-200:]}")
+            if not turn.ok:                       # D782: an agent that says why on stdout (OpenCode) is heard too
+                said = " ".join((turn.stderr or "").split())[-300:] or " ".join((turn.stdout or "").split())[-300:]
+                raise RuntimeError(f"{agent.tool} exited {turn.rc}: {said or 'nothing said'}")
             return turn.text, f"{agent.tool}" + (f" ({turn.about})" if turn.about else "")
         finally:
             shutil.rmtree(work, ignore_errors=True)

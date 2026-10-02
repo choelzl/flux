@@ -76,11 +76,12 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
     model = Model()
     digest = next(s for s in PromptProblem(task).knowledge().sources if type(s).__name__ == "Digest")
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
+    digest.make_now(state)                         # the Setup's (D782: a prompt only reads)
     text = digest.render(state)
     assert "log2(n) levels, fan-out 2" in text and "[adders.md]" in text
     assert len(model.prompts) == 1 and "adders.md" in model.prompts[0], "its own paper only, not the shared library"
     assert "other.md" not in text
-    digest.render(state)
+    digest.make_now(state)
     assert len(model.prompts) == 1, "once: the record keeps it"
 
 
