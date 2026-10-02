@@ -28,11 +28,3 @@ def test_params_are_typed_unknown_keys_refused_and_nulls_keep_the_default():
     with pytest.raises(ParamsError, match="params.lanes: 'many' is not int"):
         from_params(Req, {"lanes": "many"})
     assert from_params(Req, None) == Req()
-
-
-def test_a_world_reads_its_params_through_it():
-    from flux_macarray.world import MacRequest
-
-    assert MacRequest.from_params({"multipliers": ["booth4"], "lanes": 4}).multipliers == ("booth4",)
-    with pytest.raises(ParamsError, match="not the PE study's"):
-        MacRequest.from_params({"multiplier": ["booth4"]})

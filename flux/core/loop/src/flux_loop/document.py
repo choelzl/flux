@@ -216,6 +216,9 @@ class TaskSpec:
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
     #: policy searches; a world may compute its own instead (`space(state)`).
     space: dict[str, list] = field(default_factory=dict)
+    #: D798: knob -> (its written choices, a glob beside the document) for a knob whose choices
+    #: also come from files -- read at each load; written back as said, not as found.
+    space_from: dict[str, tuple[tuple, str]] = field(default_factory=dict, compare=False)
     when: dict[str, dict[str, list]] = field(default_factory=dict)   # knob -> {knob: choices} it moves under
     seeds: tuple[dict[str, Any], ...] = ()     # points measured before the walk; the rest from the first choices
     skills: tuple[str, ...] = ()                  # D588: skill folders (absolute), for the model and the agents
@@ -339,7 +342,7 @@ class TaskSpec:
             raise TaskError(
                 "a task divides into `parts` of ONE artifact or into `subtasks` that are each "
                 "their own loop, not both: with both, what the parent composes is ambiguous")
-        space, when = _space(doc.get("space"))
+        space, when, space_from = _space(doc.get("space"), base)
         seeds = _seeds(doc.get("seeds"), space)
         world = str(doc.get("world") or "")
         if world and ":" not in world:
@@ -440,7 +443,7 @@ class TaskSpec:
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
-            budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, seeds=seeds,
+            budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             world=world, hooks=hooks, record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
@@ -471,8 +474,7 @@ class TaskSpec:
                        "timeout_s": r.timeout_s} for r in self.stages],
             "objectives": [o.to_doc() for o in self.objectives],
             "knowledge": self.knowledge,
-            "budget": dict(self.budget), "params": dict(self.params), "space": {k: ({"values": list(v), "when": dict(self.when[k])} if k in self.when else list(v))
-                                                                        for k, v in self.space.items()},
+            "budget": dict(self.budget), "params": dict(self.params), "space": {k: _knob_doc(k, v, self.when.get(k), self.space_from.get(k)) for k, v in self.space.items()},
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
             **({"workload": self.workload} if self.workload is not None else {}),
             **({"world": self.world} if self.world else {}),
@@ -652,20 +654,33 @@ _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge
               "flow")
 
 
-def _space(raw: Any) -> tuple[dict[str, list], dict[str, dict[str, list]]]:
+def _knob_doc(knob: str, values: list, when: dict | None, found: tuple | None) -> Any:
+    """A knob as a document says it: its choices, `when` it moves, and the files it also takes (D798)."""
+    if found is None and not when:
+        return list(values)
+    out: dict[str, Any] = {"values": list(found[0]) if found is not None else list(values)}
+    if found is not None:
+        out["from"] = found[1]
+    if when:
+        out["when"] = dict(when)
+    return out
+
+
+def _space(raw: Any, base: Any = None) -> tuple[dict[str, list], dict[str, dict[str, list]], dict[str, tuple]]:
     """`space:` read and checked (D553): knob -> a non-empty list of scalar choices in the order
     written, or `{values: [...], when: {knob: [choices]}}` for a knob that only moves while
     those knobs hold one of those choices (elsewhere it stays at its first). A mapping without
     `values` is a component (D637): its knobs are `<component>.<knob>`, and `optional: true`
     adds `<component>.on` (off first), its knobs moving only while it is on."""
     if not raw:
-        return {}, {}
+        return {}, {}, {}
     if not isinstance(raw, dict):
         raise TaskError("space: a mapping of knob -> [choices], in a meaningful order")
+    found: dict[str, tuple] = {}
     flat: list[tuple[str, Any, dict[str, list]]] = []
     for k, vals in raw.items():
         k = str(k)
-        if isinstance(vals, dict) and "values" not in vals:
+        if isinstance(vals, dict) and "values" not in vals and "from" not in vals:
             comp = dict(vals)
             optional = comp.pop("optional", False)
             if not isinstance(optional, bool) or not (comp or optional):
@@ -681,10 +696,19 @@ def _space(raw: Any) -> tuple[dict[str, list], dict[str, dict[str, list]]]:
     for k, vals, implied in flat:
         cond = dict(implied)
         if isinstance(vals, dict):
-            if set(vals) - {"values", "when"} or not isinstance(vals.get("when"), dict):
-                raise TaskError(f"space.{k}: a list of choices, or {{values: [...], when: {{knob: [choices]}}}}")
-            cond.update({str(c): list(v) if isinstance(v, (list, tuple)) else [v] for c, v in vals["when"].items()})
-            vals = vals.get("values")
+            if set(vals) - {"values", "when", "from"} or not isinstance(vals.get("when", {}), dict):
+                raise TaskError(f"space.{k}: a list of choices, or {{values: [...], when: {{knob: [choices]}}, "
+                                "from: <files>}}")
+            cond.update({str(c): list(v) if isinstance(v, (list, tuple)) else [v] for c, v in (vals.get("when") or {}).items()})
+            if "from" in vals:                     # D798: the choices also files beside the document, by name
+                pattern = str(vals["from"])
+                said = list(vals.get("values") or [])
+                hits = sorted(Path(base).glob(pattern)) if base is not None and not Path(pattern).is_absolute() \
+                    else sorted(Path("/").glob(pattern.lstrip("/"))) if Path(pattern).is_absolute() else []
+                found[k] = (tuple(said), pattern)
+                vals = said + [h.stem for h in hits if h.is_file() and h.stem not in said]
+            else:
+                vals = vals.get("values")
         if not isinstance(vals, (list, tuple)) or not vals:
             raise TaskError(f"space.{k}: a non-empty list of choices")
         if any(isinstance(v, (dict, list)) for v in vals):
@@ -699,7 +723,7 @@ def _space(raw: Any) -> tuple[dict[str, list], dict[str, dict[str, list]]]:
             bad = [v for v in allowed if v not in out[c]]
             if bad:
                 raise TaskError(f"space.{k}.when.{c}: {bad} are not choices of {c}")
-    return out, when
+    return out, when, found
 
 
 def point_doc(point: dict[str, Any]) -> dict[str, Any]:

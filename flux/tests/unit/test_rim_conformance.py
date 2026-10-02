@@ -41,7 +41,11 @@ def test_the_document_loads_and_names_its_campaign_and_gate(app):
         assert "judge" in bound or "build" in bound, f"{app}: the world binds no gate"
     else:
         assert task.gate, f"{app}: no world and no gate command (D579)"
-        assert not (FLUX_ROOT / "applications" / app / "lib").exists(), f"{app}: a world-less document with a package beside it"
+        lib = FLUX_ROOT / "applications" / app / "lib"
+        if lib.exists():                           # D798: a package beside it is its phases' commands
+            assert not any((p / "world.py").exists() for p in (lib / "src").iterdir()), f"{app}: a world beside a world-less document"
+            assert app in " ".join(str(c.run) for c in task.gate) or any(
+                ".steps" in " ".join(st.command or ()) for st in task.stages), f"{app}: a package no phase runs"
     assert problem.objective(__import__("flux_loop").request_for(task, db=""))["study"] == app
 
 

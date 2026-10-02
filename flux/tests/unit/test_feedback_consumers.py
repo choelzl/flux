@@ -71,15 +71,3 @@ def test_imapping_model_free_run_still_records_the_note(tmp_path):
     study = run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0,
                       feedback=FakeChannel("try banked crossbars"))
     assert study.notes == ["try banked crossbars"]
-
-
-def test_macarray_guidance_leads_the_invention_prompt():
-    from flux_macarray.config import Shape
-    from flux_macarray.invent import build_prompt
-
-    shape = Shape(lanes=4, in_bits=8, w_bits=8)
-    block = "HUMAN GUIDANCE (typed):\n  * try a Booth recoding"
-    p = build_prompt("inv_a", shape, beat="900 MHz", tried=[], guidance=block)
-    assert p.startswith(block)
-    assert build_prompt("inv_a", shape, beat="900 MHz", tried=[]).startswith("Design ")
-

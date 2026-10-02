@@ -1,0 +1,36 @@
+# A model invents a signed multiplier for the MAC PE; every one that passes its golden vectors
+# is kept in out/invented/ and joins the PE study's space (problem.yaml) on its next run (D798).
+#     flux task run applications/macarray/invent.problem.yaml --passes 3
+
+statement: >-
+  Design a signed 8x8-bit integer multiplier for an 8-lane multiply-accumulate processing
+  element on a 7nm-class standard-cell library (ASAP7). The PE sums the products of all lanes
+  every cycle; the multiplier's delay and area set the array's frequency and size. Build the
+  product from partial products -- a Booth recoding (radix-4 or radix-8), a compression tree
+  (3:2 or 4:2 compressors), a modified Baugh-Wooley array, a recursive split -- some structure
+  with a reason to be faster or smaller than the behavioral `a * w`.
+contract: |-
+  ONE module named exactly `mult_inv`:
+    - input  logic signed [7:0]  a
+    - input  logic signed [7:0]  w
+    - output logic signed [15:0] p        p == a * w as signed integers, for EVERY input
+  Purely combinational: no clock, no reset, no registers. Verilog-2001 constructs only (wire,
+  assign, always @(*), case, +, -, <<, &, |, ^, ~); no size casts like 8'(x), no packages, no
+  functions, no generate, no $ system tasks. Not `assign p = a * w;`. Under 60 lines.
+language: systemverilog
+
+objectives:                     # measured inside the standard PE (behavioral tree, combinational)
+  - {metric: fmax_mhz, direction: maximize}
+  - {metric: area_um2, direction: minimize}
+
+flow:
+  test:
+    multiplier: {run: "{python} -m flux_macarray.steps mult-check {artifact} --keep {home}/out/invented", timeout_s: 300}
+  measure:
+    screen: {command: "{python} -m flux_macarray.steps mult-screen {artifact} --clock-ps 1000",
+             metrics: [fmax_mhz, area_um2, power_w, cell_count], needs: [yosys, openroad]}
+
+budget:
+  steps: 3
+  repair_attempts: 4
+  prototype: false

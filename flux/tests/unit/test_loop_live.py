@@ -113,16 +113,17 @@ def test_the_interconnect_mapping_document_runs_screen_only(tmp_path):
 @pytest.mark.heavy
 def test_the_macarray_document_screens_one_pe_end_to_end(tmp_path):
     """One PE of the space verified by Verilator, screened by Yosys and decided, via `dse: sweep` (D553)."""
-    doc = _doc("macarray", tmp_path, params={"multipliers": ["behavioral"], "reducers": ["tree"], "pipelines": [0],
-                                             "include_invented": False},
-               budget={"steps": 1, "passes": 1, "finalists": 0})
+    import yaml
+
+    doc = _doc("macarray", tmp_path, budget={"passes": 1, "batch": 4})
+    raw = yaml.safe_load(doc.read_text())                 # D798: the space is the document's own
+    raw["flow"]["orchestrate"]["space"] = {"multiplier": ["behavioral"], "reducer": ["tree"], "pipeline": [0]}
+    doc.write_text(yaml.safe_dump(raw, sort_keys=False))
     if not _tools_ok(doc):
         pytest.skip("verilator/yosys/openroad are not on PATH")
-    r = flux("task", "run", str(doc), "--db", str(tmp_path / "m.db"), "--screen-only",
-             "--replies", str(_replies(tmp_path, ["{}"])), timeout=1200)
+    r = flux("task", "run", str(doc), "--db", str(tmp_path / "m.db"), "--screen-only", timeout=1200)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
-    assert "1 of 1 correct" in r.stdout and "DECISION behavioral-tree-p0" in r.stdout
-    assert "no model: the space is measured" not in r.stdout                  # steps 1: no invention round asked
+    assert "DECISION behavioral-tree-pipeline=0" in r.stdout and "model: none needed" in r.stdout
 
 
 @pytest.mark.heavy

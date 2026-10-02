@@ -1,37 +1,37 @@
 # A MAC processing element: every multiplier, reducer and pipeline depth the generator spells,
-# plus multipliers a model invents. The world is `flux_macarray`.
-#     flux task run applications/macarray --db demo-macarray.db
+# plus the multipliers `invent.problem.yaml` kept (D798: the study is this document and the
+# commands of `flux_macarray.steps`, one per phase -- no world).
+#     flux task run applications/macarray/problem.yaml --db demo-macarray.db
+#     flux task run applications/macarray/invent.problem.yaml     # a model invents multipliers
 
 statement: >-
-  One MAC processing element, 8 lanes at the workload's precision: the smallest PE that
-  makes 1000 MHz placed on ASAP7, chosen from every combination of multiplier, reducer,
-  pipeline depth the generator can spell, plus what a model invents.
+  One MAC processing element, 8 lanes at the workload's precision (int8 x int8, accumulated):
+  the smallest PE that makes 1000 MHz placed on ASAP7, chosen from every combination of
+  multiplier, reducer and pipeline depth the generator can spell, plus every multiplier the
+  invention problem kept.
 language: systemverilog
 
-world: flux_macarray.world:World
-params:
-  lanes: 8
-  accumulate: true
-  target_mhz: 1000.0
-  preserve_fmax: false        # true: the incumbent's measured clock is the floor
-  multipliers: [behavioral, array, booth4, wallace]
-  include_invented: true
-  seed: 0
-  # also: workload, clock_period_ps, reducers, pipelines, problem
-
 objectives:
-  - {metric: fmax_mhz, direction: maximize, goal: 1000}
-  - {metric: area_um2, direction: minimize}
+  - {metric: fmax_mhz, direction: maximize, goal: 1000}      # the clock it must make
+  - {metric: area_um2, direction: minimize}                  # then the smallest
 
 flow:
-  orchestrate: sweep
+  orchestrate:                 # the search: every point, screened, then the finalists placed
+    policy: sweep
+    space:
+      multiplier: {values: [behavioral, array, booth4, wallace], from: "out/invented/*.sv"}
+      reducer: [tree, chain, csa]
+      pipeline: [0, 1, 2, 3]
+    seeds: [{multiplier: behavioral, reducer: tree, pipeline: 0}]    # the incumbent
+  generate: {command: "{python} -m flux_macarray.steps gen {artifact} {multiplier} {reducer} {pipeline} --invented {home}/out/invented"}
+  test:
+    verify: {run: "{python} -m flux_macarray.steps check {artifact} {pipeline}", timeout_s: 300}
   measure:
-    screen: {metrics: [fmax_mhz, area_um2], needs: [yosys, openroad]}
-    confirm: {metrics: [fmax_mhz, area_um2, power_w], needs: [openroad]}
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000 --module mac_pe
+    confirm: {command: "flux rtl measure {artifact} --stage place --clock-ps 1000 --module mac_pe --repair-design", timeout_s: 1800}
   select: {finalists: 4}
 
 budget:
-  steps: 4                    # 1 sweep + 3 invention rounds
-  repair_attempts: 6
   prototype: false
-  workers: 0                  # 0 = the machine decides
+  batch: 48                    # the whole space screened in one pass (3 reducers x 4 depths x the multipliers)
+  workers: 0                   # 0 = the machine decides

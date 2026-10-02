@@ -146,3 +146,22 @@ def test_every_display_names_every_limit(tmp_path):
     run_loop(prob, LoopRequest(steps=1, finalists=0, screen_only=True, prototype=False), proposer=model,
              log=lambda _m: None)
     assert "area_um2 at most 60" in model.prompts[0], "the DSE prompt names the second limit"
+
+
+def test_the_design_the_objectives_choose_always_climbs():
+    """D798: one finalist spread along fmax-vs-area took a curve end; the smallest design that
+    makes the clock -- what the objectives choose -- stayed screened and was never placed."""
+    from flux_loop import Candidate, LoopRequest, LoopState, PromptProblem, Scored, TaskSpec
+
+    doc = {"id": "pe", "statement": "s",
+           "objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000},
+                          {"metric": "area_um2", "direction": "minimize"}],
+           "flow": {"test": "true", "measure": {"screen": "echo x", "confirm": "echo x"}}}
+    for st in doc["flow"]["measure"]:
+        doc["flow"]["measure"][st] = {"command": "echo x", "metrics": ["fmax_mhz", "area_um2"]}
+    prob = PromptProblem(TaskSpec.from_dict(doc))
+    rows = [Scored(Candidate(n, n), "screen", {"fmax_mhz": f, "area_um2": a})
+            for n, f, a in (("small_slow", 880, 268), ("leader", 1204, 325), ("big_fast", 1400, 600))]
+    state = LoopState(request=LoopRequest(finalists=1), say=lambda _m: None, proposer=None, feedback=None)
+    front = prob.frontier(rows, state)
+    assert [s.name for s in prob.finalists(front, state, "confirm")] == ["leader"]

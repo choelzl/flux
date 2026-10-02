@@ -34,27 +34,3 @@ def test_head_to_head_withholds_anecdotes_and_ignores_multiknob_pairs():
     ]
     assert head_to_head(known) == []
     assert head_to_head(known, min_pairs=1)[0].winner == "booth4"
-
-
-def test_macarray_record_context_reads_duels_back(tmp_path):
-    from flux_macarray.world import record_context as _record_context
-    from flux_records import Records
-
-    db = str(tmp_path / "mac.db")
-    objective = {"study": "macarray", "shape": "test", "target_mhz": 1000.0,
-                 "preserve_fmax": False}
-    r1 = Records(db, objective)
-    for knobs, fmax in [
-        ({"multiplier": "booth4", "reducer": "tree", "pipeline": 1, "mapping": "delay"}, 1285.0),
-        ({"multiplier": "wallace", "reducer": "tree", "pipeline": 1, "mapping": "delay"}, 1150.0),
-        ({"multiplier": "booth4", "reducer": "tree", "pipeline": 0, "mapping": "delay"}, 1100.0),
-        ({"multiplier": "wallace", "reducer": "tree", "pipeline": 0, "mapping": "delay"}, 980.0),
-    ]:
-        r1.trial(knobs, f"k{fmax}", stage="confirm", strategy="enumerate",
-                 metrics={"fmax_mhz": fmax, "area_um2": 400.0}, analytic=False)
-    assert _record_context(r1) == ""                # first run: nothing to read back yet
-    r2 = Records(db, objective)
-    assert r2.resumed
-    ctx = _record_context(r2)
-    assert "WHAT THE RECORD SHOWS" in ctx and "booth4 beats wallace" in ctx
-    assert "pipeline" in ctx and "verdicts, not instructions" in ctx

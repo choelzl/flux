@@ -57,7 +57,9 @@ Say only what is yours; the rest is inferred.
     or a list of phases, or, with its space, `{policy: sweep, space: {...}, seeds: [...]}`.
     `space`: knob -> its choices, in a meaningful order. A knob that only matters for some
     choices of another: `{values: [...], when: {stack: [b, c]}}`; elsewhere it stays at its first
-    choice and is not measured twice. A component groups knobs: `bingo: {region_size: [...], ...}`
+    choice and is not measured twice. A knob whose choices also are files beside the document:
+    `{values: [a, b], from: "out/invented/*.sv"}` -- each file's name is one more choice, read at
+    each load (D798). A component groups knobs: `bingo: {region_size: [...], ...}`
     is `bingo.region_size`; with `optional: true` the search also switches it on or off (`sms.on`),
     so it picks the combination. A generator reads the whole point from `{point}`, a JSON file
     with components nested. `seeds`: points measured before the walk, e.g. the shipped defaults,

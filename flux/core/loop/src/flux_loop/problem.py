@@ -393,7 +393,14 @@ class OrchestratorRole(_Role):
             return sorted(front, key=cost)[:int(state.request.finalists)]
         from flux_frontier import spread as _spread
 
-        return _spread(front, state.request.finalists, cost=axes[1])
+        # D798: the design the objectives would choose on this stage always climbs -- a spread
+        # alone could send the curve's ends and leave the leader screened (macarray: the smallest
+        # PE that makes the clock stayed unplaced while a slower one was placed)
+        try:
+            lead, _why = self.decide(front, state)
+        except Exception:  # noqa: BLE001 -- a pool the objectives cannot rank: the spread alone
+            lead = None
+        return _spread(front, state.request.finalists, keep=[lead] if lead is not None else [], cost=axes[1])
 
     def review(self, stage: str, batch: list[Scored], state: LoopState) -> None:
         """What the orchestrator learns from a stage's results, once per measured batch
