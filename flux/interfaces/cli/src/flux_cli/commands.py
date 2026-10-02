@@ -183,6 +183,42 @@ def _library_line(task: Any, problem: Any) -> str:
     return head + (", used by: prompts, plan, agents" if used else ", not read by this world's knowledge")
 
 
+def pick_document(path: str) -> str | None:
+    """The document a `task run`/`task check` of a folder means (D787): the folder itself when it
+    holds one problem that loads; with several, the one the user picks at the terminal -- or,
+    with no terminal, None, the problems said."""
+    from pathlib import Path
+
+    from flux_loop import TaskError, load_task
+    from flux_loop.document import ManyDocuments, record_name
+
+    if not Path(path).is_dir():
+        return path
+    try:
+        load_task(path)
+        return path
+    except ManyDocuments as exc:
+        docs, said = exc.documents, str(exc)
+    except TaskError:
+        return path                                   # the command says why, as for one document
+    if not sys.stdin.isatty():
+        print(f"{said}: run one of them --\n" + "\n".join(f"  {d}" for d in docs))
+        return None
+    print(f"{path}: {len(docs)} problems here")
+    for i, d in enumerate(docs, 1):
+        print(f"  {i}. {d.name:<28} record {record_name(d)}")
+    while True:
+        try:
+            got = input(f"which one [1-{len(docs)}]? ").strip()
+        except EOFError:
+            return None
+        if got.isdigit() and 1 <= int(got) <= len(docs):
+            return str(docs[int(got) - 1])
+        hit = [d for d in docs if got in (d.name, d.name.split(".")[0])]
+        if len(hit) == 1:
+            return str(hit[0])
+
+
 def cmd_task_check(args: argparse.Namespace) -> int:
     """Validate a task document, list what it declares, and name any tool it needs that
     is not on PATH; runs nothing."""
@@ -386,7 +422,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         return 1
     for name, tools in problem.skipped_stages():
         print(f"warning: stage {name} will not run -- needs {', '.join(tools)}, not on PATH")
-    db = args.db or str(task.out_dir() / f"{task.id}.db")          # beside the document, under out/
+    db = args.db or str(task.out_dir() / f"{task.record or task.id}.db")          # beside the document, under out/
     overrides: dict[str, Any] = {"db": db}
     for flag, knob in (("steps", "steps"), ("repair", "repair_attempts"), ("tool_hops", "tool_hops"),
                        ("hop_share", "hop_share"), ("patience", "prototype_patience")):
@@ -619,7 +655,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
     def run_pass(task: Any, problem: Any, explore: int = 0) -> Any:
         if args.no_run:
             raise _NoRun()
-        overrides: dict[str, Any] = {"db": str(task.out_dir() / f"{task.id}.db"), "explore": explore}
+        overrides: dict[str, Any] = {"db": str(task.out_dir() / f"{task.record or task.id}.db"), "explore": explore}
         if args.steps is not None:
             overrides["steps"] = args.steps
         if args.screen_only:

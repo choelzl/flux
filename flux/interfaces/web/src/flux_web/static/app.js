@@ -416,8 +416,13 @@ async function startLoopOwned(name) {
   passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
   const checkBox = h("div", { class: "preflight" });
+  // D787: a loop with several problems (problem.yaml, NAME.problem.yaml): the start says which
+  const docs = (pre.documents || []).filter(d => d.ok);
+  const pick = docs.length > 1 ? h("select", {}, ...docs.map(d => h("option", { value: d.path, selected: d.path === pre.document },
+    `${d.path} — record ${d.record}`))) : null;
   const body = h("div", {},
     h("p", { class: "muted" }, "It resumes from its record: what was judged stays judged."),
+    pick ? h("label", { class: "stack" }, `Which problem (${docs.length} in this loop)`, pick) : "",
     checkBox,
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
     h("label", { class: "check" }, screen, "screen only (skip the costly stages)"),
@@ -434,18 +439,21 @@ async function startLoopOwned(name) {
       if (startBtn) { startBtn.textContent = "Start anyway"; startBtn.className = "danger solid"; }
     }
   };
-  if (pre.checked && pre.ok !== null) verdict(pre.ok, pre.output);
-  else {
-    said(null, pre.changed ? "The inputs changed since the last start: checking them in the sandbox…" : "Checking the inputs in the sandbox…", "");
-    if (startBtn) startBtn.disabled = true;
-    api(`/apps/${enc(name)}/check`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => said(false, "The check could not run: " + x.message, ""))
+  const runCheck = (why) => {
+    said(null, why, "");
+    if (startBtn) { startBtn.disabled = true; startBtn.textContent = "Start"; startBtn.className = "primary"; }
+    const q = pick ? `?document=${enc(pick.value)}` : "";
+    api(`/apps/${enc(name)}/check${q}`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => said(false, "The check could not run: " + x.message, ""))
       .finally(() => { if (startBtn) startBtn.disabled = false; });
-  }
+  };
+  if (pre.checked && pre.ok !== null && (!pick || pick.value === pre.document)) verdict(pre.ok, pre.output);
+  else runCheck(pre.changed ? "The inputs changed since the last start: checking them in the sandbox…" : "Checking the inputs in the sandbox…");
+  if (pick) pick.addEventListener("change", () => runCheck(`Checking ${pick.value} in the sandbox…`));
   const go = await waiting;
   if (!go) return false;
   const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: {
     passes: forever.checked ? null : (Number(passes.value) || 1), screen_only: screen.checked,
-    allow: allow.value.split(",").map(x => x.trim()).filter(Boolean) } });
+    allow: allow.value.split(",").map(x => x.trim()).filter(Boolean), document: pick ? pick.value : null } });
   toast(r.ok, "ok");
   return true;
 }

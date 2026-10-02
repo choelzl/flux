@@ -170,12 +170,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     task_sub = task_p.add_subparsers(dest="task_command", required=True)
     check_p = task_sub.add_parser("check", help="Validate a task document and its tools; run nothing.")
-    check_p.add_argument("file", help="Path to a .json/.yaml task document.")
+    check_p.add_argument("file", help="The problem's folder, or one of its documents (problem.yaml, NAME.problem.yaml).")
     check_p.add_argument("--no-sandbox", action="store_true",
                          help="Check on this machine, not in the sandbox (the check imports the document's code).")
     check_p.set_defaults(func=cmd_task_check)
     run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
-    run_p.add_argument("file", help="Path to a .json/.yaml task document.")
+    run_p.add_argument("file", help="The problem's folder, or one of its documents (problem.yaml, NAME.problem.yaml).")
     run_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, beside the document's own (repeatable).")
     run_p.add_argument("--db", default=None, help="Campaign record (default: <document dir>/out/<task id>.db).")
     run_p.add_argument("--steps", type=int, default=None, help="Planner steps (default: the document's).")
@@ -441,6 +441,15 @@ def main(argv: list[str] | None = None) -> int:
              else "task check" if args.command == "task" and getattr(args, "task_command", None) == "check"
              else "ask" if args.command == "ask" else "consult" if args.command == "consult" else "login" if args.command == "login"
              else "agent test" if args.command == "agent" else "")
+    if boxed in ("task run", "task check"):  # D787: a folder of several problems: which one
+        from .commands import pick_document
+
+        chosen = pick_document(args.file)
+        if chosen is None:
+            return 2
+        if chosen != args.file:
+            argv = [chosen if a == args.file else a for a in (list(argv) if argv is not None else sys.argv[1:])]
+            args.file = chosen
     if boxed and enabled(args):              # D680: the run re-launched in its container
         return launch(list(argv) if argv is not None else sys.argv[1:], args, boxed)
     db = getattr(args, "db", None)

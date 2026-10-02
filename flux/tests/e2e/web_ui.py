@@ -449,12 +449,24 @@ def flows(r: Run) -> None:
     r.step("variables and sharing", variables_and_sharing)
 
     def start_and_stop():
+        # D787: another problem beside problem.yaml: the dialog asks which, checked as picked
+        text = r.api("/apps/sw/file?path=problem.yaml")["body"]
+        r.check("another problem written", r.api("/apps/sw/file?path=fast.problem.yaml", "PUT", {"text": text})["status"] == 200)
         r.page("#/app/sw", "document.querySelector('.page-head')", "the loop")
         r.button("Start")
         b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good, dialog.dlg[open] .preflight .callout.bad')", timeout=60, what="the check before starting")
         r.check("the start dialog says the check", b.js("return !!document.querySelector('dialog.dlg[open] .preflight .callout.good')"),
                 b.js("return document.querySelector('dialog.dlg[open]').innerText"))
+        opts = b.js("return [...document.querySelectorAll('dialog.dlg[open] select option')].map(o => o.value + '|' + o.selected)")
+        r.check("the start dialog asks which problem", opts == ["problem.yaml|true", "fast.problem.yaml|false"], opts)
+        b.js("const s = document.querySelector('dialog.dlg[open] select'); s.value = 'fast.problem.yaml'; s.dispatchEvent(new Event('change')); return 1")
+        said = b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good') && document.querySelector('dialog.dlg[open] .preflight').innerText",
+                      timeout=60, what="the picked problem checked")
+        r.check("the picked problem is checked", "passes" in said, said)
+        b.js("const s = document.querySelector('dialog.dlg[open] select'); s.value = 'problem.yaml'; s.dispatchEvent(new Event('change')); return 1")
+        b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good')", timeout=60, what="problem.yaml checked again")
         r.dialog_button("Start")
+        r.check("the alternative removed", r.api("/apps/sw/file?path=fast.problem.yaml", "DELETE")["status"] == 200)
         b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.live')", timeout=30, what="running")
         b.wait("document.querySelector('.tree .node')", timeout=60, what="the task tree")
         r.check("Live shows the task tree", True)

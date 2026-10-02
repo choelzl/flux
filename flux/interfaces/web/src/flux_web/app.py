@@ -63,6 +63,7 @@ class RunOptions(BaseModel):
     passes: int | None = Field(default=1, ge=1, le=1000)
     screen_only: bool = False
     allow: list[str] = Field(default_factory=list)
+    document: str | None = None          # D787: which of the loop's problems, when it has several
 
 
 class Stop(BaseModel):
@@ -1229,13 +1230,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"ok": path}
 
     @app.post("/api/apps/{name}/check")
-    def check(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+    def check(name: str, owner: str | None = None, document: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         w, whose = editor(user, owner, name)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
-        doc = w.meta(name).get("document")
+        doc = document or w.meta(name).get("document")
+        if document and document not in [x["path"] for x in w.documents(name)]:
+            raise HTTPException(400, f"{name} has no problem {document!r}")
         home_ready(store, whose)
         env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop: its settings and logins (D769)
         adv = advanced(store, whose.name, name)
@@ -1248,7 +1251,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             ok, output = r.returncode == 0, (r.stdout + r.stderr)[-20000:]
         except subprocess.TimeoutExpired:
             ok, output = False, "the check ran past 600 s"
-        w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output})   # D693
+        w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output, "document": doc})   # D693
         return {"ok": ok, "output": output}
 
     @app.post("/api/apps/{name}/validate")
@@ -1281,7 +1284,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(404, str(exc)) from exc
         meta, digest = w.meta(name), w.inputs_digest(name)
         last = meta.get("last_check") or {}
-        return {"digest": digest, "changed": digest != meta.get("last_start_digest"),
+        if last.get("document", meta.get("document")) != meta.get("document"):
+            last = {}                                  # a check of another of its problems (D787)
+        return {"document": meta.get("document"), "documents": w.documents(name),"digest": digest, "changed": digest != meta.get("last_start_digest"),
                 "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
                 "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
                 "options": meta.get("last_options"), "paused": store.server_get("paused"),
@@ -1327,6 +1332,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
         if not meta.get("document"):
             raise HTTPException(409, "this loop has no problem document yet")
+        docs = w.documents(name)                   # D787: several problems: the start names one
+        if body.document:
+            if body.document not in [x["path"] for x in docs]:
+                raise HTTPException(400, f"{name} has no problem {body.document!r}")
+            meta = w.set_meta(name, document=body.document)
+        elif sum(x["ok"] for x in docs) > 1:
+            raise HTTPException(409, f"{name} has {sum(x['ok'] for x in docs)} problems: say which one to start ("
+                                + ", ".join(x["path"] for x in docs if x["ok"]) + ")")
         try:                                       # D751: the agents it hands work to, tested by its owner (D769)
             from flux_loop import load_task
             from flux_loop.agent_check import agents_used
@@ -1336,7 +1349,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             needs = []
         agents_gate(whose, needs)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
-            runs.start(whose, name, d, meta["document"], str(meta.get("id") or name), body.model_dump(), by=user)
+            from flux_loop.document import record_name
+
+            runs.start(whose, name, d, meta["document"], record_name(d / meta["document"]), body.model_dump(), by=user)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         w.set_meta(name, last_start_digest=w.inputs_digest(name), last_options=body.model_dump())    # D693

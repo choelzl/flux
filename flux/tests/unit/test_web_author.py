@@ -72,7 +72,7 @@ def test_an_agent_writes_a_new_loops_problem_from_a_description_and_files(server
     assert not (tmp / "data/users/bob/apps/z").exists(), "a refused start leaves no loop behind"
 
 
-def test_an_agent_revises_a_problem_and_says_what_changed(server, monkeypatch):
+def test_an_agent_revises_a_problem_keeping_its_name_and_says_what_changed(server, monkeypatch):
     _app, c, tmp = server
     c.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: as it was\n"))], headers=H)
     monkeypatch.setenv("FAKE_SLEEP", "1.0")
@@ -81,10 +81,10 @@ def test_an_agent_revises_a_problem_and_says_what_changed(server, monkeypatch):
     assert c.post("/api/apps/x/author", data={"prompt": "again", "author": "opencode"}, headers=H).status_code == 409
     st = _wait(c, "x")
     loop = tmp / "data/users/bob/apps/x"
-    assert st["ok"] and st["document"] == "problem.yaml" and not (loop / "x.problem.yaml").exists(), "a loop's document is its problem.yaml (D786)"
-    assert "revised by the agent" in (loop / "problem.yaml").read_text()
+    assert st["ok"] and st["document"] == "x.problem.yaml" and not (loop / "problem.yaml").exists(), "the loop keeps its document's name"
+    assert "revised by the agent" in (loop / "x.problem.yaml").read_text()
     assert "as it was" in st["before"] and "revised" in st["after"]
-    assert c.get("/api/apps/x").json()["document"] == "problem.yaml"
+    assert c.get("/api/apps/x").json()["document"] == "x.problem.yaml"
 
 
 def test_a_server_without_the_sandbox_says_so_to_its_runs():

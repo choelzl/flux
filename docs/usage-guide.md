@@ -54,7 +54,10 @@ flux ask --tui                                           # the same, from a setu
 
 A problem is a folder; its document is `problem.yaml` in it, and the folder's name is the
 problem's id -- the name of its record (`out/<id>.db`) -- so the document has no `id:` (D786).
-To ask something else, copy the folder. A document says what to make (`statement`, `contract`, `language`), what better means
+To ask something else, copy the folder -- or write `NAME.problem.yaml` beside `problem.yaml`:
+another problem of the same loop, with the same id and its own record `out/<id>.NAME.db` (D787).
+With several that load, `flux task run FOLDER` asks which (with no terminal it lists them; name
+the file to run one), and the web's Start dialog has a picker, each choice checked before it starts. A document says what to make (`statement`, `contract`, `language`), what better means
 (`objectives`), how much to spend (`budget`), and, under `flow`, each box of the loop -- who
 works it and its own settings (D775):
 

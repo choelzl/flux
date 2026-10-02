@@ -53,7 +53,7 @@ def test_files_follow_gitignore_and_never_show_git(tmp_path):
     assert c.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     _tree(tmp_path / "data/users/bob/apps/x", {".git/config": "[core]\n"})
     names = {f["path"] for f in c.get("/api/apps/x/files").json()}
-    assert "big.bin" not in names and ".git" not in names and {"check.py", ".gitignore", "problem.yaml"} <= names
+    assert "big.bin" not in names and ".git" not in names and {"check.py", ".gitignore", "x.problem.yaml"} <= names
     shown = {f["path"]: f["ignored"] for f in c.get("/api/apps/x/files", params={"ignored": True}).json()}
     assert shown["big.bin"] is True and shown["check.py"] is False and ".git" not in shown, ".git: never, even asked"
     assert c.get("/api/apps/x/file", params={"path": ".git/config"}).status_code in (400, 404)

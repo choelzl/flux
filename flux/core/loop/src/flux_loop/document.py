@@ -940,16 +940,75 @@ EXTENSIONS = {"systemverilog": ".sv", "verilog": ".v", "vhdl": ".vhd", "python":
 
 #: D786: a problem is a folder; its document is this file in it, and the folder's name is its id.
 DOCUMENT_FILE = "problem.yaml"
+#: D787: beside it, `NAME.problem.yaml` -- another problem of the same loop, its record `<id>.NAME`.
+ALT_SUFFIXES = (".problem.yaml", ".problem.yml")
+
+
+class ManyDocuments(TaskError):
+    """A folder holding several problems that load: the caller names one (D787)."""
+
+    def __init__(self, folder: Path, documents: list[Path]):
+        self.documents = documents
+        super().__init__(f"{folder}: {len(documents)} problems here ({', '.join(d.name for d in documents)}): name one")
+
+
+def documents_in(folder: str | Path) -> list[Path]:
+    """The problem documents of a folder (D787): its `problem.yaml` (or `problem.json`) first,
+    then each `NAME.problem.yaml`."""
+    f = Path(folder)
+    main = [f / n for n in (DOCUMENT_FILE, "problem.json") if (f / n).is_file()][:1]
+    return main + sorted(p for p in f.iterdir() if p.is_file() and p.name.endswith(ALT_SUFFIXES))
+
+
+def alt_name(path: str | Path) -> str:
+    """`NAME` of a `NAME.problem.yaml`: which of the folder's problems it is; '' for its `problem.yaml`."""
+    name = Path(path).name
+    for suffix in ALT_SUFFIXES:
+        if name.endswith(suffix) and name != suffix[1:]:
+            return name[: -len(suffix)]
+    return ""
+
+
+def record_name(path: str | Path) -> str:
+    """The record a document's runs keep (D787): the folder's name, `<folder>.<NAME>` for a
+    `NAME.problem.yaml` -- the file `out/<record>.db` and its campaign."""
+    p = Path(path)
+    folder, alt = p.resolve().parent.name, alt_name(p)
+    return f"{folder}.{alt}" if alt else folder
+
+
+def loadable(folder: str | Path) -> list[tuple[Path, str]]:
+    """Each document of a folder with what its loader says ('' when it loads)."""
+    out = []
+    for d in documents_in(folder):
+        try:
+            load_task(d)
+            out.append((d, ""))
+        except TaskError as exc:
+            out.append((d, str(exc)))
+    return out
 
 
 def load_task(path: str | Path) -> TaskSpec:
-    """A task from its folder (its `problem.yaml`) or the document file itself. The id is the
-    folder's name (D786): a document does not say it. Every way it can fail is a TaskError that
-    names the file (D590): a missing file, a syntax error with its line, a key no document has,
-    and whatever the document itself gets wrong."""
+    """A task from its folder or a document file. The id is the folder's name (D786): a document
+    does not say it. A folder with several problems (D787) loads the one that loads, and when
+    more than one does, raises ManyDocuments for the caller to ask which. Every way it can fail
+    is a TaskError that names the file (D590): a missing file, a syntax error with its line, a
+    key no document has, and whatever the document itself gets wrong."""
     p = Path(path)
     if p.is_dir():
-        p = p / DOCUMENT_FILE if (p / DOCUMENT_FILE).exists() or not (p / "problem.json").exists() else p / "problem.json"
+        docs = documents_in(p)
+        if not docs:
+            raise TaskError(f"{p}: no problem document here ({DOCUMENT_FILE}, or NAME.problem.yaml)")
+        if len(docs) > 1:
+            said = loadable(p)
+            good = [d for d, err in said if not err]
+            if len(good) > 1:
+                raise ManyDocuments(p, good)
+            if not good:
+                raise TaskError(said[0][1])
+            docs = good
+        p = docs[0]
     if p.suffix not in (".json", ".yaml", ".yml"):
         raise TaskError(f"{p}: a problem document is a .yaml, .yml or .json file")
     if not p.is_file():
@@ -971,19 +1030,20 @@ def load_task(path: str | Path) -> TaskSpec:
     if not isinstance(doc, dict):
         raise TaskError(f"{p}: a problem document is a mapping of keys (statement, language, flow, ...)")
     try:
-        return task_in(doc, p.parent)
+        return task_in(doc, p.parent, alt=alt_name(p))
     except TaskError as exc:
         raise TaskError(f"{p}: {exc}") from exc
 
 
-def task_in(doc: dict[str, Any], home: Path) -> TaskSpec:
-    """The task a document says in its folder `home`: the folder's name is its id (D786)."""
+def task_in(doc: dict[str, Any], home: Path, alt: str = "") -> TaskSpec:
+    """The task a document says in its folder `home`: the folder's name is its id (D786); `alt`,
+    the NAME of a `NAME.problem.yaml`, names its record `<id>.NAME` (D787)."""
     folder = Path(home).resolve().name
     if "id" in doc:
         raise TaskError(f"a document does not say its `id`: it is its folder's name ({folder}) (D786)")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", folder):
         raise TaskError(f"the folder's name {folder!r} is the problem's id: letters, digits, _, . or - (D786)")
-    return TaskSpec.from_dict({**doc, "id": folder}, base=home)
+    return TaskSpec.from_dict({**doc, "id": folder, **({"_record": f"{folder}.{alt}"} if alt else {})}, base=home)
 
 
 def request_for(task: TaskSpec, **overrides: Any) -> LoopRequest:

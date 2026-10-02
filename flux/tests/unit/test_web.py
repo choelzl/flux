@@ -70,7 +70,7 @@ def test_uploads_are_checked_and_users_are_apart(server):
     bob = _client(app, "bob", "another long secret")
     files = [("files", ("sw/sw.problem.yaml", b"statement: x\n")), ("files", ("sw/golden.py", b"def golden(a): return {}\n"))]
     r = bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H)
-    assert r.status_code == 200 and r.json()["document"] == "problem.yaml" and r.json()["id"] == "sw", r.text
+    assert r.status_code == 200 and r.json()["document"] == "sw.problem.yaml" and r.json()["id"] == "sw", r.text
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 400, "exists"
     assert bob.get("/api/apps/sw/file", params={"path": "golden.py"}).text.startswith("def golden")
     for bad in ("../../../etc/passwd", "/etc/passwd", "a/../../x"):
@@ -116,7 +116,7 @@ def test_an_admin_sees_every_application_read_only(server):
     assert [(a["owner"], a["name"]) for a in everyone] == [("bob", "x")]
     info = ada.get("/api/apps/x", params={"owner": "bob"}).json()
     assert info["owner"] == "bob" and info["mine"] is False
-    assert ada.get("/api/apps/x/file", params={"path": "problem.yaml", "owner": "bob"}).text == ""
+    assert ada.get("/api/apps/x/file", params={"path": "x.problem.yaml", "owner": "bob"}).text == ""
     assert bob.get("/api/apps/x", params={"owner": "ada"}).status_code == 403, "users read only their own"
     assert bob.get("/api/admin/apps").status_code == 403
 
@@ -155,11 +155,11 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
     files = [("files", ("x.problem.yaml", doc)), ("files", ("check.py", b"print('0 failing')\n")), ("files", ("bench.py", b"print('time_ms=1')\n"))]
     assert bob.post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     v = bob.get("/api/apps/x/document").json()
-    assert v["document"] == "problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["flow"]["test"])
+    assert v["document"] == "x.problem.yaml" and v["raw"]["params"] == {"n": 5} and "test" in json.dumps(v["normal"]["flow"]["test"])
     new = "statement: make x faster\nlanguage: python\n"
     r = bob.put("/api/apps/x/document", json={"text": new, "kept": ["params"]}, headers=H)
     assert r.status_code == 200, r.text
-    text = bob.get("/api/apps/x/file", params={"path": "problem.yaml"}).text
+    text = bob.get("/api/apps/x/file", params={"path": "x.problem.yaml"}).text
     assert "make x faster" in text and "Kept as written" in text and "n: 5" in text
     assert bob.put("/api/apps/x/document", json={"text": "params: {n: 1}\n", "kept": ["params"]}, headers=H).status_code == 400, \
         "a kept key the configurator also wrote is refused"

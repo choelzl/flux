@@ -89,8 +89,9 @@ class Workspace:
         doc = _pick_document(rels)
         if doc is None:
             raise WorkspaceError("no problem document among the files (problem.yaml)")
-        rels = [DOCUMENT_FILE if r == doc else r for r in rels]          # D786: a loop's document is its problem.yaml
-        doc = DOCUMENT_FILE
+        if not doc.endswith((".problem.yaml", ".problem.yml")) and doc != DOCUMENT_FILE:
+            rels = [DOCUMENT_FILE if r == doc else r for r in rels]      # D786: a document of another name is the problem.yaml
+            doc = DOCUMENT_FILE
         d.mkdir(parents=True, exist_ok=True)
         for rel, (_p, content) in zip(rels, files):
             target = d / rel
@@ -221,8 +222,18 @@ class Workspace:
         return d
 
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
-        """A loop from a document's text; whatever its file was called, it is the loop's problem.yaml (D786)."""
-        return self.create(name, [(DOCUMENT_FILE, text.encode())], replace=(self.root / name).exists())
+        """A loop from a document's text: its problem.yaml, or the NAME.problem.yaml it is called (D787)."""
+        doc = PurePosixPath(filename or "").name
+        doc = doc if doc.endswith((".problem.yaml", ".problem.yml")) else DOCUMENT_FILE
+        return self.create(name, [(doc, text.encode())], replace=(self.root / name).exists())
+
+    def documents(self, name: str) -> list[dict[str, Any]]:
+        """The loop's problems (D787): its problem.yaml and each NAME.problem.yaml, with whether
+        each loads and the record its runs keep."""
+        from flux_loop.document import loadable, record_name
+
+        d = self.app(name)
+        return [{"path": p.name, "record": record_name(p), "ok": not err, "error": err[:400]} for p, err in loadable(d)]
 
     def delete(self, name: str) -> None:
         shutil.rmtree(self.app(name))
