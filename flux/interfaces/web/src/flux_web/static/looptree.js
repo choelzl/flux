@@ -14,7 +14,8 @@
   /** One event of the journal into the model; "hello" (a new start) begins it afresh. Returns
       what the page may want to know besides: {reset} or {question}. */
   function apply(m, e) {
-    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; return { reset: true }; }
+    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.before = 0; return { reset: true }; }
+    if (e.ev === "window") { m.before = Number(e.before) || 0; return {}; }   // D759: passes left out before the window
     if (e.ev === "start") {
       var n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, fields: {}, kids: [], parent: null };
       m.nodes.set(e.id, n);
@@ -227,6 +228,11 @@
       if (whole.length) out.push(branch("whole", "Whole", "", whole));
     }
     if (setupLeaves.length) out.unshift(branch("setup", "Setup", "", setupLeaves));
+    if (m.before) {                                   // D759: a day-long start opens on its last passes
+      var earlier = branch("earlier", "Earlier", m.before + " pass(es) not loaded · load them", []);
+      earlier.earlier = true;
+      out.unshift(earlier);
+    }
     out.forEach(function (it) { if (it.why == null) it.why = ""; });
     var end = endLeaves(marks);
     var dec = end.filter(function (l) { return l.title === "Decision"; })[0];

@@ -1355,13 +1355,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _w, _whose, d, _run = loop_of(name, user, owner)
         return runs.notes(d / "runs")
 
-    async def _follow(path_of, start_after, offset: int, request: Request, kind: str):
+    async def _follow(path_of, start_after, offset: int, request: Request, kind: str, preface: tuple[str, ...] = ()):
         """Server-sent events: each new line of a file, as it grows, from byte `offset`. For the
         journal, `start_after()` is when the loop's latest start began: its tree, not the last."""
         from flux_loop.journal import read_events
 
         ino, offset = offset
         yield "retry: 3000\n\n"
+        for p in preface:                                      # D759: what the window left out, said first
+            yield p
         while True:
             if await request.is_disconnected():
                 return
@@ -1373,7 +1375,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                         offset = 0
                     ino = st.st_ino
                 if kind == "events":
-                    events, new = read_events(path, offset)
+                    events, new = read_events(path, offset, limit=4 << 20)       # D759: in slices
                     since = start_after()
                     for e in events:
                         if e.get("t", 0) >= since:
@@ -1403,19 +1405,42 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return None, 0
 
     @app.get("/api/apps/{name}/events")
-    async def events(name: str, request: Request, offset: str = "0", owner: str | None = None, user: User = Depends(user_of)):
+    async def events(name: str, request: Request, offset: str = "0", window: int = 0, owner: str | None = None,
+                     user: User = Depends(user_of)):
+        """The latest start's journal; `window` (D759): only its last that many passes, a first
+        `window` event saying how many came before -- a day-long run's tree opens at once."""
+        from flux_loop.journal import window_start
+
         _w, whose, _d, _run = loop_of(name, user, owner)
         latest = lambda: runs.latest(whose, name)                               # noqa: E731 -- a new start moves it
+        at, preface = _offset(request, offset), ()
+        path = runs.events_path(latest())
+        if window > 0 and at[1] == 0 and path and os.path.exists(path):
+            got = window_start(path, window)
+            if got is not None:
+                at = (os.stat(path).st_ino, got[0])
+                said = {"ev": "window", "before": got[1], "t": 0}
+                preface = (f"event: events\ndata: {json.dumps(said)}\n\n",)
         stream = _follow(lambda: runs.events_path(latest()), lambda: (latest() or {"started": 0})["started"] - 1,
-                         _offset(request, offset), request, "events")
+                         at, request, "events", preface)
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/log")
-    async def log(name: str, request: Request, offset: str = "0", owner: str | None = None, user: User = Depends(user_of)):
-        """The loop's one log, every start in it."""
+    async def log(name: str, request: Request, offset: str = "0", tail: int = 0, owner: str | None = None,
+                  user: User = Depends(user_of)):
+        """The loop's one log, every start in it; `tail` (D759): only its last that many bytes, a
+        first `skipped` event saying how many came before."""
         _w, _whose, d, _run = loop_of(name, user, owner)
         path = str(loop_files(d)["log"])
-        stream = _follow(lambda: path, lambda: 0, _offset(request, offset), request, "log")
+        at, preface = _offset(request, offset), ()
+        if tail > 0 and at[1] == 0 and os.path.exists(path) and os.path.getsize(path) > tail:
+            size = os.path.getsize(path)
+            with open(path, "rb") as fh:                        # from the first whole line of the tail
+                fh.seek(size - tail)
+                skip = size - tail + fh.read(64 * 1024).find(b"\n") + 1
+            at = (os.stat(path).st_ino, skip)
+            preface = (f"event: skipped\ndata: {json.dumps({'bytes': skip})}\n\n",)
+        stream = _follow(lambda: path, lambda: 0, at, request, "log", preface)
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/log/raw")

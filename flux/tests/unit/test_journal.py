@@ -120,3 +120,24 @@ def test_passes_mark_each_pass_and_why_the_run_ended(tmp_path):
     assert [m for m in marks if m[0] == "pass"] == [("pass", {"n": 1, "explore": 0}), ("pass", {"n": 2, "explore": 0}),
                                                    ("pass", {"n": 3, "explore": 0})]
     assert marks[-1] == ("ended", {"why": "3 passes done"})
+
+
+def test_a_long_starts_last_passes_are_found_from_the_end(tmp_path):
+    """D759: a day-long journal opens on its latest start's last passes, found reading backwards,
+    with how many came before; a start shorter than the window opens whole."""
+    from flux_loop.journal import window_start
+
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1})}]
+    rows += [{"t": 2, "ev": "hello"}]                                     # a new start
+    for n in range(1, 101):
+        rows += [{"t": 10 + n, "ev": "mark", "name": "pass", "why": json.dumps({"n": n, "explore": 0})},
+                 {"t": 10 + n, "ev": "start", "id": n, "parent": None, "name": "DSE: batch", "why": "x" * 300, "params": {}}]
+    p.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    at, before = window_start(str(p), 30)
+    assert before == 70
+    events, _end = read_events(str(p), at)
+    assert json.loads(events[0]["why"])["n"] == 71 and sum(e.get("name") == "pass" for e in events) == 30
+    assert window_start(str(p), 200) is None, "the start is shorter than the window"
+    events, end = read_events(str(p), 0, limit=500)
+    assert 0 < end <= 500 and events, "read in slices, each ending on a whole line"

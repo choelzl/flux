@@ -71,12 +71,13 @@ function offline(on) { if (offlineBar.hidden === on) offlineBar.hidden = !on; }
 /** A server-sent stream that outlives a dropped connection (D694). The browser reconnects by
     itself with the last event's id; when it gives up (a proxy's error page, a restarted server),
     the stream is opened again with that id, waiting longer each time, up to 30 s. */
-function followStream(url, event, onData, onState) {
+function followStream(url, event, onData, onState, onSkipped) {
   let es = null, last = null, closed = false, wait = 1000, timer = null;
   const say = (st) => { if (onState) onState(st); };
   const open = () => {
     es = new EventSource(last ? `${url}${url.includes("?") ? "&" : "?"}offset=${encodeURIComponent(last)}` : url);
     es.addEventListener(event, (m) => { if (m.lastEventId) last = m.lastEventId; onData(JSON.parse(m.data)); });
+    if (onSkipped) es.addEventListener("skipped", (m) => onSkipped(JSON.parse(m.data)));   // D759: what a tail left out
     es.onopen = () => { wait = 1000; say("live"); };
     es.onerror = () => {
       if (closed) return;
@@ -1764,8 +1765,21 @@ function logView(base, qs) {
     h("label", { class: "check" }, problems, "problems only"), h("label", { class: "check", title: "Each line's time (lines written since D732)" }, times, "times"),
     filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const pill = streamPill();
-  bar.append(pill.el);
-  const es = followStream(`${base}/log${qs}`, "log", add, pill.set);
+  // D759: a day-long run's log opens on its last 2 MB; the earlier lines on asking
+  const earlier = h("span", { class: "log-earlier small", hidden: true });
+  bar.append(earlier, pill.el);
+  const TAIL = 2 << 20;
+  const url = (all) => `${base}/log${qs}${qs ? "&" : "?"}tail=${all ? 0 : TAIL}`;
+  let es;
+  const open = (all) => {
+    es = followStream(url(all), "log", add, pill.set, (sk) => {
+      earlier.hidden = false;
+      earlier.replaceChildren(`${(sk.bytes / 1048576).toFixed(1)} MB of earlier lines not loaded · `,
+        h("button", { type: "button", class: "small", onclick: () => { es.close(); lines.length = 0; shown = []; partial = ""; seen = 0;
+          starts.length = 0; earlier.hidden = true; drawStarts(); render(); open(true); } }, "Load all"));
+    });
+  };
+  open(false);
   return { el: h("div", {}, bar, box), close: () => es.close(), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
            problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
@@ -1774,6 +1788,7 @@ function logView(base, qs) {
     graph (D723), the same tasks, selection and collapse either way. */
 function liveTree(base, qs, onQuestion) {
   const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
+  let loadAll = () => {};                           // D759: the passes a window left out
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
   let selected = null, selLeafKey = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
@@ -1879,12 +1894,13 @@ function liveTree(base, qs, onQuestion) {
       }
       const opened = q ? true : open.has(it.key) ? open.get(it.key) : (!collapse.checked || live || bad || itemHas(it, selected));
       return h("div", { class: "tnode" },
-        h("div", { class: `node branch ${state}`, onclick: () => { open.set(it.key, !opened); draw(); } },
+        h("div", { class: `node branch ${state}`, onclick: () => { if (it.earlier) { loadAll(); return; } open.set(it.key, !opened); draw(); },
+            title: it.earlier ? "Load every pass of this start" : null },
           h("span", { class: "caret" }, opened ? "▾" : "▸"),
           h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
           h("span", { class: "nm" }, it.title), it.why ? h("span", { class: "why" }, it.why) : "",
-          !opened ? h("span", { class: "kidsn" }, String(it.kids.length)) : "",
-          it.key === "end" ? "" : h("span", { class: "dur" }, dur(took))),
+          !opened && !it.earlier ? h("span", { class: "kidsn" }, String(it.kids.length)) : "",
+          it.key === "end" || it.earlier ? "" : h("span", { class: "dur" }, dur(took))),
         opened ? h("div", { class: "kids" }, it.kids.map(k => row(k, /^Pass /.test(it.title) ? it.why.split(" · ")[0] : ""))) : "");
     };
     treeBox.replaceChildren(...(items.length ? items.map(row) : [empty("Waiting for the run's first events…")]));
@@ -2188,7 +2204,14 @@ function liveTree(base, qs, onQuestion) {
   follow.addEventListener("change", draw);
   collapse.addEventListener("change", () => { open.clear(); draw(); });
   const pill = streamPill();
-  const es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
+  // D759: a day-long run's tree opens on its last 30 passes; "Earlier" loads the rest
+  const WINDOW = 30;
+  let es = followStream(`${base}/events${qs}${qs ? "&" : "?"}window=${WINDOW}`, "events", onEvent, pill.set);
+  loadAll = () => {
+    es.close();
+    LT.apply(mdl, { ev: "hello" }); open.clear(); selected = null; selLeafKey = null; dirty = true;
+    es = followStream(`${base}/events${qs}`, "events", onEvent, pill.set);
+  };
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
   const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
   const bar = h("div", { class: "toolbar" }, h("div", { class: "seg", role: "group", "aria-label": "View" }, modeBtns.tree, modeBtns.graph),

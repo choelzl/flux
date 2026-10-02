@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Any
 
-__all__ = ["Journal", "TAIL", "attach", "read_events"]
+__all__ = ["Journal", "TAIL", "attach", "read_events", "window_start"]
 
 TAIL = 4000
 _ATTACHED: dict[str, "Journal"] = {}
@@ -115,13 +115,14 @@ def attach(run_dir: str) -> Journal:
     return j
 
 
-def read_events(path: str, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
-    """The events from byte `offset` on and the offset after the last whole line (a follower
-    calls again with it)."""
+def read_events(path: str, offset: int = 0, limit: int | None = None) -> tuple[list[dict[str, Any]], int]:
+    """The events from byte `offset` on (at most `limit` bytes of them, D759: a day's journal is
+    read in slices, not whole) and the offset after the last whole line (a follower calls again
+    with it)."""
     try:
         with open(path, "rb") as fh:
             fh.seek(offset)
-            data = fh.read()
+            data = fh.read(limit) if limit else fh.read()
     except OSError:
         return [], offset
     end = data.rfind(b"\n")
@@ -134,3 +135,46 @@ def read_events(path: str, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
         except ValueError:
             pass
     return out, offset + end + 1
+
+
+
+def window_start(path: str, passes: int) -> tuple[int, int] | None:
+    """Where the latest start's last `passes` passes begin, read from the end backwards (D759): a
+    day-long journal is never read whole to open its latest passes. (byte offset, how many passes of
+    this start came before), or None when the start holds no more than that."""
+    PASS, HELLO = b'"ev": "mark", "name": "pass"', b'"ev": "hello"'
+    try:
+        size = os.path.getsize(path)
+        fh = open(path, "rb")
+    except OSError:
+        return None
+    with fh:
+        found: list[int] = []                                  # line starts of pass marks, newest first
+        end, carry = size, b""
+        while end > 0:
+            begin = max(0, end - (4 << 20))
+            fh.seek(begin)
+            block = fh.read(end - begin) + carry
+            cut = block.find(b"\n") + 1 if begin > 0 else 0     # a partial first line waits for the next block
+            carry, body = block[:cut], block[cut:]
+            base = begin + cut
+            hello = body.rfind(HELLO)
+            marks = []
+            i = body.find(PASS)
+            while i >= 0:
+                if hello < 0 or i > hello:
+                    marks.append(base + body.rfind(b"\n", 0, i) + 1)
+                i = body.find(PASS, i + len(PASS))
+            found.extend(reversed(marks))
+            if len(found) > passes:
+                at = found[passes - 1]
+                fh.seek(at)
+                try:
+                    n = int(json.loads(json.loads(fh.readline()).get("why") or "{}").get("n") or 0)
+                except (ValueError, AttributeError):
+                    n = 0
+                return at, max(0, n - 1)
+            if hello >= 0:
+                return None                                    # the start is shorter than the window
+            end = begin
+        return None
