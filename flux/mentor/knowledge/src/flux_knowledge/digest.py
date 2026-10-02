@@ -75,6 +75,29 @@ PER_PASS = 8
 #: papers before sources: what a designer reads first
 PAPERS = (".pdf", ".md", ".txt", ".tex", ".rst", ".html", ".htm")
 _GIVE_UP = 3                                   # failures in a row: the digester is not working today
+MIN_DIGEST_CHARS = 80                          # D785: shorter is no digest (a word, a fragment)
+
+
+def unwrapped(text: str) -> str:
+    """D785: a model that answers with a tool call written as text (`{"arguments": {"message":
+    "..."}}`, as Qwen coder through OpenCode does) -- its message, else the text as it is."""
+    import json
+
+    t = (text or "").strip()
+    if not t.startswith("{"):
+        return t
+    try:
+        doc = json.loads(t)
+    except ValueError:
+        return t
+    for _ in range(3):                             # {"arguments": {"message": ...}}, {"message": ...}, ...
+        if not isinstance(doc, dict):
+            break
+        for key in ("message", "text", "content", "answer", "summary"):
+            if isinstance(doc.get(key), str) and doc[key].strip():
+                return doc[key].strip()
+        doc = doc.get("arguments") or doc.get("input") or doc.get("parameters")
+    return t
 
 
 def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: None,
@@ -112,7 +135,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
         by = str(getattr(proposer, "model", "") or "")
         try:
             if ask is not None:
-                got, by = ask(path, prompt)
+                got, by = ask(path, prompt, text=text[:MAX_DOC_CHARS])
                 got = (got or "").strip()
             else:
                 got = (proposer.propose(prompt).text or "").strip()
@@ -123,8 +146,13 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
                 say(f"  digest: {_GIVE_UP} failures in a row -- the rest wait for the next pass ({failed[-1]})")
                 break
             continue
-        if not got:
-            say(f"  digest: {name}: the model wrote nothing")
+        got = unwrapped(got)
+        if len(got) < MIN_DIGEST_CHARS:                   # D785: a word or a fragment is not a digest
+            say(f"  digest: {name} not digested (the answer is {len(got)} characters: {got[:60]!r})")
+            failed.append(f"an answer of {len(got)} characters")
+            if len(failed) >= _GIVE_UP and not made:
+                say(f"  digest: {_GIVE_UP} failures in a row -- the rest wait for the next pass ({failed[-1]})")
+                break
             continue
         failed.clear()
         doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),

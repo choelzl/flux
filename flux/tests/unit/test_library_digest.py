@@ -28,7 +28,7 @@ class _Model:
     def propose(self, prompt, **kw):
         self.prompts.append(prompt)
         name = prompt.split("DOCUMENT `", 1)[1].split("`", 1)[0]
-        return Reply.of(f"{name}: a method\n- the number it states\n- a pitfall")
+        return Reply.of(f"{name}: a method\n- the number it states\n- a pitfall\n- the construct it uses, with the widths and the latency it reports, for a designer to reuse as stated")
 
 
 def test_a_document_is_digested_once_and_kept_in_the_store(tmp_path):
@@ -102,7 +102,7 @@ def test_the_cli_digests_and_shows(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(dg, "library_documents", lambda index=None, standard_id="library": [("mentor/knowledge/library/PACE.pdf", "the paper's text")])
     db = str(tmp_path / "d.db")
     replies = tmp_path / "r.json"
-    replies.write_text(json.dumps(["PACE: a method\n- 1 ULP at 16 segments"]))
+    replies.write_text(json.dumps(["PACE: a method\n- 1 ULP at 16 segments\n- the table size, the widths and the latency it reports, for a designer to reuse"]))
     assert main(["knowledge", "show", "--db", db]) == 1
     assert main(["knowledge", "digest", "--db", db, "--replies", str(replies)]) == 0
     out = capsys.readouterr().out
@@ -126,10 +126,29 @@ def test_a_setup_digests_a_few_its_own_papers_first_and_stops_when_the_digester_
     nxt = digest_library(db, _Model(), documents=docs, limit=3)
     assert [d["source"].rsplit("/", 1)[-1] for d in nxt] == ["f1.cpp", "f2.cpp", "f3.cpp"], "the rest, a few a pass"
 
-    def broken(path, prompt):
+    def broken(path, prompt, text=""):
         raise RuntimeError("opencode exited 1: An authentication key is required")
 
     said.clear()
     assert digest_library(str(tmp_path / "e.db"), None, documents=docs, ask=broken, say=said.append) == []
     assert sum("not digested" in m for m in said) == 3, "three tries, not one a file"
     assert any("3 failures in a row" in m and "authentication key" in m for m in said), said
+
+
+def test_an_answer_that_is_a_tool_call_or_a_fragment_is_no_digest(tmp_path):
+    """D785: Qwen coder through OpenCode answered with a tool call written as text -- its message
+    is the digest; a few characters are not one."""
+    import json
+
+    from flux_knowledge.digest import unwrapped
+
+    long = "PACE: piecewise-affine approximation; 16 segments reach 1 ULP; a 5-bit index, a 12-bit slope, 2 cycles"
+    assert unwrapped(json.dumps({"arguments": {"message": long}})) == long
+    assert unwrapped(json.dumps({"message": long})) == long and unwrapped(long) == long
+    assert unwrapped('{ "arguments": {') == '{ "arguments": {', "a fragment stays what it is"
+    answers = iter([json.dumps({"arguments": {"message": long}}), '{ "arguments": {'])
+    said: list[str] = []
+    made = digest_library(str(tmp_path / "d.db"), None, documents=[("a/PACE.pdf", "x"), ("a/other.pdf", "y")],
+                          ask=lambda p, prompt, text="": (next(answers), "opencode"), say=said.append)
+    assert [d["digest"] for d in made] == [long], "the message kept; the fragment not"
+    assert any("the answer is 16 characters" in m for m in said), said

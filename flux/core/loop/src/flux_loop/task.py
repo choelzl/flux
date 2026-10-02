@@ -1657,8 +1657,10 @@ def model_use(task: "TaskSpec") -> str:
 
 
 def _agent_digest(spec: Any):
-    """D771: `ask(path, prompt) -> (digest, by)` -- one coding agent turn per paper, in a scratch
-    directory of its own: the brief (the document's text with it) and where the file itself is."""
+    """D771: `ask(path, prompt, text) -> (digest, by)` -- one coding agent turn per paper, in a
+    scratch directory of its own. D785: the paper's text is a file there (`paper.txt`) the agent
+    reads with its tools, in pieces as it needs, not the brief itself -- a paper's 30,000 tokens
+    overflowed a model's context; the brief is the instructions and where the original is."""
     import shutil
     import tempfile
 
@@ -1666,12 +1668,16 @@ def _agent_digest(spec: Any):
 
     agent = agent_spec(spec)
 
-    def ask(path: str, prompt: str) -> tuple[str, str]:
+    def ask(path: str, prompt: str, text: str = "") -> tuple[str, str]:
         work = Path(tempfile.mkdtemp(prefix="flux-digest-"))
         try:
-            brief = (f"The document is the file {path} (read it with your tools if its text below is cut "
-                     "or garbled: a PDF's figures and tables). Do not write any file; answer with the key points only.\n\n"
-                     + prompt)
+            how = prompt.split("\nDOCUMENT `", 1)[0].strip().replace("the document below", "the document")   # no text
+            if text:
+                (work / "paper.txt").write_text(text)
+            brief = ((f"The document is `paper.txt` in your working directory: the text of {path}. Read it with "
+                      "your tools, in parts if it is long; open the original file for a table or a figure the text garbles. "
+                      if text else f"The document is the file {path}: read it with your tools. ")
+                     + "Do not write any file and call no tool to answer: reply with the key points as plain text.\n\n" + how)
             (work / "BRIEF.md").write_text(brief)
             subs = {"prompt": brief, "prompt_file": str(work / "BRIEF.md"), "artifact": str(work / "digest.md"),
                     "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work)}

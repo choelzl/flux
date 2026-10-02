@@ -71,7 +71,7 @@ def test_a_loops_own_papers_are_digested_once_by_its_model_on_their_own(tmp_path
 
         def propose(self, prompt):
             self.prompts.append(prompt)
-            return SimpleNamespace(text="Kogge-Stone prefix adder notes\nlog2(n) levels, fan-out 2")
+            return SimpleNamespace(text="Kogge-Stone prefix adder notes\nlog2(n) levels, fan-out 2\n- the construct it uses, with the widths and the latency it reports, for a designer to reuse as stated")
 
     model = Model()
     digest = next(s for s in PromptProblem(task).knowledge().sources if type(s).__name__ == "Digest")
@@ -112,7 +112,7 @@ def test_the_papers_are_digested_in_the_setup(tmp_path, monkeypatch):
     from flux_loop import PromptProblem
 
     asked = []
-    model = SimpleNamespace(model="m1", propose=lambda p: asked.append(p) or SimpleNamespace(text="adders\nlog2(n) levels"))
+    model = SimpleNamespace(model="m1", propose=lambda p: asked.append(p) or SimpleNamespace(text="adders\nlog2(n) levels\n- the construct it uses, with the widths and the latency it reports, for a designer to reuse as stated"))
     problem = PromptProblem(_adders(tmp_path, monkeypatch))
     assert problem.digesting()
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
@@ -134,8 +134,8 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     from flux_loop.agent_check import agents_used
 
     fake = tmp_path / "agent.py"
-    fake.write_text("import sys\nbrief = sys.stdin.read()\nassert 'adders.md' in brief and 'is the file' in brief\n"
-                    "print('Prefix adders, read by the agent\\nKogge-Stone: log2(n) levels')\n")
+    fake.write_text("import sys\nbrief = sys.stdin.read()\nassert 'adders.md' in brief and 'paper.txt' in brief\n"
+                    "print('Prefix adders, read by the agent\\nKogge-Stone: log2(n) levels' + ' -- and the widths, the latency and the area it reports' * 3)\n")
     spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
     task = _adders(tmp_path, monkeypatch, flow={"knowledge": {"agent": spec}})
     problem = PromptProblem(task)
@@ -168,7 +168,7 @@ def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, mon
     (tmp_path / "shared/caches.md").write_text("Caches: a victim cache of 4 lines removes most conflict misses. " * 10)
     (tmp_path / "loop").mkdir()
     fake = tmp_path / "agent.py"
-    fake.write_text("import sys\nb = sys.stdin.read()\nprint('digest of ' + ('caches.md' if 'caches.md' in b else 'other'))\n")
+    fake.write_text("import sys\nb = sys.stdin.read()\nprint('digest of ' + ('caches.md' if 'caches.md' in b else 'other') + ': a victim cache of 4 lines removes most conflict misses' * 3)\n")
     spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
     doc = {"id": "x",
            "statement": "a cache",
