@@ -588,8 +588,10 @@ class PromptProblem(Problem):
 
                     rest = [x for x in getattr(role, "sources", ()) if type(x).__name__ != "Digest"]
                     # D791: the whole library -- the shared papers and the loop's own, its own first --
-                    # digested whenever the library is on, by the model or `flow.knowledge.agent`
-                    lib.append(Digest(folders=folders, whole=True, own=own))
+                    # digested whenever the library is on, by the model or `flow.knowledge.agent`;
+                    # D793: only for a loop that reads them -- a sweep with no model has no prompt
+                    if model_use(self.task) or self.task.digest_by is not None:
+                        lib.append(Digest(folders=folders, whole=True, own=own))
                     self._mentor = (Mentor(lib) if role is None else
                                     Mentor([*lib, *rest], budget=role.budget, share=role.share))
         return self._mentor

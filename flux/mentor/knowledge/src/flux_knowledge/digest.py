@@ -102,7 +102,8 @@ def unwrapped(text: str) -> str:
 
 def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: None,
                    documents: Iterable[tuple[str, str]] | None = None, ask: Any = None,
-                   limit: int | None = None, first: Iterable[str] = ()) -> list[dict[str, Any]]:
+                   limit: int | None = None, first: Iterable[str] = (),
+                   stopped: Any = None) -> list[dict[str, Any]]:
     """Digest the library documents the store does not hold yet (by content), one model call
     each -- or one `ask(path, prompt) -> (text, by)` each (D771) -- and store the digests.
     D782: at most `limit` this call (the rest in the next), those under `first` (the loop's own
@@ -129,6 +130,10 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
     store = _store(db)
     failed: list[str] = []
     for path, text in now:
+        why = stopped() if stopped is not None else None
+        if why:                                           # D793: a stop does not wait for the library
+            say(f"  digest: stopped ({why}) -- the rest wait for the next start")
+            break
         name = path.rsplit("/", 1)[-1]
         cut = f" (the first {MAX_DOC_CHARS:,} characters of {len(text):,})" if len(text) > MAX_DOC_CHARS else ""
         prompt = BRIEF.format(name=name, cut=cut, text=text[:MAX_DOC_CHARS])
@@ -219,8 +224,12 @@ class Digest:
         except ValueError:
             limit = PER_PASS
         try:
+            try:
+                from flux_loop.ops import stop_requested as stopped
+            except ImportError:
+                stopped = None
             made = digest_library(db, proposer, say=say, documents=documents, ask=self.ask, limit=limit,
-                                  first=self.own)
+                                  first=self.own, stopped=stopped)
         except Exception as exc:  # noqa: BLE001 -- the library stays what it is
             say(f"  digest: could not digest the library ({exc!s:.100})")
             return {"error": f"{exc!s:.300}"}
