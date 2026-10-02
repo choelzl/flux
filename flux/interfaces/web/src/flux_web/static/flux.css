@@ -734,3 +734,9 @@ body:has(.composer) .toasts { bottom: 150px; }
 .drawer-sub { margin: 14px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .ask-fab.asking { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
 .composer-hist { border-bottom: none; border-top: 1px solid var(--line); margin-top: 8px; }
+.spark { display: inline-flex; align-items: flex-end; height: 16px; }
+.spark i { display: inline-block; background: var(--accent); border-radius: 1px; }
+.spark i.z { background: var(--line); }
+.why-cell { overflow-wrap: anywhere; max-width: 60ch; }
+.meter-cell { width: 120px; }
+td.num.bad { color: var(--bad); font-weight: 600; }

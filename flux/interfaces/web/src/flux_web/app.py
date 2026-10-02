@@ -1557,6 +1557,19 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         """The user's turns over all their loops (D694)."""
         return _user_usage(user)
 
+    @app.get("/api/admin/insights")
+    def admin_insights(days: int = 7, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Admin › Insights (D766): failures, usage by day, endpoints, network refusals, disk."""
+        from . import insights as ins
+
+        days = max(1, min(int(days), 60))
+        since = time.time() - days * ins.DAY
+        rows = ins.turns(store, runs)
+        res = resources(a)
+        return {"days": days, "failures": ins.failures(store, runs, since), "usage": ins.usage_by_day(rows, max(days, 7)),
+                "endpoints": ins.endpoints(rows, since), "network": ins.network(str(store.refusals_file), since),
+                "disk": ins.disk(store, res["loops"])}
+
     @app.get("/api/admin/usage")
     def all_usage(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return [_user_usage(u) for u in store.users()]

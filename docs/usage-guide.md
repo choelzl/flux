@@ -384,7 +384,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (`flux agent test <agent> --live` on the command line): a loop, a new loop's author or a question uses an
     agent only once its test passed for whoever starts it; `task check` says which agents a document needs.
   - **admin**: internal, and the admin pages.
-- **Admin** (tabs: Loops, Applications, Resources, Sandbox, Models and variables, Users, Audit):
+- **Admin** (tabs: Loops, Insights, Applications, Resources, Sandbox, Agents, Models and variables, Users, Audit):
+  - **Insights** (D766): over the last day, 7 or 30 days -- the starts that failed with why (their log's
+    words) and the agents' Tests that failed; turns, tokens and cost by user and by agent or model, a bar a
+    day, and the loops that used most; each model endpoint and agent with its turns, failures, median and
+    slow (95%) time and its last failure; the hosts the sandboxes refused, by which loops; the disk by user
+    (home, loops, the largest). All from what the server keeps already: nothing new is recorded for it.
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with
     what it asks and its size. **Use** makes one a loop of the admin's: its files hard linked
     (copied across disks), its record, log and workbench its own; an edit replaces a file rather

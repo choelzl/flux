@@ -742,13 +742,29 @@ def flows(r: Run) -> None:
         r.check("an ended session is said on the way to the login", "session ended" in seen, seen)
     r.step("error feedback", error_feedback)
 
+    def insights():
+        """D766: Admin › Insights -- the failed start above with its why, the agents' turns, the disk by user."""
+        r.login("ada")
+        r.page("#/admin/insights", "[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Disk by user')", "Admin › Insights")
+        cards = b.js("const o = {}; for (const c of document.querySelectorAll('#main .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
+        r.check("Insights: the failed start with why it stopped", "bob/broken" in cards.get("Failures", "") and "not on PATH" in cards.get("Failures", ""),
+                cards.get("Failures", "")[:300])
+        r.check("Insights: every card there", all(k in cards for k in ("Failures", "Usage", "Endpoints and agents", "Network refused", "Disk by user")), str(list(cards)))
+        r.check("Insights: the disk by user, each user", all(u in cards.get("Disk by user", "") for u in ("ada", "bob")), cards.get("Disk by user", "")[:300])
+        b.js("const s = document.querySelector('#main select[aria-label=\"Over the last\"]'); s.value = '30'; s.dispatchEvent(new Event('change')); return 1")
+        b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
+               "&& document.querySelectorAll('#main .card').length >= 5", timeout=15, what="30 days")
+        r.check("Insights: over 30 days", True)
+        r.clean("Admin › Insights")
+    r.step("insights", insights)
+
     def phone():
         """At a phone's width nothing scrolls sideways (D754): a list's rows stack, tabs and logs wrap."""
         b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 844})
         try:
             pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
                                           "#/app/sw/files", "#/app/sw/settings", "#/account")]
-            pages += [("ada", h) for h in ("#/admin", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
+            pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
             who = None
             for user, h in pages:
                 if user != who:
