@@ -252,8 +252,13 @@ class _Compiler:
             return out
         if isinstance(e, ast.IfExp):
             c = self.truth(self.expr(e.test, g, env), g)
-            return self.op("mux", c, self.expr(e.body, self.both(g, c, g), env),
-                           self.expr(e.orelse, self.both(g, self.negate(c, g), g), env), guard=g)
+            a = self.expr(e.body, self.both(g, c, g), env)
+            b = self.expr(e.orelse, self.both(g, self.negate(c, g), g), env)
+            if isinstance(a, list) or isinstance(b, list):          # D806: `p, q = (a, 1) if c else (1, a)`
+                if not (isinstance(a, list) and isinstance(b, list) and len(a) == len(b)):
+                    raise Unsupported(f"line {e.lineno}: the two sides give different numbers of values")
+                return [self.op("mux", c, x, y, guard=g) for x, y in zip(a, b)]
+            return self.op("mux", c, a, b, guard=g)
         if isinstance(e, (ast.Tuple, ast.List)):              # D804: a tuple is a row of values, as a table's row is
             vals = [self.expr(x, g, env) for x in e.elts]
             if any(isinstance(v, list) for v in vals):
@@ -271,8 +276,15 @@ class _Compiler:
             k = self.expr(e.slice, g, env)
             if isinstance(row, list) and self.is_const(k) and -len(row) <= self.nodes[k].value < len(row):
                 return row[self.nodes[k].value]
-            raise Unsupported(f"line {getattr(e, 'lineno', '?')}: only a table, or a row of a table of rows "
-                              "at a constant position, may be indexed")
+            if isinstance(row, list) and row and not self.is_const(k):
+                # D806: a tuple at a computed position, a multiplexer over its values (a negative
+                # position is not modelled: the measurement compares with design() and refuses it)
+                out = row[0]
+                for i in range(1, len(row)):
+                    out = self.op("mux", self.op("eq", k, self.const(i), guard=g), row[i], out, guard=g)
+                return out
+            raise Unsupported(f"line {getattr(e, 'lineno', '?')}: only a table or a tuple may be indexed"
+                              + (" (this position is outside it)" if isinstance(row, list) else ""))
         if isinstance(e, ast.Call):
             return self.call(e, g, env)
         raise Unsupported(f"line {getattr(e, 'lineno', '?')}: `{type(e).__name__}` is not spelled")
@@ -282,6 +294,10 @@ class _Compiler:
             return self.op("bitlen", self.expr(e.func.value, g, env), guard=g)
         if not isinstance(e.func, ast.Name) or e.keywords:
             raise Unsupported(f"line {e.lineno}: the call is not spelled")
+        if (e.func.id == "len" and len(e.args) == 1 and isinstance(e.args[0], ast.Name)
+                and e.args[0].id not in env and (e.args[0].id in self.tables or e.args[0].id in self.rows)):
+            t = e.args[0].id                                # D806: a module table's length, a constant
+            return self.const(len(self.tables[t] if t in self.tables else self.tables[column_name(t, 0)]))
         name, args = e.func.id, [self.expr(a, g, env) for a in e.args]
         if name == "len" and len(args) == 1 and isinstance(args[0], list):
             return self.const(len(args[0]))

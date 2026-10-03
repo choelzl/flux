@@ -60,7 +60,19 @@ CASES = {
         "        acc = acc * t + C[i]\n    return acc\n"
         "def design(a):\n    j, u = split(a)\n    return {'y': poly((C[j], 1, j), u) & 0xFFFF}\n",
         lambda a: {"y": (lambda j, u: 3 * j + u + j * u * u)(*((a >> 4, a & 15) if a > 200 else (a >> 5, a & 31))) & 0xFFFF}),
+    # D806: a choice between two tuples, a module table's `len`, a tuple at a computed position
+    "a conditional tuple, a table's len, a tuple at a computed position": (
+        "T = [3, 1, 4, 1, 5, 9, 2, 6]\n"
+        "def design(a):\n    s = 0\n    for i in range(len(T)):\n        s += T[i] * ((a >> i) & 1)\n"
+        "    p, q = (a, s) if a > 99 else (s, 7)\n    c = (5, p, q, 11)\n    return {'y': c[a & 3] + p}\n",
+        lambda a: _d806(a)),
 }
+
+
+def _d806(a: int) -> dict:
+    s = sum(t * ((a >> i) & 1) for i, t in enumerate([3, 1, 4, 1, 5, 9, 2, 6]))
+    p, q = (a, s) if a > 99 else (s, 7)
+    return {"y": (5, p, q, 11)[a & 3] + p}
 
 
 @pytest.mark.parametrize("case", sorted(CASES))
@@ -82,5 +94,11 @@ def test_what_is_not_spelled_says_why():
     with pytest.raises(Unsupported, match="different numbers of values"):
         spell("def f(v):\n    if v > 3:\n        return v, 1\n    return v\ndef design(a):\n    p, q = f(a)\n"
               "    return {'y': p}\n", list(PORTS8), rows, "m", table_functions)
+    with pytest.raises(Unsupported, match="different numbers of values"):
+        spell("def design(a):\n    p, q = (a, 1) if a > 3 else a\n    return {'y': p}\n", list(PORTS8), rows, "m",
+              table_functions)
+    with pytest.raises(Unsupported, match="disagrees with design"):   # a negative position: not modelled, caught
+        spell("def design(a):\n    c = (5, 6, 7, 8)\n    return {'y': c[(a & 3) - 2]}\n", list(PORTS8), rows, "m",
+              table_functions)
     with pytest.raises(Unsupported, match="does not take"):
         spell("def design(x):\n    return {'y': x}\n", list(PORTS8), rows, "m", table_functions)

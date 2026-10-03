@@ -498,7 +498,11 @@ flux rtl measure design.sv --stage synth --clock-ps 1000   # or place, route: AS
 ```
 
 `flux rtl test` exits 1 when the design fails and 3 when it does not compile. `flux rtl
-proto` prints where a prototype fails, grouped by the input's sign and exponent.
+proto` prints where a prototype fails, grouped by the input's sign and exponent. A prototype that
+passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
+returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper
+returning several values, `s, m, k = unpack(x)`, `(a, b) if c else (d, e)`, `len(T)`, a tuple read
+at a computed position (D804, D806). What it cannot spell is refused with the construct named.
 
 ## The IR and the evaluators
 
