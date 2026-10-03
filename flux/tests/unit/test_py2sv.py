@@ -50,6 +50,16 @@ CASES = {
         "    if hi > 3:\n        c = C[hi]\n    else:\n        c = C[7 - hi]\n"
         "    p, q = c[1] * lo, c[0] + c[-1]\n    return {'y': p + q}\n",
         lambda a: {"y": (lambda hi, lo: (2 * (hi if hi > 3 else 7 - hi) + 1) * lo + (hi if hi > 3 else 7 - hi) + 3)(a >> 5, a & 31)}),
+    # D804: a helper returns several values (a different tuple on each path), unpacked; a tuple
+    # built from table reads is passed to a helper that walks it by `len` -- whose own `C` is
+    # its argument, not the module's table of that name
+    "a helper's tuple, unpacked; a tuple as an argument": (
+        "C = [3 * k for k in range(16)]\n"
+        "def split(v):\n    if v > 200:\n        return v >> 4, v & 15\n    return v >> 5, v & 31\n"
+        "def poly(C, t):\n    acc = C[len(C) - 1]\n    for i in range(len(C) - 2, -1, -1):\n"
+        "        acc = acc * t + C[i]\n    return acc\n"
+        "def design(a):\n    j, u = split(a)\n    return {'y': poly((C[j], 1, j), u) & 0xFFFF}\n",
+        lambda a: {"y": (lambda j, u: 3 * j + u + j * u * u)(*((a >> 4, a & 15) if a > 200 else (a >> 5, a & 31))) & 0xFFFF}),
 }
 
 
@@ -66,5 +76,11 @@ def test_what_is_not_spelled_says_why():
         spell("def design(a):\n    while a > 3:\n        a -= 1\n    return {'y': a}\n", list(PORTS8), rows, "m", table_functions)
     with pytest.raises(Unsupported, match="negative"):
         spell("def design(a):\n    return {'y': ((a - 128) // 10) & 0xFFFF}\n", list(PORTS8), rows, "m", table_functions)
+    with pytest.raises(Unsupported, match="tuple of values used as one value"):
+        spell("def two(v):\n    return v, v\ndef design(a):\n    return {'y': two(a) + 1}\n", list(PORTS8), rows, "m",
+              table_functions)
+    with pytest.raises(Unsupported, match="different numbers of values"):
+        spell("def f(v):\n    if v > 3:\n        return v, 1\n    return v\ndef design(a):\n    p, q = f(a)\n"
+              "    return {'y': p}\n", list(PORTS8), rows, "m", table_functions)
     with pytest.raises(Unsupported, match="does not take"):
         spell("def design(x):\n    return {'y': x}\n", list(PORTS8), rows, "m", table_functions)

@@ -772,9 +772,12 @@ def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
             out[key] = parent[key]
         elif key in ("flow", "budget", "params") and isinstance(parent.get(key), dict) and isinstance(out.get(key), dict):
             out[key] = {**parent[key], **out[key]}
-    if parent.get("subtasks") and isinstance(out.get("flow"), dict) and "generate" in out["flow"] \
-            and out["flow"]["generate"] is (parent.get("flow") or {}).get("generate"):
-        out["flow"] = {k: v for k, v in out["flow"].items() if k != "generate"}   # D801: the parent's compose step
+    composes = (parent.get("flow") or {}).get("generate")
+    if parent.get("subtasks") and isinstance(out.get("flow"), dict) and isinstance(composes, dict) \
+            and "command" in composes and out["flow"].get("generate") is composes:
+        # D801: a parent's `generate: {command}` composes its sub-loops; D804: a model or an
+        # agent there drafts for them, and they inherit it like any box
+        out["flow"] = {k: v for k, v in out["flow"].items() if k != "generate"}
     out["_inherited"] = True                               # D775: the parent's fields as the loop keeps them
     if child.get("id") and (parent.get("_record") or parent.get("id")):
         out["_record"] = f"{parent.get('_record') or parent.get('id')}/{child['id']}"

@@ -3,7 +3,7 @@ container -- rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE`)
 
 The container is the host seen read-only: the system directories and `/nix/store` at their
 real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux source, the
-executables on PATH. Writable: the record's folder, the problem's `out/` and `workbench/`, the
+executables on PATH, and the program a `FLUX_<AGENT>_BIN` names (the file alone, D804). Writable: the record's folder, the problem's `out/` and `workbench/`, the
 places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
 cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
 agents' directories); and HOME (D744): the user's own Flux home,
@@ -35,7 +35,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ["HOME_IN", "IMAGE", "app_dir", "container_argv", "container_env", "enabled", "engine", "engine_cli", "flux_home", "in_sandbox",
+__all__ = ["HOME_IN", "IMAGE", "agent_programs", "app_dir", "container_argv", "container_env", "enabled", "engine", "engine_cli", "flux_home", "in_sandbox",
            "launch", "mounts_for", "relay_proxy", "seed_home"]
 
 #: A glibc base: the host's own libraries are mounted over it; only its shape is used.
@@ -202,6 +202,9 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
                     target = f.resolve()
                     if target.exists() and not any(str(target).startswith(s) for s in SYSTEM):
                         ro.append(str(target.parent))
+    for prog in agent_programs().values():                   # D804: the program an admin names, the file alone
+        if not any(prog.startswith(m + "/") for m in (*SYSTEM, *ro)):
+            ro.append(prog)
     app = app_dir(args, command)
     rw += [str(app / "tmp")]                                  # the application's own, nothing shared (D681)
     for flag in ("db", "out", "json"):
@@ -245,6 +248,20 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     rw = [p for p in rw if not (p in seen or seen.add(p))]
     ro = [p for p in ro if not (p in seen or seen.add(p))]
     return ro, rw
+
+
+def agent_programs() -> dict[str, str]:
+    """FLUX_<AGENT>_BIN -> the program it names, its links followed (D804): mounted read-only at
+    that path, the file alone -- the agents ship as one native file each, and the folder beside it
+    (Flux's own settings with the model's key, the real home) stays outside -- and named so inside,
+    where the link itself is not."""
+    out = {}
+    for k, v in os.environ.items():
+        if k.startswith("FLUX_") and k.endswith("_BIN") and v:
+            f = Path(os.path.expanduser(v))
+            if f.is_absolute() and f.is_file():
+                out[k] = str(f.resolve())
+    return out
 
 
 def _env() -> dict[str, str]:
@@ -373,6 +390,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         cmd += ["-v", f"{p}:{p}"]
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=HOME_IN, FLUX_SANDBOX_CLI=json.dumps(cli))
+    env.update(agent_programs())                              # D804: the programs at the paths mounted
     env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
     if not env.get("NODE_EXTRA_CA_CERTS"):                    # D722: Node/Bun trust their own roots only; the host's too
         bundle = next((b for b in (env.get("SSL_CERT_FILE", ""), *BUNDLES) if b and Path(b).is_file()), None)

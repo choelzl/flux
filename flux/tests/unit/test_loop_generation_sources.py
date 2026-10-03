@@ -260,4 +260,15 @@ def test_a_parents_generate_composes_and_is_not_the_sub_tasks_drafter():
     parent["subtasks"] = [{"id": "child", "statement": "the child's own artifact"}]
     task = TaskSpec.from_dict(parent)
     assert task.subtasks[0].generator == {} and task.generator == {"command": ["true"]}
+    # D804: a model or an agent there drafts for the sub-tasks: they inherit it
+    agent = _doc(generator={"by": "claude"})
+    agent.pop("parts")
+    agent["subtasks"] = [{"id": "child", "statement": "the child's own artifact"}]
+    drafted = TaskSpec.from_dict(agent)
+    assert drafted.subtasks[0].generator == {"agent": "claude"}
+    from flux_cli.commands import _drafted_by                # and `flux task check` says so
+
+    assert _drafted_by(drafted) == "its sub-loops, each by the coding agent `claude` unless its folder says otherwise"
+    assert _drafted_by(drafted.subtasks[0]) == "the coding agent `claude`"
+    assert _drafted_by(task) == "its sub-loops, composed by the generator command"
     assert json.loads(json.dumps(task.to_dict()))["flow"]["generate"] == {"command": ["true"]}

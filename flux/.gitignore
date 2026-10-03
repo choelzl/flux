@@ -8,3 +8,6 @@ __pycache__/
 # D578: what a run writes lives beside its document, under out/ -- the record, the decided
 # artifact, the cache sidecar, kept inventions -- and none of it is the repository's
 **/out/
+# D804: the agents' workbench beside a document (D677, D790) -- their notes and tools, kept from
+# run to run -- is the run's too
+**/workbench/

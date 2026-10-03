@@ -75,7 +75,7 @@ flow:
   select: {finalists: 2}
 ```
 
-There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
+There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801) -- a parent's `generate` that is a model or an agent (`generate: claude`) drafts for them instead, inherited like any box (D804). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`.
 
@@ -406,7 +406,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **The agent by default** (Admin › Models and variables, Account): who writes problems and answers
   questions unless chosen otherwise (opencode, claude, codex or model); a user's own over the
   admin's. **Program (admins):** the program each agent is (`FLUX_OPENCODE_BIN`, `FLUX_CLAUDE_BIN`,
-  `FLUX_CODEX_BIN`), for every run; its folder goes on the run's PATH, so the sandbox mounts it.
+  `FLUX_CODEX_BIN`), for every run; its folder goes on the run's PATH, so the sandbox mounts it. On the
+  command line (`flux.env`) the sandbox mounts the program itself, the file alone with its link followed,
+  and names it so inside (D804): a link in `~/.config/flux` works without the key beside it going in.
 - **Models (Admin › Models, Account):** a tab per tool (D721) -- Flux (its own model, and the agent by
   default), OpenCode, Claude Code, Codex, Other (Ollama's URL and model, OpenRouter's key); a tab with
   settings of its own is marked •, one Save covers them all. endpoint, model and key for Flux's own model calls and for

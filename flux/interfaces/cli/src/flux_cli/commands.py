@@ -332,12 +332,20 @@ def _roles_from(flags: list[str] | None) -> Any:
 
 
 def _drafted_by(task: Any) -> str:
-    """Who writes the candidates: the model unless the document says otherwise."""
+    """Who writes the candidates: the model unless the document says otherwise; a parent's are
+    its sub-loops' (D804: drafted by its model or agent, unless a folder says otherwise)."""
     spec = task.generator
+    if getattr(task, "subtasks", None):
+        if spec.get("command"):
+            return "its sub-loops, composed by the generator command"
+        who = f"the coding agent `{spec['agent']}`" if spec.get("agent") else "a model"
+        return f"its sub-loops, each by {who} unless its folder says otherwise"
     if spec.get("catalog"):
         return f"a catalog of {len(spec['catalog'])} design(s) that already exist (no model)"
     if spec.get("command"):
         return "the generator command (no model)"
+    if spec.get("agent"):
+        return f"the coding agent `{spec['agent']}`"
     return "a model"
 
 
@@ -347,7 +355,8 @@ def _roles_line(task: Any) -> str:
 
     said = dict(task.roles)
     if task.generator and "generator" not in said:
-        said["generator"] = "the document's own generator command/catalog"
+        said["generator"] = (f"the coding agent {task.generator['agent']}" if task.generator.get("agent")
+                             else "the document's own generator command/catalog")
     parts = []
     for role in ROLES:
         chosen = said.get(role)

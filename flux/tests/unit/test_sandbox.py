@@ -194,6 +194,31 @@ def test_a_path_asked_both_ways_is_writable(monkeypatch, tmp_path):
     assert str(tmp_path) in rw and str(tmp_path) not in ro
 
 
+def test_an_admins_agent_program_is_mounted_alone_and_named_inside(monkeypatch, tmp_path):
+    """D804: FLUX_CLAUDE_BIN names a program outside PATH -- through a link that sits beside the
+    model's key: the program itself is mounted read-only, the file alone (never the folder beside
+    it, nor the link's), and inside the variable names it at the path mounted."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    real = tmp_path / "ext" / "native-binary" / "claude"
+    real.parent.mkdir(parents=True)
+    real.write_text("#!/bin/sh\n")
+    real.chmod(0o755)
+    (real.parent / "other").write_text("x")
+    conf = tmp_path / "conf" / "flux"
+    conf.mkdir(parents=True)
+    (conf / "localai.key").write_text("k")
+    (conf / "claude").symlink_to(real)
+    monkeypatch.setenv("FLUX_CLAUDE_BIN", str(conf / "claude"))
+    monkeypatch.setenv("FLUX_CODEX_BIN", str(tmp_path / "missing"))        # not there: nothing mounted
+    ro, rw = sandbox.mounts_for(_args(tmp_path), "task run")
+    assert str(real) in ro
+    assert not any(p in (str(conf), str(conf / "claude"), str(real.parent), str(tmp_path / "missing")) for p in ro + rw)
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, eng="podman")
+    assert f"{real}:{real}:ro" in cmd
+    assert sandbox.container_env(cmd)["FLUX_CLAUDE_BIN"] == str(real)
+
+
 def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
     """D714: a `pip install` user's flux -- a venv, its interpreter, an editable install's source,
     anywhere on the disk -- is visible inside, and the container runs this flux by its interpreter."""
