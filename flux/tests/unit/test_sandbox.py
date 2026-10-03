@@ -194,6 +194,22 @@ def test_a_path_asked_both_ways_is_writable(monkeypatch, tmp_path):
     assert str(tmp_path) in rw and str(tmp_path) not in ro
 
 
+def test_a_sub_loop_reads_through_its_parent_and_writes_the_parents_out_and_workbench(monkeypatch, tmp_path):
+    """D802, D805: `flux task run nlu/ops/recip` loads through the parent and writes the parent's
+    `out/` (the record) and `workbench/`: the parent's folder is the one mounted, not the child's."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    top = tmp_path / "nlu"
+    (top / "ops" / "recip").mkdir(parents=True)
+    (top / "problem.yaml").write_text("statement: the operators\nlanguage: text\nsubtasks: [ops/recip]\n"
+                                      "flow:\n  test: \"true\"\n")
+    child = top / "ops" / "recip" / "problem.yaml"
+    child.write_text("statement: one operator\n")
+    ro, rw = sandbox.mounts_for(_args(tmp_path, file=str(child)), "task run")
+    assert str(top.resolve()) in ro
+    assert str(top.resolve() / "out") in rw and str(top.resolve() / "workbench") in rw
+    assert not (top / "ops" / "recip" / "out").exists() and not (top / "ops" / "recip" / "workbench").exists()
+
+
 def test_an_admins_agent_program_is_mounted_alone_and_named_inside(monkeypatch, tmp_path):
     """D804: FLUX_CLAUDE_BIN names a program outside PATH -- through a link that sits beside the
     model's key: the program itself is mounted read-only, the file alone (never the folder beside

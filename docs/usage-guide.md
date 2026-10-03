@@ -164,7 +164,8 @@ machine.
 - **It sees:** the host read-only, meaning the system, `/nix/store`, the flux source, the
   executables on PATH and the problem folder. The same tools run, OpenCode and Claude Code
   included.
-- **It writes:** the record's folder, the problem's `out/` and `workbench/`, and the
+- **It writes:** the record's folder, the problem's `out/` and `workbench/` (a sub-loop's in a folder: its
+  parent's, whose folder it reads through -- D805), and the
   application's cache `~/.cache/flux/apps/<id>/`. That cache is shared by the application's
   runs: `tmp/` holds its traces, `cache/` its caches. Tool scratch lives in the container's own
   `/tmp`, in memory and gone after the run (`FLUX_SANDBOX_TMP_SIZE` caps it).

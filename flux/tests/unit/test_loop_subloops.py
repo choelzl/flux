@@ -264,6 +264,11 @@ def test_sub_loops_in_folders_override_their_parent_box_by_box(tmp_path):
     assert "3" in " ".join(list(short.gate)[0].run) and "6" in " ".join(list(long_.gate)[0].run)
     assert short.record == "two/short" and not list(task.gate)
     assert task.to_dict()["subtasks"] == ["ops/short", "ops/long"], "written back as the folders"
+    # D805: one workbench for the parent and its sub-loops, as one out/ -- also run alone
+    wb = str((tmp_path / "two" / "workbench").resolve())
+    assert task.workbench == short.workbench == long_.workbench == wb
+    alone = load_task(tmp_path / "two" / "ops" / "short")
+    assert alone.workbench == wb and alone.out_dir() == tmp_path / "two" / "out"
 
 
 def test_the_parents_generate_composes_the_sub_loops(tmp_path):

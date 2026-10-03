@@ -231,8 +231,9 @@ class TaskSpec:
     #: coding agent's spec; None = the run's model.
     digest_by: Any = None
     #: The agents' workbench (D677, D790): `workbench/` beside the document, absolute; "" for an
-    #: inline document. Their tools and notes, kept across runs; the loop provides it and never
-    #: reads it. Where, like `home`, not what: not compared, not in the digest.
+    #: inline document; a sub-loop's in a folder, its parent's (D805), as its `out/` is. Their
+    #: tools and notes, kept across runs; the loop provides it and never reads it. Where, like
+    #: `home`, not what: not compared, not in the digest.
     workbench: str = field(default="", compare=False)
     #: The directory the document was loaded from ("" inline); every artifact of a run lives
     #: under `<home>/out/`, never beside the source (D578).
@@ -784,6 +785,15 @@ def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _with_workbench(task: "TaskSpec", where: str) -> "TaskSpec":
+    """`task` and its own sub-loops with the workbench `where` (D805): a parent's agents and its
+    sub-loops' share one -- recip's notes and tools are there for rsqrt -- and an operator's
+    folder stays what it says."""
+    from dataclasses import replace
+
+    return replace(task, workbench=where, subtasks=tuple(_with_workbench(c, where) for c in task.subtasks))
+
+
 def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
     """A sub-task in a folder beside the parent (D801): its `problem.yaml` says only what
     differs; its id is the folder's name, its home the folder (its golden model, library/, ...)."""
@@ -814,7 +824,8 @@ def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
                                for k, v in know.items()}
     try:
         own = _lift({**raw, "id": home.name})              # its own surface, read before it inherits
-        return replace(TaskSpec.from_dict(_inherited(parent, own), home), from_path=rel)
+        child = replace(TaskSpec.from_dict(_inherited(parent, own), home), from_path=rel)
+        return _with_workbench(child, str((Path(base) / "workbench").resolve()))
     except TaskError as exc:
         raise TaskError(f"subtasks: {rel}: {exc}") from exc
 

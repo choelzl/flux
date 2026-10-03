@@ -3,7 +3,8 @@ container -- rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE`)
 
 The container is the host seen read-only: the system directories and `/nix/store` at their
 real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux source, the
-executables on PATH, and the program a `FLUX_<AGENT>_BIN` names (the file alone, D804). Writable: the record's folder, the problem's `out/` and `workbench/`, the
+executables on PATH, and the program a `FLUX_<AGENT>_BIN` names (the file alone, D804). Writable: the record's folder, the problem's `out/` and `workbench/` (a sub-loop's,
+its parent's: D805), the
 places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
 cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
 agents' directories); and HOME (D744): the user's own Flux home,
@@ -174,6 +175,18 @@ def app_dir(args: Any, command: str) -> Path:
     return d
 
 
+def _top(doc: Path) -> Path:
+    """The folder a run of `doc` reads and writes under: the document's own, or for a sub-loop in
+    a folder its parent's -- the parent's document, knowledge and `out/` (D802), `workbench/` (D805)."""
+    try:
+        from flux_loop import load_task
+
+        wb = load_task(str(doc)).workbench
+        return Path(wb).parent if wb else doc.parent
+    except Exception:  # noqa: BLE001 -- a document the run itself will refuse: its own folder
+        return doc.parent
+
+
 def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     """(read-only, writable) host paths the command needs, each mounted at its own path."""
     # a merged-/usr host's /bin, /lib, ... are links into /usr: /usr covers them, and the root
@@ -225,15 +238,16 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
             ro.append(str(Path(s).resolve()))
     if command in ("task run", "task check"):
         doc = Path(args.file).resolve()
-        ro.append(str(doc.parent))
+        top = _top(doc)
+        ro.append(str(top))                                  # a sub-loop's: its parent's folder, read through it
         # D735: the papers the run reads -- the shared library where FLUX_LIBRARY moved it (the
         # loop's own `library/` is under its folder, mounted already)
         lib = os.environ.get("FLUX_LIBRARY")
         if lib and _exists(lib):
             ro.append(str(Path(lib).resolve()))
-        for sub in ("out", "workbench"):                     # the run's own, under the problem
-            (doc.parent / sub).mkdir(exist_ok=True)
-            rw.append(str(doc.parent / sub))
+        for sub in ("out", "workbench"):                     # the run's own, under the problem (D805: a sub-loop's, its parent's)
+            (top / sub).mkdir(exist_ok=True)
+            rw.append(str(top / sub))
     if command == "consult":                                 # D705: the loop read-only, the answer's folder writable
         ro.append(str(Path(args.loop).resolve()))
         out = Path(args.out).resolve()
