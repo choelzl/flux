@@ -30,7 +30,7 @@ def refusal_reason(source: str) -> str | None:
 
 def multiplier_golden(shape: Shape) -> "Golden":
     """The multiplier as a golden model: signed a x w -> p, checked on every input when the
-    operands total at most the harness's EXHAUSTIVE_BITS (D868), else with its shared vectors
+    operands total at most the harness's EXHAUSTIVE_MAX_BITS (D868, D882), else with its shared vectors
     (every corner pairwise, since sign combinations break multipliers, then random)."""
     from flux_codegen_rtl_harness import Golden
 

@@ -28,7 +28,7 @@ from .sequential_wrapper import (
     sequential_spec,
 )
 from .errors import CompileError, InvalidSpecError, explain_diagnostic
-from .golden import EXHAUSTIVE_BITS, Check, Golden, check_exhaustive, check_rtl, golden_vectors
+from .golden import EXHAUSTIVE_MAX_BITS, Check, Golden, check_rtl, golden_vectors
 from .lint import Lint, lint_rtl
 from .reply import LINT_PRAGMA, fenced_module, lint_relaxed, sv_refusal
 from .sweep import SweepSim, build_sweep_sim
@@ -37,7 +37,7 @@ from .synth import (SynthesisError, SynthesisResult, UnsupportedForSynthesisErro
                     synthesize_and_measure, unpacked_array_ports)
 
 __all__ = [
-    "EXHAUSTIVE_BITS", "Check", "Golden", "Lint", "check_exhaustive", "check_rtl", "golden_vectors", "lint_rtl",
+    "EXHAUSTIVE_MAX_BITS", "Check", "Golden", "Lint", "check_rtl", "golden_vectors", "lint_rtl",
     "generate_sequential_wrapper",
     "generate_gemm_wrapper",
     "gemm_cycles",

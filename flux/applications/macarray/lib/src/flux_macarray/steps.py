@@ -75,7 +75,9 @@ def _renamed(source: str) -> tuple[str, str]:
 
 
 def mult_check(args: argparse.Namespace) -> int:
-    from flux_codegen_rtl_harness import EXHAUSTIVE_BITS, check_exhaustive, check_rtl, lint_relaxed
+    import dataclasses
+
+    from flux_codegen_rtl_harness import EXHAUSTIVE_MAX_BITS, check_rtl, lint_relaxed
 
     from .invent import multiplier_golden, refusal_reason
 
@@ -87,11 +89,11 @@ def mult_check(args: argparse.Namespace) -> int:
         return 3
     shape = _shape(args)
     golden = multiplier_golden(shape)
-    # D868: every input when the product is small enough (int8 x int8: 65,536 rows, ~10 s); a
-    # sample passed a multiplier wrong only where a == 37 and w[2:0] == 3
-    got = (check_exhaustive(source, golden, module=INVENTED_MODULE, relaxed=True)
-           if shape.in_bits + shape.w_bits <= EXHAUSTIVE_BITS
-           else check_rtl(source, golden, module=INVENTED_MODULE, relaxed=True))
+    # D868: every input when the product is small enough (int8 x int8: 65,536 rows); a
+    # sample passed a multiplier wrong only where a == 37 and w[2:0] == 3. The table bench (D865) runs them.
+    if shape.in_bits + shape.w_bits <= EXHAUSTIVE_MAX_BITS:
+        golden = dataclasses.replace(golden, exhaustive=True)
+    got = check_rtl(source, golden, module=INVENTED_MODULE, relaxed=True, timeout_s=300)
     if not got.ok:
         print(got.why)
         print("1 failing")

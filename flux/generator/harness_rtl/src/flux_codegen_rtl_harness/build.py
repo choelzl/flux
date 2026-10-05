@@ -113,28 +113,3 @@ def compile_and_run(
         shutil.rmtree(work_dir, ignore_errors=True)
 
     return result
-
-
-def run_bench(module_source: str, testbench_sv: str, *, files: dict[str, str] | None = None,
-              timeout_s: float = 120.0) -> str:
-    """A caller's own `testbench.sv` (top `testbench`) against `module_source`, same Verilator
-    invocation as `compile_and_run` but no trace: the run's stdout. `files` are data files the
-    bench reads ($readmemh), by name. A Verilator rejection raises `CompileError`."""
-    work_dir = Path(tempfile.mkdtemp(prefix="flux-rtl-bench-"))
-    try:
-        (work_dir / "dut.sv").write_text(_normalized(module_source))
-        (work_dir / "testbench.sv").write_text(testbench_sv)
-        for name, text in (files or {}).items():
-            (work_dir / name).write_text(text)
-        build_proc = subprocess.run(
-            ["verilator", "--binary", "--build", "--timing", "-Wall", "-Wno-DECLFILENAME", "-Wno-UNUSEDSIGNAL",
-             "-Wno-UNUSEDPARAM", "-j", "1", "testbench.sv", "dut.sv", "--top-module", "testbench"],
-            capture_output=True, text=True, cwd=work_dir, timeout=timeout_s,
-        )
-        if build_proc.returncode != 0:
-            raise CompileError(build_proc.stderr, returncode=build_proc.returncode)
-        run_proc = subprocess.run([str(work_dir / "obj_dir" / "Vtestbench")], capture_output=True, text=True,
-                                  cwd=work_dir, timeout=timeout_s)
-        return run_proc.stdout
-    finally:
-        shutil.rmtree(work_dir, ignore_errors=True)
