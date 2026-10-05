@@ -1005,6 +1005,22 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
         return out
 
+    def _since(designs: list[dict[str, Any]], started: Any) -> int:
+        """The designs first measured since the loop's latest start (D837)."""
+        from datetime import datetime
+
+        def at(s: Any) -> float:
+            try:
+                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                return 0.0
+
+        try:
+            t0 = float(started)
+        except (TypeError, ValueError):
+            return 0
+        return sum(1 for d in designs if at(d.get("first")) >= t0)
+
     def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
         """A loop in a line (D693): designs measured, accepted, and the decision's value on the
         first objective."""
@@ -1023,7 +1039,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
         except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
             return {"designs": 0, "accepted": 0}
-        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"]}
+        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"],
+                               "this_run": _since(got["designs"], run.get("started"))}
         dec = next((d for d in got["designs"] if d["decision"]), None)
         if dec is not None:
             lim = got["limits"][0] if got["limits"] else None

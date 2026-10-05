@@ -268,6 +268,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     assert bob.get("/api/apps/sw/report").status_code == 200
     sm = bob.get("/api/apps").json()[0]["summary"]                  # D693: the list's line
     assert sm["designs"] == len(res["designs"]) > 0 and sm["accepted"] == res["counts"]["accepted"], sm
+    assert 0 <= sm["this_run"] <= sm["designs"], "D837: the designs first measured since the latest start, of them all"
     pre = bob.get("/api/apps/sw/preflight").json()
     assert pre["changed"] is False and pre["options"]["passes"] == 1, "the last start's inputs and options"
     ada = _client(app, "ada", "correct horse battery")

@@ -625,7 +625,7 @@ function loopsTable(loops, { who = false } = {}) {
   if (!loops.length) return empty("No loop yet.");
   return h("table", { class: "list" },
     h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"),
-      h("th", { class: "num" }, "Designs"), h("th", {}, "Best"), h("th", {}, ""))),
+      h("th", { class: "num", title: "this run / every run" }, "Designs"), h("th", {}, "Best"), h("th", {}, ""))),
     h("tbody", {}, loops.map(l => {
       const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
       const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
@@ -640,7 +640,8 @@ function loopsTable(loops, { who = false } = {}) {
         h("td", {}, h("a", { href, class: "strong" }, name)),
         h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
         h("td", { class: "muted" }, lastSaid(l)),
-        h("td", { class: "num mono" }, sm.designs ? [String(sm.accepted), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
+        h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
+          sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
         h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
           title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
           sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
