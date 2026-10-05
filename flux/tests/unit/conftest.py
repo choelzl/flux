@@ -48,7 +48,7 @@ HEAVY_FILES = {
     "test_nlu_vectorize.py", "test_nlu_hygiene.py", "test_macarray.py", "test_imapping.py",
     "test_feedback_consumers.py", "test_mentor_records_extract.py", "test_design_guidance_corpus.py",
     "test_bankmap.py", "test_shortlist.py", "test_instruments.py",
-    "test_prototype_hardware_subset.py", "test_library_source_connector.py",
+    "test_prototype_hardware_subset.py", "test_library_source_connector.py", "test_py2sv_pipeline.py",
 }
 
 

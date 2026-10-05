@@ -412,3 +412,21 @@ def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, mon
     assert [t[0] for t in turns] == ["first", "resume"] and turns[0][1:] == turns[1][1:], turns
     assert Path(turns[0][2]).parent.name == "prototype"
     assert any("prototype" in m and "resumed session ses_p1" in m for m in said), said
+
+
+def test_a_clocked_golden_keeps_the_prototype_and_moves_the_transpiler_version(tmp_path):
+    """D864: a golden with CLOCK and LATENCY is a pipeline the spelling cuts, so the prototype
+    stays; its clocking is part of the transpiler's version, so a LATENCY changed re-spells every
+    admitted design from its verified prototype at the next reload (D510)."""
+    from flux_loop import PromptProblem
+
+    doc = _rtl(tmp_path)
+    before = PromptProblem(load_task(str(doc))).versions()
+    assert before.get("transpiler"), before
+    gp = golden_path(load_task(str(doc)))
+    gp.write_text(gp.read_text() + "\nCLOCK = True\nLATENCY = 2\n")
+    after = PromptProblem(load_task(str(doc)))
+    assert after.prototype() is not None, "a stated latency keeps the prototype"
+    assert after.versions()["transpiler"] != before["transpiler"]
+    gp.write_text(gp.read_text().replace("LATENCY = 2\n", ""))
+    assert capability(load_task(str(doc))) is None, "clocked without a latency: the RTL's own cycles, no prototype"

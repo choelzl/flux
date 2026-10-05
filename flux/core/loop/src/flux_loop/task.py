@@ -583,7 +583,28 @@ class PromptProblem(Problem):
             said = json.dumps({"gate": gate, "files": files, "tools": toolchain_fingerprint(), "flux": git_revision(),
                                "inputs": self.inputs()}, sort_keys=True, default=str)
             self._judge = hashlib.sha256(said.encode()).hexdigest()[:16] if gate else ""
-        return {"judge": self._judge} if self._judge else {}
+            self._spells = self._transpiler()
+        out = {"judge": self._judge} if self._judge else {}
+        return {**out, "transpiler": self._spells} if out and self._spells else out
+
+    def _transpiler(self) -> str:
+        """D864: what spells this document's prototype -- py2sv and the golden's clocking (its
+        LATENCY is the pipeline cut) -- as a version: changed, an admitted design is re-spelled
+        from its verified prototype at the next reload (D510). "" when the loop spells nothing."""
+        import hashlib
+
+        cap = self.prototype()
+        if cap is None or getattr(cap, "language", "") != "python":
+            return ""
+        from . import py2sv
+        from .golden_proto import golden_path, load
+
+        try:
+            g = load(golden_path(self.task))
+            clocking = f"{bool(g.clocked)}:{g.latency or 0}"
+        except Exception:  # noqa: BLE001
+            clocking = "?"
+        return hashlib.sha256(Path(py2sv.__file__).read_bytes() + clocking.encode()).hexdigest()[:16]
 
     def inputs(self) -> str:
         """The fingerprint of what this loop's evidence is made from (D853, `flux_loop.inputs`): its

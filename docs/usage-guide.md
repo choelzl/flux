@@ -543,6 +543,10 @@ passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`e
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper
 returning several values, `s, m, k = unpack(x)`, `(a, b) if c else (d, e)`, `len(T)`, a tuple read
 at a computed position (D804, D806). What it cannot spell is refused with the construct named.
+A golden with `CLOCK = True` and `LATENCY = N` makes it a pipeline (D864): the spelled datapath is
+cut into N register stages of about equal estimated depth, with `clk`, `rst_n`, `start` and `done`
+(`start` N edges later); the prototype stays the plain algorithm. Changing N re-spells every
+admitted design from its verified prototype at the next pass.
 
 ## The IR and the evaluators
 

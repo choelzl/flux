@@ -1,14 +1,16 @@
 # An FP16 GELU as a formula: a coding agent writes the Python prototype, the loop spells the RTL.
 
 statement: >-
-  A purely combinational SystemVerilog module `gelu_fp16` computing the tanh form of the
+  A pipelined SystemVerilog module `gelu_fp16`, two clock cycles of latency, computing the tanh form of the
   Gaussian Error Linear Unit for IEEE 754 binary16 (FP16) inputs:
   GELU(x) = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3))).
   Input `x` and output `y` are 16-bit FP16 bit patterns. Make it fast and small on ASAP7.
 contract: |-
-  One module named exactly `gelu_fp16`, combinational (no clock or reset):
+  One module named exactly `gelu_fp16`, pipelined with a latency of 2 clock cycles:
+    - input  logic clk, input logic rst_n (active low)
+    - input  logic start, output logic done: `done` is `start` two rising edges later
     - input  logic [15:0] x
-    - output logic [15:0] y
+    - output logic [15:0] y, valid while `done` is high
   `y` is within 1 ULP of the FP16 rounding of the tanh-form GELU of `x`, computed in double
   precision. GELU(-inf) = -0 (0x8000), GELU(+inf) = +inf (0x7C00); a NaN input is returned as is.
 objectives:

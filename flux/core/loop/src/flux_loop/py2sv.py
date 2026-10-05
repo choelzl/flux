@@ -471,20 +471,34 @@ def _compile(code: str, ports: list[dict[str, Any]]) -> tuple["_Compiler", dict[
 
 
 def spell(code: str, ports: list[dict[str, Any]], rows: list[dict[str, Any]], module: str,
-          table_functions: Callable[[str], tuple[str, list[str]]]) -> str:
+          table_functions: Callable[[str], tuple[str, list[str]]], latency: int = 0) -> str:
     """The prototype as a SystemVerilog module, or `Unsupported` with the reason. `rows` are
-    the inputs to measure on (they must be the whole domain for the widths to hold)."""
+    the inputs to measure on (they must be the whole domain for the widths to hold). `latency`
+    > 0 (a clocked golden's LATENCY, D864) cuts the datapath into that many register stages."""
     c, outs, design, tables = _compile(code, ports)
     ins = [p for p in ports if p["dir"] == "in"]
     outs_p = [p for p in ports if p["dir"] == "out"]
     rows_in = [r["inputs"] for r in rows]
     _measure(c.nodes, tables, rows_in, outs, design)
+    stage = _stages(c, outs, latency) if latency > 0 else {}
+    regs: dict[int, int] = {}                    # node -> the last stage a register carries it to
+    for i, n in enumerate(c.nodes):
+        for a in n.args:
+            if c.nodes[a].op != "const" and stage.get(i, 0) > stage.get(a, 0):
+                regs[a] = max(regs.get(a, 0), stage[i])
+    for o in outs.values():
+        if latency > 0 and c.nodes[o].op != "const" and stage.get(o, 0) < latency:
+            regs[o] = latency
     # the table functions the prototype's tables need, the bit-length helpers, the signals
     used_tables = {n.value for n in c.nodes if n.op == "table"}
     fns, _lines = table_functions(code) if used_tables else ("", [])
     decl, body, helpers = [], [], {}
     name: dict[int, str] = {}
     widths: dict[int, int] = {}
+
+    def at(x: int, k: int) -> str:
+        """Node x's value as stage k reads it: itself in its own stage, else its register."""
+        return name[x] if c.nodes[x].op == "const" or k <= stage.get(x, 0) else f"r{x}_{k}"
     for i, n in enumerate(c.nodes):
         if n.op == "const":
             name[i] = _lit(n.value)
@@ -500,24 +514,74 @@ def spell(code: str, ports: list[dict[str, Any]], rows: list[dict[str, Any]], mo
             continue
         w = _width(n.lo, n.hi)
         widths[i] = w
-        a = [name[x] for x in n.args]
+        a = [at(x, stage.get(i, 0)) for x in n.args]
         e = _emit(n, a, c, helpers, w, [widths[x] for x in n.args])
         name[i] = f"n{i}"
         decl.append(f"  logic signed [{w - 1}:0] n{i};")
         body.append(f"  assign n{i} = {e};")
+    flops = []
+    for x, last in sorted(regs.items()):
+        for k in range(stage.get(x, 0) + 1, last + 1):
+            decl.append(f"  logic signed [{widths[x] - 1}:0] r{x}_{k};")
+            flops.append(f"    r{x}_{k} <= {at(x, k - 1)};")
+    if latency > 0:
+        # D864: `done` is `start` through as many registers as the data passes (the harness's
+        # start/done protocol); the data registers need no reset, the valid bits do
+        decl.append(f"  logic [{latency - 1}:0] valid;")
+        body.append("  always_ff @(posedge clk) begin\n" + "\n".join(flops) + "\n  end" if flops else "")
+        shift = "start" if latency == 1 else f"{{valid[{latency - 2}:0], start}}"
+        body.append(f"  always_ff @(posedge clk or negedge rst_n)\n    if (!rst_n) valid <= '0;\n    else valid <= {shift};")
+        body.append(f"  assign done = valid[{latency - 1}];")
     for p in outs_p:
-        body.append(f"  assign {p['name']} = {int(p['bits'])}'({name[outs[p['name']]]});")
+        body.append(f"  assign {p['name']} = {int(p['bits'])}'({at(outs[p['name']], latency)});")
     port_list = ",\n".join(
-        [f"  input logic {'' if p.get('unsigned') else 'signed '}[{int(p['bits']) - 1}:0] {p['name']}" for p in ins]
+        (["  input logic clk", "  input logic rst_n", "  input logic start", "  output logic done"] if latency > 0 else [])
+        + [f"  input logic {'' if p.get('unsigned') else 'signed '}[{int(p['bits']) - 1}:0] {p['name']}" for p in ins]
         + [f"  output logic {'' if p.get('unsigned') else 'signed '}[{int(p['bits']) - 1}:0] {p['name']}" for p in outs_p])
     header = (f"// {module}: spelled by the loop from the verified prototype (flux py2sv, D611); every signal is\n"
-              f"// as wide as its range measured over {len(rows_in)} inputs, where its path is taken.\n")
+              f"// as wide as its range measured over {len(rows_in)} inputs, where its path is taken.\n"
+              + (f"// Pipelined (D864): {latency} register stage(s), cut where the estimated delay splits evenly.\n"
+                 if latency > 0 else ""))
     parts = [header + f"module {module} (\n{port_list}\n);"]
     if fns:
         parts.append(fns)
     parts += list(helpers.values())
-    parts += decl + body + ["endmodule"]
+    parts += decl + [b for b in body if b] + ["endmodule"]
     return "\n".join(parts) + "\n"
+
+
+def _delay(c: "_Compiler", n: Node) -> float:
+    """A logic-depth proxy for one operation, in gate levels from its measured widths (D864):
+    enough to cut a datapath into stages of about equal delay, not a timing report."""
+    import math
+
+    if n.op in ("const", "input"):
+        return 0.0
+    w = _width(n.lo, n.hi)
+    aw = [_width(c.nodes[a].lo, c.nodes[a].hi) for a in n.args] or [w]
+    lg = math.log2(max(2, w, *aw))
+    const_b = len(n.args) > 1 and c.nodes[n.args[1]].op == "const"
+    if n.op in ("mul", "div", "mod"):
+        return (2.0 if any(c.nodes[a].op == "const" for a in n.args) else 3.0) * lg
+    if n.op in ("shl", "shr"):
+        return 0.0 if const_b else lg
+    if n.op == "table":
+        return math.log2(max(2, len(c.tables[n.value]))) + 2
+    if n.op in ("add", "sub", "lt", "le", "gt", "ge", "eq", "ne", "bitlen"):
+        return lg + 1
+    return 1.0
+
+
+def _stages(c: "_Compiler", outs: dict[str, int], latency: int) -> dict[int, int]:
+    """Each node's stage, 0..latency, for `latency` register ranks (D864): by its estimated
+    arrival time, the whole path split in latency+1 equal parts. Arrival never falls along an
+    edge, so a node's stage is never before its operands'."""
+    t: dict[int, float] = {}
+    for i, n in enumerate(c.nodes):
+        t[i] = max((t[a] for a in n.args), default=0.0) + _delay(c, n)
+    total = max([t[o] for o in outs.values()] + [1e-9])
+    step = total / (latency + 1)
+    return {i: min(latency, int(t[i] / step - 1e-9)) if t[i] > 0 else 0 for i in t}
 
 
 def _emit(n: Node, a: list[str], c: _Compiler, helpers: dict[str, str], w: int, aw: list[int]) -> str:

@@ -378,8 +378,9 @@ def capability(task: Any) -> Prototype | None:
         g = load(path)
     except Exception:  # noqa: BLE001 -- a golden that cannot load is refused by the gate itself
         return None
-    if g.clocked:
+    if g.clocked and not g.latency:
         return None                       # a clocked design's cycles are the RTL's, not an algorithm's
+    # D864: a stated LATENCY is a pipeline the spelling cuts; the prototype stays the algorithm
     from flux_codegen_rtl_harness import golden_vectors
 
     rows = exhaustive(g) or golden_vectors(g)
@@ -548,7 +549,8 @@ def _spell_main() -> None:
     src, golden, module, out = sys.argv[1:5]
     g = load(Path(golden))
     try:
-        sv = spell(Path(src).read_text(), list(g.ports), exhaustive(g) or [], module, table_functions)
+        sv = spell(Path(src).read_text(), list(g.ports), exhaustive(g) or [], module, table_functions,
+                   latency=int(g.latency or 0) if g.clocked else 0)     # D864: a clocked golden's stages
     except Unsupported as exc:
         print(f"not spelled: {exc}")
         sys.exit(2)

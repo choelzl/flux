@@ -9,6 +9,8 @@ PORTS = [
 ]
 SEED = 1
 COUNT = 1000
+CLOCK = True       # pipelined: `done` rises LATENCY cycles after `start` (D864)
+LATENCY = 2
 TOLERANCE_ULP = {"y": 1}
 
 
