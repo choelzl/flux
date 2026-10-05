@@ -76,3 +76,22 @@ def test_the_form_draws_every_field_and_marks_the_focus():
     text = "\n".join(t for _k, t in rows)
     assert "a multiplier" in text and "spec.pdf" in text and "< opencode >" in text and "[ Start ]" in text
     assert [k for k, t in rows if "Author" in t] == ["focus"]
+
+
+def test_the_form_keeps_its_footer_and_its_focus_on_a_small_screen():
+    """D857, from an external review: at 60x18 with a six-line prompt, Start, Quit and the keys fell
+    below the screen and a focused field could be out of sight. The footer stays; the fields scroll
+    to the focus; long text wraps or shows its end; a screen too small says so."""
+    prompt = "\n".join(f"line {i}: a fairly long requirement that goes past the right edge" for i in range(6))
+    for name in FIELDS:
+        f = SetupForm(prompt=prompt, files=["/x/" + "long-name-" * 8 + ".pdf"], focus=FIELDS.index(name))
+        for width, height in ((59, 14), (39, 8), (79, 20)):
+            rows = f.screen(width, height)
+            assert len(rows) <= height and all(len(t) <= width for _k, t in rows), (name, width, height)
+            text = "\n".join(t for _k, t in rows)
+            assert "Start" in text and "Quit" in text, (name, width, height)
+            assert any(k == "focus" for k, _t in rows), f"the focus is on the screen: {name} at {width}x{height}"
+    f = SetupForm(prompt="x", focus=FIELDS.index("workdir"), workdir="/a/" + "deep/" * 30 + "end")
+    (row,) = [t for k, t in f.screen(59, 14) if k == "focus"]
+    assert "…" in row and row.rstrip().endswith("end▏"), "a long value shows its end, where one types"
+    assert "too small" in f.screen(30, 2)[0][1]

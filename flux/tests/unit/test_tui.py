@@ -1013,3 +1013,51 @@ def test_page_keys_jump_a_screen_not_ten_lines():
         h_last = 52
 
     assert _page(V()) == 44 and _page(type("S", (), {"h_last": 12})()) == 10
+
+
+def test_a_failed_run_says_so_and_closes_what_it_left_open():
+    """D857, from an external review: a worker's exception turned the header to "failed" but its
+    message reached nobody until the TUI was left, and its open tasks kept running under it."""
+    bus = EventBus()
+    open_tid = bus.task_start("place", kind="tool")
+    done_tid = bus.task_start("screen", kind="tool")
+    bus.task_end(done_tid, ok=True)
+    bus.done(error="RuntimeError: the checker is not installed")
+    snap = bus.snapshot()
+    rows = {t["id"]: t for t in snap["tasks"]}
+    assert rows[open_tid]["t1"] is not None and rows[open_tid]["ok"] is False
+    assert rows[open_tid]["note"] == "interrupted: the run failed"
+    assert rows[done_tid]["ok"] is True, "what ended stays as it ended"
+    assert any("the run failed: RuntimeError: the checker is not installed" in ln for ln in snap["log"])
+    quiet = EventBus()
+    t = quiet.task_start("x", kind="tool")
+    quiet.done()
+    assert {r["id"]: r for r in quiet.snapshot()["tasks"]}[t]["note"] == "interrupted: the run ended"
+
+
+def test_an_agents_steps_read_as_blocks_not_a_python_list():
+    """D857: the terminal shows an agent turn's steps as the web does, one block each."""
+    from flux_tui.panels import _kv_lines
+
+    steps = [{"k": "text", "text": "I will check it."}, {"k": "tool", "name": "shell", "call": "shell: pytest", "out": "1 passed\nok", "error": False},
+             {"k": "tool", "name": "shell", "call": "shell: make", "out": "boom", "error": True}, {"k": "think", "text": "hmm"}]
+    lines = _kv_lines({"agent": "codex", "steps": steps, "cfg": {"a": [1, 2]}}, max_block=40)
+    text = "\n".join(lines)
+    assert "{'k'" not in text and "[{" not in text, "no Python repr"
+    assert "  ▸ shell: shell: pytest" in text and "    │ 1 passed" in text and "  ▸ shell FAIL: shell: make" in text
+    assert "  │ I will check it." in text and "  ~ hmm" in text and "steps (4):" in text
+    assert any(ln.rstrip().endswith('"a": [') for ln in lines), "other structures as indented JSON"
+
+
+def test_a_list_keeps_to_its_rows_with_its_more_marks():
+    """D857: the task and mentor lists draw their "more" lines inside their rows -- they had added
+    two, and on a short terminal the panel's top (the breadcrumb, its heading) fell off."""
+    from flux_tui.panels import _list_window
+
+    for n in range(0, 30):
+        for rows in range(2, 12):
+            for focus in range(max(1, n)):
+                lo, hi, up, down = _list_window(focus, n, rows)
+                drawn = (hi - lo) + up + down
+                assert up == (lo > 0 and rows >= 3) and down == (hi < n and rows >= 3)
+                assert drawn <= rows and (n == 0 or lo <= focus < hi), (n, rows, focus, lo, hi)

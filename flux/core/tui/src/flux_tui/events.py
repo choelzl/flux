@@ -170,6 +170,15 @@ class EventBus:
             self.finished_at = time.time()   # the clock stops here
             self.active_s += self.finished_at - self.run_started_at
             self.error = error
+            # D857: what the run left open ends with it -- not "running" under a finished (or failed) run
+            said = "interrupted: the run failed" if error else "interrupted: the run ended"
+            for row in self.tasks:
+                if row["t1"] is None and row["kind"] != "mark":
+                    row["t1"], row["ok"], row["note"] = self.finished_at, False, said
+            if error:
+                for part in f"[tui] the run failed: {error}".split("\n"):
+                    self.log_lines.append(part)
+                    self.log_stamps.append(self.active_s)
 
     def restart(self, run_no: int) -> None:
         """Arm the bus for another pass of the loop (the TUI's rerun key): history --

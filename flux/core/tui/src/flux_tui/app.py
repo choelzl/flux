@@ -12,6 +12,7 @@ import contextlib
 from dataclasses import dataclass, field
 import curses
 import os
+import re
 import threading
 import time
 from typing import Any, Callable
@@ -179,9 +180,12 @@ def run_tui(target: Callable[[EventBus, TuiFeedback], Any], *,
                     except Exception as exc:  # noqa: BLE001 -- a report renderer must not kill the run
                         bus.log(f"[tui] on_result failed: {exc}")
             bus.done()
-        except Exception as exc:  # noqa: BLE001 -- shown in the task panel, re-raised after quit
+        except Exception as exc:  # noqa: BLE001 -- shown at once (D857), re-raised after quit
+            import traceback
+
             box["error"] = exc
-            bus.done(error=f"{type(exc).__name__}: {exc}")
+            where = "".join(traceback.format_exception(exc)[-4:-1]).rstrip()   # the last frames, under the message
+            bus.done(error=f"{type(exc).__name__}: {exc}" + (f"\n{where}" if where else ""))
         finally:
             if clear_listener is not None:
                 clear_listener()
@@ -266,7 +270,7 @@ def _colors() -> dict[str, int]:
         attrs["mentor"] = curses.color_pair(4)
         attrs["orchestrator"] = 0
         attrs["generator"] = curses.color_pair(5)
-        attrs["evaluator"] = curses.color_pair(6)
+        attrs["evaluator"] = curses.color_pair(6) | curses.A_BOLD   # D857: bright blue -- plain blue is dim on dark palettes
         attrs["model"] = curses.color_pair(4) | curses.A_BOLD
         attrs["warn"] = curses.color_pair(5) | curses.A_BOLD     # the part being tried
     except Exception:  # noqa: BLE001
@@ -735,18 +739,36 @@ def _render(scr, view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
     else:
         spin = _SPIN[int(time.time() * 8) % len(_SPIN)]
         state, sattr = f"{spin} running · {up}", color["run"]
-    scr.addnstr(0, 0, f" {title}", w - 1, curses.A_BOLD)
+    room = max(0, w - len(state) - 4)                  # D857: the title shortened before the state, never under it
+    shown = f" {title}" if len(title) + 1 <= room else f" {title[:max(0, room - 2)]}…"
+    scr.addnstr(0, 0, shown, room, curses.A_BOLD)
     scr.addnstr(0, max(0, w - 1 - len(state) - 1), state, len(state) + 1, sattr)
     # ── row 1: tab bar, active segment highlighted ─────────────────────
-    x = 1
     view.tab_hits = []
-    for k, name in PANELS.items():
-        seg = f" {k} {name} "
+    segs = [(f" {k} {name} ", name) for k, name in PANELS.items()]
+    # D857: the tabs that fit, the active one always among them; ‹ › say more lie either side
+    first = 0
+    active = next((i for i, (_s, n) in enumerate(segs) if n == view.panel), 0)
+
+    def fits(a: int, b: int) -> bool:
+        return 2 + sum(len(seg) + 1 for seg, _n in segs[a:b + 1]) + 2 <= w - 1
+
+    while first < active and not fits(first, active):
+        first += 1
+    x = 1
+    if first > 0:
+        scr.addnstr(1, 0, "‹", 1, color["dim"])
+    last_shown = first - 1
+    for i, (seg, name) in enumerate(segs[first:], start=first):
+        if x + len(seg) + 2 > w - 1:
+            break
         attr = curses.A_REVERSE if name == view.panel else color["dim"]
-        if x + len(seg) < w - 1:
-            scr.addnstr(1, x, seg, w - 1 - x, attr)
-            view.tab_hits.append((x, x + len(seg), name))
+        scr.addnstr(1, x, seg, w - 1 - x, attr)
+        view.tab_hits.append((x, x + len(seg), name))
         x += len(seg) + 1
+        last_shown = i
+    if last_shown < len(segs) - 1:
+        scr.addnstr(1, min(x, w - 2), "›", 1, color["dim"])
     scr.hline(2, 0, curses.ACS_HLINE, w - 1)
     # ── body ───────────────────────────────────────────────────────────
     top = 3
@@ -769,20 +791,25 @@ def _render(scr, view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
         base, uses_model = (role or "").split("+")[0], "+model" in (role or "")
         attr = color.get(base, 0) if base else 0
         selected_row = _selected_row(panel, idx, line, view, panes, timing)
+        if re.search(r"(^|\s)(FAIL|FAILED)(\s|:|$)", line):
+            attr = color["bad"] | curses.A_BOLD           # D857: a failure marked whatever role wrote it
         if selected_row:
             attr = curses.A_REVERSE
         text = line[view.hscroll:] if view.hscroll < len(line) else ""
         scr.addnstr(top + i, 1, text, w - 2, attr)
         if uses_model and not selected_row:
             _highlight_model(scr, top + i, 1, text, w - 2, color["model"])
-    if view.hscroll > 0:
-        scr.addnstr(top, 1, f"⇠ col {view.hscroll}", 14, color["dim"])
-    elif any(len(line) > w - 2 for line in visible):
-        scr.addnstr(top, max(0, w - 20), "→ pans long lines", 18, color["dim"])
-    if start > 0:
-        scr.addnstr(top, max(0, w - 16), f"↑ {start} more", 14, color["dim"])
-    if view.scroll > 0:
-        scr.addnstr(top + view_h - 1, max(0, w - 16), f"↓ {view.scroll} newer", 14, color["dim"])
+    # D857: the scroll and pan hints in the separator row, never over a line of the panel
+    hints = [f"⇠ col {view.hscroll}" if view.hscroll > 0 else ("→ pans long lines" if any(len(line) > w - 2 for line in visible) else ""),
+             f"↑ {start} more" if start > 0 else "", f"↓ {view.scroll} newer" if view.scroll > 0 else ""]
+    said = " · ".join(x for x in hints if x)
+    if snap.get("error"):                              # D857: a failure said where every panel shows it
+        first = str(snap["error"]).split("\n")[0]
+        msg = f" FAILED: {first} -- the log has the rest "[: max(0, w - 4)]
+        scr.addnstr(2, 1, msg, len(msg), color["bad"] | curses.A_BOLD)
+    elif said:
+        said = f" {said} "[: max(0, w - 4)]
+        scr.addnstr(2, max(1, w - 2 - len(said)), said, len(said), color["dim"])
     _bottom(scr, view, snap, subtitle, feedback_enabled, h, w)
     scr.refresh()
 
@@ -801,11 +828,12 @@ def _panel_lines(view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
         timing.paths, timing.kids = [], []
         if panel == "task":
             pane = panes["task"]
-            list_rows = 10
-            detail_rows = max(3, view_h - 2 - list_rows - 1)   # the rest of the body
+            # D857: rows from the height there is -- the list at most 10 and half of it, the details the rest
+            list_rows = max(2, min(10, (view_h - 3) // 2))
+            detail_rows = max(1, view_h - 2 - list_rows - 1)   # the rest of the body
             clamp: dict = {}
             lines, kids_task, task_order, line_roles = task_rows(
-                snap, pane.cursor, width=max(40, w - 4), list_rows=list_rows,
+                snap, pane.cursor, width=max(24, w - 2), list_rows=list_rows,
                 detail_rows=detail_rows, detail_scroll=pane.dscroll,
                 detail_hscroll=pane.dhscroll, selected=pane.selected, clamp=clamp)
             pane.clamp(clamp)                       # never past the end (TAIL = the end)
@@ -828,11 +856,11 @@ def _panel_lines(view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
             lines, line_roles = log_rows(snap, view.log_filter)
         elif panel == "mentor":
             pane = panes["mentor"]
-            list_rows = 8
-            detail_rows = max(3, view_h - 2 - list_rows - 1)
+            list_rows = max(2, min(8, (view_h - 3) // 2))      # D857: as the task panel
+            detail_rows = max(1, view_h - 2 - list_rows - 1)
             clamp = {}
             lines, sec_ids, sec_order = mentor_rows(
-                snap, pane.cursor, selected=pane.selected, width=max(40, w - 4),
+                snap, pane.cursor, selected=pane.selected, width=max(24, w - 2),
                 list_rows=list_rows, detail_rows=detail_rows,
                 detail_scroll=pane.dscroll, detail_hscroll=pane.dhscroll, clamp=clamp)
             pane.clamp(clamp)
@@ -842,12 +870,14 @@ def _panel_lines(view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
             view.scroll = 0
         elif panel == "results":
             pane = panes["results"]
-            n_table = len((snap.get("standings") or {}).get("standings", {}).get("parts") or []) + 3
-            n_table += 4                             # OBJECTIVE / NOW / WHOLE / the report row
-            detail_rows = max(3, view_h - n_table - 1)
+            # D857: the preview gets the rows the table leaves -- measured, not guessed (a guess too
+            # small pushed the panel's top off even at 80x24)
+            probe, *_ = results_browse(snap, pane.cursor, selected=pane.selected, width=max(24, w - 2), detail_rows=1,
+                                       detail_scroll=0, detail_hscroll=0, clamp={})
+            detail_rows = max(1, view_h - (len(probe) - 1))
             clamp = {}
             lines, res_ids, res_order, line_roles = results_browse(
-                snap, pane.cursor, selected=pane.selected, width=max(40, w - 4),
+                snap, pane.cursor, selected=pane.selected, width=max(24, w - 2),
                 detail_rows=detail_rows, detail_scroll=pane.dscroll, detail_hscroll=pane.dhscroll, clamp=clamp)
             pane.clamp(clamp)
             pane.rendered(res_ids, res_order)

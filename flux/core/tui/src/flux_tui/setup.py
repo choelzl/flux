@@ -26,6 +26,7 @@ import curses
 import glob
 import os
 import re
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -179,37 +180,79 @@ class SetupForm:
 
     def lines(self, width: int) -> list[tuple[str, str]]:
         """The form as (kind, text) rows -- kind "focus" marks the row with the cursor."""
+        body, foot = self.parts(width)
+        return body + foot
+
+    def parts(self, width: int) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+        """(the fields, the footer) as rows (D857): the footer -- Start and Quit, the keys, a message
+        -- stays on the screen; the fields scroll. The prompt wraps; a long value shows its end, where
+        the cursor is, after an ellipsis."""
+        label_w = 14
+        room = max(8, width - label_w)
         rows: list[tuple[str, str]] = []
+
+        def tail(text: str, keep: int = 1) -> str:         # an input: its end, where one types (and its cursor)
+            n = room - keep
+            return text if len(text) <= n else "…" + text[-(n - 1):]
+
+        def head(text: str) -> str:                        # a list: its start, marked when cut
+            return text if len(text) <= room else text[:room - 1] + "…"
 
         def row(name: str, text: str) -> None:
             rows.append(("focus" if self.field == name else "", f" {_LABEL.get(name, ''):<13}{text}"[:width]))
 
-        prompt_lines = (self.prompt or "").split("\n")
-        shown = prompt_lines[-6:] if len(prompt_lines) > 6 else prompt_lines
+        wrapped: list[str] = []
+        for ln in (self.prompt or "").split("\n"):
+            wrapped += textwrap.wrap(ln, room, break_long_words=True, replace_whitespace=False) or [""]
+        cut = len(wrapped) > 6
+        shown = wrapped[-6:] if cut else wrapped
         for i, ln in enumerate(shown):
             label = "Prompt" if i == 0 else ""
+            more = "…" if cut and i == 0 else ""
             cursor = "▏" if self.field == "prompt" and i == len(shown) - 1 else ""
-            rows.append(("focus" if self.field == "prompt" else "", f" {label:<13}{ln}{cursor}"[:width]))
+            rows.append(("focus" if self.field == "prompt" else "", f" {label:<13}{more}{ln}{cursor}"[:width]))
         if not self.prompt and self.field != "prompt":
             rows[-1] = ("", f" {'Prompt':<13}(what you want, in words)"[:width])
         for name in ("files", "skills"):
-            row(name, "  ".join(Path(f).name for f in getattr(self, name)) or "(none)")
+            row(name, head("  ".join(Path(f).name for f in getattr(self, name)) or "(none)"))
             if self.field == name:
-                rows.append(("focus", f" {'':<13}+ {self.path_input}▏   Enter adds, Tab completes, Del removes the last"[:width]))
+                rows.append(("focus", f" {'':<13}+ {tail(self.path_input, 3)}▏"[:width]))
+                rows.append(("dim", f" {'':<13}Enter adds, Tab completes, Del removes the last"[:width]))
         row("author", f"< {self.author} >")
         row("passes", f"< {self.passes or 'until stopped'} >")
         row("screen_only", "[x]" if self.screen_only else "[ ]")
         row("review", ("[x]" if self.review else "[ ]") + "  show the problem before the loop runs it")
-        row("workdir", self.directory() + ("▏" if self.field == "workdir" else ""))
-        rows.append(("", ""))
+        row("workdir", tail(self.directory(), 1 if self.field == "workdir" else 0) + ("▏" if self.field == "workdir" else ""))
         start = "[ Start ]" if self.field != "start" else "[>Start<]"
         quit_ = "[ Quit ]" if self.field != "quit" else "[>Quit<]"
-        rows.append(("focus" if self.field in ("start", "quit") else "", f" {'':<13}{start}   {quit_}"))
-        rows.append(("", ""))
-        rows.append(("dim", " Tab/Shift-Tab move · Left/Right choose · Space toggles · F5 starts · Esc leaves"[:width]))
+        keys = textwrap.wrap("Tab/Shift-Tab move · Left/Right choose · Space toggles · F5 starts · Esc leaves",
+                             max(20, width - 1), break_on_hyphens=False)
+        foot = [("", ""), ("focus" if self.field in ("start", "quit") else "", f" {'':<13}{start}   {quit_}"[:width]),
+                *(("dim", f" {k}"[:width]) for k in keys)]
         if self.message:
-            rows.append(("warn", f" {self.message}"[:width]))
-        return rows
+            foot.append(("warn", f" {self.message}"[:width]))
+        return rows, foot
+
+    def screen(self, width: int, height: int) -> list[tuple[str, str]]:
+        """Exactly what fits in `height` rows (D857): the footer always, the fields scrolled so the
+        focused one shows, "↑"/"↓ more" where some are cut; a screen too small says so."""
+        body, foot = self.parts(width)
+        room = height - len(foot)
+        if room < 3 or width < 30:
+            return [("warn", " The terminal is too small for the form: 40×14 at least."[:width]),
+                    ("dim", " F5 starts · Esc leaves"[:width])][:max(1, height)]
+        if len(body) <= room:
+            return body + foot
+        focus = next((i for i, (k, _t) in enumerate(body) if k == "focus"), 0)
+        last = max(i for i, (k, _t) in enumerate(body) if k == "focus") if any(k == "focus" for k, _t in body) else 0
+        span = room - 2                                   # a row each for the "more" marks
+        top = min(max(0, last - span + 1), max(0, focus))
+        top = min(top, len(body) - span)
+        shown = body[top:top + span]
+        up = ("dim", f" ↑ {top} more"[:width]) if top else ("", "")
+        down_n = len(body) - top - span
+        down = ("dim", f" ↓ {down_n} more"[:width]) if down_n > 0 else ("", "")
+        return [up, *shown, down, *foot]
 
 
 def _draw(scr, form: SetupForm) -> None:
@@ -218,9 +261,10 @@ def _draw(scr, form: SetupForm) -> None:
     title = " flux ask -- the loop from a prompt and files "
     with _quiet():
         scr.addstr(0, 0, title[: w - 1], curses.A_BOLD)
-        scr.addstr(1, 0, " An author writes the problem from your prompt and files; the loop runs it."[: w - 1], curses.A_DIM)
-    for i, (kind, text) in enumerate(form.lines(w - 1)):
-        if 3 + i >= h - 1:
+        sub = " An author writes the problem from your prompt and files; the loop runs it."
+        scr.addstr(1, 0, (sub if len(sub) < w else sub[: w - 2] + "…")[: w - 1], curses.A_DIM)
+    for i, (kind, text) in enumerate(form.screen(w - 1, h - 3)):      # D857: the footer kept, the fields scrolled
+        if 3 + i >= h:
             break
         attr = curses.A_REVERSE if kind == "focus" else curses.A_DIM if kind == "dim" else curses.A_BOLD if kind == "warn" else 0
         with _quiet():

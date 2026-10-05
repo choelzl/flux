@@ -7,6 +7,8 @@ pads and paints. Panel numbers follow btop: 1 task, 2 timing, 3 results, 4 log, 
 
 from __future__ import annotations
 
+import json
+
 import time
 from typing import Any
 
@@ -60,12 +62,39 @@ def _task_line(t: dict[str, Any], now: float, width: int, started_at: float | No
     return head[:width]
 
 
+def _step_lines(steps: list[Any], max_block: int) -> list[str]:
+    """An agent's steps (D857), one readable block each as the web shows them -- a tool call with
+    its input and output, its words, its thinking -- not a Python list on one line."""
+    out = [f"steps ({len(steps)}):"]
+    for st in steps:
+        if not isinstance(st, dict):
+            out.append(f"  · {st}")
+            continue
+        kind = st.get("k")
+        if kind == "tool":
+            out.append(f"  ▸ {st.get('name', 'tool')}{' FAIL' if st.get('error') else ''}: {st.get('call', '')}")
+            body = str(st.get("out") or "").splitlines()
+            out += [f"    │ {ln}" for ln in body[:max(1, max_block // 10)]]
+            if len(body) > max(1, max_block // 10):
+                out.append(f"    │ … ({len(body) - max(1, max_block // 10)} more lines)")
+        elif kind in ("text", "think"):
+            mark = "  │ " if kind == "text" else "  ~ "
+            body = str(st.get("text") or "").splitlines() or [""]
+            out += [mark + ln for ln in body[:max(1, max_block // 10)]]
+        else:
+            out.append(f"  · {json.dumps(st, default=str)[:200]}")
+    return out
+
+
 def _kv_lines(values: dict[str, Any], max_block: int) -> list[str]:
     """Short values as `k = v`, long text (a prompt, a reply, a command line) as an
-    indented block."""
+    indented block; an agent's steps each as its own block, other structures as indented JSON (D857)."""
+    steps = values.get("steps") if isinstance(values.get("steps"), list) else None
+    values = {k: (json.dumps(v, indent=2, default=str) if isinstance(v, (list, dict)) and k != "steps" else v)
+              for k, v in values.items()}
     long_values = {k: v for k, v in values.items()
-                   if isinstance(v, str) and (len(v) > 60 or "\n" in v)}
-    lines = [f"{k} = {v}" for k, v in values.items() if k not in long_values]
+                   if k != "steps" and isinstance(v, str) and (len(v) > 60 or "\n" in v)}
+    lines = [f"{k} = {v}" for k, v in values.items() if k not in long_values and not (k == "steps" and steps is not None)]
     for k, v in long_values.items():
         block = v.splitlines() or [""]
         lines.append(f"{k} ({len(v)} chars, {len(block)} lines):")
@@ -73,6 +102,8 @@ def _kv_lines(values: dict[str, Any], max_block: int) -> list[str]:
             lines.append("  │ " + ln)
         if len(block) > max_block:
             lines.append(f"  │ … ({len(block) - max_block} more lines)")
+    if steps is not None:
+        lines += _step_lines(steps, max_block)
     return lines
 
 
@@ -96,6 +127,25 @@ def task_details(t: dict[str, Any], now: float, width: int = 96,
     elif t["t1"] is None:
         lines.append("── output ── (still running)")
     return [ln[:width] for ln in lines]
+
+
+def _list_window(focus: int, n: int, rows: int) -> tuple[int, int, bool, bool]:
+    """(lo, hi, an "↑ more" line, a "↓ more" line) of a list `rows` lines high around `focus`
+    (D857): when it does not all fit, its "more" lines are among those rows, not added to them --
+    the panel keeps to its height; under three rows there is no room for them."""
+    if n <= rows:
+        return 0, n, False, False
+    if rows < 3:
+        lo = max(0, min(focus - rows // 2, n - rows))
+        return lo, lo + rows, False, False
+    inner = rows - 2
+    lo = max(0, min(focus - inner // 2, n - inner))
+    if lo == 0:                                         # no "↑" line: one more row of the list
+        return 0, rows - 1, False, True
+    if lo + inner >= n:                                 # no "↓" line
+        lo = n - (rows - 1)
+        return lo, n, True, False
+    return lo, lo + inner, True, True
 
 
 def task_rows(snap: dict[str, Any], cursor: int | None = None,
@@ -163,9 +213,8 @@ def task_rows(snap: dict[str, Any], cursor: int | None = None,
     put(f"{lmark}── tasks ({lkeys}) ── {mode} " + "─" * width)
     # the list window: whole rows, the highlight kept inside it
     sel_i = next(i for i, t in enumerate(shown) if t["id"] == focus_id)
-    lo = max(0, min(sel_i - list_rows // 2, len(shown) - list_rows))
-    hi = min(len(shown), lo + list_rows)
-    if lo > 0:
+    lo, hi, up, down = _list_window(sel_i, len(shown), list_rows)   # D857: its "more" marks within its rows
+    if up:
         put(f"{'':>23}↑ {lo} more")
     started_at = snap.get("started_at")
     for t in shown[lo:hi]:
@@ -174,9 +223,9 @@ def task_rows(snap: dict[str, Any], cursor: int | None = None,
             continue
         put(("▸ " if t["id"] == focus_id else "  ") + _task_line(t, now, width - 2, started_at),
             t["id"], task_role(t, tasks))
-    if hi < len(shown):
+    if down:
         put(f"{'':>23}↓ {len(shown) - hi} more")
-    for _ in range(list_rows - (hi - lo)):             # keep the details at a fixed row
+    for _ in range(list_rows - (hi - lo) - up - down):     # keep the details at a fixed row
         put("")
     chosen = next(t for t in shown if t["id"] == focus_id and not t.get("gap"))
     put(f"{dmark}── details: {chosen['name']} ({dkeys}) " + "─" * width)
@@ -727,18 +776,17 @@ def _browse(sections: list[dict[str, Any]], heading: str, cursor: int | None = N
         mode, lmark, dmark = "browsing · ⏎/click opens", "▌", " "
         dkeys = "⏎ to scroll"
     put(f"{lmark}── {heading} ── {mode} " + "─" * width)
-    lo = max(0, min(focus - list_rows // 2, len(sections) - list_rows))
-    hi = min(len(sections), lo + list_rows)
-    if lo > 0:
+    lo, hi, up, down = _list_window(focus, len(sections), list_rows)   # D857: as the task list
+    if up:
         put(f"{'':>4}↑ {lo} more")
     for i in range(lo, hi):
         sec = sections[i]
         n = len(sec.get("text", ""))
         size = f"{n / 1000:.1f}k chars" if n >= 1000 else f"{n} chars"
         put(("▸ " if i == focus else "  ") + f"{sec.get('title', '?'):<44} {size:>11}", i)
-    if hi < len(sections):
+    if down:
         put(f"{'':>4}↓ {len(sections) - hi} more")
-    for _ in range(list_rows - (hi - lo)):
+    for _ in range(list_rows - (hi - lo) - up - down):
         put("")
     sec = sections[focus]
     put(f"{dmark}── {sec.get('title', '?')} ({dkeys}) " + "─" * width)
