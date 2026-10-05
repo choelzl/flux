@@ -1672,6 +1672,9 @@ async function loopPage(name, owner, path = "") {
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
     pick one from (D692). */
+/** D816: a log line's stamp with its day -- "Oct 05 14:03:22" -- so a run of several days reads. */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const logAt = (at) => `${MONTHS[Number(at.slice(5, 7)) - 1] || at.slice(5, 7)} ${at.slice(8, 10)} ${at.slice(11, 19)}`;
 function logView(base, qs) {
   const lines = []; let partial = "", seen = 0;
   const listeners = [];                                   // D697: the Live tab's log follows the same stream
@@ -1696,7 +1699,7 @@ function logView(base, qs) {
   const MARK = /^── started (.+?) ──$/;
   const STAMP = /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d{3} /;   // flux_web.stamp.STAMP_RE (D732)
   const times = h("input", { type: "checkbox" });
-  try { times.checked = localStorage.getItem("flux-log-times") === "on"; } catch (_) { /* per browser, when it can */ }
+  try { times.checked = localStorage.getItem("flux-log-times") !== "off"; } catch (_) { times.checked = true; }   // D816: on unless turned off
   const timeListeners = [];
   times.addEventListener("change", () => {
     try { localStorage.setItem("flux-log-times", times.checked ? "on" : "off"); } catch (_) { /* per browser */ }
@@ -1721,7 +1724,7 @@ function logView(base, qs) {
   function lineEl(l) {
     const cls = MARK.test(l.text) ? "marker" : PROBLEM.test(l.text) ? "bad" : WARN.test(l.text) ? "warn" : GOOD.test(l.text) ? "good" : "";
     return h("div", { class: "ln " + cls, "data-n": String(l.n) }, h("span", { class: "no" }, String(l.n)),
-      times.checked ? h("span", { class: "at", title: l.at || "written before times were kept" }, l.at ? l.at.slice(11) : "") : "",
+      times.checked ? h("span", { class: "at", title: l.at || "written before times were kept" }, l.at ? logAt(l.at) : "") : "",
       h("span", { class: "tx" }, l.text || " "));
   }
   function drawStarts() {
@@ -2569,7 +2572,7 @@ async function reviseByAgent(body, name, owner) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", documents: "Documents", resources: "Resources", sandbox: "Sandbox", agents: "Agents and models", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", sandbox: "Sandbox", agents: "Agents and models", users: "Users" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -2577,7 +2580,8 @@ function meter(frac, cls = "") {
 }
 async function adminPage(sub = "") {
   const show = pageShow();
-  const tab = sub === "models" ? "agents" : ADMIN_TABS[sub] ? sub : "";       // D814: Models and variables are the agents' tab
+  // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
+  const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
   const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
   const body = h("div", {});
@@ -2588,9 +2592,18 @@ async function adminPage(sub = "") {
   if (tab === "users") return adminUsers(body);
   if (tab === "sandbox") return adminSandbox(body);
   if (tab === "agents") return adminAgents(body);
-  if (tab === "insights") return adminInsights(body);
+  if (tab === "insights") {
+    const ins = h("div", {}), aud = h("div", { id: "audit" });
+    body.replaceChildren(ins, aud);
+    await Promise.all([adminInsights(ins), adminAudit(aud)]);
+    if (sub === "audit") aud.scrollIntoView();
+    return;
+  }
   if (tab === "applications") return adminApplications(body);
-  if (tab === "documents") return adminDocuments(body);
+}
+
+/** The audit trail (D708, D723), under Insights (D816): what happened, by whom, narrowed by both. */
+async function adminAudit(body) {
   const audit = await api("/audit");
   // D708: the hosts a loop's sandbox refused are here too, once per host and run.
   // D723: narrowed by what happened and by whom, each a list of what the trail holds
@@ -2631,12 +2644,16 @@ async function adminPage(sub = "") {
       h("td", { class: "mono muted" }, x.detail))) : [h("tr", {}, h("td", { colspan: 4 }, empty("Nothing matches.")))]));
   };
   what.onchange = who.onchange = draw; find.oninput = draw; draw();
-  body.replaceChildren(card(null, [h("div", { class: "toolbar" }, what, who, find, count),
+  body.replaceChildren(card("The audit trail", [h("div", { class: "toolbar" }, what, who, find, count),
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 
 async function adminLoops(body) {
   const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null)]);
+  // D816: the documents of an earlier form, looked for when asked (each loop's documents are tried)
+  const migration = h("div", {});
+  const migrateBtn = act("Migrate documents of an earlier form…", async () => { migrateBtn.hidden = true; await adminDocuments(migration); },
+    { cls: "small", title: "Each loop's documents, what would change to be of today's form, and the migration" });
   const paused = res ? res.paused : null;
   const running = allApps.filter(l => l.running).length;
   const reason = h("input", { placeholder: "why (users see it)", style: "min-width:260px" });
@@ -2657,7 +2674,7 @@ async function adminLoops(body) {
         const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
       }, { cls: "danger" }))]);
   const box = h("div", {}, loopsBrowser(allApps, { who: true }));
-  body.replaceChildren(controls, card("Every loop", box));
+  body.replaceChildren(controls, card("Every loop", box, { actions: [migrateBtn] }), migration);
   pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); };
 }
 
@@ -2985,25 +3002,26 @@ async function adminAgents(body) {
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
     const first = JSON.stringify(body_());
-    const el = h("div", { class: "agent-panel" },
-      h("h2", { class: "agent-panel-name" }, a.label),
+    const el = h("div", { class: "agent-panel", "data-agent": a.id, "data-label": a.label },
       h("div", { class: "agent-found" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
         h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`), h("code", { class: "small" }, a.id),
         h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`)),
-      h("h4", { class: "set-sub" }, "Its program and login"),
       h("div", { class: "grid-2" },
-        h("label", { class: "stack" }, "Name shown", label),
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
-        h("label", { class: "stack" }, "Login command", login),
-        h("label", { class: "stack" }, "Extra arguments, every run", args),
-        h("label", { class: "stack", title: "Where a login of this build is kept, in a user's home: what says they are logged in" }, "Login files (when not its usual)", creds),
-        h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
-        h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts)),
-      h("p", { class: "small" }, h("strong", {}, "Ready for: "), ready.length ? ready.join(", ") : "nobody yet",
-        failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
-        h("span", { class: "muted" }, " (each user tests it on their Account page; it is tested again each day)")),
+        h("label", { class: "stack" }, "Name shown", label)),
+      // D816: what is set once and rarely looked at again, folded
+      h("details", { class: "agent-more" }, h("summary", { class: "small" }, "Login, arguments, home files, hosts",
+          [a.login, a.args, ...a.login_files, ...a.home, ...a.hosts].some(Boolean) ? h("span", { class: "set-dot" }, " •") : ""),
+        h("div", { class: "grid-2" },
+          h("label", { class: "stack" }, "Login command", login),
+          h("label", { class: "stack" }, "Extra arguments, every run", args),
+          h("label", { class: "stack", title: "Where a login of this build is kept, in a user's home: what says they are logged in" }, "Login files (when not its usual)", creds),
+          h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
+          h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts))),
+      h("p", { class: "small muted" }, "Ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
+        failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "", "."),
       a.builtin ? "" : h("div", { class: "form-actions" }, act("Remove", async () => {
         if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
         await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
@@ -3016,7 +3034,7 @@ async function adminAgents(body) {
   for (const a of r.agents) {
     const p = panelOf(a);
     if (offered.has(a.id)) panels[a.id] = p;
-    else extraTabs.push({ tab: a.label, before: "other", el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
+    else extraTabs.push({ tab: a.label, el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
       h("p", { class: "muted small" }, "Its model and its own variables are set here once its program is found.")), save: p.save, dirty: p.dirty });
   }
   extraTabs.push({ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent"),
@@ -3037,8 +3055,7 @@ async function adminAgents(body) {
       toast(`${name.value.trim()} added`, "ok"); route();
     }, { cls: "primary" }))) });
   const save = async (values) => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); toast("Saved", "ok"); route(); };
-  body.replaceChildren(card("Agents and models", [h("p", { class: "muted" }, "Each tool on a tab of its own: an agent's program and login, then the model it uses and the variables only it gets; ",
-      "Flux's own model; the variables every agent gets. What the server sets, every run gets unless its user sets their own on their Account page. Keys are stored encrypted and never shown again."),
+  body.replaceChildren(card("Agents and models", [h("p", { class: "muted small" }, "What the server sets, every run gets unless its user sets their own. Keys are stored encrypted and never shown again."),
     ...settingsForm(st, { save, scope: "server", panels, extraTabs, agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
       save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
 }
@@ -3096,13 +3113,13 @@ async function adminUsers(body) {
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
     the admin's values a field falls back to when empty (a key only said to be set). */
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
-  FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_REMOTE_API_KEY: "Key", OPENROUTER_API_KEY: "OpenRouter key",
+  FLUX_REMOTE_API_KEY: "Key",
   FLUX_DEFAULT_AGENT: "Agent" };
 /** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables
     for it alone (`agentEnv(name)`: its rows and how to save one, or null). */
 function settingsForm(st, { server = null, save, scope, agentEnv = null, panels = {}, extraTabs = [] }) {
   // D814: `panels[agent]` -- {el, save, dirty} -- its program and login above its model; `extraTabs` --
-  // [{tab, el, before, save, dirty, noSave}] -- a tab of its own (an agent not offered, every agent's
+  // [{tab, el, save, dirty, noSave}] -- a tab of its own (an agent not offered, every agent's
   // variables, adding one); one Save writes what changed on any tab
   const inputs = {};
   const secret = new Set(st.secret);
@@ -3137,9 +3154,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   });
   // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; one Save for all of them;
   // a tab that holds a value is marked; the tab last looked at is kept in this browser
-  const own = st.groups.filter(g => g.id !== "other").map(g => g.tab || g.label);
-  const tabs = [...new Set([...own, ...extraTabs.filter(x => x.before === "other").map(x => x.tab),
-    ...st.groups.filter(g => g.id === "other").map(g => g.tab || g.label), ...extraTabs.filter(x => x.before !== "other").map(x => x.tab)])];
+  const tabs = [...new Set([...st.groups.map(g => g.tab || g.label), ...extraTabs.map(x => x.tab)])];
   const extras = extraTabs.map(x => ({ ...x, holder: h("div", { class: "set-extra" }, x.el) }));
   const memo = `flux-models-tab-${scope}`;
   let cur = (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();

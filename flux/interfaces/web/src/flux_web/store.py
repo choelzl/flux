@@ -44,13 +44,10 @@ GROUPS: dict[str, dict[str, Any]] = {
     "model": {"label": "Flux's own model (OpenAI-compatible)", "tab": "Flux", "endpoint": "FLUX_REMOTE_BASE_URL",
               "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S"),
               "secret": ("FLUX_REMOTE_API_KEY",),
-              "hint": "The endpoint Flux's own model calls go to (a proposer, a critic, an Ask answered by the model)."},
+              "hint": "The endpoint Flux's own model calls go to (a proposer, a critic, an Ask answered by the model): "
+                      "any OpenAI-compatible one -- a hosted one, OpenRouter's, a local Ollama's /v1 (D817)."},
     "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
               "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: an agent's name, or model."},
-    "other": {"label": "Other providers: Ollama, OpenRouter", "tab": "Other", "endpoint": "OLLAMA_BASE_URL",
-              "public": ("OLLAMA_BASE_URL", "FLUX_LLM_MODEL"), "secret": ("OPENROUTER_API_KEY",),
-              "hint": "Ollama: Flux's model calls go to a local Ollama when no endpoint is set on the Flux tab; FLUX_LLM_MODEL names its "
-                      "model. OpenRouter: its key, used when Flux's endpoint is OpenRouter's (the default when a key is set)."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])

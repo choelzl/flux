@@ -518,9 +518,10 @@ def flows(r: Run) -> None:
             r.check("the step bar goes through the selected box's runs (no box ran twice: one run each)", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
         b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=30, what="the log's lines")
-        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
         stamps = b.wait("[...document.querySelectorAll('.logview .ln .at')].map(a => a.textContent).filter(Boolean)", timeout=10, what="the times")
-        r.check("the log shows each line's time when asked (D732)", bool(stamps) and all(re.match(r"^\d\d:\d\d:\d\d$", x) for x in stamps), str(stamps[:3]))
+        r.check("the log shows each line's day and time, by default (D732, D816)", bool(stamps) and all(re.match(r"^[A-Z][a-z]{2} \d\d \d\d:\d\d:\d\d$", x) for x in stamps), str(stamps[:3]))
+        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
+        r.check("and hides them when asked", b.wait("document.querySelectorAll('.logview .ln .at').length === 0", timeout=10, what="no times"))
         b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
         r.check("the graph view is remembered", b.js("return !!document.querySelector('.seg button.on') && document.querySelector('.seg button.on').textContent") == "Graph")
@@ -563,7 +564,7 @@ def flows(r: Run) -> None:
 
     def admin():
         r.login("ada")
-        tabs = ["", "applications", "documents", "resources", "sandbox", "models", "users", "audit"]
+        tabs = ["", "insights", "applications", "resources", "sandbox", "agents", "users", "audit", "models"]
         for t in tabs:
             r.page(f"#/admin{'/' + t if t else ''}", "document.querySelector('#main .tabs')", f"admin {t or 'loops'}")
             b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
@@ -578,23 +579,23 @@ def flows(r: Run) -> None:
         r.check("hovering a chart shows its time and value in a bubble", said is None or bool(said), repr(said))
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
-        r.check("the model settings have a tab per tool, an agent's where it is installed (D721, D807)",
-                tabs[:1] == ["Flux"] and "Other" in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
-                and set(tabs[1:tabs.index("Other")]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
-        r.button("Other", ".set-tabs")
+        r.check("the model settings have a tab per tool, an agent's where it is installed, no Other (D721, D807, D817)",
+                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
+                and set(tabs[1:-2]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
+        r.button("Every agent", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
-        r.check("a tab shows its own groups only", shown == ["Other providers: Ollama, OpenRouter"], str(shown))
-        r.page("#/admin/audit", "document.querySelector('#main select[aria-label=What]')", "the audit")   # D723
-        opts = b.js("return [...document.querySelectorAll('#main select[aria-label=What] option')].map(o => [o.value, o.textContent])")
+        r.check("a tab shows its own groups only", shown == ["Variables for every run and every agent"], str(shown))
+        r.page("#/admin/audit", "document.querySelector('#audit select[aria-label=What]')", "the audit")   # D723
+        opts = b.js("return [...document.querySelectorAll('#audit select[aria-label=What] option')].map(o => [o.value, o.textContent])")
         values = [v for v, _ in opts if v]
         r.check("the audit's What offers groups only (D733)", "Users and sign-in" in values and "Runs" in values
-                and "login" not in values and not b.js("return !!document.querySelector('#main select[aria-label=What] optgroup')"), str(opts))
-        b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
-        whats = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
+                and "login" not in values and not b.js("return !!document.querySelector('#audit select[aria-label=What] optgroup')"), str(opts))
+        b.js("const s = document.querySelector('#audit select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
+        whats = b.js("return [...document.querySelectorAll('#audit tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
         r.check("a group shows its kinds together", "login" in whats and set(whats) <= {"login", "login refused", "add user", "change user", "change password"}, str(whats))
-        b.js("const s = document.querySelector('#main select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
-             "const w = document.querySelector('#main select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
-        whos = b.js("return [...document.querySelectorAll('#main tbody tr')].map(t => t.children[1].textContent)")
+        b.js("const s = document.querySelector('#audit select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
+             "const w = document.querySelector('#audit select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
+        whos = b.js("return [...document.querySelectorAll('#audit tbody tr')].map(t => t.children[1].textContent)")
         r.check("the audit narrows to one user", whos and set(whos) == {"bob"}, str(whos))
         r.page("#/admin", "document.querySelector('#main .tabs')", "admin loops")
         b.wait("document.querySelector('#main').innerText.includes('sw')", what="every loop listed")
@@ -734,8 +735,8 @@ def flows(r: Run) -> None:
         r.check("the test says each step, the answer last", any("answer" in x and "FLUX-OK" in x for x in steps), str(steps))
         r.check("tested, the agent is accepted", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 200)
         r.login("ada")                                     # D756: the admin sees it found, and whom it is ready for
-        r.page("#/admin/agents", "[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Codex')", "Admin › Agents")
-        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('Ready for: bob'))",
+        r.page("#/admin/agents", "[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Codex')", "Admin › Agents")
+        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('Ready for bob'))",
                timeout=30, what="Codex found, ready for bob")
         r.check("Admin › Agents: the program found with its version, ready for who tested it",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
@@ -744,10 +745,10 @@ def flows(r: Run) -> None:
         b.js("document.querySelector('#ag-new-name').value = 'corp'; document.querySelector('#ag-new-kind').value = 'codex';"
              f"document.querySelector('#ag-new-bin').value = {json.dumps(str(fake))}; return 1")
         b.js("[...document.querySelector('#ag-new-name').closest('fieldset').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click(); return 1")
-        b.wait("[...document.querySelectorAll('#main .agent-panel h2')].some(x => x.textContent === 'corp')", timeout=30, what="corp added")
-        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.querySelector('h2').textContent === 'corp').textContent"))
+        b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'corp')", timeout=30, what="corp added")
+        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp').textContent"))
         r.check("Agents and models is one tab: the agent's program and its model on its tab (D814)",
-                b.js("const p = [...document.querySelectorAll('#main .agent-panel')].find(c => c.querySelector('h2').textContent === 'corp');"
+                b.js("const p = [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp');"
                      "return !!p.closest('fieldset').querySelector('#set-server-FLUX_CORP_BASE_URL') && !!p.closest('fieldset').querySelector('#env-server-corp-name')"))
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         r.check("it has a tab of its own, with variables for it alone",
@@ -765,7 +766,7 @@ def flows(r: Run) -> None:
         r.page("#/admin/agents", "document.querySelector('#ag-corp-label')", "Admin › Agents")
         b.js("document.querySelector('#ag-corp-label').value = 'Corp Codex'; return 1")
         b.js("[...document.querySelector('#ag-corp-label').closest('.card').querySelectorAll('button')].find(x => x.textContent.trim() === 'Save').click(); return 1")
-        b.wait("[...document.querySelectorAll('#main .agent-panel h2')].some(x => x.textContent === 'Corp Codex')", timeout=20, what="corp renamed")
+        b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Corp Codex')", timeout=20, what="corp renamed")
         r.check("an agent's name shown is the admin's", True)
         r.login("bob")
         r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Corp Codex')", "corp in bob's agent logins")
@@ -843,7 +844,9 @@ def flows(r: Run) -> None:
         refused = r.api("/apps/oldform/start", "POST", {"passes": 1})
         r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Admin › Documents" in refused["body"], refused["body"][:300])
         r.login("ada")
-        r.page("#/admin/documents", "[...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", "Admin › Documents")
+        r.page("#/admin", "document.querySelector('#main .card')", "Admin › Loops")
+        r.button("Migrate documents of an earlier form…", "#main")              # D816: a button on the Loops tab
+        b.wait("[...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", timeout=60, what="the documents to migrate")
         text = b.js("return [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).textContent")
         r.check("it says the document, where it goes and that it would migrate", "oldsum.problem.yaml" in text and "problem.yaml" in text
                 and "would migrate" in text, text[:300])

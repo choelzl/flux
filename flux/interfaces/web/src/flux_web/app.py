@@ -313,7 +313,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     def _groups(agents: dict[str, Any]) -> list[dict[str, Any]]:
         """Flux's own settings, then a group per agent offered (D807: its kind's endpoint, model
-        and key, each its own), then the other providers -- a tab each."""
+        and key, each its own) -- a tab each (D817: no other providers' tab)."""
         from .agents import KINDS
         from .store import GROUPS
 
@@ -324,7 +324,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         per = [{"id": a.name, "label": f"{a.label} ({a.kind})" if not a.builtin else a.label, "tab": a.label,
                 "public": list(a.keys()["public"]), "secret": list(a.keys()["secret"]), "endpoint": a.keys()["public"][0],
                 "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name} for a in agents.values()]
-        return [*(static(k, g) for k, g in GROUPS.items() if k != "other"), *per, static("other", GROUPS["other"])]
+        return [*(static(k, g) for k, g in GROUPS.items()), *per]
 
     def _keys_of(groups: list[dict[str, Any]]) -> dict[str, list[str]]:
         return {"public": [k for g in groups for k in g["public"]], "secret": [k for g in groups for k in g["secret"]]}

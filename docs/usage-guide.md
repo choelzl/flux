@@ -78,7 +78,7 @@ flow:
 There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801) -- a parent's `generate` that is a model or an agent (`generate: claude`) drafts for them instead, inherited like any box (D804). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`. A document of an earlier form
-is brought to this one by `flux task migrate FOLDER [--write]`, or by an admin in Admin › Documents (D811):
+is brought to this one by `flux task migrate FOLDER [--write]`, or by an admin from Admin › Loops' "Migrate documents of an earlier form" (D811, D816):
 each change said, a result written only when it loads, the original kept as `<file>.orig`; a `world:`
 or `hooks:` is said for a person to rewrite as commands.
 
@@ -308,7 +308,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     exit; its thinking, the commands it ran, the last command's output and its words, each a stream
     that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand, and each line's
     time with **times** (D732: a run writes every line with its time; the setting is one for both logs,
-    kept per browser; lines from before have none). A line
+    kept per browser, on unless turned off; lines from before have none). A time carries its day, `Oct 05 14:03:22`
+    (D816), so a run of several days reads. A line
     docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when
     the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
@@ -423,7 +424,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   command line (`flux.env`) the sandbox mounts the program itself, the file alone with its link followed,
   and names it so inside (D804): a link in `~/.config/flux` works without the key beside it going in.
 - **Models (Admin › Models, Account):** a tab per tool (D721) -- Flux (its own model, and the agent by
-  default), one per agent offered (D807), Other (Ollama's URL and model, OpenRouter's key); a tab with
+  default; its endpoint is any OpenAI-compatible one -- a hosted one, OpenRouter's, a local Ollama's /v1, D817), one per
+  agent offered (D807); `OLLAMA_BASE_URL`, `FLUX_LLM_MODEL` and `OPENROUTER_API_KEY` are no settings, but variables when
+  one wants them (the command line reads them as before); a tab with
   settings of its own is marked •, one Save covers them all. Each agent's tab is its own: an endpoint, a
   model and a key as its kind reads them (`FLUX_<AGENT>_BASE_URL`, `_MODEL`, `_API_KEY`) -- an OpenCode gets
   them as a provider (the built-in OpenCode, with none of its own, Flux's model's), Claude Code and Codex as
@@ -454,12 +457,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **Each day** (D807) an agent a user tested is tested again, one at a time: an answer keeps its login fresh;
     a failure is told to the user (the bell) and their loops that need it wait until a Test passes again.
   - **admin**: internal, and the admin pages.
-- **Admin** (tabs: Loops, Insights, Applications, Documents, Resources, Sandbox, Agents and models, Users, Audit):
-  - **Documents** (D811): every loop's documents of an earlier form -- what each would change (the steps, the
+- **Admin** (tabs: Loops, Insights and audit, Applications, Resources, Sandbox, Agents and models, Users):
+  - **Loops' "Migrate documents of an earlier form…"** (D811, D816): every loop's documents of an earlier form -- what each would change (the steps, the
     result), where it goes (`<id>.problem.yaml` with an `id:` becomes `problem.yaml`; the record follows a
     renamed id) -- migrated one loop at a time or all at once; a running loop is left until stopped; a loop's
     Start says when its document needs it.
-  - **Insights** (D766): over the last day, 7 or 30 days -- the starts that failed with why (their log's
+  - **Insights and audit** (D766, D816; the audit trail at the end): over the last day, 7 or 30 days -- the starts that failed with why (their log's
     words) and the agents' Tests that failed; turns, tokens and cost by user and by agent or model, a bar a
     day, and the loops that used most; each model endpoint and agent with its turns, failures, median and
     slow (95%) time and its last failure; the hosts the sandboxes refused, by which loops; the disk by user
