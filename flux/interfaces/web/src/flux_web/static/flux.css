@@ -790,3 +790,9 @@ ul.files li.own > a { font-weight: 600; }   /* D829 */
 /* D833: a field's save, said beside it */
 .save-mark { color: var(--muted); min-width: 4em; font-size: 12px; }
 .save-mark.ok { color: var(--ok); } .save-mark.bad { color: var(--bad); }
+
+/* D834: a long file name wraps inside its row and the viewer's head, never past them */
+ul.files li > a { min-width: 0; overflow-wrap: anywhere; }
+ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; }
+.viewer-head { flex-wrap: wrap; gap: 6px 12px; }
+.viewer-head > .path-crumbs { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }

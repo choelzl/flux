@@ -413,6 +413,12 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
         r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
         b.click("#show-ignored")
+        long = "a_very_long_file_name_" * 6 + ".txt"                     # D834: wraps, never widens the card
+        r.api(f"/apps/sw/file?path={long}", "PUT", {"text": "x"})
+        r.page("#/app/sw/files", f"[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('{long}'))", "the long name")
+        wide = b.js("const c = document.querySelector('.files-card'); return [c.scrollWidth, c.clientWidth]")
+        r.check("a long file name stays inside the Files card", wide[0] <= wide[1] + 1, str(wide))
+        r.api(f"/apps/sw/file?path={long}", "DELETE")
         r.clean("files")
     r.step("files and .gitignore", files_and_gitignore)
 
