@@ -11,8 +11,8 @@ writes the document, who fills the loop's roles, and how the answer is read back
 ## Scripts: run a document, read the answer as JSON
 
 ```bash
-flux task check applications/mul8/mul8.problem.yaml          # answerable? which tools, which roles
-flux task run   applications/mul8/mul8.problem.yaml --json answer.json
+flux task check applications/mul8   # answerable? which tools, which roles
+flux task run   applications/mul8 --json answer.json
 ```
 
 `flux task run DOC --json FILE` writes what the pass decided ([D591](decisions.md)): the

@@ -18,6 +18,7 @@ flow:
     screen: flux rtl measure {artifact} --stage synth --clock-ps 333
     confirm: flux rtl measure {artifact} --stage place --clock-ps 333
   select: {finalists: 2}
+  knowledge: off      # D867: the shared library is the NLU's papers, none of them about an adder
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 2900}

@@ -9,13 +9,12 @@ where the design is written, not enumerated.
 
 | file | what it is |
 |---|---|
-| `mul8.problem.yaml` | the problem document: the statement and the contract (together, the prompt), the gate, the two stages, the objectives, the budget |
+| `problem.yaml` | the problem document: the statement and the contract (together, the prompt), the gate, the two stages, the objectives, the budget |
 | `golden.py` | the golden model: `PORTS`, `EXHAUSTIVE` and `golden(a, w)`, what the multiplier must compute |
 
 The gate is `flux rtl test {artifact} --golden {home}/golden.py`: Verilator runs the design on
 every one of the 65,536 input pairs (`EXHAUSTIVE = True`, D865) and compares each output with
-`golden()`. A
-design that fails goes back to the model with the failing vectors, up to
+`golden()`. A design that fails goes back to the model with the failing vectors, up to
 `budget.repair_attempts` times. The stages are `flux rtl measure --stage synth` (Yosys +
 OpenSTA, the screen) and `--stage place` (OpenROAD, the numbers the report quotes).
 
@@ -26,9 +25,9 @@ It needs a model: the design is written by it. See "Choose a model" in the
 OpenAI-compatible server). From `flux/`:
 
 ```bash
-nix develop --command flux task check applications/mul8/mul8.problem.yaml
-nix develop --command flux task run applications/mul8/mul8.problem.yaml --tui
-nix develop --command flux task run applications/mul8/mul8.problem.yaml --screen-only   # synthesis only
+nix develop --command flux task check applications/mul8
+nix develop --command flux task run applications/mul8 --tui
+nix develop --command flux task run applications/mul8 --screen-only   # synthesis only
 ```
 
 The record goes to `applications/mul8/out/mul8.db` and the chosen design to `out/mul8.sv`.

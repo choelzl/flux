@@ -11,7 +11,7 @@ run: it needs no model.
 
 | file | what it is |
 |---|---|
-| `adder16.problem.yaml` | the problem document: the statement, the `flow.orchestrate.space` (one knob, `arch`: 6 points), the generator command, the gate, the two stages, the objectives, the budget |
+| `problem.yaml` | the problem document: the statement, the `flow.orchestrate.space` (one knob, `arch`: 6 points), the generator command, the gate, the two stages, the objectives, the budget |
 | `gen.py` | the generator: `gen.py <out> <arch>` writes one adder as Verilog |
 | `golden.py` | the golden model: `PORTS` and `golden(a, b)`, what the adder must compute |
 
@@ -25,9 +25,9 @@ against `golden.py` in Verilator (`flux rtl test`), synthesises it with Yosys + 
 From `flux/`:
 
 ```bash
-nix develop --command flux task check applications/adder16/adder16.problem.yaml   # what it will do, tools present?
-nix develop --command flux task run applications/adder16/adder16.problem.yaml --screen-only   # synthesis only, a few minutes
-nix develop --command flux task run applications/adder16/adder16.problem.yaml   # plus placement of the finalists
+nix develop --command flux task check applications/adder16   # what it will do, tools present?
+nix develop --command flux task run applications/adder16 --screen-only   # synthesis only, a few minutes
+nix develop --command flux task run applications/adder16   # plus placement of the finalists
 ```
 
 The report opens with the DECISION (the design to build and its numbers, and which stage they

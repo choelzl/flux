@@ -16,6 +16,7 @@ flow:
     screen: flux rtl measure {artifact} --stage synth --clock-ps 625
     confirm: flux rtl measure {artifact} --stage place --clock-ps 625
   select: {finalists: 2}
+  knowledge: off      # D867: the shared library is the NLU's papers, none of them about a multiplier
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 1600}

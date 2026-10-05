@@ -54,6 +54,16 @@ def test_the_example_document_loads_and_names_the_two_commands():
     assert any(line.startswith("test: gate (never delegated) -- the document's commands") for line in describe_flow(task, prob))
 
 
+def test_the_adder_and_the_multiplier_read_no_library():
+    """D867: the shared library is the NLU's papers; an agent spent 40 minutes digesting 88 of
+    them for the adder. Both documents turn it off."""
+    from flux_loop import load_task
+    from flux_loop.document import library_on
+
+    for app in ("adder16", "mul8"):
+        assert not library_on(load_task(FLUX / "applications" / app / "problem.yaml")), app
+
+
 @pytest.mark.heavy
 @pytest.mark.skipif(shutil.which("verilator") is None, reason="needs verilator")
 def test_rtl_test_passes_the_right_module_and_names_the_wrong_ones_vectors(tmp_path):
