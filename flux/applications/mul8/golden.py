@@ -5,8 +5,8 @@ PORTS = [
     {"name": "w", "dir": "in", "bits": 8},
     {"name": "p", "dir": "out", "bits": 16},
 ]
-SEED = 1
-COUNT = 24
+# D865: all 65,536 input pairs; 49 sampled ones passed a design wrong on 1,024 of them
+EXHAUSTIVE = True
 
 
 def golden(a: int, w: int) -> dict:

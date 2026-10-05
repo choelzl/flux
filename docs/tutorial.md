@@ -61,7 +61,8 @@ def golden(x: int) -> dict:
 ```
 
 The gate runs every design against it: Verilator drives the corner cases and `COUNT` random
-inputs and compares each output.
+inputs and compares each output. `EXHAUSTIVE = True` drives every input instead (at most 20
+input bits in all; `mul8` checks all 65,536 pairs this way, D865).
 
 ## 3. Say what you want: the problem document
 

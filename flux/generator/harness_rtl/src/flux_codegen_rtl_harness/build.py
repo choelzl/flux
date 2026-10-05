@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .driver_gen import generate_testbench_sv
+from .driver_gen import generate_testbench_sv, vector_table
 from .errors import CompileError
 from flux_codegen_harness_spec import DesignSpec, HarnessRunResult
 
@@ -53,7 +53,11 @@ def compile_and_run(
     vcd_path = work_dir / "trace.vcd"
 
     dut_path.write_text(_normalized(module_source))
-    testbench_path.write_text(generate_testbench_sv(spec, vcd_path=str(vcd_path)))
+    table = vector_table(spec)          # D865: a long vector list is read, not compiled
+    if table is not None:
+        (work_dir / "vectors.hex").write_text(table)
+    testbench_path.write_text(generate_testbench_sv(
+        spec, vcd_path=str(vcd_path), table_path=str(work_dir / "vectors.hex") if table is not None else None))
 
     extra_paths: list[Path] = []
     for stem, source in (extra_sources or {}).items():

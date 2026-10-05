@@ -11,8 +11,9 @@ so an RTL problem needs only a document and a Python golden model, no world pack
 
 The golden model (`golden.py`) declares `PORTS` -- `[{name, dir, bits}, ...]`, ints, signed
 unless `unsigned: true` -- and `golden(**inputs) -> {output: value}`; optionally `VECTORS`,
-`COUNT` (random vectors, default 32), `SEED`, `CLOCK` (a clocked design), `LATENCY` (its
-cycles, checked) and `TOLERANCE_ULP` ({port: n}: allowed ULP error on a float output). The
+`COUNT` (random vectors, default 32), `SEED`, `EXHAUSTIVE` (every input, D865), `CLOCK` (a
+clocked design), `LATENCY` (its cycles, checked) and `TOLERANCE_ULP` ({port: n}: allowed ULP
+error on a float output). The
 commands wrap `flux_codegen_rtl_harness.check_rtl` and `flux_evaluator_openroad.measure_rtl`.
 """
 

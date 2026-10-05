@@ -4,6 +4,7 @@ written by the model when the named one does not exist (D604)."""
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -134,7 +135,7 @@ def test_a_small_input_space_is_checked_exhaustively():
     rows = exhaustive(g)
     assert rows is not None and len(rows) == 65536
     sneaky = "def design(a, w):\n    return {'p': 0 if a == -77 and w == 113 else (a * w) & 0xFFFF}\n"
-    assert check(sneaky, g, golden_vectors(g)).ok, "the sampled vectors do not include (-77, 113)"
+    assert check(sneaky, g, golden_vectors(replace(g, exhaustive=False))).ok, "the sampled vectors do not include (-77, 113)"
     v = check(sneaky, g, rows)
     assert not v.ok and v.score == 1 and "a=-0x4d, w=0x71" in v.why
 

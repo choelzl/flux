@@ -11,10 +11,11 @@ a problem where the design is written, not enumerated.
 | file | what it is |
 |---|---|
 | `mul8.problem.yaml` | the problem document: the statement and the contract (together, the prompt), the gate, the two stages, the objectives, the budget |
-| `golden.py` | the golden model: `PORTS` and `golden(a, w)`, what the multiplier must compute |
+| `golden.py` | the golden model: `PORTS`, `EXHAUSTIVE` and `golden(a, w)`, what the multiplier must compute |
 
 The gate is `flux rtl test {artifact} --golden {home}/golden.py`: Verilator runs the design on
-the corners of every input and on random vectors and compares each output with `golden()`. A
+every one of the 65,536 input pairs (`EXHAUSTIVE = True`, D865) and compares each output with
+`golden()`. A
 design that fails goes back to the model with the failing vectors, up to
 `budget.repair_attempts` times. The stages are `flux rtl measure --stage synth` (Yosys +
 OpenSTA, the screen) and `--stage place` (OpenROAD, the numbers the report quotes).

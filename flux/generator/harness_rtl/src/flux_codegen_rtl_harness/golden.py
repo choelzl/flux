@@ -3,9 +3,9 @@ worlds for their own designs.
 
 A `Golden` is the ports (`{name, dir, bits}`, signed unless `unsigned: true`) and a function
 `fn(**inputs) -> {output: value}`; optionally explicit input rows, a random `count` and
-`seed`, and for a clocked design its `latency` (cycles from the edge that takes the inputs to
-the valid output). `golden_vectors` makes the rows (explicit ones, else pairwise corners and
-`count` random); `check_rtl` Verilates the source against them and returns a `Check`: failing
+`seed`, or `exhaustive` (every input, D865), and for a clocked design its `latency` (cycles from
+the edge that takes the inputs to the valid output). `golden_vectors` makes the rows (explicit
+ones, every input, else pairwise corners and `count` random); `check_rtl` Verilates the source against them and returns a `Check`: failing
 count, first failure lines with inputs and expected values, measured latency, or the compile
 error explained.
 """
@@ -31,6 +31,7 @@ class Golden:
     latency: int | None = None                 # a clocked design's cycles, checked when given
     behavior: str = ""
     ulp: dict = field(default_factory=dict)    # output port -> the ULPs it may be off by
+    exhaustive: bool = False                   # every input combination, not corners and samples (D865)
 
     def __post_init__(self) -> None:
         if not self.ports or not callable(self.fn):
@@ -46,20 +47,28 @@ class Golden:
                 raise ValueError(f"TOLERANCE_ULP on {name!r}: a {outs[name]}-bit port is not an IEEE float (16, 32 or 64 bits)")
             if int(n) < 0:
                 raise ValueError(f"TOLERANCE_ULP on {name!r} must be 0 or more")
+        bits = sum(int(p["bits"]) for p in self.ports if p["dir"] == "in")
+        if self.exhaustive and bits > EXHAUSTIVE_MAX_BITS:
+            raise ValueError(f"EXHAUSTIVE over {bits} input bits is 2**{bits} vectors; at most {EXHAUSTIVE_MAX_BITS} bits")
 
     @classmethod
     def from_module(cls, mod: Any) -> "Golden":
         """A `golden.py`: `PORTS`, `golden(**inputs)`; `VECTORS`, `COUNT`, `SEED`, `CLOCK`,
-        `LATENCY`, `BEHAVIOR` when it says them."""
+        `LATENCY`, `BEHAVIOR`, `EXHAUSTIVE` when it says them."""
         return cls(ports=tuple(getattr(mod, "PORTS", None) or ()), fn=getattr(mod, "golden", None),
                    vectors=tuple(getattr(mod, "VECTORS", None) or ()), count=int(getattr(mod, "COUNT", 32)),
                    seed=getattr(mod, "SEED", 0), clocked=bool(getattr(mod, "CLOCK", None)),
                    latency=getattr(mod, "LATENCY", None), ulp=dict(getattr(mod, "TOLERANCE_ULP", None) or {}),
+                   exhaustive=bool(getattr(mod, "EXHAUSTIVE", False)),
                    behavior=str(getattr(mod, "BEHAVIOR", "") or getattr(getattr(mod, "golden", None), "__doc__", "") or ""))
 
     @property
     def unsigned(self) -> dict[str, int]:
         return {p["name"]: int(p["bits"]) for p in self.ports if p.get("unsigned")}
+
+
+#: The most input bits an EXHAUSTIVE golden may have: 2**20 vectors (D865).
+EXHAUSTIVE_MAX_BITS = 20
 
 
 def _corners(bits: int, unsigned: bool) -> list[int]:
@@ -69,14 +78,24 @@ def _corners(bits: int, unsigned: bool) -> list[int]:
 
 
 def golden_vectors(g: Golden) -> list[dict[str, Any]]:
-    """Explicit rows when the model gives them; else every input's corners (each against the
-    others' corners, pairwise), then `count` random rows from `seed`; `expected` from `fn`."""
+    """Explicit rows when the model gives them; every input combination when it says EXHAUSTIVE
+    (D865); else every input's corners (each against the others' corners, pairwise), then `count`
+    random rows from `seed`; `expected` from `fn`."""
     def row(inputs: dict[str, int], expected: dict[str, int] | None = None) -> dict[str, Any]:
         return {"inputs": dict(inputs), "expected": {k: int(v) for k, v in (expected or g.fn(**inputs)).items()}}
 
     if g.vectors:
         return [row(r["inputs"], r.get("expected")) if "inputs" in r else row(r) for r in g.vectors]
     ins = [p for p in g.ports if p["dir"] == "in"]
+    if g.exhaustive:
+        import itertools
+
+        def values(p: dict[str, Any]) -> range:
+            n = int(p["bits"])
+            return range(0, 1 << n) if p.get("unsigned") else range(-(1 << (n - 1)), 1 << (n - 1))
+
+        return [row(dict(zip([p["name"] for p in ins], combo)))
+                for combo in itertools.product(*(values(p) for p in ins))]
     rows: list[dict[str, Any]] = []
     seen: set = set()
 

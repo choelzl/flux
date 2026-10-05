@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -32,7 +33,9 @@ def test_the_golden_model_gives_the_vectors():
     inputs = {(r["inputs"]["a"], r["inputs"]["w"]) for r in rows}
     assert {(-128, -128), (127, 127), (-128, 127), (0, 0), (-1, 1)} <= inputs, "the corners, pairwise"
     assert all(r["expected"] == {"p": r["inputs"]["a"] * r["inputs"]["w"]} for r in rows)
-    assert 24 + 25 <= len(rows) <= 24 + 40 and len(inputs) == len(rows), "the corners pairwise, then 24 random"
+    assert g.exhaustive and len(rows) == len(inputs) == 65536, "every input pair (D865)"
+    sampled = golden_vectors(replace(g, exhaustive=False, count=24))
+    assert 24 + 25 <= len(sampled) <= 24 + 40, "else the corners pairwise, then 24 random"
     assert not g.clocked and g.latency is None
     with pytest.raises(SystemExit, match="golden model"):
         load_golden(EXAMPLE / "nope.py")
@@ -68,6 +71,39 @@ def test_rtl_test_passes_the_right_module_and_names_the_wrong_ones_vectors(tmp_p
     broken.write_text("module mul8(input logic signed [7:0] a, output logic signed [15:0] p);\nassign p = {10{a[7]}, a};\nendmodule\n")
     r = _rtl("test", str(broken), "--golden", str(EXAMPLE / "golden.py"))
     assert r.returncode == 3 and "did not compile" in r.stdout and "line 2 of your module" in r.stdout   # D594: 3 = not built
+
+
+def test_a_long_vector_list_is_a_table_the_testbench_reads():
+    """D865: from TABLE_VECTORS a combinational design's vectors are a `$readmemh` table, inputs
+    then expected outputs at their widths, not tens of thousands of unrolled lines."""
+    from flux_cli.rtl import load_golden
+    from flux_codegen_harness_spec import design_spec_from_dict
+    from flux_codegen_rtl_harness import golden_vectors
+    from flux_codegen_rtl_harness.driver_gen import generate_testbench_sv, vector_table
+    from flux_codegen_rtl_harness.golden import _harness_port
+
+    g = load_golden(EXAMPLE / "golden.py")
+    doc = {"schema_version": "0.1.0", "id": "golden/mul8", "module_name": "mul8",
+           "ports": [_harness_port(p) for p in g.ports], "behavior": "a * w"}
+    spec = design_spec_from_dict({**doc, "test_vectors": golden_vectors(g)})
+    table = vector_table(spec).splitlines()
+    assert len(table) == 65536 and table[0] == "80804000", "a=-128, w=-128, p=16384"
+    tb = generate_testbench_sv(spec, vcd_path="t.vcd", table_path="v.hex")
+    assert '$readmemh("v.hex", __flux_tab);' in tb and "{a, w, __flux_exp_p} = __flux_tab[__flux_v];" in tb
+    assert tb.count("\n") < 100
+    few = design_spec_from_dict({**doc, "test_vectors": golden_vectors(replace(g, exhaustive=False))})
+    assert vector_table(few) is None and "__flux_tab" not in generate_testbench_sv(few, vcd_path="t.vcd", table_path="v.hex")
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs verilator")
+def test_a_multiplier_wrong_on_one_input_in_64_is_refused(tmp_path):
+    """D865: off by 256 when a[3:0] == 4'b1011 and w[7:6] == 2'b01, 1,024 of 65,536 pairs: the 49
+    sampled vectors passed it; the exhaustive gate names every one."""
+    bad = tmp_path / "bad.sv"
+    bad.write_text(GOOD.replace("assign t = a * w;", "assign t = (a[3:0] == 4'b1011 && w[7:6] == 2'b01) ? a * w + 16'sd256 : a * w;"))
+    r = _rtl("test", str(bad), "--golden", str(EXAMPLE / "golden.py"))
+    assert r.returncode == 1 and r.stdout.strip().endswith("1024 failing of 65536"), r.stdout[-2000:] + r.stderr
 
 
 @pytest.mark.heavy

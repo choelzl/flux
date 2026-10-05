@@ -100,11 +100,53 @@ def _element_loop_sv(port, *, indent: str) -> list[str]:
     return lines
 
 
-def generate_testbench_sv(spec: DesignSpec, *, vcd_path: str) -> str:
+#: From this many vectors a combinational design with scalar ports is driven from a table
+#: (D865): every vector unrolled into the testbench made 65,536 of them a long C++ compile.
+TABLE_VECTORS = 1024
+
+
+def vector_table(spec: DesignSpec) -> str | None:
+    """The `$readmemh` table of a long vector list (D865): one hex row per vector, the inputs
+    then the expected outputs in port order, each its port's width in two's complement. None
+    when the vectors are unrolled instead (few of them, a clock, or an array port)."""
+    if spec.is_clocked or len(spec.test_vectors) < TABLE_VECTORS or any(p.is_array for p in spec.ports):
+        return None
+    ins = [p for p in spec.ports if p.dir == "in"]
+    outs = [p for p in spec.ports if p.dir == "out"]
+    width = sum(p.width for p in ins + outs)
+    rows = []
+    for vec in spec.test_vectors:
+        word = 0
+        for p, v in [(p, vec.inputs[p.name]) for p in ins] + [(p, vec.expected[p.name]) for p in outs]:
+            word = (word << p.width) | (int(v) & ((1 << p.width) - 1))
+        rows.append(f"{word:0{(width + 3) // 4}x}")
+    return "\n".join(rows) + "\n"
+
+
+def _table_lines(spec: DesignSpec, table_path: str) -> list[str]:
+    """The loop that drives every row of `vector_table` and checks it, as the unrolled vectors do."""
+    ins = [p for p in spec.ports if p.dir == "in"]
+    outs = [p for p in spec.ports if p.dir == "out"]
+    fields = ", ".join([p.name for p in ins] + [f"__flux_exp_{p.name}" for p in outs])
+    checks = " && ".join(f"({p.name} === __flux_exp_{p.name})" for p in outs)
+    fmt = " ".join(f"{p.name}=%0d" for p in outs)
+    return [f'    $readmemh("{table_path}", __flux_tab);',
+            f"    for (__flux_v = 0; __flux_v < {len(spec.test_vectors)}; __flux_v = __flux_v + 1) begin",
+            f"      {{{fields}}} = __flux_tab[__flux_v];",
+            "      #1;",
+            "      __flux_total = __flux_total + 1;",
+            f"      if ({checks}) __flux_passed = __flux_passed + 1;",
+            f'      else $display("VECTOR %0d FAIL {fmt}", __flux_v, {", ".join(p.name for p in outs)});',
+            "    end",
+            ""]
+
+
+def generate_testbench_sv(spec: DesignSpec, *, vcd_path: str, table_path: str | None = None) -> str:
     """Return a complete, compilable `testbench.sv` for `spec`: instantiates a DUT module named
     `spec.module_name` (the caller writes it to a separate `dut.sv`, see `build.py`) and
     drives/checks every test vector. `vcd_path` is where Verilator dumps the `.vcd`. Branches
     on `spec.is_clocked` (clock + reset + edge-synchronised driving vs `#1`-settle driving).
+    With `table_path`, a long vector list is read from there (`vector_table`, D865).
     """
     check_not_reserved(spec.module_name, context="module_name")
     for p in spec.ports:
@@ -131,6 +173,13 @@ def generate_testbench_sv(spec: DesignSpec, *, vcd_path: str) -> str:
         if p.is_array:
             # A separate golden array, so the comparison is element-wise.
             lines.append(f"  {_port_type(p)} __flux_exp_{p.name}{_array_suffix(p)};")
+    table = table_path is not None and vector_table(spec) is not None
+    if table:
+        for p in out_ports:
+            lines.append(f"  {_port_type(p)} __flux_exp_{p.name};")
+        lines.append(f"  logic [{sum(p.width for p in in_ports + out_ports) - 1}:0] "
+                     f"__flux_tab [0:{len(spec.test_vectors) - 1}];")
+        lines.append("  integer __flux_v;")
     if any(p.is_array for p in out_ports):
         lines.append("  integer __flux_arr_errs;")
         lines.append("  integer __flux_i0;")
@@ -179,7 +228,9 @@ def generate_testbench_sv(spec: DesignSpec, *, vcd_path: str) -> str:
         lines.append(f"    {RESET_PORT} = 1;")
         lines.append("")
 
-    for i, vec in enumerate(spec.test_vectors):
+    if table:
+        lines.extend(_table_lines(spec, table_path))
+    for i, vec in enumerate(() if table else spec.test_vectors):
         for p in in_ports:
             if p.is_array:
                 for idx, element in _array_elements(p.dims, vec.inputs[p.name]):
