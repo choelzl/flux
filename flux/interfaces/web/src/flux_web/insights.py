@@ -146,12 +146,14 @@ def usage_by_day(rows: list[tuple], days: int = 14, now: float | None = None) ->
     return {"days": labels, "users": by_user, "agents": by_who, "top": top}
 
 
-def endpoints(rows: list[tuple], since: float) -> list[dict[str, Any]]:
+def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """Each model endpoint and agent as its turns since `since` found it: turns, failures and
-    their rate, the median and the slow (95th) seconds, the last failure, when last used."""
+    their rate, the median and the slow (95th) seconds, the last failure, when last used. `forgot`
+    (D850): `kind|where` -> when the admin removed it; only turns after that count."""
+    forgot = forgot or {}
     by: dict[tuple[str, str], list[tuple]] = {}
     for _user, _app, ts, kind, who, where, ok, secs, *_rest, err in rows:
-        if ts >= since:
+        if ts >= since and ts > forgot.get(f"{kind}|{where}", 0.0):
             by.setdefault((kind, where), []).append((ts, ok, secs, err))
     out = []
     for (kind, where), xs in by.items():
@@ -159,14 +161,16 @@ def endpoints(rows: list[tuple], since: float) -> list[dict[str, Any]]:
         bad = [x for x in xs if not x[1]]
         q = lambda f: secs[min(len(secs) - 1, int(f * len(secs)))] if secs else 0.0   # noqa: E731
         last_bad = max(bad, key=lambda x: x[0]) if bad else None
-        out.append({"kind": kind, "where": where, "turns": len(xs), "failed": len(bad), "rate": len(bad) / len(xs),
+        out.append({"key": f"{kind}|{where}", "kind": kind, "where": where, "turns": len(xs), "failed": len(bad), "rate": len(bad) / len(xs),
                     "p50": q(0.5), "p95": q(0.95), "last": max(x[0] for x in xs),
                     "last_error": last_bad[3] if last_bad else "", "last_error_at": last_bad[0] if last_bad else None})
     return sorted(out, key=lambda e: (-e["rate"], -e["turns"]))
 
 
-def network(path: str, since: float) -> list[dict[str, Any]]:
-    """The hosts the sandboxes refused since `since`: how often, by which loops, when last."""
+def network(path: str, since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
+    """The hosts the sandboxes refused since `since`: how often, by which loops, when last;
+    `forgot` (D850): `host:port` -> when the admin removed it."""
+    forgot = forgot or {}
     by: dict[tuple[str, int], dict[str, Any]] = {}
     try:
         fh = open(path, "rb")
@@ -181,13 +185,15 @@ def network(path: str, since: float) -> list[dict[str, Any]]:
             if float(e.get("t") or 0) < since:
                 continue
             k = (str(e.get("host") or "?"), int(e.get("port") or 0))
-            x = by.setdefault(k, {"host": k[0], "port": k[1], "count": 0, "loops": {}, "last": 0.0})
+            if float(e.get("t") or 0) <= forgot.get(f"{k[0]}:{k[1]}", 0.0):
+                continue
+            x = by.setdefault(k, {"key": f"{k[0]}:{k[1]}", "host": k[0], "port": k[1], "count": 0, "loops": {}, "last": 0.0})
             x["count"] += 1
             app = str(e.get("app") or "?")
             x["loops"][app] = x["loops"].get(app, 0) + 1
             x["last"] = max(x["last"], float(e.get("t") or 0))
     out = [{**x, "loops": sorted(x["loops"].items(), key=lambda kv: -kv[1])[:5]} for x in by.values()]
-    return sorted(out, key=lambda x: -x["count"])[:50]
+    return sorted(out, key=lambda x: -x["count"])[:200]
 
 
 def disk(store: Any, loops: list[dict[str, Any]]) -> list[dict[str, Any]]:

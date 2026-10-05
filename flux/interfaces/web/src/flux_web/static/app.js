@@ -3125,20 +3125,35 @@ async function adminInsights(body, part = "failures") {   // D819: one part of t
         + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
       route();
     }, { cls: "small" }))]);
-  const epCard = card("Endpoints and agents", r.endpoints.length ? h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Which"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Failed"), h("th", { class: "num" }, "Median"),
-      h("th", { class: "num" }, "Slow (95%)"), h("th", {}, "Last used"), h("th", {}, "Last failure"))),
-    h("tbody", {}, r.endpoints.map(e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
+  // D850: each list in the order asked (kept in this browser), each row removable
+  const forget = (kind, key, what) => binButton("row", `Remove ${what}?`, "It leaves this list until it is used again.", async () => {
+    await api("/admin/insights/forget", { method: "POST", body: { kind, key } }); route(); });
+  const orderSel = (memo, opts, redraw) => { let cur = (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
+    if (!opts.some(([v]) => v === cur)) cur = opts[0][0];
+    const s = h("select", { class: "small", "aria-label": "Order" }, opts.map(([v, label]) => h("option", { value: v, selected: v === cur }, label)));
+    s.addEventListener("change", () => { try { localStorage.setItem(memo, s.value); } catch (_) { /* per viewer */ } redraw(s.value); });
+    return { s, cur }; };
+  const SORT = { failures: (a, b) => b.rate - a.rate || b.turns - a.turns, used: (a, b) => (b.turns ?? b.count) - (a.turns ?? a.count), last: (a, b) => b.last - a.last };
+  const epBody = h("tbody", {}), netBody = h("tbody", {});
+  const drawEp = (o) => epBody.replaceChildren(...r.endpoints.slice().sort(SORT[o]).map(e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
       h("td", { class: "num" }, String(e.turns)),
       h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
       h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
-      h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—")))))
-    : h("p", { class: "muted" }, "No turn in this time."));
+      h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
+      h("td", { class: "right" }, forget("endpoint", e.key, e.where)))));
+  const drawNet = (o) => netBody.replaceChildren(...r.network.slice().sort(SORT[o]).map(n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
+      h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
+      h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)))));
+  const epOrder = orderSel("flux-insights-ep-order", [["failures", "most failing"], ["used", "most used"], ["last", "last used"]], drawEp);
+  const netOrder = orderSel("flux-insights-net-order", [["used", "most refused"], ["last", "last refused"]], drawNet);
+  drawEp(epOrder.cur); drawNet(netOrder.cur);
+  const epCard = card("Endpoints and agents", r.endpoints.length ? h("table", { class: "list compact" },
+    h("thead", {}, h("tr", {}, h("th", {}, "Which"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Failed"), h("th", { class: "num" }, "Median"),
+      h("th", { class: "num" }, "Slow (95%)"), h("th", {}, "Last used"), h("th", {}, "Last failure"), h("th", {}))), epBody)
+    : h("p", { class: "muted" }, "No turn in this time."), { actions: r.endpoints.length ? [epOrder.s] : [] });
   const netCard = card("Network refused", r.network.length ? h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Host"), h("th", { class: "num" }, "Times"), h("th", {}, "By"), h("th", {}, "Last"))),
-    h("tbody", {}, r.network.map(n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
-      h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last))))))
-    : h("p", { class: "muted" }, "Nothing refused."));
+    h("thead", {}, h("tr", {}, h("th", {}, "Host"), h("th", { class: "num" }, "Times"), h("th", {}, "By"), h("th", {}, "Last"), h("th", {}))), netBody)
+    : h("p", { class: "muted" }, "Nothing refused."), { actions: r.network.length ? [netOrder.s] : [] });
   const maxDisk = Math.max(...r.disk.map(d => d.total), 1);
   const diskCard = card("Disk by user", h("table", { class: "list compact" },
     h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
@@ -3215,6 +3230,15 @@ async function adminAgents(body) {
   const kind = h("select", { id: "ag-new-kind", "aria-label": "Its kind" }, r.kinds.map(k => h("option", { value: k.id }, k.label)));
   const nlabel = h("input", { id: "ag-new-label", placeholder: "NGA (our OpenCode)", autocomplete: "off" });
   const nbin = h("input", { id: "ag-new-bin", placeholder: "/opt/nga/bin/nga", class: "mono", autocomplete: "off" });
+  // D850: the stderr lines the pages leave out
+  const maskBox = h("textarea", { id: "stderr-masks", rows: 6, class: "mono", placeholder: "failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/" });
+  api("/admin/masks").then(m => { maskBox.value = (m.masks || []).join("\n"); }).catch(() => {});
+  const maskMark = saveMark();
+  autosave(maskBox, async () => { const got = await api("/admin/masks", { method: "PUT", body: { masks: maskBox.value.split("\n") } });
+    if (document.activeElement !== maskBox) maskBox.value = got.masks.join("\n"); }, maskMark, { delay: 1200 });
+  extraTabs.push({ tab: "Hidden output", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Stderr lines to hide"),
+    h("p", { class: "muted small" }, "One per line: a piece of text, or a /regular expression/. Hidden from the pages, kept in the record."),
+    maskBox, h("div", { class: "row" }, maskMark)) });
   extraTabs.push({ tab: "+ Add an agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Add an agent"),
     h("p", { class: "muted small" }, "Another build of a kind under its own name (", h("code", {}, "generate: nga"), ")."),
     h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Name (lower case)", name), h("label", { class: "stack" }, "Kind", kind),

@@ -97,6 +97,15 @@ class NoticeIn(BaseModel):                # D846: the admin's message to users' 
     kind: str = "info"
 
 
+class ForgetIn(BaseModel):                # D850
+    kind: str
+    key: str
+
+
+class MasksIn(BaseModel):                 # D850
+    masks: list[str] = []
+
+
 class StopAll(BaseModel):
     now: bool = False
 
@@ -1809,7 +1818,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 with open(path) as fh:
                     body = fh.read()
                 json.loads(body)
-                return body
+                return _masks().body(body)                        # D850: the admin's stderr masks
             except (OSError, ValueError):
                 seen[0] = None                                  # half written: read again
                 return None
@@ -1895,15 +1904,16 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if not (path and os.path.exists(path)):
             return {"turns": []}
         offsets, rows = _turn_summaries(path)
+        hide = _masks()                                       # D850: the admin's stderr masks
         if k is None:
             listed = [{"k": n, **t} for n, t in enumerate(rows, 1) if t is not None]
-            return {"turns": listed[-500:], "total": len(listed)}
+            return {"turns": hide.fields(listed[-500:]), "total": len(listed)}
         if not 1 <= k <= len(offsets):
             return {"turns": []}
         with open(path, "rb") as fh:                         # the one turn, read from its place
             fh.seek(offsets[k - 1])
             try:
-                return {"turns": [{"k": k, **json.loads(fh.readline())}]}
+                return {"turns": hide.fields([{"k": k, **json.loads(fh.readline())}])}
             except ValueError:
                 return {"turns": []}
 
@@ -1952,9 +1962,45 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         since = time.time() - days * ins.DAY
         rows = ins.turns(store, runs)
         res = resources(a)
-        return {"days": days, "failures": ins.failures(store, runs, since), "usage": ins.usage_by_day(rows, max(days, 7)),
-                "endpoints": ins.endpoints(rows, since), "network": ins.network(str(store.refusals_file), since),
+        forgot = store.server_get("insights_forgot") or {}
+        hide = _masks()
+        return {"days": days, "failures": hide.fields(ins.failures(store, runs, since)), "usage": ins.usage_by_day(rows, max(days, 7)),
+                "endpoints": hide.fields(ins.endpoints(rows, since, forgot.get("endpoint"))),
+                "network": ins.network(str(store.refusals_file), since, forgot.get("network")),
                 "disk": ins.disk(store, res["loops"])}
+
+    @app.post("/api/admin/insights/forget")
+    def insights_forget(body: ForgetIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D850: an endpoint or a refused host out of Insights -- its uses until now; a later one brings it back."""
+        if body.kind not in ("endpoint", "network") or not body.key.strip():
+            raise HTTPException(400, "forget an endpoint or a network host, by its key")
+        forgot = store.server_get("insights_forgot") or {}
+        forgot.setdefault(body.kind, {})[body.key] = time.time()
+        store.server_set("insights_forgot", forgot)
+        store.audit(a.name, "insights: removed", f"{body.kind} {body.key}")
+        return {"ok": True}
+
+    def _masks() -> Any:
+        from .masks import Masks
+
+        return Masks(store.server_get("stderr_masks") or [])
+
+    @app.get("/api/admin/masks")
+    def get_masks(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        return {"masks": store.server_get("stderr_masks") or []}
+
+    @app.put("/api/admin/masks")
+    def put_masks(body: MasksIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D850: the stderr lines the pages leave out -- a text, or a /regular expression/."""
+        from .masks import check
+
+        try:
+            got = check(body.masks)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.server_set("stderr_masks", got)
+        store.audit(a.name, "stderr masks", f"{len(got)} pattern(s)")
+        return {"masks": got}
 
     @app.post("/api/admin/reprice")
     def reprice(a: User = Depends(admin_of)) -> dict[str, Any]:

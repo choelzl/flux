@@ -616,8 +616,8 @@ def flows(r: Run) -> None:
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
         r.check("the model settings have a tab per tool, an agent's where it is installed, no Other (D721, D807, D817)",
-                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
-                and set(tabs[1:-2]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
+                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-3:] == ["Every agent", "Hidden output", "+ Add an agent"]
+                and set(tabs[1:-3]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
         r.button("Every agent", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Variables for every run and every agent"], str(shown))
@@ -1061,6 +1061,23 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
                "&& document.querySelectorAll('#insights-part .card').length >= 2", timeout=15, what="30 days")
         r.check("Insights: over 30 days", True)
+        # D850: the endpoints in the order asked, a row removed until used again
+        eps = json.loads(r.api("/admin/insights?days=30")["body"])["endpoints"]
+        if eps:
+            r.check("Insights: the endpoints have an order to pick", b.js("return [...document.querySelectorAll('#insights-part select[aria-label=Order]')].length") >= 1)
+            gone = eps[0]["key"]
+            b.js("document.querySelector('#insights-part .card tbody tr button.bin').click(); return 1")
+            r.dialog_button("Remove")
+            b.wait("!document.querySelector('dialog.dlg[open]')", timeout=10)
+            left = [e["key"] for e in json.loads(r.api("/admin/insights?days=30")["body"])["endpoints"]]
+            r.check("Insights: a removed endpoint leaves the list", gone not in left, f"{gone} in {left}")
+        r.page("#/admin/agents", "document.querySelector('.set-tabs')", "Agents and models")
+        r.button("Hidden output", ".set-tabs")
+        b.js("const t = document.querySelector('#stderr-masks'); t.value = 'stale arg0\\n/^ERROR rmcp/'; t.dispatchEvent(new Event('change')); return 1")
+        b.wait("(document.querySelector('#stderr-masks').closest('fieldset').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the masks saved")
+        r.check("the admin's stderr masks save as they change (D850)",
+                json.loads(r.api("/admin/masks")["body"])["masks"] == ["stale arg0", "/^ERROR rmcp/"])
+        r.api("/admin/masks", "PUT", {"masks": []})
         r.clean("Admin › Insights")
     r.step("insights", insights)
 
