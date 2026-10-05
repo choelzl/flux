@@ -76,7 +76,11 @@ function followStream(url, event, onData, onState, onSkipped) {
   const say = (st) => { if (onState) onState(st); };
   const open = () => {
     es = new EventSource(last ? `${url}${url.includes("?") ? "&" : "?"}offset=${encodeURIComponent(last)}` : url);
-    es.addEventListener(event, (m) => { if (m.lastEventId) last = m.lastEventId; onData(JSON.parse(m.data)); });
+    es.addEventListener(event, (m) => {
+      if (m.lastEventId) last = m.lastEventId;
+      const d = JSON.parse(m.data);
+      if (Array.isArray(d)) d.forEach(onData); else onData(d);       // D855: a journal slice comes whole
+    });
     if (onSkipped) es.addEventListener("skipped", (m) => onSkipped(JSON.parse(m.data)));   // D759: what a tail left out
     es.onopen = () => { wait = 1000; say("live"); };
     es.onerror = () => {

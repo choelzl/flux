@@ -186,6 +186,22 @@ class Settings(BaseModel):
     values: dict[str, str | None]
 
 
+def journal_messages(path: str, off: int, ino: int, since: float, kind: str = "events") -> tuple[list[str], int]:
+    """The journal from byte `off` as server-sent messages, and the offset after (D855). A slice is
+    one message whose data is its events -- compacted (D762) and from `since` on -- and whose id is
+    the slice's end: a client that reconnects with it resumes after what it received whole. One
+    message per event, each with the slice's end, skipped the rest of a slice when a client got
+    only the first (and compaction merges a phase's updates into its last, so a per-event cursor
+    cannot be made safe)."""
+    from flux_loop.journal import compact, read_events
+
+    events, new = read_events(path, off, limit=4 << 20)       # D759: in slices
+    got = [e for e in compact(events) if e.get("t", 0) >= since]
+    if not got and new == off:
+        return [], new
+    return [f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(got)}\n\n"], new
+
+
 def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = False, max_running: int = 4) -> FastAPI:
     store = Store(data)
     runs = RunManager(store, sandbox=sandbox, max_running=max_running)
@@ -1742,7 +1758,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         D774: each look -- the run's record, the file, a slice read and parsed -- is a worker
         thread's: the event loop that answers every other request never waits on a disk or the
         store."""
-        from flux_loop.journal import compact, read_events
 
         at = {"ino": offset[0], "offset": offset[1]}
 
@@ -1758,9 +1773,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 ino = st.st_ino
             out: list[str] = []
             if kind == "events":
-                events, new = read_events(path, off, limit=4 << 20)       # D759: in slices
-                since = start_after()
-                out = [f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n" for e in compact(events) if e.get("t", 0) >= since]
+                out, new = journal_messages(path, off, ino, start_after())
             else:
                 from .confine import open_read
 

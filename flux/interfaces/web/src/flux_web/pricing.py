@@ -57,6 +57,9 @@ def _priced(path: str, table: dict[str, tuple[float | None, float | None]]) -> t
         if price is None or t.get("priced") in ("set", "retro") or not (tin or tout):
             out.append(raw)
             continue
+        if (tin and price[0] is None) or (tout and price[1] is None):
+            out.append(raw)                              # D855: a rate it needs is unknown: priced later, not as 0
+            continue
         try:
             cost = round((float(tin) * (price[0] or 0) + float(tout) * (price[1] or 0)) / 1e6, 6)
         except (TypeError, ValueError):

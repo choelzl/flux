@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import threading
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -16,6 +17,9 @@ from typing import Any
 MAX_BYTES = 256 * 1024 * 1024           # one request (D700: the page sends a large upload in batches)
 MAX_FILES = 900                         # below the 1000 files a request may carry (Starlette)
 LOOP_BYTES = 8 * 1024 ** 3              # a loop's own files in all
+#: Parts of uploads checked against the room and written one at a time (D855): two uploads at once
+#: cannot each claim the same room. In one server process; several would need the store's lock.
+_ROOM = threading.Lock()
 LOOP_FILES = 100_000
 PART_BYTES = 64 * 1024 * 1024           # one part of a file sent in parts
 TEXT_MAX = 2 * 1024 * 1024
@@ -109,9 +113,9 @@ class Workspace:
         if not files:
             raise WorkspaceError("no files")
         _check_batch(files, unzipped)
-        self._check_room(name, sum(len(b) for _p, b in files), len(files))
         prefix = safe_rel(sub) + "/" if sub.strip("/") else ""
         rels = [safe_rel(prefix + p) for p, _b in files]
+        self._check_room(name, sum(len(b) for _p, b in files), len(files), [self.app(name) / r for r in rels])
         written = []
         for rel, (_p, content) in zip(rels, files):
             if rel == ".flux-app.json":
@@ -121,12 +125,27 @@ class Workspace:
             written.append(rel)
         return written
 
-    def _check_room(self, name: str, more_bytes: int, more_files: int) -> None:
-        """A loop's own files stay under LOOP_BYTES and LOOP_FILES in all (D700)."""
+    def _check_room(self, name: str, more_bytes: int, more_files: int, replacing: Any = ()) -> None:
+        """A loop's own files stay under LOOP_BYTES and LOOP_FILES in all (D700) -- counting the
+        uploads under way (D855: their partial files), and a file being replaced by the difference
+        its new content makes, not twice."""
         n, size = 0, 0
         for rec in self.inputs(name):
             n += 1
             size += rec["size"]
+        root = self.app(name)
+        for part in root.rglob("*.part-upload"):
+            try:
+                size += part.lstat().st_size
+            except OSError:
+                pass
+        for old in replacing:
+            try:
+                if old.is_file() and not old.is_symlink():
+                    size -= old.lstat().st_size
+                    n -= 1
+            except OSError:
+                pass
         if size + more_bytes > LOOP_BYTES or n + more_files > LOOP_FILES:
             raise WorkspaceError(f"a loop holds at most {LOOP_FILES} files and {LOOP_BYTES // 2**30} GB of its own")
 
@@ -140,18 +159,21 @@ class Workspace:
             raise WorkspaceError(f"a part is at most {PART_BYTES // 2**20} MB")
         target = self.path(name, rel)
         part = target.with_name(f".{target.name}.part-upload")
-        if offset == 0:
-            self._check_room(name, 0, 1)
-            part.parent.mkdir(parents=True, exist_ok=True)
-            part.unlink(missing_ok=True)
-        elif not part.exists() or part.stat().st_size != offset:
-            raise WorkspaceError(f"{rel}: the part at {offset} does not follow the parts before")
-        if offset + len(data) > LOOP_BYTES:
-            raise WorkspaceError(f"a file is at most {LOOP_BYTES // 2**30} GB")
-        fd = os.open(part, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)   # D852: not through a link
-        with os.fdopen(fd, "ab") as fh:
-            fh.write(data)
-        size = part.stat().st_size
+        with _ROOM:                                   # D855: a part checked and written as one, uploads at once
+            if offset == 0:
+                part.parent.mkdir(parents=True, exist_ok=True)
+                part.unlink(missing_ok=True)
+            elif not part.exists() or part.stat().st_size != offset:
+                raise WorkspaceError(f"{rel}: the part at {offset} does not follow the parts before")
+            if offset + len(data) > LOOP_BYTES:
+                raise WorkspaceError(f"a file is at most {LOOP_BYTES // 2**30} GB")
+            # D855: every part against the loop's room -- what it holds, the uploads under way, this
+            # part -- the file it replaces counted out (its new content takes its place)
+            self._check_room(name, len(data), 1 if offset == 0 and not target.exists() else 0, [target])
+            fd = os.open(part, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)   # D852: not through a link
+            with os.fdopen(fd, "ab") as fh:
+                fh.write(data)
+            size = part.stat().st_size
         if final:
             target.unlink(missing_ok=True)
             part.replace(target)

@@ -29,7 +29,8 @@ def path() -> str | None:
 def priced(prefix: str, tokens_in: Any, tokens_out: Any) -> dict[str, Any]:
     """A turn's cost from the prices set for who ran it (D835): `<prefix>_PRICE_IN` and `_OUT`, USD
     per million tokens (`FLUX_REMOTE` for Flux's own model, `FLUX_<NAME>` for an agent) --
-    {cost_usd, priced: "set"}; {} with neither set, so an agent's own figure stands."""
+    {cost_usd, priced: "set"}; {} when a rate the turn needs is not set (D855), so an agent's own
+    figure stands and `Price past turns` can price it once it is."""
     def num(name: str) -> float | None:
         try:
             v = float(os.environ.get(f"{prefix}_PRICE_{name}", "").strip())
@@ -38,13 +39,15 @@ def priced(prefix: str, tokens_in: Any, tokens_out: Any) -> dict[str, Any]:
         return v if v >= 0 else None
 
     pin, pout = num("IN"), num("OUT")
-    if pin is None and pout is None:
-        return {}
     try:
-        cost = (float(tokens_in or 0) * (pin or 0) + float(tokens_out or 0) * (pout or 0)) / 1e6
+        tin, tout = float(tokens_in or 0), float(tokens_out or 0)
     except (TypeError, ValueError):
         return {}
-    return {"cost_usd": round(cost, 6), "priced": "set"}
+    # D855: a rate is known or the turn is not priced -- a missing one is not 0 (0 is said as 0):
+    # every kind of token the turn used needs its rate, else it stays unpriced, priceable later
+    if (tin and pin is None) or (tout and pout is None) or (pin is None and pout is None):
+        return {}
+    return {"cost_usd": round((tin * (pin or 0) + tout * (pout or 0)) / 1e6, 6), "priced": "set"}
 
 
 def record(kind: str, **fields: Any) -> None:

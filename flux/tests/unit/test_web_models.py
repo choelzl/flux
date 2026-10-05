@@ -242,3 +242,33 @@ def test_past_turns_are_priced_once_at_todays_prices(server, tmp_path):
     live["on"] = True
     assert reprice(store, runs)["skipped"] == ["bob/x"]
     assert ada.post("/api/admin/reprice", headers=H).status_code == 200
+
+
+def test_a_missing_rate_is_unknown_not_free(server, tmp_path, monkeypatch):
+    """D855, the review's reproduction (#3): an input rate of $1 with no output rate stored $1 for a
+    million of each and marked the turn priced; the output rate added later priced nothing. Now a
+    turn whose rates are not all known stays unpriced until they are; an explicit 0 is free."""
+    from types import SimpleNamespace
+
+    from flux_llm.transcript import priced
+    from flux_web.pricing import reprice
+    from flux_web.workspace import Workspace
+
+    for k in ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("FLUX_REMOTE_PRICE_IN", "1")
+    assert priced("FLUX_REMOTE", 1_000_000, 1_000_000) == {}, "output used, its rate unknown: unpriced"
+    assert priced("FLUX_REMOTE", 1_000_000, 0) == {"cost_usd": 1.0, "priced": "set"}, "only input used: known"
+    monkeypatch.setenv("FLUX_REMOTE_PRICE_OUT", "0")
+    assert priced("FLUX_REMOTE", 1_000_000, 1_000_000) == {"cost_usd": 1.0, "priced": "set"}, "0 said: free"
+    app, store = server
+    ada = _client(app, "ada", "correct horse battery")
+    Workspace(store.data, "bob").create("x", [("problem.yaml", b"statement: s\n")])
+    turns = tmp_path / "turns.jsonl"
+    turns.write_text(json.dumps({"kind": "model", "tokens_in": 1_000_000, "tokens_out": 1_000_000}) + "\n")
+    runs = SimpleNamespace(latest=lambda u, a: {"user": u.name, "app": a}, turns_path=lambda r: str(turns) if r else None,
+                           live=lambda r: False)
+    ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_IN": "1"}}, headers=H)
+    assert reprice(store, runs)["turns"] == 0, "a rate missing: not priced"
+    ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_OUT": "2"}}, headers=H)
+    assert reprice(store, runs) == {"turns": 1, "usd": 3.0, "loops": 1, "skipped": []}, "priced once both are known"

@@ -121,3 +121,73 @@ def test_a_replacement_is_never_written_through_a_link(tmp_path):
     with pytest.raises(WorkspaceError):
         w.add("x", [("sub/planted.txt", b"x")])
     assert not (tmp_path / "planted.txt").exists()
+
+
+def test_a_reconnect_resumes_after_what_was_received_whole(tmp_path):
+    """D855, the review's reproduction (#2): every event of a journal slice had the slice's end as its
+    id, so a client that received the first and reconnected skipped the rest. A slice is now one
+    message: received whole, or not at all; a reconnect with its id gets what came after."""
+    import time
+
+    from flux_web.app import journal_messages
+
+    ev = tmp_path / "events.jsonl"
+    t = time.time()
+    ev.write_text("".join(json.dumps({"ev": "begin", "id": i, "name": f"p{i}", "t": t}) + "\n" for i in (1, 2)))
+    ino = os.stat(ev).st_ino
+
+    def parsed(msgs):
+        (m,) = msgs
+        ident = next(ln[4:] for ln in m.splitlines() if ln.startswith("id: "))
+        return ident, json.loads(next(ln[6:] for ln in m.splitlines() if ln.startswith("data: ")))
+
+    msgs, new = journal_messages(str(ev), 0, ino, 0.0)
+    ident, data = parsed(msgs)
+    assert [e["id"] for e in data] == [1, 2] and ident == f"{ino}-{new}", "the slice, whole, in one message"
+    assert journal_messages(str(ev), new, ino, 0.0) == ([], new), "nothing new: nothing sent"
+    with ev.open("a") as fh:
+        fh.write(json.dumps({"ev": "begin", "id": 3, "name": "p3", "t": t}) + "\n")
+    resume = int(ident.split("-")[1])                       # what a reconnect sends back
+    _ident, data = parsed(journal_messages(str(ev), resume, ino, 0.0)[0])
+    assert [e["id"] for e in data] == [3], "resumed after what was received, nothing skipped"
+
+
+def test_chunked_uploads_stay_within_the_loops_room(tmp_path, monkeypatch):
+    """D855, the review's reproduction (#9): with a 64-byte room, two 40-byte files sent in parts were
+    both accepted (93 bytes with the document). Now each part counts against the room with what the
+    loop holds and the uploads under way; a replaced file counts by its difference."""
+    import threading
+
+    import flux_web.workspace as ws
+
+    monkeypatch.setattr(ws, "LOOP_BYTES", 64)
+    w = Workspace(tmp_path / "data", "bob")
+    w.create("x", [("problem.yaml", b"statement: s\n")])          # 13 bytes
+    assert w.put_part("x", "a.bin", 0, b"a" * 40, True) == 40
+    with pytest.raises(WorkspaceError, match="at most"):
+        w.put_part("x", "b.bin", 0, b"b" * 40, True)
+    assert not (w.app("x") / "b.bin").exists()
+    # a part at a time: the second part of a file is refused when it would pass the room
+    w.drop_part("x", "b.bin")
+    assert w.put_part("x", "c.bin", 0, b"c" * 5, False) == 5
+    with pytest.raises(WorkspaceError, match="at most"):
+        w.put_part("x", "c.bin", 5, b"c" * 10, True)
+    w.drop_part("x", "c.bin")
+    # replacing the 40-byte file with a 45-byte one: by the difference, it fits (13 + 45 <= 64)
+    assert w.put_part("x", "a.bin", 0, b"A" * 45, True) == 45
+    # two uploads at once cannot both claim the room that is left (6 bytes)
+    got: list[str] = []
+
+    def up(name):
+        try:
+            w.put_part("x", name, 0, b"z" * 5, True)
+            got.append("ok")
+        except WorkspaceError:
+            got.append("refused")
+
+    ts = [threading.Thread(target=up, args=(f"t{i}.bin",)) for i in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert got.count("ok") == 1, got
