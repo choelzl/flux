@@ -94,11 +94,9 @@ class Workspace:
             doc = DOCUMENT_FILE
         d.mkdir(parents=True, exist_ok=True)
         for rel, (_p, content) in zip(rels, files):
-            target = d / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content)
+            _replace(d, rel, content)                                 # D852: never through a link, an import's source kept
         meta = {"document": doc, "id": name}                          # D786: the loop's name is the problem's id
-        (d / ".flux-app.json").write_text(json.dumps(meta))
+        _replace(d, ".flux-app.json", json.dumps(meta))
         return meta
 
     def add(self, name: str, files: list[tuple[str, bytes]], sub: str = "") -> list[str]:
@@ -118,12 +116,8 @@ class Workspace:
         for rel, (_p, content) in zip(rels, files):
             if rel == ".flux-app.json":
                 raise WorkspaceError("that name is the server's")
-            target = self.path(name, rel)
-            if target.is_dir():
-                raise WorkspaceError(f"{rel!r} is a folder")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.unlink(missing_ok=True)                # D700: a linked file is replaced, not written through
-            target.write_bytes(content)
+            self.path(name, rel)                           # inside the application
+            _replace(self.app(name), rel, content)         # D700, D852: the file named is replaced, not what it links to
             written.append(rel)
         return written
 
@@ -154,7 +148,8 @@ class Workspace:
             raise WorkspaceError(f"{rel}: the part at {offset} does not follow the parts before")
         if offset + len(data) > LOOP_BYTES:
             raise WorkspaceError(f"a file is at most {LOOP_BYTES // 2**30} GB")
-        with open(part, "ab") as fh:
+        fd = os.open(part, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)   # D852: not through a link
+        with os.fdopen(fd, "ab") as fh:
             fh.write(data)
         size = part.stat().st_size
         if final:
@@ -402,12 +397,25 @@ class Workspace:
         return data, is_text
 
     def write(self, name: str, rel: str, text: str) -> None:
-        p = self.path(name, rel)
+        self.path(name, rel)                           # inside the application
         if len(text.encode()) > TEXT_MAX:
             raise WorkspaceError("too large to edit here")
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.unlink(missing_ok=True)                      # D700: a linked file is replaced, not written through
-        p.write_text(text)
+        _replace(self.app(name), safe_rel(rel), text)  # D700, D852: replaced, not written through a link
+
+
+def _replace(app: Path, rel: str, content: bytes | str) -> Path:
+    """`rel` in the application replaced by `content` (D852): its folders made, each inside the
+    application; the file renamed into place, so a symbolic link or a hardlink there is replaced
+    rather than written through -- an imported document's source stays as it was."""
+    from .confine import Escape, replace
+
+    target = app / rel
+    try:
+        within_app = app.resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return replace(target, content, within_app)
+    except Escape as exc:
+        raise WorkspaceError(f"{rel!r} is outside the application") from exc
 
 
 def _unzip(data: bytes) -> list[tuple[str, bytes]]:

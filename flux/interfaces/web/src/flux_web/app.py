@@ -1156,7 +1156,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 continue
             target = d / ATTACHED / safe_rel(f.filename)
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+            from .confine import replace
+
+            target = replace(target, data, d)                    # D852: never written through a link
             out.append(target)
         if sum(p.stat().st_size for p in out) > 256 * 2 ** 20:
             raise HTTPException(400, "at most 256 MB of files for the agent to read")
@@ -1692,7 +1694,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _w, _whose, d, run = loop_of(name, user, owner, edit=True)   # the owner or an editor
         if not run or not runs.live(run):
             raise HTTPException(409, "the loop is not running")
-        runs.note(d / "runs", user, body.text.strip())
+        from .confine import Escape
+
+        try:
+            runs.note(d / "runs", user, body.text.strip())
+        except (Escape, OSError) as exc:                  # D852: an inbox that is a link is not written
+            raise HTTPException(400, "the loop's inbox is not a file of this loop") from exc
         store.audit(user.name, "note", name)
         return {"ok": "sent: it reaches the next prompt, or answers the agent's open question"}
 
@@ -1700,7 +1707,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def remove_note(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         """D808: a note off the page (and out of a loop that has not read it yet)."""
         _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
-        if not runs.forget_note(d / "runs", user, ident):
+        from .confine import Escape
+
+        try:
+            gone = runs.forget_note(d / "runs", user, ident)
+        except (Escape, OSError) as exc:
+            raise HTTPException(400, "the loop's inbox is not a file of this loop") from exc
+        if not gone:
             raise HTTPException(404, "no such note")
         store.audit(user.name, "note removed", name)
         return {"ok": "the note is removed"}
@@ -1710,7 +1723,20 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _w, _whose, d, _run = loop_of(name, user, owner)
         return runs.notes(d / "runs")
 
-    async def _follow(path_of, start_after, offset: int, request: Request, kind: str, preface: tuple[str, ...] = ()):
+    def _confined(path: str | None, roots: Any) -> str | None:
+        """D852: `path` when it is no link and lies in the loop's own folders; else None (not there)."""
+        from .confine import Escape, within
+
+        if not path or os.path.islink(path):
+            return None
+        try:
+            within(path, *roots)
+        except Escape:
+            return None
+        return path
+
+    async def _follow(path_of, start_after, offset: int, request: Request, kind: str, preface: tuple[str, ...] = (),
+                      roots_of=lambda: ()):
         """Server-sent events: each new line of a file, as it grows, from byte `offset`. For the
         journal, `start_after()` is when the loop's latest start began: its tree, not the last.
         D774: each look -- the run's record, the file, a slice read and parsed -- is a worker
@@ -1721,7 +1747,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         at = {"ino": offset[0], "offset": offset[1]}
 
         def look() -> tuple[list[str], bool]:
-            path = path_of()
+            path = _confined(path_of(), roots_of())             # D852: no link, nothing outside the loop
             if not (path and os.path.exists(path)):
                 return [], False
             st = os.stat(path)
@@ -1736,7 +1762,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 since = start_after()
                 out = [f"id: {ino}-{new}\nevent: {kind}\ndata: {json.dumps(e)}\n\n" for e in compact(events) if e.get("t", 0) >= since]
             else:
-                with open(path, "rb") as fh:
+                from .confine import open_read
+
+                with open_read(path, *roots_of()) as fh:
                     fh.seek(off)
                     chunk = fh.read(256 * 1024)
                 new = off + len(chunk)
@@ -1781,7 +1809,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _w, whose, _d, _run = loop_of(name, user, owner)
         latest = lambda: runs.latest(whose, name)                               # noqa: E731 -- a new start moves it
         at, preface = _offset(request, offset), ()
-        path = runs.events_path(latest())
+        path = _confined(runs.events_path(latest()), runs.roots(latest()))   # D852
         if window > 0 and at[1] == 0 and path and os.path.exists(path):
             got = window_start(path, window)
             if got is not None:
@@ -1789,11 +1817,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 said = {"ev": "window", "before": got[1], "t": 0, "cut": got[2] is not None}
                 preface = (f"event: events\ndata: {json.dumps(said)}\n\n",)
                 if got[2] is not None and got[2] >= 0:         # D762: inside a pass -- its mark first
-                    with open(path, "rb") as fh:
+                    from .confine import open_read
+
+                    with open_read(path, *runs.roots(latest())) as fh:
                         fh.seek(got[2])
                         preface += (f"event: events\ndata: {fh.readline().decode('utf-8', 'replace').strip()}\n\n",)
         stream = _follow(lambda: runs.events_path(latest()), lambda: (latest() or {"started": 0})["started"] - 1,
-                         at, request, "events", preface)
+                         at, request, "events", preface, roots_of=lambda: runs.roots(latest()))
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/live")
@@ -1805,8 +1835,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         seen: list[Any] = [None]
 
         def look() -> str | None:                            # D774: a worker thread's, not the event loop's
-            ev = runs.events_path(runs.latest(whose, name))
-            path = os.path.join(os.path.dirname(ev), "live.json") if ev else None
+            run = runs.latest(whose, name)
+            ev = runs.events_path(run)
+            path = _confined(os.path.join(os.path.dirname(ev), "live.json"), runs.roots(run)) if ev else None   # D852
             try:
                 st = os.stat(path) if path else None
             except OSError:
@@ -1815,7 +1846,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 return None
             seen[0] = (st.st_ino, st.st_mtime_ns, st.st_size)
             try:
-                with open(path) as fh:
+                from .confine import open_read
+
+                with open_read(path, *runs.roots(run), text=True) as fh:
                     body = fh.read()
                 json.loads(body)
                 return _masks().body(body)                        # D850: the admin's stderr masks
@@ -1842,24 +1875,42 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         _w, _whose, d, _run = loop_of(name, user, owner)
         path = str(loop_files(d)["log"])
         at, preface = _offset(request, offset), ()
-        if tail > 0 and at[1] == 0 and os.path.exists(path) and os.path.getsize(path) > tail:
+        ok = _confined(path, (str(d),))                           # D852
+        if tail > 0 and at[1] == 0 and ok and os.path.exists(path) and os.path.getsize(path) > tail:
             size = os.path.getsize(path)
-            with open(path, "rb") as fh:                        # from the first whole line of the tail
+            from .confine import open_read
+
+            with open_read(path, str(d)) as fh:                  # from the first whole line of the tail
                 fh.seek(size - tail)
                 skip = size - tail + fh.read(64 * 1024).find(b"\n") + 1
             at = (os.stat(path).st_ino, skip)
             preface = (f"event: skipped\ndata: {json.dumps({'bytes': skip})}\n\n",)
-        stream = _follow(lambda: path, lambda: 0, at, request, "log", preface)
+        stream = _follow(lambda: path, lambda: 0, at, request, "log", preface, roots_of=lambda: (str(d),))
         return StreamingResponse(stream, media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/apps/{name}/log/raw")
     def log_raw(name: str, owner: str | None = None, user: User = Depends(user_of)):
         _w, _whose, d, _run = loop_of(name, user, owner)
+        from .confine import Escape, open_read
+
         path = loop_files(d)["log"]
-        if not path.exists():
-            raise HTTPException(404, "no log yet")
-        return FileResponse(path, media_type="text/plain; charset=utf-8",
-                            headers={"Content-Disposition": f'attachment; filename="{name}.log"'})
+        try:
+            fh = open_read(path, str(d))                           # D852: never a link out of the loop
+        except FileNotFoundError:
+            raise HTTPException(404, "no log yet") from None
+        except (Escape, OSError) as exc:
+            raise HTTPException(400, "the log is not a file of this loop") from exc
+
+        def chunks():
+            with fh:
+                while True:
+                    b = fh.read(1 << 16)
+                    if not b:
+                        return
+                    yield b
+
+        return StreamingResponse(chunks(), media_type="text/plain; charset=utf-8",
+                                 headers={"Content-Disposition": f'attachment; filename="{name}.log"'})
 
     turn_index: dict[str, tuple[int, int, list[int], list[dict[str, Any]]]] = {}   # path -> (inode, read, offsets, summaries)
     turn_lock = threading.Lock()
@@ -2032,8 +2083,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         ans = loop_files(d)["answer"]
         if ans.exists():
             try:
-                answer = json.loads(ans.read_text())
-            except ValueError:
+                from .confine import open_read
+
+                with open_read(ans, str(d), text=True) as fh:        # D852: runs/ is the run's to write
+                    answer = json.loads(fh.read())
+            except (ValueError, OSError):
                 pass
         from .results import decision_doc
 

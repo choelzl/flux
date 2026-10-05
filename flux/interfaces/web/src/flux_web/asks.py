@@ -31,6 +31,24 @@ def _alive(pid: int | None) -> bool:
     return True
 
 
+def _loop(d: Path) -> str:
+    return str(d.parent.parent.parent)                  # <loop>/runs/asks/<id>
+
+
+def _text(d: Path, name: str) -> str:
+    """D852: an ask's folder is its agent's to write -- read without following a link out of the loop."""
+    from .confine import open_read
+
+    with open_read(d / name, _loop(d)) as fh:
+        return fh.read().decode("utf-8", "replace")
+
+
+def _write(d: Path, name: str, text: str) -> None:
+    from .confine import replace
+
+    replace(d / name, text, _loop(d))
+
+
 class Asks:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -41,7 +59,7 @@ class Asks:
 
     def _read(self, d: Path) -> dict[str, Any]:
         try:
-            st = json.loads((d / "ask.json").read_text())
+            st = json.loads(_text(d, "ask.json"))
         except (OSError, ValueError):
             return {}
         st["id"] = d.name
@@ -49,10 +67,13 @@ class Asks:
         if st.get("ended") is None and not st["running"]:
             st = self._finish(d, None)
         if (d / "answer.md").is_file() and not st["running"]:
-            st["answer"] = (d / "answer.md").read_text(errors="replace")
+            try:
+                st["answer"] = _text(d, "answer.md")
+            except (OSError, ValueError):
+                st["answer"] = ""
         try:
-            st["log"] = (d / "ask.log").read_text(errors="replace").splitlines()[-40:]
-        except OSError:
+            st["log"] = _text(d, "ask.log").splitlines()[-40:]
+        except (OSError, ValueError):
             st["log"] = []
         return st
 
@@ -82,20 +103,20 @@ class Asks:
             proc = subprocess.Popen(argv, cwd=str(d), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                     env=env, start_new_session=True)
             log.close()
-            (d / "ask.json").write_text(json.dumps({"question": question.strip()[:8000], "author": author, "by": by,
-                                                    "pid": proc.pid, "started": time.time(), "ended": None}))
+            _write(d, "ask.json", json.dumps({"question": question.strip()[:8000], "author": author, "by": by,
+                                              "pid": proc.pid, "started": time.time(), "ended": None}))
         threading.Thread(target=lambda: self._finish(d, proc.wait()), daemon=True).start()
         return d.name
 
     def _finish(self, d: Path, rc: int | None) -> dict[str, Any]:
         with self._lock if rc is not None else _Nothing():
             try:
-                st = json.loads((d / "ask.json").read_text())
+                st = json.loads(_text(d, "ask.json"))
             except (OSError, ValueError):
                 st = {}
             if st.get("ended") is None:
                 st.update(ended=time.time(), rc=rc, ok=(d / "answer.md").is_file() and rc in (0, None))
-                (d / "ask.json").write_text(json.dumps(st))
+                _write(d, "ask.json", json.dumps(st))
             (d / "record.db").unlink(missing_ok=True)        # the snapshot the agent read: not kept
             st["id"], st["running"] = d.name, False
             return st

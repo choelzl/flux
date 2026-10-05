@@ -113,6 +113,27 @@ class User:
         return self.role == "external"
 
 
+def _record_checked(run: dict[str, Any]) -> dict[str, Any]:
+    """A run whose record the server may open (D852). The record and its sidecars lie in out/, which
+    the run writes: a link there -- the record pointing at another user's, a `-wal` pointing at any
+    file, which SQLite would write through -- leaves the run without a record on the pages."""
+    from .confine import Escape, within
+
+    db = run.get("db")
+    if not db:
+        return run
+    loop = Path(run["log"]).parent.parent if run.get("log") else Path(db).parent.parent
+    names = [db, *(f"{db}{x}" for x in ("-wal", "-shm", "-journal", ".runs.json"))]
+    try:
+        within(Path(db).parent, loop)
+        bad = next((n for n in names if os.path.islink(n)), None)
+    except Escape:
+        bad = str(Path(db).parent)
+    if bad:
+        run = {**run, "db": f"{db}.refused", "refused": f"{bad} is a link; a record is not followed out of its loop"}
+    return run
+
+
 class Store:
     def __init__(self, data: str | Path) -> None:
         self.data = Path(data)
@@ -315,13 +336,13 @@ class Store:
         if where:
             q += " WHERE " + " AND ".join(where)
         with self._db() as db:
-            return [dict(r) for r in db.execute(q + " ORDER BY r.id DESC", args)]
+            return [_record_checked(dict(r)) for r in db.execute(q + " ORDER BY r.id DESC", args)]
 
     def run(self, run_id: int) -> dict[str, Any] | None:
         with self._db() as db:
             r = db.execute("SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id WHERE r.id = ?",
                            (run_id,)).fetchone()
-        return dict(r) if r else None
+        return _record_checked(dict(r)) if r else None
 
     # ---- a user's model settings (D684)
     def _fernet(self):

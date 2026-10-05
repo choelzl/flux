@@ -382,7 +382,7 @@ def test_a_name_typed_on_a_phone_is_the_same_name(server):
     assert app.state.store.login("bob", "a changed secret")
 
 
-def test_the_turns_are_read_as_they_grow_and_one_from_its_place(server, tmp_path):
+def test_the_turns_are_read_as_they_grow_and_one_from_its_place(server, tmp_path, monkeypatch):
     """D779: the turn list parses only what was added since the last look; a line being written
     waits; turn `k` is read from its byte offset, whole."""
     import json as _json
@@ -392,9 +392,17 @@ def test_the_turns_are_read_as_they_grow_and_one_from_its_place(server, tmp_path
     bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
     proc, _rid, d = _fake_start(app, "bob", "x")
     try:
-        rundir = tmp_path / "run"
-        rundir.mkdir()
+        from flux_web.admin import _key, cache_root
+
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))   # the loop's cache, the test's own
         (d / "out").mkdir(exist_ok=True)
+        outside = tmp_path / "run"                                       # D852: a pointer out of the loop is not followed
+        outside.mkdir()
+        (outside / "turns.jsonl").write_text(_json.dumps({"kind": "turn", "prompt": "not this loop's"}) + "\n")
+        (d / "out" / "x.db.runs.json").write_text(_json.dumps({"c1": str(outside)}))
+        assert bob.get("/api/apps/x/turns").json()["turns"] == [], "a run pointer outside the loop's folders"
+        rundir = cache_root() / _key("bob", "x") / "tmp" / "flux-traces" / "x" / "run1"   # the loop's own cache
+        rundir.mkdir(parents=True)
         (d / "out" / "x.db.runs.json").write_text(_json.dumps({"c1": str(rundir)}))
         turns = rundir / "turns.jsonl"
         long = "y" * 5000

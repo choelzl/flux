@@ -95,7 +95,10 @@ def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) 
         try:
             st = os.stat(answer_path)
             if name is None or st.st_mtime > when:
-                ans = json.loads(open(answer_path).read())
+                from .confine import open_read
+
+                with open_read(answer_path, os.path.dirname(os.path.dirname(os.path.abspath(answer_path))), text=True) as fh:
+                    ans = json.loads(fh.read())          # D852: runs/ is the run's to write
                 dec = ans.get("decision") if isinstance(ans.get("decision"), dict) else {}
                 if dec.get("name"):
                     name, said = dec["name"], {**dec, "decision_key": dec.get("key")}

@@ -329,8 +329,12 @@ class RunManager:
             argv.append("--screen-only")
         home_ready(self.store, user)                          # D744: started before anything runs in it, not on a page's look
         # D769: the owner's loop runs as the owner's -- their agents' logins too, whoever starts it
+        from .admin import _key, cache_root
+
         env = {**run_env(self.store, user, app), "FLUX_SANDBOX_APP": f"{user.name}.{app}", "PYTHONUNBUFFERED": "1",
-               "FLUX_FEEDBACK_INBOX": str(files["inbox"])}                  # D684: notes and answers from the page
+               "FLUX_FEEDBACK_INBOX": str(files["inbox"]),                  # D684: notes and answers from the page
+               # D852: traces in the loop's own cache, sandboxed or not -- the one place the server reads them from
+               "FLUX_TRACE_ROOT": str(cache_root() / _key(user.name, app) / "tmp" / "flux-traces")}
         adv = advanced(self.store, user.name, app)
         if adv.get("parallel"):                       # D741: an admin allows it; the document says how much
             env.pop("FLUX_PARALLEL_MAX", None)
@@ -342,8 +346,9 @@ class RunManager:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else [])   # D720: not the network
-        with open(files["log"], "a") as fh:
-            fh.write(f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n")
+        from .confine import append
+
+        append(files["log"], f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n", app_dir)
         run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)
         # D732: through the stamper, which writes each line with its time
         proc = subprocess.Popen([sys.executable, "-m", "flux_web.stamp", str(files["log"]), "--", *argv], cwd=str(app_dir),
@@ -381,17 +386,40 @@ class RunManager:
         runs = self.store.runs(user, app)
         return runs[0] if runs else None
 
+    @staticmethod
+    def roots(run: dict[str, Any] | None) -> tuple[str, ...]:
+        """Where a run's files may lie (D852): the loop's own folder and its own cache -- the two
+        places its sandbox writes. Anything a run points the server at must resolve inside them."""
+        if not run:
+            return ()
+        from .admin import _key, cache_root
+
+        loop = Path(run["log"]).parent.parent                 # <loop>/runs/loop.log
+        out = [str(loop)] + ([str(Path(run["db"]).parent)] if run.get("db") else [])
+        if run.get("user") and run.get("app"):
+            out.append(str(cache_root() / _key(run["user"], run["app"])))
+        return tuple(out)
+
     def campaign(self, run: dict[str, Any] | None) -> tuple[str | None, str | None]:
-        """(campaign id, its run directory) from the record's run pointer, once a start made one."""
+        """(campaign id, its run directory) from the record's run pointer, once a start made one.
+        The pointer lies in out/, which the run writes: a directory it names outside the loop's own
+        folders is not followed (D852)."""
+        from .confine import Escape, open_read, within
+
         if not run:
             return None, None
         try:
-            pointer = json.loads(Path(f"{run['db']}.runs.json").read_text())
+            with open_read(f"{run['db']}.runs.json", *self.roots(run), text=True) as fh:
+                pointer = json.loads(fh.read())
         except (OSError, ValueError):
             return None, None
-        if not pointer:
+        if not pointer or not isinstance(pointer, dict):
             return None, None
         cid, rdir = list(pointer.items())[-1]
+        try:
+            rdir = str(within(rdir, *self.roots(run)))
+        except (Escape, TypeError):
+            return str(cid), None
         return cid, rdir
 
     #: A log line that says what went wrong (D757), as the page's own log marks problems.
@@ -401,11 +429,13 @@ class RunManager:
     def failure(self, run: dict[str, Any], n: int = 4) -> list[str]:
         """The last lines of a failed start's log that say what went wrong (its last lines when
         none does), without their time stamps."""
+        from .confine import open_read
+
         try:
-            with open(run["log"], "rb") as fh:
-                fh.seek(max(0, os.path.getsize(run["log"]) - 64 * 1024))
+            with open_read(run["log"], *self.roots(run)) as fh:
+                fh.seek(max(0, os.fstat(fh.fileno()).st_size - 64 * 1024))
                 tail = fh.read().decode("utf-8", "replace").splitlines()
-        except (OSError, KeyError, TypeError):
+        except (OSError, KeyError, TypeError, ValueError):
             return []
         at = max((i for i, ln in enumerate(tail) if "── started" in ln), default=-1)
         lines = [re.sub(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ", "", ln).rstrip() for ln in tail[at + 1:]]
@@ -446,12 +476,14 @@ class RunManager:
         `question` mark of this start, when no note came after it and its time is not up."""
         if not rdir:
             return None
+        from .confine import open_read
+
         path = os.path.join(rdir, "events.jsonl")
         try:
-            with open(path, "rb") as fh:
-                fh.seek(max(0, os.path.getsize(path) - 256 * 1024))
+            with open_read(path, *self.roots(run)) as fh:
+                fh.seek(max(0, os.fstat(fh.fileno()).st_size - 256 * 1024))
                 tail = fh.read().decode("utf-8", "replace").splitlines()
-        except OSError:
+        except (OSError, ValueError):
             return None
         asked = None
         for line in reversed(tail):
@@ -473,19 +505,28 @@ class RunManager:
         return asked
 
     def events_path(self, run: dict[str, Any] | None) -> str | None:
-        _cid, rdir = self.campaign(run)
-        return os.path.join(rdir, "events.jsonl") if rdir else None
+        return self._run_file(run, "events.jsonl")
 
     def turns_path(self, run: dict[str, Any] | None) -> str | None:
+        return self._run_file(run, "turns.jsonl")
+
+    def _run_file(self, run: dict[str, Any] | None, name: str) -> str | None:
+        """A file of the run's directory (confined by `campaign`), unless it is a link (D852): the
+        directory is the run's to write, and what the server reads there it reads as itself."""
         _cid, rdir = self.campaign(run)
-        return os.path.join(rdir, "turns.jsonl") if rdir else None
+        if not rdir:
+            return None
+        path = os.path.join(rdir, name)
+        return None if os.path.islink(path) else path
 
     # ---- notes, into the loop's inbox (D684)
     def note(self, runs_dir: Path, user: User, text: str) -> None:
         import secrets
 
-        with open(runs_dir / "inbox.jsonl", "a") as fh:
-            fh.write(json.dumps({"id": secrets.token_hex(6), "text": text, "by": user.name, "t": time.time()}) + "\n")
+        from .confine import append
+
+        append(runs_dir / "inbox.jsonl", json.dumps({"id": secrets.token_hex(6), "text": text, "by": user.name,
+                                                     "t": time.time()}) + "\n", runs_dir.parent)
 
     def forget_note(self, runs_dir: Path, user: User, ident: str) -> bool:
         """D808: a note removed from the page -- a line saying so, never the note's line taken out:
@@ -493,15 +534,19 @@ class RunManager:
         it read already stays in its record."""
         if ident not in {n["id"] for n in self.notes(runs_dir)}:
             return False
-        with open(runs_dir / "inbox.jsonl", "a") as fh:
-            fh.write(json.dumps({"forget": ident, "by": user.name, "t": time.time()}) + "\n")
+        from .confine import append
+
+        append(runs_dir / "inbox.jsonl", json.dumps({"forget": ident, "by": user.name, "t": time.time()}) + "\n", runs_dir.parent)
         return True
 
     def notes(self, runs_dir: Path) -> list[dict[str, Any]]:
         """The notes on the page, each with its `id` (an old one's is its time), the removed left out."""
+        from .confine import open_read
+
         try:
-            lines = (runs_dir / "inbox.jsonl").read_text().splitlines()
-        except OSError:
+            with open_read(runs_dir / "inbox.jsonl", runs_dir.parent, text=True) as fh:
+                lines = fh.read().splitlines()
+        except (OSError, ValueError):
             return []
         docs = []
         for ln in lines:

@@ -32,7 +32,14 @@ def main(argv: list[str]) -> int:
     # after the run started, so it does not inherit the ignore: a Stop now reaches it, not us
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, lambda *_: proc.send_signal(signal.SIGTERM))
-    with open(log, "ab", buffering=0) as out:
+    import os
+
+    from .confine import within
+
+    # D852: the log lies in runs/, which a run writes -- a link left there is not followed
+    real = within(log, os.path.dirname(os.path.dirname(os.path.abspath(log))))
+    fd = os.open(real, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), 0o644)
+    with os.fdopen(fd, "ab", buffering=0) as out:
         for line in iter(proc.stdout.readline, b""):
             out.write(stamp().encode() + line if line.endswith(b"\n") else stamp().encode() + line + b"\n")
     return proc.wait()
