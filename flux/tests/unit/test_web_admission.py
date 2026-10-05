@@ -87,7 +87,15 @@ def test_a_launch_that_fails_gives_its_place_back(tmp_path, monkeypatch):
     rm.start(bob, "x", app, "problem.yaml", "x", {"passes": 1})
     latest = rm.latest(bob, "x")
     try:
-        assert latest["pid"] and rm.live(latest)
+        # launched: a process, not the failed launch's mark -- not "still alive", which raced with a
+        # run that ends at once (this document is no task: it exits in 0.4 s, before a busy CI looked)
+        assert latest["pid"] and latest["rc"] != -1
+        for _ in range(100):                                 # and its end is recorded when it ends
+            row = rm.latest(bob, "x")
+            if row["ended"]:
+                break
+            time.sleep(0.1)
+        assert row["ended"] and row["rc"] is not None and row["rc"] != -1, row
     finally:
         import os
         import signal

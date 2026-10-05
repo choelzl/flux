@@ -154,7 +154,6 @@ def test_a_tool_whose_child_holds_its_output_is_bounded_and_its_group_ends(tmp_p
     """D854, the review's reproduction (#8): a tool exits while a child it started keeps its output
     open -- `run_tool` waited for the child (1.56 s for a 0.2 s timeout, and for ever for a child that
     never exits). Now the whole call is bounded, and on a timeout the child is gone too."""
-    import os
     import time
 
     import pytest
@@ -167,17 +166,35 @@ def test_a_tool_whose_child_holds_its_output_is_bounded_and_its_group_ends(tmp_p
         run_tool([sys.executable, "-c", script], timeout_s=1.0, what="leaky")
     assert time.monotonic() - t0 < 10, "bounded by the timeout, not by the child"
     child = int(pidfile.read_text())
-    time.sleep(0.2)
-    with pytest.raises(ProcessLookupError):
-        os.kill(child, 0)                                   # the child went with the group
+    assert _gone(child), "the child went with the group"
     # a tool that runs past its time: it and its children are gone when the call returns
     pidfile.unlink()
     slow = ("import subprocess, sys, time; p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
             f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); open({str(pidfile)!r}, 'w').write(str(p.pid)); time.sleep(30)")
     with pytest.raises(RuntimeError, match="timed out"):
         run_tool([sys.executable, "-c", slow], timeout_s=1.0, what="slow")
-    time.sleep(0.2)
-    with pytest.raises(ProcessLookupError):
-        os.kill(int(pidfile.read_text()), 0)
+    assert _gone(int(pidfile.read_text()))
     # an ordinary tool is unchanged
     assert run_tool([sys.executable, "-c", "print('ok')"], timeout_s=10).stdout.strip() == "ok"
+
+
+def _gone(pid: int, within: float = 5.0) -> bool:
+    """A killed process is gone -- or a zombie its new parent has not reaped yet, which a loaded
+    machine can leave for a moment: dead either way."""
+    import os
+    import time
+
+    end = time.monotonic() + within
+    while time.monotonic() < end:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        try:
+            with open(f"/proc/{pid}/stat") as fh:
+                if fh.read().rsplit(")", 1)[1].split()[0] == "Z":
+                    return True
+        except OSError:
+            return True
+        time.sleep(0.05)
+    return False

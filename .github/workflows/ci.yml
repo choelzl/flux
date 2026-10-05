@@ -95,7 +95,14 @@ jobs:
         # No PYTHONPATH prefix: the dev shell puts every local package on it itself (D123).
         # The core is what `pytest tests/unit` runs by default (pytest.ini, D531); the heavy
         # tests -- real tools, whole studies -- are the next step.
-        run: nix develop --command python3 -m pytest tests/unit tests/conformance -q -n auto
+        # D858: a failing test is named in an annotation -- the run's page shows it to anyone; the
+        # job's log needs a login, and a red job without a name cost a day to guess (a flaky test)
+        run: |
+          set -o pipefail
+          nix develop --command python3 -m pytest tests/unit tests/conformance -q -n auto -rfE | tee "$RUNNER_TEMP/unit.txt" || {
+            grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/unit.txt" | head -30 | sed 's/^/::error title=test::/'
+            exit 1
+          }
 
   heavy:
     # Real tools and whole studies (D531): minutes each, so nightly and on demand, not per push (D638).
@@ -115,7 +122,12 @@ jobs:
           fi
       - name: Heavy tests
         working-directory: flux
-        run: nix develop --command python3 -m pytest tests/unit -m heavy -q -n auto
+        run: |
+          set -o pipefail
+          nix develop --command python3 -m pytest tests/unit -m heavy -q -n auto -rfE | tee "$RUNNER_TEMP/heavy.txt" || {
+            grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/heavy.txt" | head -30 | sed 's/^/::error title=heavy test::/'
+            exit 1
+          }
 
   integration:
     name: integration sweep (nightly)
@@ -150,7 +162,13 @@ jobs:
           fail=0
           for f in tests/integration/test_*.py; do
             echo "::group::$f"
-            nix develop --command timeout 2400 python3 -m pytest "$f" -q --tb=short || fail=1
+            if ! nix develop --command timeout 2400 python3 -m pytest "$f" -q --tb=short -rfE > "$RUNNER_TEMP/one.txt" 2>&1; then
+              # D858: which file, and which tests in it, said where the run's page shows it
+              echo "::error title=integration::$f failed"
+              grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/one.txt" | head -10 | sed 's/^/::error title=integration test::/'
+              fail=1
+            fi
+            cat "$RUNNER_TEMP/one.txt"
             echo "::endgroup::"
           done
           exit $fail
