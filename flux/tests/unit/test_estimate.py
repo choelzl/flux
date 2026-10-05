@@ -23,7 +23,8 @@ TOOL = ("import sys, pathlib; x = int(open(sys.argv[1]).read().split('=')[1]); "
 def _doc(tmp_path: Path, xs, estimate=None, **more) -> dict:
     (tmp_path / "gen.py").write_text(GEN)
     (tmp_path / "tool.py").write_text(TOOL)
-    stage = {"command": f"{{python}} {tmp_path}/tool.py {{artifact}} {tmp_path}/tool.log",
+    (tmp_path / "out").mkdir(exist_ok=True)       # D853: what a tool writes goes to out/, not among the loop's inputs
+    stage = {"command": f"{{python}} {tmp_path}/tool.py {{artifact}} {tmp_path}/out/tool.log",
              "metrics": ["cost"], "cutoff": {"metric": "cost", "below": 35}}
     if estimate is not None:
         stage["estimate"] = estimate
@@ -43,7 +44,7 @@ def _run(tmp_path: Path, doc: dict, proposer=None, db: str = "e.db"):
 
 
 def _tool_runs(tmp_path: Path) -> list[int]:
-    log = tmp_path / "tool.log"
+    log = tmp_path / "out" / "tool.log"
     return sorted(int(x) for x in log.read_text().split()) if log.exists() else []
 
 
@@ -101,7 +102,7 @@ def test_the_model_estimates_against_an_objective_limit_and_no_model_estimates_n
     assert _tool_runs(tmp_path) == [1, 2]
     assert "fails cost <= 25 (the objective's limit)" in dict(out.refused)["x=3"]
     assert "ESTIMATE what the place stage will measure (cost)" in model.prompts[0]
-    (tmp_path / "tool.log").unlink()
+    (tmp_path / "out" / "tool.log").unlink()
     out, _p, _s = _run(tmp_path, doc, proposer=None, db="none.db")
     assert _tool_runs(tmp_path) == [1, 2, 3] and out.provenance["estimates"] == {}, "no model: the tool runs"
 

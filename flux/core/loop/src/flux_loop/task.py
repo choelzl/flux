@@ -578,10 +578,37 @@ class PromptProblem(Problem):
                 path = home / rel if home is not None else None
                 files[rel] = (hashlib.sha256(path.read_bytes()).hexdigest()[:16]
                               if path is not None and path.is_file() else "missing")
-            said = json.dumps({"gate": gate, "files": files, "tools": toolchain_fingerprint(), "flux": git_revision()},
-                              sort_keys=True, default=str)
+            # D853: and every input of the loop with its params -- a checker's imported helper, its
+            # data, `{params}` changed, an admission is re-checked
+            said = json.dumps({"gate": gate, "files": files, "tools": toolchain_fingerprint(), "flux": git_revision(),
+                               "inputs": self.inputs()}, sort_keys=True, default=str)
             self._judge = hashlib.sha256(said.encode()).hexdigest()[:16] if gate else ""
         return {"judge": self._judge} if self._judge else {}
+
+    def inputs(self) -> str:
+        """The fingerprint of what this loop's evidence is made from (D853, `flux_loop.inputs`): its
+        input files and params -- looked at most every few seconds, a measurement key per candidate
+        not walking the folder each time."""
+        import time
+
+        from .inputs import digest
+
+        got = self.__dict__.get("_inputs")
+        if got is None or time.monotonic() - got[0] > 5.0:
+            got = (time.monotonic(), digest(self.task.home, self.task.params))
+            self.__dict__["_inputs"] = got
+        return got[1]
+
+    def _workload(self) -> Any:
+        """The workload as a stage reads it: a file's content when the document names one (D663) --
+        `{home}/w.yaml`, or a path beside the document -- else the document's own value."""
+        workload = self.task.workload
+        if isinstance(workload, str):
+            path = Path(workload.replace("{home}", self.task.home or "."))
+            path = path if path.is_absolute() or path.exists() else Path(self.task.home or ".") / path
+            if path.exists():
+                return _document(path.read_text())
+        return workload
 
     def digesting(self) -> bool:
         """Whether this loop digests papers at all (D771): its own, or the library's by `flow.knowledge`."""
@@ -1402,12 +1429,7 @@ class PromptProblem(Problem):
 
             ev = make_evaluator(spec.evaluator or "")
             arch = _document(cand.artifact)
-            workload = self.task.workload
-            if isinstance(workload, str):     # a file: `{home}/w.yaml`, or a path beside the document (D663)
-                path = Path(workload.replace("{home}", self.task.home or "."))
-                path = path if path.is_absolute() or path.exists() else Path(self.task.home or ".") / path
-                if path.exists():
-                    workload = _document(path.read_text())
+            workload = self._workload()
             result = ev.evaluate(AbiCandidate(workload=workload, arch=arch), Budget(),
                                  frozenset(spec.metrics) if spec.metrics else frozenset())
             return {k: float(v.value) for k, v in result.metrics.items()
@@ -1492,8 +1514,10 @@ class PromptProblem(Problem):
         spec = next((r for r in self.task.stages if r.name == stage), None)
         if spec is None:
             return cand.key()
+        # D853: the workload as read (its file's content, not its name) and the loop's inputs -- a
+        # helper or a data file a stage reads changed, the measurement is not the same one
         h = hashlib.sha256(json.dumps([list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
-                                       self.task.params, self.task.workload], sort_keys=True, default=str).encode())
+                                       self.task.params, self._workload(), self.inputs()], sort_keys=True, default=str).encode())
         home = self.task.home
         for token in spec.command or ():
             if home and "{home}/" in token:

@@ -159,7 +159,8 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
         scored = Scored(cand, stage, metrics, payload)
         if state.records is not None:
             try:
-                state.records.trial(_doc(cand, _with(prov, estimate.get(id(cand)))), f"{cand.name}@{stage}", stage=stage,
+                state.records.trial(_doc(cand, _as(problem, cand, stage, state, _with(prov, estimate.get(id(cand))))),
+                                    f"{cand.name}@{stage}", stage=stage,
                                     strategy=_strategy(cand), metrics=scored.metrics,
                                     wall_s=seconds, analytic=analytic, evaluator=evaluator)
             except Exception:  # noqa: BLE001
@@ -211,6 +212,15 @@ def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage
     return run, made
 
 
+def _as(problem: Problem, cand: Candidate, stage: str, state: LoopState, prov: dict[str, Any]) -> dict[str, Any]:
+    """The row's provenance with what it was measured as (D853): the stage's measurement key -- the
+    candidate, the stage's command, the loop's inputs and params -- so a resume tells a stale row."""
+    try:
+        return {**prov, "measured_as": problem.cache_key(cand, stage, state)}
+    except Exception:  # noqa: BLE001 -- a row without it is re-measured on a resume
+        return prov
+
+
 def _with(prov: dict[str, Any], estimate: dict[str, Any] | None) -> dict[str, Any]:
     """The row's provenance, with the estimate made before it was measured (D665)."""
     return {**prov, "estimate": estimate} if estimate else prov
@@ -227,7 +237,7 @@ def _record(state: LoopState, cand: Candidate, stage: str, m: dict[str, Any], pr
     try:
         analytic: bool | frozenset[str] = (True if stage in problem.analytic_stages()
                                            else (problem.analytic_metrics() or False))
-        state.records.trial(_doc(cand, stamp(seconds=seconds or None, cached=(True if cached else None))),
+        state.records.trial(_doc(cand, _as(problem, cand, stage, state, stamp(seconds=seconds or None, cached=(True if cached else None)))),
                             f"{cand.name}@{stage}", stage=stage, strategy=_strategy(cand), metrics=metrics,
                             wall_s=seconds, analytic=analytic, evaluator=problem.evaluator_name(stage))
     except Exception:  # noqa: BLE001

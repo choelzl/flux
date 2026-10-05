@@ -128,6 +128,12 @@ def history(problem: Problem, state: LoopState) -> list[Scored]:
                 knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
                 cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
                                  dict(doc.get("meta") or {}), doc.get("subgoal"))
+                was = ((doc.get("meta") or {}).get("provenance") or {}).get("measured_as")
+                try:
+                    if not was or was != problem.cache_key(cand, t.stage, state):
+                        continue                         # D853: numbers of other inputs are not today's
+                except Exception:  # noqa: BLE001
+                    continue
                 latest[(cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
                                                        {"recalled": True})
         except Exception:  # noqa: BLE001 -- a record that cannot be read back: no history
@@ -147,6 +153,7 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
         return
     stages = set(problem.stages() or [])
     latest: dict[tuple[str, str], Scored] = {}
+    stale: set[tuple[str, str]] = set()
     try:
         for t in state.records.store.trials(state.records.campaign_id, status="ok"):
             if t.stage not in stages or t.result is None:
@@ -155,11 +162,27 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
             knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
             cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
                              dict(doc.get("meta") or {}), doc.get("subgoal"))
-            latest[(cand.name, cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
-                                                             {"recalled": True})
+            k = (cand.name, cand.key(), t.stage)
+            # D853: a row stands only for what measured it -- the stage's key today (its command, the
+            # loop's inputs and params) must be the one it was measured as; a row without one (made
+            # before) is measured again. The stale row stays on the record, out of the search.
+            was = ((doc.get("meta") or {}).get("provenance") or {}).get("measured_as")
+            try:
+                now = problem.cache_key(cand, t.stage, state)
+            except Exception:  # noqa: BLE001
+                now = None
+            if not was or was != now:
+                stale.add(k[:2])
+                latest.pop(k, None)
+                continue
+            latest[k] = Scored(cand, t.stage, {m: float(e.value) for m, e in t.result.metrics.items()}, {"recalled": True})
     except Exception as exc:  # noqa: BLE001 -- a record that cannot be read back: the search starts over
         state.say(f"reload: the record's measurements could not be read back ({exc!s:.80}); the search starts over")
         return
+    stale -= {k[:2] for k in latest}
+    if stale:
+        state.say(f"reload: {len(stale)} design(s) measured under other inputs (or before these were recorded) "
+                  "are measured again; their old numbers stay on the record")
     if latest:
         state.scored.extend(latest.values())
         state.say(f"reload: {len({k[:2] for k in latest})} design(s) measured on earlier passes rejoin the search")
@@ -335,6 +358,11 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
             if v2.ok:
                 state.admitted[key] = orig
                 state.say(f"reload: {key} re-verified from the record's RTL (today's re-spelling did not pass: {(v.why or '')[:80]})")
+            else:
+                state.say(f"reload: {key} re-verified: no longer passes today's checks ({' '.join((v.why or '').split())[:160]}); drafted again")
+        else:
+            # D853: said, not only in the timing tree -- a changed checker or input refused it
+            state.say(f"reload: {key} re-verified: no longer passes today's checks ({' '.join((v.why or '').split())[:160]}); drafted again")
     for key, entry in best.items():
         if key not in state.admitted:
             state.best[key] = entry
