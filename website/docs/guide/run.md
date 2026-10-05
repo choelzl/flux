@@ -66,9 +66,6 @@ flux attach myproblem/out/myproblem.db                      # follow its log
 | how the search moved, pass by pass | `flux report myproblem/out/myproblem.db` (an HTML page) |
 | every prompt and reply | `flux log myproblem/out/myproblem.db` |
 
-The report says which numbers were measured by real tools and which were only estimated, and
-names the deepest stage that ran.
-
 ## Choosing an AI model
 
 Problems whose designs come from a script (`flux example sweep`, `rtl-sweep`, `tune`) need no
@@ -98,6 +95,5 @@ on the `PATH`, give the path in `FLUX_CLAUDE_BIN` (or `FLUX_CODEX_BIN`, `FLUX_OP
 
 ## Asking something else
 
-Every setting is in the document. To ask a different question, copy the folder, change its
-`objectives:` (or `flow`, `budget:`); the copy's folder name is its id, so it keeps its own
-record.
+Copy the folder and change its `objectives:` (or `flow:`, `budget:`). The folder's name is the
+problem's id, so the copy keeps its own record.

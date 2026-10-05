@@ -12,19 +12,18 @@ Before you start: the [full install](../index.md#get-started), and an AI model
 ([choosing one](run.md#choosing-an-ai-model)). Run `flux selftest`: every line should
 say PASS.
 
-## 1. Start from a template
+## 1. Start from an example
 
 ```bash
 flux example rtl isqrt
 ```
 
-This writes `isqrt/` with a document, a golden model and a README. It runs as it is (an 8-bit
-adder); the next two steps turn it into a square root.
+This writes `isqrt/`: a document, a golden model and a README. As written it is an 8-bit adder;
+the next two steps make it a square root.
 
 ## 2. Say what is correct: `isqrt/golden.py`
 
-The **golden model** is a Python function that computes the right answer. Every design is tested
-against it.
+The **golden model** computes the right answer; every design is tested against it.
 
 ```python
 import math
@@ -50,7 +49,6 @@ statement: >-                     # the request, in words: the model reads it
 contract: >-                      # rules every design must follow
   One module named exactly `isqrt`, purely combinational (no clock, no reset), ports
   `input logic [15:0] x` and `output logic [7:0] r`. r must equal floor(sqrt(x)) for every x.
-language: systemverilog
 
 flow:
   test: flux rtl test {artifact} --golden {home}/golden.py     # refuses a wrong design
@@ -101,7 +99,7 @@ No design reached 1000 MHz, and the report says so. Left running, the loop keeps
 
 | to | add |
 |---|---|
-| let the model pick the next step | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
+| let the model pick the next step | `--agent orchestrate`, or `flow: {orchestrate: tools}` |
 | let the model plan each pass | `--agent plan`, or `flow: {plan: model}` |
 | let a coding agent write the design | `flow: {generate: opencode}` (or `claude`, `codex`) |
 | give the model a method note | `flow.knowledge: {files: [method-note.md]}` |

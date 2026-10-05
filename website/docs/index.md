@@ -5,12 +5,12 @@ hide:
 
 # Flux
 
-**Flux searches for the best hardware design for a problem you describe: a model or a script
-proposes designs, real tools check and measure them, and Flux picks the winner and tells you why.**
+**Flux searches for the best hardware design for a problem you describe: a model, a coding agent
+or a script proposes designs, real tools check and measure them, and Flux picks the winner and
+says why.**
 
-You describe the problem in one short file, the **document** (`*.problem.yaml`): what to build,
-how to tell a right design from a wrong one, what to measure and what "better" means. Flux does
-the rest and keeps a record of every design it tried.
+The problem is one short file, the **document** (`problem.yaml`): what to build, what is
+correct, what to measure, what "better" means. Every design tried is kept on record.
 
 ## Get started
 
@@ -87,21 +87,19 @@ the rest and keeps a record of every design it tried.
   SystemC, checked on every input in seconds; Flux then turns it into RTL itself (SystemC through
   the ICSC translator, in `nix develop .#systemc`).
 - **Design-space sweeps and searches.** List the knobs; pick a search: `sweep`, `montecarlo`,
-  `gradient`, `anneal`, `genetic`, `pareto`, `llm` (a model picks the points) or a coding agent.
-- **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer
-  any box of the loop that does not establish facts.
+  `gradient`, `anneal`, `genetic`, `pareto`, `model` (a model picks the points) or a coding agent.
+- **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or do any
+  step that does not establish facts.
+- **A web server for a team.** `flux serve`: loops in a browser, each in its own sandbox, with
+  users, prices per model and usage.
 - **Real measurements.** Yosys and OpenROAD on the ASAP7 process for speed, area and power;
   ChampSim for cache prefetcher studies; ZigZag for accelerator sizing; any command of yours.
-- **Calibration.** Cheap stages are compared with costly ones, so a quick estimate is never
-  reported as a measured result.
-- **An honest report.** The design to build first, then the trade-offs, what was measured and
-  what was only modelled, and every design that was refused, with the reason.
+- **An honest report.** The design to build, the trade-offs, what was measured and what only
+  estimated, and every refused design with the reason.
 - **From a sentence.** `flux ask "what you want"` writes the document for you.
 
 ## How it works
 
-Every problem runs through the same loop: a design is proposed, written, checked, measured
-stage by stage, and the best one is chosen. Each step can be done by *rules* (plain code), a
-*model* (an AI language model) or a *coding agent*; you choose in the document, and the defaults
-are usually right. Two steps are never handed to an AI: the checks that say a design is correct,
-and the measurements. [The loop](guide/loop-shape.md) draws every step.
+One loop for every problem: propose, write, check, measure stage by stage, choose. Each step is
+done by *rules*, a *model* or a *coding agent*, as the document says; the checks and the
+measurements are never an AI's. [The loop](guide/loop-shape.md) draws every step.

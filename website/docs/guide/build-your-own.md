@@ -23,9 +23,9 @@ flux example rtl myproblem
 | `rtl-sweep` | a script writes one module per knob setting | Verilator and Yosys | no |
 | `tune` | the knobs go straight into your own commands | `check.py`, `bench.py` | no |
 
-`flux example` writes `myproblem/` with a document, the scripts it names and a README. It runs as it
-is. `flux new myproblem` writes the baseline instead: the document's every part with what goes there, to fill in. For larger complete problems to copy from, see the repository's
-[`flux/applications/`](https://github.com/choelzl/flux/tree/main/flux/applications) folder.
+`flux example` writes `myproblem/`: a document, the scripts it names and a README, ready to run.
+`flux new myproblem` writes an empty baseline to fill in instead. Larger problems to copy from are
+in [`flux/applications/`](https://github.com/choelzl/flux/tree/main/flux/applications).
 
 ## 2. Say what you want
 
@@ -42,11 +42,10 @@ Edit `myproblem/problem.yaml`:
 - `python`, `sweep`, `tune`: edit `check.py` so it prints `N failing` (0 when correct).
 - For a knob search: list the knobs under `flow.orchestrate.space` and write each design in the generator script.
 
-Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
-problem on the machine) or in `library/` beside the document (this problem's own). Each paper is
-summed up once by the model (or `flow.knowledge: {digest: opencode}`).
-Excerpts that match the statement, contract and parts reach the model's prompts, and the coding
-agents get the file paths to open. `flow: {knowledge: off}` turns it off.
+Papers help: put PDFs, notes or code in `library/` beside the document (or
+`flux/mentor/knowledge/library/` for every problem). Each is summed up once (by the model, or
+`flow.knowledge: {digest: opencode}`); matching excerpts reach the prompts, and agents get the
+paths. `flow: {knowledge: off}` turns it off.
 
 ## 4. Check it
 
@@ -54,8 +53,7 @@ agents get the file paths to open. `flow: {knowledge: off}` turns it off.
 flux task check myproblem
 ```
 
-It runs nothing. It lists the loop's boxes, the stages and their tools, the library, and says
-what is missing.
+It runs nothing: it lists the boxes, the stages and their tools, and says what is missing.
 
 ## 5. Run it
 
@@ -80,13 +78,13 @@ writes an HTML page of the whole search.
 |---|---|
 | `id` | a short name (letters, digits, `_`); names the record, so an edited document resumes it |
 | `statement`, `contract` | the request and its rules, in words |
-| `language` | `systemverilog`, `verilog`, `python`, `c`, `cpp`, `text`, ...: the file type |
+| `language` | optional: the design's file type (`systemverilog`, `python`, `cpp`, `text`, ...); unsaid, the tools the checks name tell it |
 | `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; each `goal` is a limit (at least / at most), the goal-less ones decide in order, `balance: true` ones as their knee; `{keep: 0.9, above: 1.0}` is a limit relative to the best |
 | `flow` | each box of [the loop](loop-shape.md): who fills it, and its own settings (below) |
 | `flow.test` | a command that prints `N failing` or exits non-zero; or a map of named checks, run in order |
 | `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
 | `flow.orchestrate` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
-| `flow.knowledge` | `{files: [...]}` the model reads with every prompt; `agent: opencode` digests the library instead of the model; `off` |
+| `flow.knowledge` | `{files: [...]}` read with every prompt; `{digest: opencode}` sums up the library by that agent; `off` |
 | `flow.select` | `{finalists: 3}`: how many reach the costliest stage |
 | `budget` | `steps`, `passes`, `repair_attempts`, `workers`, `prototype` |
 
@@ -106,10 +104,9 @@ flow:
 A stage's `cutoff` is its gate: `cutoff: {metric: fmax_mhz, at: 1000}` sends on only the designs
 that meet timing at 1 GHz. `flux tools` lists every check and stage Flux has, with its command.
 
-`budget.prototype: true` (the default with a golden model) has the model write the algorithm in
-Python first, checked on every input; Flux then writes the RTL. `prototype: systemc` does the same
-with a SystemC module, translated by ICSC in `nix develop .#systemc` (elsewhere the model writes
-the RTL from it). Use `false` for plain logic such as adders.
+`budget.prototype: true` (the default with a golden model): the algorithm is written in Python
+first, checked on every input, then Flux writes the RTL; `systemc` does it with a SystemC module.
+Use `false` for plain logic such as adders.
 
 Every key is in the
 [author reference](https://github.com/choelzl/flux/blob/main/flux/core/loop/src/flux_loop/author_reference.md).
@@ -124,8 +121,8 @@ write a script and name it in the box it belongs to:
 | a check of your own | `flow.test: {name: "{python} {home}/check.py {artifact}"}` | prints `N failing`; exit 3 = did not build |
 | a measurement | `flow.measure: {name: {command: ..., metrics: [...]}}` | prints `name=value` |
 | a generator over a space | `flow.generate: {command: "... {knob} {artifact}"}` or `{point}` | writes `{artifact}` |
-| a search of your own -- a solver, a proof, a model it asks itself | `flow.orchestrate: {command: "... {history} {state} {params}"}` | reads what was measured and refused, keeps its state, prints the next candidates, lessons, a conclusion (D799) |
-| a composition of sub-loops | the parent's `flow.generate: {command: "... {parts} {artifact}"}` | reads each sub-loop's answer, writes the whole (D801) |
+| a search of your own -- a solver, a proof, a model it asks itself | `flow.orchestrate: {command: "... {history} {state} {params}"}` | reads what was measured and refused, keeps its state, prints the next candidates, lessons, a conclusion |
+| a composition of sub-loops | the parent's `flow.generate: {command: "... {parts} {artifact}"}` | reads each sub-loop's answer, writes the whole |
 | settings | `params:` | `{params}`: a JSON file any command reads |
 
 Worked examples:

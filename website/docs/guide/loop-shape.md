@@ -5,12 +5,9 @@ hide:
 
 # The loop
 
-Every document runs through one loop. A design is proposed, written, checked, measured stage by
-stage, and the best one is chosen. Every step is written to the record.
-
-This is the loop as it runs when the document says nothing about it. The
-[loop crafter](loop-crafter.md) shows the same drawing: there, a click on a box changes who does
-the step.
+Every document runs through one loop: propose, write, check, measure stage by stage, choose.
+Below, the loop as it runs when the document says nothing; in the [loop crafter](loop-crafter.md)
+a click on a box changes who does it.
 
 <div id="flux-loop-drawing" class="flux-crafter">
   <noscript>The drawing needs JavaScript. The table below lists the same boxes, top to bottom.</noscript>
@@ -24,8 +21,8 @@ the step.
 - **Red dotted arrows** are the ways a design is refused. A failed check sends it back to be
   *repaired*; a critic's objection *sends it back*; a measurement short of the objective asks to
   *improve* it; a design that fails a measurement's gate (or is estimated to) is *dropped*.
-- **At rest, explore**: when a round finds nothing new, the next one sends the best designs back
-  to be improved. A run ends only when you stop it, or at `--passes N`.
+- **At rest, explore**: when a round finds nothing new, the next asks for new designs that beat
+  the best. A run ends only when you stop it, or at `--passes N`.
 
 ## Words used here
 
@@ -40,15 +37,14 @@ the step.
 
 ## The boxes
 
-Each box is one step. Most can be done by *rules* (plain code), a *model* (an AI language model)
-or a *coding agent* (Claude Code, Codex, OpenCode). Say who in the document's `flow:` block, one
-key per box; a box you do not name keeps its default, the first choice listed.
+Most boxes can be done by *rules*, a *model* or a *coding agent* (Claude Code, Codex, OpenCode):
+one key per box in `flow:`; a box left out keeps its default, the first choice listed.
 
 ```yaml
 flow:
-  orchestrate: sweep                     # Search the settings: try every combination
-  generate: claude      # Make a design: a coding agent writes it
-  critique: model                  # Second opinion: a model critic
+  orchestrate: sweep        # Search the settings: try every combination
+  generate: claude          # Make a design: a coding agent writes it
+  critique: model           # Second opinion: a model critic
 ```
 
 | box | `flow:` key | what it does | choices, the default first |
@@ -57,26 +53,21 @@ flow:
 | Plan the round | `plan` | Optionally writes a plan for the round before any work starts. | `off`: step by step · `model`: a model writes the plan · a coding agent |
 | Pick the next job | `orchestrate` | Decides what to work on next. | unsaid: the model picks the next part, rules pick the kind of work · `rules`: no model · `model`: a model picks · `tools`: a model with tools picks · a coding agent. Left out when a search is on: the search picks. |
 | Your notes | `feedback` | Notes you type while it runs steer the next round. Typed in the live screen (`--tui`, then `f`). | `human` · `off` |
-| Search the settings | `orchestrate` | Walks the list of settings (the space) to choose which to try. With a space, the orchestrator picks points, not parts (D797). The settings are its `space` (`flow.orchestrate: {policy: sweep, space: {...}}`). | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
+| Search the settings | `orchestrate` | With a space of settings (`flow.orchestrate: {policy: sweep, space: {...}}`), picks which points to try. | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
 | Make a design | `generate` | Writes each candidate design. | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
 | Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library |
-| Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt. Always, while the library is on. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {digest: opencode}` |
+| Digest the papers | | Each paper of the library (`library/` beside the document, and the shared one) is summed up once; the summaries reach every prompt. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {digest: opencode}` |
 | Check it works | `test` | Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's. | **fixed**: always your checks, said as `flow.test` |
-| Second opinion | `critique` | Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice. The three *Critic* boxes of the drawing. | `off` · `model`: a model critic · a coding agent |
+| Second opinion | `critique` | Optionally, a critic questions the parts, each admitted part and the final choice (the drawing's three *Critic* boxes). | `off` · `model`: a model critic · a coding agent |
 | Measure | | Runs your measurements, cheapest first; a design that fails a gate is dropped. | **fixed**: always your measurements, said as `flow.measure`. Each may `estimate:` first and skip a design that cannot pass. |
 | Compare measures | `calibrate` | Checks how well the cheap measurement predicts the costly one. | `on` · `off`; never a model's or an agent's |
 | Choose the best | `select` | Picks the winner by your goals. | `objectives` · a coding agent breaks the ties they leave open |
 | Keep a record | | Every design, measurement and refusal is kept, and read back when you resume. | **fixed**: always on |
 | Learn from results | | Optionally turns past results into lessons for the next round, read with the library. | `off` · `mined`: lessons mined from the record, written `knowledge: {lessons: mined}` · a coding agent, `knowledge: {lessons: claude}` |
 
-A coding agent is written `claude` (or `codex`, `opencode`). The loop checks its answer
-and falls back to the rules when the answer is unusable. An agent that writes designs keeps one
-session per part until the part is admitted; an agent on any other box starts fresh every turn,
-or keeps one session for the whole round with `{by: claude, session: pass}`. Every box says it
-the same way (D795): a word, an agent's name, or `{by: <who>, ...}` with its settings beside.
-
-`flux task check <document>` prints these boxes for a given document, each with the choice in
-force.
+A box takes a word or an agent's name (`claude`, `codex`, `opencode`); `{by: claude, ...}` only
+when it has options, e.g. `session: pass` for one agent session per round. An unusable answer
+falls back to the rules. `flux task check` prints each box with the choice in force.
 
 ### In a document only
 
@@ -87,19 +78,17 @@ The loop crafter offers the choices above. A document written by hand can also s
 | `orchestrate` | `given` | take the parts in the order the document lists them, no model |
 | `orchestrate` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
 | `generate` | `{catalog: [...]}` | a fixed list of designs, no model |
-| `knowledge` | `opencode` | that coding agent sums up the library's papers instead of the model |
 
 ## Parts
 
-A large design can be made as several **parts**, each written and checked on its own, then
-composed and measured as one. List them (`parts: [decoder, datapath]`), say what each is
-(`parts: {decoder: "the opcode to control lines", datapath: "the ALU and the registers"}`) or let
-the loop divide the statement (`parts: decompose`). The drawing then shows a *parts* stack beside the checks.
+A large design can be several **parts**, each written and checked alone, then composed and
+measured as one: `parts: [decoder, datapath]`, `parts: {decoder: "...", datapath: "..."}`, or
+`parts: decompose` to let the loop divide the statement.
 
 ## Measurements that estimate first
 
-A costly measurement can be predicted before its tool runs, with `estimate:` on the stage. A
-design estimated to fail a gate or a limit by more than the margin is skipped at that stage.
+With `estimate:` on a stage, a design predicted to miss its gate or a limit by more than the
+margin is skipped there.
 
 | `kind` | the estimate comes from |
 |---|---|
@@ -124,12 +113,10 @@ flow:
   names it.
 - **Measured and modelled are kept apart.** The report says which numbers come from real tools
   and which from estimates.
-- **A run ends only when you stop it** (Ctrl-C, `q`, `flux stop`) or at `--passes N`.
 - **Nothing is measured twice.** The record keys every measurement by the tools and the exact
   source.
 
 ## Code a document cannot hold
 
-When a problem needs code (a solver, a simulator, a special search), it is a command the box
-names -- `orchestrate: {command: ...}` for a search of its own, the parent's `generate` for a
-composition of sub-loops. See [build your own](build-your-own.md#when-you-need-code-commands-beside-the-document).
+A solver, a simulator or a search of your own is a command the box names
+(`orchestrate: {command: ...}`); see [build your own](build-your-own.md#when-you-need-code-commands-beside-the-document).
