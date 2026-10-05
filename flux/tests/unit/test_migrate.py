@@ -21,7 +21,7 @@ OLD = {
     "statement": "sum two numbers",
     "language": "python",
     "gate": {"test": ["python", "check.py", "{artifact}"], "count_re": r"(\d+) failing", "timeout_s": 60},
-    "stages": [{"name": "bench", "command": "python bench.py {artifact}", "metrics": ["t"], "timeout_s": 600}],
+    "stages": [{"name": "bench", "command": "python bench.py {artifact} {n}", "metrics": ["t"], "timeout_s": 600}],
     "space": {"n": [1, 2, 3]},
     "knowledge": "add carefully",
     "objectives": [{"metric": "t", "direction": "minimize"}],
@@ -50,7 +50,7 @@ def test_every_old_form_is_brought_to_todays_and_said(tmp_path):
     assert {"D775", "D786", "D789", "D790-D792", "D795-D797", "D830"} <= codes, said
     flow = new["flow"]
     assert flow["test"] == {"test": {"run": ["python", "check.py", "{artifact}"], "count_re": r"(\d+) failing", "timeout_s": 60}}
-    assert flow["measure"] == {"bench": {"command": "python bench.py {artifact}", "metrics": ["t"]}}
+    assert flow["measure"] == {"bench": {"command": "python bench.py {artifact} {n}", "metrics": ["t"]}}
     assert flow["orchestrate"] == {"policy": "sweep", "space": {"n": [1, 2, 3]}}
     assert flow["select"] == {"finalists": 2} and flow["calibrate"] == "off" and flow["knowledge"] == {"text": "add carefully", "digest": "opencode"}
     assert flow["critique"] == "off" and flow["plan"] == "model" and flow["generate"] == {"by": "claude"}

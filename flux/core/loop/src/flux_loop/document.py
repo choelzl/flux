@@ -36,6 +36,7 @@ __all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "FLOW_BOXES
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
+_PLACEHOLDER_ANY = re.compile(r"\{(\w+)\}")      # D879: any knob a command says, in a script too
 BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
                 "prompt", "prompt_file", "point", "params", "history", "state", "parts")
 
@@ -587,14 +588,22 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
     cmds += [(f"estimate {r.name}", r.estimate.command) for r in stages if r.estimate and r.estimate.command]
     if generator.get("command"):
         cmds.append(("generator", generator["command"]))
+    said: set[str] = set()
     for what, cmd in cmds:
         for tok in cmd:
+            said |= set(_PLACEHOLDER_ANY.findall(tok))
             if any(c.isspace() for c in tok):
                 continue
             for m in _PLACEHOLDER.finditer(tok):
                 if m.group(1) not in known:
                     raise TaskError(f"{what} says {{{m.group(1)}}}, which is neither a knob of `flow.dse.space` "
                                     f"({', '.join(space) or 'none'}) nor the loop's ({', '.join(BUILTIN_SUBS)})")
+    if space and "agent" in generator and not (said & set(space)) and "{point}" not in str(cmds):
+        # D879: a point becomes a design only through a command that says its knobs; with none, every
+        # point was an empty artifact the gate refused, pass after pass (an agent spells no sweep point)
+        raise TaskError(f"flow.dse.space knobs ({', '.join(space)}) are said by no command: a search's points "
+                        "become designs through `flow.generate: {command: ... {" + next(iter(space)) + "} ...}` "
+                        "(or a measure command that takes them); a coding agent does not spell a point")
 
 
 def _knob_subs(knobs: dict[str, Any]) -> dict[str, str]:
