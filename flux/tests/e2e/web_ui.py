@@ -785,8 +785,7 @@ def flows(r: Run) -> None:
         got = json.loads(r.api("/admin/settings")["body"])["agent_env"]["corp"]
         r.check("the admin sets a variable for one agent alone", got == [{"name": "CORP_REGION", "value": "eu", "secret": False}], str(got))
         r.page("#/admin/agents", "document.querySelector('#ag-corp-label')", "Admin › Agents")
-        b.js("document.querySelector('#ag-corp-label').value = 'Corp Codex'; return 1")
-        b.js("[...document.querySelector('#ag-corp-label').closest('.card').querySelectorAll('button')].find(x => x.textContent.trim() === 'Save').click(); return 1")
+        b.js("const l = document.querySelector('#ag-corp-label'); l.value = 'Corp Codex'; l.dispatchEvent(new Event('change')); return 1")   # D833: saved on change
         b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Corp Codex')", timeout=20, what="corp renamed")
         r.check("an agent's name shown is the admin's", True)
         r.login("bob")
@@ -979,10 +978,13 @@ def flows(r: Run) -> None:
         r.login("ada")
         b.js("window.__e2e.bad.splice(0); return 1")
         r.page("#/u/bob/app/broken/settings/loop", "document.querySelector('#adv-memory')", "Advanced, as the admin")
-        b.js("const m = document.querySelector('#adv-memory'); m.value = 'lots'; return 1")
-        b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent.trim() === 'Save' && x.closest('.card') && x.closest('.card').textContent.includes('Advanced')).click(); return 1")
-        said = b.wait("window.__e2e.bad.length && window.__e2e.bad.join(' ')", timeout=10, what="the refusal")
-        r.check("a refused setting says what it takes", "16g" in said, said)
+        b.js("const m = document.querySelector('#adv-memory'); m.value = 'lots'; m.dispatchEvent(new Event('change')); return 1")   # D833: saved on change
+        said = b.wait("(document.querySelector('#main .save-mark.bad') || {}).textContent", timeout=10, what="the refusal")
+        r.check("a refused setting says what it takes, beside it", "16g" in said, said)
+        b.js("const m = document.querySelector('#adv-memory'); m.value = '8g'; m.dispatchEvent(new Event('change')); return 1")
+        b.wait("(document.querySelector('#main .save-mark.ok') || {}).textContent === 'saved'", timeout=10, what="the fixed value saved")
+        r.page("#/u/bob/app/broken/settings/loop", "document.querySelector('#adv-memory')", "Advanced, again")
+        r.check("a setting saves as it changes, no Save to press (D833)", b.js("return document.querySelector('#adv-memory').value") == "8g")
         b.js("window.__e2e.bad.splice(0); return 1")
         r.clean("error feedback")
         # around: a session that ended is said, not a silent jump to the login

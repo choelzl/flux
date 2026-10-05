@@ -151,6 +151,30 @@ function appHref(user, app) {
   return user && me && user !== me.name ? `#/u/${enc(user)}/app/${enc(app)}` : `#/app/${enc(app)}`;
 }
 /** A button whose async action disables it while it runs, and says a failure as a notice. */
+/** D833: a field that saves as it changes -- a moment after typing stops, or on leaving it -- with a
+    mark beside it: saving, saved, or why the server refused it. `run()` saves; saves never overlap. */
+function saveMark() { return h("span", { class: "save-mark small", "aria-live": "polite" }); }
+function autosave(fields, run, mark, { delay = 900, typing = true } = {}) {
+  let t = null, chain = Promise.resolve(), clear = null;
+  const go = () => {
+    clearTimeout(t);
+    chain = chain.then(async () => {
+      clearTimeout(clear);
+      mark.className = "save-mark small"; mark.textContent = "saving…";
+      try {
+        await run();
+        mark.classList.add("ok"); mark.textContent = "saved";
+        clear = setTimeout(() => { if (mark.textContent === "saved") mark.textContent = ""; }, 2500);
+      } catch (x) { mark.classList.add("bad"); mark.textContent = x.message === "log in" ? "" : x.message; }
+    });
+    return chain;
+  };
+  for (const el of [].concat(fields)) {
+    if (typing) el.addEventListener("input", () => { clearTimeout(t); t = setTimeout(go, delay); });
+    el.addEventListener("change", go);
+  }
+  return go;
+}
 function act(label, fn, { cls = "", title } = {}) {
   const b = h("button", { class: cls, title, type: "button" }, label);
   b.addEventListener("click", async () => {
@@ -937,6 +961,18 @@ function advancedCard(e, save, saveLabel = "Save") {
   const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
   const par = h("input", { type: "checkbox", checked: !!a.parallel, id: "adv-parallel" });
   const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
+  // D833: saved as they change; turning the sandbox off asks first
+  const mark = saveMark();
+  const collect = () => ({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
+    pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.checked,
+    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean) });
+  const go = autosave([mem, cpus, pids, tmp, par, hosts], () => save(collect()), mark);
+  sb.addEventListener("change", async () => {
+    if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) {
+      sb.checked = true; return;
+    }
+    go();
+  });
   return card("Advanced (admins)", [h("p", { class: "muted" }, "Apply from the loop's next start, whoever starts it.",
       e.sandboxed_server ? "" : " This server runs without the sandbox (--no-sandbox): the limits do nothing."),
     h("label", { class: "check" }, sb, "Run in the sandbox (off: on the host, with this machine's files and network: only for code you trust)"),
@@ -944,12 +980,7 @@ function advancedCard(e, save, saveLabel = "Save") {
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
     h("label", { class: "check" }, par, "Allow parallel work: tool runs and parts at once, as many as the document asks (budget.workers, parallel_parts); off: one at a time"),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
-    h("div", { class: "form-actions" }, act(saveLabel, async () => {
-      if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) return;
-      await save({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
-        pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.checked,
-        allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean) });
-    }, { cls: "primary" }))]);
+    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, saveLabel === "Save" ? "Changes save as you make them." : "Kept for the new loop as you make them."), mark)]);
 }
 
 async function loopPage(name, owner, path = "") {
@@ -1479,7 +1510,7 @@ async function loopPage(name, owner, path = "") {
         await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
       }, { cls: "danger" }))], { cls: "danger-card" }) : "";
     body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
-      await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv }); toast("Advanced settings saved: they apply from the next start", "ok"); settingsView();
+      await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
     }), danger);
   }
   /** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
@@ -2536,7 +2567,7 @@ async function crafterView(body, name, owner) {
   const panel = filesPanel(null, yamlOf);
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
-    can_advance: true, sandboxed_server: true }, async (a) => { adv = a; toast("Kept: applied when the loop is created", "ok"); }, "Keep for the new loop") : "";
+    can_advance: true, sandboxed_server: true }, async (a) => { adv = a; }, "Keep for the new loop") : "";
   body.replaceChildren(host, panel.el, advBox);
   host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
   setTimeout(panel.draw, 300);
@@ -2996,6 +3027,7 @@ async function adminSandbox(body) {
     h("label", { class: "check" }, usersAdd, "a user may add hosts when starting a loop"));
   const showAllow = () => { allowBox.hidden = mode.value !== "allowlist"; };
   mode.addEventListener("change", showAllow); showAllow();
+  const sbMark = saveMark();
   body.replaceChildren(
     r.sandboxed ? "" : h("p", { class: "callout bad" }, "This server runs without the sandbox (--no-sandbox): none of this applies."),
     card("Network", [h("p", { class: "muted" }, "What the containers may reach. With an allowlist they have no network of their own: a proxy on this machine forwards to the allowed hosts and refuses the rest, a name resolved and checked against the IPs and CIDRs. A loop's Settings may add hosts for that loop; a loop an admin runs on the host has the machine's network."),
@@ -3007,11 +3039,10 @@ async function adminSandbox(body) {
     card("Homes", [h("p", { class: "muted" }, "Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. ",
         "Each user logs their agents in on their Account page; no one's login is shared."),
       h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
-    h("div", { class: "form-actions" }, act("Save", async () => {
-      await api("/admin/sandbox", { method: "PUT", body: { network: mode.value, allow: list(allow), users_add: usersAdd.checked, endpoints: endpoints.checked,
-        path: list(paths), login_path: loginP.checked, home_seed: list(seed) } });
-      toast("Sandbox settings saved: they apply from each loop's next start", "ok"); route();
-    }, { cls: "primary" })));
+    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, "Changes save as you make them; they apply from each loop's next start."), sbMark));
+  // D833: saved as they change
+  autosave([mode, allow, usersAdd, endpoints, paths, loginP, seed], () => api("/admin/sandbox", { method: "PUT", body: { network: mode.value,
+    allow: list(allow), users_add: usersAdd.checked, endpoints: endpoints.checked, path: list(paths), login_path: loginP.checked, home_seed: list(seed) } }), sbMark);
 }
 
 /** Admin › Insights (D766): what went wrong, what was used, how the endpoints and agents did,
@@ -3096,12 +3127,16 @@ async function adminAgents(body) {
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
-    const first = JSON.stringify(body_());
+    let first = JSON.stringify(body_());
+    const mark = saveMark();
+    const put = async () => { if (JSON.stringify(body_()) === first) return; await api(`/admin/agents/${a.id}`, { method: "PUT", body: body_() }); first = JSON.stringify(body_()); };
+    autosave([login, args, home, hosts, creds], put, mark);                       // D833
+    autosave([label, bin], async () => { const was = first; await put(); if (was !== first) route(); }, mark, { typing: false });
     const el = h("div", { class: "agent-panel", "data-agent": a.id, "data-label": a.label },
       h("div", { class: "agent-found" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
         h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`), h("code", { class: "small" }, a.id),
-        h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
+        mark, h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`)),
       h("div", { class: "grid-2" },
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
@@ -3121,16 +3156,15 @@ async function adminAgents(body) {
         if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
         await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
       }, { cls: "danger small" })));
-    return { el, dirty: () => JSON.stringify(body_()) !== first,
-             save: async () => { await api(`/admin/agents/${a.id}`, { method: "PUT", body: body_() }); toast(`${label.value || a.label} saved: from the next start, login and test`, "ok"); } };
+    return { el };
   };
   const offered = new Set(st.groups.filter(g => g.agent).map(g => g.agent));
   const panels = {}, extraTabs = [];
   for (const a of r.agents) {
     const p = panelOf(a);
     if (offered.has(a.id)) panels[a.id] = p;
-    else extraTabs.push({ tab: a.label, el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
-      h("p", { class: "muted small" }, "Its model and its own variables are set here once its program is found.")), save: p.save, dirty: p.dirty });
+    else extraTabs.push({ tab: a.label, noSave: true, el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
+      h("p", { class: "muted small" }, "Its model and its own variables are set here once its program is found.")) });
   }
   extraTabs.push({ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent"),
     h("p", { class: "muted small" }, "Every run on this server gets these, and each of its agents whatever the name (an ANTHROPIC_API_KEY here reaches Claude Code and OpenCode alike); a user's and a loop's own come over them. The sandbox's own variables cannot be set here: a loop's Settings tab has them."),
@@ -3149,7 +3183,7 @@ async function adminAgents(body) {
       try { localStorage.setItem("flux-models-tab-server", nlabel.value.trim() || name.value.trim()); } catch (_) { /* per viewer */ }
       toast(`${name.value.trim()} added`, "ok"); route();
     }, { cls: "primary" }))) });
-  const save = async (values) => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); toast("Saved", "ok"); route(); };
+  const save = async (values) => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); };   // D833: quiet, field by field
   body.replaceChildren(card("Agents and models", [h("p", { class: "muted small" }, "What the server sets, every run gets unless its user sets their own. Keys are stored encrypted and never shown again."),
     ...settingsForm(st, { save, scope: "server", panels, extraTabs, agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
       save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
@@ -3166,12 +3200,10 @@ async function adminUsers(body) {
   const def = res ? res.max_running : 4;
   const limitCell = (u) => {
     const cur = res && res.limits ? res.limits[u.name] : null;
-    const inp = h("input", { type: "number", min: 0, max: 64, value: cur ?? "", placeholder: String(def), style: "width:64px" });
-    return h("td", {}, h("span", { class: "inline" }, inp, act("Set", async () => {
-      const v = inp.value.trim() === "" ? null : Number(inp.value);
-      await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: v } });
-      toast(`${u.name}: ${v == null ? `the default (${def})` : v} loop(s) at once`, "ok");
-    }, { cls: "small" })));
+    const inp = h("input", { type: "number", min: 0, max: 64, value: cur ?? "", placeholder: String(def), style: "width:64px", "aria-label": `${u.name}'s running limit` });
+    const mark = saveMark();
+    autosave(inp, () => api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: inp.value.trim() === "" ? null : Number(inp.value) } }), mark);   // D833
+    return h("td", {}, h("span", { class: "inline" }, inp, mark));
   };
   body.replaceChildren(card("Users", [h("div", { class: "scroll-x" }, h("table", { class: "list" },
       h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Role"), h("th", { title: "Loops running at once; empty: the server's default" }, "Running limit"),
@@ -3222,14 +3254,30 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const secret = new Set(st.secret);
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
   const row = (k) => {
-    const cur = st.values[k], fall = server ? server[k] : null, sec = secret.has(k);
+    const fall = server ? server[k] : null, sec = secret.has(k);
+    const holder = (cur) => sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set");
     // D820: a key is a secret of the server's, not a login: no password manager fills it, nor the field before it
     inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: sec ? "new-password" : "off", name: `flux-setting-${k}`,
-      "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other", value: sec ? "" : (cur || ""),
-      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set") });
+      "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other", value: sec ? "" : (st.values[k] || ""),
+      placeholder: holder(st.values[k]) });
+    const mark = saveMark(), clearBox = h("span", {});
+    const drawClear = () => clearBox.replaceChildren(st.values[k] ? act("Clear", async () => {
+      await save({ [k]: null }); st.values[k] = ""; inputs[k].value = ""; inputs[k].placeholder = holder(""); drawClear();
+      mark.className = "save-mark small ok"; mark.textContent = "cleared";
+    }, { cls: "small" }) : "");
+    drawClear();
+    // D833: saved as it changes; a key once typed and left (never shown back)
+    autosave(inputs[k], async () => {
+      const v = inputs[k].value.trim();
+      if (sec && !v) return;                                      // an empty key field changes nothing
+      if (!sec && v === (st.values[k] || "")) return;
+      await save({ [k]: v || null });
+      st.values[k] = sec ? "set" : v;
+      if (sec) { inputs[k].value = ""; inputs[k].placeholder = holder("set"); }
+      drawClear();
+    }, mark, { typing: !sec });
     return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, labels[k] || k),
-      h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }),
-        cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : ""),
+      h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }), clearBox, mark),
       h("code", { class: "muted small var" }, k));
   };
   const groups = st.groups.map(g => {
@@ -3274,13 +3322,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     for (const x of extras) x.holder.hidden = x.tab !== cur;
     actions.hidden = extras.some(x => x.tab === cur && x.noSave);
   };
-  const actions = h("div", { class: "form-actions" }, act("Save", async () => {
-    const values = {};
-    for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
-    for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
-    for (const x of [...Object.values(panels), ...extras]) if (x.save && x.dirty && x.dirty()) await x.save();
-    return save(values);
-  }, { cls: "primary" }));
+  const actions = h("p", { class: "muted small autosave-said" }, "Changes save as you make them.");   // D833
   draw();
   return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el), extras.map(x => x.holder)), actions];
 }
@@ -3288,7 +3330,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
 async function accountPage() {
   const show = pageShow();
   const [st, myEnv] = await Promise.all([api("/settings"), api("/env")]);
-  async function save(values) { await api("/settings", { method: "PUT", body: { values } }); toast("Settings saved", "ok"); route(); }
+  async function save(values) { await api("/settings", { method: "PUT", body: { values } }); }   // D833: quiet, field by field
   const pw = h("input", { type: "password", autocomplete: "new-password" });
   const mine = await api("/usage").catch(() => null);
   const holders = Object.fromEntries(st.groups.filter(g => g.agent).map(g => [g.agent, h("div", { class: "agent-login" })]));

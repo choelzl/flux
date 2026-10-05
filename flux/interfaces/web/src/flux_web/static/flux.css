@@ -786,3 +786,7 @@ details.agent-more > summary { cursor: pointer; }
 
 /* D824: a loop's folder, said */
 ul.files li.own > a { font-weight: 600; }   /* D829 */
+
+/* D833: a field's save, said beside it */
+.save-mark { color: var(--muted); min-width: 4em; font-size: 12px; }
+.save-mark.ok { color: var(--ok); } .save-mark.bad { color: var(--bad); }
