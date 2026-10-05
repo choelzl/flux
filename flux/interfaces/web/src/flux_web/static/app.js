@@ -933,6 +933,26 @@ async function sharingCard(name, isOwner) {
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
 /** D808: a bin at a card's top right that removes it once confirmed. */
+/** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
+    keyboard reaches it too) and `aria-sort`; the same header again turns the order round. A column's
+    first order is descending (most, newest) unless it says `asc`. Kept per table in this browser. */
+function sortableTable(memo, cols, rows, rowFn, firstCol = 0) {
+  let col = firstCol, desc = !cols[firstCol].asc;
+  try { const m = JSON.parse(localStorage.getItem(memo) || "null"); if (m && cols[m.col] && cols[m.col].key) { col = m.col; desc = m.desc; } } catch (_) { /* a default */ }
+  const head = h("tr", {}), body = h("tbody", {});
+  const draw = () => {
+    const k = cols[col].key, cmp = (a, b) => { const x = k(a), y = k(b); return x < y ? -1 : x > y ? 1 : 0; };
+    body.replaceChildren(...rows.slice().sort((a, b) => desc ? cmp(b, a) : cmp(a, b)).map(rowFn));
+    head.replaceChildren(...cols.map((c, i) => h("th", { class: c.num ? "num" : "", "aria-sort": !c.key ? null : i === col ? (desc ? "descending" : "ascending") : "none" },
+      c.key ? h("button", { type: "button", class: "th-sort" + (i === col ? " on" : ""), onclick: () => {
+        if (i === col) desc = !desc; else { col = i; desc = !c.asc; }
+        try { localStorage.setItem(memo, JSON.stringify({ col, desc })); } catch (_) { /* per viewer */ }
+        draw();
+      } }, c.label, h("span", { class: "th-arrow", "aria-hidden": "true" }, i === col ? (desc ? " ▾" : " ▴") : "")) : c.label)));
+  };
+  draw();
+  return h("table", { class: "list compact sortable" }, h("thead", {}, head), body);
+}
 function binButton(what, title, said, remove) {
   return h("button", { type: "button", class: "bin", title: `Remove this ${what}`, "aria-label": `Remove this ${what}`,
     onclick: async () => { if (await confirmDialog(title, said, { ok: "Remove", danger: true })) await remove(); } },
@@ -3143,32 +3163,35 @@ async function adminInsights(body, part = "failures") {   // D819: one part of t
   // D850: each list in the order asked (kept in this browser), each row removable
   const forget = (kind, key, what) => binButton("row", `Remove ${what}?`, "It leaves this list until it is used again.", async () => {
     await api("/admin/insights/forget", { method: "POST", body: { kind, key } }); route(); });
-  const orderSel = (memo, opts, redraw) => { let cur = (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
-    if (!opts.some(([v]) => v === cur)) cur = opts[0][0];
-    const s = h("select", { class: "small", "aria-label": "Order" }, opts.map(([v, label]) => h("option", { value: v, selected: v === cur }, label)));
-    s.addEventListener("change", () => { try { localStorage.setItem(memo, s.value); } catch (_) { /* per viewer */ } redraw(s.value); });
-    return { s, cur }; };
-  const SORT = { failures: (a, b) => b.rate - a.rate || b.turns - a.turns, used: (a, b) => (b.turns ?? b.count) - (a.turns ?? a.count), last: (a, b) => b.last - a.last };
-  const epBody = h("tbody", {}), netBody = h("tbody", {});
-  const drawEp = (o) => epBody.replaceChildren(...r.endpoints.slice().sort(SORT[o]).map(e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
-      h("td", { class: "num" }, String(e.turns)),
-      h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
-      h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
-      h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
-      h("td", { class: "right" }, forget("endpoint", e.key, e.where)))));
-  const drawNet = (o) => netBody.replaceChildren(...r.network.slice().sort(SORT[o]).map(n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
-      h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
-      h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)))));
-  const epOrder = orderSel("flux-insights-ep-order", [["failures", "most failing"], ["used", "most used"], ["last", "last used"]], drawEp);
-  const netOrder = orderSel("flux-insights-net-order", [["used", "most refused"], ["last", "last refused"]], drawNet);
-  drawEp(epOrder.cur); drawNet(netOrder.cur);
-  const epCard = card("Endpoints and agents", r.endpoints.length ? h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Which"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Failed"), h("th", { class: "num" }, "Median"),
-      h("th", { class: "num" }, "Slow (95%)"), h("th", {}, "Last used"), h("th", {}, "Last failure"), h("th", {}))), epBody)
-    : h("p", { class: "muted" }, "No turn in this time."), { actions: r.endpoints.length ? [epOrder.s] : [] });
-  const netCard = card("Network refused", r.network.length ? h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Host"), h("th", { class: "num" }, "Times"), h("th", {}, "By"), h("th", {}, "Last"), h("th", {}))), netBody)
-    : h("p", { class: "muted" }, "Nothing refused."), { actions: r.network.length ? [netOrder.s] : [] });
+  // D859: a column's header sorts it -- a click, again for the other way; kept in this browser
+  const epCols = [
+    { label: "Which", key: e => `${e.kind} ${e.where}`, asc: true },
+    { label: "Turns", key: e => e.turns, num: true },
+    { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true },
+    { label: "Median", key: e => e.p50, num: true },
+    { label: "Slow (95%)", key: e => e.p95, num: true },
+    { label: "Last used", key: e => e.last },
+    { label: "Last failure", key: e => e.last_error_at || 0 },
+    { label: "" }];
+  const epRow = e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
+    h("td", { class: "num" }, String(e.turns)),
+    h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
+    h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
+    h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
+    h("td", { class: "right" }, forget("endpoint", e.key, e.where)));
+  const netCols = [
+    { label: "Host", key: n => `${n.host}:${n.port}`, asc: true },
+    { label: "Times", key: n => n.count, num: true },
+    { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true },
+    { label: "Last", key: n => n.last },
+    { label: "" }];
+  const netRow = n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
+    h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
+    h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)));
+  const epCard = card("Endpoints and agents", r.endpoints.length ? sortableTable("flux-insights-ep-sort", epCols, r.endpoints, epRow, 2)
+    : h("p", { class: "muted" }, "No turn in this time."));
+  const netCard = card("Network refused", r.network.length ? sortableTable("flux-insights-net-sort", netCols, r.network, netRow, 1)
+    : h("p", { class: "muted" }, "Nothing refused."));
   const maxDisk = Math.max(...r.disk.map(d => d.total), 1);
   const diskCard = card("Disk by user", h("table", { class: "list compact" },
     h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),

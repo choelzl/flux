@@ -1082,16 +1082,30 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
                "&& document.querySelectorAll('#insights-part .card').length >= 2", timeout=15, what="30 days")
         r.check("Insights: over 30 days", True)
-        # D850: the endpoints in the order asked, a row removed until used again
-        eps = json.loads(r.api("/admin/insights?days=30")["body"])["endpoints"]
-        if eps:
-            r.check("Insights: the endpoints have an order to pick", b.js("return [...document.querySelectorAll('#insights-part select[aria-label=Order]')].length") >= 1)
-            gone = eps[0]["key"]
-            b.js("document.querySelector('#insights-part .card tbody tr button.bin').click(); return 1")
-            r.dialog_button("Remove")
-            b.wait("!document.querySelector('dialog.dlg[open]')", timeout=10)
-            left = [e["key"] for e in json.loads(r.api("/admin/insights?days=30")["body"])["endpoints"]]
-            r.check("Insights: a removed endpoint leaves the list", gone not in left, f"{gone} in {left}")
+        # D850, D859: two refused hosts on record -- so the table is there to sort and to remove from
+        now = time.time()
+        with open(r.data / "network-refused.jsonl", "a") as fh:
+            for host, n in (("few.example", 1), ("many.example", 3)):
+                for i in range(n):
+                    fh.write(json.dumps({"t": now - 60 * (i + 1), "host": host, "port": 443, "app": "sw", "user": "bob"}) + "\n")
+        r.page("#/admin/insights", "document.querySelector('#main .subtabs')", "Admin › Insights")
+        r.button("Endpoints and network", "#main .subtabs")
+        b.wait("[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === 'Network refused') && "
+               "document.querySelector('#insights-part .card:last-child tbody tr')", timeout=20, what="the refused hosts")
+        hosts = "return [...[...document.querySelectorAll('#insights-part .card')].find(c => c.querySelector('h2').textContent === 'Network refused').querySelectorAll('tbody tr')].map(t => t.cells[0].textContent)"
+        sort = "[...document.querySelectorAll('#insights-part .th-sort')].find(x => x.textContent.startsWith(arguments[0])).click(); return 1"
+        r.check("Insights: refused hosts, most refused first", b.js(hosts)[:2] == ["many.example:443", "few.example:443"], str(b.js(hosts)))
+        b.js(sort, "Times")
+        r.check("Insights: a column's header sorts it, again the other way (D859)", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
+        b.js(sort, "Host")
+        r.check("Insights: by host, A to Z first", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
+        b.js("const c = [...document.querySelectorAll('#insights-part .card')].find(c => c.querySelector('h2').textContent === 'Network refused');"
+             " [...c.querySelectorAll('tbody tr')].find(t => t.cells[0].textContent === 'many.example:443').querySelector('button.bin').click(); return 1")
+        r.dialog_button("Remove")
+        b.wait("!document.querySelector('dialog.dlg[open]')", timeout=10)
+        left = [n["key"] for n in json.loads(r.api("/admin/insights?days=30")["body"])["network"]]
+        r.check("Insights: a removed host leaves the list (D850)", "many.example:443" not in left and "few.example:443" in left, str(left))
+        b.js("localStorage.removeItem('flux-insights-net-sort'); return 1")
         r.page("#/admin/agents", "document.querySelector('.set-tabs')", "Agents and models")
         r.button("Hidden output", ".set-tabs")
         b.js("const t = document.querySelector('#stderr-masks'); t.value = 'stale arg0\\n/^ERROR rmcp/'; t.dispatchEvent(new Event('change')); return 1")
