@@ -71,9 +71,9 @@ def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
     assert started == {"user": "bob", "by": "dee"}, "the owner's loop, started by the editor"
     shared = {(s["owner"], s["name"], s["perm"]) for s in cy.get("/api/shared").json()}
     assert shared == {("bob", "x", "watch")}
-    # an admin still watches without a share, and cannot change
+    # an admin needs no share, and changes it too (D812)
     assert ada.get("/api/apps/x", params=O).json()["perm"] == "admin"
-    assert ada.put("/api/apps/x/file", params={**O, "path": "check.py"}, json={"text": "x"}, headers=H).status_code == 403
+    assert ada.put("/api/apps/x/file", params={**O, "path": "check.py"}, json={"text": "x"}, headers=H).status_code == 200
     # unshare, and delete clears the shares
     assert bob.put("/api/apps/x/shares", json={"user": "cy", "perm": None}, headers=H).status_code == 200
     assert cy.get("/api/apps/x", params=O).status_code == 403

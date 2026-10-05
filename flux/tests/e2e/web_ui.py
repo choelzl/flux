@@ -563,7 +563,7 @@ def flows(r: Run) -> None:
 
     def admin():
         r.login("ada")
-        tabs = ["", "applications", "resources", "sandbox", "models", "users", "audit"]
+        tabs = ["", "applications", "documents", "resources", "sandbox", "models", "users", "audit"]
         for t in tabs:
             r.page(f"#/admin{'/' + t if t else ''}", "document.querySelector('#main .tabs')", f"admin {t or 'loops'}")
             b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
@@ -815,6 +815,37 @@ def flows(r: Run) -> None:
             b.js("localStorage.removeItem('flux-show-ignored'); return 1")
             r.login("ada")
     r.step("files and questions", files_and_questions)
+
+    def documents_migrated():
+        """D811: a loop of an earlier form is listed in Admin › Documents with what would change, and
+        the admin migrates it there; its start was refused saying so."""
+        r.login("bob")
+        old = ("id: oldsum\nstatement: add two numbers\nlanguage: python\n"
+               "gate: {test: [python, check.py, '{artifact}'], count_re: '(\\d+) failing'}\n"
+               "stages: [{name: bench, command: 'python bench.py {artifact}', metrics: [t]}]\n"
+               "objectives: [{metric: t, direction: minimize}]\nflow: {critique: none}\n")
+        made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'oldform');
+            for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
+            fetch('/api/apps', {method: 'POST', body: f, headers: {'X-Flux': '1'}}).then(async x => done({status: x.status, body: await x.text()}));""",
+                     [["oldsum.problem.yaml", old], ["check.py", "print('0 failing')\n"], ["bench.py", "print('t=1')\n"]])
+        r.check("a loop of an earlier form is uploaded", made["status"] == 200, str(made)[:300])
+        refused = r.api("/apps/oldform/start", "POST", {"passes": 1})
+        r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Admin › Documents" in refused["body"], refused["body"][:300])
+        r.login("ada")
+        r.page("#/admin/documents", "[...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", "Admin › Documents")
+        text = b.js("return [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).textContent")
+        r.check("it says the document, where it goes and that it would migrate", "oldsum.problem.yaml" in text and "problem.yaml" in text
+                and "would migrate" in text, text[:300])
+        r.clean("Admin › Documents")
+        b.js("[...[...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).querySelectorAll('button')]"
+             ".find(x => x.textContent.trim() === 'Migrate').click(); return 1")
+        b.wait("![...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", timeout=30, what="oldform migrated")
+        info = json.loads(r.api("/apps/oldform?owner=bob")["body"])
+        text = r.api("/apps/oldform/file?path=problem.yaml&owner=bob")["body"]
+        said = json.loads(r.api("/apps/oldform/validate?owner=bob", "POST", {"text": text})["body"] or "{}")
+        r.check("migrated: the loop's document is problem.yaml, and it loads", info.get("document") == "problem.yaml"
+                and said.get("ok") is True and "flow:" in text, f"{info.get('document')} {said}")
+    r.step("documents migrated", documents_migrated)
 
     def error_feedback():
         """D757: what a user is told when something is wrong -- before (a document that does not load,

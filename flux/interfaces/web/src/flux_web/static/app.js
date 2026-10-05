@@ -921,7 +921,7 @@ async function loopPage(name, owner, path = "") {
   if (show.stale()) return;                         // D719: the user went elsewhere while it loaded
   // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
   const perm = info.perm || (info.mine ? "owner" : "admin");
-  const mine = perm === "owner" || perm === "edit", isOwner = perm === "owner";
+  const mine = perm === "owner" || perm === "edit" || perm === "admin", isOwner = perm === "owner";   // D812: an admin edits anyone's
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
   // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
@@ -938,7 +938,7 @@ async function loopPage(name, owner, path = "") {
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
   const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["problem", "Problem"], ["loop", "Variables and sharing"]] };
-  const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !(perm === "owner" || perm === "edit")));
+  const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
   function setUrl() {
     const segs = [SLUG[tab], tab === "Overview" ? "" : (curSub() === (subsOf(tab)[0] || [""])[0] && !mode ? "" : curSub()), mode].filter(Boolean);
@@ -983,9 +983,9 @@ async function loopPage(name, owner, path = "") {
       if (perm === "edit") acts.push(leaveBtn());
     }
     if (perm === "watch") acts.push(leaveBtn());
-    const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
-      : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin's look: read only" },
-      `${info.owner}'s · ${perm === "edit" ? "you may edit" : perm === "watch" ? "watching" : "read only"}`);
+    const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
+      : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin: you may change and run it; it runs on its owner's agents and settings" },
+      `${info.owner}'s · ${perm === "edit" ? "you may edit" : perm === "watch" ? "watching" : "an admin's edit"}`);
     header.replaceChildren(head(h("span", {}, name, " ", statePill(st), whose),
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
@@ -2567,7 +2567,7 @@ async function reviseByAgent(body, name, owner) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", resources: "Resources", sandbox: "Sandbox", agents: "Agents", models: "Models and variables", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", documents: "Documents", resources: "Resources", sandbox: "Sandbox", agents: "Agents", models: "Models and variables", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -2588,6 +2588,7 @@ async function adminPage(sub = "") {
   if (tab === "agents") return adminAgents(body);
   if (tab === "insights") return adminInsights(body);
   if (tab === "applications") return adminApplications(body);
+  if (tab === "documents") return adminDocuments(body);
   if (tab === "models") {
     const st = await api("/admin/settings");
     const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
@@ -2830,6 +2831,42 @@ async function adminApplications(body) {
         h("td", { class: "right" }, h("div", { class: "actions end" }, a.loop
           ? [h("a", { class: "btn small primary", href: `#/app/${enc(a.name)}` }, "Open"), a.linked ? act("Refresh", () => use(a, true), { cls: "small" }) : h("span", { class: "muted small", title: "A loop of yours has this name; it was not made from this folder" }, "name taken")]
           : act("Use", () => use(a, false), { cls: "small primary" })))))))]));
+}
+
+/** Admin › Documents (D811): every loop's documents of an earlier form, what each would change to
+    be of today's, and the migration -- one loop or all; a result is written only when it loads, the
+    original kept as `<file>.orig`; what needs a person is said, not written. */
+async function adminDocuments(body) {
+  body.replaceChildren(skeleton(4));
+  const r = await api("/admin/documents");
+  const PILL = { "would migrate": "live", "needs a hand": "bad", failed: "bad", current: "ok", migrated: "ok" };
+  const run = async (b, what) => {
+    const got = await api("/admin/documents/migrate", { method: "POST", body: b });
+    const left = got.done.flatMap(x => x.why ? [`${x.user}/${x.app}: ${x.why}`] : x.documents.filter(d => d.status !== "migrated" && d.status !== "current").map(d => `${x.user}/${x.app}/${d.file}: ${d.status}`));
+    toast(`${what}: ${got.migrated} document(s) migrated${left.length ? `; left: ${left.join("; ")}` : ""}`, left.length ? "warn" : "ok");
+    route();
+  };
+  const ready = r.loops.filter(l => !l.running && l.documents.some(d => d.status === "would migrate"));
+  const rows = r.loops.map(l => h("div", { class: "mig-loop" },
+    h("div", { class: "mig-head" }, h("strong", {}, `${l.user} / `, h("a", { href: appHref(l.user, l.app) }, l.app)), l.running ? h("span", { class: "pill live" }, "running") : "",
+      h("span", { class: "grow" }),
+      l.documents.some(d => d.status === "would migrate") ? (l.running ? h("span", { class: "muted small" }, "stop it to migrate: its document is in use")
+        : act("Migrate", () => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`), { cls: "small primary", title: "Write the documents that load; keep each original" })) : ""),
+    ...l.documents.filter(d => d.status !== "current").map(d => h("div", { class: "mig-doc" },
+      h("div", {}, h("span", { class: "mono" }, d.file), d.to !== d.file ? h("span", { class: "mono muted" }, ` → ${d.to}`) : "", " ",
+        h("span", { class: `pill ${PILL[d.status] || ""}` }, d.status)),
+      d.why ? h("p", { class: "small bad" }, d.why) : "",
+      d.manual.length ? h("ul", { class: "small bad" }, d.manual.map(m => h("li", {}, m))) : "",
+      d.said.length ? h("details", {}, h("summary", { class: "small" }, `${d.said.length} change(s)`),
+        h("ul", { class: "small mono" }, d.said.map(x => h("li", {}, x))),
+        d.text ? h("pre", { class: "log small" }, d.text) : "") : ""))));
+  body.replaceChildren(card("Documents of an earlier form", [
+    h("p", { class: "muted" }, `${r.documents} document(s) in ${r.total} loop(s); `, r.loops.length ? `${r.loops.length} loop(s) with one to bring to today's form.` : "all of today's form.",
+      " A migration writes a document only when the result loads; the original is kept beside it as ", h("code", {}, "<file>.orig"),
+      " (YAML comments are not carried over). A loop whose id was not its folder's name keeps its record, renamed. What a migration cannot do -- a ",
+      h("code", {}, "world:"), " to say as commands -- is said for a person."),
+    ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
+    ...(r.loops.length ? rows : [empty("Nothing to migrate.")])]));
 }
 
 /** What every sandbox gets (D698): the network, PATH directories, what every home starts with (D744). */

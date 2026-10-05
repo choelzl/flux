@@ -77,7 +77,10 @@ flow:
 
 There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801) -- a parent's `generate` that is a model or an agent (`generate: claude`) drafts for them instead, inherited like any box (D804). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or `{by: claude, session: pass, ...the box's settings}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
-document does not have, and `budget` takes no `finalists` or `calibrate`.
+document does not have, and `budget` takes no `finalists` or `calibrate`. A document of an earlier form
+is brought to this one by `flux task migrate FOLDER [--write]`, or by an admin in Admin › Documents (D811):
+each change said, a result written only when it loads, the original kept as `<file>.orig`; a `world:`
+or `hooks:` is said for a person to rewrite as commands.
 
 ## Check and run a problem
 
@@ -450,7 +453,11 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **Each day** (D807) an agent a user tested is tested again, one at a time: an answer keeps its login fresh;
     a failure is told to the user (the bell) and their loops that need it wait until a Test passes again.
   - **admin**: internal, and the admin pages.
-- **Admin** (tabs: Loops, Insights, Applications, Resources, Sandbox, Agents, Models and variables, Users, Audit):
+- **Admin** (tabs: Loops, Insights, Applications, Documents, Resources, Sandbox, Agents, Models and variables, Users, Audit):
+  - **Documents** (D811): every loop's documents of an earlier form -- what each would change (the steps, the
+    result), where it goes (`<id>.problem.yaml` with an `id:` becomes `problem.yaml`; the record follows a
+    renamed id) -- migrated one loop at a time or all at once; a running loop is left until stopped; a loop's
+    Start says when its document needs it.
   - **Insights** (D766): over the last day, 7 or 30 days -- the starts that failed with why (their log's
     words) and the agents' Tests that failed; turns, tokens and cost by user and by agent or model, a bar a
     day, and the loops that used most; each model endpoint and agent with its turns, failures, median and
@@ -481,8 +488,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   serve` says its data folder and its accounts: the two must be the same folder. Passwords are hashed with scrypt; five failures from one address lock the name there for ten minutes, fifty
   from all addresses lock it everywhere;
   sessions live in an HttpOnly, SameSite=Strict cookie; every change needs the `X-Flux` header.
-  A user sees only their own loops and those shared with them. An admin manages users, sees every
-  application (read only) and every run (and may stop it), and the audit trail. The audit also
+  A user sees only their own loops and those shared with them. An admin manages users, sees and edits
+  every loop -- its files, problem and variables, starting and stopping it, as an editor of it would; it runs on
+  its owner's agents and settings (D812) -- and the audit trail. The audit also
   lists each host a loop's sandbox refused (network allowlist), under the loop's owner, once per
   host and port per run. The audit narrows by what happened and by whom (D723), and searches
   the details. What happened comes in groups (D724): users and sign-in, runs, loops and their

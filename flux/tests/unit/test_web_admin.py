@@ -34,7 +34,7 @@ def _client(app, name, password):
 
 
 def _loop(c, name):
-    files = [("files", (f"{name}.problem.yaml", f"id: {name}\nstatement: s\n".encode()))]
+    files = [("files", (f"{name}.problem.yaml", b"statement: s\n"))]
     assert c.post("/api/apps", data={"name": name}, files=files, headers=H).status_code == 200
 
 
@@ -114,3 +114,21 @@ def test_pausing_starts_limits_and_stopping_every_loop(server):
     finally:
         for p in procs:
             p.kill()
+
+
+def test_an_admin_edits_anyones_loop_and_a_user_still_only_their_own(server):
+    """D812: an admin changes and runs anyone's loop, as an editor of it would; a user without a
+    share still only reads nothing of it."""
+    app, tmp = server
+    bob, ada = _client(app, "bob", "another long secret"), _client(app, "ada", "correct horse battery")
+    _loop(bob, "x")
+    assert ada.put("/api/apps/x/file", params={"path": "bench.sh", "owner": "bob"}, json={"text": "echo t=1\n"}, headers=H).status_code == 200
+    assert (tmp / "data/users/bob/apps/x/bench.sh").read_text() == "echo t=1\n"
+    assert ada.put("/api/apps/x/env", params={"owner": "bob"}, json={"name": "SEED", "value": "7"}, headers=H).status_code == 200
+    assert ada.get("/api/apps/x", params={"owner": "bob"}).json()["perm"] == "admin"
+    from flux_web.store import Store
+
+    store = Store(tmp / "data")
+    store.add_user("cy", "cy has a long secret")
+    cy = _client(app, "cy", "cy has a long secret")
+    assert cy.put("/api/apps/x/file", params={"path": "y", "owner": "bob"}, json={"text": "z"}, headers=H).status_code == 403

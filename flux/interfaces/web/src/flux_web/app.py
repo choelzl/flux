@@ -143,6 +143,11 @@ class AgentNew(BaseModel):               # D807: an agent the admin adds -- a na
     bin: str = Field(default="", max_length=1024)
 
 
+class MigrateIn(BaseModel):              # D811: one loop's documents, or every loop's
+    user: str | None = None
+    app: str | None = None
+
+
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
     path: list[str] = Field(default_factory=list)
     login_path: bool = False
@@ -214,7 +219,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     def access(user: User, owner: str | None, name: str | None) -> tuple[Workspace, User, str]:
         """Whose loop a call names, and what this user may do with it (D701): "owner"; "edit" or
-        "watch" when the owner shared it with them; "admin" for an admin (watch, and stop)."""
+        "watch" when the owner shared it with them; "admin" for an admin, who edits anyone's (D812)."""
         if not owner or owner.strip().lower() == user.name.lower():
             return ws(user), user, "owner"
         other = store.user(name=owner)
@@ -233,9 +238,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return w, whose
 
     def editor(user: User, owner: str | None, name: str) -> tuple[Workspace, User]:
-        """Whose loop a change names: one's own, or one shared with this user to edit (D701)."""
+        """Whose loop a change names: one's own, one shared with this user to edit (D701), or for an
+        admin anyone's (D812)."""
         w, whose, perm = access(user, owner, name)
-        if perm not in ("owner", "edit"):
+        if perm not in ("owner", "edit", "admin"):
             raise HTTPException(403, "you may watch this loop, not change it")
         return w, whose
 
@@ -1368,6 +1374,71 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         w.set_meta(name, last_check={"digest": digest, "ok": ok, "t": time.time(), "output": output, "document": doc})   # D693
         return {"ok": ok, "output": output}
 
+    # ---- D811: documents of an earlier form, brought to today's by an admin
+    def _running(u: User, name: str) -> bool:
+        run = runs.latest(u, name)
+        return bool(run) and runs.live(run)
+
+    def _loops_documents() -> list[dict[str, Any]]:
+        from flux_loop.migrate import migrate_loop
+
+        out = []
+        for u in store.users():
+            w = Workspace(store.data, u.name)
+            for a in w.apps():
+                try:
+                    got = migrate_loop(w.app(a["name"]))
+                except Exception as exc:  # noqa: BLE001 -- one loop's trouble, said; the others listed
+                    got = {"documents": [{"file": "?", "to": "?", "status": "failed", "said": [], "manual": [], "text": "",
+                                          "why": f"{type(exc).__name__}: {exc}"[:500]}]}
+                docs = [{k: x[k] for k in ("file", "to", "status", "said", "manual", "why", "text")} for x in got["documents"]]
+                out.append({"user": u.name, "app": a["name"], "documents": docs, "running": _running(u, a["name"])})
+        return out
+
+    @app.get("/api/admin/documents")
+    def admin_documents(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Every loop's documents, and what each would change to be of today's form (nothing written)."""
+        loops = _loops_documents()
+        return {"loops": [x for x in loops if any(d["status"] != "current" for d in x["documents"])],
+                "total": len(loops), "documents": sum(len(x["documents"]) for x in loops)}
+
+    @app.post("/api/admin/documents/migrate")
+    def admin_migrate(body: MigrateIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """One loop's documents (`user` and `app`), or every loop's, brought to today's form: each
+        written only when it loads, the original kept as `<file>.orig`; a running loop is left
+        alone; a renamed record or document is followed by its runs and by the loop."""
+        from flux_loop.migrate import migrate_loop
+
+        done = []
+        for u in store.users():
+            if body.user and u.name != body.user:
+                continue
+            w = Workspace(store.data, u.name)
+            for app_ in w.apps():
+                name = app_["name"]
+                if body.app and name != body.app:
+                    continue
+                if _running(u, name):
+                    done.append({"user": u.name, "app": name, "documents": [], "why": "running: stop it first"})
+                    continue
+                folder = w.app(name)
+                if all(x["status"] == "current" for x in migrate_loop(folder)["documents"]):
+                    continue
+                got = migrate_loop(folder, write=True)
+                renamed = {Path(k).name: Path(v).name for k, v in got["moves"].items() if Path(k).parent == folder}
+                doc = w.meta(name).get("document")
+                if doc in renamed:
+                    w.set_meta(name, document=renamed[doc], id=name)
+                store.move_paths(got["moves"])
+                migrated = [x["file"] for x in got["documents"] if x["status"] == "migrated"]
+                if migrated:
+                    store.audit(a.name, "document migrated", f"{u.name}/{name}: {', '.join(migrated)}")
+                done.append({"user": u.name, "app": name, "why": "",
+                             "documents": [{k: x[k] for k in ("file", "to", "status", "manual", "why")} for x in got["documents"]]})
+        if body.app and not done:
+            raise HTTPException(404, f"nothing to migrate in {body.user}/{body.app}")
+        return {"done": done, "migrated": sum(d["status"] == "migrated" for x in done for d in x["documents"])}
+
     @app.post("/api/apps/{name}/validate")
     def validate_text(name: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Whether a document, not yet saved, loads (D757): what Direct edit says before it writes."""
@@ -1461,6 +1532,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             needs = agents_used(load_task(str(d / meta["document"])))
         except Exception:  # noqa: BLE001 -- a document the run itself will refuse, saying why
             needs = []
+            from flux_loop.migrate import migrate_loop
+
+            older = [x for x in migrate_loop(d)["documents"] if x["file"] == meta["document"] and x["status"] != "current"]
+            if older:                                  # D811: of an earlier form -- said here, with what to do
+                raise HTTPException(409, f"{meta['document']} is of an earlier form ({len(older[0]['said'])} change(s) to make"
+                                         + (", and some need a person" if older[0]["manual"] else "")
+                                         + "): an admin migrates it in Admin › Documents")
         agents_gate(whose, needs)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             from flux_loop.document import record_name

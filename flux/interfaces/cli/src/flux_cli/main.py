@@ -174,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.add_argument("--no-sandbox", action="store_true",
                          help="Check on this machine, not in the sandbox (the check imports the document's code).")
     check_p.set_defaults(func=cmd_task_check)
+    mig_p = task_sub.add_parser("migrate", help="Bring a problem's documents of an earlier form to today's (D811).")
+    mig_p.add_argument("folder", help="The problem's folder.")
+    mig_p.add_argument("--write", action="store_true", help="Write them (each only when it loads; the original kept as <file>.orig).")
+    mig_p.set_defaults(func=_cmd_task_migrate)
     run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
     run_p.add_argument("file", help="The problem's folder, or one of its documents (problem.yaml, NAME.problem.yaml).")
     run_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, beside the document's own (repeatable).")
@@ -337,6 +341,28 @@ def _cmd_user(args):
     from flux_web.cli import user
 
     return user(args)
+
+
+def _cmd_task_migrate(args: argparse.Namespace) -> int:
+    """`flux task migrate FOLDER [--write]` (D811): each document, what it changes; exit 1 when one
+    needs a person or would not load."""
+    from pathlib import Path
+
+    from flux_loop.migrate import migrate_loop
+
+    folder = Path(args.folder)
+    if folder.is_file():
+        folder = folder.parent
+    got = migrate_loop(folder, write=args.write)
+    for d in got["documents"]:
+        print(f"{d['file']}{' -> ' + d['to'] if d['to'] != d['file'] else ''}: {d['status']}" + (f" -- {d['why']}" if d["why"] else ""))
+        for x in d["said"]:
+            print(f"  {x}")
+        for x in d["manual"]:
+            print(f"  NEEDS A PERSON: {x}")
+    if not args.write and any(d["status"] == "would migrate" for d in got["documents"]):
+        print("(nothing written: --write writes them)")
+    return 1 if any(d["status"] in ("needs a hand", "failed") for d in got["documents"]) else 0
 
 
 def _cmd_agent_test(args: argparse.Namespace) -> int:

@@ -4,6 +4,7 @@ the users' data; every function opens its own connection (FastAPI serves from th
 from __future__ import annotations
 
 import hashlib
+import json
 import hmac
 import os
 import re
@@ -346,6 +347,21 @@ class Store:
             else:
                 out[r["key"]] = r["value"]
         return out
+
+    def move_paths(self, moves: dict[str, str]) -> int:
+        """Runs whose record or document moved (a migrated loop, D811) follow it; returns how many."""
+        if not moves:
+            return 0
+        n = 0
+        with self._db() as db:
+            for rid, dbp, argv in db.execute("SELECT id, db, argv FROM runs").fetchall():
+                new_db, new_argv = moves.get(dbp, dbp), argv
+                for a, b in moves.items():
+                    new_argv = new_argv.replace(json.dumps(a), json.dumps(b))
+                if (new_db, new_argv) != (dbp, argv):
+                    db.execute("UPDATE runs SET db = ?, argv = ? WHERE id = ?", (new_db, new_argv, rid))
+                    n += 1
+        return n
 
     def forget_settings(self, keys: tuple[str, ...]) -> None:
         """These settings, the server's and every user's (an agent removed, D807)."""
