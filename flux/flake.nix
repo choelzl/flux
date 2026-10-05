@@ -193,6 +193,7 @@
               pkgs.systemc     # a SystemC prototype's testbench links it (D635)
               pkgs.hyperfine   # `flux prog time` (D661)
               pkgs.tini        # PID 1 of the run's sandbox: reaps the tools' processes, forwards signals (D680)
+              pkgs.ripgrep     # `rg`: the coding agents search with it first (Codex) -- in the sandbox via the PATH (D848)
             ]
             # Physical design (OpenROAD, yosys-slang), linux-only.
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [

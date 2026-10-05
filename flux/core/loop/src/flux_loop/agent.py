@@ -48,6 +48,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+#: Codex features a loop never uses (D848), off by config -- a Codex that lacks one ignores it
+_CODEX_OFF = ("-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.in_app_browser=false")
+
 __all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
 
 #: The agents this repository knows how to call headless: the first turn, the turn that
@@ -76,12 +79,17 @@ PRESETS: dict[str, dict[str, Any]] = {
                           "--output-format", "stream-json", "--verbose", "--include-partial-messages", *_CLAUDE_DENY),
                "output": "claude", "add_dir": ("--add-dir",)},
     # D748: `--full-auto` is gone (Codex 0.159); writing in its folder, no prompts, in a folder that is no git repository
-    "codex": {"argv": ("codex", "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"), "resume": None, "output": "text"},
+    # D848: --json -- the session (to resume), each command and its output, the tokens on stdout; stderr is quiet.
+    # A loop's Codex without the ChatGPT apps (their MCP client fails loudly on an expired login), plugins or browser
+    "codex": {"argv": ("codex", "exec", "--json", "--sandbox", "workspace-write", "--skip-git-repo-check", *_CODEX_OFF, "-"),
+              "resume": ("codex", "exec", "resume", "{session}", "--json", "--skip-git-repo-check", "-c", 'sandbox_mode="workspace-write"',
+                         *_CODEX_OFF, "-"),
+              "output": "codex"},
     "opencode": {"argv": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}"),
                  "resume": ("opencode", "run", "--format", "json", "--thinking", "--dir", "{workdir}", "--session", "{session}"),
                  "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": _OPENCODE_DENY}},
 }
-OUTPUTS = ("text", "opencode", "claude")
+OUTPUTS = ("text", "opencode", "claude", "codex")
 #: An agent's name (D807): the presets', or one a server adds -- `nga`, an OpenCode of its own.
 AGENT_NAME = r"[a-z][a-z0-9_]{0,23}"
 
@@ -194,7 +202,10 @@ def _in_box(argv: tuple[str, ...]) -> tuple[str, ...]:
     outside the container -- so every write failed. There the container is the sandbox (its
     network rules, only the loop's folders writable), as it is for OpenCode and Claude Code:
     Codex's `danger-full-access` mode, inside it only; on the host Codex keeps `workspace-write`."""
-    if os.environ.get("FLUX_SANDBOXED") != "1" or "--sandbox" not in argv:
+    if os.environ.get("FLUX_SANDBOXED") != "1":
+        return argv
+    argv = tuple('sandbox_mode="danger-full-access"' if a == 'sandbox_mode="workspace-write"' else a for a in argv)   # a resume's
+    if "--sandbox" not in argv:
         return argv
     i = argv.index("--sandbox")
     return (*argv[:i + 1], "danger-full-access", *argv[i + 2:])
@@ -456,6 +467,21 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
             if isinstance(doc, dict) and session is None:
                 session = doc.get("session_id")
         return stdout, session
+    if output == "codex":
+        # --json (D848): the thread is the session; the turn's words are its agent messages
+        texts, session = [], None
+        for line in stdout.splitlines():
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(ev, dict):
+                continue
+            session = ev.get("thread_id") or session
+            item = ev.get("item") or {}
+            if ev.get("type") == "item.completed" and item.get("type") == "agent_message":
+                texts.append(str(item.get("text") or ""))
+        return "\n".join(t for t in texts if t.strip()), session
     return stdout, None
 
 
@@ -471,7 +497,7 @@ def usage(output: str, stdout: str) -> dict[str, float]:
 
     for line in stdout.splitlines():
         line = line.strip()
-        if not line.startswith("{") or ('"step_finish"' not in line and '"result"' not in line):
+        if not line.startswith("{") or ('"step_finish"' not in line and '"result"' not in line and '"turn.completed"' not in line):
             continue
         try:
             ev = json.loads(line)
@@ -494,6 +520,11 @@ def usage(output: str, stdout: str) -> dict[str, float]:
             add("tokens_out", u.get("output_tokens"))
             add("tokens_cached", u.get("cache_read_input_tokens"))
             add("cost_usd", ev.get("total_cost_usd"))
+        elif output == "codex" and ev.get("type") == "turn.completed":
+            u = ev.get("usage") or {}
+            add("tokens_in", (u.get("input_tokens") or 0))            # cached ones are among them
+            add("tokens_out", (u.get("output_tokens") or 0) + (u.get("reasoning_output_tokens") or 0))
+            add("tokens_cached", u.get("cached_input_tokens"))
     return got
 
 
@@ -633,6 +664,45 @@ class _Live:
         self.steps.append({"k": kind, "text": text[-self.STEP_CHARS:]})
         del self.steps[:-self.STEPS_KEPT]
 
+    def _codex(self, ev: dict[str, Any]) -> None:
+        """Codex's --json events (D848): its messages, reasoning, commands with their output and exit
+        code, file changes and web searches, as the other agents' steps."""
+        kind, item = ev.get("type"), ev.get("item") or {}
+        what = item.get("type")
+        if kind == "turn.started":
+            self.status = "model step"
+        elif kind == "turn.completed":
+            self.status = "step done"
+        elif kind in ("turn.failed", "error"):
+            err = ev.get("error") or {}
+            self.status = f"error: {err.get('message') if isinstance(err, dict) else err or ev.get('message')}"[:300]
+        elif what == "command_execution":
+            ident = str(item.get("id") or "")
+            if kind == "item.started":
+                self.tools.append(_detail("shell", {"command": item.get("command")}))
+                self._tool_step("shell", {"command": item.get("command")}, ident=ident)
+            elif kind == "item.completed":
+                out = item.get("aggregated_output") or ""
+                if ident not in self._by_id:
+                    self.tools.append(_detail("shell", {"command": item.get("command")}))
+                    self._tool_step("shell", {"command": item.get("command")}, ident=ident)
+                self._tool_result(ident, out, item.get("exit_code") not in (0, None) or item.get("status") == "failed")
+                if str(out).strip():
+                    self.result = str(out).strip()[-self.OUT_TAIL:]
+        elif kind == "item.completed" and what == "agent_message":
+            self._say(str(item.get("text") or ""))
+        elif kind == "item.completed" and what == "reasoning":
+            self._think(str(item.get("text") or ""))
+        elif kind == "item.completed" and what == "file_change":
+            files = [f"{c.get('kind', 'edit')} {c.get('path', '')}" for c in item.get("changes") or [] if isinstance(c, dict)]
+            self.tools.append(_detail("edit", {"files": files}))
+            self._tool_step("edit", {"files": "\n".join(files)}, out="", error=item.get("status") == "failed")
+        elif kind == "item.completed" and what == "web_search":
+            self.tools.append(_detail("web_search", {"query": item.get("query")}))
+            self._tool_step("web_search", {"query": item.get("query")}, out="")
+        elif kind == "item.completed" and what == "error":
+            self.status = f"error: {item.get('message')}"[:300]
+
     def _tool_step(self, name: str, args: Any, ident: str | None = None, out: Any = None, error: bool = False) -> None:
         step: dict[str, Any] = {"k": "tool", "name": name, "call": _detail(name, args), "input": self._args(args)}
         if out is not None:
@@ -676,6 +746,9 @@ class _Live:
         except ValueError:
             return
         if not isinstance(ev, dict):
+            return
+        if self.output == "codex":
+            self._codex(ev)
             return
         if self.output == "opencode":
             part = ev.get("part") or {}

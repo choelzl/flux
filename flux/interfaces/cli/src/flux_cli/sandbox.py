@@ -3,7 +3,7 @@ container -- rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE`)
 
 The container is the host seen read-only: the system directories and `/nix/store` at their
 real paths (the same binaries run: nix tools, OpenCode, Claude Code), the flux source, the
-executables on PATH, and the program a `FLUX_<AGENT>_BIN` names (the file alone, D804). Writable: the record's folder, the problem's `out/` and `workbench/` (a sub-loop's,
+executables on PATH, and the program a `FLUX_<AGENT>_BIN` names with its own folder (D848; the file alone in a personal folder, D804). Writable: the record's folder, the problem's `out/` and `workbench/` (a sub-loop's,
 its parent's: D805), the
 places the command writes to (`--out`, `--json`, `flux ask --dir`), and the application's own
 cache (D681): `~/.cache/flux/apps/<id>/`, shared by its runs, with `tmp/` (scratch, traces,
@@ -218,9 +218,10 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
                     target = f.resolve()
                     if target.exists() and not any(str(target).startswith(s) for s in SYSTEM):
                         ro.append(str(target.parent))
-    for prog in agent_programs().values():                   # D804: the program an admin names, the file alone
-        if not any(prog.startswith(m + "/") for m in (*SYSTEM, *ro)):
-            ro.append(prog)
+    for prog in agent_programs().values():                   # D804, D848: the program an admin names, with its package
+        place = program_mount(prog)
+        if not any(place == m or place.startswith(m + "/") for m in (*SYSTEM, *ro)):
+            ro.append(place)
     app = app_dir(args, command)
     rw += [str(app / "tmp")]                                  # the application's own, nothing shared (D681)
     for flag in ("db", "out", "json"):
@@ -265,6 +266,19 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     rw = [p for p in rw if not (p in seen or seen.add(p))]
     ro = [p for p in ro if not (p in seen or seen.add(p))]
     return ro, rw
+
+
+def program_mount(prog: str) -> str:
+    """What to mount for an agent's program (D848): its folder, read-only -- Codex ships helpers beside
+    its binary (`codex-code-mode-host`, its own `rg`), without which every file write failed in the
+    container -- unless the folder is a personal one (the home itself, Flux's settings, a folder
+    holding a settings file or a key), where the file alone is mounted, as D804 did for every one."""
+    folder = Path(prog).parent
+    home = Path.home()
+    personal = (folder == home or folder == home / ".config" / "flux" or str(folder) in ("/", "")
+                or any((folder / n).exists() for n in ("flux.env", ".env"))
+                or any(folder.glob("*.key")) or any(folder.glob("*.pem")))
+    return prog if personal else str(folder)
 
 
 def agent_programs() -> dict[str, str]:

@@ -93,7 +93,8 @@ def test_the_presets_and_the_missing_binary():
     for argv in (agent_spec("claude").argv, agent_spec("claude").resume):    # D673: a shell without the design tools
         assert argv[argv.index("--allowedTools") + 1] == "Bash" and "Bash(yosys:*)" in argv and "Bash(bash:*)" in argv
     a = agent_spec({"preset": "codex", "timeout_s": 60, "questions": "model"})
-    assert a.tool == "codex" and a.timeout_s == 60.0 and a.questions == "model" and a.resume is None
+    assert a.tool == "codex" and a.timeout_s == 60.0 and a.questions == "model" and a.output == "codex"
+    assert "--json" in a.argv and a.resume[:4] == (a.argv[0], "exec", "resume", "{session}"), "D848: resumable, its events as JSON"
     with pytest.raises(ValueError, match="not an agent here"):
         agent_spec("cursor")
     with pytest.raises(ValueError, match="questions is one of decide, model, operator"):
@@ -293,3 +294,47 @@ def test_opencode_is_denied_the_design_tools_in_its_inline_config():
     assert list(bash)[0] == "*" and bash["*"] == "allow"            # first: a later, narrower rule wins
     assert bash["yosys"] == bash["yosys *"] == bash["flux rtl *"] == "deny" and len(bash) == 1 + 2 * len(DENIED)
     assert _config_env(agent_spec("claude"), {}) == {}
+
+
+#: what `codex exec --json` printed for a turn that ran one command (codex-cli 0.160.0)
+CODEX = "\n".join([
+    '{"type":"thread.started","thread_id":"01a10ca6-03c6-7ef3-92f0-ab1275a9a133"}',
+    '{"type":"turn.started"}',
+    '{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc \'echo hi\'","aggregated_output":"","exit_code":null,"status":"in_progress"}}',
+    '{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc \'echo hi\'","aggregated_output":"hi\\n","exit_code":0,"status":"completed"}}',
+    '{"type":"item.completed","item":{"id":"item_1","type":"reasoning","text":"Ran it."}}',
+    '{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"DONE"}}',
+    '{"type":"turn.completed","usage":{"input_tokens":46020,"cached_input_tokens":42496,"cache_write_input_tokens":0,"output_tokens":37,"reasoning_output_tokens":3}}'])
+
+
+def test_codex_json_gives_the_reply_the_session_the_steps_and_the_tokens():
+    """D848: Codex as JSON -- its transcript was its stderr, its tokens unread, its session unresumable."""
+    from flux_loop.agent import _Live, _parse, usage
+
+    assert _parse("codex", CODEX) == ("DONE", "01a10ca6-03c6-7ef3-92f0-ab1275a9a133")
+    assert usage("codex", CODEX) == {"tokens_in": 46020, "tokens_out": 40, "tokens_cached": 42496}
+    live = _Live("codex")
+    for line in CODEX.splitlines():
+        live.feed(line)
+    tools = [s for s in live.steps if s["k"] == "tool"]
+    assert len(tools) == 1 and tools[0]["name"] == "shell" and "echo hi" in tools[0]["call"] and tools[0]["out"].strip() == "hi"
+    assert not tools[0]["error"] and "DONE" in live.words and "Ran it." in live.thinking and live.status == "step done"
+
+
+def test_a_resumed_codex_in_the_container_has_the_containers_access(monkeypatch):
+    """D750 for a resume (D848): `exec resume` takes no --sandbox; its -c sandbox_mode is set the same way."""
+    monkeypatch.setenv("FLUX_SANDBOXED", "1")
+    a = agent_spec("codex")
+    assert a.argv[a.argv.index("--sandbox") + 1] == "danger-full-access"
+    assert 'sandbox_mode="danger-full-access"' in a.resume and 'sandbox_mode="workspace-write"' not in a.resume
+
+
+def test_an_agents_printed_design_is_its_fenced_code_not_its_prose():
+    """D848: an agent that writes no file and says so in words gives no design -- gated as one, a
+    note in prose read as `SyntaxError: invalid character`."""
+    from flux_loop.task import _printed_artifact
+
+    assert _printed_artifact("I could not write the file: the sandbox refused it’s write.") is None
+    assert _printed_artifact("Here it is:\n```python\ndef f():\n    return 1\n```\nDone.") == "def f():\n    return 1\n"
+    assert _printed_artifact('{"artifact": "x = 1\\n"}') == "x = 1\n"
+    assert _printed_artifact("```\na\n```\n```py\nlonger\nblock\n```") == "longer\nblock\n", "the largest block"

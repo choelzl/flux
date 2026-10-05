@@ -1028,10 +1028,9 @@ class PromptProblem(Problem):
             return Candidate(name, path.read_text(), knobs=knobs, meta=meta, subgoal=sg), ""
         from .agent import question_in
 
-        if turn.ok and turn.text.strip() and question_in(turn.text) is None:
-            cand, why = self.parse_design(turn.text, sg)          # the agent printed the artifact instead
-            if cand is not None:
-                return Candidate(name, cand.artifact, knobs=knobs, meta=meta, subgoal=sg), ""
+        printed = _printed_artifact(turn.text) if turn.ok and question_in(turn.text) is None else None
+        if printed is not None:                                   # the agent printed the artifact instead (D848: only
+            return Candidate(name, printed, knobs=knobs, meta=meta, subgoal=sg), ""   # code it fenced, not its prose)
         tail = ((turn.text or turn.stdout or "") + "\n" + (turn.stderr or "")).strip()[-2000:]
         still = (f" (still asking after {len(asked)} answer(s))" if question_in(turn.text) is not None and asked
                  else " (it asked, and its questions are answered by nobody here)" if question_in(turn.text) is not None else "")
@@ -1601,6 +1600,20 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
     except Exception:  # noqa: BLE001
         lines += [f"  {ln}" for ln in out.lessons]
     return lines
+
+
+def _printed_artifact(text: str) -> str | None:
+    """The artifact an agent printed instead of writing its file (D848): the JSON reply's `artifact`,
+    else its largest fenced code block; None for prose -- a note that it could not write the file
+    is no design, and gated as one it read as `SyntaxError: invalid character '’'`."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    doc = _json(text)
+    if isinstance(doc, dict) and isinstance(doc.get("artifact"), str) and doc["artifact"].strip():
+        return doc["artifact"]
+    blocks = [b for b in re.findall(r"```[^\n`]*\n(.*?)```", text, flags=re.S) if b.strip()]
+    return max(blocks, key=len) if blocks else None
 
 
 def model_use(task: "TaskSpec") -> str:

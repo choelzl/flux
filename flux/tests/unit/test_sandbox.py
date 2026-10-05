@@ -212,10 +212,10 @@ def test_a_sub_loop_reads_through_its_parent_and_writes_the_parents_out_and_work
     assert not (top / "ops" / "recip" / "out").exists() and not (top / "ops" / "recip" / "workbench").exists()
 
 
-def test_an_admins_agent_program_is_mounted_alone_and_named_inside(monkeypatch, tmp_path):
-    """D804: FLUX_CLAUDE_BIN names a program outside PATH -- through a link that sits beside the
-    model's key: the program itself is mounted read-only, the file alone (never the folder beside
-    it, nor the link's), and inside the variable names it at the path mounted."""
+def test_an_admins_agent_program_is_mounted_with_its_package_and_named_inside(monkeypatch, tmp_path):
+    """D804, D848: FLUX_CLAUDE_BIN names a program outside PATH -- through a link that sits beside the
+    model's key: the program's own folder is mounted read-only (Codex's helpers live beside it), never
+    the link's folder, and inside the variable names it at the path mounted."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     real = tmp_path / "ext" / "native-binary" / "claude"
@@ -230,11 +230,17 @@ def test_an_admins_agent_program_is_mounted_alone_and_named_inside(monkeypatch, 
     monkeypatch.setenv("FLUX_CLAUDE_BIN", str(conf / "claude"))
     monkeypatch.setenv("FLUX_CODEX_BIN", str(tmp_path / "missing"))        # not there: nothing mounted
     ro, rw = sandbox.mounts_for(_args(tmp_path), "task run")
-    assert str(real) in ro
-    assert not any(p in (str(conf), str(conf / "claude"), str(real.parent), str(tmp_path / "missing")) for p in ro + rw)
+    assert str(real.parent) in ro
+    assert not any(p in (str(conf), str(conf / "claude"), str(tmp_path / "missing")) for p in ro + rw)
     cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, eng="podman")
-    assert f"{real}:{real}:ro" in cmd
+    assert f"{real.parent}:{real.parent}:ro" in cmd
     assert sandbox.container_env(cmd)["FLUX_CLAUDE_BIN"] == str(real)
+    # a program kept in a personal folder -- beside a key -- is mounted alone, as D804 did
+    (conf / "codex").write_text("#!/bin/sh\n")
+    (conf / "codex").chmod(0o755)
+    monkeypatch.setenv("FLUX_CODEX_BIN", str(conf / "codex"))
+    ro, rw = sandbox.mounts_for(_args(tmp_path), "task run")
+    assert str(conf / "codex") in ro and str(conf) not in ro
 
 
 def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):

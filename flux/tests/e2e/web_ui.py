@@ -746,7 +746,10 @@ def flows(r: Run) -> None:
         fake.write_text("#!/usr/bin/env python3\nimport sys\na = sys.argv[1:]\n"
                         "if a[:1] == ['--version']: print('codex-cli 0.0-e2e')\n"
                         "elif a[:2] == ['login', 'status']: print('Logged in (e2e)')\n"
-                        "else: sys.stdin.read(); print('FLUX-OK')\n")
+                        "else:\n    sys.stdin.read()\n"            # D848: as `codex exec --json` answers
+                        "    print('{\"type\":\"thread.started\",\"thread_id\":\"e2e\"}')\n"
+                        "    print('{\"type\":\"item.completed\",\"item\":{\"id\":\"i0\",\"type\":\"agent_message\",\"text\":\"FLUX-OK\"}}')\n"
+                        "    print('{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}')\n")
         fake.chmod(0o755)
         r.login("ada")
         r.check("the admin names the agent's program", r.api("/admin/agents/codex", "PUT", {"bin": str(fake)})["status"] == 200)
