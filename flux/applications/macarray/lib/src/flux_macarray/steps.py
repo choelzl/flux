@@ -3,7 +3,7 @@
 
     python -m flux_macarray.steps gen ARTIFACT MULTIPLIER REDUCER PIPELINE   # the PE's RTL
     python -m flux_macarray.steps check ARTIFACT PIPELINE                   # Verilator vs golden vectors
-    python -m flux_macarray.steps mult-check ARTIFACT [--keep DIR]          # an invented multiplier
+    python -m flux_macarray.steps mult-check ARTIFACT [--keep DIR]          # an invented multiplier, every input
     python -m flux_macarray.steps mult-screen ARTIFACT [--clock-ps P]       # it, in the standard PE
 
 Each takes `--lanes N` and `--workload FILE` (the precision; default the GEMM example), and the
@@ -75,7 +75,7 @@ def _renamed(source: str) -> tuple[str, str]:
 
 
 def mult_check(args: argparse.Namespace) -> int:
-    from flux_codegen_rtl_harness import check_rtl, lint_relaxed
+    from flux_codegen_rtl_harness import EXHAUSTIVE_BITS, check_exhaustive, check_rtl, lint_relaxed
 
     from .invent import multiplier_golden, refusal_reason
 
@@ -85,7 +85,13 @@ def mult_check(args: argparse.Namespace) -> int:
         print(why)
         print("1 failing")
         return 3
-    got = check_rtl(source, multiplier_golden(_shape(args)), module=INVENTED_MODULE, relaxed=True)
+    shape = _shape(args)
+    golden = multiplier_golden(shape)
+    # D868: every input when the product is small enough (int8 x int8: 65,536 rows, ~10 s); a
+    # sample passed a multiplier wrong only where a == 37 and w[2:0] == 3
+    got = (check_exhaustive(source, golden, module=INVENTED_MODULE, relaxed=True)
+           if shape.in_bits + shape.w_bits <= EXHAUSTIVE_BITS
+           else check_rtl(source, golden, module=INVENTED_MODULE, relaxed=True))
     if not got.ok:
         print(got.why)
         print("1 failing")

@@ -39,28 +39,37 @@ def _signed_range(bits: int) -> tuple[int, int]:
     return -(1 << (bits - 1)), (1 << (bits - 1)) - 1
 
 
-def golden_vectors(shape: Shape, *, seed: str, count: int = 6) -> list[dict[str, Any]]:
-    """`count` (inputs, expected) pairs. The accumulator input is drawn from half the range so
-    the sum can never overflow the port, which the width already guarantees for the products."""
+def golden_vectors(shape: Shape, *, seed: str, count: int = 200) -> list[dict[str, Any]]:
+    """The PE's (inputs, expected) rows: every lane at the same corner (the widest sums), each
+    lane alone at each corner with the others 0 (a lane's own sign handling), then `count`
+    random rows with every lane its own value (D868: four corners and two random rows passed a
+    PE wrong whenever a3[6:4] == 3'b101 and w3[0]). The accumulator input is drawn from half
+    the range so the sum can never overflow the port, which the width already guarantees for
+    the products."""
     rng = random.Random(int.from_bytes(hashlib.sha256(seed.encode()).digest()[:8], "big"))
     lo, hi = _signed_range(shape.in_bits)
     wlo, whi = _signed_range(shape.w_bits)
     alo, ahi = _signed_range(shape.acc_bits - 1)
-    out = []
     extremes = [(lo, wlo), (lo, whi), (hi, wlo), (hi, whi)]
-    for n in range(count):
-        if n < len(extremes):
-            a = [extremes[n][0]] * shape.lanes
-            w = [extremes[n][1]] * shape.lanes
-        else:
-            a = [rng.randint(lo, hi) for _ in range(shape.lanes)]
-            w = [rng.randint(wlo, whi) for _ in range(shape.lanes)]
+    rows: list[tuple[list[int], list[int], int]] = []
+    for n, (x, y) in enumerate(extremes):
+        rows.append(([x] * shape.lanes, [y] * shape.lanes, alo if n % 2 else ahi))
+    for lane in range(shape.lanes):
+        for x, y in extremes:
+            a, w = [0] * shape.lanes, [0] * shape.lanes
+            a[lane], w[lane] = x, y
+            rows.append((a, w, rng.randint(alo, ahi)))
+    for _ in range(count):
+        rows.append(([rng.randint(lo, hi) for _ in range(shape.lanes)],
+                     [rng.randint(wlo, whi) for _ in range(shape.lanes)], rng.randint(alo, ahi)))
+    out = []
+    for a, w, acc_in in rows:
         inputs = {f"a{i}": a[i] for i in range(shape.lanes)}
         inputs.update({f"w{i}": w[i] for i in range(shape.lanes)})
         total = sum(x * y for x, y in zip(a, w))
         if shape.accumulate:
-            inputs["acc_in"] = rng.randint(alo, ahi) if n >= len(extremes) else (alo if n % 2 else ahi)
-            total += inputs["acc_in"]
+            inputs["acc_in"] = acc_in
+            total += acc_in
         out.append({"inputs": inputs, "expected": {"acc": total}})
     return out
 

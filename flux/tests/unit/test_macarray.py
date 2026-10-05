@@ -61,9 +61,13 @@ def test_an_invented_multiplier_is_instantiated_once_per_lane():
 
 def test_golden_vectors_cover_the_corners_and_never_overflow():
     vecs = golden_vectors(SHAPE, seed="t")
-    assert len(vecs) == 6
+    assert len(vecs) == 4 + 8 * 4 + 200
     corners = [tuple(v["inputs"][f"a{i}"] for i in range(8)) for v in vecs[:4]]
     assert corners[0] == (-128,) * 8 and corners[3] == (127,) * 8
+    walking = [tuple(v["inputs"][f"a{i}"] for i in range(8)) for v in vecs[4:36]]
+    assert walking[0] == (-128, 0, 0, 0, 0, 0, 0, 0) and walking[-1] == (0, 0, 0, 0, 0, 0, 0, 127), "each lane alone at a corner"
+    distinct = [len({v["inputs"][f"a{i}"] for i in range(8)}) for v in vecs[36:]]
+    assert sum(distinct) / len(distinct) > 6, "random rows give every lane its own value (D868)"
     lo, hi = -(1 << 19), (1 << 19) - 1
     for v in vecs:
         assert lo <= v["expected"]["acc"] <= hi
@@ -157,6 +161,36 @@ def test_a_pe_that_lies_about_its_latency_is_refused_and_a_wrong_multiplier_says
     wrong = "module m(input signed [7:0] a, input signed [7:0] w, output signed [15:0] p);\n  assign p = a * w + 16'sd1;\nendmodule\n"
     got = check_rtl(wrong, multiplier_golden(SHAPE), module="m", relaxed=True)
     assert not got.ok and "-- for a=" in got.why and "expected p=" in got.why
+
+
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs Verilator")
+def test_a_pe_wrong_on_a_sliver_of_one_lane_is_refused():
+    """D868: four same-value corners and two random rows passed a PE whose acc is off by one
+    only when a3[6:4] == 3'b101 and w3[0]; random rows with every lane its own value catch it."""
+    from dataclasses import replace
+
+    from flux_macarray import verify
+
+    d = generate(PeConfig("behavioral", "tree", 0), SHAPE)
+    assert "  assign acc = t3_0;\n" in d.source
+    bad = d.source.replace("  assign acc = t3_0;\n", "  assign acc = t3_0 + {19'd0, (a3[6:4] == 3'b101) & w3[0]};\n")
+    v = verify(replace(d, source=bad), golden_vectors(SHAPE, seed="t"))
+    assert not v.ok and v.failing > 0, v.why
+
+
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs Verilator")
+def test_an_invented_multiplier_wrong_on_one_input_pair_is_refused_and_not_kept(tmp_path):
+    """D868: 25 corners and 12 random rows passed a multiplier wrong only when a == 37 and
+    w[2:0] == 3; an 8x8 multiplier is checked on all 65,536 inputs."""
+    from flux_macarray.steps import main
+
+    wrong = tmp_path / "m.sv"
+    wrong.write_text("module mult_inv(input logic signed [7:0] a, input logic signed [7:0] w,\n"
+                     "                output logic signed [15:0] p);\n  wire signed [15:0] x = a;\n"
+                     "  assign p = x * w + ((a == 8'sd37 && w[2:0] == 3'd3) ? 16'sd1 : 16'sd0);\nendmodule\n")
+    keep = tmp_path / "invented"
+    assert main(["mult-check", str(wrong), "--keep", str(keep)]) == 1
+    assert not list(keep.glob("*.sv")), "a wrong multiplier never joins the PE study's space"
 
 
 # ---- D798: the study is two documents and the commands of `flux_macarray.steps`

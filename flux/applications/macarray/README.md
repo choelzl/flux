@@ -17,7 +17,7 @@ documents and the commands of `flux_macarray.steps`, one per phase (D798) -- no 
 |---|---|
 | `orchestrate` | a sweep over the space; the multiplier knob also takes every file in `out/invented/` (`from: "out/invented/*.sv"`) |
 | `generate` | `steps gen {artifact} {multiplier} {reducer} {pipeline}`: the PE's RTL (`rtl.py`) |
-| `test` | `steps check {artifact} {pipeline}`: **Verilator** against golden vectors seeded from the workload, the latency checked against the stages the PE claims |
+| `test` | `steps check {artifact} {pipeline}`: **Verilator** against golden vectors seeded from the workload (every lane at each corner, each lane alone at each corner, 200 random rows; D868), the latency checked against the stages the PE claims |
 | `measure` | `flux rtl measure --stage synth` (the **screen**: Yosys + OpenSTA, seconds, optimistic) and `--stage place` (**OpenROAD**, the number a report may quote) |
 | `select` | the objectives: at least 1000 MHz placed, then the least area; the design they choose is always placed, the rest of the finalists spread along the fmax-vs-area frontier |
 
@@ -53,7 +53,7 @@ Nothing in the PE study: a 48-point space is screened exhaustively and needs a j
 proposer. `invent.problem.yaml` asks a model for a **multiplier structure the enumeration does
 not contain** -- one combinational module `mult_inv` (`a`, `w` in, `p` out) -- refused before
 any tool runs if it is sequential, uses SystemVerilog casts, or is the behavioral `a * w`;
-then Verilator against the products at the sign corners (`steps mult-check`), its failures fed
+then Verilator against every product, all 65,536 for int8 (`steps mult-check`, D868), its failures fed
 back up to `repair_attempts` times, and the screen of the standard PE built around it (`steps
 mult-screen`) as its measurement. Every multiplier that passes is kept in `out/invented/`
 (renamed by its content) and joins the PE study's space on its next run.

@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-__all__ = ["Check", "Golden", "check_rtl", "golden_vectors", "ulp_distance"]
+__all__ = ["EXHAUSTIVE_BITS", "Check", "Golden", "check_exhaustive", "check_rtl", "golden_vectors", "ulp_distance"]
 
 
 @dataclass(frozen=True)
@@ -280,3 +280,81 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
             return Check(len(rows), 0, tuple(lines), latency,
                          error=f"claims {g.latency} cycle(s) of latency, measured {latency}")
     return Check(len(rows), failing, tuple(lines), latency)
+
+
+#: Inputs of at most this many bits in all can be checked on every combination (D868): the
+#: bench loops over them and reads the golden's answers from a table, so 2^16 rows run in
+#: seconds where an unrolled bench of 2^11 rows already takes a minute to compile.
+EXHAUSTIVE_BITS = 20
+
+
+def check_exhaustive(source: str, g: Golden, *, module: str, timeout_s: float = 300.0,
+                     relaxed: bool = False, show: int = 5) -> Check:
+    """Verilator on `source` against the golden model on EVERY input combination (D868), for a
+    combinational module whose inputs total at most EXHAUSTIVE_BITS: a sample misses a design
+    that is wrong on a handful of inputs. Exact comparison; the first failures name their inputs."""
+    from .build import run_bench
+    from .errors import CompileError, explain_diagnostic
+    from .reply import LINT_PRAGMA, lint_relaxed
+
+    ins = [p for p in g.ports if p["dir"] == "in"]
+    outs = [p for p in g.ports if p["dir"] == "out"]
+    total = sum(int(p["bits"]) for p in ins)
+    if g.clocked or g.ulp or not ins or total > EXHAUSTIVE_BITS:
+        raise ValueError(f"an exhaustive check is for a combinational, exact module of at most {EXHAUSTIVE_BITS} input bits")
+    n = 1 << total
+
+    def decode(i: int) -> dict[str, int]:
+        """Row `i`: the inputs' bit fields, the first input most significant."""
+        got, shift = {}, total
+        for p in ins:
+            b = int(p["bits"])
+            shift -= b
+            v = (i >> shift) & ((1 << b) - 1)
+            got[p["name"]] = v if p.get("unsigned") or b == 1 else v - (1 << b) * (v >> (b - 1))
+        return got
+
+    tables: dict[str, list[str]] = {p["name"]: [] for p in outs}
+    try:
+        for i in range(n):
+            want = g.fn(**decode(i))
+            for p in outs:
+                tables[p["name"]].append(f"{int(want[p['name']]) & ((1 << int(p['bits'])) - 1):x}")
+    except Exception as exc:  # noqa: BLE001 -- a golden that cannot answer everywhere cannot judge everywhere
+        return Check(n, n, error=f"the golden model fails on its own inputs: {exc}")
+
+    def shown(p: dict[str, Any]) -> str:
+        return p["name"] if p.get("unsigned") or int(p["bits"]) == 1 else f"$signed({p['name']})"
+
+    tb = ["/* verilator lint_off WIDTH */", "`timescale 1ns/1ps", "module testbench;"]
+    tb += [f"  logic [{int(p['bits']) - 1}:0] {p['name']};" for p in ins + outs]
+    tb += [f"  logic [{int(p['bits']) - 1}:0] __flux_exp_{p['name']} [0:{n - 1}];" for p in outs]
+    tb += ["  logic [31:0] __flux_i;", "  integer __flux_fails;",
+           f"  {module} __flux_dut (" + ", ".join(f".{p['name']}({p['name']})" for p in ins + outs) + ");",
+           "  initial begin", "    __flux_fails = 0;"]
+    tb += [f'    $readmemh("{p["name"]}.hex", __flux_exp_{p["name"]});' for p in outs]
+    tb += [f"    for (__flux_i = 0; __flux_i < {n}; __flux_i = __flux_i + 1) begin",
+           "      {" + ", ".join(p["name"] for p in ins) + f"}} = __flux_i[{total - 1}:0];", "      #1;",
+           "      if (" + " || ".join(f"({p['name']} !== __flux_exp_{p['name']}[__flux_i])" for p in outs) + ") begin",
+           "        __flux_fails = __flux_fails + 1;",
+           f'        if (__flux_fails <= {show}) $display("VECTOR %0d FAIL '
+           + " ".join(f"{p['name']}=%0d" for p in outs) + '", __flux_i, ' + ", ".join(shown(p) for p in outs) + ");",
+           "      end", "    end",
+           f'    $display("RESULT vectors={n} failing=%0d", __flux_fails);', "    $finish;", "  end", "endmodule", ""]
+    text = lint_relaxed(source) if relaxed else source
+    prefix = LINT_PRAGMA.count("\n") if relaxed and not source.startswith(LINT_PRAGMA) else 0
+    try:
+        out = run_bench(text, "\n".join(tb), files={f"{k}.hex": "\n".join(v) + "\n" for k, v in tables.items()},
+                        timeout_s=timeout_s)
+    except CompileError as exc:
+        return Check(n, n, error="did not compile: " + explain_diagnostic(str(exc), source, prefix_lines=prefix))
+    m = re.search(r"^RESULT vectors=\d+ failing=(\d+)", out, re.M)
+    if not m:
+        return Check(n, n, error="the exhaustive bench did not finish: " + out[-300:])
+    lines = []
+    for ln in re.findall(r"^VECTOR \d+ FAIL .*$", out, re.M):
+        i = int(ln.split()[1])
+        want = g.fn(**decode(i))
+        lines.append(ln + " -- for " + ", ".join(f"{k}={x}" for k, x in decode(i).items())
+                     + " expected " + ", ".join(f"{p['name']}={int(want[p['name']])}" for p in outs))
+    return Check(n, int(m.group(1)), tuple(lines))
