@@ -68,3 +68,31 @@ def test_the_designs_are_kept_until_the_record_changes(tmp_path, monkeypatch):
     assert designs(db, STAGES, decision="fast", stale_s=30) is first, "changed, but a list may wait 30 s"
     got = designs(db, STAGES, decision="fast")
     assert len(reads) == 2 and any(d["name"] == "new" for d in got["designs"]), "changed: read again"
+
+
+def test_the_decision_is_the_records_latest_pass_and_the_best_are_ranked_by_the_loops_rule(tmp_path):
+    """D809: a loop running for days has its decision from its first pass's end -- the record's
+    `conclusion`, not only the answer a run writes when it ends -- and the best are ranked by the
+    objectives' own rule over the deepest stage, whether or not there is a decision."""
+    import os
+    import time
+
+    from flux_web.results import decision_of
+
+    db = _record(tmp_path)
+    assert decision_of(db) is None, "no pass ended yet"
+    got = designs(db, STAGES)
+    ranks = {d["name"]: d["rank"] for d in got["designs"]}
+    # on the deepest stage (confirm): fast meets the 1000 limit, slow does not; tiny never reached it
+    assert ranks == {"fast": 1, "slow": 2, "tiny": None}, ranks
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.conclude({"decision": "slow", "decided_by": "a test"})
+    rec.close("paused")
+    assert decision_of(db) == "slow"
+    ans = tmp_path / "answer.json"
+    ans.write_text('{"decision": {"name": "fast"}}')
+    os.utime(ans, (time.time() - 3600, time.time() - 3600))
+    assert decision_of(db, ans) == "slow", "an older answer gives way to the record's newer pass"
+    os.utime(ans, None)
+    assert decision_of(db, ans) == "fast", "a run's answer newer than the record's last pass"
+    assert decision_of(str(tmp_path / "none.db"), tmp_path / "missing.json") is None

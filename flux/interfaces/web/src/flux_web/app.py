@@ -962,10 +962,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         run = runs.latest(whose, name)
         if not run or not os.path.exists(run["db"]):
             return {"designs": 0, "accepted": 0}
+        from .results import decision_of
+
         try:
-            answer = json.loads(loop_files(w.app(name))["answer"].read_text())
-            decision = (answer.get("decision") or {}).get("name") if isinstance(answer.get("decision"), dict) else None
-        except (OSError, ValueError, WorkspaceError):
+            decision = decision_of(run["db"], loop_files(w.app(name))["answer"], runs.campaign(run)[0])   # D809: the latest pass's
+        except WorkspaceError:
             decision = None
         try:
             got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
@@ -1489,6 +1490,15 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "note", name)
         return {"ok": "sent: it reaches the next prompt, or answers the agent's open question"}
 
+    @app.delete("/api/apps/{name}/notes/{ident}")
+    def remove_note(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """D808: a note off the page (and out of a loop that has not read it yet)."""
+        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        if not runs.forget_note(d / "runs", user, ident):
+            raise HTTPException(404, "no such note")
+        store.audit(user.name, "note removed", name)
+        return {"ok": "the note is removed"}
+
     @app.get("/api/apps/{name}/notes")
     def list_notes(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         _w, _whose, d, _run = loop_of(name, user, owner)
@@ -1772,7 +1782,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 answer = json.loads(ans.read_text())
             except ValueError:
                 pass
-        decision = ((answer or {}).get("decision") or {}).get("name") if isinstance((answer or {}).get("decision"), dict) else None
+        from .results import decision_of
+
+        decision = decision_of(run["db"], ans, cid)             # D809: the record's latest pass's, while it runs too
         listed = designs(run["db"], _stages(_w, name), decision, limit=20000)
         objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
                           for o in rep.objectives]                     # for the Overview's charts (D692)

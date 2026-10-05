@@ -126,11 +126,20 @@ class InboxChannel:
         if end < 0:
             return []
         self._offset += end + 1
-        notes = []
+        docs = []
         for line in data[:end].splitlines():
             try:
                 doc = json.loads(line)
             except ValueError:
+                continue
+            if isinstance(doc, dict):
+                docs.append(doc)
+        # D808: a note the page removed before this read is not taken (the file only grows: a
+        # removal is a line of its own, so a reader's place in it never moves)
+        gone = {str(d["forget"]) for d in docs if d.get("forget") is not None}
+        notes = []
+        for doc in docs:
+            if str(doc.get("id") or doc.get("t")) in gone:
                 continue
             text = str(doc.get("text") or "").strip()
             if text:

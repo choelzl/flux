@@ -1054,8 +1054,22 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
         on_stage[stage] = got
         reached = stage
 
+    # D809: the decision is over every design measured on a stage so far -- this pass's and the
+    # record's, each design's latest -- taken on the deepest stage anything reached: a better
+    # design placed in an earlier pass is not dropped when the cheap stage's finalists move, and a
+    # pass whose deep stage measured nothing does not decide on the cheap stage's numbers
+    pools: dict[str, list[Scored]] = {}
+    for st in stages:
+        latest: dict[str, Scored] = {}
+        for s in state.scored:
+            if s.stage == st:
+                latest.pop(s.candidate.key(), None)
+                latest[s.candidate.key()] = s
+        if latest:
+            pools[st] = list(latest.values())
+            reached = st
     state.reached = reached
-    state.on_stage = on_stage
+    state.on_stage = {**on_stage, **pools}
 
 
 def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> None:

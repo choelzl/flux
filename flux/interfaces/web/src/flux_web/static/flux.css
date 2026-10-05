@@ -748,3 +748,13 @@ body:has(.composer) .toasts { bottom: 150px; }
 .why-cell { overflow-wrap: anywhere; max-width: 60ch; }
 .meter-cell { width: 120px; }
 td.num.bad { color: var(--bad); font-weight: 600; }
+
+/* D808: a card's bin, top right; a path's folders as links */
+.has-bin { position: relative; }
+.has-bin > .bin, .card.has-bin .bin { position: absolute; top: 8px; right: 8px; }
+.note.has-bin { padding-right: 34px; }
+.ask-card.has-bin .ask-head { padding-right: 34px; }
+button.bin { background: transparent; border: 1px solid transparent; color: var(--muted); padding: 4px; border-radius: 6px; line-height: 0; cursor: pointer; }
+button.bin:hover, button.bin:focus-visible { color: var(--bad); border-color: var(--line); background: var(--panel); }
+.path-crumbs a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.path-crumbs a:hover { color: var(--accent); }

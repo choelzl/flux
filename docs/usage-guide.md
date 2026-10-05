@@ -254,7 +254,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   the old ones (`/log`, `/timeline`, `/agent-turns`, `/workbench`, `/configure/...`) lead to their new places.
   What each view shows:
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
-    objective, and the decision's numbers against the limits. A best-so-far chart per objective
+    objective, and the decision's numbers against the limits -- the decision is the record's latest
+    pass's (D809), so a loop that runs for days has one from its first pass on -- and the best 3, ranked
+    by the objectives' own rule over the deepest stage (also before any decision). A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
     marked. Also the agent's open question, the latest notes and the newest workbench entries (under
     the decision), and the last pass: when, its measurements, its conclusion.
@@ -272,6 +274,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     beside the journal says where each pass begins; a journal from before it is read back at most 88 MB.
   - **Talk** (D758): the button on every loop page opens the drawer -- a note to the running loop (it joins the
     next prompt, or answers its agent's open question; the notes so far under it) and questions to an agent about it.
+    A note or a question is removed by its bin, top right, once confirmed (D808); a note the loop has not read yet
+    never reaches it, one it read stays in its record. In Files, a path's folders are links (D808).
   - **When something is wrong** (D757): a failed start's Overview says why (its log's own lines, with the log a
     click away); Direct edit says before saving that a document does not load; a tool that broke fails its leaf;
     an ended session is said on the way to the login.

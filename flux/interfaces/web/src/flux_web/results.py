@@ -21,7 +21,7 @@ import threading
 import time
 from typing import Any
 
-__all__ = ["designs", "thin"]
+__all__ = ["decision_of", "designs", "thin"]
 
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
@@ -48,6 +48,85 @@ def _objective_limits(db: str) -> list[dict[str, Any]]:
         return []
     return [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage}
             for o in objectives if o.goal is not None]
+
+
+def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -> str | None:
+    """The loop's decision (D809): the record's latest pass's -- each pass writes its conclusion,
+    so a loop that runs for days has one from its first pass on -- unless the run's answer
+    (`runs/answer.json`, written when a run ends) is newer. `campaign`: the run's own (a record may
+    hold a parent's and its sub-loops')."""
+    import sqlite3
+    from datetime import datetime
+
+    name, when = None, 0.0
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        try:
+            row = con.execute("SELECT detail_json, created_at FROM campaign_events WHERE kind = 'conclusion' "
+                              + ("AND campaign_id = ? " if campaign else "") + "ORDER BY id DESC LIMIT 1",
+                              (campaign,) if campaign else ()).fetchone()
+        finally:
+            con.close()
+        if row:
+            name = (json.loads(row[0]) or {}).get("decision")
+            try:
+                when = datetime.fromisoformat(str(row[1]).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                when = 0.0
+    except Exception:  # noqa: BLE001 -- no record: the answer alone
+        name = None
+    if answer_path is not None:
+        try:
+            st = os.stat(answer_path)
+            if name is None or st.st_mtime > when:
+                ans = json.loads(open(answer_path).read())
+                got = (ans.get("decision") or {}).get("name") if isinstance(ans.get("decision"), dict) else None
+                name = got or name
+        except (OSError, ValueError):
+            pass
+    return str(name) if name else None
+
+
+def _objectives(db: str) -> Any:
+    """The record's latest objectives, whole (the ranking's), or None."""
+    import sqlite3
+
+    try:
+        from flux_loop.objective import Objectives
+
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        try:
+            row = con.execute("SELECT detail_json FROM campaign_events WHERE kind = 'decided:objectives' "
+                              "ORDER BY id DESC LIMIT 1").fetchone()
+        finally:
+            con.close()
+        return Objectives.from_doc((json.loads(row[0]) or {}).get("objectives") or []) if row else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10) -> None:
+    """The best `n` by the loop's own rule (D809): `Objectives.decide` over the designs measured on
+    the deepest stage any reached -- picked, set aside, picked again -- each its `rank` (1 the best)."""
+    objectives = _objectives(db)
+    if not objectives or not out:
+        return
+    from types import SimpleNamespace
+
+    deepest = max((s for d in out for s in d["stages"]), key=lambda s: order.get(s, -1))
+    pool = [SimpleNamespace(stage=deepest, metrics=d["stages"][deepest], d=d) for d in out if deepest in d["stages"]]
+    names = list(order) or None
+    for i in range(1, n + 1):
+        if not pool:
+            break
+        try:
+            pick, _why = objectives.decide(pool, names)
+        except Exception:  # noqa: BLE001 -- numbers the rule cannot read: no ranking
+            return
+        if pick is None:
+            break
+        pick.d["rank"] = i
+        pool.remove(pick)
 
 
 def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -169,7 +248,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         d["why"] = misses
         d["meets"] = meets
         d["decision"] = bool(decision and d["name"] == decision)
+        d["rank"] = None
         out.append(d)
+    _rank(out, order, db)
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not d["decision"])                   # the decided design on top
     metrics: list[str] = []

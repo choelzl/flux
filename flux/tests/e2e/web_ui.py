@@ -679,6 +679,35 @@ def flows(r: Run) -> None:
         r.clean("passes at once")
     r.step("passes at once", passes_at_once)
 
+    def decision_and_best():
+        """D809: a loop's decision is its record's latest pass's (no need for the run to end), and the
+        best are ranked by the objectives' own rule; the Overview shows both."""
+        r.login("bob")
+        r.page("#/", "document.querySelector('#main')", "the loops")
+        ds, loop = [], None
+        for app in ("fromex", "sw"):                               # the loop with the most designs measured
+            for _ in range(60):
+                got = r.api(f"/apps/{app}/results")
+                try:
+                    found = json.loads(got["body"] or "{}").get("designs") or []
+                except ValueError:
+                    found = []
+                if found:
+                    break
+                time.sleep(0.5)
+            if len(found) > len(ds):
+                ds, loop = found, app
+        ranks = sorted(d["rank"] for d in ds if d.get("rank") is not None)
+        r.check("the designs are ranked 1, 2, 3, ... by the loop's rule", ranks and ranks == list(range(1, len(ranks) + 1)), f"{loop}: {ranks}")
+        r.check("the loop has a decision from its record", any(d.get("decision") for d in ds), f"{loop}: {[d['name'] for d in ds[:3]]}")
+        if len(ds) >= 2:
+            r.page(f"#/app/{loop}", "document.querySelector('#main .best-n')", "the best on the Overview")
+            rows = b.js("return [...document.querySelectorAll('#main .best-n tbody tr')].map(t => t.children[1].textContent)")
+            first = next(d["name"] for d in ds if d.get("rank") == 1)
+            r.check("the Overview's best are the ranking's, the best first", len(rows) >= 2 and rows[0].startswith(first), f"{rows} vs {first}")
+        r.clean("the decision and the best")
+    r.step("the decision and the best", decision_and_best)
+
     def agent_test():
         """D751: an agent is used once its test passed -- a stand-in Codex, no quota spent."""
         fake = r.files / "fake-codex"
@@ -724,6 +753,37 @@ def flows(r: Run) -> None:
         r.check("an added agent is removed", r.api("/admin/agents/corp", "DELETE")["status"] == 200)
         r.clean("agent test")
     r.step("agent test", agent_test)
+
+    def files_and_questions():
+        """D808: a path's folders are links; a question is removed by its bin, once confirmed."""
+        r.login("bob")
+        try:
+            for _ in range(120):
+                if not any(a.get("running") for a in json.loads(r.api("/apps/fromex/asks")["body"] or "[]")):
+                    break
+                time.sleep(0.5)
+            b.js("localStorage.setItem('flux-show-ignored', '1'); return 1")      # runs/ is what .gitignore leaves out
+            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
+            b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('runs/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/'))", what="runs/ listed")
+            b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('asks/')).click(); return 1")
+            b.wait("document.querySelector('.path-crumbs') && document.querySelector('.path-crumbs').textContent.endsWith('runs / asks')", what="the path runs / asks")
+            b.js("[...document.querySelectorAll('.path-crumbs a')].find(a => a.textContent === 'runs').click(); return 1")
+            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/')) && document.querySelector('.path-crumbs').textContent.endsWith('runs')",
+                   what="back in runs/")
+            r.check("a path's folders are links that open them", True)
+            b.click(".ask-fab")
+            b.wait("document.querySelector('.ask-card .bin')", timeout=30, what="the question's bin")
+            b.click(".ask-card .bin")
+            b.wait("[...document.querySelectorAll('dialog[open] button')].some(x => x.textContent === 'Remove')", what="the confirmation")
+            b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Remove').click(); return 1")
+            b.wait("!document.querySelector('.ask-card .bin')", timeout=20, what="the question removed")
+            r.check("a question is removed by its bin, once confirmed", json.loads(r.api("/apps/fromex/asks")["body"] or "[]") == [])
+            r.clean("files and questions")
+        finally:
+            b.js("localStorage.removeItem('flux-show-ignored'); return 1")
+            r.login("ada")
+    r.step("files and questions", files_and_questions)
 
     def error_feedback():
         """D757: what a user is told when something is wrong -- before (a document that does not load,

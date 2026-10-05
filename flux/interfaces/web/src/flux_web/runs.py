@@ -476,20 +476,42 @@ class RunManager:
 
     # ---- notes, into the loop's inbox (D684)
     def note(self, runs_dir: Path, user: User, text: str) -> None:
+        import secrets
+
         with open(runs_dir / "inbox.jsonl", "a") as fh:
-            fh.write(json.dumps({"text": text, "by": user.name, "t": time.time()}) + "\n")
+            fh.write(json.dumps({"id": secrets.token_hex(6), "text": text, "by": user.name, "t": time.time()}) + "\n")
+
+    def forget_note(self, runs_dir: Path, user: User, ident: str) -> bool:
+        """D808: a note removed from the page -- a line saying so, never the note's line taken out:
+        a running loop reads the file from where it stopped. One it has not read yet it skips; what
+        it read already stays in its record."""
+        if ident not in {n["id"] for n in self.notes(runs_dir)}:
+            return False
+        with open(runs_dir / "inbox.jsonl", "a") as fh:
+            fh.write(json.dumps({"forget": ident, "by": user.name, "t": time.time()}) + "\n")
+        return True
 
     def notes(self, runs_dir: Path) -> list[dict[str, Any]]:
+        """The notes on the page, each with its `id` (an old one's is its time), the removed left out."""
         try:
             lines = (runs_dir / "inbox.jsonl").read_text().splitlines()
         except OSError:
             return []
-        out = []
+        docs = []
         for ln in lines:
             try:
-                out.append(json.loads(ln))
+                doc = json.loads(ln)
             except ValueError:
-                pass
+                continue
+            if isinstance(doc, dict):
+                docs.append(doc)
+        gone = {str(d["forget"]) for d in docs if d.get("forget") is not None}
+        out = []
+        for d in docs:
+            if d.get("forget") is None and "text" in d:
+                d = {**d, "id": str(d.get("id") or d.get("t"))}
+                if d["id"] not in gone:
+                    out.append(d)
         return out
 
     # ---- stop

@@ -853,6 +853,14 @@ async function sharingCard(name, isOwner) {
 }
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
+/** D808: a bin at a card's top right that removes it once confirmed. */
+function binButton(what, title, said, remove) {
+  return h("button", { type: "button", class: "bin", title: `Remove this ${what}`, "aria-label": `Remove this ${what}`,
+    onclick: async () => { if (await confirmDialog(title, said, { ok: "Remove", danger: true })) await remove(); } },
+    sv("svg", { viewBox: "0 0 16 16", width: 15, height: 15, "aria-hidden": "true" },
+      sv("path", { d: "M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.6 6.5v5M9.4 6.5v5", fill: "none", stroke: "currentColor",
+        "stroke-width": 1.3, "stroke-linecap": "round", "stroke-linejoin": "round" })));
+}
 function envTable(rows, shadowed = new Set()) {
   return h("table", { class: "list compact env" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Value"), h("th", {}, "From"))),
     h("tbody", {}, rows.map(x => h("tr", { class: shadowed.has(x.name) ? "shadowed" : "" }, h("td", { class: "mono" }, x.name),
@@ -992,7 +1000,9 @@ async function loopPage(name, owner, path = "") {
   }
   async function drawNotes() {
     const notes = await api(`/apps/${enc(name)}/notes${qs}`).catch(() => []);
-    noteList.replaceChildren(...notes.slice(-20).reverse().map(n => h("div", { class: "note" }, h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text))));
+    noteList.replaceChildren(...notes.slice(-20).reverse().map(n => h("div", { class: "note has-bin" }, h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text),
+      mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
+        async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawNotes(); }) : "")));
   }
   function drawBanner() {
     composer.update();
@@ -1070,22 +1080,29 @@ async function loopPage(name, owner, path = "") {
   const viewer = h("div", { class: "viewer" });
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
   const size = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+  /** D808: a path as its folders, each one a link that opens it; the loop's own folder first. */
+  function pathCrumbs(path, dir) {
+    const segs = String(path || "").split("/").filter(Boolean);
+    const link = (label, to) => h("a", { href: "javascript:void 0", onclick: () => openFile(to, true) }, label);
+    return h("span", { class: "mono path-crumbs" }, link(name, ""), ...segs.flatMap((s, i) => [h("span", { class: "muted" }, " / "),
+      i < segs.length - 1 || dir ? (i < segs.length - 1 ? link(s, segs.slice(0, i + 1).join("/")) : h("strong", {}, s)) : h("strong", {}, s)]));
+  }
   async function openFile(path, dir) {
     viewer.replaceChildren(skeleton(8));
     if (dir) {
       const list = await api(`/apps/${enc(name)}/files?path=${enc(path)}${showIgnored() ? "&ignored=true" : ""}${q}`);
-      viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path + "/")), fileList(list));
+      viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, true)), fileList(list));
       return;
     }
     const r = await fetch(fileUrl(path), { credentials: "same-origin" });
     if ((r.headers.get("content-type") || "").startsWith("text/")) {
       const ed = codeEditor(await r.text(), langOf(path), { readonly: !mine });
-      viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path),
+      viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, false),
           h("div", { class: "actions" }, mine ? act("Save", async () => {
             await api(`/apps/${enc(name)}/file?path=${enc(path)}`, { method: "PUT", body: { text: ed.textarea.value } }); toast(`${path} saved`, "ok");
           }, { cls: "small" }) : "", h("a", { class: "btn small", href: fileUrl(path, true) }, "Download"))), ed.el);
     } else {
-      viewer.replaceChildren(h("div", { class: "viewer-head" }, h("span", { class: "mono" }, path)),
+      viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, false)),
         empty("A binary file.", h("a", { class: "btn", href: fileUrl(path, true) }, "Download")));
     }
   }
@@ -1388,14 +1405,15 @@ async function loopPage(name, owner, path = "") {
           }, { cls: "primary", title: busy ? "Another question is being answered" : null }))]);
     }
     const one = (a) => card(null, [
+      mine && !a.running ? binButton("question", "Remove this question?", "The question and its answer are removed for everyone who sees this loop.",
+        async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); toast("The question and its answer are removed", "ok"); askView(); }) : "",
       h("div", { class: "ask-head" }, h("strong", {}, a.question), h("div", { class: "muted small" }, `${a.author} · asked by ${a.by} `, ago(a.started),
         a.ended ? [" · took ", dur(a.ended - a.started)] : "")),
       a.running ? [h("div", { class: "row" }, h("span", { class: "pill live" }, h("i", { class: "dot" }), "reading the loop"),
           mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : ""),
           h("pre", { class: "log small author-log" }, (a.log || []).join("\n") || "…")]
-        : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))],
-      mine && !a.running ? h("div", { class: "form-actions" }, act("Forget", async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); toast("The question and its answer are forgotten", "ok"); askView(); }, { cls: "small" })) : ""],
-      { cls: "ask-card" });
+        : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))]],
+      { cls: "ask-card has-bin" });
     askBox.replaceChildren(steer, mine ? h("h3", { class: "drawer-sub" }, "Ask an agent about it") : "", form,
       ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
   }
@@ -1445,7 +1463,8 @@ async function loopPage(name, owner, path = "") {
       first, the deepest stage reached, then each objective without a limit in turn. */
   function topDesigns(r, n) {
     const objs = r.objective_list || [], order = r.stages || [];
-    const key = (d) => [d.decision ? 0 : 1, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
+    // D809: the server's ranking by the loop's own rule; the old key only where none came
+    const key = (d) => [d.rank != null ? d.rank : Infinity, d.decision ? 0 : 1, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
       ...objs.filter(o => o.goal == null).map(o => { const v = d.numbers[o.metric]; return v == null ? Infinity : o.direction === "minimize" ? v : -v; })];
     const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
     const top = (r.designs || []).slice().sort(cmp).slice(0, n);
@@ -1478,7 +1497,8 @@ async function loopPage(name, owner, path = "") {
         dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
         topDesigns(r, 3)],
         { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
-      : card("The decision", empty(designs.length ? "No decision yet." : "No design measured yet."));
+      : card("The decision", [empty(designs.length ? "No decision yet: the loop decides at the end of its first pass." : "No design measured yet."),
+          topDesigns(r, 3)]);
     const q0 = st.question;
     if (tab !== "Overview") return;                   // the tab changed while it loaded
     body.replaceChildren(
