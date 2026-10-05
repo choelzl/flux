@@ -575,6 +575,17 @@ def flows(r: Run) -> None:
         pts = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Improvement over time');"
                      " const s = c && c.querySelector('svg'); return s ? s.querySelectorAll('circle.pt').length : 0; })()", timeout=10, what="the chart's points")
         r.check("improvement over time: one point per design", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
+        r.check("Results: the designs before the charts (D856)", b.js(
+            "const t = document.querySelector('#main table.designs'), c = document.querySelector('#main details.charts-box');"
+            " return !!t && !!c && !!(t.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && c.open"))
+        r.page("#/app/sw", "document.querySelector('#main .card')", "Overview")
+        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent?.startsWith('The last pass'));"
+                      " return c && [c.querySelector('.pass-said') ? c.querySelector('.pass-said').textContent : '', !!c.querySelector('details.pass-record:not([open])'),"
+                      " c.innerText.includes('INFERENCE')]; })()", timeout=20, what="the last pass card")
+        r.check("Overview: the last pass says its decision in words, its record folded (D856)", card[0] and card[1] and not card[2], str(card))
+        r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
+        b.wait("document.querySelector('.pill.stream').hidden", timeout=15, what="the connection pill hidden once connected")
+        r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
 
@@ -672,6 +683,16 @@ def flows(r: Run) -> None:
             r.page(h, "document.querySelector('#main')", h)
             b.wait("!document.querySelector('#main .skeleton')", timeout=20)
             r.clean(f"dark {h}")
+        # D856: the Talk button's text is the theme's ink on its accent, not white on light blue
+        r.login("bob")
+        b.js("localStorage.setItem('flux-theme', 'dark'); return true;")
+        r.page("#/app/sw", "document.querySelector('.ask-fab')", "the Talk button")
+        got = b.js("""const s = getComputedStyle(document.querySelector('.ask-fab'));
+            const lum = c => { const v = c.match(/\\d+/g).slice(0, 3).map(x => { x = x / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+                               return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+            const [a, b] = [lum(s.color), lum(s.backgroundColor)].sort((x, y) => y - x); return (a + 0.05) / (b + 0.05);""")
+        dark_on = b.js("return document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches)")
+        r.check("dark: the Talk button reads (contrast 4.5:1 or more)", dark_on and got >= 4.5, f"dark {dark_on}, {got:.2f}:1")
         b.js("localStorage.setItem('flux-theme', 'system'); return true;")
     r.step("dark", dark)
 
@@ -1082,30 +1103,33 @@ def flows(r: Run) -> None:
     r.step("insights", insights)
 
     def phone():
-        """At a phone's width nothing scrolls sideways (D754): a list's rows stack, tabs and logs wrap."""
-        b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 844})
-        try:
-            pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
-                                          "#/app/sw/files", "#/app/sw/settings", "#/account")]
-            pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
-            who = None
-            for user, h in pages:
-                if user != who:
-                    r.login(user)
-                    who = user
-                r.page(h, "document.querySelector('#main')", h)
-                b.wait("!document.querySelector('#main .skeleton')", timeout=20)
+        """At a phone's width nothing scrolls sideways (D754). D856: measured in a frame of exactly that
+        width -- the browser's own window does not go below 500 pixels, so the check used to run at 500."""
+        pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
+                                      "#/app/sw/files", "#/app/sw/settings", "#/account")]
+        pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
+        who = None
+        for user, h in pages:
+            if user != who:
+                r.login(user)
+                who = user
+            for width in (390, 320):
+                b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                     "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/' + arguments[1]; document.body.append(f); return 1", width, h)
+                b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main') "
+                       "&& !d.querySelector('#main .skeleton') && d.readyState === 'complete'; })()", timeout=20, what=f"{h} at {width}")
                 time.sleep(0.8)
-                wide = b.js("return [document.documentElement.scrollWidth, window.innerWidth]")
-                over = b.js("""return [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect();
-                    return r.width > 0 && r.right > window.innerWidth + 1 && getComputedStyle(e).position !== 'fixed'
-                      && !e.closest('pre, code, .cm-editor, .drawer:not(.open)'); })
-                    .filter((e, i, all) => !all.some(p => p !== e && p.contains(e))).slice(0, 3)
-                    .map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right))""")
-                r.check(f"phone {h}: nothing wider than the screen", wide[0] <= wide[1] + 1 and not over, f"{wide} {over}")
-                r.clean(f"phone {h}")
-        finally:
-            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                got = b.js("""const w = document.getElementById('phone').contentWindow, d = w.document;
+                    const over = [...d.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect();
+                        return r.width > 0 && r.right > w.innerWidth + 1 && w.getComputedStyle(e).position !== 'fixed'
+                          && !e.closest('pre, code, .cm-editor, .drawer:not(.open), .scroll-x'); })
+                        .filter((e, i, all) => !all.some(p => p !== e && p.contains(e))).slice(0, 3)
+                        .map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right));
+                    return [d.documentElement.scrollWidth, w.innerWidth, over];""")
+                r.check(f"phone {h} at {width}px: nothing wider than the screen", got[0] <= got[1] + 1 and not got[2], f"{got}")
+            b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})   # a reload: the page is the app again
+            b.wait("document.querySelector('#main')", timeout=20)
+            r.clean(f"phone {h}")
     r.step("phone", phone)
 
     def screens():

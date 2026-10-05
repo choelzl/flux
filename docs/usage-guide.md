@@ -441,6 +441,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
 - **`language:` is optional** (D832): unsaid, the tools the checks and stages name tell it (`flux rtl ...`: SystemVerilog, a ChampSim build: C++); say it when they do not -- a script of your own, `flux prog` -- or the design is a `.txt` file.
+- **On a phone** (D856): the account items are in the ☰ menu; a loop's Overview opens on its decision; Results opens on its designs, the charts below.
 - **Evidence follows its inputs** (D853): editing a file beside the document (a checker's helper, a data file, a bench script) or the params re-checks what was admitted and measures again on resume; the document's objectives do not. After this update a resumed search re-measures once.
 - **Files stay in their loop** (D852): the server never follows a link out of a loop's folders -- a raw log, a record, a run pointer, an inbox that leads elsewhere is refused; a replaced file is replaced, never written through a link.
 - **One pass, one design** (D845): a loop of one design builds a design every pass, refining the standing one or exploring a new one -- the orchestrator chooses, else the rules (explore after `budget.explore_after: 2` passes without a new decision); it never rests.

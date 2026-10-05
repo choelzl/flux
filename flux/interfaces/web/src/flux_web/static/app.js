@@ -93,8 +93,9 @@ function followStream(url, event, onData, onState, onSkipped) {
   return { close: () => { closed = true; clearTimeout(timer); if (es) es.close(); } };
 }
 function streamPill() {
-  const el = h("span", { class: "pill stream", title: "The live stream" }, "connecting");
-  return { el, set: (st) => { el.textContent = st === "live" ? "● live" : "reconnecting…"; el.className = `pill stream ${st === "live" ? "live" : "warn"}`; } };
+  // D856: said only while the page is not connected -- a green "live" beside an idle loop read as running
+  const el = h("span", { class: "pill stream warn", title: "The page's connection to the loop" }, "connecting…");
+  return { el, set: (st) => { el.hidden = st === "live"; el.textContent = "reconnecting…"; } };
 }
 const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
 
@@ -294,7 +295,7 @@ function bestChart(rows, obj, passes) {
     pts.map(p => sv("circle", { cx: p.x, cy: y(p.v), r: 3, class: "pt" + (obj.goal != null && (maxi ? p.v < obj.goal : p.v > obj.goal) ? " miss" : "") },
       sv("title", {}, `${num4(p.v)} · ${new Date(p.t * 1000).toLocaleString()}`))),
     sv("path", { d: path, class: "best" }),
-    sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} measurement(s), in order`),
+    sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} design(s), in order`),
     sv("text", { x: L, y: H - 8, class: "tick" }, new Date(t0 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
     sv("text", { x: W - R, y: H - 8, class: "tick", "text-anchor": "end" }, new Date(t1 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
@@ -1444,8 +1445,9 @@ async function loopPage(name, owner, path = "") {
           r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
         h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
           h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")))),
-      charts,
-      h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })));
+      // D856: the decision and the designs first, the charts after (open, as before)
+      h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })),
+      charts);
   }
 
   const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; setUrl(); drawTabs(); drawBody(); };
@@ -1542,8 +1544,14 @@ async function loopPage(name, owner, path = "") {
     if (!ps.length) return "";
     const p = ps[ps.length - 1], prev = ps.length > 1 ? ps[ps.length - 2].when : 0;
     const took = (r.designs || []).filter(d => { const t = Date.parse(d.first || "") / 1000; return t > prev && t <= p.when; }).length;   // D849
+    // D856: what the pass decided, in words, first; the record's own fields behind a fold
+    const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
+    const said = c ? (c.decision ? [h("strong", {}, String(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""] : "No decision.")
+      : p.conclusion ? String(p.conclusion) : "";
     return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
-      p.conclusion ? h("pre", { class: "val small conclusion" }, conclusionText(p.conclusion)) : "",
+      said ? h("p", { class: "pass-said" }, said) : "",
+      c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "The record"),
+        h("pre", { class: "val small conclusion" }, conclusionText(c))) : "",
       h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
   }
   /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
@@ -1591,7 +1599,7 @@ async function loopPage(name, owner, path = "") {
     const q0 = st.question;
     if (tab !== "Overview") return;                   // the tab changed while it loaded
     body.replaceChildren(
-      h("div", { class: "stats five" },
+      h("div", { class: "stats five ov-stats" },
         stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
           st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
         stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
@@ -1739,7 +1747,7 @@ async function loopPage(name, owner, path = "") {
           })
         : empty("Empty.")),
         card(null, viewer, { cls: "viewer-card" })));
-      viewer.replaceChildren(empty(""));
+      viewer.replaceChildren(empty("Select a file."));            // D856: said again (D846 had blanked it)
     }
   }
   let beat = 0, busy = false;
@@ -1984,7 +1992,10 @@ function liveTree(base, qs, onQuestion) {
   let shownItems = [];
   function draw() {
     const now = Date.now() / 1000;
-    if (follow.checked) { const t = followTarget() || lastEnded(); if (t) selected = t; }
+    const anyRunning = [...nodes.values()].some(running);           // D856: nothing runs, nothing to follow
+    follow.disabled = !anyRunning;
+    follow.closest("label")?.classList.toggle("muted", !anyRunning);
+    if (follow.checked) { const t = followTarget() || lastEnded(); if (t) selected = t; }   // at rest: the last ended (D696)
     const q = search.value.trim().toLowerCase();
     if (mode === "graph") drawGraph(now);
     else drawLoopTree(now, q);
@@ -3591,8 +3602,17 @@ function drawNav() {
     link("#/configure", "New loop", here.startsWith("#/configure") || here === "#/new"),
     me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""] : []));
   drawBell();
-  document.getElementById("who").replaceChildren(themeBtn, ...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu), h("a", { href: "#/account", class: "me" }, me.name),
+  // D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar
+  const items = h("div", { class: "who-items" }, themeBtn, ...(me ? [h("a", { href: "#/account", class: "me", title: me.name }, me.name),
     h("button", { class: "small", onclick: async () => { await api("/logout", { method: "POST" }).catch(() => {}); me = null; location.hash = "#/login"; } }, "Log out")] : []));
+  const menuBtn = h("button", { class: "small acct-btn", type: "button", "aria-label": "Account menu", "aria-expanded": "false",
+    onclick: (e) => { e.stopPropagation(); const open = !items.classList.contains("open"); items.classList.toggle("open", open); menuBtn.setAttribute("aria-expanded", String(open)); } }, "☰");
+  items.addEventListener("click", (e) => { if (e.target.closest("a, button")) { items.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); } });
+  document.getElementById("who").replaceChildren(...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu)] : []), menuBtn, items);
 }
+document.addEventListener("click", (e) => {                 // D856: a tap elsewhere closes the phone menu
+  const open = document.querySelector("#who .who-items.open");
+  if (open && !e.target.closest("#who")) { open.classList.remove("open"); const b = document.querySelector("#who .acct-btn"); if (b) b.setAttribute("aria-expanded", "false"); }
+});
 window.addEventListener("hashchange", route);
 route();
