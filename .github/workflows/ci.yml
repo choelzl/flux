@@ -158,11 +158,21 @@ jobs:
         # which collects no tests from them and exits 5 -- so this job failed BY CONSTRUCTION
         # on every nightly it ever ran, and the summary never named a test because no test had
         # failed (D371). The per-file real failures, if any, were invisible behind it.
+        # D881: the run's summary is a table per file -- passed, failed, skipped (with why) and
+        # timed out told apart, so a file whose tests all skip reads as such, never as a pass.
         run: |
           fail=0
+          {
+            echo "### Integration sweep"
+            echo "| file | outcome | passed | failed | skipped |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          : > "$RUNNER_TEMP/skips.txt"
           for f in tests/integration/test_*.py; do
             echo "::group::$f"
-            if ! nix develop --command timeout 2400 python3 -m pytest "$f" -q --tb=short -rfE > "$RUNNER_TEMP/one.txt" 2>&1; then
+            rc=0
+            nix develop --command timeout 2400 python3 -m pytest "$f" -q --tb=short -rfEs > "$RUNNER_TEMP/one.txt" 2>&1 || rc=$?
+            if [ "$rc" -ne 0 ]; then
               # D858: which file, and which tests in it, said where the run's page shows it
               echo "::error title=integration::$f failed"
               grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/one.txt" | head -10 | sed 's/^/::error title=integration test::/'
@@ -170,7 +180,22 @@ jobs:
             fi
             cat "$RUNNER_TEMP/one.txt"
             echo "::endgroup::"
+            last=$(grep -E '^(=+ )?[0-9]+ (passed|failed|skipped|error|deselected)' "$RUNNER_TEMP/one.txt" | tail -1)
+            n() { echo "$last" | grep -oE "[0-9]+ $1" | grep -oE '^[0-9]+' || echo 0; }
+            p=$(n passed); x=$(( $(n failed) + $(n error) )); s=$(n skipped)
+            if [ "$rc" -eq 124 ]; then out="timed out"
+            elif [ "$rc" -eq 5 ]; then out="nothing ran"
+            elif [ "$x" -gt 0 ] || [ "$rc" -ne 0 ]; then out="FAILED"
+            elif [ "$p" -eq 0 ]; then out="all skipped"
+            elif [ "$s" -gt 0 ]; then out="passed, some skipped"
+            else out="passed"; fi
+            echo "| \`$(basename "$f")\` | $out | $p | $x | $s |" >> "$GITHUB_STEP_SUMMARY"
+            grep -E '^SKIPPED ' "$RUNNER_TEMP/one.txt" | sed "s|^|$(basename "$f"): |" >> "$RUNNER_TEMP/skips.txt" || true
           done
+          if [ -s "$RUNNER_TEMP/skips.txt" ]; then
+            { echo; echo "<details><summary>Why tests skipped</summary>"; echo; echo '```'
+              cut -c1-240 "$RUNNER_TEMP/skips.txt"; echo '```'; echo "</details>"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
           exit $fail
 
   physical:
