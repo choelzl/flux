@@ -5,7 +5,8 @@ import sys
 
 import yaml
 
-out, pe_x, gbuf_kb = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+out, pe_x, gbuf_kb = sys.argv[1], int(sys.argv[2]), float(sys.argv[3])     # 0.5: half a KB
+gbuf_kb = int(gbuf_kb) if gbuf_kb.is_integer() else gbuf_kb
 arch = {
     "schema_version": "0.1.0",
     "id": f"npu/x{pe_x}-g{gbuf_kb}",

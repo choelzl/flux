@@ -172,9 +172,11 @@ def test_the_adder16_dse_runs_with_no_world(tmp_path):
 
 @pytest.mark.heavy
 def test_the_npu_gemm_sweep_picks_the_smallest_array_that_makes_its_cycles(tmp_path):
-    """An accelerator sized by ZigZag from a document (D625): 32 PEs is the least area at <= 500 cycles."""
+    """An accelerator sized by ZigZag from a document (D625): 32 PEs is the least area at <= 500 cycles,
+    and the buffer the least that holds a layer -- the 20 points in the one pass (D877)."""
     doc = FLUX / "applications/npu_gemm/problem.yaml"
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "n.db"), "--passes", "1",
              "--out", str(tmp_path / "n.yaml"), timeout=900)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]
-    assert "DECISION pe_x=32-gbuf_kb=16" in r.stdout and "latency_cycles=341" in r.stdout, r.stdout[-3000:]
+    assert "DECISION pe_x=32-gbuf_kb=1 " in r.stdout and "latency_cycles=341" in r.stdout, r.stdout[-3000:]
+    assert "sweep: 20 point(s) of 20" in r.stdout, r.stdout[-3000:]

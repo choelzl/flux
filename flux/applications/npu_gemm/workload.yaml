@@ -1,4 +1,6 @@
 # A two-layer feed-forward block: (B,C)x(C,H) then (B,H)x(H,K), int8 in, int16 out.
+# `precision.O` is the accumulator (16 bits), `O_final` what is stored: the hidden layer H_act
+# is requantised to int8 for the second GEMM, the block's output O is kept at int16 (D877).
 schema_version: "0.1.0"
 id: mlp/ffn0
 provenance:
@@ -20,4 +22,4 @@ ops:
     kind: einsum
     expr: "B H, H K -> B K"
     bounds: {B: 4, H: 16, K: 32}
-    precision: {I: 8, W: 8, O: 16, O_final: 8}
+    precision: {I: 8, W: 8, O: 16, O_final: 16}
