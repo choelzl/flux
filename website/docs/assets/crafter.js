@@ -676,9 +676,9 @@
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
       var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
-      if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.by = dg.slice(6);
+      if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.digest = dg.slice(6);      // D830: by name, as every box
       var ls = (state.flow || {}).lessons;                 // D796: the Learn box
-      if (ls && ls !== "off") K.lessons = typeof ls === "string" && ls.indexOf("agent:") === 0 ? { by: ls.slice(6) } : ls;
+      if (ls && ls !== "off") K.lessons = typeof ls === "string" && ls.indexOf("agent:") === 0 ? ls.slice(6) : ls;
       if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
@@ -976,7 +976,13 @@
     var f = {};
     for (k in fl) {
       var key = k === "orchestrate" && isSearch(fl[k]) ? "dse" : k;            // D797: a search is the orchestrator's
-      f[key] = ["test", "measure"].indexOf(k) >= 0 ? fl[k] : toInner(key, fl[k]);   // D795
+      var val = fl[k];
+      if (k === "knowledge" && val && typeof val === "object" && !Array.isArray(val) && "digest" in val) {   // D830
+        val = Object.assign({}, val);
+        var dg2 = val.digest; delete val.digest;
+        if (dg2 && typeof dg2 === "object") Object.assign(val, dg2); else if (dg2 && dg2 !== "model") val.by = dg2;
+      }
+      f[key] = ["test", "measure"].indexOf(k) >= 0 ? val : toInner(key, val);   // D795
     }
     if ("test" in f) { out.gate = f.test; delete f.test; }
     if ("measure" in f) {

@@ -167,7 +167,7 @@ draft can fix what was slow. `validate` refuses a badly posed run before anythin
 `available_roles`, `register_role`). Orchestration: `rules`, `given`, a DSE policy, `model`, or
 `agent` (a model with tools, every pick on the ledger). Generation: `Model` (the prototype
 stage, translation and repair), `Template` (a command), `Catalog`, `Solver`, or a coding agent
-(`flow: {generate: {by: opencode}}`). Knowledge: a `Mentor` over declared sources,
+(`flow: {generate: opencode}`). Knowledge: a `Mentor` over declared sources,
 `mined`, `digest`. Evaluation: the document's stages, each with an optional estimate before its
 tool (`estimate:`, D665) that may skip a design, never choose one.
 

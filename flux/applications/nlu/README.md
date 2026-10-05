@@ -10,7 +10,7 @@ sub-loops in folders (`subtasks: [ops/recip, ...]`) and says what they share —
 the gate (`flux rtl test {artifact} --golden {home}/golden.py`, `{home}` being the operator's
 folder), the stages (synthesis, then placement, at 1250 ps), the objectives (at least 800 MHz,
 then the least area, then the least power), the methods sheet (`knowledge/nlu-methods.md`) and
-the budget -- and who drafts: `generate: {by: claude}`, which every operator inherits (D804). Each `ops/<op>/` holds a `problem.yaml` saying only what differs — its statement
+the budget -- and who drafts: `generate: claude`, which every operator inherits (D804). Each `ops/<op>/` holds a `problem.yaml` saying only what differs — its statement
 and its contract — and its `golden.py`: the reference in double precision, rounded to FP16
 once, with `TOLERANCE_ULP = {"y": 1}`. A folder may override anything else too: its own
 `flow.test`, a stage, the budget.
@@ -36,7 +36,7 @@ nix develop --command flux task run applications/nlu/ops/exp      # one operator
 ```
 
 It needs Claude Code (`flux agent test claude --live`); another drafter is one line in
-`problem.yaml` (`generate: {by: opencode}`, or `model` for the configured model -- see "Choose a
+`problem.yaml` (`generate: opencode`, or `model` for the configured model -- see "Choose a
 model" in the [usage guide](../../../docs/usage-guide.md)). The record is `applications/nlu/out/nlu.db`, one
 campaign per operator (`nlu/exp`, ...) -- an operator run alone resumes the same one. Another
 ask -- a 2-ULP budget, a 1 GHz clock, other operators -- is a copy of the folder (its name is its

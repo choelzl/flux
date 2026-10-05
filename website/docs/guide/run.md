@@ -90,7 +90,7 @@ that does not establish facts. Name it in the document:
 
 ```yaml
 flow:
-  generate: {by: claude}        # or codex, opencode
+  generate: claude        # or codex, opencode
 ```
 
 The agent must be installed and signed in on the machine that runs Flux. If its program is not

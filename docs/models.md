@@ -96,7 +96,7 @@ turns every failure into the next prompt. For hard numeric RTL:
 
 ## Coding agents
 
-A document can hand generation to a coding agent (`flow: {generate: {by: opencode}}`), and
+A document can hand generation to a coding agent (`flow: {generate: opencode}`), and
 `flux ask --author opencode|claude|codex` hands it the writing of the problem itself. The agent
 uses its own model and configuration. The loop gives it a work directory, a brief and a time
 limit, and records every agent turn (see `flux log`). The agent writes; it does not compile, simulate,

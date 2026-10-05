@@ -49,7 +49,7 @@ def test_a_plain_document_reads_the_library_by_default_and_not_with_knowledge_no
     from flux_loop import TaskError
 
     with pytest.raises(TaskError, match="stands alone"):
-        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"off": True, "by": "opencode"}}})
+        TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": {"off": True, "digest": "opencode"}}})
 
 
 def test_an_empty_library_adds_nothing(tmp_path, monkeypatch):

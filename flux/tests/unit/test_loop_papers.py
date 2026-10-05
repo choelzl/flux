@@ -124,7 +124,7 @@ def test_the_papers_are_digested_in_the_setup(tmp_path, monkeypatch):
 
 
 def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
-    """D771, D773: `flow: {knowledge: {by: …}}` -- one agent turn per paper, told where the file is."""
+    """D771, D773: `flow: {knowledge: {digest: …}}` (D830) -- one agent turn per paper, told where the file is."""
     import sys
     from types import SimpleNamespace
 
@@ -137,7 +137,7 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     fake.write_text("import sys\nbrief = sys.stdin.read()\nassert 'adders.md' in brief and 'paper.txt' in brief\n"
                     "print('Prefix adders, read by the agent\\nKogge-Stone: log2(n) levels' + ' -- and the widths, the latency and the area it reports' * 3)\n")
     spec = {"command": [sys.executable, str(fake)], "output": "text", "timeout_s": 60}
-    task = _adders(tmp_path, monkeypatch, flow={"knowledge": {"by": spec}})
+    task = _adders(tmp_path, monkeypatch, flow={"knowledge": {"digest": spec}})
     problem = PromptProblem(task)
     model = SimpleNamespace(model="m1", propose=lambda p: (_ for _ in ()).throw(AssertionError("not the model")))
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=model, say=lambda _m: None)
@@ -145,13 +145,13 @@ def test_an_agent_the_document_names_digests_the_papers(tmp_path, monkeypatch):
     assert got["digested"] == 1, got
     digest = next(s for s in problem.knowledge().sources if type(s).__name__ == "Digest")
     assert "read by the agent" in digest.render(state)
-    oc = _adders(tmp_path, monkeypatch, flow={"knowledge": {"by": "opencode"}})
+    oc = _adders(tmp_path, monkeypatch, flow={"knowledge": {"digest": "opencode"}})
     assert agents_used(oc) == ["opencode"], "its Test gates a start"
     assert oc.flow["knowledge"] == {"agent": "opencode"} and oc.digest_by == "opencode"
     assert type(oc).from_dict(oc.to_dict(), base=tmp_path / "loop").digest_by == "opencode", "written back as read"
     with pytest.raises(TaskError, match="flow.knowledge"):
-        _adders(tmp_path, monkeypatch, flow={"knowledge": {"by": "someone"}})
-    with pytest.raises(TaskError, match=r"flow.knowledge keys \['digest'\] are not known"):
+        _adders(tmp_path, monkeypatch, flow={"knowledge": {"digest": "someone"}})
+    with pytest.raises(TaskError, match=r"flow.knowledge.digest names who sums up the papers"):     # D830: not D791's true
         _adders(tmp_path, monkeypatch, {"digest": True})
 
 
@@ -178,7 +178,7 @@ def test_an_agent_digests_the_whole_library_not_only_the_loops_own(tmp_path, mon
     assert PromptProblem(TaskSpec.from_dict(doc, base=tmp_path / "loop")).digesting(), "D791: unsaid, the library is digested"
     off = {**doc, "flow": {**doc["flow"], "knowledge": "off"}}
     assert not PromptProblem(TaskSpec.from_dict(off, base=tmp_path / "loop")).digesting()
-    problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "knowledge": {"by": spec}}}, base=tmp_path / "loop"))
+    problem = PromptProblem(TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "knowledge": {"digest": spec}}}, base=tmp_path / "loop"))
     assert problem.digesting()
     state = SimpleNamespace(request=SimpleNamespace(db=str(tmp_path / "r.db")), proposer=None, say=lambda _m: None)
     got = problem.digest(state)

@@ -13,7 +13,7 @@ pre-written rules:
 
 | role | what a model can do there | how you turn it on |
 |---|---|---|
-| generator | write each design, repair it from the failures, make it cheaper | `flow: {generate: model}` (the default), or `{by: opencode}` |
+| generator | write each design, repair it from the failures, make it cheaper | `flow: {generate: model}` (the default), or `opencode` |
 | orchestrator | pick the next piece of work, with its reasons on the record | `--agent orchestrate`, or `flow: {orchestrate: agent}` |
 | planner | write the plan of a pass: parts, order, method, budgets | `--agent plan`, or `flow: {plan: model}` |
 | search | propose the next points of a knob space from what was measured | `flow: {orchestrate: {by: model}}`, or a `model` phase |
@@ -155,7 +155,7 @@ Each of these is one flag or one line; mix them.
   model reads the standings and the record with tools, picks the next step, and records why.
 - **Let a model plan each pass:** `--agent plan` (or `flow: {plan: model}`): the parts, the order,
   the method to try first, the budgets. It is checked against the problem before it applies.
-- **Hand the writing to a coding agent:** `flow: {generate: {by: opencode}}` (or `claude`,
+- **Hand the writing to a coding agent:** `flow: {generate: opencode}` (or `claude`,
   `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
   `prototype: true` the agent writes the Python prototype, which the loop checks with
   `flux rtl proto` before it writes the RTL.

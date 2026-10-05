@@ -44,7 +44,7 @@ of the NLU's seven. `parts:` lists them; `decompose` lets the model divide the g
 
 **Generator.** Whatever drafts candidates: a model, a script run once per design point
 (`flow: {generate: {command: ...}}`), a catalog of existing designs, a solver, or a coding
-agent (`flow: {generate: {by: opencode}}`).
+agent (`flow: {generate: opencode}`).
 
 **Author.** In `flux ask`, the one who writes the problem document and its golden model from
 your prompt and files: the model by default, or a coding agent (`--author
@@ -86,7 +86,7 @@ pre-written half; `--role` swaps them.
 
 **Coding agent.** A terminal tool that takes a brief and writes files: Claude Code, Codex CLI,
 OpenCode or any command. One can be the author in `flux ask` or the generator of any document
-(`flow: {generate: {by: opencode}}`); scripts and agents alike read a run's answer with
+(`flow: {generate: opencode}`); scripts and agents alike read a run's answer with
 `flux task run --json` ([agent-surface.md](agent-surface.md)).
 
 **ASAP7.** A free, predictive 7 nm process design kit from Arizona State University, used

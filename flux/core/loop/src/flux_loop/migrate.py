@@ -138,7 +138,7 @@ def _d791(doc: dict[str, Any], say: Say, manual: Say) -> None:
     flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
     k = flow.get("knowledge")
     if isinstance(k, dict):
-        if "digest" in k:
+        if isinstance(k.get("digest"), bool):             # D791's `digest: true`; D830's digest names who
             k.pop("digest")
             say("flow.knowledge.digest: dropped (always digested)")
         if "library" in k:
@@ -214,6 +214,24 @@ def _d795_d797(doc: dict[str, Any], say: Say) -> None:
         say("brief: dropped (the plan briefs the parts)")
 
 
+def _d830(doc: dict[str, Any], say: Say) -> None:
+    """Who digests the papers is `knowledge.digest`, by name like every box's worker; lessons by name too."""
+    flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else None
+    k = flow.get("knowledge") if flow else None
+    if isinstance(k, dict) and "by" in k:
+        k = dict(k)
+        by = k.pop("by")
+        opts = {x: k.pop(x) for x in ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow") if x in k}
+        k["digest"] = {"by": by, **opts} if opts else by
+        flow["knowledge"] = k
+        say("flow.knowledge.by -> digest")
+    if isinstance(k, dict) and isinstance(k.get("lessons"), dict) and set(k["lessons"]) == {"by"}:
+        k = dict(k)
+        k["lessons"] = k["lessons"]["by"]
+        flow["knowledge"] = k
+        say("flow.knowledge.lessons: {by: X} -> X")
+
+
 def _d803(doc: dict[str, Any], say: Say, manual: Say) -> None:
     """No `world:` and no `hooks:`: what a document cannot say is a command beside it."""
     for key in ("world", "hooks"):
@@ -231,6 +249,7 @@ STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D791", "the library is the library/ folder", _d791),
     ("D795-D797", "who works a box, said the same way; the search under orchestrate", _d795_d797),
     ("D803", "no world, no hooks", _d803),
+    ("D830", "who digests the papers is knowledge.digest", _d830),
 ]
 
 

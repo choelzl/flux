@@ -10,13 +10,13 @@ real tools and are never delegated: the gate, the measurements and the record.
 
 ```yaml
 flow:
-  orchestrate: {by: claude}          # picks the next work item, every pick on the ledger
-  plan:        {by: claude}          # writes the pass's plan, checked by check_plan
-  orchestrate:         {by: codex}           # proposes points in `flow.orchestrate.space`
-  generate:    {by: opencode}        # writes the artifact (exists: D575)
-  critique:    {by: claude}          # objects to a division, a part or a decision
-  knowledge:   {lessons: {by: claude}}   # lessons mined from the record, citing its rows
-  select:      {by: claude}          # chooses among designs that tie on the objective vector
+  orchestrate: claude          # picks the next work item, every pick on the ledger
+  plan:        claude          # writes the pass's plan, checked by check_plan
+  orchestrate:         codex           # proposes points in `flow.orchestrate.space`
+  generate:    opencode        # writes the artifact (exists: D575)
+  critique:    claude          # objects to a division, a part or a decision
+  knowledge:   {lessons: claude}   # lessons mined from the record, citing its rows
+  select:      claude          # chooses among designs that tie on the objective vector
   test: gate                            # never delegated (D460)
 ```
 

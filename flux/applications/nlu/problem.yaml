@@ -17,7 +17,7 @@ objectives:                 # 3% margin on shallower stages, 3% tie band
   - {metric: power_w, direction: minimize}
 
 flow:                       # every operator's, unless its folder says otherwise
-  generate: {by: claude}    # D804: drafts each operator's prototype and RTL (a parent's command would compose)
+  generate: claude    # D804: drafts each operator's prototype and RTL (a parent's command would compose)
   test: flux rtl test {artifact} --golden {home}/golden.py     # {home}: the operator's folder
   measure:
     synth: {command: "flux rtl measure {artifact} --stage synth --clock-ps 1250 --timeout 1200", timeout_s: 1300}

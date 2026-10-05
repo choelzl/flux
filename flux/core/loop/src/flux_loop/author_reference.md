@@ -89,7 +89,7 @@ Say only what is yours; the rest is inferred.
   - Every box says who works it the same way (D795): a word (`rules`, `model`, `off`, ...), an
     agent's name (`critique: claude`), or `{by: <who>, ...}` with the box's settings and the
     agent's options beside (`plan: {by: claude, session: pass}`, `select: {by: claude,
-    finalists: 2}`, `knowledge: {by: opencode, files: [...]}`); an agent of your own is
+    finalists: 2}`, `knowledge: {digest: opencode, files: [...]}`); an agent of your own is
     `by: {command: [...], output: text}`. A coding agent answers any box but test and measure,
     checked by the loop, falling back to the rules half (docs/design-agent-loop.md);
     `session: pass` keeps one agent session per box for the pass

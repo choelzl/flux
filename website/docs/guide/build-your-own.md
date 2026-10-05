@@ -44,7 +44,7 @@ Edit `myproblem/problem.yaml`:
 
 Papers help. Put PDFs, notes or reference code in `flux/mentor/knowledge/library/` (every
 problem on the machine) or in `library/` beside the document (this problem's own). Each paper is
-summed up once by the model (or `flow.knowledge: {by: opencode}`).
+summed up once by the model (or `flow.knowledge: {digest: opencode}`).
 Excerpts that match the statement, contract and parts reach the model's prompts, and the coding
 agents get the file paths to open. `flow: {knowledge: off}` turns it off.
 

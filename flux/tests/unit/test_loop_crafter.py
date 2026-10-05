@@ -375,11 +375,11 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
     assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["lessons"] == "off"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: {\"off\": true, lessons: {by: claude}}" in y and "critique: model" in y and "test: {agent" not in y
+    assert "knowledge: {\"off\": true, lessons: claude}" in y and "critique: model" in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
     p = BUILT["papers_by_agent"]
-    assert "knowledge: {by: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
+    assert "knowledge: {digest: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
     assert _load(tmp_path, p).digest_by == "opencode", "D773: the configurator's Background reading by an agent loads as one"
     assert "digest" not in BUILT["rtl_one_gate"]["yaml"], "D791: the model digests unsaid"
     r = BUILT["readback"]["papers"]

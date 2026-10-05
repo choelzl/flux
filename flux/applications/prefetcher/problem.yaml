@@ -17,7 +17,7 @@ contract: >-
 flow:
   knowledge:
     files: [knobs.md, bingo_default.ini]
-  # generate: {by: opencode}     # a coding agent writes the file, not the model
+  # generate: opencode     # a coding agent writes the file, not the model
   test: "{python} {home}/bingo.py check {artifact}"   # bingo.cc aborts on an illegal configuration
   measure:                     # 10M+15M instructions, then 100M+150M for the finalists
     screen:

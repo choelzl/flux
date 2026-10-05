@@ -47,7 +47,7 @@ key per box; a box you do not name keeps its default, the first choice listed.
 ```yaml
 flow:
   orchestrate: sweep                     # Search the settings: try every combination
-  generate: {by: claude}      # Make a design: a coding agent writes it
+  generate: claude      # Make a design: a coding agent writes it
   critique: model                  # Second opinion: a model critic
 ```
 
@@ -60,7 +60,7 @@ flow:
 | Search the settings | `orchestrate` | Walks the list of settings (the space) to choose which to try. With a space, the orchestrator picks points, not parts (D797). The settings are its `space` (`flow.orchestrate: {policy: sweep, space: {...}}`). | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
 | Make a design | `generate` | Writes each candidate design. | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
 | Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library |
-| Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt. Always, while the library is on. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {by: opencode}` |
+| Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt. Always, while the library is on. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {digest: opencode}` |
 | Check it works | `test` | Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's. | **fixed**: always your checks, said as `flow.test` |
 | Second opinion | `critique` | Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice. The three *Critic* boxes of the drawing. | `off` · `model`: a model critic · a coding agent |
 | Measure | | Runs your measurements, cheapest first; a design that fails a gate is dropped. | **fixed**: always your measurements, said as `flow.measure`. Each may `estimate:` first and skip a design that cannot pass. |
@@ -69,7 +69,7 @@ flow:
 | Keep a record | | Every design, measurement and refusal is kept, and read back when you resume. | **fixed**: always on |
 | Learn from results | | Optionally turns past results into lessons for the next round, read with the library. | `off` · `mined`: lessons mined from the record, written `knowledge: {lessons: mined}` · a coding agent, `knowledge: {lessons: claude}` |
 
-A coding agent is written `{by: claude}` (or `codex`, `opencode`). The loop checks its answer
+A coding agent is written `claude` (or `codex`, `opencode`). The loop checks its answer
 and falls back to the rules when the answer is unusable. An agent that writes designs keeps one
 session per part until the part is admitted; an agent on any other box starts fresh every turn,
 or keeps one session for the whole round with `{by: claude, session: pass}`. Every box says it
@@ -87,7 +87,7 @@ The loop crafter offers the choices above. A document written by hand can also s
 | `orchestrate` | `given` | take the parts in the order the document lists them, no model |
 | `orchestrate` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
 | `generate` | `{catalog: [...]}` | a fixed list of designs, no model |
-| `knowledge` | `{by: opencode}` | that coding agent sums up the library's papers instead of the model |
+| `knowledge` | `opencode` | that coding agent sums up the library's papers instead of the model |
 
 ## Parts
 

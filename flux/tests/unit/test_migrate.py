@@ -30,7 +30,7 @@ OLD = {
     "workbench": True,
     "joiner": "\n",
     "brief": True,
-    "flow": {"critique": "none", "plan": "llm", "generate": {"agent": "claude"}, "dse": "sweep"},
+    "flow": {"critique": "none", "plan": "llm", "generate": {"agent": "claude"}, "dse": "sweep", "knowledge": {"agent": "opencode"}},
 }
 
 
@@ -47,12 +47,12 @@ def test_every_old_form_is_brought_to_todays_and_said(tmp_path):
     new, said, manual = migrate(OLD)
     assert manual == []
     codes = {s.split(":")[0] for s in said}
-    assert {"D775", "D786", "D789", "D790-D792", "D795-D797"} <= codes, said
+    assert {"D775", "D786", "D789", "D790-D792", "D795-D797", "D830"} <= codes, said
     flow = new["flow"]
     assert flow["test"] == {"test": {"run": ["python", "check.py", "{artifact}"], "count_re": r"(\d+) failing", "timeout_s": 60}}
     assert flow["measure"] == {"bench": {"command": "python bench.py {artifact}", "metrics": ["t"]}}
     assert flow["orchestrate"] == {"policy": "sweep", "space": {"n": [1, 2, 3]}}
-    assert flow["select"] == {"finalists": 2} and flow["calibrate"] == "off" and flow["knowledge"] == {"text": "add carefully"}
+    assert flow["select"] == {"finalists": 2} and flow["calibrate"] == "off" and flow["knowledge"] == {"text": "add carefully", "digest": "opencode"}
     assert flow["critique"] == "off" and flow["plan"] == "model" and flow["generate"] == {"by": "claude"}
     assert not {"id", "gate", "stages", "space", "cache", "workbench", "joiner", "brief"} & set(new)
     assert new["budget"] == {"steps": 3}

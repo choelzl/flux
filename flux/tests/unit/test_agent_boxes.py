@@ -199,7 +199,7 @@ def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_pa
 
 
 def test_an_agent_draws_lessons_from_the_record_and_each_cites_its_rows(tmp_path):
-    """`flow: {knowledge: {lessons: {by: ...}}}`: once a pass the agent reads the measured rows; a lesson
+    """`flow: {knowledge: {lessons: claude}}` (or `{by: ..., options}`): once a pass the agent reads the measured rows; a lesson
     citing a row that does not exist is refused (D640)."""
     from flux_loop import LoopRequest, run_loop
     from flux_loop.boxes import AgentLessons

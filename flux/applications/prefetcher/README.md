@@ -28,5 +28,5 @@ flux task run applications/prefetcher --db demo-prefetcher.db --tui
 flux task run applications/prefetcher/invent.problem.yaml --db demo-invent.db --tui
 ```
 
-A coding agent can write either file instead of the model: `flow: {generate: {by: opencode}}`.
+A coding agent can write either file instead of the model: `flow: {generate: opencode}`.
 `bingo` beside `scooby`, `mlop` or `next_line` crashes; `knobs.md` says so.

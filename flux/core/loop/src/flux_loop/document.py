@@ -1184,6 +1184,8 @@ def _agents() -> tuple[str, ...]:
     from .agent import agent_kinds
 
     return tuple(agent_kinds())
+#: what a document calls the boxes an agent may work (D830: never the loop's inside names, dse or extract)
+_SURFACE_DELEGABLE = ("validate", "orchestrate", "plan", "generate", "critique", "select", "knowledge (digest, lessons)")
 _DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select", "knowledge"})
 _AGENT_OPTS = ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow",
                "output", "resume", "name")
@@ -1232,6 +1234,19 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
             or (isinstance(o, dict) and ({"policy", "space", "seeds"} & set(o) or set(o) & set(_dse_words()))):
         flow["dse"] = flow.pop("orchestrate")
     k = flow.get("knowledge")
+    if isinstance(k, dict) and "by" in k:
+        raise TaskError("flow.knowledge: who digests the papers is `digest:` -- knowledge: {digest: claude} (D830)")
+    if isinstance(k, dict) and isinstance(k.get("digest"), bool):
+        raise TaskError("flow.knowledge.digest names who sums up the papers -- model (the default) or an agent; "
+                        "the papers are always digested while the library is on (D791, D830)")
+    if isinstance(k, dict) and "digest" in k:              # D830: who sums up library/'s papers, said by name
+        k = dict(k)
+        d = k.pop("digest")
+        if isinstance(d, dict) and "by" in d:
+            k.update(d)
+        elif d not in ("model", None):
+            k["by"] = d
+        flow["knowledge"] = k = k or "model"
     if isinstance(k, dict) and "lessons" in k:
         k = dict(k)
         flow["extract"] = k.pop("lessons")
@@ -1299,7 +1314,7 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
                 out[box] = inner
             continue
         if box not in _DELEGABLE:
-            raise TaskError(f"flow.{box} is not a box an agent answers; those are {', '.join(sorted(_DELEGABLE))}")
+            raise TaskError(f"flow.{box} is not a box an agent answers; those are {', '.join(_SURFACE_DELEGABLE)}")
         spec = _who(box, by, opts)
         if box == "dse":
             out[box] = {**settings, **({"policy": {"agent": spec}} if settings else {"agent": spec})}
@@ -1354,15 +1369,22 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
         if isinstance(dse, dict) and set(dse) == {"command"} and isinstance(dse["command"], dict):
             dse = {"command": dse["command"].get("run"), **{k: v for k, v in dse["command"].items() if k != "run"}}
         out["orchestrate"] = {"by": "model"} if dse == "model" else dse
+    k = out.get("knowledge")                               # D830: who digests is `digest:`
+    if isinstance(k, dict) and "by" in k:
+        agent_opts = {x: k[x] for x in _AGENT_OPTS if x in k}
+        read = {x: v for x, v in k.items() if x != "by" and x not in agent_opts}
+        out["knowledge"] = {**read, "digest": {"by": k["by"], **agent_opts} if agent_opts else k["by"]}
+    elif isinstance(k, str) and k not in ("off", "model"):
+        out["knowledge"] = {"digest": k}
     lessons = out.pop("extract", "off")
     if lessons != "off":
         k = out.get("knowledge")
-        if k is None:
+        if k is None or k == "model":
             k = {}
         elif k == "off":
             k = {"off": True}
         elif isinstance(k, str):
-            k = {"by": k}
+            k = {"digest": k}
         out["knowledge"] = {**k, "lessons": lessons}
     return out
 

@@ -20,7 +20,7 @@ NEW = {"id": "t", "statement": "x", "language": "python",
                 "measure": {"screen": {"command": "echo t=1", "metrics": ["t"]},
                             "confirm": {"command": ["echo", "t=2"], "metrics": ["t"], "timeout_s": 900}},
                 "orchestrate": {"policy": "sweep", "space": {"n": [1, 2]}, "seeds": [{"n": 2}]},
-                "knowledge": {"text": "a note", "by": "opencode"},
+                "knowledge": {"text": "a note", "digest": "opencode"},
                 "select": {"finalists": 3},
                 "calibrate": "off"}}
 
@@ -66,9 +66,9 @@ def test_each_box_says_its_settings_in_the_forms_it_has():
     assert flow(knowledge="off").flow["knowledge"] == ["none"]
     assert yaml.safe_load("k: off")["k"] is False and flow(knowledge=False).flow["knowledge"] == ["none"], \
         "YAML reads a bare off as false"
-    assert flow(knowledge={"files": [], "by": "opencode"}).digest_by == "opencode"
+    assert flow(knowledge={"files": [], "digest": "opencode"}).digest_by == "opencode"
     with pytest.raises(TaskError, match="stands alone"):
-        flow(knowledge={"off": True, "by": "opencode"})
+        flow(knowledge={"off": True, "digest": "opencode"})
     with pytest.raises(TaskError, match="flow.knowledge keys"):
         flow(knowledge={"papers": "x"})
     assert flow(select={"by": "claude", "finalists": 1}).flow["select"] == {"agent": "claude"}
