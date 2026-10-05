@@ -94,3 +94,36 @@ def test_pipelines_in_the_workflow_do_not_swallow_exit_status(workflow):
                 assert "set -o pipefail" in run, (
                     f"job {name!r} pipes into tee without pipefail — a failing command reads as a pass"
                 )
+
+
+def test_every_flux_command_the_workflow_runs_is_one_the_cli_takes():
+    """D831: the job that installs with pip ran `flux new primes --kind sweep` and
+    `primes/primes.problem.yaml` long after D786 and D825 changed both -- red for days, unseen.
+    Every `flux ...` line of the workflow must parse with the CLI as it is, and name no document
+    of the old layout."""
+    import shlex
+
+    from flux_cli.main import build_parser
+
+    parser = build_parser()
+    lines = [ln.strip() for ln in _WORKFLOW.read_text().splitlines()]
+    calls = []
+    for ln in lines:
+        if ln.startswith("#") or "flux" not in ln:
+            continue
+        for part in ln.split("&&"):
+            words = shlex.split(part.split(" #")[0], posix=True)
+            for i, w in enumerate(words):
+                if w.endswith("/bin/flux") or w == "flux":
+                    calls.append(words[i + 1:])
+                    break
+    assert calls, "the workflow runs flux"
+    for args in calls:
+        if not args or args[0].startswith("-") or args[0] in ("--help",):
+            continue
+        try:
+            parser.parse_args([a for a in args if a not in (">", "|")])
+        except SystemExit as exc:
+            raise AssertionError(f"the workflow runs `flux {' '.join(args)}`, which the CLI refuses") from exc
+        assert not any(a.endswith(".problem.yaml") and "/" in a and a.split("/")[-1].split(".")[0] == a.split("/")[-2]
+                       for a in args), f"`flux {' '.join(args)}` names a document of the old layout (D786)"

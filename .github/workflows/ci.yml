@@ -47,8 +47,8 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -e ./flux
           cd "$RUNNER_TEMP"
-          "$GITHUB_WORKSPACE/.venv/bin/flux" new primes --kind sweep
-          "$GITHUB_WORKSPACE/.venv/bin/flux" task run primes/primes.problem.yaml --passes 1 --json answer.json
+          "$GITHUB_WORKSPACE/.venv/bin/flux" example sweep primes
+          "$GITHUB_WORKSPACE/.venv/bin/flux" task run primes --passes 1 --json answer.json
           python -c "import json; d = json.load(open('answer.json')); assert d['decision'], d; print(d['decision'])"
           # the newcomer's own check (D623); the RTL checks skip on a runner without the tools
           "$GITHUB_WORKSPACE/.venv/bin/flux" selftest --no-model
