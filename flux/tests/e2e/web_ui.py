@@ -747,10 +747,32 @@ def flows(r: Run) -> None:
         r.check("it has a tab of its own, with variables for it alone",
                 "corp" in b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent).join(' ')")
                 and b.js("return !!document.querySelector('#env-server-corp-name')"))
+        add_var = """const [scope, name, value] = arguments;
+            document.querySelector(`#env-${scope}-name`).value = name; document.querySelector(`#env-${scope}-value`).value = value;
+            [...document.querySelector(`#env-${scope}-name`).closest('.env-add').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click();
+            return 1"""
+        r.button("corp", ".set-tabs")
+        b.js(add_var, "server-corp", "CORP_REGION", "eu")
+        b.wait("[...document.querySelectorAll('.agent-vars td')].some(t => t.textContent === 'CORP_REGION')", timeout=20, what="the server's variable for corp")
+        got = json.loads(r.api("/admin/settings")["body"])["agent_env"]["corp"]
+        r.check("the admin sets a variable for one agent alone", got == [{"name": "CORP_REGION", "value": "eu", "secret": False}], str(got))
+        r.page("#/admin/agents", "document.querySelector('#ag-corp-label')", "Admin › Agents")
+        b.js("document.querySelector('#ag-corp-label').value = 'Corp Codex'; return 1")
+        b.js("[...document.querySelector('#ag-corp-label').closest('.card').querySelectorAll('button')].find(x => x.textContent.trim() === 'Save').click(); return 1")
+        b.wait("[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Corp Codex')", timeout=20, what="corp renamed")
+        r.check("an agent's name shown is the admin's", True)
         r.login("bob")
-        r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'corp')", "corp in bob's agent logins")
+        r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Corp Codex')", "corp in bob's agent logins")
+        r.button("Corp Codex", ".set-tabs")
+        b.js(add_var, "me-corp", "CORP_USER", "bob")
+        b.wait("[...document.querySelectorAll('.agent-vars td')].some(t => t.textContent === 'CORP_USER')", timeout=20, what="bob's variable for corp")
+        mine = json.loads(r.api("/settings")["body"])["agent_env"]["corp"]
+        r.check("a user sets their own for one agent, over the server's", [x["name"] for x in mine["mine"]] == ["CORP_USER"]
+                and [x["name"] for x in mine["server"]] == ["CORP_REGION"], str(mine))
+        r.clean("agent tabs and variables")
         r.login("ada")
         r.check("an added agent is removed", r.api("/admin/agents/corp", "DELETE")["status"] == 200)
+        r.check("its variables go with it", "corp" not in json.loads(r.api("/admin/settings")["body"])["agent_env"])
         r.clean("agent test")
     r.step("agent test", agent_test)
 
@@ -779,6 +801,15 @@ def flows(r: Run) -> None:
             b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Remove').click(); return 1")
             b.wait("!document.querySelector('.ask-card .bin')", timeout=20, what="the question removed")
             r.check("a question is removed by its bin, once confirmed", json.loads(r.api("/apps/fromex/asks")["body"] or "[]") == [])
+            notes = json.loads(r.api("/apps/sw/notes")["body"] or "[]")
+            if notes:                                                # a note sent to sw earlier
+                r.page("#/app/sw", "document.querySelector('#main .note .bin')", "sw's Overview: its latest notes, each with a bin")
+                b.click(".note .bin")
+                b.wait("[...document.querySelectorAll('dialog[open] button')].some(x => x.textContent === 'Remove')", what="the confirmation")
+                b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Remove').click(); return 1")
+                b.wait(f"document.querySelectorAll('.note').length < {len(notes)}", timeout=20, what="the note removed")
+                left = json.loads(r.api("/apps/sw/notes")["body"] or "[]")
+                r.check("a note is removed by its bin, once confirmed", len(left) == len(notes) - 1, str(left))
             r.clean("files and questions")
         finally:
             b.js("localStorage.removeItem('flux-show-ignored'); return 1")

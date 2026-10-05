@@ -1519,8 +1519,10 @@ async function loopPage(name, owner, path = "") {
         h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
       h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
         // D755: a card with nothing in it is not drawn -- a quiet loop's Overview is its decision and charts
-        notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note" },
-          h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text))))) : "",
+        notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note has-bin" },
+          h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text),
+          mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
+            async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawBody(); }) : "")))) : "",
         bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
           h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
           b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
