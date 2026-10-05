@@ -1517,11 +1517,7 @@
                 function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
           field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
                 function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
-        h("div", { class: "fc-line" }, [                    // D781, D791: who digests the papers of library/
-          field("Digest the papers in the Setup", function () { return state.flow.digest || "model"; },
-                function (v) { state.flow.digest = v; }, { compact: true, structural: true,
-                  options: BOXES.digest.choices.map(function (c) { return [c.value, c.label.split(":")[0].replace(/^The /, "")]; }),
-                  hint: "Papers go in library/ beside the document; each is summed up once" })]),
+        // D828: who digests library/'s papers is a box of the drawing ("Digest the papers"), not a field here
       ]);
       var kids = [what];
       if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));
@@ -1851,7 +1847,7 @@
           h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
-      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the drawing above", [
+      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the drawing (who does each step)", [
         h("div", { class: "fc-rows" }, knobs),
         button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 
@@ -1878,6 +1874,15 @@
     // D826: steps instead of one long form -- a step bar, one step at a time, Back and Next; the
     // document, its checklist and the save on the last step (and Save on every step when editing)
     var STEPS = ["The problem", "Checks", "Measurements", "Objectives", "Who does each step", "More", "Review and save"];
+    // D828: what each step is for, in a line -- in place of the long form's numbered titles
+    var STEP_SAYS = [
+      "What the loop designs, in your words, and what every design must respect.",
+      "Each check refuses a wrong design. They run in order; the first that fails sends the design back to be repaired.",
+      "Each measurement sizes or times a design that passed the checks, cheapest first; a costly one runs only on the best of the cheaper.",
+      "What makes one design better: limits it must meet, then what to push, most important first.",
+      "Who works each step: built-in rules, a model, or a coding agent. Click a box to change it; the defaults are usually right.",
+      "The budget, settings to search over, and splitting one design into parts. An empty field keeps the default, shown greyed.",
+      ""];
     function renderForm() {
       parts.form.innerHTML = "";
       if (!stepped) {
@@ -1906,10 +1911,22 @@
       var back = step > 0 ? button("Back", function () { go(step - 1); }) : null;
       var next = step < STEPS.length - 1 ? button("Next: " + STEPS[step + 1], function () { go(step + 1); }, "fc-primary") : null;
       var nav = h("div", { class: "fc-stepnav" }, [back, h("span", { class: "fc-grow" }), opts.save && step < STEPS.length - 1 ? button(opts.saveLabel || "Save", function () { parts.saveBtn.click(); }) : null, next]);
+      body.forEach(function (el) {                       // the long form's titles: the step bar says them
+        if (!el.querySelectorAll) return;
+        var t = el.querySelector("h3");
+        if (t && step !== 6) t.parentNode.removeChild(t);
+        Array.prototype.forEach.call(el.querySelectorAll(".fc-advanced-body"), function (b) { b.hidden = false; });
+      });
+      if (STEP_SAYS[step]) body.unshift(h("p", { class: "fc-step-says", text: STEP_SAYS[step] }));
+      var last = step === STEPS.length - 1;
+      if (parts.out) {                                   // the document is the last step's own, inside it
+        parts.out.hidden = !last;
+        if (last) body.push(parts.out);
+        else if (parts.bodyEl && parts.out.parentNode !== parts.bodyEl) parts.bodyEl.appendChild(parts.out);
+      }
       parts.form.appendChild(bar);
-      parts.form.appendChild(h("div", { class: "fc-step" }, body));
+      parts.form.appendChild(h("div", { class: "fc-step" + (last ? " fc-step-last" : "") }, body));
       parts.form.appendChild(nav);
-      if (parts.out) parts.out.hidden = step !== STEPS.length - 1;
       if (step === 4) setTimeout(renderDiagram, 0);
     }
     function go(i) {
@@ -1983,7 +2000,8 @@
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]));
-    host.appendChild(h("div", { class: "fc-body" + (stepped ? " fc-stepped" : "") }, [parts.form, out]));
+    parts.bodyEl = h("div", { class: "fc-body" + (stepped ? " fc-stepped" : "") }, [parts.form, out]);
+    host.appendChild(parts.bodyEl);
     if (stepped) drawing();                            // the drawing's parts exist before its step is shown
     parts.pop = h("div", { class: "fc-pop", role: "dialog", hidden: "hidden" });
     host.appendChild(parts.pop);

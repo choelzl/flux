@@ -1156,7 +1156,6 @@ async function loopPage(name, owner, path = "") {
   function fileList(list) {
     return h("ul", { class: "files" }, list.map(f => h("li", { class: f.ignored ? "ignored" : "" },
       h("a", { href: "javascript:void 0", onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
-      f.dir && !f.path.includes("/") && ROLE_OF[f.path] ? h("span", { class: "muted small role" }, ` — ${ROLE_OF[f.path]}`) : "",
       f.ignored ? h("span", { class: "pill small" }, "ignored") : "", f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
   function adder() {
@@ -2390,10 +2389,15 @@ function filesPanel(name, yamlOf) {
     catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
     finally { pd.close(); draw(); }
   });
+  // D828: folded under the form; open by itself when there are files, or the document names one it lacks
+  const count = h("span", { class: "muted small" });
+  const fold = h("details", { class: "card files-card files-fold" }, h("summary", {}, h("strong", {}, "Files that go with it"), count), box);
   async function draw() {
     const files = await list().catch(() => []);
     const have = new Set(files.map(f => f.path));
     const missing = named().filter(p => !have.has(p));
+    count.textContent = ` · ${files.length} file(s)` + (missing.length ? ` · ${missing.length} named and missing` : "");
+    if (files.length || missing.length) fold.open = true;
     box.replaceChildren(
       files.length ? h("ul", { class: "files flist" }, files.map(f => h("li", {},
         h("a", { href: "javascript:void 0", onclick: () => open(f) }, h("span", { class: "ic" }, "·"), f.path),
@@ -2406,7 +2410,7 @@ function filesPanel(name, yamlOf) {
   let t;
   const watch = () => { clearTimeout(t); t = setTimeout(draw, 600); };
   draw();
-  return { el: card("Files that go with it", box, { cls: "files-card" }), watch, draw,
+  return { el: fold, watch, draw,
     async upload(appName) {                                  // a new loop: its files, once it exists
       if (!staged.size) return 0;
       return sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })));
@@ -2417,17 +2421,6 @@ function filesPanel(name, yamlOf) {
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
 const CONFIG_MODES = { empty: "Empty loop", configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
-/** D824: what each part of a loop's folder is for -- said beside each in Files (D827: not on New loop). */
-const FOLDER_ROLES = [
-  ["problem.yaml", "the problem: what to design, the gate, the stages, the objectives, who works each box (NAME.problem.yaml: another problem of the same loop)"],
-  ["the files it names", "scripts, a golden model, a spec, tools -- beside it, read by the gate and the stages ({home} is this folder)"],
-  ["library/", "papers and notes the loop reads: digested for its model and agents, cited in their prompts"],
-  ["workbench/", "the agents' notes and tools, written by them and kept from run to run (a sub-loop's is its parent's)"],
-  ["out/", "what its runs keep: the record of every design and measurement, the decided artifact, the caches -- the loop's own, never cloned"],
-  ["runs/", "the log, the answer, notes and questions -- written by the server, never cloned"],
-  ["a folder with a problem.yaml", "a sub-loop: says only what differs from this one"],
-];
-const ROLE_OF = { library: FOLDER_ROLES[2][1], workbench: FOLDER_ROLES[3][1], out: FOLDER_ROLES[4][1], runs: FOLDER_ROLES[5][1] };
 /** D824: a loop's problem cloned into a new loop of one's own. */
 async function cloneDialog(name, owner) {
   const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
