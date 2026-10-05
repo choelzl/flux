@@ -3092,7 +3092,17 @@ async function adminInsights(body, part = "failures") {   // D819: one part of t
       h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
       h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
         h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))))] : ""]
-    : h("p", { class: "muted" }, "No model or agent turn in this time.")]);
+    : h("p", { class: "muted" }, "No model or agent turn in this time."),
+    // D841: turns recorded before a price was set, priced once at today's prices
+    h("div", { class: "row end" }, act("Price past turns…", async () => {
+      if (!await confirmDialog("Price past turns?", "Every turn recorded without a price set is priced at today's prices "
+        + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
+        + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
+      const got = await api("/admin/reprice", { method: "POST" });
+      toast(`${got.turns} turn(s) in ${got.loops} loop(s) priced: $${got.usd.toFixed(2)}`
+        + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
+      route();
+    }, { cls: "small" }))]);
   const epCard = card("Endpoints and agents", r.endpoints.length ? h("table", { class: "list compact" },
     h("thead", {}, h("tr", {}, h("th", {}, "Which"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Failed"), h("th", { class: "num" }, "Median"),
       h("th", { class: "num" }, "Slow (95%)"), h("th", {}, "Last used"), h("th", {}, "Last failure"))),

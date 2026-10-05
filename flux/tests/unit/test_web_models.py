@@ -209,3 +209,36 @@ def test_a_turn_is_priced_from_the_prices_set(monkeypatch):
     monkeypatch.setenv("FLUX_CLAUDE_PRICE_IN", "3")
     monkeypatch.setenv("FLUX_CLAUDE_PRICE_OUT", "15")
     assert _priced(spec, used) == {"tokens_in": 1_000_000.0, "tokens_out": 100_000.0, "cost_usd": 4.5, "priced": "set"}
+
+
+def test_past_turns_are_priced_once_at_todays_prices(server, tmp_path):
+    """D841: a turn recorded before a price was set is priced at today's (the run's rule), marked,
+    and never priced again; a turn priced when recorded is left; a running loop is skipped."""
+    from types import SimpleNamespace
+
+    from flux_web.pricing import reprice
+
+    app, store = server
+    ada = _client(app, "ada", "correct horse battery")
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_IN": "1", "FLUX_REMOTE_PRICE_OUT": "2",
+                                                            "FLUX_CLAUDE_PRICE_IN": "3", "FLUX_CLAUDE_PRICE_OUT": "15"}}, headers=H).status_code == 200
+    from flux_web.workspace import Workspace
+
+    Workspace(store.data, "bob").create("x", [("problem.yaml", b"statement: s\n")])
+    turns = tmp_path / "turns.jsonl"
+    rows = [{"kind": "model", "model": "qwen", "tokens_in": 1_000_000, "tokens_out": 1_000_000},
+            {"kind": "agent", "agent": "claude", "tokens_in": 1_000_000, "tokens_out": 100_000, "cost_usd": 9.0},
+            {"kind": "agent", "agent": "claude", "tokens_in": 5, "tokens_out": 5, "cost_usd": 0.5, "priced": "set"},
+            {"kind": "model", "model": "qwen", "seconds": 1.0}]
+    turns.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    live = {"on": False}
+    runs = SimpleNamespace(latest=lambda u, a: {"user": u.name, "app": a}, turns_path=lambda r: str(turns) if r else None,
+                           live=lambda r: live["on"])
+    got = reprice(store, runs)
+    assert got == {"turns": 2, "usd": 7.5, "loops": 1, "skipped": []}, got
+    after = [json.loads(ln) for ln in turns.read_text().splitlines()]
+    assert [t.get("cost_usd") for t in after] == [3.0, 4.5, 0.5, None] and after[0]["priced"] == after[1]["priced"] == "retro"
+    assert reprice(store, runs)["turns"] == 0, "once"
+    live["on"] = True
+    assert reprice(store, runs)["skipped"] == ["bob/x"]
+    assert ada.post("/api/admin/reprice", headers=H).status_code == 200

@@ -1934,6 +1934,16 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "endpoints": ins.endpoints(rows, since), "network": ins.network(str(store.refusals_file), since),
                 "disk": ins.disk(store, res["loops"])}
 
+    @app.post("/api/admin/reprice")
+    def reprice(a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Past turns priced once at today's prices (D841); running loops skipped."""
+        from .pricing import reprice as price_past
+
+        got = price_past(store, runs)
+        store.audit(a.name, "past turns priced", f"{got['turns']} turn(s) in {got['loops']} loop(s), ${got['usd']:.2f}"
+                    + (f"; skipped, running: {', '.join(got['skipped'])}" if got["skipped"] else ""))
+        return got
+
     @app.get("/api/admin/usage")
     def all_usage(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return [_user_usage(u) for u in store.users()]
