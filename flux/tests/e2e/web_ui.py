@@ -412,6 +412,8 @@ def flows(r: Run) -> None:
         b.click("#show-ignored")
         b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
         r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
+        r.check("a dotfile counts as ignored (D836)", not any(n.startswith(".gitignore") for n in names)
+                and b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('.gitignore'))"))
         b.click("#show-ignored")
         long = "a_very_long_file_name_" * 6 + ".txt"                     # D834: wraps, never widens the card
         r.api(f"/apps/sw/file?path={long}", "PUT", {"text": "x"})

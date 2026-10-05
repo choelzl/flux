@@ -274,7 +274,7 @@ class Workspace:
 
     def files(self, name: str, sub: str = "", show_ignored: bool = False) -> list[dict[str, Any]]:
         """A folder of the loop as the Files tab lists it (D703): what its `.gitignore` files ignore
-        left out, or marked with `show_ignored`; `.git` never."""
+        left out, or marked with `show_ignored`, and so is a name starting with "." (D836); `.git` never."""
         from .gitignore import Ignores
 
         if Ignores.hidden(sub):
@@ -290,7 +290,8 @@ class Workspace:
                 continue
             rel = str(p.relative_to(root))
             is_dir = p.is_dir() and not p.is_symlink()
-            ignored = ig.ignored(rel, is_dir)
+            # D836: a name starting with "." -- a file, a folder, or anything in one -- counts as ignored too
+            ignored = ig.ignored(rel, is_dir) or any(part.startswith(".") for part in Path(rel).parts)
             if ignored and not show_ignored:
                 continue
             st = p.lstat()
