@@ -10,7 +10,6 @@ contract: >-
   One module named exactly `mul8`, purely combinational, Verilog-2001 constructs only
   (wire, assign, always @(*), case; no SystemVerilog casts, no functions, no $ system
   tasks). p must equal a * w as signed integers for every input.
-language: systemverilog
 
 flow:
   test: flux rtl test {artifact} --golden {home}/golden.py

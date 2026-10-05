@@ -671,3 +671,23 @@ def test_a_world_or_a_hook_is_no_key_of_a_document(key, value):
     composition -- not a Python object bound to the loop."""
     with pytest.raises(TaskError, match=f"keys a problem document does not have: {key}"):
         TaskSpec.from_dict({"id": "t", "statement": "x", "flow": {"test": "true"}, key: value})
+
+
+def test_the_language_is_inferred_from_the_tools_when_not_said():
+    """D832: `language:` is optional -- `flux rtl ...` checks make a SystemVerilog design (.sv), a
+    ChampSim build a C++ one; a script of one's own decides nothing (text); said, it wins; an
+    inferred language is not written back."""
+    from flux_loop import TaskSpec
+
+    def doc(test, **extra):
+        return {"id": "t", "statement": "s", "objectives": [], "flow": {"test": {"t": test}}, **extra}
+
+    rtl = TaskSpec.from_dict(doc("flux rtl test {artifact} --golden {home}/golden.py"))
+    assert (rtl.language, rtl.extension, rtl.language_inferred) == ("systemverilog", ".sv", True)
+    assert "language" not in rtl.to_dict()
+    assert TaskSpec.from_dict(doc("flux champsim build {artifact}")).language == "cpp"
+    own = TaskSpec.from_dict(doc("{python} {home}/check.py {artifact}"))
+    assert (own.language, own.language_inferred) == ("text", False)
+    said = TaskSpec.from_dict(doc("flux rtl test {artifact} --golden g.py", language="verilog"))
+    assert (said.language, said.extension, said.language_inferred) == ("verilog", ".v", False)
+    assert said.to_dict()["language"] == "verilog"

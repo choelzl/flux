@@ -162,7 +162,7 @@ def test_new_writes_the_baseline_and_nothing_of_a_case(tmp_path, capsys):
     assert sorted(p.name for p in d.iterdir()) == ["README.md", "library", "problem.yaml"] and not any((d / "library").iterdir())
     text = (d / "problem.yaml").read_text()
     doc = yaml.safe_load(text)
-    assert set(doc) == {"statement", "contract", "language", "flow", "objectives", "budget"}
+    assert set(doc) == {"statement", "contract", "flow", "objectives", "budget"} and "# language:" in text, "D832: optional"
     for part in ("test", "measure", "generate", "orchestrate", "knowledge"):
         assert f"# {part} --" in text, part
     assert not any(w in text.lower() for w in ("prime", "adder", "popcount", "matrix")), "nothing of a case"

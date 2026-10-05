@@ -6,7 +6,8 @@ statement: >-
   What to design, in a few sentences: what it does, what makes one better than another.
 contract: >-
   The interface every design must have: its name, its inputs and outputs, what it must compute.
-language: python               # what a design is written in: python, systemverilog, c, ...
+# language: python             # optional: what a design is written in, when the checks' tools do not tell it
+                               # (`flux rtl ...` checks make it systemverilog by themselves)
 
 flow:
   # test -- the gate: each check refuses a wrong design, by name, in order. A command that prints

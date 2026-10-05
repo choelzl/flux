@@ -9,7 +9,6 @@ statement: >-
   the smallest PE that makes 1000 MHz placed on ASAP7, chosen from every combination of
   multiplier, reducer and pipeline depth the generator can spell, plus every multiplier the
   invention problem kept.
-language: systemverilog
 
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 1000}      # the clock it must make

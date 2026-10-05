@@ -11,7 +11,6 @@ statement: >-
   not covered is irregular or pointer-chasing access, patterns that repeat across pages rather
   than within one, and correlations no fixed delta relates. Find a different idea, not a
   reparameterisation of those.
-language: cpp
 
 contract: |
   One header holding one class that subclasses ChampSim's `Prefetcher` (inc/prefetcher.h):

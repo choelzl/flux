@@ -184,6 +184,8 @@ class TaskSpec:
     contract: str = ""
     language: str = "text"
     extension: str = ".txt"
+    #: D832: `language` was not said; the tools the checks and stages name gave it (not written back)
+    language_inferred: bool = field(default=False, compare=False)
     parts: tuple[Part, ...] = ()
     decompose: bool = False              # "parts": "decompose" -- the orchestrator divides it
     max_parts: int = 8                   # the most a model's division may make (D792: not a document key)
@@ -409,7 +411,9 @@ class TaskSpec:
             raise TaskError(f"budget keys {bad} are not loop knobs; known: {sorted(known)}")
         if budget.get("prototype", True) not in (True, False, "python", "systemc"):
             raise TaskError(f"budget.prototype is true, false, python or systemc, not {budget['prototype']!r}")
-        language = str(doc.get("language") or "text")
+        said_language = doc.get("language")
+        inferred = None if said_language else _inferred_language(gate, stages)      # D832: from the tools named
+        language = str(said_language or inferred or "text")
         ext = EXTENSIONS.get(language.lower(), "." + language.lower().replace(" ", ""))
         _check_placeholders(gate, stages, generator, space)
         skills_raw = doc.get("skills") or []
@@ -438,14 +442,14 @@ class TaskSpec:
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
-            skills=skills, workbench=workbench,
+            skills=skills, workbench=workbench, language_inferred=bool(inferred),
         )
 
     def _to_dict(self) -> dict[str, Any]:
         gate = _gate_doc(self.gate)
         return {
             "id": self.id, "statement": self.statement, "contract": self.contract,
-            "language": self.language,
+            **({} if self.language_inferred else {"language": self.language}),
             "parts": ("decompose" if self.decompose
                       else {p.name: p.statement for p in self.parts} if any(p.statement for p in self.parts)
                       else [p.name for p in self.parts]),
@@ -515,6 +519,36 @@ def read_input(path: Path) -> str:
         return path.read_text()
     except UnicodeDecodeError:
         return f"({path.name}: {path.stat().st_size} bytes of binary, not text)"
+
+
+def _inferred_language(gate: Any, stages: Any) -> str | None:
+    """The language a document need not say (D832): the one the tools its checks and stages name
+    take -- `flux rtl ...` is SystemVerilog, a ChampSim build C++ -- from the tool catalog's
+    `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
+    when nothing decides."""
+    from .toolbox import TOOLS
+
+    hdl = {"systemverilog", "verilog"}
+
+    def said(argv: Any) -> str:
+        toks = list(argv or ())
+        if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_cli.main"]:
+            toks = ["flux", *toks[5:]]
+        return " ".join(toks)
+
+    cmds = [said(c.run) for c in (gate or ())] + [said(st.command) for st in (stages or ()) if st.command]
+    found: set[str] | None = None
+    for cmd in cmds:
+        for t in TOOLS:
+            head = str(t.get("run") or "").split("{")[0].strip()
+            langs = set(t.get("languages") or ())
+            if len(head.split()) < 2 or not langs or not cmd.startswith(head):
+                continue                                   # `{python} {script}`, `{command}`: no word on it
+            if len(langs) == 1 or langs <= hdl:
+                found = langs if found is None else (found & langs or found)
+    if not found:
+        return None
+    return "systemverilog" if found <= hdl and "systemverilog" in found else (next(iter(found)) if len(found) == 1 else None)
 
 
 def _command(raw: Any, what: str) -> tuple[str, ...] | None:

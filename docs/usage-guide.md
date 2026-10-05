@@ -440,6 +440,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
+- **`language:` is optional** (D832): unsaid, the tools the checks and stages name tell it (`flux rtl ...`: SystemVerilog, a ChampSim build: C++); say it when they do not -- a script of your own, `flux prog` -- or the design is a `.txt` file.
 - **The configurator** (D826) is seven steps -- the problem, checks, measurements, objectives, who does each step, more (budget, search, parts), review and save -- one at a time, Back and Next, Save on every step when editing a loop.
 - **Cloning** (D824, D828): "Clone…" on a loop (or New loop › Clone a loop) makes a new loop of yours with its problem and none of its runs, its workbench when asked.
 - **Invitations** (D818): an admin adds a user without a password (Users, or `flux user add NAME --invite --url https://flux.example`) and gets a link to send them -- it lets them choose their password (10 or more characters) and logs them in; until then the account cannot be used. **Password reset link** (Users, or `flux user link NAME`) is the same for an existing user: their password works until the link is used, and their sessions end then. A link works once, for a week; a new one replaces it. There is no mail: the admin sends it.

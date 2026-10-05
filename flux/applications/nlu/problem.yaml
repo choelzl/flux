@@ -7,7 +7,6 @@ statement: >-
   The seven operators of an FP16 non-linear unit (recip, rsqrt, sigmoid, tanh, gelu, log, exp):
   each within 1 ULP of the correctly rounded reference on ALL 65536 inputs, at 800 MHz on
   ASAP7 with the least area and power.
-language: systemverilog
 
 subtasks: [ops/recip, ops/rsqrt, ops/sigmoid, ops/tanh, ops/gelu, ops/log, ops/exp]   # shallowest arithmetic first
 

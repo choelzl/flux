@@ -11,7 +11,6 @@ contract: |-
     - output logic [15:0] y
   `y` is within 1 ULP of the FP16 rounding of the tanh-form GELU of `x`, computed in double
   precision. GELU(-inf) = -0 (0x8000), GELU(+inf) = +inf (0x7C00); a NaN input is returned as is.
-language: systemverilog
 objectives:
 - {metric: fmax_mhz, direction: maximize, goal: 500}
 - {metric: area_um2, direction: minimize}

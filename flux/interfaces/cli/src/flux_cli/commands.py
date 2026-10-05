@@ -231,7 +231,10 @@ def cmd_task_check(args: argparse.Namespace) -> int:
         return 2
     problem = PromptProblem(task)
     print(f"task {task.id}: {task.statement[:100]}")
-    print(f"  language {task.language} ({task.extension}); parts: "
+    print(f"  language {task.language} ({task.extension}"
+          + ("; inferred from the tools it names" if task.language_inferred
+             else "; not said, and no tool tells: say `language:` if the checks need another kind of file"
+             if task.language == "text" and not task.subtasks else "") + "); parts: "
           + ("decided by the model (decompose)" if task.decompose
              else ", ".join(p.name for p in task.parts) or "one goal"))
     if task.split or task.subtasks:      # each one is its own loop

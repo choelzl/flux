@@ -486,6 +486,23 @@
     return l || (bare ? "" : "text");
   }
 
+  /** D832: the language the chosen checks' and measurements' tools take, as the loader infers it
+      when the document does not say one ("" when none tells: a script of one's own, a command). */
+  function impliedLanguage(state, cat) {
+    var hdl = ["systemverilog", "verilog"], found = null;
+    (state.checks || []).concat(state.stages || []).forEach(function (row) {
+      var t = toolOf(row.tool, cat), langs = t ? (t.languages || []) : [];
+      if (!langs.length) return;
+      var onlyHdl = langs.every(function (l) { return hdl.indexOf(l) >= 0; });
+      if (langs.length !== 1 && !onlyHdl) return;
+      found = found === null ? langs.slice() : (found.filter(function (l) { return langs.indexOf(l) >= 0; }).length
+        ? found.filter(function (l) { return langs.indexOf(l) >= 0; }) : found);
+    });
+    if (!found || !found.length) return "";
+    if (found.indexOf("systemverilog") >= 0 && found.every(function (l) { return hdl.indexOf(l) >= 0; })) return "systemverilog";
+    return found.length === 1 ? found[0] : "";
+  }
+
   function knobNames(state) {
     return (state.space || []).filter(function (r) { return String(r.knob || "").trim() && list(r.choices).length; })
       .map(function (r) { return r.knob.trim(); });
@@ -717,7 +734,9 @@
     if (!id) error("Give the problem a name (letters, digits and _).");
     else if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(id)) error("The name \"" + id + "\" should be a letter, then letters, digits or _.");
     if (!String(state.statement || "").trim()) error("Say what you want made (the statement is empty).");
-    if (!lang) warn("Choose the design's language.");
+    var implied = impliedLanguage(state, cat);
+    if (!lang && !implied) note("The language is not said and no chosen tool tells it: the design is a .txt file -- choose one if the checks need another kind.");
+    if (!lang) lang = implied;                         // D832: what the loader will take
 
     function params(row, what, nm) {
       var t = toolOf(row.tool, cat);
@@ -1507,13 +1526,14 @@
 
     // -- level 1
     function renderLevel1() {
-      var langs = [["", "Choose..."]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
+      var implied = impliedLanguage(state);                // D832: optional -- the tools usually tell
+      var langs = [["", implied ? "from the tools: " + implied : "from the tools (none tells yet)"]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
       var what = titled("1. What do you want?", [], [
         h("div", { class: "fc-line" }, [
           field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
                 { compact: true, placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits and _" }),
           field("Language", function () { return state.language; }, function (v) { state.language = v; },
-                { compact: true, options: langs, structural: true, hint: "The language the designs are written in" }),
+                { compact: true, options: langs, structural: true, hint: "Optional: the language the designs are written in, when the checks' tools do not tell it" }),
           state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
           ]),
         field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
