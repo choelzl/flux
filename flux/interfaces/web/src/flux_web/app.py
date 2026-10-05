@@ -1657,7 +1657,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             if older:                                  # D811: of an earlier form -- said here, with what to do
                 raise HTTPException(409, f"{meta['document']} is of an earlier form ({len(older[0]['said'])} change(s) to make"
                                          + (", and some need a person" if older[0]["manual"] else "")
-                                         + "): an admin migrates it in Admin › Documents")
+                                         + "): an admin migrates it in Admin › Loops › Migrate old documents")
         agents_gate(whose, needs)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             from flux_loop.document import record_name

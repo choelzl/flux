@@ -893,7 +893,7 @@ def flows(r: Run) -> None:
                      [["problem.yaml", old.replace("id: oldsum\n", "") + "world: flux_x.world:World\n"]])
         r.check("a loop whose world needs a person is uploaded", made["status"] == 200, str(made)[:300])
         refused = r.api("/apps/oldform/start", "POST", {"passes": 1})
-        r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Admin › Documents" in refused["body"], refused["body"][:300])
+        r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Migrate old documents" in refused["body"], refused["body"][:300])
         r.login("ada")
         r.page("#/admin", "document.querySelector('#main .card')", "Admin › Loops")
         r.check("the controls say no more than their buttons (D846)", "nobody can start one" not in r.text())

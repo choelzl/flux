@@ -50,7 +50,7 @@ def test_an_admin_migrates_a_loops_document_and_the_loop_follows(tmp_path):
     assert (loop["user"], loop["app"], doc["file"], doc["to"], doc["status"]) == ("bob", "sum", "adder.problem.yaml", "problem.yaml", "would migrate")
     assert any(s.startswith("D775") for s in doc["said"]) and "flow:" in doc["text"]
     r = bob.post("/api/apps/sum/start", json={"passes": 1}, headers=H)
-    assert r.status_code == 409 and "Admin › Documents" in r.json()["detail"], r.text
+    assert r.status_code == 409 and "Migrate old documents" in r.json()["detail"], r.text
     got = ada.post("/api/admin/documents/migrate", json={"user": "bob", "app": "sum"}, headers=H).json()
     assert got["migrated"] == 1, got
     assert w.meta("sum")["document"] == "problem.yaml" and (d / "problem.yaml").is_file() and (d / "adder.problem.yaml.orig").is_file()
