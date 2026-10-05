@@ -7,8 +7,8 @@ A Python problem for Flux, written by `flux example python primes`. The model wr
 | file | what it is |
 |---|---|
 | `problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
-| `check.py` | the gate: known cases against a reference, prints `N failing of M` |
-| `bench.py` | the stage: times the candidate, prints `time_ms=` |
+| `check.py` | the gate: known cases up to the workload's n and a few drawn per run, against a reference; prints `N failing of M` |
+| `bench.py` | the stage: times the candidate in 5 fresh processes, checks each answer, prints `time_ms=` (the median) |
 
     flux task check applications/primes
     flux task run applications/primes --passes 1      # one pass; without --passes it runs until stopped
