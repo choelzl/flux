@@ -21,7 +21,7 @@ ASSETS = REPO / "website/docs/assets"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"), *REPO.glob("flux/applications/*/*.problem.yaml"),
-               *REPO.glob("flux/interfaces/cli/src/flux_cli/templates/*/problem.yaml"),
+               *REPO.glob("flux/interfaces/cli/src/flux_cli/examples/*/problem.yaml"),
                REPO / "flux/core/loop/examples/digits/problem.json"])
 COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts", "workload")
 
@@ -62,7 +62,7 @@ def test_a_document_read_back_and_written_again_is_the_same_loop(path, tmp_path)
 @pytest.mark.parametrize("kind", ["rtl", "python", "sweep", "rtl-sweep"])
 def test_a_template_is_editable_whole(kind, tmp_path):
     """Nothing of what `flux new` writes is kept aside: the configurator edits all of it."""
-    path = REPO / "flux/interfaces/cli/src/flux_cli/templates" / kind / "problem.yaml"
+    path = REPO / "flux/interfaces/cli/src/flux_cli/examples" / kind / "problem.yaml"
     _before, _after, kept = _round(path, tmp_path)
     assert kept == [], kept
 
@@ -71,7 +71,7 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     """D728: `generate: {by: opencode, bin, args}` and a custom-command critic were not
     the configurator's choices, so the whole flow fell back to its defaults ("a model") and was
     kept aside. Now each is its agent -- drawn as one -- and written back as it was."""
-    src = REPO / "flux/interfaces/cli/src/flux_cli/templates/python"
+    src = REPO / "flux/interfaces/cli/src/flux_cli/examples/python"
     home = tmp_path / "p"
     shutil.copytree(src, home)
     doc = home / "problem.yaml"

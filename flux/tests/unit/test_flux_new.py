@@ -1,4 +1,4 @@
-"""`flux new NAME --kind python|rtl|sweep` (D598): a working problem to start from. Every kind
+"""`flux example KIND NAME` (D598, D825: the worked examples; `flux new NAME` writes the baseline alone). Every kind
 must load under `flux task check`; the sweep, which needs no model and no EDA tool, must run to
 a decision."""
 
@@ -13,7 +13,7 @@ from flux_cli.main import main
 
 @pytest.mark.parametrize("kind", ["python", "rtl", "sweep", "tune"])
 def test_every_kind_writes_a_document_that_loads(tmp_path, capsys, kind):
-    assert main(["new", "demo", "--kind", kind, "--dir", str(tmp_path / kind)]) == 0
+    assert main(["example", kind, "demo", "--dir", str(tmp_path / kind)]) == 0
     doc = tmp_path / kind / "demo/problem.yaml"
     assert doc.is_file() and (doc.parent / "README.md").is_file()
     text = doc.read_text()
@@ -25,7 +25,7 @@ def test_every_kind_writes_a_document_that_loads(tmp_path, capsys, kind):
 
 def test_the_sweep_runs_to_a_decision_without_a_model(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "primes", "--kind", "sweep", "--dir", str(tmp_path / "p")])
+    main(["example", "sweep", "primes", "--dir", str(tmp_path / "p")])
     answer = tmp_path / "answer.json"
     rc = main(["task", "run", str(tmp_path / "p/primes/problem.yaml"), "--passes", "20", "--json", str(answer)])
     got = json.loads(answer.read_text())
@@ -46,7 +46,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
     import yaml
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "mine", "--kind", "sweep", "--dir", str(tmp_path / "m")])
+    main(["example", "sweep", "mine", "--dir", str(tmp_path / "m")])
     (tmp_path / "m" / "mine" / "every_other.py").write_text(
         "from dataclasses import dataclass\n"
         "from flux_loop.dse import Policy, points\n\n\n"
@@ -78,7 +78,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
 def test_the_tune_kind_runs_to_a_decision_without_a_model(tmp_path, monkeypatch):
     """Knobs go straight into the gate's and stage's commands, measured one at a time (D608)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
+    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
     doc = (tmp_path / "t" / "mm/problem.yaml").read_text()
     assert "workers: 1" in doc and "{block}" in doc
     answer = tmp_path / "answer.json"
@@ -93,7 +93,7 @@ def test_the_banner_says_when_no_model_is_needed(tmp_path, capsys, monkeypatch):
     from flux_loop.task import model_use
 
     for kind, needs in (("tune", False), ("sweep", False), ("python", True), ("rtl", True)):
-        main(["new", f"k_{kind}", "--kind", kind, "--dir", str(tmp_path / kind)])
+        main(["example", kind, f"k_{kind}", "--dir", str(tmp_path / kind)])
         task = load_task(str(tmp_path / kind / f"k_{kind}/problem.yaml"))
         assert bool(model_use(task)) is needs, (kind, model_use(task))
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
@@ -107,7 +107,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     import yaml
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
+    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
     doc_path = tmp_path / "t" / "mm/problem.yaml"
     doc = yaml.safe_load(doc_path.read_text())
     doc["flow"]["orchestrate"]["policy"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
@@ -126,7 +126,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
 def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tmp_path, capsys, monkeypatch):
     """D695: its pass ended on "nothing left to do", not a rest, so pass after pass began at once."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "primes", "--kind", "sweep", "--dir", str(tmp_path / "p")])
+    main(["example", "sweep", "primes", "--dir", str(tmp_path / "p")])
     doc, db = str(tmp_path / "p/primes/problem.yaml"), str(tmp_path / "p.db")
     assert main(["task", "run", doc, "--passes", "20", "--db", db]) == 0
     capsys.readouterr()
@@ -139,7 +139,7 @@ def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tm
 def test_the_report_of_a_tuning_ranks_every_point_with_its_knobs(tmp_path, monkeypatch):
     """A DSE's report is read from its points, ranked by the decision's rule; one objective gets no front, saying why (D609)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["new", "mm", "--kind", "tune", "--dir", str(tmp_path / "t")])
+    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
     answer, db = tmp_path / "a.json", str(tmp_path / "mm.db")
     main(["task", "run", str(tmp_path / "t/mm/problem.yaml"), "--passes", "20", "--json", str(answer), "--db", db])
     out = tmp_path / "r.html"
@@ -149,3 +149,24 @@ def test_the_report_of_a_tuning_ranks_every_point_with_its_knobs(tmp_path, monke
     first = page.split("Every point measured", 1)[1].split("<tr><td>1</td><td>", 1)[1].split("<", 1)[0]
     assert first == json.loads(answer.read_text())["decision"]["name"]
     assert "one objective: there is no front to draw" in page
+
+
+def test_new_writes_the_baseline_and_nothing_of_a_case(tmp_path, capsys):
+    """D825: `flux new NAME` is a loop's folder as it starts -- the skeleton problem.yaml with every
+    part present and what goes there, a README of the folder's parts, an empty library/ -- no
+    script, no golden model, no example; `flux task check` says what is missing."""
+    import yaml
+
+    assert main(["new", "mine", "--dir", str(tmp_path)]) == 0
+    d = tmp_path / "mine"
+    assert sorted(p.name for p in d.iterdir()) == ["README.md", "library", "problem.yaml"] and not any((d / "library").iterdir())
+    text = (d / "problem.yaml").read_text()
+    doc = yaml.safe_load(text)
+    assert set(doc) == {"statement", "contract", "language", "flow", "objectives", "budget"}
+    for part in ("test", "measure", "generate", "orchestrate", "knowledge"):
+        assert f"# {part} --" in text, part
+    assert not any(w in text.lower() for w in ("prime", "adder", "popcount", "matrix")), "nothing of a case"
+    readme = (d / "README.md").read_text()
+    assert all(x in readme for x in ("`out/`", "`workbench/`", "`library/`", "`runs/`")) and "mine" in readme
+    capsys.readouterr()
+    assert main(["task", "check", str(d), "--no-sandbox"]) != 0, "a baseline to fill in: the check says so"

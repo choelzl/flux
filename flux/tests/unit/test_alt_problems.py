@@ -17,7 +17,7 @@ H = {"X-Flux": "1"}
 
 
 def _loop(tmp_path, bad: bool = False):
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
     home = tmp_path / "sw"
     text = (home / "problem.yaml").read_text()
     (home / "fast.problem.yaml").write_text("statment: a typo\n" if bad else text)

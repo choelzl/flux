@@ -1022,7 +1022,6 @@ async function loopPage(name, owner, path = "") {
       }));
       if (perm === "edit") acts.push(leaveBtn());
     }
-    acts.push(act("Clone…", () => cloneDialog(name, owner), { title: "A new loop of yours with this one's problem, without its runs (D824)" }));
     if (perm === "watch") acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
       : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin: you may change and run it; it runs on its owner's agents and settings" },
@@ -2417,7 +2416,7 @@ function filesPanel(name, yamlOf) {
 /** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
-const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
+const CONFIG_MODES = { empty: "Empty loop", configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 /** D824: what each part of a loop's folder is for -- said on New loop, and beside each in Files. */
 const FOLDER_ROLES = [
   ["problem.yaml", "the problem: what to design, the gate, the stages, the objectives, who works each box (NAME.problem.yaml: another problem of the same loop)"],
@@ -2448,6 +2447,18 @@ async function cloneDialog(name, owner) {
   toast(`${got.name}: cloned`, "ok");
   location.hash = `#/app/${enc(got.name)}`;
 }
+/** D825: a loop's baseline -- the skeleton problem.yaml, the README of its parts, library/ -- then its configurator. */
+function emptyForm(body) {
+  const name = h("input", { id: "empty-name", placeholder: "my_loop", class: "mono", autocomplete: "off" });
+  body.replaceChildren(card(null, [h("p", { class: "muted" }, "A loop's folder as it starts: problem.yaml with every part present and what goes there, ",
+      "a README of what each part of the folder is for, an empty library/. Nothing of any case: you fill it in, in the configurator or directly."),
+    h("label", { class: "stack" }, "Its name", name),
+    h("div", { class: "form-actions" }, act("Make the empty loop", async () => {
+      const got = await api("/apps/new-empty", { method: "POST", body: { name: name.value.trim() } });
+      toast(`${got.name}: fill in its problem`, "ok");
+      location.hash = `#/app/${enc(got.name)}/settings/problem`;
+    }, { cls: "primary" }))]));
+}
 async function cloneForm(body) {
   const loops = await api("/loops");
   const pick = h("select", { id: "clone-from", "aria-label": "The loop to clone" },
@@ -2474,7 +2485,7 @@ async function configurePage(name, owner, mode = "configurator") {
     loop's Settings › Problem (D713). `base`: the address the modes extend. */
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
-  const modes = isNew ? ["configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
+  const modes = isNew ? ["empty", "configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
   const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
   function drawTabs() {
@@ -2488,6 +2499,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
       else if (mode === "upload") body.replaceChildren(uploadForm());
       else if (mode === "edit") await directEdit(body, name);
       else if (mode === "clone") await cloneForm(body);
+      else if (mode === "empty") emptyForm(body);
       else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }

@@ -280,7 +280,7 @@ class Run:
 def flows(r: Run) -> None:
     b = r.b
     # a loop to upload: a sweep, no model needed
-    subprocess.run(["flux", "new", "--kind", "sweep", "sw", "--dir", str(r.files)], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["flux", "example", "sweep", "sw", "--dir", str(r.files)], check=True, stdout=subprocess.DEVNULL)
 
     def login_refused():
         b.go(f"{r.url}/#/login")
@@ -310,7 +310,7 @@ def flows(r: Run) -> None:
     def new_loop_tabs():
         r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("New loop has four ways (D767, D824: a loop cloned)", tabs == ["Configurator", "Upload", "Agent", "Clone a loop"], str(tabs))
+        r.check("New loop has five ways (D767, D824: a loop cloned, D825: an empty loop)", tabs == ["Empty loop", "Configurator", "Upload", "Agent", "Clone a loop"], str(tabs))
         r.check("New loop says what a loop's folder holds (D824)", b.js("return !!document.querySelector('details.folder-roles')")
                 and all(x in b.js("return document.querySelector('details.folder-roles').textContent") for x in ("out/", "workbench/", "library/", "runs/")))
         b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
@@ -651,12 +651,12 @@ def flows(r: Run) -> None:
     def passes_at_once():
         """D747, D752: two passes at once, each its own branch, "with" the other; then the Conclusion."""
         r.login("bob")
-        from flux_cli.commands import template_files
+        from flux_cli.commands import example_files
 
         made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'fromex');
             for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
             fetch('/api/apps', {method: 'POST', headers: {'X-Flux': '1'}, body: f}).then(async r => done({status: r.status, body: await r.text()}));""",
-                     [[rel, text] for rel, text in template_files("fromex", "sweep")])
+                     [[rel, text] for rel, text in example_files("fromex", "sweep")])
         assert made["status"] == 200, f"the loop uploaded: {made}"
         info = r.api("/apps/fromex")
         assert info["status"] == 200, f"the loop: {info}"
@@ -903,18 +903,27 @@ def flows(r: Run) -> None:
     r.step("invitation", invitation)
 
     def clone():
-        """D824: a loop cloned from its page: the new loop has its problem, none of its runs."""
+        """D824: a loop cloned from New loop (never from a loop's page, D825): its problem, none of its runs.
+        D825: an empty loop, the baseline, opened in its configurator."""
         r.login("bob")
         r.page("#/app/sw", "document.querySelector('.page-head')", "sw")
-        r.button("Clone…", ".page-head")
+        r.check("a loop's page offers no clone", not b.js("return [...document.querySelectorAll('.page-head button')].some(x => x.textContent.trim() === 'Clone…')"))
+        r.page("#/configure/clone", "document.querySelector('#clone-from')", "New loop › Clone a loop")
+        b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify(['', 'sw']); return 1")
+        r.button("Clone…", "#main")
         b.wait("document.querySelector('#clone-to')", timeout=10, what="the clone dialog")
         b.js("document.querySelector('#clone-to').value = 'sw-copy'; return 1")
         b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Clone').click(); return 1")
         b.wait("location.hash === '#/app/sw-copy'", timeout=20, what="the clone's page")
         files = [f["path"] for f in json.loads(r.api("/apps/sw-copy/files?ignored=true")["body"])]
         r.check("the clone has the problem, not the runs", "problem.yaml" in files and "out" not in files and "runs" not in files, str(files))
-        r.page("#/app/sw-copy/files", "document.querySelector('#main ul.files')", "the clone's files")
-        r.clean("clone")
+        r.page("#/configure/empty", "document.querySelector('#empty-name')", "New loop › Empty loop")
+        b.js("document.querySelector('#empty-name').value = 'blank'; return 1")
+        r.button("Make the empty loop", "#main")
+        b.wait("location.hash === '#/app/blank/settings/problem' && document.querySelector('.flux-crafter')", timeout=20, what="the empty loop's configurator")
+        files = [f["path"] for f in json.loads(r.api("/apps/blank/files")["body"])]
+        r.check("an empty loop is the baseline, opened in its configurator", sorted(files) == ["README.md", "library", "problem.yaml"], str(files))
+        r.clean("clone and empty loop")
     r.step("clone", clone)
 
     def error_feedback():

@@ -15,7 +15,7 @@ say PASS.
 ## 1. Start from a template
 
 ```bash
-flux new isqrt --kind rtl
+flux example rtl isqrt
 ```
 
 This writes `isqrt/` with a document, a golden model and a README. It runs as it is (an 8-bit

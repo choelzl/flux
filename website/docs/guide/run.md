@@ -71,7 +71,7 @@ names the deepest stage that ran.
 
 ## Choosing an AI model
 
-Problems whose designs come from a script (`flux new --kind sweep`, `rtl-sweep`, `tune`) need no
+Problems whose designs come from a script (`flux example sweep`, `rtl-sweep`, `tune`) need no
 model. For the others, Flux uses a local [Ollama](https://ollama.com) by default and the model
 named in `FLUX_LLM_MODEL` (default `qwen3.8:latest`). For any OpenAI-compatible server:
 

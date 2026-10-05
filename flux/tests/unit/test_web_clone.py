@@ -45,3 +45,19 @@ def test_a_loop_is_cloned_with_its_problem_and_none_of_its_runs(tmp_path):
         "a watcher clones into their own"
     assert (tmp_path / "data/users/cy/apps/mine/check.py").is_file()
     assert any(a["name"] == "mine" for a in cy.get("/api/apps").json())
+
+
+def test_an_empty_loop_is_the_baseline_to_fill_in(tmp_path):
+    """D825: New loop › Empty loop -- the baseline folder, opened in the configurator."""
+    store = Store(tmp_path / "data")
+    store.add_user("bob", "another long secret")
+    app = create_app(tmp_path / "data", sandbox=False)
+    bob = TestClient(app)
+    bob.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H)
+    got = bob.post("/api/apps/new-empty", json={"name": "blank"}, headers=H).json()
+    assert got["name"] == "blank" and got["document"] == "problem.yaml"
+    d = tmp_path / "data/users/bob/apps/blank"
+    assert (d / "README.md").is_file() and (d / "library").is_dir() and "statement:" in (d / "problem.yaml").read_text()
+    v = bob.get("/api/apps/blank/document").json()
+    assert v["raw"]["statement"] and v["error"], "the configurator reads it, and says what is missing"
+    assert bob.post("/api/apps/new-empty", json={"name": "blank"}, headers=H).status_code == 400

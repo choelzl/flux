@@ -29,7 +29,7 @@ the rest and keeps a record of every design it tried.
     2. Write a ready-to-run problem:
 
         ```bash
-        .venv/bin/flux new primes --kind sweep
+        .venv/bin/flux example sweep primes
         ```
 
     3. Run it:

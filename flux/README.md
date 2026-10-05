@@ -30,7 +30,7 @@ The tree follows the kinds of module the architecture is built from:
 | `interfaces/` | how it is driven: the CLI |
 | `tests/` | the unit suite (core + heavy), the integration suite |
 
-`applications/` is the part that grows. Ten today; `flux new` writes the start of another:
+`applications/` is the part that grows. Ten today; `flux new` writes the baseline of another (`flux example` a worked one):
 
 | application | the problem | the chain | the model's roles |
 |---|---|---|---|

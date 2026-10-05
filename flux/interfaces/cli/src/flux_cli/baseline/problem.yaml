@@ -1,0 +1,32 @@
+# The problem: what this loop designs and how a design is judged. Fill in each part; the comments
+# say what goes where (docs/usage-guide.md has every key). README.md says what each part of this
+# folder is for.
+
+statement: >-
+  What to design, in a few sentences: what it does, what makes one better than another.
+contract: >-
+  The interface every design must have: its name, its inputs and outputs, what it must compute.
+language: python               # what a design is written in: python, systemverilog, c, ...
+
+flow:
+  # test -- the gate: each check refuses a wrong design, by name, in order. A command that prints
+  # "N failing" (0 passes), or exits non-zero; {artifact} is the design, {home} this folder.
+  #   test: "{python} {home}/check.py {artifact}"
+  #
+  # measure -- the stages, cheapest first: each command prints name=value lines for the metrics.
+  #   bench: {command: "{python} {home}/bench.py {artifact}", metrics: [time_ms]}
+  #
+  # generate -- who drafts a design: model (the default), an agent (claude, opencode, codex),
+  # {command: "..."} a script of yours, or {catalog: [...]} designs that already exist.
+  #
+  # orchestrate -- how the next design is chosen: rules, model, an agent, or a search over knobs:
+  #   {policy: sweep, space: {knob: [1, 2, 4]}}
+  #
+  # knowledge -- what the model and agents read besides library/: {files: [spec.md], sheet: notes.md}
+
+objectives: []
+  # what "better" is, most important first; a goal makes a limit to meet:
+  #   - {metric: time_ms, direction: minimize}
+  #   - {metric: fmax_mhz, direction: maximize, goal: 800}
+
+budget: {steps: 3}             # steps a pass; a pass runs until it is stopped

@@ -35,14 +35,15 @@ adds the README's first run. Prints PASS, FAIL or SKIP per check; exits 1 when o
 ## Start a problem
 
 ```bash
-flux new NAME --kind python|rtl|sweep|tune|rtl-sweep     # a working problem to start from
+flux example python|rtl|sweep|tune|rtl-sweep NAME     # a working problem to start from
 flux ask "what you want" --file spec.pdf                 # an author writes the problem for you
 flux ask --tui                                           # the same, from a setup screen
 ```
 
-- `flux new NAME` writes `NAME/problem.yaml`, its golden model or checker, and a README
-  (`--dir D`: into `D/NAME/`). The
-  [cookbook](cookbook.md) says which kind fits which problem.
+- `flux new NAME` writes a loop's baseline (D825): `NAME/problem.yaml` with every part present and what goes there,
+  a README of what each part of the folder is for, an empty `library/` (`--dir D`: into `D/NAME/`) -- nothing of a case.
+  `flux example KIND NAME` writes a worked example that runs (sweep, tune, python, rtl, rtl-sweep); the
+  [cookbook](cookbook.md) says which fits which problem.
 - `flux ask` has an author (the model by default, or `--author opencode|claude|codex`) write
   the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
   gives the author the report to revise for the next pass. Options: `--no-run` (write and

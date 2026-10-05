@@ -12,7 +12,7 @@ writes the document for you.
 ## 1. Pick a kind and write the start
 
 ```bash
-flux new myproblem --kind rtl
+flux example rtl myproblem
 ```
 
 | kind | the designs come from | judged by | AI model? |
@@ -23,8 +23,8 @@ flux new myproblem --kind rtl
 | `rtl-sweep` | a script writes one module per knob setting | Verilator and Yosys | no |
 | `tune` | the knobs go straight into your own commands | `check.py`, `bench.py` | no |
 
-`flux new` writes `myproblem/` with a document, the scripts it names and a README. It runs as it
-is. For larger complete problems to copy from, see the repository's
+`flux example` writes `myproblem/` with a document, the scripts it names and a README. It runs as it
+is. `flux new myproblem` writes the baseline instead: the document's every part with what goes there, to fill in. For larger complete problems to copy from, see the repository's
 [`flux/applications/`](https://github.com/choelzl/flux/tree/main/flux/applications) folder.
 
 ## 2. Say what you want

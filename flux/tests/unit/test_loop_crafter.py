@@ -21,7 +21,7 @@ from flux_loop import TaskError, load_task
 
 REPO = Path(__file__).resolve().parents[3]
 ASSETS = REPO / "website/docs/assets"
-TEMPLATES = REPO / "flux/interfaces/cli/src/flux_cli/templates"
+TEMPLATES = REPO / "flux/interfaces/cli/src/flux_cli/examples"
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 

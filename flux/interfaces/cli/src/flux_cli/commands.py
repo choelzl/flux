@@ -1011,10 +1011,10 @@ def cmd_knowledge_show(args: argparse.Namespace) -> int:
     return 0
 
 
-_NEW_README = {
+_EXAMPLE_README = {
     "python": """# {name}
 
-A Python problem for Flux, written by `flux new {name} --kind python`. The model writes
+A Python problem for Flux, written by `flux example python {name}`. The model writes
 `count_primes(n)`; `check.py` refuses a wrong one (the gate); `bench.py` times the survivors
 (the stage); the loop keeps the fastest and asks for faster.
 
@@ -1033,7 +1033,7 @@ put your own cases in `check.py` and your own workload in `bench.py`.
 """,
     "rtl": """# {name}
 
-An RTL problem for Flux, written by `flux new {name} --kind rtl`. The model writes the module;
+An RTL problem for Flux, written by `flux example rtl {name}`. The model writes the module;
 `flux rtl test` proves it against `golden.py` on Verilator (the gate); `flux rtl measure` times
 it with Yosys and OpenSTA, then places it with OpenROAD on ASAP7 (the stages).
 
@@ -1051,8 +1051,8 @@ golden models (floats, clocks, tolerances).
 """,
     "rtl-sweep": """# {name}
 
-A hardware design-space sweep for Flux with no model, written by `flux new {name} --kind
-rtl-sweep`. `gen.py` spells one module per point of the document's `flow.dse.space`; `flux rtl test`
+A hardware design-space sweep for Flux with no model, written by `flux example
+rtl-sweep {name}`. `gen.py` spells one module per point of the document's `flow.dse.space`; `flux rtl test`
 proves each against `golden.py` on Verilator; `flux rtl measure` synthesises the survivors with
 Yosys and OpenSTA on ASAP7.
 
@@ -1065,11 +1065,11 @@ Yosys and OpenSTA on ASAP7.
     flux task run problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
 
 Add an architecture to `gen.py` and its name to `flow.dse.space`, or add knobs (widths, pipeline
-depth, table size). For placed numbers, add the `confirm` stage from `flux new --kind rtl`.
+depth, table size). For placed numbers, add the `confirm` stage of `flux example rtl`.
 """,
     "tune": """# {name}
 
-A tuning problem for Flux, written by `flux new {name} --kind tune`. No model and no generated
+A tuning problem for Flux, written by `flux example tune {name}`. No model and no generated
 code: every point of the document's `flow.dse.space` is a setting, handed to the gate and the stage as
 `{{knob}}` placeholders. `check.py` refuses a setting that breaks the result; `bench.py` measures
 the rest; the fastest wins.
@@ -1090,7 +1090,7 @@ parameters, a training script with hyperparameters. For a space too big to sweep
 """,
     "sweep": """# {name}
 
-A design-space sweep for Flux with no model, written by `flux new {name} --kind sweep`.
+A design-space sweep for Flux with no model, written by `flux example sweep {name}`.
 `render.py` writes one candidate per point of the document's `flow.dse.space`; `check.py` refuses a
 wrong one; `bench.py` times the survivors; the fastest wins.
 
@@ -1109,8 +1109,8 @@ sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
 }
 
 
-#: What each `flux new` kind is, in a line (the web's "Start from an example", D719).
-NEW_KINDS = {
+#: The worked examples (D825: `flux example KIND NAME`; `flux new` writes the baseline alone), each in a line.
+EXAMPLES = {
     "sweep": "A script writes every point of a knob space; the fastest wins. No model needed.",
     "tune": "Knobs go straight to your own commands (build flags, block sizes). No model needed.",
     "python": "A model writes a Python function; a checker and a benchmark judge it.",
@@ -1119,42 +1119,66 @@ NEW_KINDS = {
 }
 
 
-def template_files(name: str, kind: str) -> list[tuple[str, str]]:
-    """`flux new`'s problem of `kind` named `name`: (file name, text) pairs, the document as
-    `problem.yaml` (D786: in a folder named `name`, its id), and its README."""
+def example_files(name: str, kind: str) -> list[tuple[str, str]]:
+    """A worked example of `kind` named `name` (D825): (file name, text) pairs from
+    `flux_cli/examples/<kind>/`, the document as `problem.yaml`, and its README."""
     from pathlib import Path
 
-    if kind not in NEW_KINDS:
-        raise ValueError(f"a kind is one of {', '.join(NEW_KINDS)}")
-    source = Path(__file__).with_name("templates") / kind
+    if kind not in EXAMPLES:
+        raise ValueError(f"an example is one of {', '.join(EXAMPLES)}")
+    source = Path(__file__).with_name("examples") / kind
     out = [(f.name, f.read_text().replace("__NAME__", name))
            for f in sorted(source.iterdir()) if f.is_file()]
-    return [*out, ("README.md", _NEW_README[kind].format(name=name))]
+    return [*out, ("README.md", _EXAMPLE_README[kind].format(name=name))]
 
 
-def cmd_new(args: argparse.Namespace) -> int:
-    """`flux new NAME --kind python|rtl|sweep`: a working problem from
-    `flux_cli/templates/<kind>/`, with its README."""
+def baseline_files(name: str) -> list[tuple[str, str]]:
+    """A loop's baseline (D825): the skeleton `problem.yaml` -- every part, empty or commented with
+    what goes there -- and the README of what each part of the folder is for. Nothing of a case."""
+    from pathlib import Path
+
+    source = Path(__file__).with_name("baseline")
+    return [(f.name, f.read_text().replace("__NAME__", name)) for f in sorted(source.iterdir()) if f.is_file()]
+
+
+def _write_folder(name: str, where: str | None, files: list[tuple[str, str]], what: str) -> Any:
     import re as _re
     from pathlib import Path
 
-    name = args.name
     if not _re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
-        print(f"flux new: {name!r} is not a name (a letter, then letters, digits or _)")
-        return 2
-    target = Path(args.dir) / name if args.dir else Path(name)     # D786: the folder is the problem, its name the id
+        print(f"flux {what}: {name!r} is not a name (a letter, then letters, digits or _)")
+        return None
+    target = Path(where) / name if where else Path(name)     # D786: the folder is the problem, its name the id
     if target.exists() and any(target.iterdir()):
-        print(f"flux new: {target} exists and is not empty; choose another name or --dir")
-        return 2
+        print(f"flux {what}: {target} exists and is not empty; choose another name or --dir")
+        return None
     target.mkdir(parents=True, exist_ok=True)
-    written = []
-    for rel, text in template_files(name, args.kind):
+    for rel, text in files:
         (target / rel).write_text(text)
-        written.append(rel)
-    doc = target
-    print(f"wrote {target}/: {', '.join(written)}")
+    return target
+
+
+def cmd_new(args: argparse.Namespace) -> int:
+    """`flux new NAME` (D825): the baseline of a loop -- the skeleton problem.yaml, the README of the
+    folder's parts, an empty library/ -- to fill in."""
+    target = _write_folder(args.name, args.dir, baseline_files(args.name), "new")
+    if target is None:
+        return 2
+    (target / "library").mkdir(exist_ok=True)
+    print(f"wrote {target}/: problem.yaml (fill it in), README.md (what each part is for), library/")
+    print(f"next: fill in problem.yaml, then\n  flux task check {target}\n  flux task run {target} --passes 1")
+    return 0
+
+
+def cmd_example(args: argparse.Namespace) -> int:
+    """`flux example KIND NAME` (D825): a worked example that runs -- a sweep, a tuning, a Python or an
+    RTL problem -- with its README."""
+    target = _write_folder(args.name, args.dir, example_files(args.name, args.kind), "example")
+    if target is None:
+        return 2
+    print(f"wrote {target}/: {', '.join(rel for rel, _t in example_files(args.name, args.kind))}")
     points = {"sweep": 6, "rtl-sweep": 6, "tune": 15}.get(args.kind, 1)     # D738: a pass a point
-    print(f"next:\n  flux task check {doc}\n  flux task run {doc} --passes {points}"
+    print(f"next:\n  flux task check {target}\n  flux task run {target} --passes {points}"
           + (" --screen-only" if args.kind == "rtl" else ""))
     return 0
 

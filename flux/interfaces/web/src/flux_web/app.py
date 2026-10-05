@@ -143,6 +143,10 @@ class AgentNew(BaseModel):               # D807: an agent the admin adds -- a na
     bin: str = Field(default="", max_length=1024)
 
 
+class EmptyIn(BaseModel):                # D825: a loop's baseline
+    name: str = Field(max_length=64)
+
+
 class CloneIn(BaseModel):                # D824: a loop's problem into a new loop of one's own
     to: str = Field(max_length=64)
     workbench: bool = False
@@ -1479,6 +1483,21 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if body.app and not done:
             raise HTTPException(404, f"nothing to migrate in {body.user}/{body.app}")
         return {"done": done, "migrated": sum(d["status"] == "migrated" for x in done for d in x["documents"])}
+
+    @app.post("/api/apps/new-empty")
+    def new_empty(body: EmptyIn, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A loop's baseline (D825) -- the skeleton problem.yaml, the README of the folder's parts, an
+        empty library/ -- to fill in with the configurator. Nothing of a case."""
+        from flux_cli.commands import baseline_files
+
+        name = body.name.strip()
+        try:
+            meta = ws(user).create(name, [(rel, text.encode()) for rel, text in baseline_files(name)])
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        (ws(user).app(name) / "library").mkdir(exist_ok=True)
+        store.audit(user.name, "empty loop", name)
+        return {"name": name, **meta}
 
     @app.post("/api/apps/{name}/clone")
     def clone_loop(name: str, body: CloneIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

@@ -74,8 +74,8 @@ Measured in this project, with the hosted `qwen3.6-35b-a3b-apex` (a 35B mixture 
 
 | problem | result |
 |---|---|
-| `flux new --kind python` (count primes) | passes on the first draft in seconds; later passes make it about 2x faster |
-| `flux new --kind rtl` (8-bit adder) | passes on the first draft; 4378 MHz on the synthesis screen, 28 s |
+| `flux example python` (count primes) | passes on the first draft in seconds; later passes make it about 2x faster |
+| `flux example rtl` (8-bit adder) | passes on the first draft; 4378 MHz on the synthesis screen, 28 s |
 | `mul8` (Booth or Baugh-Wooley, `a * w` not allowed) | one pass each on two dates (26 min, 4 drafts): the best that compiled failed 22 of 49 vectors, then all 49; it needs several passes or a stronger model |
 | a combinational FP16 GELU within 1 ULP, from a plain prompt, RTL directly | after hours and about 60 attempts, no draft compiled: SystemVerilog syntax and FP16 decoding were the walls |
 | the same GELU, the model writing a Python prototype (`prototype: true`) | the first to pass was a table of the answers; under the formula rules (D616) it stalled at 24,196 of 65,536 inputs wrong: one fixed-point format for every input, then x/2 across the middle range |

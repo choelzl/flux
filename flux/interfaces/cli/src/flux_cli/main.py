@@ -16,7 +16,7 @@ from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_example, cmd_log, cmd_probe)
 from flux_evaluator_abi import available_evaluators
 
 
@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="flux",
         description="Flux: an AI-driven design-space exploration loop for hardware. A model or a coding agent "
                     "proposes designs, real tools check and measure them, the loop decides and keeps a record.",
-        epilog="start with:\n  flux new myproblem --kind python|rtl|sweep|tune|rtl-sweep\n"
+        epilog="start with:\n  flux new myloop            (the baseline to fill in)\n  flux example sweep demo    (a worked example: sweep|tune|python|rtl|rtl-sweep)\n"
                "  flux task check <folder>\n  flux task run <folder>\n"
                "  flux ask \"what you want\" --file spec.pdf\ndocs: README.md and docs/usage-guide.md",
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -109,16 +109,21 @@ def build_parser() -> argparse.ArgumentParser:
     st_p.set_defaults(func=cmd_selftest)
 
     new_p = subparsers.add_parser(
-        "new", help="Write a working problem to start from: a document and its checker, ready to run and change.")
-    new_p.add_argument("name", help="The problem's name (letters, digits, _): its id, and its folder unless --dir.")
-    new_p.add_argument("--kind", choices=("python", "rtl", "sweep", "tune", "rtl-sweep"), default="python",
-                       help="python: the model writes a function, a checker and a benchmark judge it (default); "
-                            "rtl: the model writes a module, Verilator and ASAP7 judge it; "
-                            "sweep: a script renders every point of a knob space, no model needed; "
-                            "tune: the knobs go straight to your own commands (build flags, block sizes, hyperparameters), no model; "
-                            "rtl-sweep: a script spells a module per knob point, Verilator and Yosys judge them, no model.")
+        "new", help="Write a loop's baseline to fill in: the skeleton problem.yaml, a README of the folder's parts, library/ (D825).")
+    new_p.add_argument("name", help="The loop's name (letters, digits, _): its id, and its folder unless --dir.")
     new_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
     new_p.set_defaults(func=cmd_new)
+    ex_p = subparsers.add_parser(
+        "example", help="Write a worked example that runs (D825): sweep, tune, python, rtl or rtl-sweep.")
+    ex_p.add_argument("kind", choices=("python", "rtl", "sweep", "tune", "rtl-sweep"),
+                      help="python: the model writes a function, a checker and a benchmark judge it; "
+                           "rtl: the model writes a module, Verilator and ASAP7 judge it; "
+                           "sweep: a script renders every point of a knob space, no model needed; "
+                           "tune: the knobs go straight to your own commands (build flags, block sizes, hyperparameters), no model; "
+                           "rtl-sweep: a script spells a module per knob point, Verilator and Yosys judge them, no model.")
+    ex_p.add_argument("name", help="Its name (letters, digits, _): its id, and its folder unless --dir.")
+    ex_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
+    ex_p.set_defaults(func=cmd_example)
 
     co_p = subparsers.add_parser(
         "consult", help="A question about a loop, answered by an agent that reads it and changes nothing (D705).")

@@ -4,7 +4,7 @@ What you can change to try something new, from the cheapest to the deepest, and 
 extension point is. **Stable** means it will keep working across releases. **Evolving** means it
 works and is tested, but its shape may still change.
 
-Start with `flux new NAME --kind python|rtl|sweep`: it writes a problem that runs, and every
+Start with `flux example python|rtl|sweep NAME`: it writes a problem that runs, and every
 section below changes one part of it.
 
 ## 1. The problem document (stable)
@@ -37,7 +37,7 @@ in the report).
 `flow.generate`:
 - `model` (the default): the model writes it and repairs it from the gate's output.
 - `{command: "..."}`: a script renders it. With a space (`flow.orchestrate.space`), the script runs once per point with
-  the knobs as placeholders (`flux new --kind sweep`).
+  the knobs as placeholders (`flux example sweep`).
 - `{by: opencode|claude|codex}` or `{by: {command: [...]}, timeout_s: N, questions:
   decide|model|operator}`: a coding agent writes it in a work directory. It does not compile or
   test: the loop runs the gate and brings a failure back to its session (D673, D674).

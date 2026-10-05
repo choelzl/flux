@@ -36,7 +36,7 @@ any OpenAI-compatible server (`FLUX_REMOTE_BASE_URL`, `FLUX_REMOTE_MODEL`,
 ## 1. Start from a template
 
 ```bash
-flux new isqrt --kind rtl
+flux example rtl isqrt
 ```
 
 This writes `isqrt/` with a problem document, a golden model and a README. It runs as it
@@ -184,7 +184,7 @@ budget: {steps: 12}  # every batch is a step: enough for all three phases
 On the `rtl-sweep` template (its knobs are `arch` and `chunk`) with 12 steps, `coarse` swept
 the architectures, `fine` moved `chunk` and raised fmax from 3,166 to 3,577 MHz, then `ideas`
 asked the model. With the template's `steps: 1` only the first phase runs.
-`flux new NAME --kind rtl-sweep` starts from this shape. The policies are `sweep`,
+`flux example rtl-sweep NAME` starts from this shape. The policies are `sweep`,
 `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto` and `model` (the model proposes). The
 [cookbook](cookbook.md) says which suits which space.
 
@@ -192,9 +192,9 @@ asked the model. With the template's `steps: 1` only the first phase runs.
 
 | you have | start with |
 |---|---|
-| a Python function to write and speed up | `flux new NAME --kind python` |
-| a program whose settings to tune | `flux new NAME --kind tune` |
-| a script that writes designs from knobs | `flux new NAME --kind sweep` |
+| a Python function to write and speed up | `flux example python NAME` |
+| a program whose settings to tune | `flux example tune NAME` |
+| a script that writes designs from knobs | `flux example sweep NAME` |
 | only a description and some files | `flux ask "what you want" --file spec.pdf` |
 | an accelerator architecture for a workload | `applications/npu_gemm/`: a script writes the architecture, ZigZag measures it |
 

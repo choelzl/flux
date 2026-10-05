@@ -1,6 +1,6 @@
 # Cookbook: which recipe for which problem
 
-Each recipe says which `flux new` kind to start from and which lines of the problem document to
+Each recipe says which `flux example` to start from and which lines of the problem document to
 change. The document keys are in
 [author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md), and the extension
 points in [extending.md](extending.md).
@@ -9,11 +9,11 @@ points in [extending.md](extending.md).
 
 | you have | start from | a model? |
 |---|---|---|
-| a program with settings to tune (flags, block sizes, hyperparameters) | `flux new NAME --kind tune` | no |
-| a script that writes a design from knobs (any language) | `flux new NAME --kind sweep` | no |
-| a hardware family you can spell from knobs | `flux new NAME --kind rtl-sweep` | no |
-| a function you want written and made fast | `flux new NAME --kind python` | yes |
-| a hardware module you want written | `flux new NAME --kind rtl` | yes |
+| a program with settings to tune (flags, block sizes, hyperparameters) | `flux example tune NAME` | no |
+| a script that writes a design from knobs (any language) | `flux example sweep NAME` | no |
+| a hardware family you can spell from knobs | `flux example rtl-sweep NAME` | no |
+| a function you want written and made fast | `flux example python NAME` | yes |
+| a hardware module you want written | `flux example rtl NAME` | yes |
 | only a description, a spec, some files | `flux ask "..." --file spec.pdf` | yes |
 
 ## Tuning: knobs into your own commands

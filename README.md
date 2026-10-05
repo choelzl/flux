@@ -27,7 +27,7 @@ it tried. Website: <https://choelzl.github.io/flux/>.
 2. Write a ready-to-run problem, then run it:
 
    ```bash
-   .venv/bin/flux new primes --kind sweep
+   .venv/bin/flux example sweep primes
    .venv/bin/flux task run primes --passes 6    # a pass a point
    ```
 
@@ -141,7 +141,7 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 ## Your own problem
 
 ```bash
-flux new myproblem --kind rtl        # or python, sweep, rtl-sweep, tune
+flux example rtl myproblem        # or python, sweep, rtl-sweep, tune
 flux task check myproblem
 flux task run myproblem --passes 1
 ```

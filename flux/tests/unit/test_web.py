@@ -177,7 +177,7 @@ def test_before_a_start_the_check_is_known_for_the_inputs_as_they_are(server, tm
     from flux_cli.main import main
 
     app, _ = server
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
@@ -244,7 +244,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     from flux_loop.journal import read_events
 
     app, _ = server
-    assert main(["new", "--kind", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200

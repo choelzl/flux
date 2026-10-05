@@ -1,6 +1,6 @@
 # primes
 
-A Python problem for Flux, written by `flux new primes --kind python`. The model writes
+A Python problem for Flux, written by `flux example python primes`. The model writes
 `count_primes(n)`; `check.py` refuses a wrong one (the gate); `bench.py` times the survivors
 (the stage); the loop keeps the fastest and asks for faster.
 

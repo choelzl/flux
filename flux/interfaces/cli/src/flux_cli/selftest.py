@@ -31,7 +31,7 @@ def _flux(*args: str, cwd: Path, timeout: float) -> subprocess.CompletedProcess:
 def _decided(cwd: Path, kind: str, timeout: float, *extra: str, passes: int = 1) -> tuple[bool, str]:
     """`flux new` of this kind, run for `passes` passes: (a decision was made, what it was or why not)."""
     name = f"st_{kind.replace('-', '_')}"
-    made = _flux("new", name, "--kind", kind, cwd=cwd, timeout=120)
+    made = _flux("example", kind, name, cwd=cwd, timeout=120)
     if made.returncode != 0:
         return False, (made.stdout + made.stderr).strip().splitlines()[-1:][0] if (made.stdout + made.stderr).strip() else "flux new failed"
     return _run_doc(cwd / name / "problem.yaml", cwd, timeout, *extra, passes=passes)
@@ -75,8 +75,8 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             True if not rtl_tools else None,
             "verilator, yosys, openroad" if not rtl_tools
             else f"missing {', '.join(rtl_tools)}: the RTL checks skip (use `nix develop`)"))
-        check("a sweep, no model (flux new --kind sweep)", lambda: _decided(work, "sweep", 300, passes=6))         # D738: a pass a point
-        check("an RTL sweep (flux new --kind rtl-sweep)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
+        check("a sweep, no model (flux example sweep)", lambda: _decided(work, "sweep", 300, passes=6))         # D738: a pass a point
+        check("an RTL sweep (flux example rtl-sweep)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
               else _decided(work, "rtl-sweep", 900, "--screen-only", passes=6))
         if args.full:
             check("the README's first run (adder16)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
@@ -90,7 +90,7 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             prop = OpenAIChatProposer(args.model)
             down = prop.preflight()
             check("the model server", lambda: (not down, down or describe_model(prop)))
-            check("a problem the model writes (--kind python)", lambda: (None, "the model server is not ready") if down
+            check("a problem the model writes (flux example python)", lambda: (None, "the model server is not ready") if down
                   else _decided(work, "python", float(args.model_timeout), *(("--model", args.model) if args.model else ())))
         agent = next((a for a in ("opencode", "claude", "codex") if shutil.which(a)), None)
         check("a coding agent on PATH", lambda: (bool(agent) or None, agent or "none of opencode, claude, codex"))
