@@ -398,3 +398,35 @@ def test_only_out_and_workbench_are_kept_the_rest_read_only(monkeypatch, tmp_pat
     assert f"{here}:{here}:ro" in vols and not any(v.endswith(":O") for v in vols)
     assert f"{p}/out:{p}/out" in vols and f"{p}/workbench:{p}/workbench" in vols
     assert any(c.startswith("/tmp:") for c in cmd), "scratch: the container's own /tmp"
+
+
+def test_a_rogue_loop_is_contained_by_the_config(monkeypatch, tmp_path):
+    """D851: the containment guarantees from the launch alone, so they hold where no container runs.
+    A loop's commands are arbitrary; the sandbox is the boundary. The writable surface is the loop's
+    own folders and nothing else; sensitive host paths are never writable, and the ones that would be
+    an escape are never mounted at all; the hardening flags are all in place."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.delenv("FLUX_SANDBOXED", raising=False)
+    args = _args(tmp_path)
+    ro, rw = sandbox.mounts_for(args, "task run")
+    home, app = str(tmp_path / "p"), sandbox.app_dir(args, "task run")
+    # the writable surface is exactly the loop's own folders -- out/, workbench/, the record, the app tmp
+    assert set(rw) == {f"{home}/out", f"{home}/workbench", str(Path(args.db).parent), str(app / "tmp")}, rw
+    # the problem's own folder is read-only (a loop cannot rewrite its own document or scripts)
+    assert home in ro and home not in rw
+    # nothing a loop writes escapes the loop: no writable path is outside its own tree or the record
+    own = (home, str(Path(args.db).parent), str(app))
+    assert all(any(w == o or w.startswith(o + "/") for o in own) for w in rw), rw
+    # paths that would be an escape or a leak are never mounted -- not even read-only
+    for danger in (str(Path.home() / ".ssh"), str(Path.home() / ".config" / "flux"),
+                   "/var/run/docker.sock", "/run/docker.sock", "/etc", "/root", str(sandbox._local())):
+        assert not any(m == danger or m.startswith(danger + "/") for m in rw), f"{danger} writable"
+        assert danger not in ro, f"{danger} mounted"
+    # the hardening flags, on every launch
+    cmd = sandbox.container_argv(["flux", "task", "run"], args, "task run", "flux-t", None, "podman")
+    assert "--read-only" in cmd and "no-new-privileges" in cmd
+    assert cmd[cmd.index("--cap-drop") + 1] == "ALL"
+    assert cmd[cmd.index("--pids-limit") + 1].isdigit() and int(cmd[cmd.index("--pids-limit") + 1]) > 0
+    # with an allowlist the container has no network of its own (D717); the proxy is the only route
+    boxed = sandbox.container_argv(["flux"], args, "task run", "flux-t", str(tmp_path / "proxy"), "podman")
+    assert boxed[boxed.index("--network") + 1] == "none"
