@@ -3,24 +3,24 @@
 
 statement: >-
   An unsigned 16-bit adder (module `adder16`, inputs `a` and `b`, 17-bit sum `s`): the
-  smallest that makes 3000 MHz placed on ASAP7, chosen from the architectures gen.py spells.
+  smallest that makes 2900 MHz placed on ASAP7, chosen from the architectures gen.py spells.
 language: verilog
 
 flow:
   orchestrate:
     policy: sweep
     space:
-      arch: [behavioral, ripple, carry_select, kogge_stone]
-      block: [2, 4, 8]             # the carry-select block size; the others ignore it
-  generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
+      # D866: one knob, six designs -- carry-select's block size is in its name
+      arch: [behavioral, ripple, carry_select_2, carry_select_4, carry_select_8, kogge_stone]
+  generate: {command: "{python} {home}/gen.py {artifact} {arch}"}
   test: flux rtl test {artifact} --golden {home}/golden.py
   measure:
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 300
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 300
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 333
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 333
   select: {finalists: 2}
 
 objectives:
-  - {metric: fmax_mhz, direction: maximize, goal: 3000}
+  - {metric: fmax_mhz, direction: maximize, goal: 2900}
   - {metric: area_um2, direction: minimize}
 
 budget:

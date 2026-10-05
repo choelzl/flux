@@ -4,22 +4,21 @@
 statement: >-
   A combinational signed 8x8 -> 16-bit multiplier in SystemVerilog: module `mul8` with inputs
   `a` and `w` (`input logic signed [7:0]`) and output `p` (`output logic signed [15:0]`), the
-  smallest that makes 1000 MHz placed on ASAP7. Build the product from partial products (a
-  Booth recoding, a compression tree, a Baugh-Wooley array) rather than writing `a * w`.
+  smallest that makes 1600 MHz placed on ASAP7.
 contract: >-
-  One module named exactly `mul8`, purely combinational, Verilog-2001 constructs only
-  (wire, assign, always @(*), case; no SystemVerilog casts, no functions, no $ system
-  tasks). p must equal a * w as signed integers for every input.
+  One module named exactly `mul8`, purely combinational, synthesizable SystemVerilog (logic,
+  assign, always_comb; no $ system tasks, no initial blocks). p must equal a * w as signed
+  integers for every input.
 
 flow:
   test: flux rtl test {artifact} --golden {home}/golden.py
   measure:
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000
+    screen: flux rtl measure {artifact} --stage synth --clock-ps 625
+    confirm: flux rtl measure {artifact} --stage place --clock-ps 625
   select: {finalists: 2}
 
 objectives:
-  - {metric: fmax_mhz, direction: maximize, goal: 1000}
+  - {metric: fmax_mhz, direction: maximize, goal: 1600}
   - {metric: area_um2, direction: minimize}
 
 budget:

@@ -1,10 +1,9 @@
 # mul8/ -- an RTL problem with no code of its own
 
 A combinational signed 8x8 -> 16-bit multiplier in SystemVerilog (module `mul8`, inputs `a`
-and `w`, output `p`): the smallest one that makes 1000 MHz placed on ASAP7, built from partial
-products (Booth recoding, a compression tree, a Baugh-Wooley array) rather than `a * w`. A
-model writes the RTL; Flux checks it and measures it. It is the smallest complete example of
-a problem where the design is written, not enumerated.
+and `w`, output `p`): the smallest one that makes 1600 MHz placed on ASAP7. A model writes
+the RTL; Flux checks it and measures it. It is the smallest complete example of a problem
+where the design is written, not enumerated.
 
 ## The files
 

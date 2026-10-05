@@ -34,8 +34,8 @@ The tree follows the kinds of module the architecture is built from:
 
 | application | the problem | the chain | the model's roles |
 |---|---|---|---|
-| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 3 GHz placed, from four architectures a script writes | `flux rtl test` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
-| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1 GHz placed | `flux rtl test` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
+| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `flux rtl test` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
+| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `flux rtl test` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
 | [`gelu_fp16/`](applications/gelu_fp16/) | an FP16 GELU within 1 ULP on every input, as a formula | `flux rtl proto` on the Python prototype, the loop's spelling to SystemVerilog, Yosys screen, OpenROAD placement | a coding agent writes the prototype |
 | [`npu_gemm/`](applications/npu_gemm/) | the smallest 1-D accelerator for a two-GEMM workload that makes 500 cycles | valid Architecture IR, ZigZag's cycles and energy, a first-order area | none: a sweep over PEs and buffer size |
 | [`primes/`](applications/primes/) | not hardware: the fastest Python `count_primes(n)` | `check.py` against a reference, `bench.py` timing | writes it, then makes it faster pass after pass |

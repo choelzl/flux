@@ -166,7 +166,7 @@ def test_the_adder16_dse_runs_with_no_world(tmp_path):
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "a.db"), "--screen-only", "--passes", "1",
              "--out", str(tmp_path / "adder16.v"), timeout=900)
     assert r.returncode in (0, 1), r.stdout[-3000:] + r.stderr[-2000:]
-    assert "sweep: 12 point(s) of 12" in r.stdout and "DECISION" in r.stdout, r.stdout[-3000:]
+    assert "sweep: 6 point(s) of 6" in r.stdout and "DECISION" in r.stdout, r.stdout[-3000:]
     assert "module adder16" in (tmp_path / "adder16.v").read_text()
 
 

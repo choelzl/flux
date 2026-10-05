@@ -1,6 +1,6 @@
-"""The adder generator the document sweeps: `gen.py <out> <arch> <block>` writes one
-16-bit adder. `block` is the carry-select block size; the other architectures ignore it (the
-loop's cache sees the same text and measures it once)."""
+"""The adder generator the document sweeps: `gen.py <out> <arch>` writes one 16-bit adder.
+`carry_select_<block>` names the carry-select block size (2, 4 or 8): six architectures, one
+knob (D866)."""
 
 import sys
 
@@ -8,11 +8,11 @@ N = 16
 HEAD = f"module adder16(input [{N - 1}:0] a, input [{N - 1}:0] b, output [{N}:0] s);\n"
 
 
-def behavioral(block: int) -> list[str]:
+def behavioral() -> list[str]:
     return ["  assign s = a + b;"]
 
 
-def ripple(block: int) -> list[str]:
+def ripple() -> list[str]:
     out = [f"  wire [{N}:0] c;", "  assign c[0] = 1'b0;"]
     for i in range(N):
         out.append(f"  assign s[{i}] = a[{i}] ^ b[{i}] ^ c[{i}];")
@@ -35,7 +35,7 @@ def carry_select(block: int) -> list[str]:
     return out
 
 
-def kogge_stone(block: int) -> list[str]:
+def kogge_stone() -> list[str]:
     """Parallel prefix: log2(N) levels of (generate, propagate) pairs at doubling distance."""
     out = [f"  wire [{N - 1}:0] g0 = a & b;", f"  wire [{N - 1}:0] p0 = a ^ b;"]
     level, d = 0, 1
@@ -56,9 +56,15 @@ def kogge_stone(block: int) -> list[str]:
     return out
 
 
+ARCHS = {"behavioral": behavioral, "ripple": ripple, "carry_select_2": lambda: carry_select(2),
+         "carry_select_4": lambda: carry_select(4), "carry_select_8": lambda: carry_select(8),
+         "kogge_stone": kogge_stone}
+
+
 if __name__ == "__main__":
-    path, arch, block = sys.argv[1], sys.argv[2], int(sys.argv[3])
-    body = {"behavioral": behavioral, "ripple": ripple, "carry_select": carry_select,
-            "kogge_stone": kogge_stone}[arch](block)
+    path, arch = sys.argv[1], sys.argv[2]
+    if arch not in ARCHS:
+        sys.exit(f"gen.py: no architecture {arch!r}; one of {', '.join(ARCHS)}")
+    body = ARCHS[arch]()
     with open(path, "w") as f:
         f.write(HEAD + "\n".join(body) + "\nendmodule\n")
