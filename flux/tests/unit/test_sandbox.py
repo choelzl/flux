@@ -64,12 +64,14 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     monkeypatch.setenv("FLUX_SANDBOX_ALLOW", "secret-host.example")
     monkeypatch.setenv("FLUX_SANDBOX_NET", "allowlist")
     monkeypatch.setenv("FLUX_SANDBOX_REFUSALS", "/data/network-refused.jsonl")
+    monkeypatch.setenv("CODEX_HOME", str(Path.home() / ".codex"))
     cmd = sandbox.container_argv(["flux", "task", "run", "x"], _args(tmp_path), "task run", "flux-t", None, "docker")
     env = sandbox.container_env(cmd)
     assert "SSH_AUTH_SOCK" not in env and "GITHUB_TOKEN" not in env and env["FLUX_REMOTE_API_KEY"] == "k"
     assert env["FLUX_SANDBOXED"] == "1" and env["FLUX_SANDBOX_NAME"] == "flux-t"
     assert not {"FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS"} & set(env), "D716: the proxy's, outside"
     assert env["OPENCODE_SKIP_SAFE_CHECK"] == "1", "D714: OpenCode inside the sandbox"
+    assert "CODEX_HOME" not in env, "D847: the host's agent folder is not mounted; the login is in the Flux home"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
     app = sandbox.app_dir(_args(tmp_path), "task run")
     import os as _os

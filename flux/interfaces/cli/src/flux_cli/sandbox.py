@@ -50,7 +50,10 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-
 _DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
-         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS")
+         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS",
+         # D847: an agent's own folder on this machine (the ChatGPT extension sets CODEX_HOME=~/.codex):
+         # not mounted inside, where the agent's login is in the Flux home
+         "CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR")
 _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_", "GOOGLE_APPLICATION")
 #: HOME inside (D744): the user's Flux home, at a path of its own -- this machine's folders under
 #: its own HOME (PATH folders, the flux source) are mounted at their own paths, and would otherwise
