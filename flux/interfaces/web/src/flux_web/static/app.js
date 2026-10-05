@@ -1489,6 +1489,8 @@ async function loopPage(name, owner, path = "") {
     const decisionCard = dec ? card("The decision", [
         h("div", { class: "decision-head" }, h("span", { class: "mono strong" }, dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
           h("span", { class: "muted" }, `measured at ${dec.shown}`)),
+        // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
+        r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Chosen as "), r.decided_by, ".") : "",
         h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => dec.numbers[m] != null).slice(0, 6).map(m => {
           const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
           return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : "") }, h("small", {}, m),

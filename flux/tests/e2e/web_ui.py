@@ -706,6 +706,8 @@ def flows(r: Run) -> None:
             rows = b.js("return [...document.querySelectorAll('#main .best-n tbody tr')].map(t => t.children[1].textContent)")
             first = next(d["name"] for d in ds if d.get("rank") == 1)
             r.check("the Overview's best are the ranking's, the best first", len(rows) >= 2 and rows[0].startswith(first), f"{rows} vs {first}")
+        said = b.js("const p = document.querySelector('#main .decided-by'); return p ? p.textContent : ''") if len(ds) >= 2 else "Chosen as"
+        r.check("the decision says why it was chosen (D815)", said.startswith("Chosen as"), said)
         r.clean("the decision and the best")
     r.step("the decision and the best", decision_and_best)
 

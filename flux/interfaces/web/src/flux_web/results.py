@@ -21,7 +21,7 @@ import threading
 import time
 from typing import Any
 
-__all__ = ["decision_of", "designs", "thin"]
+__all__ = ["decision_of", "decision_said", "designs", "thin"]
 
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
@@ -85,6 +85,24 @@ def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -
         except (OSError, ValueError):
             pass
     return str(name) if name else None
+
+
+def decision_said(db: str, campaign: str | None = None) -> str:
+    """Why the record's latest pass decided as it did (D815): its `decided_by` -- e.g. "the least
+    area_um2 at fmax_mhz >= 800" -- or ""."""
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        try:
+            row = con.execute("SELECT detail_json FROM campaign_events WHERE kind = 'conclusion' "
+                              + ("AND campaign_id = ? " if campaign else "") + "ORDER BY id DESC LIMIT 1",
+                              (campaign,) if campaign else ()).fetchone()
+        finally:
+            con.close()
+        return str((json.loads(row[0]) or {}).get("decided_by") or "") if row else ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _objectives(db: str) -> Any:

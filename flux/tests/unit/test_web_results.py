@@ -89,6 +89,10 @@ def test_the_decision_is_the_records_latest_pass_and_the_best_are_ranked_by_the_
     rec.conclude({"decision": "slow", "decided_by": "a test"})
     rec.close("paused")
     assert decision_of(db) == "slow"
+    from flux_web.results import decision_said
+
+    assert decision_said(db) == "a test", "D815: why, as the loop said it"
+    assert decision_said(str(tmp_path / "none.db")) == ""
     ans = tmp_path / "answer.json"
     ans.write_text('{"decision": {"name": "fast"}}')
     os.utime(ans, (time.time() - 3600, time.time() - 3600))

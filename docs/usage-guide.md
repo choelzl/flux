@@ -258,7 +258,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   What each view shows:
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits -- the decision is the record's latest
-    pass's (D809), so a loop that runs for days has one from its first pass on -- and the best 3, ranked
+    pass's (D809), so a loop that runs for days has one from its first pass on, with why it was chosen (D815: a limit
+    is a floor to meet; among the designs that meet every limit the next objective without one decides) -- and the best 3, ranked
     by the objectives' own rule over the deepest stage (also before any decision). A best-so-far chart per objective
     shows each measurement in order, the best as a step line, the limit dashed and the passes
     marked. Also the agent's open question, the latest notes and the newest workbench entries (under

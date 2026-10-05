@@ -1863,13 +1863,16 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         from .results import decision_of
 
         decision = decision_of(run["db"], ans, cid)             # D809: the record's latest pass's, while it runs too
+        from .results import decision_said
+
+        decided_by = decision_said(run["db"], cid)              # D815: why, as the loop said it
         listed = designs(run["db"], _stages(_w, name), decision, limit=20000)
         objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
                           for o in rep.objectives]                     # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
                 "rows_total": len(rep.rows),
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
-                "agent_turns": len(rep.agent_turns), "answer": answer, **listed}
+                "agent_turns": len(rep.agent_turns), "answer": answer, "decided_by": decided_by, **listed}
 
     def _stages(w: Workspace, name: str) -> list[dict[str, Any]]:
         """The document's stages (order, cutoffs) as the loader reads them; [] when it refuses."""
