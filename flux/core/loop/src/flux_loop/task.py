@@ -226,8 +226,8 @@ class PromptProblem(Problem):
         reworking the spelled RTL would be overwritten on the next spell. Others use the default."""
         cap = self.prototype()
         key = item.subgoal or "*"
-        if cap is None or getattr(cap, "language", "") != "python" or key not in state.prototypes:
-            return Problem.improve(self, item, state)
+        if item.explore or cap is None or getattr(cap, "language", "") != "python" or key not in state.prototypes:
+            return Problem.improve(self, item, state)     # D845: an explore is a new algorithm, not a cheaper one
         return self._cost_pass(item, state, key)
 
     def _cost_pass(self, item: Any, state: LoopState, key: str) -> tuple[Candidate | None, Any, str]:

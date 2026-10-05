@@ -353,7 +353,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
     started = time.monotonic()
     admitted_before = set(state.admitted)          # D506: what the record gave, before this pass
     # D845: a loop of one design -- no parts, no search over knobs -- builds one design a pass
-    one = not hunting and not goals and not getattr(problem, "subtasks", None)
+    one = not hunting and not goals
     built_before = state.built
     directed = False
     try:
@@ -573,7 +573,7 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     state.lessons.append(f"[direction] {pick}: {why}")
     if pick == "explore":
         return Improve(cand, f"This design stands. {said}", stage=stage, subgoal=None, explore=True)
-    return Improve(cand, f"This design stands; refine it. {said}", stage=stage, subgoal=None)
+    return Improve(cand, f"This design stands; refine it. {said}", stage=stage, subgoal=None, refine=True)
 
 
 def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) -> str:
@@ -626,6 +626,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
                           str(item.candidate.key())[:16], why=reason[:300])
         return []
     if cand is None:
+        say(f"  {item.candidate.name}: no design -- {' '.join(str(reason).split())[:240]}")
         state.refused.append((f"{item.candidate.name} (improve)", reason[:300]))
         _record_trial(state, item.candidate, item.subgoal, None, error=reason)
         return []
@@ -962,6 +963,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         state.fail_streak[key] = state.fail_streak.get(key, 0) + 1
         state.refused.append((f"{tag} (generate)", reason))
         _record_trial(state, None, sg, None, error=reason)
+        say(f"  {tag}: no design -- {' '.join(str(reason).split())[:240]}")      # said as it happens, not only in the report
         return
     state.fail_streak[key] = 0
     with _phase(f"test: judge {tag}", why=cand.name) as out:

@@ -114,6 +114,8 @@ class Improve:
     #: sent back because the campaign was at rest, not because a number fell short: goes straight
     #: to the generator, past the rested improve ladder (D593)
     explore: bool = False
+    #: a pass's direction (D845): the ladder's due step if any, else the generator reworks it -- never "stand"
+    refine: bool = False
 
 
 @dataclass(frozen=True)

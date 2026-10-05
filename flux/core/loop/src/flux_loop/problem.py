@@ -515,6 +515,8 @@ class GeneratorRole(_Role):
         loop, which is what `state.best` is for), and a template, catalog or solver source
         sees it as `Attempt.prior` with `Attempt.failure` carrying the numbers."""
         options = [] if item.explore else self.improve_options(item, state)   # D593: past the rested ladder
+        if item.refine:
+            options = [o for o in options if o.due]      # D845: a refine builds something; nothing due, the generator
         if options:
             pick = self.improve_choice(item, options, state)
             state.say(f"  improve {item.subgoal or item.candidate.name}: {pick.name} -- {pick.why[:140]}")
@@ -534,6 +536,7 @@ class GeneratorRole(_Role):
 
             key = item.subgoal or "*"
             keep = state.best.pop(key, None)
+            proto = state.prototypes.pop(key, None)       # a new design proves a new algorithm first
             brief = explore_brief(item.why, item.candidate, str(getattr(getattr(self, "task", None), "language", "") or ""))
             try:
                 if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
@@ -542,6 +545,8 @@ class GeneratorRole(_Role):
             finally:
                 if keep is not None:
                     state.best[key] = keep
+                if proto is not None and key not in state.prototypes:
+                    state.prototypes[key] = proto         # no new one proved: the standing one stays
         if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
             key = item.subgoal or "*"
             keep = state.best.get(key)

@@ -125,3 +125,22 @@ def test_the_rules_refine_while_the_decision_moves_then_explore_in_turn():
     assert choose(prob, state(["p#3"] * 4), standing, "")[0] == "refine", "then in turn"
     asked = SimpleNamespace(roles=lambda: SimpleNamespace(orchestrator=SimpleNamespace(direction=lambda p, s, lines: ("explore", "the front is flat"))))
     assert choose(asked, state(["p#3", "p#2"]), standing, "") == ("explore", "the orchestrator: the front is flat")
+
+
+def test_a_refine_never_stands_nothing_due_the_generator_reworks_it(tmp_path, monkeypatch):
+    """D845: a pass's refine builds something -- a ladder with nothing due ("stand") hands the
+    design to the generator instead of letting the pass build nothing."""
+    from flux_loop.types import Option
+
+    task = _digits(_fake(tmp_path), role="genok")
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    ran = []
+    monkeypatch.setattr(prob, "improve_options", lambda item, st: [Option("stand", "nothing due", due=False,
+                                                                          run=lambda: ran.append(1) or (None, None, "stands"))])
+    standing = Candidate("digits#1", "0\n1\n2\n3\n4\n5\n6\n7\n8")
+    cand, _built, why = prob.improve(Improve(standing, "refine it", refine=True), state)
+    assert not ran and cand is not None, why
+    ran.clear()
+    cand, _built, _why = prob.improve(Improve(standing, "make it better"), state)
+    assert ran and cand is None, "a send-back's ladder still may stand"
