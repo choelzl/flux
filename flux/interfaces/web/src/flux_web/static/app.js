@@ -879,7 +879,7 @@ function usageCard(u) {
       fig("Time", dur(t.seconds) || "0s", t.turns ? `${dur(t.seconds / t.turns)} a turn` : ""),
       fig("Tokens in", t.counted ? fmtTok(t.tokens_in) : "—", t.tokens_cached ? `${fmtTok(t.tokens_cached)} from the cache` : ""),
       fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", t.counted < t.turns ? `${t.turns - t.counted} turn(s) without a count (recorded since D694)` : ""),
-      fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "as the agents priced it" : "no agent priced its turns")),
+      fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "at the prices set, else the agent's own" : "no prices set (Agents and models)")),
     u.by.length > 1 ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i > 1 ? "num" : "" }, x)))),
       h("tbody", {}, u.by.map(b => h("tr", {}, h("td", { class: "strong" }, b.who), h("td", { class: "muted" }, b.kind),
         h("td", { class: "num mono" }, String(b.turns)), h("td", { class: "num mono" }, dur(b.seconds)),
@@ -3242,7 +3242,7 @@ async function adminUsers(body) {
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
     the admin's values a field falls back to when empty (a key only said to be set). */
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
-  FLUX_REMOTE_API_KEY: "Key",
+  FLUX_REMOTE_API_KEY: "Key", FLUX_REMOTE_PRICE_IN: "Price in (USD per 1M tokens)", FLUX_REMOTE_PRICE_OUT: "Price out (USD per 1M tokens)",
   FLUX_DEFAULT_AGENT: "Agent" };
 /** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables
     for it alone (`agentEnv(name)`: its rows and how to save one, or null). */
@@ -3253,13 +3253,15 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const inputs = {};
   const secret = new Set(st.secret);
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
+  const priceKeys = new Set(st.groups.flatMap(g => g.prices || []));
   const row = (k) => {
-    const fall = server ? server[k] : null, sec = secret.has(k);
-    const holder = (cur) => sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set");
+    const fall = server ? server[k] : null, sec = secret.has(k), price = priceKeys.has(k);
+    const holder = (cur) => sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set")
+      : price ? (fall ? `the admin's: $${fall}` : "not priced") : (fall ? `the server's: ${fall}` : "not set");
     // D820: a key is a secret of the server's, not a login: no password manager fills it, nor the field before it
     inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: sec ? "new-password" : "off", name: `flux-setting-${k}`,
       "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other", value: sec ? "" : (st.values[k] || ""),
-      placeholder: holder(st.values[k]) });
+      placeholder: holder(st.values[k]), ...(price ? { inputmode: "decimal", class: "price" } : {}) });
     const mark = saveMark(), clearBox = h("span", {});
     const drawClear = () => clearBox.replaceChildren(st.values[k] ? act("Clear", async () => {
       await save({ [k]: null }); st.values[k] = ""; inputs[k].value = ""; inputs[k].placeholder = holder(""); drawClear();
@@ -3290,8 +3292,18 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     const setHere = [...g.public, ...g.secret].filter(k => st.values[k] || (server && server[k])).length;
     const fold = (title, n, open, ...kids) => h("details", { class: "set-fold" + (title.startsWith("Variables") ? " agent-vars" : ""), open: open || null },
       h("summary", {}, title, n ? h("span", { class: "muted small" }, ` · ${n} set`) : h("span", { class: "muted small" }, " · none")), ...kids);
+    const prices = g.prices || [];
     const rows = [g.hint ? h("p", { class: "muted small" }, g.hint) : "", note ? h("p", { class: "small hint-line" }, note) : "",
-      ...g.public.map(row), ...g.secret.map(row)];
+      ...g.public.filter(k => !prices.includes(k)).map(row), ...g.secret.map(row), ...prices.map(row)];
+    // D835: a user prices only an endpoint of their own; on the server's, the admin's prices count
+    if (server && prices.length && inputs[g.endpoint]) {
+      const why = h("p", { class: "muted small price-said" });
+      const gate = () => { const own = !!inputs[g.endpoint].value.trim();
+        for (const k of prices) inputs[k].disabled = !own;
+        why.textContent = own ? "" : "Your own prices count with your own endpoint; on the server's, the admin's prices apply."; };
+      inputs[g.endpoint].addEventListener("input", gate); gate();
+      rows.push(why);
+    }
     const nVars = vars ? vars.rows.length + ((vars.server || []).length) : 0;
     const varsEl = vars ? fold(`Variables for ${g.label} alone`, nVars, nVars > 0,
       h("p", { class: "muted small" }, "Only this agent gets these (e.g. ANTHROPIC_API_KEY for an OpenCode); a variable for every agent goes on Every agent."),
@@ -3299,7 +3311,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
         envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "";
     const el = h("fieldset", { class: "set-group" + (panel ? " with-panel" : "") }, h("legend", {}, g.label), panel ? panel.el : "",
-      g.agent ? fold("Its model: endpoint, model, key", setHere, setHere > 0, ...rows) : rows,
+      g.agent ? fold("Its model: endpoint, model, key, prices", setHere, setHere > 0, ...rows) : rows,
       varsEl);
     return { g, el, own };
   });
@@ -3340,7 +3352,7 @@ async function accountPage() {
   show(head("Account", `Logged in as ${me.name}`),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
-      mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} as the agents priced it` : "", ".")) : "",
+      mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} at the prices set` : "", ".")) : "",
     // D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's
     // model; the variables every agent of yours gets
     card("My agents and models", [

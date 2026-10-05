@@ -157,3 +157,55 @@ def test_the_configurator_lists_edits_and_deletes_the_loops_own_files(server):
     assert bob.delete("/api/apps/x/file", params={"path": "x.problem.yaml"}, headers=H).status_code == 400, "not the document"
     assert bob.delete("/api/apps/x/file", params={"path": "../../x"}, headers=H).status_code == 400
     assert bob.delete("/api/apps/x/file", params={"path": "runs/loop.log"}, headers=H).status_code == 400
+
+
+def test_prices_are_the_admins_unless_a_user_names_their_own_endpoint(server, monkeypatch):
+    """D835: the admin prices Flux's model and each agent; a user's own prices count only with an
+    endpoint of their own; the built-in OpenCode on Flux's model takes Flux's model's prices."""
+    for k in ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT", "FLUX_OPENCODE_PRICE_IN", "FLUX_CLAUDE_PRICE_IN"):
+        monkeypatch.delenv(k, raising=False)
+    app, store = server
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_IN": "lots"}}, headers=H).status_code == 400
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_IN": "-1"}}, headers=H).status_code == 400
+    assert ada.put("/api/admin/settings", json={"values": {
+        "FLUX_REMOTE_BASE_URL": "https://llm.example/v1", "FLUX_REMOTE_MODEL": "qwen", "FLUX_REMOTE_PRICE_IN": "0.5",
+        "FLUX_REMOTE_PRICE_OUT": "1.5", "FLUX_CLAUDE_PRICE_IN": "3", "FLUX_CLAUDE_PRICE_OUT": "15"}}, headers=H).status_code == 200
+    groups = {g["id"]: g for g in bob.get("/api/settings").json()["groups"]}
+    assert groups["model"]["prices"] == ["FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"]
+    assert groups["claude"]["prices"] == ["FLUX_CLAUDE_PRICE_IN", "FLUX_CLAUDE_PRICE_OUT"]
+    # bob's own prices without an endpoint of his own: kept, not used
+    assert bob.put("/api/settings", json={"values": {"FLUX_REMOTE_PRICE_IN": "0", "FLUX_CLAUDE_PRICE_IN": "0"}}, headers=H).status_code == 200
+    env = run_env(store, store.user(name="bob"))
+    assert (env["FLUX_REMOTE_PRICE_IN"], env["FLUX_REMOTE_PRICE_OUT"]) == ("0.5", "1.5"), "the admin's, on the admin's endpoint"
+    assert (env["FLUX_CLAUDE_PRICE_IN"], env["FLUX_CLAUDE_PRICE_OUT"]) == ("3", "15")
+    assert (env["FLUX_OPENCODE_PRICE_IN"], env["FLUX_OPENCODE_PRICE_OUT"]) == ("0.5", "1.5"), "OpenCode on Flux's model"
+    # his own endpoints: his prices, and none of the admin's
+    bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "https://mine.example/v1", "FLUX_CLAUDE_BASE_URL": "https://c.example"}}, headers=H)
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_REMOTE_PRICE_IN"] == "0" and "FLUX_REMOTE_PRICE_OUT" not in env
+    assert env["FLUX_CLAUDE_PRICE_IN"] == "0" and "FLUX_CLAUDE_PRICE_OUT" not in env
+    assert env["FLUX_OPENCODE_PRICE_IN"] == "0", "OpenCode on his model: his price"
+    # a variable cannot stand in for a price
+    assert bob.put("/api/env", json={"name": "FLUX_CLAUDE_PRICE_IN", "value": "0"}, headers=H).status_code == 400
+
+
+def test_a_turn_is_priced_from_the_prices_set(monkeypatch):
+    """D835: tokens x USD per million; the prices set win over an agent's own figure, which stands without."""
+    from flux_llm.transcript import priced
+    from flux_loop.agent import AgentSpec, _priced
+
+    monkeypatch.delenv("FLUX_REMOTE_PRICE_IN", raising=False)
+    monkeypatch.delenv("FLUX_REMOTE_PRICE_OUT", raising=False)
+    assert priced("FLUX_REMOTE", 1000, 1000) == {}
+    monkeypatch.setenv("FLUX_REMOTE_PRICE_IN", "0.5")
+    monkeypatch.setenv("FLUX_REMOTE_PRICE_OUT", "2")
+    assert priced("FLUX_REMOTE", 2_000_000, 1_000_000) == {"cost_usd": 3.0, "priced": "set"}
+    spec = AgentSpec(tool="claude", argv=("claude",))
+    monkeypatch.delenv("FLUX_CLAUDE_PRICE_IN", raising=False)
+    monkeypatch.delenv("FLUX_CLAUDE_PRICE_OUT", raising=False)
+    used = {"tokens_in": 1_000_000.0, "tokens_out": 100_000.0, "cost_usd": 9.0}
+    assert _priced(spec, used) == {**used, "priced": "agent"}
+    monkeypatch.setenv("FLUX_CLAUDE_PRICE_IN", "3")
+    monkeypatch.setenv("FLUX_CLAUDE_PRICE_OUT", "15")
+    assert _priced(spec, used) == {"tokens_in": 1_000_000.0, "tokens_out": 100_000.0, "cost_usd": 4.5, "priced": "set"}

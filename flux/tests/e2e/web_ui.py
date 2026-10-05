@@ -805,6 +805,23 @@ def flows(r: Run) -> None:
         r.check("a user sets their own for one agent, over the server's", [x["name"] for x in mine["mine"]] == ["CORP_USER"]
                 and [x["name"] for x in mine["server"]] == ["CORP_REGION"], str(mine))
         r.clean("agent tabs and variables")
+        # D835: the admin prices Flux's model; a user's price field waits for an endpoint of their own
+        r.login("ada")
+        r.page("#/admin/models", "document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN')", "the model settings")
+        b.js("const i = document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN'); i.value = '0.4'; i.dispatchEvent(new Event('change')); return 1")
+        b.wait("(document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').closest('.set-row').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the price saved")
+        r.check("the admin sets a price, saved as it changes", json.loads(r.api("/admin/settings")["body"])["values"].get("FLUX_REMOTE_PRICE_IN") == "0.4")
+        r.login("bob")
+        r.page("#/account", "document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN')", "bob's model settings")
+        got = b.js("const i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN'); return [i.disabled, i.placeholder]")
+        r.check("a user's price waits for their own endpoint, the admin's shown", got == [True, "the admin's: $0.4"], str(got))
+        got = b.js("const e = document.querySelector('#set-me-FLUX_REMOTE_BASE_URL'), i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN');"
+                   "e.value = 'https://mine.example/v1'; e.dispatchEvent(new Event('input')); const on = !i.disabled;"
+                   "e.value = ''; e.dispatchEvent(new Event('input')); return [on, i.disabled]")
+        r.check("and opens once they name one", got == [True, True], str(got))
+        r.login("ada")
+        r.api("/admin/settings", "PUT", {"values": {"FLUX_REMOTE_PRICE_IN": None}})
+        r.clean("agent tabs and variables")
         r.login("ada")
         r.check("an added agent is removed", r.api("/admin/agents/corp", "DELETE")["status"] == 200)
         r.check("its variables go with it", "corp" not in json.loads(r.api("/admin/settings")["body"])["agent_env"])

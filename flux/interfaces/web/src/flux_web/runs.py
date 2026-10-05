@@ -90,7 +90,8 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
                     env.pop(k, None)
             vals = {k: mine[k] for k in keys if k in mine}
         else:
-            vals = {**{k: server[k] for k in keys if k in server}, **{k: mine[k] for k in keys if k in mine}}
+            # D835: a user's own prices count only with their own endpoint
+            vals = {**{k: server[k] for k in keys if k in server}, **{k: mine[k] for k in keys if k in mine and k not in g.get("prices", ())}}
             if name == "model" and vals.get("FLUX_REMOTE_API_KEY"):
                 env.pop("FLUX_REMOTE_API_KEY_FILE", None)             # a key set here wins over the server's file
         web.update(vals)
@@ -258,7 +259,7 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
     variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
     then the user's -- in `FLUX_<NAME>_ENV`, which only that agent is given; an added agent's kind
     in `FLUX_AGENTS`."""
-    from .agents import found, run_settings, visible
+    from .agents import found, run_prices, run_settings, visible
 
     added: dict[str, str] = {}
     for a in visible(store).values():
@@ -273,6 +274,11 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
         variables = {**({} if user.external else {n: x["value"] for n, x in store.env(f"agent:{a.name}", reveal=True).items()}),
                      **{n: x["value"] for n, x in store.env(f"agent:{a.name}:user:{user.id}", reveal=True).items()}}
         own, args = run_settings(a, server, mine, flux, variables, env)
+        for k in a.prices():                                     # D835: the web's prices, not the machine's
+            env.pop(k, None)
+        for k, v in run_prices(a, server, mine, flux).items():
+            env[k] = v
+            names.append(k)
         if own:
             env[f"FLUX_{a.up}_ENV"] = json.dumps(own)
             names.append(f"FLUX_{a.up}_ENV")

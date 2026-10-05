@@ -20,7 +20,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["BUILTIN", "KINDS", "Agent", "found", "registry", "run_settings", "setting_keys", "version", "visible"]
+__all__ = ["BUILTIN", "KINDS", "Agent", "found", "registry", "run_prices", "run_settings", "setting_keys", "version", "visible"]
 
 #: What each kind is: its label, its login command, where its login is kept under HOME, the
 #: secret a login prints instead of keeping (D748), and what its settings mean.
@@ -66,11 +66,17 @@ class Agent:
     def keys(self) -> dict[str, tuple[str, ...]]:
         """Its settings' names: endpoint and model public, the key (and a Claude login's token) secret."""
         secret = (f"FLUX_{self.up}_API_KEY", *((f"FLUX_{self.up}_OAUTH_TOKEN",) if self.kind == "claude" else ()))
-        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL"), "secret": secret}
+        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL", *self.prices()), "secret": secret}
+
+    def prices(self) -> tuple[str, str]:
+        """Its prices' names (D835): USD per million tokens in and out."""
+        return f"FLUX_{self.up}_PRICE_IN", f"FLUX_{self.up}_PRICE_OUT"
 
     def labels(self) -> dict[str, str]:
         k = self.keys()
-        out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", k["secret"][0]: "Key"}
+        pin, pout = self.prices()
+        out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", k["secret"][0]: "Key",
+               pin: "Price in (USD per 1M tokens)", pout: "Price out (USD per 1M tokens)"}
         if self.kind == "claude":
             out[k["secret"][1]] = "Login token (its login saves it)"
         return out
@@ -167,6 +173,27 @@ def setting_keys(store: Any) -> dict[str, tuple[str, ...]]:
             "secret": tuple(k for a in agents for k in a.keys()["secret"])}
 
 
+def _resolved(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> dict[str, str]:
+    """The agent's settings for a run: a user who names their own endpoint gets only theirs, prices
+    too; else the server's under theirs -- but the server's prices, which only an endpoint of one's
+    own lets a user set (D835)."""
+    k = agent.keys()
+    names, base_key, prices = (*k["public"], *k["secret"]), k["public"][0], agent.prices()
+    if mine.get(base_key):
+        return {n: mine[n] for n in names if mine.get(n)}
+    return {**{n: server[n] for n in names if server.get(n)}, **{n: mine[n] for n in names if mine.get(n) and n not in prices}}
+
+
+def run_prices(agent: Agent, server: dict[str, str], mine: dict[str, str], flux: dict[str, str]) -> dict[str, str]:
+    """`FLUX_<NAME>_PRICE_IN`/`_OUT` as a run gets them (D835): the agent's own, and the built-in
+    OpenCode on Flux's own model (no endpoint of its own) Flux's model's prices, unless it has its own."""
+    vals = _resolved(agent, server, mine)
+    pin, pout = agent.prices()
+    if agent.name == "opencode" and not vals.get(agent.keys()["public"][0]) and not (vals.get(pin) or vals.get(pout)):
+        vals = {pin: flux.get("FLUX_REMOTE_PRICE_IN", ""), pout: flux.get("FLUX_REMOTE_PRICE_OUT", "")}
+    return {n: vals[n] for n in (pin, pout) if vals.get(n)}
+
+
 def run_settings(agent: Agent, server: dict[str, str], mine: dict[str, str], flux: dict[str, str],
                  variables: dict[str, str], base_env: dict[str, str]) -> tuple[dict[str, str], list[str]]:
     """What a run hands `agent` (D807): (its own variables, extra arguments). `server` and `mine`
@@ -175,12 +202,8 @@ def run_settings(agent: Agent, server: dict[str, str], mine: dict[str, str], flu
     Flux's own model settings, the built-in OpenCode's when it has none of its own (D696).
     `variables`: the agent's own, the server's then the user's."""
     k = agent.keys()
-    names = (*k["public"], *k["secret"])
     base_key, model_key, api_key = k["public"][0], k["public"][1], k["secret"][0]
-    if mine.get(base_key):
-        vals = {n: mine[n] for n in names if mine.get(n)}
-    else:
-        vals = {**{n: server[n] for n in names if server.get(n)}, **{n: mine[n] for n in names if mine.get(n)}}
+    vals = _resolved(agent, server, mine)
     token = mine.get(f"FLUX_{agent.up}_OAUTH_TOKEN")
     own: dict[str, str] = {}
     args: list[str] = []

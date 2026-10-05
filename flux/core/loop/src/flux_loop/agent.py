@@ -514,8 +514,18 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
                       about=turn.about, tool_calls=turn.tools, steps=turn.steps, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
-                      **usage(spec.output, turn.stdout or ""))
+                      **_priced(spec, usage(spec.output, turn.stdout or "")))
     return turn
+
+
+def _priced(spec: AgentSpec, used: dict[str, float]) -> dict[str, Any]:
+    """The turn's usage, its cost from the prices set for this agent where there are (D835: they win
+    over the agent's own figure), else as the agent priced it."""
+    from flux_llm import transcript
+
+    got = transcript.priced(f"FLUX_{spec.tool.upper()}", used.get("tokens_in"), used.get("tokens_out")) \
+        if used.get("tokens_in") or used.get("tokens_out") else {}
+    return {**used, **got} if got else {**used, **({"priced": "agent"} if used.get("cost_usd") else {})}
 
 
 def _short(step: dict[str, Any], chars: int = 4000) -> dict[str, Any]:

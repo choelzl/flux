@@ -796,3 +796,6 @@ ul.files li > a { min-width: 0; overflow-wrap: anywhere; }
 ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; }
 .viewer-head { flex-wrap: wrap; gap: 6px 12px; }
 .viewer-head > .path-crumbs { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }
+
+/* D835: a price is a short number */
+.set-row input.price { max-width: 9em; }

@@ -364,11 +364,11 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
         def static(k: str, g: dict[str, Any]) -> dict[str, Any]:
             return {"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
-                    "endpoint": g["endpoint"], "hint": g.get("hint", "")}
+                    "endpoint": g["endpoint"], "hint": g.get("hint", ""), "prices": list(g.get("prices", ()))}
 
         per = [{"id": a.name, "label": f"{a.label} ({a.kind})" if not a.builtin else a.label, "tab": a.label,
                 "public": list(a.keys()["public"]), "secret": list(a.keys()["secret"]), "endpoint": a.keys()["public"][0],
-                "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name} for a in agents.values()]
+                "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name, "prices": list(a.prices())} for a in agents.values()]
         return [*(static(k, g) for k, g in GROUPS.items()), *per]
 
     def _keys_of(groups: list[dict[str, Any]]) -> dict[str, list[str]]:

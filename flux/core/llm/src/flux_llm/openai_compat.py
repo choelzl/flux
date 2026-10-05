@@ -397,9 +397,10 @@ class OpenAIChatProposer:
             transcript.record("model", **base, error=f"{type(exc).__name__}: {exc}", seconds=round(time.monotonic() - t0, 2))
             raise
         notes = getattr(reply, "notes", None) or {}
+        tokens = {k: notes[n] for k, n in (("tokens_in", "turn_tokens_in"), ("tokens_out", "turn_tokens_out")) if notes.get(n)}
         transcript.record("model", **base, reply=reply.text, hops=[h.line(400) for h in getattr(reply, "hops", None) or []],
-                          notes=notes, seconds=round(time.monotonic() - t0, 2),
-                          **{k: notes[n] for k, n in (("tokens_in", "turn_tokens_in"), ("tokens_out", "turn_tokens_out")) if notes.get(n)})
+                          notes=notes, seconds=round(time.monotonic() - t0, 2), **tokens,
+                          **(transcript.priced("FLUX_REMOTE", tokens.get("tokens_in"), tokens.get("tokens_out")) if tokens else {}))
         return reply
 
     def _propose_turn(self, prompt: str, *, schema: dict | None = None, tools: list | None = None,

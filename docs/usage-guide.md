@@ -441,6 +441,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
 - **`language:` is optional** (D832): unsaid, the tools the checks and stages name tell it (`flux rtl ...`: SystemVerilog, a ChampSim build: C++); say it when they do not -- a script of your own, `flux prog` -- or the design is a `.txt` file.
+- **Token prices** (D835): Admin › Agents and models, Flux tab (Flux's own model) and each agent's model fold: price in and out, USD per million tokens; Insights and a loop's Agents tab then show the cost. A user's own prices count only with their own endpoint. On the command line: `FLUX_REMOTE_PRICE_IN=0.5` and `FLUX_<AGENT>_PRICE_OUT=...` in flux.env.
 - **Settings save as you change them** (D833): Account, Admin (agents, sandbox, a user's running limit) and a loop's Advanced have no Save button; a mark beside the field says saved or why not. A key saves when you leave its field. The document (Direct edit, the configurator) keeps Save.
 - **The configurator** (D826) is seven steps -- the problem, checks, measurements, objectives, who does each step, more (budget, search, parts), review and save -- one at a time, Back and Next, Save on every step when editing a loop.
 - **Cloning** (D824, D828): "Clone…" on a loop (or New loop › Clone a loop) makes a new loop of yours with its problem and none of its runs, its workbench when asked.
