@@ -819,11 +819,13 @@ class PromptProblem(Problem):
     def design_prompt(self, subgoal: str | None, method: str, state: LoopState,
                       human: str | None, prior: Candidate | None, prior_why: str
                       ) -> tuple[str, dict | None]:
+        from .novelty import tried_block
+
         target = f"part {subgoal}" if subgoal else f"task {self.task.id}"
-        parts = [human or ""]
+        parts = [human or "", tried_block(self, state, subgoal)]          # D839: what was tried, the best first
         if prior is not None:
             numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(prior.artifact.splitlines()))
-            parts += [f"Your previous attempt for {target} was refused:\n\n{prior_why}",
+            parts += [f"What the loop said about your previous attempt for {target}:\n\n{prior_why}",
                       "Rework it, or send a new one if the approach itself is wrong.",
                       f"Previous attempt (line numbers for reading only):\n\n{numbered}"]
         else:
@@ -983,7 +985,7 @@ class PromptProblem(Problem):
         if prior is not None and failure:
             body, _schema = self.rewrite_prompt(sg, prior, failure, state)
         else:
-            body, _schema = self.design_prompt(sg, "", state, None, prior, failure)
+            body, _schema = self.design_prompt(sg, "", state, getattr(attempt, "brief", "") or None, prior, failure)
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=prior.artifact if prior is not None else None, failure=failure,

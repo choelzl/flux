@@ -527,6 +527,21 @@ class GeneratorRole(_Role):
         from .sources import Model, iterate
 
         source = self.generator(item.subgoal, state)
+        if item.explore:
+            # D839: the campaign at rest asks for a NEW design, the standing one shown to beat -- not
+            # handed over to be edited, which kept every exploring pass beside it
+            from .novelty import explore_brief
+
+            key = item.subgoal or "*"
+            keep = state.best.pop(key, None)
+            brief = explore_brief(item.why, item.candidate, str(getattr(getattr(self, "task", None), "language", "") or ""))
+            try:
+                if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
+                    return self.generate(item.subgoal, "", state, brief)
+                return iterate(self, source, item.subgoal, state, brief=brief)
+            finally:
+                if keep is not None:
+                    state.best[key] = keep
         if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
             key = item.subgoal or "*"
             keep = state.best.get(key)

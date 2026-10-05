@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .gradient import Gradient, gate_score
+from .novelty import twin, twin_said
 from .model import _ask, _compose
 from .observe import _phase
 from .patch import apply_patch, parse_patch
@@ -199,6 +200,13 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             cand, tnote = problem.apply_tools(subgoal, cand, reply, state)
             if tnote:
                 last_err = tnote
+        again = twin(state, cand)
+        if again is not None:                       # D839: a design measured already, refused before it is built
+            state.say(f"  {tag}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
+            last_err = twin_said(again)
+            mode = "design"
+            prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
+            continue
         built = None
         with _phase(f"test: build {tag}", why=cand.name) as out:
             try:

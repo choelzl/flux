@@ -39,6 +39,7 @@ class Attempt:
     index: int = 0
     prior: Candidate | None = None
     failure: str = ""
+    brief: str = ""                     # D839: what this draft is asked beyond the problem (an exploring pass's)
 
     @property
     def params(self) -> dict[str, Any]:
@@ -121,7 +122,7 @@ def _signature(cand: Candidate) -> str:
 
 
 def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState, *,
-            prior: Candidate | None = None, failure: str = ""
+            prior: Candidate | None = None, failure: str = "", brief: str = ""
             ) -> tuple[Candidate | None, Any, str]:
     """The generation sub-loop for a source that is not the model (D456): draft, build,
     fast-check, and again with the failure in hand, `request.repair_attempts` times over.
@@ -138,7 +139,7 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
     for index in range(rounds):
         state.attempts[key] = state.attempts.get(key, 0) + 1
         attempt = Attempt(subgoal=subgoal, state=state, index=index, prior=prior,
-                          failure=failure)
+                          failure=failure, brief=brief)
         with _phase(f"generation: {source.name} draft {index + 1}", why=tag):
             try:
                 cand, why = source.draft(attempt)
@@ -152,6 +153,14 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
             return None, None, (f"{source.name} produced the same design again after "
                                 f"{index} failure(s): {failure!s:.200}")
         seen.add(sign)
+        if source.name.startswith("agent:"):
+            from .novelty import twin, twin_said
+
+            again = twin(state, cand)
+            if again is not None:                   # D839: a design measured already, refused before it is built
+                failure, prior = twin_said(again), cand
+                say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
+                continue
         try:
             with _phase(f"generation: build {cand.name}", why=source.name):
                 built = problem.build(cand, subgoal, state)

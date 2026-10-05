@@ -1,0 +1,66 @@
+"""D839: away from the first design. An exploring pass asks for a NEW design with the standing one
+shown to beat, not handed over to be edited; a draft that repeats a measured design is refused
+before it is built and told so; a fresh draft reads what was tried, the best first."""
+
+from __future__ import annotations
+
+from test_agent_sessions import _digits, _fake, _turns
+
+from flux_loop import PromptProblem, request_for
+from flux_loop.novelty import tried_block, twin
+from flux_loop.types import Candidate, Improve, LoopState, Scored
+
+DIGITS = "\n".join(str(i) for i in range(10)) + "\n"
+
+
+def _state(task, tmp_path):
+    return LoopState(request=request_for(task, db=""), say=lambda _m: None, proposer=None, feedback=None,
+                     workdir=str(tmp_path / "trace"))
+
+
+def test_an_exploring_pass_asks_for_a_new_design_not_an_edit(tmp_path):
+    from flux_loop.loop import _improve_step
+
+    task = _digits(_fake(tmp_path), role="genok")
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    standing = Candidate("digits#1", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    _improve_step(prob, state, Improve(standing, "It meets the goal; make it better.", subgoal=None, explore=True))
+    asked = _turns(tmp_path)[0]["text"]
+    assert "Write a NEW design that beats it" in asked and "THE STANDING DESIGN, digits#1" in asked
+    assert "do not edit or resend it" in asked and "THE LAST DRAFT" not in asked, "shown to beat, not handed over"
+
+
+def test_a_draft_that_repeats_a_measured_design_is_refused_before_it_is_built(tmp_path):
+    from flux_loop.sources import iterate
+
+    task = _digits(_fake(tmp_path), role="genok")
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    state.scored.append(Scored(Candidate("digits#7", DIGITS), "test", {"score": 1.0}))
+    said: list[str] = []
+    state.say = said.append
+    source = prob.generator(None, state)
+    cand, _built, why = iterate(prob, source, None, state)
+    assert cand is None, "the agent wrote it again each time"
+    assert any("is digits#7 again, already measured" in m for m in said), said
+    first, again = _turns(tmp_path)[:2]
+    assert "TRIED SO FAR (1 design(s) measured" in first["text"] and "digits#7" in first["text"]
+    assert "This design is digits#7 again" in again["text"] and "Write a DIFFERENT design" in again["text"]
+
+
+def test_what_was_tried_is_listed_the_best_first(tmp_path):
+    task = _digits(_fake(tmp_path))
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    for i, (score, why) in enumerate([(3.0, "a table"), (9.0, "a loop over the digits"), (5.0, "")]):
+        state.scored.append(Scored(Candidate(f"d#{i}", f"text {i}", meta={"why": why}), "test", {"score": score}))
+    assert twin(state, Candidate("x", "text   1")) is state.scored[1], "spacing aside"
+    assert twin(state, Candidate("x", "text 4")) is None
+    block = tried_block(prob, state, None)
+    lines = block.splitlines()
+    assert lines[0].startswith("TRIED SO FAR (3 design(s)") and len(lines) == 4
+    assert lines[1].startswith("- d#2"), "without objectives: the latest first"
+    assert "d#1" in block and "a loop over the digits" in block and "a table" in block
+    body, _schema = prob.design_prompt(None, "", state, None, None, "")
+    assert "TRIED SO FAR" in body
