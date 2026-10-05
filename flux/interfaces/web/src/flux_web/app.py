@@ -643,6 +643,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         hours = max(0.25, min(hours, 168))
         return {"hours": hours, "samples": history.read(hours), "sampling": history._thread is not None}
 
+    @app.get("/api/admin/token-rate")
+    def token_rate(hours: float = 24, _a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Tokens per second over every loop (D838), in and out, agents' and Flux's model's."""
+        from . import insights
+
+        hours = max(0.25, min(hours, 168))
+        return {"hours": hours, "samples": insights.token_rate(insights.turns(store, runs), hours)}
+
     @app.get("/api/admin/resources")
     def resources(_a: User = Depends(admin_of)) -> dict[str, Any]:
         """The machine, the sandbox's containers and every loop's disk (D695)."""

@@ -596,6 +596,8 @@ def flows(r: Run) -> None:
             b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
             r.clean(f"admin › {t or 'loops'}")
         r.page("#/admin/resources", "document.querySelector('#main .tchart')", "the resources over time")
+        r.check("every loop's tokens per second, in and out, over time (D838)", "Tokens in per second" in r.text()
+                and "Tokens out (generated) per second" in r.text())
         r.check("the resources page has no notes on how sizes and samples are kept",
                 "kept for a minute" not in r.text() and "the highest in each step" not in r.text())
         said = b.js("""const svg = document.querySelector('#main .tchart-svg'); if (!svg) return null;

@@ -63,3 +63,21 @@ def test_the_disk_by_user_largest_first(tmp_path):
     assert [d["user"] for d in got] == ["bob", "ada"]
     assert got[0]["largest"] == {"app": "big", "size": 9000} and got[0]["count"] == 2 and got[0]["total"] == 9100
     assert got[1]["home"] >= 5000 and got[1]["total"] == got[1]["home"] + 10
+
+
+def test_token_rate_spreads_each_turn_over_its_time():
+    """D838: tokens per second, a turn's tokens spread evenly over how long it took, agents' and
+    Flux's model's apart; outside the window, nothing."""
+    from flux_web.insights import token_rate
+
+    now = 10_000.0
+    rows = [("bob", "x", now, "agent", "claude", "", True, 600.0, 60_000, 6_000, 0.0, ""),   # 10 minutes, the last ones
+            ("bob", "x", now - 30, "model", "qwen", "", True, 30.0, 3_000, 300, 0.0, ""),
+            ("bob", "x", now - 7200, "model", "qwen", "", True, 10.0, 999, 999, 0.0, "")]            # before the hour
+    got = token_rate(rows, hours=1, points=6, now=now)                # 10-minute buckets
+    assert len(got) == 6 and got[-1]["t"] == now
+    last = got[-1]
+    assert abs(last["in_agent"] - 100.0) < 1e-6 and abs(last["out_agent"] - 10.0) < 1e-6, last
+    assert abs(last["in_model"] - 3_000 / 600) < 1e-6 and abs(last["out_model"] - 0.5) < 1e-6, last
+    assert all(b["in_agent"] == b["in_model"] == 0 for b in got[:-1])
+    assert sum(b["in_agent"] for b in got) * 600 == 60_000, "every token counted once"

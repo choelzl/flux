@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 
-__all__ = ["disk", "endpoints", "failures", "network", "turns", "usage_by_day"]
+__all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day"]
 
 DAY = 86400.0
 _TURNS: dict[str, tuple[tuple[int, float], list[tuple]]] = {}
@@ -92,6 +92,30 @@ def turns(store: Any, runs: Any) -> list[tuple]:
             path = runs.turns_path(runs.latest(u, a["name"]))
             if path:
                 out.extend((u.name, a["name"], *t) for t in _rows(path))
+    return out
+
+
+def token_rate(rows: list[tuple], hours: float = 24, points: int = 180, now: float | None = None) -> list[dict[str, Any]]:
+    """Every loop's tokens per second over the last `hours` (D838), in and out, the coding agents'
+    and Flux's own model's apart: each turn's tokens spread evenly over the time it took, summed per
+    bucket of `hours / points`. A turn counts once it ends (the transcript is written then), so the
+    newest bucket may grow."""
+    now = now or time.time()
+    size = hours * 3600 / points
+    t0 = now - hours * 3600
+    out = [{"t": t0 + (i + 1) * size, "in_agent": 0.0, "in_model": 0.0, "out_agent": 0.0, "out_model": 0.0} for i in range(points)]
+    for _user, _app, ts, kind, _who, _where, _ok, secs, tin, tout, _cost, _err in rows:
+        end = float(ts or 0)
+        start = end - max(1.0, float(secs or 0))
+        if end <= t0 or start >= now or not (tin or tout):
+            continue
+        k = "agent" if kind == "agent" else "model"
+        for i in range(max(0, int((start - t0) // size)), min(points, int((end - t0) // size) + 1)):
+            lo, hi = t0 + i * size, t0 + (i + 1) * size
+            share = (min(end, hi) - max(start, lo)) / (end - start)
+            if share > 0:
+                out[i][f"in_{k}"] += float(tin or 0) * share / size
+                out[i][f"out_{k}"] += float(tout or 0) * share / size
     return out
 
 
