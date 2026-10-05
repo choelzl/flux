@@ -211,6 +211,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     verified: dict[str, str] = {}                   # the verified prototype per part (D495): the last
     by_digest: dict[str, dict[str, str]] = {}       # ... and every one, by its digest (D504)
     admits: dict[str, list[Candidate]] = {}         # every admitted design per part, oldest first
+    gated: list[Candidate] = []                     # whole designs measured on a stage (D861)
     measured: dict[str, dict[str, dict[str, float]]] = {}   # stage -> artifact digest -> its numbers
     stages_all = list(problem.stages() or [])
     try:
@@ -243,6 +244,9 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
             key = sg or "*"
             if _fresh(key):
                 continue
+            if (t.stage in stages_all and t.status == "ok" and sg is None
+                    and not (cand.meta or {}).get("composed")):
+                gated.append(cand)                  # measured, so it passed the gate
             if t.stage == StageNames.ADMIT and t.status == "ok":
                 proven[key] = cand
                 admits.setdefault(key, []).append(cand)
@@ -254,6 +258,15 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     def numbers_of(c: Candidate, stage: str | None) -> dict[str, float] | None:
         return measured.get(stage or "", {}).get(prototype_digest(c.artifact or ""))
 
+    if "*" in admits:
+        # D861: a whole design refined or explored before D861 was measured but never recorded
+        # as admitted; it is one of the options all the same
+        seen = {prototype_digest(c.artifact or "") for c in admits["*"]}
+        for c in gated:
+            dg = prototype_digest(c.artifact or "")
+            if dg not in seen:
+                seen.add(dg)
+                admits["*"].append(c)
     for key, options in admits.items():
         # The best measured design of a part stands (D504), not the last admitted, compared on
         # the deepest stage on which two of the part's designs were measured (the screen can

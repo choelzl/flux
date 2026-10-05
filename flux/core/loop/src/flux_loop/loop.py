@@ -655,6 +655,10 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         state.admitted[item.subgoal] = cand
         _forget_stale_compositions(state)
         _record_trial(state, cand, item.subgoal, verdict, admitted=True)
+    else:
+        # D861: a whole design refined or explored is admitted too, so the next pass's reload
+        # weighs it (D504) -- unrecorded, the first design admitted stood however far one beat it
+        _record_trial(state, cand, None, verdict, admitted=True)
     stages = problem.stages()
     if not stages:
         return []
@@ -1132,10 +1136,15 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
     # record's, each design's latest -- taken on the deepest stage anything reached: a better
     # design placed in an earlier pass is not dropped when the cheap stage's finalists move, and a
     # pass whose deep stage measured nothing does not decide on the cheap stage's numbers
+    # D861: the record's rows too (`history`): a generator loop's `state.scored` holds only this
+    # pass's designs, so an exploring pass decided on its one new design alone
+    from .records import history
+
+    recalled = history(problem, state)
     pools: dict[str, list[Scored]] = {}
     for st in stages:
         latest: dict[str, Scored] = {}
-        for s in state.scored:
+        for s in [*recalled, *state.scored]:
             if s.stage == st:
                 latest.pop(s.candidate.key(), None)
                 latest[s.candidate.key()] = s
