@@ -43,6 +43,25 @@ def _describe_parts(goals: list, problem: Problem, state: LoopState) -> str:
     return "\n".join(lines) + f"\n({len(goals)} part(s), in the order the problem declares them)"
 
 
+def _number_on(problem: Problem, state: LoopState) -> None:
+    """A design's number carries on from the record (D840): a start numbered its drafts from 1 again,
+    so a later start's `x#3` was another design than the first one's, and every reader that goes
+    by the name mixed them."""
+    if state.records is None or getattr(state.records, "store", None) is None or not hasattr(problem, "_count"):
+        return
+    import re
+
+    top = 0
+    try:
+        for t in state.records.store.trials(state.records.campaign_id):
+            m = re.search(r"#(?:spelled)?(\d+)", str((t.candidate or {}).get("name") or ""))
+            if m:
+                top = max(top, int(m.group(1)))
+    except Exception:  # noqa: BLE001 -- a record that cannot be read: numbering as before
+        return
+    problem._count = max(int(problem._count or 0), top)
+
+
 def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = None,
              feedback: Any | None = None, log: Callable[[str], None] | None = None,
              depth: int = 0) -> LoopResult:
@@ -91,6 +110,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
             except Exception:  # noqa: BLE001
                 state.cache = None
         state.records = problem.open_records(request, say)
+        _number_on(problem, state)
         objs = problem.objectives()
         if objs and state.records is not None:
             # D512: what the campaign is for, on the record, so `flux report` reads the vector

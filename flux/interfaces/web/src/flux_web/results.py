@@ -21,7 +21,7 @@ import threading
 import time
 from typing import Any
 
-__all__ = ["decision_of", "decision_said", "designs", "thin"]
+__all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "designs", "thin"]
 
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
@@ -50,7 +50,22 @@ def _objective_limits(db: str) -> list[dict[str, Any]]:
             for o in objectives if o.goal is not None]
 
 
+def content_key(c: dict[str, Any]) -> str:
+    """A recorded design's identity by what it is (D840): its text, else its knobs -- as
+    `Candidate.key` -- since a name may be given again by a later start."""
+    import hashlib
+
+    body = c.get("artifact") or json.dumps(c.get("knobs") or {}, sort_keys=True, default=str)
+    return hashlib.sha256(str(body).encode()).hexdigest()[:16]
+
+
 def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -> str | None:
+    """The decided design's name (`decision_doc`)."""
+    got = decision_doc(db, answer_path, campaign)
+    return got["name"] if got else None
+
+
+def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) -> dict[str, Any] | None:
     """The loop's decision (D809): the record's latest pass's -- each pass writes its conclusion,
     so a loop that runs for days has one from its first pass on -- unless the run's answer
     (`runs/answer.json`, written when a run ends) is newer. `campaign`: the run's own (a record may
@@ -58,7 +73,7 @@ def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -
     import sqlite3
     from datetime import datetime
 
-    name, when = None, 0.0
+    name, when, said = None, 0.0, {}
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         try:
@@ -68,7 +83,8 @@ def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -
         finally:
             con.close()
         if row:
-            name = (json.loads(row[0]) or {}).get("decision")
+            said = json.loads(row[0]) or {}
+            name = said.get("decision")
             try:
                 when = datetime.fromisoformat(str(row[1]).replace("Z", "+00:00")).timestamp()
             except ValueError:
@@ -80,11 +96,15 @@ def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -
             st = os.stat(answer_path)
             if name is None or st.st_mtime > when:
                 ans = json.loads(open(answer_path).read())
-                got = (ans.get("decision") or {}).get("name") if isinstance(ans.get("decision"), dict) else None
-                name = got or name
+                dec = ans.get("decision") if isinstance(ans.get("decision"), dict) else {}
+                if dec.get("name"):
+                    name, said = dec["name"], {**dec, "decision_key": dec.get("key")}
         except (OSError, ValueError):
             pass
-    return str(name) if name else None
+    if not name:
+        return None
+    metrics = {k: v for k, v in (said.get("metrics") or said).items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    return {"name": str(name), "key": said.get("decision_key"), "metrics": metrics}
 
 
 def decision_said(db: str, campaign: str | None = None) -> str:
@@ -147,6 +167,26 @@ def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10
         pool.remove(pick)
 
 
+def _decided(out: list[dict[str, Any]], decision: Any) -> None:
+    """Mark the decided design (D840): by name and what it is when the record says it; else, of the
+    designs with that name, the one whose numbers are the conclusion's; else the latest."""
+    if not decision:
+        return
+    doc = decision if isinstance(decision, dict) else {"name": decision}
+    same = [d for d in out if d["base"] == doc.get("name")]
+    if doc.get("key"):
+        same = [d for d in same if d["key"] == doc["key"]] or same
+    if len(same) > 1 and doc.get("metrics"):
+        def fits(d: dict[str, Any]) -> bool:
+            return any(all(abs(float(nums.get(k, float("nan"))) - float(v)) <= 1e-9 * max(1.0, abs(float(v)))
+                           for k, v in doc["metrics"].items() if k in nums) and any(k in nums for k in doc["metrics"])
+                       for nums in d["stages"].values())
+
+        same = [d for d in same if fits(d)] or same
+    if same:
+        max(same, key=lambda d: d["last"] or "")["decision"] = True
+
+
 def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for st in stages:
@@ -178,7 +218,7 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
     """`stages`: the document's stages as the loader writes them (name, cutoff). D774: kept
     while the record is unchanged; with `stale_s`, also while it changed less than that ago --
     a running loop's line in a list need not be read again on every look."""
-    key = (db, json.dumps(stages, sort_keys=True, default=str), decision, limit)
+    key = (db, json.dumps(stages, sort_keys=True, default=str), json.dumps(decision, sort_keys=True, default=str), limit)
     sig = _signature(db)
     with _KEEPING:
         got = _KEPT.get(key)
@@ -207,8 +247,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 c = t.candidate or {}
                 name = str(c.get("name") or t.candidate_key or "?")
                 part = str(c.get("subgoal") or (c.get("knobs") or {}).get("part") or "")
-                d = by.setdefault((part, name), {"name": name, "part": part, "stages": {}, "first": t.created_at,
-                                                 "last": t.created_at})
+                ck = content_key(c)                 # D840: a name a later start gave again is another design
+                d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "stages": {},
+                                                     "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]
     finally:
@@ -265,9 +306,16 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         d["verdict"] = "failed" if misses else "accepted"
         d["why"] = misses
         d["meets"] = meets
-        d["decision"] = bool(decision and d["name"] == decision)
+        d["decision"] = False
         d["rank"] = None
         out.append(d)
+    _decided(out, decision)
+    names: dict[tuple[str, str], int] = {}
+    for d in out:
+        names[(d["part"], d["base"])] = names.get((d["part"], d["base"]), 0) + 1
+    for d in out:                                   # a name given to more than one design: told apart by what each is
+        if names[(d["part"], d["base"])] > 1:
+            d["name"] = f"{d['base']}·{d['key'][:6]}"
     _rank(out, order, db)
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not d["decision"])                   # the decided design on top

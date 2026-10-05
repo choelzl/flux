@@ -463,7 +463,7 @@ class OrchestratorRole(_Role):
         return self.objectives().decide(pool, self.stages())
 
     def conclusion(self, pick: Scored, decided_by: str) -> dict[str, Any]:
-        return {"decision": pick.name, "decided_by": decided_by, **pick.metrics}
+        return {"decision": pick.name, "decision_key": pick.candidate.key(), "decided_by": decided_by, **pick.metrics}   # D840: which
 
 
 class GeneratorRole(_Role):

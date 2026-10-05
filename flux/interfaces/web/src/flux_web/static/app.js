@@ -1286,7 +1286,7 @@ async function loopPage(name, owner, path = "") {
       if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
       tr.classList.add("sel");
       detail.replaceChildren(skeleton(6));
-      const full = await api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`);
+      const full = await api(`/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`);
       const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
       const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
       detail.replaceChildren(
@@ -1308,7 +1308,7 @@ async function loopPage(name, owner, path = "") {
     const drawPicked = () => { cmpBtn.disabled = picked.length !== 2; cmpBtn.textContent = picked.length ? `Compare ${picked.length}/2` : "Compare"; };
     async function compare() {
       const [a, b] = picked;
-      const [fa, fb] = await Promise.all([a, b].map(d => api(`/apps/${enc(name)}/design?design=${enc(d.name)}&part=${enc(d.part)}${q}`)));
+      const [fa, fb] = await Promise.all([a, b].map(d => api(`/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`)));
       const stages = (r.stages || []).filter(st => a.stages[st] || b.stages[st]).concat(Object.keys({ ...a.stages, ...b.stages }).filter(st => !(r.stages || []).includes(st)));
       const rows = [];
       for (const st of stages) {

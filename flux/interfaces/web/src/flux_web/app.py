@@ -1037,10 +1037,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         run = runs.latest(whose, name)
         if not run or not os.path.exists(run["db"]):
             return {"designs": 0, "accepted": 0}
-        from .results import decision_of
+        from .results import decision_doc
 
         try:
-            decision = decision_of(run["db"], loop_files(w.app(name))["answer"], runs.campaign(run)[0])   # D809: the latest pass's
+            decision = decision_doc(run["db"], loop_files(w.app(name))["answer"], runs.campaign(run)[0])   # D809: the latest pass's
         except WorkspaceError:
             decision = None
         try:
@@ -1957,9 +1957,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 answer = json.loads(ans.read_text())
             except ValueError:
                 pass
-        from .results import decision_of
+        from .results import decision_doc
 
-        decision = decision_of(run["db"], ans, cid)             # D809: the record's latest pass's, while it runs too
+        decision = decision_doc(run["db"], ans, cid)            # D809: the record's latest pass's, while it runs too; D840: which one
         from .results import decision_said
 
         decided_by = decision_said(run["db"], cid)              # D815: why, as the loop said it
@@ -1983,9 +1983,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return [{"name": n, **(v if isinstance(v, dict) else {})} for n, v in measure.items()]
 
     @app.get("/api/apps/{name}/design")
-    def design(name: str, design: str, part: str = "", owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        """One design of the loop: its source, why it failed, every stage's numbers (D690)."""
+    def design(name: str, design: str, part: str = "", key: str = "", owner: str | None = None,
+               user: User = Depends(user_of)) -> dict[str, Any]:
+        """One design of the loop: its source, why it failed, every stage's numbers (D690); `key`:
+        which, of the designs a name was given to (D840)."""
         from flux_store import CampaignStore
+
+        from .results import content_key
 
         _w, _whose, _d, run = loop_of(name, user, owner)
         if not run or not os.path.exists(run["db"]):
@@ -1996,7 +2000,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             for camp in store.list_campaigns():
                 for t in store.trials(camp["campaign_id"], status="ok"):
                     c = t.candidate or {}
-                    if str(c.get("name")) != design or str(c.get("subgoal") or "") != part:
+                    if str(c.get("name")) != design or str(c.get("subgoal") or "") != part or (key and content_key(c) != key):
                         continue
                     if c.get("artifact"):
                         found["artifact"] = c["artifact"]

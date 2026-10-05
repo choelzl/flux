@@ -565,7 +565,7 @@ def _answer(task, db: str, out, problem, artifact: Any) -> dict[str, Any]:
     from flux_loop.task import task_report_lines
 
     def row(sc) -> dict[str, Any]:
-        return {"name": sc.candidate.name, "stage": sc.stage, "knobs": sc.candidate.knobs, "metrics": sc.metrics}
+        return {"name": sc.candidate.name, "key": sc.candidate.key(), "stage": sc.stage, "knobs": sc.candidate.knobs, "metrics": sc.metrics}
 
     answer: dict[str, Any] = {
         "task": task.id, "record": db, "stopped": out.stopped, "decided_by": out.decided_by,
