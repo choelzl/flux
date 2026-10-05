@@ -2417,7 +2417,7 @@ function filesPanel(name, yamlOf) {
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
 const CONFIG_MODES = { empty: "Empty loop", configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
-/** D824: what each part of a loop's folder is for -- said on New loop, and beside each in Files. */
+/** D824: what each part of a loop's folder is for -- said beside each in Files (D827: not on New loop). */
 const FOLDER_ROLES = [
   ["problem.yaml", "the problem: what to design, the gate, the stages, the objectives, who works each box (NAME.problem.yaml: another problem of the same loop)"],
   ["the files it names", "scripts, a golden model, a spec, tools -- beside it, read by the gate and the stages ({home} is this folder)"],
@@ -2428,11 +2428,6 @@ const FOLDER_ROLES = [
   ["a folder with a problem.yaml", "a sub-loop: says only what differs from this one"],
 ];
 const ROLE_OF = { library: FOLDER_ROLES[2][1], workbench: FOLDER_ROLES[3][1], out: FOLDER_ROLES[4][1], runs: FOLDER_ROLES[5][1] };
-function folderRoles(open = false) {
-  return h("details", { class: "folder-roles card", open: open || null }, h("summary", {}, h("strong", {}, "A loop is a folder"),
-      h("span", { class: "muted small" }, " · what each part of it is for")),
-    h("dl", { class: "roles" }, FOLDER_ROLES.flatMap(([k, v]) => [h("dt", { class: "mono" }, k), h("dd", { class: "muted" }, v)])));
-}
 /** D824: a loop's problem cloned into a new loop of one's own. */
 async function cloneDialog(name, owner) {
   const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
@@ -2475,9 +2470,7 @@ async function configurePage(name, owner, mode = "configurator") {
   const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
   show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
-    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub),
-    isNew ? folderRoles((() => { try { return !localStorage.getItem("flux-seen-roles"); } catch (_) { return true; } })()) : "", host);
-  try { localStorage.setItem("flux-seen-roles", "1"); } catch (_) { /* per viewer */ }
+    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
   configureInto(host, name, owner, mode, isNew ? "#/configure" : `${appHref(owner, name)}/settings/problem`);
 }
 
