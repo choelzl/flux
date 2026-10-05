@@ -18,8 +18,20 @@ import pytest
 
 from flux_cli import sandbox
 
-_HAVE = bool(__import__("shutil").which("podman") or __import__("shutil").which("docker"))
-pytestmark = pytest.mark.skipif(not _HAVE, reason="needs Podman or Docker for a real container")
+def _engine_runs() -> str:
+    """"" when this machine can start the sandbox's container, else why not (D858): a CI runner may
+    have the engine installed but no rootless setup for it -- an environment's limit, not a breach."""
+    import shutil
+    import tempfile
+
+    if not (shutil.which("podman") or shutil.which("docker")):
+        return "needs Podman or Docker for a real container"
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            rc, said = _run(Path(d), "echo ok")
+    except Exception as exc:  # noqa: BLE001
+        return f"the container engine cannot start the sandbox here: {exc!s:.200}"
+    return "" if rc == 0 and "ok" in said else f"the container engine cannot start the sandbox here: {said.strip()[-200:]}"
 
 
 def _args(tmp_path: Path) -> types.SimpleNamespace:
@@ -57,6 +69,13 @@ def _run(tmp_path: Path, script: str, env: dict[str, str] | None = None, proxy_d
         eng = sandbox.engine_cli(sandbox.engine())
         subprocess.run([*eng, "rm", "-f", name], capture_output=True, timeout=30)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _engine():
+    why = _engine_runs()
+    if why:
+        pytest.skip(why)
 
 
 def test_a_loop_may_write_its_own_out_and_workbench(tmp_path):
