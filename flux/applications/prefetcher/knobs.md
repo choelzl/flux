@@ -35,7 +35,15 @@ pc_width + max_addr_width.
 
 Each Bingo table costs entries x (tag + payload + valid + LRU) bits. The pattern table is 31 KB
 of the shipped 35 KB. The accumulation payload grows with pattern_len, the streamer's is
-2 x pattern_len, the pattern table's is pattern_len. Partners are not counted.
+2 x pattern_len, the pattern table's is pattern_len.
+
+Each partner adds its tables (`bingo.py`, from the fields its Pythia source keeps: 48-bit
+physical addresses, the PC whole at 48 bits, a fully associative table keeps its full key, a
+valid bit and an LRU position). At the shipped values: sms 32,456 B (its pattern table
+2048 x (47-bit tag + 64-bit pattern) is most of it), spp_ppf_dev 57,217 B, spp_dev2 5,508 B,
+power7 4,736 B, stride 4,192 B, ipcp 2,048 B, ampm 856 B, streamer 416 B, sandbox 301 B. A
+size knob (`sms_pht_size`, `stride_num_trackers`, `sandbox_bloom_filter_size`, ...) scales its
+table; a degree or threshold costs nothing.
 
 ## Partners' knobs (shipped value in brackets)
 
@@ -45,7 +53,7 @@ Degrees are 0..64, sizes and counts at least 1.
   [4096], `sms_ft_size` [64], `sms_at_size` [32], `sms_pref_buffer_size` [256]. The region is a
   power of two, 64..4096; the pattern table's sets (size / assoc) a power of two.
 - ampm: `ampm_pref_degree` [4], `ampm_pred_degree` [4], `ampm_pb_size` [64],
-  `ampm_pref_buffer_size` [256]
+  `ampm_pref_buffer_size` [256] (the buffer is off, so it changes nothing)
 - stride: `stride_pref_degree` [2], `stride_num_trackers` [256]
 - streamer: `streamer_pref_degree` [5], `streamer_num_trackers` [64]
 - spp_ppf_dev: `ppf_perc_threshold_hi` [-5], `ppf_perc_threshold_lo` [-15], -256..256, lo <= hi

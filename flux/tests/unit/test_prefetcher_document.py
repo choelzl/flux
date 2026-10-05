@@ -34,7 +34,8 @@ def test_a_file_that_leaves_knobs_out_takes_the_shipped_ones(tmp_path, capsys):
     (tmp_path / "d.ini").write_text("l2c_prefetcher_types = bingo,sms\nsms_pref_degree = 8\n")
     k = bingo.full(tmp_path / "d.ini")
     assert k["l2c_prefetcher_types"] == "bingo,sms" and k["bingo_pht_size"] == "4096" and k["sms_pref_degree"] == "8"
-    assert bingo.storage_bytes({n: int(k[n]) for n in bingo.RANGES}) == 35_096
+    assert bingo.storage_bytes({n: int(k[n]) for n in bingo.RANGES}) == 35_096, "Bingo's own tables"
+    assert bingo.design_storage_bytes(k) > 35_096, "sms beside it costs its tables (D873)"
     (tmp_path / "r.ini").write_text("bingo_region_size = 1024\n")
     assert bingo.full(tmp_path / "r.ini")["bingo_pattern_len"] == "16", "pattern_len follows region_size"
     (tmp_path / "bad.ini").write_text("bingo_pc_width = 0\nbingo_min_addr_width = 0\n")
@@ -42,7 +43,7 @@ def test_a_file_that_leaves_knobs_out_takes_the_shipped_ones(tmp_path, capsys):
                  ["check", str(tmp_path / "r.ini")], ["check", str(tmp_path / "bad.ini")]):
         assert bingo.main(argv) == 0
     assert capsys.readouterr().out.splitlines() == [
-        "0 failing", "1 failing: 35096 B is over the 30000 B budget", "0 failing",
+        "0 failing", "1 failing: 67552 B is over the 30000 B budget", "0 failing",
         "1 failing: pc_width + min_addr_width must exceed 0 (the PHT would have no key)"]
 
 

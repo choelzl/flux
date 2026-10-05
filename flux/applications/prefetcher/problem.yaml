@@ -19,13 +19,14 @@ flow:
     files: [knobs.md, bingo_default.ini]
   # generate: opencode     # a coding agent writes the file, not the model
   test: "{python} {home}/bingo.py check {artifact}"   # bingo.cc aborts on an illegal configuration
-  measure:                     # 10M+15M instructions, then 100M+150M for the finalists
+  measure:                     # 2M+10M instructions, then 2M+15M for the finalists: the shortest
+                               # trace (tdd_ul) is 17.7M, and a longer run replays it (D873)
     screen:
-      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000"
+      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 2000000 --sim 10000000"
       metrics: [geomean_speedup, storage_bytes]
       needs: [pythia]
     confirm:
-      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 100000000 --sim 150000000"
+      command: "{python} {home}/bingo.py measure {artifact} --traces {home}/traces --warmup 2000000 --sim 15000000"
       metrics: [geomean_speedup, storage_bytes]
       needs: [pythia]
   select: {finalists: 4}

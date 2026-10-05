@@ -97,6 +97,87 @@ def storage_bytes(k: dict[str, int]) -> int:
     return (storage_bits(k) + 7) // 8
 
 
+# The partners' storage (D873). Pythia's partners are simulator code with no storage comments, so
+# each is modelled from the fields its source keeps, at these widths: a 48-bit physical address (as
+# Bingo's tables), so a line is 42 bits and a 4 KB page 36; the PC whole at 48 bits, since the
+# partners match it unhashed; and a fully associative table (a deque searched whole) holds the full
+# key, a valid bit and an LRU/FIFO position of ceil(lg entries) bits per entry.
+PHYS_BITS, PC_BITS = 48, 48
+LINE_BITS, PAGE_BITS = PHYS_BITS - 6, PHYS_BITS - 12
+COUNTER_BITS = 64
+
+
+def _clg(n: int) -> int:
+    return (n - 1).bit_length()
+
+
+def assoc_bits(entries: int, key_bits: int, payload_bits: int) -> int:
+    return entries * (key_bits + payload_bits + 1 + _clg(entries))
+
+
+def _sms(p: dict[str, int]) -> int:
+    """sms.h: filter (page, pc, trigger offset), accumulation (+ pattern, age), the pattern table
+    keyed by pc . trigger offset (sms.cc create_signature) holding the pattern, and the prefetch
+    buffer of line addresses (sms_enable_pref_buffer is on)."""
+    blocks = p["sms_region_size"] // BLOCK_SIZE
+    page, off = PHYS_BITS - lg(p["sms_region_size"]), lg(blocks)
+    return (assoc_bits(p["sms_ft_size"], page, PC_BITS + off)
+            + assoc_bits(p["sms_at_size"], page, PC_BITS + off + blocks)
+            + table_bits(p["sms_pht_size"], p["sms_pht_assoc"], PC_BITS + off, blocks)
+            + p["sms_pref_buffer_size"] * LINE_BITS)
+
+
+def _stride(p: dict[str, int]) -> int:
+    """stride.h Tracker: pc, last line address, an int32 stride."""
+    return assoc_bits(p["stride_num_trackers"], PC_BITS, LINE_BITS + 32)
+
+
+def _streamer(p: dict[str, int]) -> int:
+    """streamer.h Stream_Tracker: page, last offset in it, direction (+1/-1/0), a confidence bit."""
+    return assoc_bits(p["streamer_num_trackers"], PAGE_BITS, 6 + 2 + 1)
+
+
+def _sandbox(p: dict[str, int]) -> int:
+    """sandbox.h: the bloom filter's bits, 32 candidate offsets (+-1..16, 6 bits), 16 scores and the
+    phase's demand and hit counters (each at most num_access_in_phase), the 4-bit pointer."""
+    count = p["sandbox_num_access_in_phase"].bit_length()
+    return p["sandbox_bloom_filter_size"] + 32 * 6 + 16 * count + 2 * count + 4
+
+
+#: Knobless partners, from their headers' constants (bits).
+SPP_ST = 256 * (1 + 16 + 6 + 12 + 8)        # signature table: valid, tag, last offset, signature, LRU
+SPP_GHR = 8 * (1 + 12 + 7 + 6 + 7) + 2 * 10 # global history: valid, sig, confidence, offset, delta; 2 counters
+SPP_DEV2_BITS = (SPP_ST + 512 * (4 + 4 * (7 + 4))     # pattern table: c_sig + 4 x (delta, c_delta)
+                 + 1024 * (1 + 1 + 6) + SPP_GHR)       # prefetch filter: valid, useful, remainder
+PPF_FEATURES = 11 + 12 + 12 + 12 + 10 + 12 + 10 + 11 + 7   # lg of each PERC_DEPTH: the indices kept
+PPF_BITS = (SPP_ST + 2048 * (4 + 4 * (7 + 4))          # ppf_dev_helper.h: PT_SET 2048
+            + (2048 + 4 * 4096 + 1024 + 1024 + 2048 + 128) * 5      # perceptron weights, 5-bit
+            + 1024 * (1 + 1 + 6 + PPF_FEATURES + 9)     # filter: valid, useful, remainder, features, sum
+            + 1024 * (1 + 8 + PPF_FEATURES + 9)         # reject filter
+            + SPP_GHR + 3 * PC_BITS + 6 * PAGE_BITS)    # last three IPs, six pages tracked
+IPCP_BITS = 1024 * (6 + 1 + 2 + 7)                      # ipcp_L2.h IP_TRACKER: tag, valid, class, stride
+
+#: partner -> its storage in bits, from its knobs.
+PARTNER_BITS = {
+    "sms": _sms,
+    "ampm": lambda p: assoc_bits(p["ampm_pb_size"], PAGE_BITS, 64),     # page, 64-line bitmap; buffer off
+    "stride": _stride,
+    "streamer": _streamer,
+    "power7": lambda p: _stride(p) + _streamer(p) + 16 * COUNTER_BITS,  # cycle_stats[14], 2 counters
+    "sandbox": _sandbox,
+    "spp_dev2": lambda p: SPP_DEV2_BITS,
+    "spp_ppf_dev": lambda p: PPF_BITS,
+    "ipcp": lambda p: IPCP_BITS,
+}
+
+
+def design_storage_bytes(k: dict[str, object]) -> int:
+    """Bingo's tables and every partner's in the stack."""
+    p = partner_knobs(k)
+    bits = storage_bits({n: int(k[n]) for n in RANGES}) + sum(PARTNER_BITS[t](p) for t in stack(k)[1:])
+    return (bits + 7) // 8
+
+
 def stack(k: dict[str, object]) -> list[str]:
     """The L2 prefetchers `l2c_prefetcher_types` names, in order."""
     return [t.strip() for t in str(k.get("l2c_prefetcher_types", "")).split(",") if t.strip()]
@@ -170,7 +251,7 @@ def invalid_reason(k: dict[str, object]) -> str | None:
         _require(ints["bingo_max_addr_width"] >= ints["bingo_min_addr_width"], "max_addr_width < min_addr_width")
         _require(ints["bingo_pc_width"] + ints["bingo_min_addr_width"] > 0,
                  "pc_width + min_addr_width must exceed 0 (the PHT would have no key)")
-        storage_bits(ints)
+        design_storage_bytes(k)
     except (Invalid, ValueError) as exc:
         return str(exc)
     return None
@@ -212,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "check":
         why = invalid_reason(knobs)
         if why is None and args.max_storage is not None:
-            size = storage_bytes({n: int(knobs[n]) for n in RANGES})
+            size = design_storage_bytes(knobs)
             why = f"{size} B is over the {args.max_storage} B budget" if size > args.max_storage else None
         print(f"1 failing: {why}" if why else "0 failing")
         return 0
@@ -225,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         ini.write_text("".join(f"{n} = {v}\n" for n, v in knobs.items()))
         got = measure(str(ini), args.traces, args.warmup, args.sim, jobs=args.jobs)
     print(f"geomean_speedup={got.pop('geomean_speedup'):.6g}")
-    print(f"storage_bytes={storage_bytes({n: int(knobs[n]) for n in RANGES})}")
+    print(f"storage_bytes={design_storage_bytes(knobs)}")
     for n, v in sorted(got.items()):
         print(f"{n}={v:.6g}" if not float(v).is_integer() else f"{n}={int(v)}")
     return 0

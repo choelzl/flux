@@ -40,20 +40,21 @@ contract: |
   - Include what you use: <cstdint>, <vector>, <iostream>, each container, <algorithm> for
     std::find/std::sort, and "prefetcher.h", "champsim.h".
   - C++11; no external libraries, threads, file I/O or rand(). Per-access work small and
-    memory bounded: it runs for 250 million instructions. Under 70 lines.
+    memory bounded: it runs for 17 million instructions. Under 70 lines.
 
 flow:
   # generate: opencode     # a coding agent writes the header, not the model
   test:
     build: flux champsim build {artifact}
     test: flux champsim check {artifact} --traces {home}/traces
-  measure:                     # 10M+15M instructions, then 100M+150M for the finalists
+  measure:                     # 2M+10M instructions, then 2M+15M for the finalists: the shortest
+                               # trace (tdd_ul) is 17.7M, and a longer run replays it (D873)
     screen:
-      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 10000000 --sim 15000000"
+      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 2000000 --sim 10000000"
       metrics: [geomean_speedup]
       needs: [pythia]
     confirm:
-      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 100000000 --sim 150000000"
+      command: "flux champsim run {artifact} --traces {home}/traces --config {home}/bingo_default.ini --warmup 2000000 --sim 15000000"
       metrics: [geomean_speedup]
       needs: [pythia]
 

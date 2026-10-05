@@ -2,11 +2,16 @@
 
 Three ChampSim instruction traces from 5G baseband workloads, ~380 MB in total:
 
-| trace | size | no-prefetcher IPC |
-|---|---|---|
-| `fdd_su_v1_0.simout_champsim.gz` | 129 MB | 0.69602 |
-| `tdd_dl_mu_v1_0.simout_champsim.gz` | 166 MB | 0.99071 |
-| `tdd_ul_mu_v1_0.simout_champsim.gz` | 85 MB | 0.80232 |
+| trace | size | instructions | no-prefetcher IPC (2M+10M) |
+|---|---|---|---|
+| `fdd_su_v1_0.simout_champsim.gz` | 129 MB | 25,361,630 | 0.67766 |
+| `tdd_dl_mu_v1_0.simout_champsim.gz` | 166 MB | 35,834,286 | 0.92154 |
+| `tdd_ul_mu_v1_0.simout_champsim.gz` | 85 MB | 17,749,698 | 0.77059 |
+
+The instruction count is the decompressed size / 64 (a ChampSim `input_instr` is 64 bytes). At
+the end of a trace ChampSim starts it again, so a run longer than the trace replays it and the
+prefetcher's tables learn the replay: the stages stay within the shortest, 2M warmup + 10M
+(screen) or 15M (confirm) instructions (D873).
 
 **They are not in git.** 380 MB of binary blobs do not belong in a source repository, and the
 repository-root `.gitignore` excludes them. The stages measure every `*.gz`/`*.xz` in this

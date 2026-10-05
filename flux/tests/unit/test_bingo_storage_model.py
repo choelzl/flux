@@ -86,6 +86,25 @@ def test_storage_is_monotone_in_table_size():
     assert storage_bytes(bigger) > storage_bytes(DEFAULT)
 
 
+def test_partners_cost_their_tables():
+    """D873: partners cost 0 B, so every design reported 35,096. sms at its shipped values, longhand:
+    filter 64 x (36 page + 48 pc + 6 offset + 1 + 6), accumulation 32 x (36 + 48 + 6 + 64 + 1 + 5),
+    pattern table 2048 x (54 - lg(128) tag + 64 + 1 + 4), prefetch buffer 256 x 42-bit lines."""
+    shipped = {**DEFAULT, "l2c_prefetcher_types": "bingo"}
+    assert bingo.design_storage_bytes(shipped) == 35096
+    sms = (64 * 97 + 32 * 160 + 2048 * (47 + 64 + 1 + 4) + 256 * 42) // 8
+    assert sms == 32456
+    assert bingo.design_storage_bytes({**shipped, "l2c_prefetcher_types": "bingo,sms"}) == 35096 + sms
+    costs = {t: bingo.design_storage_bytes({**shipped, "l2c_prefetcher_types": f"bingo,{t}"}) - 35096
+             for t in bingo.PARTNERS}
+    assert all(c > 0 for c in costs.values()), costs
+    assert bingo.design_storage_bytes({**shipped, "l2c_prefetcher_types": "bingo,sms,stride"}) == 35096 + sms + costs["stride"]
+    for knob, more in [("sms_pht_size", 4096), ("stride_num_trackers", 512), ("sandbox_bloom_filter_size", 4096)]:
+        t = knob.split("_")[0]
+        assert bingo.design_storage_bytes({**shipped, "l2c_prefetcher_types": f"bingo,{t}", knob: more}) > 35096 + costs[t], knob
+    assert bingo.design_storage_bytes({**shipped, "l2c_prefetcher_types": "bingo,sms", "sms_pref_degree": 8}) == 35096 + sms
+
+
 def test_an_illegal_configuration_is_refused_before_the_simulator():
     """bingo.cc aborts on these; `bingo.py check` must refuse them with the reason."""
     legal = {**DEFAULT, "bingo_l2c_thresh": 0.8, "l2c_prefetcher_types": "bingo"}
