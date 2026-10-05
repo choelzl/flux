@@ -2851,7 +2851,11 @@ async function adminDocuments(body) {
     h("div", { class: "mig-head" }, h("strong", {}, `${l.user} / `, h("a", { href: appHref(l.user, l.app) }, l.app)), l.running ? h("span", { class: "pill live" }, "running") : "",
       h("span", { class: "grow" }),
       l.documents.some(d => d.status === "would migrate") ? (l.running ? h("span", { class: "muted small" }, "stop it to migrate: its document is in use")
-        : act("Migrate", () => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`), { cls: "small primary", title: "Write the documents that load; keep each original" })) : ""),
+        : act("Migrate", () => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`), { cls: "small primary", title: "Write the documents that load; keep each original" }))
+        // D813: no document it can write by itself -- why, said where the button would be, and the way to do it by hand
+        : [h("span", { class: "small bad" }, l.documents.some(d => d.status === "needs a hand") ? "not by itself: a part needs rewriting by hand (below)"
+            : "not by itself: its result would not load (below)"),
+          h("a", { class: "btn small", href: `${appHref(l.user, l.app)}/settings/problem` }, "Edit its document")]),
     ...l.documents.filter(d => d.status !== "current").map(d => h("div", { class: "mig-doc" },
       h("div", {}, h("span", { class: "mono" }, d.file), d.to !== d.file ? h("span", { class: "mono muted" }, ` → ${d.to}`) : "", " ",
         h("span", { class: `pill ${PILL[d.status] || ""}` }, d.status)),

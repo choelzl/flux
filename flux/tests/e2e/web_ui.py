@@ -829,6 +829,11 @@ def flows(r: Run) -> None:
             fetch('/api/apps', {method: 'POST', body: f, headers: {'X-Flux': '1'}}).then(async x => done({status: x.status, body: await x.text()}));""",
                      [["oldsum.problem.yaml", old], ["check.py", "print('0 failing')\n"], ["bench.py", "print('t=1')\n"]])
         r.check("a loop of an earlier form is uploaded", made["status"] == 200, str(made)[:300])
+        made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'worldly');
+            for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
+            fetch('/api/apps', {method: 'POST', body: f, headers: {'X-Flux': '1'}}).then(async x => done({status: x.status, body: await x.text()}));""",
+                     [["problem.yaml", old.replace("id: oldsum\n", "") + "world: flux_x.world:World\n"]])
+        r.check("a loop whose world needs a person is uploaded", made["status"] == 200, str(made)[:300])
         refused = r.api("/apps/oldform/start", "POST", {"passes": 1})
         r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Admin › Documents" in refused["body"], refused["body"][:300])
         r.login("ada")
@@ -836,6 +841,10 @@ def flows(r: Run) -> None:
         text = b.js("return [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).textContent")
         r.check("it says the document, where it goes and that it would migrate", "oldsum.problem.yaml" in text and "problem.yaml" in text
                 and "would migrate" in text, text[:300])
+        card_w = b.js("const c = [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('worldly'));"
+                      "return c ? [c.textContent, [...c.querySelectorAll('a.btn')].map(a => a.textContent)] : null")
+        r.check("a loop it cannot migrate by itself says why where the button would be, and links to its document (D813)",
+                card_w is not None and "needs rewriting by hand" in card_w[0] and "Edit its document" in card_w[1], str(card_w)[:300])
         r.clean("Admin › Documents")
         b.js("[...[...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).querySelectorAll('button')]"
              ".find(x => x.textContent.trim() === 'Migrate').click(); return 1")
