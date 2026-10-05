@@ -579,7 +579,8 @@ def flows(r: Run) -> None:
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
         r.check("the model settings have a tab per tool, an agent's where it is installed (D721, D807)",
-                tabs[:1] == ["Flux"] and tabs[-1:] == ["Other"] and set(tabs[1:-1]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
+                tabs[:1] == ["Flux"] and "Other" in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
+                and set(tabs[1:tabs.index("Other")]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
         r.button("Other", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Other providers: Ollama, OpenRouter"], str(shown))
@@ -604,14 +605,14 @@ def flows(r: Run) -> None:
         kind_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s kind\")"
         r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s kind\"))", "the users and their kinds")
         r.check("the admin sees each user's kind", b.js(f"const k = {kind_of}; return k && k.value", "bob") == "internal")
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "an admin's account")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "an admin's account")
         r.check("every user logs their agents in, not only an external one (D747)", True)
         made = r.api("/users", "POST", {"name": "ex", "password": "ex has a long secret", "role": "external"})
         r.check("an external user is added", made["status"] == 200, str(made))
         r.login("ex", "ex has a long secret")
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "an external user's account")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "an external user's account")
         rows = b.js("return [...document.querySelectorAll('.card table.list tbody tr')].map(t => t.children[0].textContent)")
-        r.check("an external user logs their agents in from their account", "Agent logins" in r.text(), str(rows))
+        r.check("an external user logs their agents in from their account", "My agents and models" in r.text(), str(rows))
         offered = b.js("return [...document.querySelectorAll('#main input')].map(i => i.placeholder).filter(p => /the server's/.test(p))")
         r.check("and is offered nothing of the server's", not offered and "the server's settings apply" not in r.text(), str(offered))
         r.clean("external user")
@@ -721,8 +722,8 @@ def flows(r: Run) -> None:
         r.login("bob")
         r.api("/settings", "PUT", {"values": {"FLUX_CODEX_API_KEY": "sk-e2e-not-a-key"}})
         refused = r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})
-        r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "Agent logins" in refused["body"], refused["body"][:200])
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "Account")
+        r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "My agents and models" in refused["body"], refused["body"][:200])
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "Account")
         b.wait("[...document.querySelectorAll('.card tr')].some(t => t.textContent.includes('Codex') && t.textContent.includes('not tested'))", timeout=20, what="Codex, not tested")
         b.js("const row = [...document.querySelectorAll('.card tr')].find(t => t.children[0] && t.children[0].textContent === 'Codex'); [...row.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test').click(); return 1")
         b.wait("[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Codex' && t.textContent.includes('ready'))",
@@ -740,9 +741,12 @@ def flows(r: Run) -> None:
         # D807: an agent added under a name of its own, of a kind, by its program -- offered once found
         b.js("document.querySelector('#ag-new-name').value = 'corp'; document.querySelector('#ag-new-kind').value = 'codex';"
              f"document.querySelector('#ag-new-bin').value = {json.dumps(str(fake))}; return 1")
-        r.button("Add", "#main")
-        b.wait("[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'corp')", timeout=30, what="corp added")
-        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.querySelector('h2').textContent === 'corp').textContent"))
+        b.js("[...document.querySelector('#ag-new-name').closest('fieldset').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click(); return 1")
+        b.wait("[...document.querySelectorAll('#main .agent-panel h2')].some(x => x.textContent === 'corp')", timeout=30, what="corp added")
+        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.querySelector('h2').textContent === 'corp').textContent"))
+        r.check("Agents and models is one tab: the agent's program and its model on its tab (D814)",
+                b.js("const p = [...document.querySelectorAll('#main .agent-panel')].find(c => c.querySelector('h2').textContent === 'corp');"
+                     "return !!p.closest('fieldset').querySelector('#set-server-FLUX_CORP_BASE_URL') && !!p.closest('fieldset').querySelector('#env-server-corp-name')"))
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         r.check("it has a tab of its own, with variables for it alone",
                 "corp" in b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent).join(' ')")
@@ -759,7 +763,7 @@ def flows(r: Run) -> None:
         r.page("#/admin/agents", "document.querySelector('#ag-corp-label')", "Admin › Agents")
         b.js("document.querySelector('#ag-corp-label').value = 'Corp Codex'; return 1")
         b.js("[...document.querySelector('#ag-corp-label').closest('.card').querySelectorAll('button')].find(x => x.textContent.trim() === 'Save').click(); return 1")
-        b.wait("[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Corp Codex')", timeout=20, what="corp renamed")
+        b.wait("[...document.querySelectorAll('#main .agent-panel h2')].some(x => x.textContent === 'Corp Codex')", timeout=20, what="corp renamed")
         r.check("an agent's name shown is the admin's", True)
         r.login("bob")
         r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Corp Codex')", "corp in bob's agent logins")

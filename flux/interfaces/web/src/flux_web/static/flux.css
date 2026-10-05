@@ -764,3 +764,11 @@ button.bin:hover, button.bin:focus-visible { color: var(--bad); border-color: va
 .mig-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .mig-doc { padding-left: 12px; min-width: 0; }
 .mig-doc pre { max-height: 320px; overflow: auto; }
+
+/* D814: an agent's program and login above its model, on its tab */
+fieldset.set-group.with-panel { grid-column: 1 / -1; }
+.agent-panel { display: grid; gap: 8px; min-width: 0; }
+.agent-panel-name { font-size: 1.05em; margin: 0; }
+h4.set-sub { margin: 10px 0 2px; font-size: 0.95em; border-top: 1px solid var(--line); padding-top: 8px; }
+.set-extra { grid-column: 1 / -1; min-width: 0; }
+h4.set-sub.first { border-top: 0; padding-top: 0; margin-top: 0; }

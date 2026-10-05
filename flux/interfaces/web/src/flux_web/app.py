@@ -360,7 +360,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         reg = registry(store)
         bad = [reg[a].label for a in agents if a in reg and not agent_test_of(user, a).get("ok")]
         if bad:
-            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: {user.name}'s Account › Agent logins, log in and Test")
+            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: {user.name}'s Account › My agents and models, the agent's tab: log in and Test")
 
     def author_agent(author: Any) -> list[str]:
         name = author.get("preset") if isinstance(author, dict) else author
@@ -433,7 +433,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 got = run_agent_test(u, n, why="daily")
                 if was and not got.get("ok"):
                     store.notify(u.name, f"{registry(store)[n].label}'s daily test failed: your loops wait for it -- "
-                                 "Account › Agent logins, log in again", "#/account", "warn")
+                                 "Account › My agents and models, its tab: log in again", "#/account", "warn")
             finally:
                 retesting.discard((u.name, n))
 

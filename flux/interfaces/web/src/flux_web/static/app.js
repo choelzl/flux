@@ -2567,7 +2567,7 @@ async function reviseByAgent(body, name, owner) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", documents: "Documents", resources: "Resources", sandbox: "Sandbox", agents: "Agents", models: "Models and variables", users: "Users", audit: "Audit" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", documents: "Documents", resources: "Resources", sandbox: "Sandbox", agents: "Agents and models", users: "Users", audit: "Audit" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -2575,7 +2575,7 @@ function meter(frac, cls = "") {
 }
 async function adminPage(sub = "") {
   const show = pageShow();
-  const tab = ADMIN_TABS[sub] ? sub : "";
+  const tab = sub === "models" ? "agents" : ADMIN_TABS[sub] ? sub : "";       // D814: Models and variables are the agents' tab
   const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
   const body = h("div", {});
@@ -2589,17 +2589,6 @@ async function adminPage(sub = "") {
   if (tab === "insights") return adminInsights(body);
   if (tab === "applications") return adminApplications(body);
   if (tab === "documents") return adminDocuments(body);
-  if (tab === "models") {
-    const st = await api("/admin/settings");
-    const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
-    const genv = await api("/admin/env");
-    body.replaceChildren(card("The server's models", [h("p", { class: "muted" }, "What every run gets, for Flux's own model calls and for each coding agent, unless its user sets their own on their Account page. Keys are stored encrypted and never shown again."),
-      ...settingsForm(st, { save, scope: "server", agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
-        save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]),
-      card("The server's environment variables", [h("p", { class: "muted" }, "Every run on this server gets these; a user's and a loop's own come over them. The sandbox's own variables cannot be set here: a loop's Settings tab has them."),
-        envEditor(genv, async (v) => { await api("/admin/env", { method: "PUT", body: v }); route(); }, "server")]));
-    return;
-  }
   const audit = await api("/audit");
   // D708: the hosts a loop's sandbox refused are here too, once per host and run.
   // D723: narrowed by what happened and by whom, each a list of what the trail holds
@@ -2973,18 +2962,18 @@ async function adminInsights(body) {
   body.replaceChildren(h("div", { class: "toolbar" }, h("span", { class: "muted" }, "Over the last"), pick), failCard, usageCard, epCard, netCard, diskCard);
 }
 
-/** Admin › Agents (D756, D807): every agent the server knows -- the three built-in ones and those
-    the admin adds (a name, a kind, its program) -- found or not and its version (only a found one is
-    offered to users), its program, login command and extra arguments, the files every home starts
-    with for it, the hosts it needs on the allowlist -- and who has it ready (a passed Test on their
-    Account, asked again each day). */
+/** Admin › Agents and models (D756, D807, D814): one tab per tool -- Flux's own model and the agent by
+    default; each agent, its program and login (found or not, its version, who has it ready) with its
+    model settings and its own variables under it, one Save; the other providers; the variables every
+    agent and run gets; adding an agent. An agent whose program is not found has its program only:
+    users are offered it, and its model, once it is found. */
 async function adminAgents(body) {
   body.replaceChildren(skeleton(6));
-  const r = await api("/admin/agents");
+  const [r, st, genv] = await Promise.all([api("/admin/agents"), api("/admin/settings"), api("/admin/env")]);
   const lines = (a) => (a || []).join("\n");
   const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
   const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
-  const cards = r.agents.map(a => {
+  const panelOf = (a) => {
     const f = (id, value, ph) => h("input", { id: `ag-${a.id}-${id}`, value, placeholder: ph, class: "mono", autocomplete: "off" });
     const label = h("input", { id: `ag-${a.id}-label`, value: a.label, placeholder: a.id, autocomplete: "off" });
     const bin = f("bin", a.bin, a.builtin ? a.id : "/path/to/its/program"), login = f("login", a.login, a.login_default), args = f("args", a.args, "none");
@@ -2992,12 +2981,16 @@ async function adminAgents(body) {
     const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
-    return card(a.label, [
+    const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
+    const first = JSON.stringify(body_());
+    const el = h("div", { class: "agent-panel" },
+      h("h2", { class: "agent-panel-name" }, a.label),
       h("div", { class: "agent-found" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
         h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`), h("code", { class: "small" }, a.id),
         h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`)),
+      h("h4", { class: "set-sub" }, "Its program and login"),
       h("div", { class: "grid-2" },
         h("label", { class: "stack" }, "Name shown", label),
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
@@ -3009,30 +3002,43 @@ async function adminAgents(body) {
       h("p", { class: "small" }, h("strong", {}, "Ready for: "), ready.length ? ready.join(", ") : "nobody yet",
         failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
         h("span", { class: "muted" }, " (each user tests it on their Account page; it is tested again each day)")),
-      h("div", { class: "form-actions" },
-        a.builtin ? "" : act("Remove", async () => {
-          if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
-          await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
-        }, { cls: "danger" }),
-        act("Save", async () => {
-          await api(`/admin/agents/${a.id}`, { method: "PUT", body: { label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) } });
-          toast(`${label.value || a.label} saved: from the next start, login and test`, "ok"); route();
-        }, { cls: "primary" }))]);
-  });
+      a.builtin ? "" : h("div", { class: "form-actions" }, act("Remove", async () => {
+        if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
+        await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
+      }, { cls: "danger small" })));
+    return { el, dirty: () => JSON.stringify(body_()) !== first,
+             save: async () => { await api(`/admin/agents/${a.id}`, { method: "PUT", body: body_() }); toast(`${label.value || a.label} saved: from the next start, login and test`, "ok"); } };
+  };
+  const offered = new Set(st.groups.filter(g => g.agent).map(g => g.agent));
+  const panels = {}, extraTabs = [];
+  for (const a of r.agents) {
+    const p = panelOf(a);
+    if (offered.has(a.id)) panels[a.id] = p;
+    else extraTabs.push({ tab: a.label, before: "other", el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
+      h("p", { class: "muted small" }, "Its model and its own variables are set here once its program is found.")), save: p.save, dirty: p.dirty });
+  }
+  extraTabs.push({ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent"),
+    h("p", { class: "muted small" }, "Every run on this server gets these, and each of its agents whatever the name (an ANTHROPIC_API_KEY here reaches Claude Code and OpenCode alike); a user's and a loop's own come over them. The sandbox's own variables cannot be set here: a loop's Settings tab has them."),
+    envEditor(genv, async (v) => { await api("/admin/env", { method: "PUT", body: v }); route(); }, "server")) });
   const name = h("input", { id: "ag-new-name", placeholder: "nga", class: "mono", autocomplete: "off" });
   const kind = h("select", { id: "ag-new-kind", "aria-label": "Its kind" }, r.kinds.map(k => h("option", { value: k.id }, k.label)));
   const nlabel = h("input", { id: "ag-new-label", placeholder: "NGA (our OpenCode)", autocomplete: "off" });
   const nbin = h("input", { id: "ag-new-bin", placeholder: "/opt/nga/bin/nga", class: "mono", autocomplete: "off" });
-  const add = card("Add an agent", [
-    h("p", { class: "muted" }, "Another build of a kind -- an OpenCode of your own beside the plain one -- under a name of its own, which a document names (",
+  extraTabs.push({ tab: "+ Add an agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Add an agent"),
+    h("p", { class: "muted small" }, "Another build of a kind -- an OpenCode of your own beside the plain one -- under a name of its own, which a document names (",
       h("code", {}, "generate: nga"), "). It runs as its kind does, with its own program, login and settings, and is offered to users once its program is found."),
     h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Name (lower case)", name), h("label", { class: "stack" }, "Kind", kind),
       h("label", { class: "stack" }, "Name shown", nlabel), h("label", { class: "stack" }, "Program (a path)", nbin)),
     h("div", { class: "form-actions" }, act("Add", async () => {
       await api("/admin/agents", { method: "POST", body: { name: name.value.trim(), kind: kind.value, label: nlabel.value, bin: nbin.value } });
+      try { localStorage.setItem("flux-models-tab-server", nlabel.value.trim() || name.value.trim()); } catch (_) { /* per viewer */ }
       toast(`${name.value.trim()} added`, "ok"); route();
-    }, { cls: "primary" }))]);
-  body.replaceChildren(...cards, add);
+    }, { cls: "primary" }))) });
+  const save = async (values) => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); toast("Saved", "ok"); route(); };
+  body.replaceChildren(card("Agents and models", [h("p", { class: "muted" }, "Each tool on a tab of its own: an agent's program and login, then the model it uses and the variables only it gets; ",
+      "Flux's own model; the variables every agent gets. What the server sets, every run gets unless its user sets their own on their Account page. Keys are stored encrypted and never shown again."),
+    ...settingsForm(st, { save, scope: "server", panels, extraTabs, agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
+      save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
 }
 
 async function adminUsers(body) {
@@ -3092,7 +3098,10 @@ const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL
   FLUX_DEFAULT_AGENT: "Agent" };
 /** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables
     for it alone (`agentEnv(name)`: its rows and how to save one, or null). */
-function settingsForm(st, { server = null, save, scope, agentEnv = null }) {
+function settingsForm(st, { server = null, save, scope, agentEnv = null, panels = {}, extraTabs = [] }) {
+  // D814: `panels[agent]` -- {el, save, dirty} -- its program and login above its model; `extraTabs` --
+  // [{tab, el, before, save, dirty, noSave}] -- a tab of its own (an agent not offered, every agent's
+  // variables, adding one); one Save writes what changed on any tab
   const inputs = {};
   const secret = new Set(st.secret);
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
@@ -3110,7 +3119,9 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null }) {
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null;
-    const el = h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
+    const panel = g.agent ? panels[g.agent] : null;
+    const el = h("fieldset", { class: "set-group" + (panel ? " with-panel" : "") }, h("legend", {}, g.label), panel ? panel.el : "",
+      panel ? h("h4", { class: "set-sub" }, "Its model") : "", g.hint ? h("p", { class: "muted small" }, g.hint) : "",
       note ? h("p", { class: "small hint-line" }, note) : "",
       ...g.public.map(row), ...g.secret.map(row),
       // D807: variables for this agent alone (a variable for every agent is an ordinary one)
@@ -3119,13 +3130,15 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null }) {
         envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
         vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
           envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "",
-      g.agent && scope === "server" ? h("p", { class: "muted small" }, "Its program, login command and arguments: ",
-        h("a", { href: "#/admin/agents" }, "Admin › Agents"), ".") : "");
+      "");
     return { g, el, own };
   });
   // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; one Save for all of them;
   // a tab that holds a value is marked; the tab last looked at is kept in this browser
-  const tabs = [...new Set(st.groups.map(g => g.tab || g.label))];
+  const own = st.groups.filter(g => g.id !== "other").map(g => g.tab || g.label);
+  const tabs = [...new Set([...own, ...extraTabs.filter(x => x.before === "other").map(x => x.tab),
+    ...st.groups.filter(g => g.id === "other").map(g => g.tab || g.label), ...extraTabs.filter(x => x.before !== "other").map(x => x.tab)])];
+  const extras = extraTabs.map(x => ({ ...x, holder: h("div", { class: "set-extra" }, x.el) }));
   const memo = `flux-models-tab-${scope}`;
   let cur = (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
   if (!tabs.includes(cur)) cur = tabs[0];
@@ -3138,14 +3151,18 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null }) {
         t, set ? h("span", { class: "set-dot", "aria-label": "set" }, " •") : "");
     }));
     for (const x of groups) x.el.hidden = (x.g.tab || x.g.label) !== cur;
+    for (const x of extras) x.holder.hidden = x.tab !== cur;
+    actions.hidden = extras.some(x => x.tab === cur && x.noSave);
   };
-  draw();
-  return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el)), h("div", { class: "form-actions" }, act("Save", () => {
+  const actions = h("div", { class: "form-actions" }, act("Save", async () => {
     const values = {};
     for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
     for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
+    for (const x of [...Object.values(panels), ...extras]) if (x.save && x.dirty && x.dirty()) await x.save();
     return save(values);
-  }, { cls: "primary" }))];
+  }, { cls: "primary" }));
+  draw();
+  return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el), extras.map(x => x.holder)), actions];
 }
 
 async function accountPage() {
@@ -3154,20 +3171,29 @@ async function accountPage() {
   async function save(values) { await api("/settings", { method: "PUT", body: { values } }); toast("Settings saved", "ok"); route(); }
   const pw = h("input", { type: "password", autocomplete: "new-password" });
   const mine = await api("/usage").catch(() => null);
+  const holders = Object.fromEntries(st.groups.filter(g => g.agent).map(g => [g.agent, h("div", { class: "agent-login" })]));
+  const lg = await loginsCard(holders);
+  const logins = { box: lg.box, term: lg.term, panels: Object.fromEntries(Object.entries(holders).map(([a, el]) =>
+    [a, { el: h("div", { class: "agent-panel" }, h("h4", { class: "set-sub first" }, "Its login"), el) }])) };
   show(head("Account", `Logged in as ${me.name}`),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
       mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} as the agents priced it` : "", ".")) : "",
-    card("My environment variables", [h("p", { class: "muted" }, st.external ? "Every run of yours gets these (yours alone: nothing of the server's); a loop's own (its Settings tab) come over them."
-        : "Every run of yours gets these, over the server's; a loop's own (its Settings tab) come over them."),
-      envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
-      myEnv.server.length ? h("div", { class: "blk" }, h("h3", {}, "The server's"), envTable(myEnv.server.map(x => ({ ...x, from: "the server" })), new Set(myEnv.mine.map(x => x.name)))) : ""]),
-    card("Models for my runs", [
-      h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Set an endpoint, model and key, or log an agent in below. Keys are stored encrypted and never shown again."
-        : "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
-      ...settingsForm(st, { server: st.server, save, scope: "me", agentEnv: (a) => { const e = (st.agent_env || {})[a] || { mine: [], server: [] };
-        return { rows: e.mine, server: e.server, save: async (v) => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; } })]),
-    await loginsCard(),
+    // D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's
+    // model; the variables every agent of yours gets
+    card("My agents and models", [
+      h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Log each agent in on its tab, or set its endpoint, model and key. Keys are stored encrypted and never shown again. "
+        : "Empty: the server's settings, shown in grey. Naming your own endpoint for a tool sends none of the server's values of it to your runs. Keys are stored encrypted and never shown again. ",
+        "Your agents log in into a home of your own on the server, in the sandbox; your loops use an agent once its Test passed for you, and it is tested again each day."),
+      ...settingsForm(st, { server: st.server, save, scope: "me", panels: logins.panels,
+        extraTabs: [{ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent of yours"),
+          h("p", { class: "muted small" }, st.external ? "Every run of yours gets these (yours alone: nothing of the server's), and each of its agents; a loop's own (its Settings tab) come over them."
+            : "Every run of yours gets these, over the server's, and each of its agents; a loop's own (its Settings tab) come over them."),
+          envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
+          myEnv.server.length ? h("div", { class: "blk" }, h("h4", {}, "The server's"), envTable(myEnv.server.map(x => ({ ...x, from: "the server" })), new Set(myEnv.mine.map(x => x.name)))) : "") }],
+        agentEnv: (a) => { const e = (st.agent_env || {})[a] || { mine: [], server: [] };
+          return { rows: e.mine, server: e.server, save: async (v) => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; } }),
+      logins.box, logins.term]),
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
@@ -3179,7 +3205,7 @@ async function accountPage() {
 
 /** A user's agent logins (D734; every user's, D747): each agent, logged in or not, and its login run in a
     small terminal -- its output (links clickable), a line to type, the keys a menu wants. */
-async function loginsCard() {
+async function loginsCard(holders = null) {           // D814: `holders[agent]`: where its row goes (its tab)
   const box = h("div", {});
   const out = h("pre", { class: "login-out", "aria-live": "polite" });
   const line = h("input", { placeholder: "type here, then Send (or a key below)", class: "login-in", "aria-label": "Input to the login" });
@@ -3224,7 +3250,7 @@ async function loginsCard() {
     if (wasTesting.size) testTimer = setTimeout(drawList, 2000);
     const steps = (t) => h("ul", { class: "agent-steps small" }, (t.steps || []).map(st =>
       h("li", { class: st.ok ? "" : "bad" }, h("span", { class: "mono" }, st.ok ? "✓ " : "✗ "), h("strong", {}, st.step), " ", st.said)));
-    box.replaceChildren(h("table", { class: "list compact" }, h("tbody", {}, lg.agents.flatMap(a => [h("tr", {},
+    const rowsOf = (a) => [h("tr", {},
       h("td", { class: "strong" }, a.label),
       h("td", {}, (() => { const viaKey = !a.logged_in && ((a.tested || {}).steps || []).some(st => st.step === "login" && st.ok);
         return h("span", { class: `pill ${a.logged_in || viaKey ? "ok" : ""}`, title: viaKey ? "No login of its own: a key or endpoint from the settings" : "" },
@@ -3242,11 +3268,17 @@ async function loginsCard() {
           await api(`/logins/${a.id}`, { method: "POST" });
           text = ""; offset = 0; out.replaceChildren(); term.hidden = false; poll();
         }, { cls: "small" })))),
-      ...(a.tested && a.tested.steps && a.tested.steps.length ? [h("tr", { class: "agent-test-row" }, h("td", { colspan: 5 }, steps(a.tested)))] : [])]))));
+      ...(a.tested && a.tested.steps && a.tested.steps.length ? [h("tr", { class: "agent-test-row" }, h("td", { colspan: 5 }, steps(a.tested)))] : [])];
+    const table = (as) => h("table", { class: "list compact" }, h("tbody", {}, as.flatMap(rowsOf)));
+    const placed = holders ? lg.agents.filter(a => holders[a.id]) : [];
+    for (const a of placed) holders[a.id].replaceChildren(table([a]));
+    const rest = lg.agents.filter(a => !placed.includes(a));
+    box.replaceChildren(rest.length ? table(rest) : "");
     if (lg.session && lg.session.running && term.hidden) { term.hidden = false; poll(); }
   }
   cleanup.push(() => { clearTimeout(timer); clearTimeout(testTimer); });
   await drawList();
+  if (holders) return { box, term };
   return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs use what the login writes. ",
     "The login runs as a run does, in the sandbox, under the server's network rules. ",
     "Your loops run on your logins -- also when someone you share one with starts it -- and use an agent once its Test passed for you; a login that ends well is tested at once."), box, term]);

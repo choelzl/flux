@@ -72,7 +72,7 @@ class Agent:
         k = self.keys()
         out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", k["secret"][0]: "Key"}
         if self.kind == "claude":
-            out[k["secret"][1]] = "Login token (Agent logins saves it)"
+            out[k["secret"][1]] = "Login token (its login saves it)"
         return out
 
     def login_command(self) -> list[str]:

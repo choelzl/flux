@@ -2,7 +2,7 @@
 status, and -- asked for -- one short answer through the very command a loop runs it with.
 
 `flux agent test <agent> [--live]` (a preset, or an agent a server adds, D807) runs this in the sandbox with the user's own
-home and settings; the web's Account › Agent logins runs it from a Test button, and a loop that
+home and settings; the web's Account › My agents and models runs it from a Test button, and a loop that
 needs an agent starts only for a user whose test of it passed. `task check` says each agent a
 document uses and whether it is set up (the free part: no model is asked)."""
 
@@ -123,7 +123,7 @@ def check_agent(name: str, *, live: bool = False, env: dict[str, str] | None = N
     keys = [k for k in LOGIN_KEYS[kind] if mine.get(k)]
     if not step("login", bool(files or keys),
                 (f"logged in ({', '.join(files)})" if files else f"a key in the settings ({', '.join(keys)})") if files or keys
-                else "not logged in: Account › Agent logins, or a key in the settings"):
+                else "not logged in: Account › My agents and models (its tab), or a key in the settings"):
         return done()
     if kind in STATUS:
         try:

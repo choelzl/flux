@@ -364,7 +364,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     and drafts one part at a time whatever its document asks (the log says so); on, the document
     says how many (`budget.workers`, `parallel_parts`). Only an admin changes the advanced
     settings (also when creating a loop); everyone sees them.
-- **Agents (Admin › Agents, D756, D807):** OpenCode, Claude Code and Codex, and any the admin adds -- **Add an
+- **Agents and models (Admin › Agents and models, D756, D807, D814):** one tab per tool -- Flux's own model and the agent by default; each agent, its program and login above the model it uses and the variables only it gets, one Save; the other providers; **Every agent** (the server's variables, which every run and agent gets); **+ Add an agent**. A user's Account has the same tabs (**My agents and models**): each agent's login and Test, its model, its own variables; their variables for every agent. In detail: OpenCode, Claude Code and Codex, and any the admin adds -- **Add an
   agent**: a name (lower case: what a document says, `generate: nga`), a kind (opencode, claude or codex: how it
   runs) and its program (a path) -- e.g. a company's own OpenCode beside the plain one. An agent is offered to users
   (pickers, Agent logins, its Models tab) only where its program is found and runnable; here every agent is listed,
@@ -415,7 +415,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   again where it left off (no line twice, none lost), waiting up to 30 s between tries, and a
   banner says when the server cannot be reached. A stopped server waits at most 3 s for open
   streams; a restarted one finds its running loops again.
-- **The agent by default** (Admin › Models and variables, Account): who writes problems and answers
+- **The agent by default** (Admin › Agents and models, Account): who writes problems and answers
   questions unless chosen otherwise (an agent's name, or model); a user's own over the admin's. An agent's
   program is Admin › Agents' (D807), for every run; its folder goes on the run's PATH, so the sandbox mounts
   it (without one, a built-in agent's own name on PATH, or the machine's `FLUX_<AGENT>_BIN`). On the
@@ -453,7 +453,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **Each day** (D807) an agent a user tested is tested again, one at a time: an answer keeps its login fresh;
     a failure is told to the user (the bell) and their loops that need it wait until a Test passes again.
   - **admin**: internal, and the admin pages.
-- **Admin** (tabs: Loops, Insights, Applications, Documents, Resources, Sandbox, Agents, Models and variables, Users, Audit):
+- **Admin** (tabs: Loops, Insights, Applications, Documents, Resources, Sandbox, Agents and models, Users, Audit):
   - **Documents** (D811): every loop's documents of an earlier form -- what each would change (the steps, the
     result), where it goes (`<id>.problem.yaml` with an `id:` becomes `problem.yaml`; the record follows a
     renamed id) -- migrated one loop at a time or all at once; a running loop is left until stopped; a loop's
