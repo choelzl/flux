@@ -15,7 +15,7 @@ flow:
   measure:                                 # bench.py prints time_ms=<median of 5 fresh runs>
     bench:
       command: "{python} {home}/bench.py {artifact}"
-      metrics: [time_ms]                   # it prints time_spread_ms too
+      metrics: [time_ms, time_spread_ms]   # the median of 5 runs and their spread (D874, D880)
       timeout_s: 180                       # 5 runs of at most 25 s each
 
 objectives:

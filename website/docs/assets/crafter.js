@@ -1187,6 +1187,9 @@
       var row = null;
       if (st.command) {
         var argv = argvOf(st.command), m = matchTool(argv, "stage", cat);
+        // D880: a document that reads more numbers than its tool's entry reports keeps them all --
+        // matched to the tool, the stage's other metrics were dropped on the way back
+        if (m && (st.metrics || []).some(function (x) { return !(m.tool.metrics && x in m.tool.metrics); })) m = null;
         if (m) row = { tool: m.tool.id, name: st.name, params: paramsOf(m.tool, m.params), metrics: "", needs: "", gates: [] };
         else row = { tool: "custom-stage", name: st.name, params: { command: argv.map(shellWord).join(" ") },
                      metrics: (st.metrics || []).join(", "), needs: (st.needs || []).join(", "), gates: [] };
