@@ -64,3 +64,15 @@ def test_what_was_tried_is_listed_the_best_first(tmp_path):
     assert "d#1" in block and "a loop over the digits" in block and "a table" in block
     body, _schema = prob.design_prompt(None, "", state, None, None, "")
     assert "TRIED SO FAR" in body
+
+
+def test_an_exploring_pass_with_nothing_to_explore_from_says_so(tmp_path):
+    """D842: not a silent "nothing left to do" pass after pass."""
+    from flux_loop.loop import _explore_items
+
+    task = _digits(_fake(tmp_path))
+    state = _state(task, tmp_path)
+    said: list[str] = []
+    state.say = said.append
+    assert _explore_items(PromptProblem(task), state) == []
+    assert any("nothing to explore from -- no design admitted yet" in m for m in said), said

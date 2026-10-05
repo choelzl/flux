@@ -523,6 +523,12 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
                              stage=row.stage if row is not None else "", subgoal=sub, explore=True))
     if items:
         state.say(f"  exploring: {len(items)} design(s) go back to the generator for a better one")
+    elif not state.admitted:
+        # D842: an exploring pass with nothing to explore from says so, not a silent "nothing left to do"
+        state.say("  exploring: nothing to explore from -- no design admitted yet, on this pass or the record's")
+    else:
+        state.say("  exploring: nothing goes back -- no generator here drafts a new design (a script or a sweep "
+                  "writes what its knobs say); give `generate:` a model or an agent to explore")
     return items
 
 
