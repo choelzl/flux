@@ -62,7 +62,6 @@ class FileText(BaseModel):
 class RunOptions(BaseModel):
     passes: int | None = Field(default=1, ge=1, le=1000)
     screen_only: bool = False
-    allow: list[str] = Field(default_factory=list)
     document: str | None = None          # D787: which of the loop's problems, when it has several
 
 
@@ -178,7 +177,6 @@ class SandboxConfig(BaseModel):          # D698: what every sandbox gets
     home_seed: list[str] = Field(default_factory=lambda: list(HOME_SEED))    # D744: every home starts with these
     network: str = "open"
     allow: list[str] = Field(default_factory=list)
-    users_add: bool = True
     endpoints: bool = True
 
 
@@ -460,7 +458,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
                    "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
             sandbox_env(env, sandbox, {})
-            machine_env(env, sandbox_config(store), {}, [])
+            machine_env(env, sandbox_config(store), {})
             flux = shutil.which("flux", path=env.get("PATH"))
             argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
             try:
@@ -553,7 +551,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1",
                    "FLUX_SANDBOX_TIMEOUT": str(int(LIMIT_S) + 60)}  # D768: it ends itself, whatever happens to us
             sandbox_env(env, sandbox, {})
-            machine_env(env, sandbox_config(store), {}, [])       # the network rules apply to everyone
+            machine_env(env, sandbox_config(store), {})       # the network rules apply to everyone
             def tested_after(rc: int) -> None:          # D768: a login that ended well is tested at once
                 if rc == 0:
                     threading.Thread(target=run_agent_test, args=(user, agent), daemon=True).start()
@@ -1158,7 +1156,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
-        machine_env(env, sandbox_config(store), adv, [])
+        machine_env(env, sandbox_config(store), adv)
         return env
 
     async def _attach(d: Path, files: list[UploadFile] | None) -> list[Path]:
@@ -1482,7 +1480,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop: its settings and logins (D769)
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
-        machine_env(env, sandbox_config(store), adv, [])
+        machine_env(env, sandbox_config(store), adv)
         digest = w.inputs_digest(name)
         try:
             r = subprocess.run([shutil.which("flux") or sys.argv[0], "task", "check", str(d / doc)], cwd=str(d), env=env,
@@ -1620,9 +1618,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return {"document": meta.get("document"), "documents": w.documents(name),"digest": digest, "changed": digest != meta.get("last_start_digest"),
                 "checked": last.get("digest") == digest, "ok": bool(last.get("ok")) if last.get("digest") == digest else None,
                 "output": last.get("output", "") if last.get("digest") == digest else "", "when": last.get("t"),
-                "options": meta.get("last_options"), "paused": store.server_get("paused"),
-                # D716: the admin's hosts are the admin's: a user learns the network is limited, not by what
-                "network": {k: (store.server_get("sandbox") or {}).get(k) for k in ("network", "users_add", *(("allow",) if user.role == "admin" else ()))}}
+                "options": meta.get("last_options"), "paused": store.server_get("paused")}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
     def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:

@@ -121,19 +121,15 @@ def test_the_admins_sandbox_settings_reach_each_run(tmp_path, monkeypatch):
     extra = tmp_path / "tools/bin"
     extra.mkdir(parents=True)
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1", "FLUX_REMOTE_BASE_URL": "https://llm.example:8443/v1", "FLUX_SANDBOX_ALLOW": "evil.example"}
-    said = machine_env(env, {"path": [str(extra), "/nope"], "network": "allowlist", "allow": ["10.0.0.0/8"], "users_add": False, "endpoints": True},
-                       {"allow": ["huggingface.co"]}, ["asked.example"])
+    said = machine_env(env, {"path": [str(extra), "/nope"], "network": "allowlist", "allow": ["10.0.0.0/8"], "endpoints": True},
+                       {"allow": ["huggingface.co"]})
     assert env["PATH"] == f"{extra}:/usr/bin", "a directory that does not exist is left out"
     assert env["FLUX_SANDBOX_NET"] == "allowlist" and env["FLUX_SANDBOX_ALLOW"] == "10.0.0.0/8,huggingface.co,llm.example"
-    assert "asked.example" not in env["FLUX_SANDBOX_ALLOW"], "a user may not add: their hosts are not taken"
     assert said == "network: an allowlist of 3 entries" and "10.0.0" not in said, "D716: the log says how many, never which"
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
-    machine_env(env, {"network": "allowlist", "allow": ["a.example"], "users_add": True}, {}, ["b.example"])
-    assert env["FLUX_SANDBOX_ALLOW"] == "a.example,b.example"
-    env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
-    assert machine_env(env, {}, {}, []) == "" and "FLUX_SANDBOX_ALLOW" not in env and "FLUX_SANDBOX_NET" not in env, "open by default"
+    assert machine_env(env, {}, {}) == "" and "FLUX_SANDBOX_ALLOW" not in env and "FLUX_SANDBOX_NET" not in env, "open by default"
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "0"}
-    assert machine_env(env, {"network": "allowlist", "allow": ["a.example"]}, {}, []) == "" and "FLUX_SANDBOX_NET" not in env
+    assert machine_env(env, {"network": "allowlist", "allow": ["a.example"]}, {}) == "" and "FLUX_SANDBOX_NET" not in env
 
 
 def test_only_an_admin_sets_the_sandbox_and_bad_entries_are_refused(tmp_path):
@@ -161,8 +157,7 @@ def test_only_an_admin_sets_the_sandbox_and_bad_entries_are_refused(tmp_path):
     got = ada.get("/api/admin/sandbox").json()
     assert got["config"]["network"] == "allowlist" and isinstance(got["login_path"], list)
     bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
-    net = bob.get("/api/apps/x/preflight").json()["network"]
-    assert net["network"] == "allowlist" and "allow" not in net, "D716: a user learns it is limited, not by which hosts"
+    assert "network" not in bob.get("/api/apps/x/preflight").json(), "D884: a start says nothing of the network"
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"allow": ["hf.co", "nope nope"]}, headers=H).status_code == 400
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"allow": ["hf.co"]}, headers=H).json()["advanced"]["allow"] == ["hf.co"]
 

@@ -485,12 +485,6 @@ async function startLoopOwned(name) {
   const passes = h("input", { type: "number", min: 1, value: last.passes || 1, style: "width:90px" });
   const forever = h("input", { type: "checkbox", checked: last.passes === null });
   const screen = h("input", { type: "checkbox", checked: !!last.screen_only });
-  const net = pre.network || {};
-  const allow = h("input", { placeholder: net.network === "allowlist" ? "more hosts for this start" : "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
-  if (net.network === "allowlist" && !net.users_add) allow.disabled = true;
-  const netSaid = net.network === "allowlist" ? h("p", { class: "muted small" },
-    net.allow ? `Allowed: ${net.allow.join(", ") || "nothing"}` : "Network: the admin's allowlist",
-    net.users_add ? " (and the hosts below)" : "") : "";
   passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
   const checkBox = h("div", { class: "preflight" });
@@ -503,8 +497,7 @@ async function startLoopOwned(name) {
     pick ? h("label", { class: "stack" }, `Which problem (${docs.length} in this loop)`, pick) : "",
     checkBox,
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
-    h("label", { class: "check" }, screen, "screen only (skip the costly stages)"),
-    h("label", { class: "stack", style: "margin-top:10px" }, "Network allowlist (hosts, domains, CIDRs)", allow), netSaid);
+    h("label", { class: "check" }, screen, "screen only (skip the costly stages)"));
   const said = (ok, text, output) => checkBox.replaceChildren(h("div", { class: `callout ${ok === true ? "good" : ok === false ? "bad" : ""}` },
     h("strong", {}, text), output ? h("details", {}, h("summary", {}, "the check's output"), h("pre", { class: "log small" }, output)) : ""));
   const waiting = dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
@@ -531,7 +524,7 @@ async function startLoopOwned(name) {
   if (!go) return false;
   const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: {
     passes: forever.checked ? null : (Number(passes.value) || 1), screen_only: screen.checked,
-    allow: allow.value.split(",").map(x => x.trim()).filter(Boolean), document: pick ? pick.value : null } });
+    document: pick ? pick.value : null } });
   toast(r.ok, "ok");
   return true;
 }
@@ -3083,15 +3076,13 @@ async function adminSandbox(body) {
   const mode = h("select", { id: "sb-net" }, h("option", { value: "open", selected: c.network !== "allowlist" }, "open: the containers reach any host"),
     h("option", { value: "allowlist", selected: c.network === "allowlist" }, "allowlist: only the hosts below"));
   const allow = ta("sb-allow", lines(c.allow), 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20");
-  const usersAdd = h("input", { type: "checkbox", id: "sb-users", checked: c.users_add !== false });
   const endpoints = h("input", { type: "checkbox", id: "sb-ep", checked: c.endpoints !== false });
   const paths = ta("sb-path", lines(c.path), 3, "/opt/tools/bin");
   const loginP = h("input", { type: "checkbox", id: "sb-login", checked: !!c.login_path });
   const adds = r.login_path.filter(d => !r.path.includes(d));
   const seed = ta("sb-seed", lines(c.home_seed), 3, ".config/opencode\n.gitconfig\n.npmrc");
   const allowBox = h("div", { class: "sb-allow" }, h("label", { class: "stack" }, "Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR", allow),
-    h("label", { class: "check" }, endpoints, "also the model endpoints set under Models (their hosts)"),
-    h("label", { class: "check" }, usersAdd, "a user may add hosts when starting a loop"));
+    h("label", { class: "check" }, endpoints, "also the model endpoints set under Models (their hosts)"));
   const showAllow = () => { allowBox.hidden = mode.value !== "allowlist"; };
   mode.addEventListener("change", showAllow); showAllow();
   const sbMark = saveMark();
@@ -3108,8 +3099,8 @@ async function adminSandbox(body) {
       h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
     h("div", { class: "form-actions" }, h("span", { class: "muted small" }, "Changes save as you make them; they apply from each loop's next start."), sbMark));
   // D833: saved as they change
-  autosave([mode, allow, usersAdd, endpoints, paths, loginP, seed], () => api("/admin/sandbox", { method: "PUT", body: { network: mode.value,
-    allow: list(allow), users_add: usersAdd.checked, endpoints: endpoints.checked, path: list(paths), login_path: loginP.checked, home_seed: list(seed) } }), sbMark);
+  autosave([mode, allow, endpoints, paths, loginP, seed], () => api("/admin/sandbox", { method: "PUT", body: { network: mode.value,
+    allow: list(allow), endpoints: endpoints.checked, path: list(paths), login_path: loginP.checked, home_seed: list(seed) } }), sbMark);
 }
 
 /** Admin › Insights (D766): what went wrong, what was used, how the endpoints and agents did,

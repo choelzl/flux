@@ -124,7 +124,7 @@ def test_admin_agents_sets_each_agents_program_login_files_and_hosts(server, tmp
     assert env["FLUX_OPENCODE_BIN"] == str(corp) and env["FLUX_OPENCODE_ARGS"].startswith("--agent flux")
     store.server_set("sandbox", {"network": "allowlist", "allow": ["a.example"]})
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
-    machine_env(env, sandbox_config(store), {}, [])
+    machine_env(env, sandbox_config(store), {})
     assert env["FLUX_SANDBOX_ALLOW"].split(",")[:2] == ["a.example", "ai.corp.example"], "its hosts join the allowlist"
 
 

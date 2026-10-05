@@ -167,10 +167,10 @@ def sandbox_config(store: Store) -> dict[str, Any]:
     return cfg
 
 
-def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], asked: list[str]) -> str:
+def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any]) -> str:
     """What the admin set for every sandbox (D698): PATH directories (and the server user's login
     PATH) and the network (the home files start each user's home, D744: `home_ready`). Returns how the network
-    was set, for the log line. `asked`: the start's own allowlist entries."""
+    was set, for the log line. A loop's hosts are its Settings' (`adv`), never a start's (D884)."""
     from urllib.parse import urlsplit
 
     dirs = [*(cfg.get("path") or []), *(login_path() if cfg.get("login_path") else [])]
@@ -184,7 +184,7 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
         return ""                                         # on the host: the admin chose this loop's network as the machine's
     loop = [str(x) for x in adv.get("allow") or []]
     if cfg.get("network") == "allowlist":
-        allow = [*(cfg.get("allow") or []), *loop, *(asked if cfg.get("users_add") else [])]
+        allow = [*(cfg.get("allow") or []), *loop]
         if cfg.get("endpoints"):
             for url in _endpoints(env):
                 allow.append(urlsplit(url).hostname or "")
@@ -192,7 +192,7 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
         env["FLUX_SANDBOX_NET"] = "allowlist"
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
         return _net_said(allow)
-    allow = [a for a in dict.fromkeys(str(x).strip() for x in [*loop, *asked]) if a]
+    allow = [a for a in dict.fromkeys(str(x).strip() for x in loop) if a]
     if allow:
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
         return _net_said(allow)
@@ -337,7 +337,7 @@ class RunManager:
         else:
             env["FLUX_PARALLEL_MAX"] = "1"
         sandbox_env(env, self.sandbox, adv)
-        machine_env(env, sandbox_config(self.store), adv, list(options.get("allow") or []))
+        machine_env(env, sandbox_config(self.store), adv)
         if adv.get("sandbox") is False and self.sandbox:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \

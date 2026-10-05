@@ -236,8 +236,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   files (or a `.zip`) to an existing one. Files and folders can also be dragged onto the page:
   a dropped folder keeps its paths, and names the new loop. Every file can be viewed, edited and downloaded. **Check the document** runs `flux task check` in the
   sandbox.
-- **Start and stop:** a start takes passes (or "until I stop it"), screen only and a network
-  allowlist, and is always sandboxed. The dialog offers the last start's choices, and runs the
+- **Start and stop:** a start takes passes (or "until I stop it") and screen only, and is
+  always sandboxed; its network is the admin's and the loop's Settings' (D884). The dialog offers the last start's choices, and runs the
   check when the inputs changed since it last ran; when it fails, the button says "Start
   anyway". It resumes the loop from its record. Stop after the pass
   or at once. A loop has one log (every start marked in it), one answer and one notes inbox;
@@ -379,11 +379,11 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist the container has no network; a proxy on the host forwards to allowed hosts
     only. A name is resolved and passes when one of its addresses is in an allowed IP or CIDR,
-    and is reached at that address. Optionally the model endpoints' hosts join the list, and users
-    may add hosts when starting. A loop's Settings (admins) may add hosts for that loop. An empty
-    allowlist reaches nothing. Users never see the admin's hosts (D716): a run's log and the Start dialog
-    say the network is limited and by how many entries, and the container's environment does not carry
-    the list. Admins see it in the Sandbox tab and the Start dialog.
+    and is reached at that address. Optionally the model endpoints' hosts join the list. A loop's Settings (admins) may add
+    hosts for that loop; a start adds none (D884). An empty
+    allowlist reaches nothing. Users never see the admin's hosts (D716): a run's log says the network is
+    limited and by how many entries, and the container's environment does not carry the list. Admins
+    see it in the Sandbox tab.
     A program that ignores the proxy settings still looks its host up: under an allowlist the
     container resolves through Flux (D717), and a name the list does not allow is refused and
     shows in the admin's audit as "a name lookup". A direct connection to a bare IP fails
