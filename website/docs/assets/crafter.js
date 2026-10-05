@@ -1263,6 +1263,7 @@
       promise of a line to show, `notes` on what is kept as written. */
   function mount(host, readonly, opts) {
     opts = opts || {};
+    var stepped = opts.stepped !== false;              // D826: steps unless a page asks for the whole form
     var state = opts.state || base();
     var openBox = null, openNode = null;
     var parts = {};
@@ -1874,11 +1875,48 @@
       return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), body]);
     }
 
+    // D826: steps instead of one long form -- a step bar, one step at a time, Back and Next; the
+    // document, its checklist and the save on the last step (and Save on every step when editing)
+    var STEPS = ["The problem", "Checks", "Measurements", "Objectives", "Who does each step", "More", "Review and save"];
     function renderForm() {
       parts.form.innerHTML = "";
-      parts.form.appendChild(renderLevel1());
-      parts.form.appendChild(renderLevel2());
-      parts.form.appendChild(renderLevel3());
+      if (!stepped) {
+        parts.form.appendChild(renderLevel1());
+        parts.form.appendChild(renderLevel2());
+        parts.form.appendChild(renderLevel3());
+        return;
+      }
+      var step = parts.step || 0;
+      var bar = h("ol", { class: "fc-stepbar", role: "tablist" }, STEPS.map(function (t, i) {
+        return h("li", { class: (i === step ? "fc-on" : "") + (i < step ? " fc-done" : "") }, [h("button", { type: "button", role: "tab",
+          "aria-selected": i === step ? "true" : "false", on: { click: function () { go(i); } } }, [h("span", { class: "fc-num", text: String(i + 1) }), t])]);
+      }));
+      var body;
+      if (step <= 3) {
+        var kids = Array.prototype.slice.call(renderLevel1().childNodes), n = kids.length;
+        body = step === 0 ? kids.slice(0, n - 3) : [kids[n - 4 + step]];
+      } else if (step === 4) {
+        var was = opts.foldSteps; opts.foldSteps = false; body = [renderLevel2()]; opts.foldSteps = was;
+      } else if (step === 5) {
+        parts.advancedOpen = true; body = [renderLevel3()];
+      } else {
+        body = [h("p", { class: "fc-hint", text: opts.save ? "The document as the steps say it, what is left to do, and the save." :
+          "The document as the steps say it, and what is left to do. Copy or download it." })];
+      }
+      var back = step > 0 ? button("Back", function () { go(step - 1); }) : null;
+      var next = step < STEPS.length - 1 ? button("Next: " + STEPS[step + 1], function () { go(step + 1); }, "fc-primary") : null;
+      var nav = h("div", { class: "fc-stepnav" }, [back, h("span", { class: "fc-grow" }), opts.save && step < STEPS.length - 1 ? button(opts.saveLabel || "Save", function () { parts.saveBtn.click(); }) : null, next]);
+      parts.form.appendChild(bar);
+      parts.form.appendChild(h("div", { class: "fc-step" }, body));
+      parts.form.appendChild(nav);
+      if (parts.out) parts.out.hidden = step !== STEPS.length - 1;
+      if (step === 4) setTimeout(renderDiagram, 0);
+    }
+    function go(i) {
+      parts.step = Math.max(0, Math.min(STEPS.length - 1, i));
+      renderForm();
+      renderOutput();
+      if (parts.form.scrollIntoView && parts.form.getBoundingClientRect && parts.form.getBoundingClientRect().top < 0) parts.form.scrollIntoView();
     }
 
     function renderOutput() {
@@ -1937,14 +1975,16 @@
     }, "fc-primary") : null;
     var keptNotes = (opts.notes || []).length ? [h("h4", { text: "Kept as written" }),
       h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))] : [];
-    var out = h("div", { class: "fc-output" }, [
+    parts.saveBtn = saveBtn;
+    var out = parts.out = h("div", { class: "fc-output" }, [
       h("div", { class: "fc-output-head" }, [parts.file, saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
       h("pre", { class: "fc-yaml" }, [parts.code]),
       h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat(opts.nextSteps === false ? [] : [
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]));
-    host.appendChild(h("div", { class: "fc-body" }, [parts.form, out]));
+    host.appendChild(h("div", { class: "fc-body" + (stepped ? " fc-stepped" : "") }, [parts.form, out]));
+    if (stepped) drawing();                            // the drawing's parts exist before its step is shown
     parts.pop = h("div", { class: "fc-pop", role: "dialog", hidden: "hidden" });
     host.appendChild(parts.pop);
     document.addEventListener("keydown", function (ev) {

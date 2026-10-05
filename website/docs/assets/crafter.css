@@ -201,3 +201,20 @@
 .fc-box.fc-sel rect { stroke-width: 4.5; }
 @keyframes fc-pulse { 50% { stroke-opacity: .45; } }
 @media (prefers-reduced-motion: no-preference) { .fc-box.fc-act-running rect { animation: fc-pulse 1.4s ease-in-out infinite; } }
+
+/* D826: steps instead of one long form */
+@media (min-width: 1100px) { .fc-body.fc-stepped { grid-template-columns: minmax(0, 1fr); } .fc-body.fc-stepped .fc-output { position: static; max-height: none; } }
+.fc-stepbar { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 10px; padding: 0; counter-reset: none; }
+.fc-stepbar li { margin: 0; }
+.fc-stepbar button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--fc-line); background: transparent;
+  color: var(--fc-muted); border-radius: 999px; padding: 3px 10px 3px 4px; font: inherit; cursor: pointer; }
+.fc-stepbar .fc-num { display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; border-radius: 50%;
+  border: 1px solid var(--fc-line); font-size: .9em; }
+.fc-stepbar li.fc-done button { color: inherit; }
+.fc-stepbar li.fc-done .fc-num { border-color: var(--fc-ok); color: var(--fc-ok); }
+.fc-stepbar li.fc-on button { color: inherit; border-color: var(--fc-rules); font-weight: 600; }
+.fc-stepbar li.fc-on .fc-num { background: var(--fc-rules); border-color: var(--fc-rules); color: #fff; }
+.fc-step { min-height: 12em; }
+.fc-step > .fc-section:first-child { border-top: 0; }
+.fc-stepnav { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--fc-line); margin-top: 12px; padding-top: 10px; }
+.fc-stepnav .fc-grow { flex: 1; }

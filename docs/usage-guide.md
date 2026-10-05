@@ -440,6 +440,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
+- **The configurator** (D826) is seven steps -- the problem, checks, measurements, objectives, who does each step, more (budget, search, parts), review and save -- one at a time, Back and Next, Save on every step when editing a loop.
 - **A loop's folder and cloning** (D824): New loop says what each part of a loop's folder is for (the documents, the files they name, library/, workbench/, out/, runs/, sub-loops), and the Files tab says it beside each; "Clone…" on a loop (or New loop › Clone a loop) makes a new loop of yours with its problem and none of its runs, its workbench when asked.
 - **Invitations** (D818): an admin adds a user without a password (Users, or `flux user add NAME --invite --url https://flux.example`) and gets a link to send them -- it lets them choose their password (10 or more characters) and logs them in; until then the account cannot be used. **Password reset link** (Users, or `flux user link NAME`) is the same for an existing user: their password works until the link is used, and their sessions end then. A link works once, for a week; a new one replaces it. There is no mail: the admin sends it.
 - **Kinds of user** (D734; the Users tab, or `flux user add NAME --role internal|external|admin`, `flux user role NAME --role ...`):
@@ -503,7 +504,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   the details. What happened comes in groups (D724): users and sign-in, runs, loops and their
   files, sharing and loop settings, server, network, and other; the filter offers the groups only (D733),
   each row keeping its exact kind.
-- **Every check at once** (D822): `python3 tests/check.py` (from `flux/`, in the dev shell) runs ruff, the unit suite, the heavy tests and the browser test side by side, a line each as it ends (about 2.5 minutes); `python3 tests/check.py unit e2e` some of them; `FLUX_E2E_STEPS="invitation,insights"` a few steps of the browser test (D821).
+- **Every check at once** (D822): `python3 tests/check.py` (from `flux/`, in the dev shell) runs ruff, the unit suite, the heavy tests and the browser test side by side, a line each as it ends (about 2.5 minutes); `python3 tests/check.py unit e2e` some of them; `FLUX_E2E_STEPS="login refused,login,invitation,insights"` a few steps of the browser test (D821; the first two log the browser in).
 - **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
   `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
   loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and
