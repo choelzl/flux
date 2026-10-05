@@ -212,6 +212,32 @@ class Workspace:
         (d / ".flux-app.json").write_text(json.dumps(meta))
         return {**meta, "linked": linked, "copied": copied}
 
+    #: D824: what a clone of a loop leaves behind -- its runs' own: the record and what they decided
+    #: (out/), the log, answer, notes and questions (runs/), an agent's work in progress
+    CLONE_SKIPS = ("out", "runs", ".author-work", ".attachments", "__pycache__", ".git")
+
+    def clone(self, name: str, src: Path, *, workbench: bool = False, source: str = "") -> dict[str, Any]:
+        """A new loop `name` with `src`'s problem (D824): its documents, the files they name, its
+        library/, its sub-loops' folders -- never its runs' record, log or answers; its workbench (the
+        agents' notes and tools) only when asked. Links stay links (an application's files, D703)."""
+        d = self.root / check_name(name)
+        if d.exists():
+            raise WorkspaceError(f"application {name!r} exists")
+        skips = set(self.CLONE_SKIPS) | (set() if workbench else {"workbench"})
+
+        def ignore(folder: str, names: list[str]) -> set[str]:
+            top = Path(folder).resolve() == src.resolve()
+            return {n for n in names if (top and n in skips) or n in ("__pycache__", ".git") or n.endswith(".orig")}
+
+        shutil.copytree(src, d, symlinks=True, ignore=ignore)
+        try:
+            old = json.loads((src / ".flux-app.json").read_text())
+        except (OSError, ValueError):
+            old = {}
+        meta = {"document": old.get("document"), "id": name, "cloned_from": source}
+        (d / ".flux-app.json").write_text(json.dumps(meta))
+        return meta
+
     def create_empty(self, name: str) -> Path:
         """A loop with no document yet (D704): an agent is about to write it."""
         d = self.root / check_name(name)

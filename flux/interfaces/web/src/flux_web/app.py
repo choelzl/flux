@@ -143,6 +143,11 @@ class AgentNew(BaseModel):               # D807: an agent the admin adds -- a na
     bin: str = Field(default="", max_length=1024)
 
 
+class CloneIn(BaseModel):                # D824: a loop's problem into a new loop of one's own
+    to: str = Field(max_length=64)
+    workbench: bool = False
+
+
 class MigrateIn(BaseModel):              # D811: one loop's documents, or every loop's
     user: str | None = None
     app: str | None = None
@@ -1474,6 +1479,18 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if body.app and not done:
             raise HTTPException(404, f"nothing to migrate in {body.user}/{body.app}")
         return {"done": done, "migrated": sum(d["status"] == "migrated" for x in done for d in x["documents"])}
+
+    @app.post("/api/apps/{name}/clone")
+    def clone_loop(name: str, body: CloneIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A loop cloned (D824) into the caller's own: any loop they can see -- their own, one shared with
+        them, for an admin anyone's. Its problem, never its runs'; its workbench when asked."""
+        _w, whose, d, _run = loop_of(name, user, owner)
+        try:
+            meta = ws(user).clone(body.to.strip(), d, workbench=body.workbench, source=f"{whose.name}/{name}")
+        except WorkspaceError as exc:
+            raise fail(exc) from exc
+        store.audit(user.name, "clone loop", f"{whose.name}/{name} -> {body.to.strip()}" + (" (with its workbench)" if body.workbench else ""))
+        return {"name": body.to.strip(), **meta}
 
     @app.post("/api/apps/{name}/validate")
     def validate_text(name: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

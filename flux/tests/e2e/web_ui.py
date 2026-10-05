@@ -310,7 +310,9 @@ def flows(r: Run) -> None:
     def new_loop_tabs():
         r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("New loop has three ways (D767)", tabs == ["Configurator", "Upload", "Agent"], str(tabs))
+        r.check("New loop has four ways (D767, D824: a loop cloned)", tabs == ["Configurator", "Upload", "Agent", "Clone a loop"], str(tabs))
+        r.check("New loop says what a loop's folder holds (D824)", b.js("return !!document.querySelector('details.folder-roles')")
+                and all(x in b.js("return document.querySelector('details.folder-roles').textContent") for x in ("out/", "workbench/", "library/", "runs/")))
         b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
         r.clean("New loop › Configurator")
         r.button("Agent", "#main .tabs")
@@ -899,6 +901,21 @@ def flows(r: Run) -> None:
         r.clean("invitation")
         r.login("ada")
     r.step("invitation", invitation)
+
+    def clone():
+        """D824: a loop cloned from its page: the new loop has its problem, none of its runs."""
+        r.login("bob")
+        r.page("#/app/sw", "document.querySelector('.page-head')", "sw")
+        r.button("Clone…", ".page-head")
+        b.wait("document.querySelector('#clone-to')", timeout=10, what="the clone dialog")
+        b.js("document.querySelector('#clone-to').value = 'sw-copy'; return 1")
+        b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Clone').click(); return 1")
+        b.wait("location.hash === '#/app/sw-copy'", timeout=20, what="the clone's page")
+        files = [f["path"] for f in json.loads(r.api("/apps/sw-copy/files?ignored=true")["body"])]
+        r.check("the clone has the problem, not the runs", "problem.yaml" in files and "out" not in files and "runs" not in files, str(files))
+        r.page("#/app/sw-copy/files", "document.querySelector('#main ul.files')", "the clone's files")
+        r.clean("clone")
+    r.step("clone", clone)
 
     def error_feedback():
         """D757: what a user is told when something is wrong -- before (a document that does not load,

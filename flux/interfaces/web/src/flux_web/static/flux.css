@@ -778,3 +778,10 @@ details.set-fold { border-top: 1px solid var(--line); padding-top: 6px; display:
 details.set-fold > summary { cursor: pointer; font-weight: 600; font-size: 0.95em; }
 details.set-fold[open] > summary { margin-bottom: 4px; }
 details.agent-more > summary { cursor: pointer; }
+
+/* D824: a loop's folder, said */
+details.folder-roles > summary { cursor: pointer; }
+dl.roles { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 0; }
+dl.roles dt { font-weight: 600; } dl.roles dd { margin: 0; min-width: 0; }
+@media (max-width: 560px) { dl.roles { grid-template-columns: 1fr; } dl.roles dd { margin-bottom: 6px; } }
+ul.files .role { margin-left: 6px; }

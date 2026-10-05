@@ -1022,6 +1022,7 @@ async function loopPage(name, owner, path = "") {
       }));
       if (perm === "edit") acts.push(leaveBtn());
     }
+    acts.push(act("Clone…", () => cloneDialog(name, owner), { title: "A new loop of yours with this one's problem, without its runs (D824)" }));
     if (perm === "watch") acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
       : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin: you may change and run it; it runs on its owner's agents and settings" },
@@ -1156,6 +1157,7 @@ async function loopPage(name, owner, path = "") {
   function fileList(list) {
     return h("ul", { class: "files" }, list.map(f => h("li", { class: f.ignored ? "ignored" : "" },
       h("a", { href: "javascript:void 0", onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
+      f.dir && !f.path.includes("/") && ROLE_OF[f.path] ? h("span", { class: "muted small role" }, ` — ${ROLE_OF[f.path]}`) : "",
       f.ignored ? h("span", { class: "pill small" }, "ignored") : "", f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
   function adder() {
@@ -2415,7 +2417,46 @@ function filesPanel(name, yamlOf) {
 /** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
     agent that writes it from a description and files. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
-const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent" };
+const CONFIG_MODES = { configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
+/** D824: what each part of a loop's folder is for -- said on New loop, and beside each in Files. */
+const FOLDER_ROLES = [
+  ["problem.yaml", "the problem: what to design, the gate, the stages, the objectives, who works each box (NAME.problem.yaml: another problem of the same loop)"],
+  ["the files it names", "scripts, a golden model, a spec, tools -- beside it, read by the gate and the stages ({home} is this folder)"],
+  ["library/", "papers and notes the loop reads: digested for its model and agents, cited in their prompts"],
+  ["workbench/", "the agents' notes and tools, written by them and kept from run to run (a sub-loop's is its parent's)"],
+  ["out/", "what its runs keep: the record of every design and measurement, the decided artifact, the caches -- the loop's own, never cloned"],
+  ["runs/", "the log, the answer, notes and questions -- written by the server, never cloned"],
+  ["a folder with a problem.yaml", "a sub-loop: says only what differs from this one"],
+];
+const ROLE_OF = { library: FOLDER_ROLES[2][1], workbench: FOLDER_ROLES[3][1], out: FOLDER_ROLES[4][1], runs: FOLDER_ROLES[5][1] };
+function folderRoles(open = false) {
+  return h("details", { class: "folder-roles card", open: open || null }, h("summary", {}, h("strong", {}, "A loop is a folder"),
+      h("span", { class: "muted small" }, " · what each part of it is for")),
+    h("dl", { class: "roles" }, FOLDER_ROLES.flatMap(([k, v]) => [h("dt", { class: "mono" }, k), h("dd", { class: "muted" }, v)])));
+}
+/** D824: a loop's problem cloned into a new loop of one's own. */
+async function cloneDialog(name, owner) {
+  const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
+  const wb = h("input", { type: "checkbox", id: "clone-wb" });
+  const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, h("div", { class: "stack" },
+    h("label", { class: "stack" }, "The new loop's name", to),
+    h("label", { class: "check" }, wb, "with its workbench (the agents' notes and tools)"),
+    h("p", { class: "muted small" }, "It gets the problem: its documents, the files they name, library/, its sub-loops. Not its runs: out/ (the record, the decision) and runs/ (the log, notes, questions) start empty.")),
+    [["Cancel", null], ["Clone", () => ({ to: to.value.trim(), workbench: wb.checked }), "primary"]]);
+  if (!go || !go.to) return;
+  const got = await api(`/apps/${enc(name)}/clone${owner ? `?owner=${enc(owner)}` : ""}`, { method: "POST", body: go });
+  toast(`${got.name}: cloned`, "ok");
+  location.hash = `#/app/${enc(got.name)}`;
+}
+async function cloneForm(body) {
+  const loops = await api("/loops");
+  const pick = h("select", { id: "clone-from", "aria-label": "The loop to clone" },
+    loops.map(l => { const o = l.owner && l.owner !== me.name ? l.owner : ""; return h("option", { value: JSON.stringify([o, l.name || l.app]) }, `${o ? o + " / " : ""}${l.name || l.app}`); }));
+  body.replaceChildren(card(null, loops.length ? [h("p", { class: "muted" }, "A loop you have, or one shared with you, as the start of a new one: its problem -- documents, files, library/, sub-loops -- without its runs."),
+    h("label", { class: "stack" }, "Clone", pick),
+    h("div", { class: "form-actions" }, act("Clone…", () => { const [o, n] = JSON.parse(pick.value); return cloneDialog(n, o || null); }, { cls: "primary" }))]
+    : empty("No loop to clone yet.")));
+}
 async function configurePage(name, owner, mode = "configurator") {
   const show = pageShow();
   const isNew = !name;
@@ -2423,7 +2464,9 @@ async function configurePage(name, owner, mode = "configurator") {
   const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
   show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
-    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
+    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub),
+    isNew ? folderRoles((() => { try { return !localStorage.getItem("flux-seen-roles"); } catch (_) { return true; } })()) : "", host);
+  try { localStorage.setItem("flux-seen-roles", "1"); } catch (_) { /* per viewer */ }
   configureInto(host, name, owner, mode, isNew ? "#/configure" : `${appHref(owner, name)}/settings/problem`);
 }
 
@@ -2431,7 +2474,7 @@ async function configurePage(name, owner, mode = "configurator") {
     loop's Settings › Problem (D713). `base`: the address the modes extend. */
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
-  const modes = isNew ? ["configurator", "upload", "agent"] : ["configurator", "edit", "agent"];
+  const modes = isNew ? ["configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
   const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
   function drawTabs() {
@@ -2444,6 +2487,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
       if (mode === "configurator") await crafterView(body, name, owner);
       else if (mode === "upload") body.replaceChildren(uploadForm());
       else if (mode === "edit") await directEdit(body, name);
+      else if (mode === "clone") await cloneForm(body);
       else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }
