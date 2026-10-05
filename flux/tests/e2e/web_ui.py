@@ -766,8 +766,11 @@ def flows(r: Run) -> None:
             [...document.querySelector(`#env-${scope}-name`).closest('.env-add').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click();
             return 1"""
         r.button("corp", ".set-tabs")
+        folds = b.js("const f = document.querySelector('#env-server-corp-name').closest('fieldset'); return [...f.querySelectorAll('details.set-fold')].map(d => [d.querySelector('summary').textContent, d.open])")
+        r.check("an agent's model and its variables are folded while nothing is set (D823)", len(folds) == 2 and not any(o for _t, o in folds), str(folds))
         b.js(add_var, "server-corp", "CORP_REGION", "eu")
         b.wait("[...document.querySelectorAll('.agent-vars td')].some(t => t.textContent === 'CORP_REGION')", timeout=20, what="the server's variable for corp")
+        r.check("and open by themselves once something is set", b.js("const f = document.querySelector('#env-server-corp-name').closest('details.set-fold'); return f && f.open") is True)
         got = json.loads(r.api("/admin/settings")["body"])["agent_env"]["corp"]
         r.check("the admin sets a variable for one agent alone", got == [{"name": "CORP_REGION", "value": "eu", "secret": False}], str(got))
         r.page("#/admin/agents", "document.querySelector('#ag-corp-label')", "Admin › Agents")

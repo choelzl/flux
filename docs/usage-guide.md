@@ -501,6 +501,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   the details. What happened comes in groups (D724): users and sign-in, runs, loops and their
   files, sharing and loop settings, server, network, and other; the filter offers the groups only (D733),
   each row keeping its exact kind.
+- **Every check at once** (D822): `python3 tests/check.py` (from `flux/`, in the dev shell) runs ruff, the unit suite, the heavy tests and the browser test side by side, a line each as it ends (about 2.5 minutes); `python3 tests/check.py unit e2e` some of them; `FLUX_E2E_STEPS="invitation,insights"` a few steps of the browser test (D821).
 - **Browser test:** `python3 tests/e2e/web_ui.py` (from `flux/`, in the dev shell) starts its own
   `flux serve` with three users and walks the pages in headless Firefox. It covers login, New
   loop, upload, every tab, Files and `.gitignore`, Direct edit, variables, sharing, start and

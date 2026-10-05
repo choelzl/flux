@@ -104,6 +104,7 @@ loop and the CLI alone; see the repository README):
 
 ```sh
 cd flux
+nix develop --command python3 tests/check.py                     # every check at once: ruff, unit, heavy, e2e (~2.5 min, D822)
 nix develop --command python3 -m pytest -q tests/unit            # the core suite
 nix develop --command python3 -m pytest -q tests/unit -m heavy   # the slow, tool-backed tests (Yosys, OpenROAD, Verilator, z3, ChampSim)
 nix develop --command flux --help

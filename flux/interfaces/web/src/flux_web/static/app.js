@@ -3193,17 +3193,21 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null;
     const panel = g.agent ? panels[g.agent] : null;
+    // D823: an agent's model and its own variables fold away, open by themselves when something is set
+    const setHere = [...g.public, ...g.secret].filter(k => st.values[k] || (server && server[k])).length;
+    const fold = (title, n, open, ...kids) => h("details", { class: "set-fold" + (title.startsWith("Variables") ? " agent-vars" : ""), open: open || null },
+      h("summary", {}, title, n ? h("span", { class: "muted small" }, ` · ${n} set`) : h("span", { class: "muted small" }, " · none")), ...kids);
+    const rows = [g.hint ? h("p", { class: "muted small" }, g.hint) : "", note ? h("p", { class: "small hint-line" }, note) : "",
+      ...g.public.map(row), ...g.secret.map(row)];
+    const nVars = vars ? vars.rows.length + ((vars.server || []).length) : 0;
+    const varsEl = vars ? fold(`Variables for ${g.label} alone`, nVars, nVars > 0,
+      h("p", { class: "muted small" }, "Only this agent gets these (e.g. ANTHROPIC_API_KEY for an OpenCode); a variable for every agent goes on Every agent."),
+      envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
+      vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
+        envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "";
     const el = h("fieldset", { class: "set-group" + (panel ? " with-panel" : "") }, h("legend", {}, g.label), panel ? panel.el : "",
-      panel ? h("h4", { class: "set-sub" }, "Its model") : "", g.hint ? h("p", { class: "muted small" }, g.hint) : "",
-      note ? h("p", { class: "small hint-line" }, note) : "",
-      ...g.public.map(row), ...g.secret.map(row),
-      // D807: variables for this agent alone (a variable for every agent is an ordinary one)
-      vars ? h("div", { class: "blk agent-vars" }, h("h4", {}, `Variables for ${g.label} alone`),
-        h("p", { class: "muted small" }, "Only this agent gets these (e.g. ANTHROPIC_API_KEY for an OpenCode); a variable for every agent goes with the environment variables."),
-        envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
-        vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
-          envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "",
-      "");
+      g.agent ? fold("Its model: endpoint, model, key", setHere, setHere > 0, ...rows) : rows,
+      varsEl);
     return { g, el, own };
   });
   // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; one Save for all of them;
