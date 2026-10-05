@@ -567,6 +567,14 @@ def flows(r: Run) -> None:
         r.check("a leaf opens its work: output, input and every field as tabs", {"Output", "Input"} <= set(tabs), str(tabs))
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
+        # D849: the chart over time has one point per design, not one per measurement
+        b.js("const d = [...document.querySelectorAll('#main details')].find(x => x.querySelector('summary') && x.querySelector('summary').textContent.startsWith('Charts')); if (d) d.open = true; return 1")
+        got = json.loads(r.api("/apps/sw/results")["body"])
+        metric = next(iter(got["designs"][0]["numbers"]))
+        want = sum(1 for d in got["designs"] if metric in d["numbers"])
+        pts = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Improvement over time');"
+                     " const s = c && c.querySelector('svg'); return s ? s.querySelectorAll('circle.pt').length : 0; })()", timeout=10, what="the chart's points")
+        r.check("improvement over time: one point per design", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
 

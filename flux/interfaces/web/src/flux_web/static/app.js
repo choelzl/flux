@@ -252,6 +252,16 @@ function bellIcon() {
 const num4 = (v) => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
 /** One objective over time: every measurement (dots), the best so far (a step line), its limit
     (dashed), the passes (faint ticks). `rows`: [{when, stage, metrics}]. */
+/** D849: one point per design for the charts over time -- its number at the stage asked for, else
+    at the deepest stage it reached, when it was first measured; not every measurement of it. */
+function designPoints(designs, obj) {
+  const want = obj.stage && obj.stage !== "deepest" ? obj.stage : null;
+  return (designs || []).map(d => {
+    const stage = want || d.shown, v = ((d.stages || {})[stage] || {})[obj.metric];
+    const t = Date.parse(d.first || d.last || "") / 1000;
+    return v == null || !isFinite(t) ? null : { when: t, stage, name: d.name, metrics: { [obj.metric]: v } };
+  }).filter(Boolean);
+}
 function bestChart(rows, obj, passes) {
   const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
   const pts = rows.filter(r => r.metrics[obj.metric] != null && (!obj.stage || obj.stage === "deepest" || r.stage === obj.stage))
@@ -1416,16 +1426,15 @@ async function loopPage(name, owner, path = "") {
         h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
           onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); drawTime(); } }, m))),
         h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; drawTime(); }))),
-        tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => bestChart(r.rows || [], objFor(m), r.passes)))
+        tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m); return bestChart(designPoints(r.designs, o), o, r.passes); }))
           : empty("Pick a metric to chart."));
     }
     drawPareto(); drawTime();
-    const thinned = r.rows_total > (r.rows || []).length ? h("p", { class: "muted small" }, `${r.rows.length} of ${r.rows_total} measurements shown`) : "";
     let shut = false;
     try { shut = localStorage.getItem("flux-charts") === "shut"; } catch (_) { /* a default */ }
     const charts = nums.length ? h("details", { class: "charts-box", open: !shut, ontoggle: (e) => { try { localStorage.setItem("flux-charts", e.target.open ? "open" : "shut"); } catch (_) { /* per viewer */ } } },
       h("summary", {}, "Charts: the Pareto front and the improvement over time"),
-      h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", [timeBox, thinned]))) : "";
+      h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", timeBox))) : "";
     return h("div", {},
       card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
           r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
@@ -1528,8 +1537,8 @@ async function loopPage(name, owner, path = "") {
     const ps = r.passes || [];
     if (!ps.length) return "";
     const p = ps[ps.length - 1], prev = ps.length > 1 ? ps[ps.length - 2].when : 0;
-    const took = (r.rows || []).filter(x => x.when > prev && x.when <= p.when).length;
-    return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} measurement(s)` : ""),
+    const took = (r.designs || []).filter(d => { const t = Date.parse(d.first || "") / 1000; return t > prev && t <= p.when; }).length;   // D849
+    return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
       p.conclusion ? h("pre", { class: "val small conclusion" }, conclusionText(p.conclusion)) : "",
       h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
   }
@@ -1602,7 +1611,7 @@ async function loopPage(name, owner, path = "") {
         bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
           h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
           b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
-        h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(r.rows || [], o, r.passes)) : empty("The objective has no number to chart.")),
+        h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes)) : empty("The objective has no number to chart.")),
           lastPass(r))));
   }
 
