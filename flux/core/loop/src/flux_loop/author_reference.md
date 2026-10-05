@@ -115,7 +115,7 @@ Say only what is yours; the rest is inferred.
     `prototype_cost_max` (2,000, about 650 um2 on ASAP7; -1 for none): a prototype costing
     more is made cheaper first and never synthesised while over it.
 - Advanced `budget` knobs, rarely needed: agent, ahead, budget_s, compact,
-  compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_every,
+  compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_after, explore_every,
   hop_share, knowledge_share, max_depth, max_tolerance, parallel_parts, patch_context_lines,
   patching, plan_file, prototype_attempts, prototype_attempts_max, prototype_patience,
   prototype_shrink_attempts, prototype_unmeasured_stop, regenerate, regress_after,

@@ -109,6 +109,34 @@ def shortlist_of(problem: Problem, options: list[Candidate], stage: str | None, 
 _NOT_KNOBS = ("name", "artifact", "meta", "subgoal", "knobs", "score", "why")
 
 
+def history(problem: Problem, state: LoopState) -> list[Scored]:
+    """The designs earlier passes measured (D845), the latest row per design and stage, read from
+    the record once a pass and kept beside `state.scored`, not in it: what was tried and what a
+    standing design measured, for prompts and the pass's direction."""
+    got = state.__dict__.get("_history")
+    if got is not None:
+        return got
+    out: list[Scored] = []
+    if state.records is not None and getattr(state.records, "resumed", False):
+        stages = set(problem.stages() or [])
+        latest: dict[tuple[str, str], Scored] = {}
+        try:
+            for t in state.records.store.trials(state.records.campaign_id, status="ok"):
+                if t.stage not in stages or t.result is None:
+                    continue
+                doc = dict(t.candidate or {})
+                knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
+                cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
+                                 dict(doc.get("meta") or {}), doc.get("subgoal"))
+                latest[(cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
+                                                       {"recalled": True})
+        except Exception:  # noqa: BLE001 -- a record that cannot be read back: no history
+            latest = {}
+        out = list(latest.values())
+    state.__dict__["_history"] = out
+    return out
+
+
 def _reload_measured(problem: Problem, state: LoopState) -> None:
     """A search resumes where the record left it (D682): every point an earlier pass measured
     rejoins `state.scored`, the latest row per point and stage, so the policy proposes only

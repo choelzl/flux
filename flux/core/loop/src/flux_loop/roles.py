@@ -186,6 +186,25 @@ class ModelOrchestrator:
         return None
 
 
+    def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
+        """D845: refine the standing design or explore a new one, the model asked; None: the rules."""
+        from .model import _ask, _json
+
+        if state.proposer is None:
+            return None
+        schema = {"type": "object", "properties": {"pick": {"enum": ["refine", "explore"]}, "why": {"type": "string"}},
+                  "required": ["pick"]}
+        prompt = "\n".join(["You orchestrate a design campaign: one design a pass.", *lines,
+                             'Reply with ONLY JSON: {"pick": "refine" or "explore", "why": "<one line>"}'])
+        try:
+            doc = _json(_ask(state, prompt, schema).text)
+        except Exception:  # noqa: BLE001 -- an unanswered choice is not a failed run
+            return None
+        if isinstance(doc, dict) and doc.get("pick") in ("refine", "explore"):
+            return str(doc["pick"]), str(doc.get("why") or "")[:200]
+        return None
+
+
 # ------------------------------------------------------------- the AGENT orchestrator (D505)
 @dataclass
 class AgentOrchestrator:
@@ -228,6 +247,13 @@ class AgentOrchestrator:
         lines.append("batch: the search proposes more candidates")
         got = self._decide(problem, state, "what next", lines, kinds)
         return got["pick"] if got else None
+
+    def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
+        """D845: refine the standing design or explore a new one, decided with tools and recorded."""
+        if self.coding is None and state.proposer is None:
+            return None
+        got = self._decide(problem, state, "direction", lines, ["refine", "explore"])
+        return (got["pick"], str(got.get("why") or "")[:200]) if got else None
 
     def choose_improve(self, problem: Any, item: Any, options: list, state: Any) -> Any | None:
         if (self.coding is None and state.proposer is None) or len(options) <= 1:

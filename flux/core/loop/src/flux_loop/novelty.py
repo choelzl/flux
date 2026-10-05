@@ -26,7 +26,8 @@ def _measured(state: Any, subgoal: str | None) -> list[Any]:
     """The part's measured designs, the deepest stage each reached, in the order measured."""
     order: dict[str, int] = {}
     by: dict[str, Any] = {}
-    for i, s in enumerate(getattr(state, "scored", None) or []):
+    earlier = list(state.__dict__.get("_history") or []) if hasattr(state, "__dict__") else []   # D845: the record's
+    for i, s in enumerate(earlier + list(getattr(state, "scored", None) or [])):
         c = s.candidate
         if (c.subgoal or None) != (subgoal or None) or not (c.artifact or "").strip():
             continue
@@ -57,6 +58,12 @@ def twin_said(s: Any) -> str:
 
 def tried_block(problem: Any, state: Any, subgoal: str | None, limit: int = 8) -> str:
     """What was tried for the part: the best by the objectives, then the latest, `limit` in all."""
+    try:
+        from .records import history
+
+        history(problem, state)                  # D845: the record's designs too
+    except Exception:  # noqa: BLE001 -- this pass's alone
+        pass
     rows = _measured(state, subgoal)
     if not rows:
         return ""

@@ -66,7 +66,7 @@
     test: { title: "Check it works", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
       fixed: "Configured in the Checks list above.",
       choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
-    critique: { title: "Second opinion", says: "Optionally, a critic questions the division into parts, each admitted part (sending it back) and the final choice.",
+    critique: { title: "Second opinion", says: "Optionally, a critic questions the parts, each admitted part and the final choice.",
       choices: [{ value: "off", half: "off", label: "No critic" },
                 { value: "model", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
@@ -85,7 +85,7 @@
                 { value: "none", half: "off", label: "None: no library" }] },
     // D784, D791: who sums the papers up, once each, in each pass's Setup -- always, while the
     // library is on; not a flow key of its own: an agent is written as flow.knowledge.agent
-    digest: { title: "Digest the papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once, in the Setup, and the summaries reach every prompt.",
+    digest: { title: "Digest the papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt.",
       choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
         .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
     // D796: the record's lessons, written into flow.knowledge as `lessons:` -- not a flow key of its own

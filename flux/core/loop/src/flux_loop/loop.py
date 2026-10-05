@@ -352,8 +352,15 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
     step = 0
     started = time.monotonic()
     admitted_before = set(state.admitted)          # D506: what the record gave, before this pass
+    # D845: a loop of one design -- no parts, no search over knobs -- builds one design a pass
+    one = not hunting and not goals and not getattr(problem, "subtasks", None)
+    built_before = state.built
+    directed = False
     try:
         while step < request.steps:
+            if one and state.built > built_before and not state.improve:   # a critic's send-back finishes first
+                state.stopped = "one design a pass"
+                break
             # The two optional stops first, so nothing runs after the pass is done (D463): no
             # clock unless a caller set one, no target unless the problem has one.
             if request.budget_s is not None and time.monotonic() - started >= request.budget_s:
@@ -371,6 +378,12 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     f"[loop] the pass stopped because it was good enough: {done}")
                 break
             waiting = list(todo)
+            if one and not waiting and not state.improve and not directed and state.built == built_before:
+                item = _direction(problem, state)       # D845: this pass's design: refine or explore,
+                if item is not None:                    # again when the last try was refused
+                    state.improve.append(item)
+                    continue
+                directed = True                         # nothing here drafts a new design
             if not waiting and not live and not state.improve:
                 # Nothing to generate: climb the chain with what is in hand. Its numbers may
                 # send designs back (D463), which is work again.
@@ -441,7 +454,11 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                 _publish(problem, state, todo, goals, f"after step {state.step}",
                          searching=hunting)
                 _publish_mentor(problem, state)
-        if (not state.improved and not state.pool and not todo and not live and not paused
+        if one and not directed and state.built == built_before:
+            # D845: a loop that can draft never rests: it tries again next pass
+            state.stopped = f"no new design passed the gate in {step} step(s); the next pass tries again"
+            state.say(f"  {state.stopped}")
+        if (not (one and not directed) and not state.improved and not state.pool and not todo and not live and not paused
                 and not (set(state.admitted) - admitted_before) and (state.rested or not state.sent_back)
                 and not getattr(state, "search_done", False)):      # a finished search says so below
             # D506/D518: a pass where every design sent back stood and nothing was admitted, or
@@ -483,44 +500,54 @@ def _can_draft(problem: Problem, subgoal: str | None, state: LoopState) -> bool:
     return source is None or isinstance(source, Model) or str(getattr(source, "name", "")).startswith("agent:")
 
 
-def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
-    """The campaign at rest, kept going (D593): every admitted design goes back to its
-    generator with its numbers and what better means from here -- every limit met: the
-    goal-less objectives with the limits held; one missed: the limits. The gate and the
-    decision are unchanged."""
+def _standing_said(problem: Problem, state: LoopState, cand: Candidate) -> tuple[str, str]:
+    """(its numbers and what better means from here, the stage they are from) for a standing
+    design: every limit met -- the goal-less objectives with the limits held; one missed -- the
+    limits. Its numbers from this pass, else the record's (D845)."""
+    from .records import history
+
     objs = problem.objectives()
     stages = list(problem.stages() or [])
     rank = {st: i for i, st in enumerate(stages)}
+    pool = list(state.scored) + history(problem, state)
+    rows = [s for s in pool if s.candidate.key() == cand.key()] or \
+           [s for s in state.scored if (s.candidate.meta or {}).get("composed")]
+    row = max(rows, key=lambda s: rank.get(s.stage, -1), default=None)
+    m = dict(row.metrics) if row is not None else {}
+    shown = ", ".join(f"{k} {v:.4g}" for k, v in m.items() if isinstance(v, (int, float)))
+    limits = objs.limits
+    missed = objs.missed(m, row.stage if row is not None else None, stages)
+    head = "Its numbers" + (f" on the {row.stage} stage" if row is not None else "") + f": {shown or 'not measured'}. "
+    said = ", ".join(o.describe() for o in limits)
+    one = len(limits) == 1
+    if limits and row is not None and not missed:
+        rest = Objectives(o for o in objs if o.goal is None).describe()
+        ask = (f"It meets {'the goal' if one else 'every limit'} ({said}). Keep meeting "
+               f"{'it' if one else 'them'} and make the design better on "
+               + (rest or f"{limits[0].label}, beyond the goal") + ".")
+    elif limits:
+        ask = (f"It misses the goal ({said}): make it reach the goal." if one else
+               f"It misses {', '.join(o.describe() for o in missed)} (the limits: {said}): make it meet every limit.")
+    else:
+        ask = f"Make it better on {objs.describe() or 'the objectives'}."
+    return head + ask, row.stage if row is not None else ""
+
+
+def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
+    """The campaign at rest, kept going (D593): every admitted design goes back to its
+    generator with its numbers and what better means from here. The gate and the decision
+    are unchanged. (A loop of one design chooses a direction each pass instead, D845.)"""
     items: list[Improve] = []
     for key, cand in list(state.admitted.items()):
         sub = None if key == "*" else key
         if not _can_draft(problem, sub, state):
             continue
-        rows = [s for s in state.scored if s.candidate.key() == cand.key()] or \
-               [s for s in state.scored if (s.candidate.meta or {}).get("composed")]
-        row = max(rows, key=lambda s: rank.get(s.stage, -1), default=None)
-        m = dict(row.metrics) if row is not None else {}
-        shown = ", ".join(f"{k} {v:.4g}" for k, v in m.items() if isinstance(v, (int, float)))
-        limits = objs.limits
-        missed = objs.missed(m, row.stage if row is not None else None, stages)
+        said, stage = _standing_said(problem, state, cand)
         head = (f"The campaign is at rest: this design stands and nothing the loop tried improved it "
-                f"(exploring, pass {state.request.explore} in a row). Its numbers"
-                + (f" on the {row.stage} stage" if row is not None else "") + f": {shown or 'not measured'}. ")
-        said = ", ".join(o.describe() for o in limits)
-        one = len(limits) == 1
-        if limits and row is not None and not missed:
-            rest = Objectives(o for o in objs if o.goal is None).describe()
-            ask = (f"It meets {'the goal' if one else 'every limit'} ({said}). Keep meeting "
-                   f"{'it' if one else 'them'} and make the design better on "
-                   + (rest or f"{limits[0].label}, beyond the goal") + ".")
-        elif limits:
-            ask = (f"It misses the goal ({said}): make it reach the goal." if one else
-                   f"It misses {', '.join(o.describe() for o in missed)} (the limits: {said}): make it meet every limit.")
-        else:
-            ask = f"Make it better on {objs.describe() or 'the objectives'}."
-        items.append(Improve(cand, head + ask + " A different structure or algorithm is welcome when reworking "
+                f"(exploring, pass {state.request.explore} in a row). ")
+        items.append(Improve(cand, head + said + " A different structure or algorithm is welcome when reworking "
                              "this one has stalled; it must still pass the gate.",
-                             stage=row.stage if row is not None else "", subgoal=sub, explore=True))
+                             stage=stage, subgoal=sub, explore=True))
     if items:
         state.say(f"  exploring: {len(items)} design(s) go back to the generator for a better one")
     elif not state.admitted:
@@ -530,6 +557,23 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
         state.say("  exploring: nothing goes back -- no generator here drafts a new design (a script or a sweep "
                   "writes what its knobs say); give `generate:` a model or an agent to explore")
     return items
+
+
+def _direction(problem: Problem, state: LoopState) -> Improve | None:
+    """This pass's design when nothing is left to draft (D845): the standing design refined or a
+    new one explored, as the orchestrator or the rules choose (`flux_loop.direction`)."""
+    from .direction import choose
+
+    cand = state.admitted.get("*")
+    if cand is None or not _can_draft(problem, None, state):
+        return None
+    said, stage = _standing_said(problem, state, cand)
+    pick, why = choose(problem, state, cand, said)
+    state.say(f"  direction: {pick} {cand.name} -- {why}")
+    state.lessons.append(f"[direction] {pick}: {why}")
+    if pick == "explore":
+        return Improve(cand, f"This design stands. {said}", stage=stage, subgoal=None, explore=True)
+    return Improve(cand, f"This design stands; refine it. {said}", stage=stage, subgoal=None)
 
 
 def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) -> str:
@@ -603,6 +647,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         tag = hashlib.sha256((cand.artifact or "").encode()).hexdigest()[:6]
         cand = dataclasses.replace(cand, name=f"{item.candidate.name.split('~')[0]}~{tag}")
     state.pool.append(cand)
+    state.built += 1                        # D845: a design that passed the gate this pass
     if item.subgoal:
         # An improved part replaces what was admitted for it: the composition must use the
         # design the numbers approved of. It can be sent back again in its turn.
@@ -945,6 +990,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         if sg is not None and cand.subgoal is None:
             cand = dataclasses.replace(cand, subgoal=sg)
         state.admitted[key] = cand
+        state.built += 1                    # D845: a design that passed the gate this pass
         state.part(sg).sessions.clear()     # D669: the part is done; its next job is a new agent
         _forget_stale_compositions(state)
         if sg in todo:
