@@ -89,3 +89,25 @@ def test_the_admins_routes_refuse_a_user_and_are_the_admin_and_user_management_o
     assert not wrong, f"a user got past an admin's route: {wrong}"
     unguarded_admin = [(m, p) for m, p, r in _routes(app) if p.startswith("/api/admin/") and not _guarded_by(r, "admin_of")]
     assert not unguarded_admin, f"an /api/admin/ route without the admin's guard: {unguarded_admin}"
+
+
+def test_an_admin_notifies_everyone_or_the_users_named(tmp_path):
+    """D846: the admin's notification reaches each bell; an unknown name is refused."""
+    from fastapi.testclient import TestClient
+
+    from flux_web import create_app
+    from flux_web.store import Store
+
+    store = Store(tmp_path / "data")
+    store.add_user("ada", "correct horse battery", "admin")
+    store.add_user("bob", "another long secret")
+    c = TestClient(create_app(tmp_path / "data", sandbox=False))
+    H = {"X-Flux": "1"}
+    assert c.post("/api/login", json={"name": "ada", "password": "correct horse battery"}, headers=H).status_code == 200
+    assert c.post("/api/admin/notify", json={"text": "noon"}, headers=H).json() == {"sent": 2}
+    assert [n["text"] for n in store.take_notices("bob")] == ["ada: noon"]
+    assert c.post("/api/admin/notify", json={"text": "only you", "to": ["bob"], "kind": "warn"}, headers=H).json() == {"sent": 1}
+    assert [n["text"] for n in store.take_notices("ada")] == ["ada: noon"], "not to ada"
+    assert [(n["text"], n["kind"]) for n in store.take_notices("bob")] == [("ada: only you", "warn")]
+    assert c.post("/api/admin/notify", json={"text": "x", "to": ["nobody"]}, headers=H).status_code == 400
+    assert c.post("/api/admin/notify", json={"text": "  "}, headers=H).status_code == 400

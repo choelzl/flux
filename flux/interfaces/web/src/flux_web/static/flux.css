@@ -799,3 +799,19 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
 
 /* D835: a price is a short number */
 .set-row input.price { max-width: 9em; }
+
+/* D846: the admin's controls, a line each */
+.ctl-grid { display: grid; gap: 8px; }
+.ctl-line { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 10px; align-items: center; }
+.ctl-label { color: var(--muted); font-size: 13px; }
+.ctl-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.ctl-acts input { min-width: 0; flex: 1 1 14em; max-width: 22em; }
+.notify-who { display: flex; flex-wrap: wrap; gap: 4px 14px; max-height: 12em; overflow: auto; }
+@media (max-width: 560px) { .ctl-line { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* D846: a settings row is its label and its field; a price pair on one line */
+.set-row .inline input { flex: 1 1 18em; max-width: 34em; min-width: 0; }
+.price-pair { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.price-pair .inline { flex: 0 1 auto; }
+.price-pair input.price { width: 7em; }
+.price-pair .save-mark { min-width: 0; }

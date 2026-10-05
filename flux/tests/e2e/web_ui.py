@@ -105,8 +105,8 @@ class Browser:
     def attach(self, css, path):
         self.cmd("WebDriver:ElementSendKeys", {"id": self.find(css), "text": str(path)})
 
-    def shot(self, path):
-        r = self.cmd("WebDriver:TakeScreenshot", {"full": False})
+    def shot(self, path, full=False):
+        r = self.cmd("WebDriver:TakeScreenshot", {"full": full})
         Path(path).write_bytes(base64.b64decode(r["value"]))
 
     def wait(self, expr, timeout=20.0, what=""):
@@ -896,7 +896,14 @@ def flows(r: Run) -> None:
         r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Admin › Documents" in refused["body"], refused["body"][:300])
         r.login("ada")
         r.page("#/admin", "document.querySelector('#main .card')", "Admin › Loops")
-        r.button("Migrate documents of an earlier form…", "#main")              # D816: a button on the Loops tab
+        r.check("the controls say no more than their buttons (D846)", "nobody can start one" not in r.text())
+        r.button("Send a notification…", "#main")                              # D846
+        b.wait("document.querySelector('dialog.dlg[open] textarea')", timeout=10, what="the notification dialog")
+        b.js("const d = document.querySelector('dialog.dlg[open]'); d.querySelector('textarea').value = 'Maintenance at noon'; return 1")
+        r.dialog_button("Send")
+        b.wait("[...document.querySelectorAll('.toast')].some(t => t.textContent.startsWith('Sent to'))", timeout=10, what="the notification sent")
+        r.check("the admin sends a notification to everyone", True)
+        r.button("Migrate old documents…", "#main")                            # D816: a button on the Loops tab
         b.wait("[...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", timeout=60, what="the documents to migrate")
         text = b.js("return [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).textContent")
         r.check("it says the document, where it goes and that it would migrate", "oldsum.problem.yaml" in text and "problem.yaml" in text
@@ -1072,6 +1079,30 @@ def flows(r: Run) -> None:
         finally:
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
     r.step("phone", phone)
+
+    def screens():
+        """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
+        out = Path(os.environ["FLUX_E2E_SHOTS"])
+        out.mkdir(parents=True, exist_ok=True)
+        pages = [("ada", "#/admin"), ("ada", "#/admin/agents"), ("ada", "#/admin/agents?OpenCode"), ("ada", "#/admin/resources"), ("ada", "#/admin/sandbox"),
+                 ("ada", "#/admin/users"), ("bob", "#/account"), ("bob", "#/app/sw"), ("bob", "#/app/sw/settings")]
+        who = None
+        for user, h in pages:
+            if user != who:
+                r.login(user)
+                who = user
+            tab = h.split("?", 1)[1] if "?" in h else None
+            r.page(h.split("?")[0], "document.querySelector('#main')", h)
+            b.wait("!document.querySelector('#main .skeleton')", timeout=20)
+            if tab:
+                r.button(tab, ".set-tabs")
+                b.js("document.querySelectorAll('#main details').forEach(d => d.open = true); return 1")
+            time.sleep(1.0)
+            h = h.replace("?", "-")
+            b.shot(out / f"{user}-{h.strip('#/').replace('/', '-') or 'loops'}.png", full=True)
+        r.check(f"screenshots in {out}", True)
+    if os.environ.get("FLUX_E2E_SHOTS"):
+        r.step("screens", screens)
 
 
 def main() -> int:

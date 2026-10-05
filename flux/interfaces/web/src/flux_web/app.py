@@ -91,6 +91,12 @@ class Limit(BaseModel):
     max_running: int | None = None
 
 
+class NoticeIn(BaseModel):                # D846: the admin's message to users' bells
+    text: str
+    to: list[str] = []                       # [] = every user
+    kind: str = "info"
+
+
 class StopAll(BaseModel):
     now: bool = False
 
@@ -713,6 +719,22 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         store.audit(a.name, "clean cache", f"{key}: {body.what}, {freed} bytes")
         return {"freed": freed}
+
+    @app.post("/api/admin/notify")
+    def admin_notify(body: NoticeIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """A notification from the admin (D846): to every user, or those named."""
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(400, "a notification needs a text")
+        names = {u.name for u in store.users() if not u.disabled}
+        to = [n for n in body.to if n in names] if body.to else sorted(names)
+        if body.to and len(to) != len(set(body.to)):
+            raise HTTPException(400, f"no such user: {', '.join(sorted(set(body.to) - names))}")
+        kind = body.kind if body.kind in ("info", "warn", "bad", "ok") else "info"
+        for n in to:
+            store.notify(n, f"{a.name}: {text[:500]}", "", kind)
+        store.audit(a.name, "notification", f"to {', '.join(to) if body.to else 'everyone'}: {text[:200]}")
+        return {"sent": len(to)}
 
     @app.post("/api/admin/stop-all")
     def stop_all(body: StopAll, a: User = Depends(admin_of)) -> dict[str, Any]:

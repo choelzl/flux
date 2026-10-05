@@ -26,14 +26,13 @@ __all__ = ["BUILTIN", "KINDS", "Agent", "found", "registry", "run_prices", "run_
 #: secret a login prints instead of keeping (D748), and what its settings mean.
 KINDS: dict[str, dict[str, Any]] = {
     "opencode": {"label": "OpenCode", "login": "opencode auth login", "credentials": (".local/share/opencode/auth.json",),
-                 "printed": None, "endpoint": "Endpoint URL (OpenAI-compatible)",
-                 "hint": "A provider of its own for this agent; empty: its own configuration "
-                         "(the built-in OpenCode: Flux's own model's endpoint, model and key)."},
+                 "printed": None, "endpoint": "Endpoint URL",
+                 "hint": "Empty: its own configuration; the built-in OpenCode uses Flux's model."},
     "claude": {"label": "Claude Code", "login": "claude setup-token", "credentials": (".claude/.credentials.json",),
-               "printed": re.compile(r"sk-ant-oat\d+-[A-Za-z0-9_\-]{20,}"), "endpoint": "Endpoint URL (ANTHROPIC_BASE_URL)",
+               "printed": re.compile(r"sk-ant-oat\d+-[A-Za-z0-9_\-]{20,}"), "endpoint": "Endpoint URL",
                "hint": "Empty: its own login and model."},
     "codex": {"label": "Codex", "login": "codex login", "credentials": (".codex/auth.json",), "printed": None,
-              "endpoint": "Endpoint URL (OPENAI_BASE_URL)", "hint": "Empty: its own login and model."},
+              "endpoint": "Endpoint URL", "hint": "Empty: its own login and model."},
 }
 BUILTIN = tuple(KINDS)
 #: An added agent's name: lower case, as a document names it (`generate: nga`).
@@ -76,7 +75,7 @@ class Agent:
         k = self.keys()
         pin, pout = self.prices()
         out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", k["secret"][0]: "Key",
-               pin: "Price in (USD per 1M tokens)", pout: "Price out (USD per 1M tokens)"}
+               pin: "Price in", pout: "Price out"}
         if self.kind == "claude":
             out[k["secret"][1]] = "Login token (its login saves it)"
         return out

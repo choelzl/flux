@@ -53,10 +53,9 @@ GROUPS: dict[str, dict[str, Any]] = {
               "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),
               "prices": ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),
               "secret": ("FLUX_REMOTE_API_KEY",),
-              "hint": "The endpoint Flux's own model calls go to (a proposer, a critic, an Ask answered by the model): "
-                      "any OpenAI-compatible one -- a hosted one, OpenRouter's, a local Ollama's /v1 (D817)."},
+              "hint": "Any OpenAI-compatible endpoint: hosted, OpenRouter, a local Ollama's /v1."},
     "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
-              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: an agent's name, or model."},
+              "hint": "Writes problems and answers questions unless chosen: an agent's name, or model."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])

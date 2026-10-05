@@ -395,7 +395,7 @@ function drawBell() {
       canAsk ? h("button", { class: "link", onclick: async () => { await Notification.requestPermission(); drawBell(); } }, "Allow desktop notifications") : "",
       bell.list.length ? h("button", { class: "link", onclick: () => { bell.list = []; bell.unread = 0; localStorage.removeItem(bellKey()); drawBell(); } }, "Clear") : ""),
     ...(bell.list.length ? bell.list.map(n => h("a", { class: `bell-item ${n.kind}`, href: n.href || "#/", onclick: () => { bellMenu.hidden = true; } },
-      h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "Nothing yet: you are told here when a loop stops, fails, or its agent asks.")]));
+      h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "No notifications.")]));
 }
 bellBtn.addEventListener("click", (e) => { e.stopPropagation(); bellMenu.hidden = !bellMenu.hidden; bell.unread = 0; drawBell(); });
 document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.contains(e.target)) bellMenu.hidden = true; });
@@ -440,7 +440,7 @@ async function invitePage(token) {
     h("p", { class: "sub" }, got.kind === "invite" ? `Welcome, ${got.name}: choose your password.` : `${got.name}: choose a new password.`),
     h("label", { class: "stack" }, "Password (10 or more characters)", pw), h("label", { class: "stack" }, "Again", pw2),
     h("button", { class: "primary wide", type: "submit" }, got.kind === "invite" ? "Set it and log in" : "Change it and log in"), err,
-    h("p", { class: "muted small" }, `This link works once, until ${new Date(got.expires * 1000).toLocaleString()}.`));
+    h("p", { class: "muted small" }, `Valid once, until ${new Date(got.expires * 1000).toLocaleString()}.`));
   show(form);
   pw.focus();
 }
@@ -455,7 +455,7 @@ function linkDialog(name, token, kind) {
     h("p", {}, kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
       : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`),
     h("div", { class: "row" }, field, copy),
-    h("p", { class: "muted small" }, "It works once, for a week, and is not shown again; a new link replaces it.")), [["Done", true, "primary"]]);
+    h("p", { class: "muted small" }, "Single use, valid a week, shown once.")), [["Done", true, "primary"]]);
 }
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
@@ -474,8 +474,8 @@ async function startLoopOwned(name) {
   const allow = h("input", { placeholder: net.network === "allowlist" ? "more hosts for this start" : "empty: open network", style: "width:100%", value: (last.allow || []).join(", ") });
   if (net.network === "allowlist" && !net.users_add) allow.disabled = true;
   const netSaid = net.network === "allowlist" ? h("p", { class: "muted small" },
-    net.allow ? `The server allows only: ${net.allow.join(", ") || "nothing"}` : "The network is limited to the hosts an admin allows",
-    net.users_add ? "; hosts added here join them for this start." : ".") : "";
+    net.allow ? `Allowed: ${net.allow.join(", ") || "nothing"}` : "Network: the admin's allowlist",
+    net.users_add ? " (and the hosts below)" : "") : "";
   passes.disabled = forever.checked;
   forever.addEventListener("change", () => { passes.disabled = forever.checked; });
   const checkBox = h("div", { class: "preflight" });
@@ -484,7 +484,7 @@ async function startLoopOwned(name) {
   const pick = docs.length > 1 ? h("select", {}, ...docs.map(d => h("option", { value: d.path, selected: d.path === pre.document },
     `${d.path} — record ${d.record}`))) : null;
   const body = h("div", {},
-    h("p", { class: "muted" }, "It resumes from its record: what was judged stays judged."),
+    h("p", { class: "muted" }, "Resumes from its record."),
     pick ? h("label", { class: "stack" }, `Which problem (${docs.length} in this loop)`, pick) : "",
     checkBox,
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
@@ -521,7 +521,7 @@ async function startLoopOwned(name) {
   return true;
 }
 async function stopLoop(name, now, owner) {
-  if (now && !await confirmDialog(`Stop ${name} now?`, "The pass ends at once; the record keeps what was judged. Starting it again resumes from there.", { ok: "Stop now", danger: true })) return;
+  if (now && !await confirmDialog(`Stop ${name} now?`, "The pass ends now; what was measured is kept.", { ok: "Stop now", danger: true })) return;
   const r = await api(`/apps/${enc(name)}/stop${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
 }
@@ -708,7 +708,7 @@ function uploadForm() {
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
     }
   }, { cls: "primary" });
-  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A loop you already have: its problem.yaml and the files it runs, as a folder, files or a .zip. The loop's name is the problem's id."),
+  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A problem.yaml and its files: a folder, files or a .zip."),
     h("label", { class: "stack" }, "Name", name), dz, said,
     h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)),
     h("div", { class: "form-actions" }, go)));
@@ -768,7 +768,7 @@ function markdown(text) {
 const convOpen = new Set();
 function conversation(steps, { key = "", offset = 0, live = false, scroll = false } = {}) {
   const items = [];
-  if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} not shown here: the Agent turns tab has the whole turn once it ends.`));
+  if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} hidden`));
   const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
   steps.forEach((st, i) => {
     const id = `${key}:${offset + i}`, last = i === steps.length - 1;
@@ -879,7 +879,7 @@ function usageCard(u) {
       fig("Turns", String(t.turns), t.errors ? `${t.errors} failed` : ""),
       fig("Time", dur(t.seconds) || "0s", t.turns ? `${dur(t.seconds / t.turns)} a turn` : ""),
       fig("Tokens in", t.counted ? fmtTok(t.tokens_in) : "—", t.tokens_cached ? `${fmtTok(t.tokens_cached)} from the cache` : ""),
-      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", t.counted < t.turns ? `${t.turns - t.counted} turn(s) without a count (recorded since D694)` : ""),
+      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", t.counted < t.turns ? `${t.turns - t.counted} turn(s) not counted` : ""),
       fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "at the prices set, else the agent's own" : "no prices set (Agents and models)")),
     u.by.length > 1 ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i > 1 ? "num" : "" }, x)))),
       h("tbody", {}, u.by.map(b => h("tr", {}, h("td", { class: "strong" }, b.who), h("td", { class: "muted" }, b.kind),
@@ -901,7 +901,7 @@ async function sharingCard(name, isOwner) {
   const rows = sh.shares.flatMap(x => [person(x.user),
     isOwner ? access({ "aria-label": `What ${x.user} may do`, onchange: (e) => set(x.user, e.target.value) }, x.perm) : h("span", { class: "pill" }, CAN[x.perm] || x.perm),
     isOwner ? h("button", { type: "button", class: "small", onclick: () => set(x.user, null) }, "Remove") : h("span", {})]);
-  const none = h("p", { class: "muted share-none" }, isOwner ? "Only you: share it with someone below." : "Shared with nobody else.");
+  const none = h("p", { class: "muted share-none" }, isOwner ? "Not shared." : "Shared with nobody else.");
   if (!isOwner) return card("Sharing", sh.shares.length ? h("div", { class: "share-grid" }, rows) : none);
   const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
   const who = h("select", { id: "share-user", "aria-label": "Share with" }, h("option", { value: "" }, free.length ? "Choose a user…" : "No other user"), free.map(u => h("option", { value: u }, u)));
@@ -912,8 +912,8 @@ async function sharingCard(name, isOwner) {
   return card("Sharing", [
     sh.shares.length ? "" : none,
     h("div", { class: "share-grid" }, rows, h("div", { class: "share-add-sep" }), who, how, add),
-    h("p", { class: "muted small share-note" }, h("strong", {}, "Watch"), ": its runs, log, results, turns and files. ",
-      h("strong", {}, "Edit"), ": also its files and settings, and starting and stopping it; their runs use your model settings and keys, and the log says who started each.")]);
+    h("p", { class: "muted small share-note" }, h("strong", {}, "Watch"), ": view only. ",
+      h("strong", {}, "Edit"), ": also change, start and stop it (runs use your keys).")]);
 }
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
@@ -956,7 +956,7 @@ function advancedCard(e, save, saveLabel = "Save") {
     ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
     ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : []),
     a.parallel ? "parallel work allowed" : "one at a time"].join(" · ");
-  if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, ". An admin sets these."));
+  if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, " (admin only)."));
   const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
   const f = (k, ph) => h("input", { id: `adv-${k}`, value: a[k] ?? "", placeholder: ph, style: "width:120px" });
   const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
@@ -974,12 +974,12 @@ function advancedCard(e, save, saveLabel = "Save") {
     }
     go();
   });
-  return card("Advanced (admins)", [h("p", { class: "muted" }, "Apply from the loop's next start, whoever starts it.",
+  return card("Advanced (admins)", [h("p", { class: "muted" }, "From the next start.",
       e.sandboxed_server ? "" : " This server runs without the sandbox (--no-sandbox): the limits do nothing."),
-    h("label", { class: "check" }, sb, "Run in the sandbox (off: on the host, with this machine's files and network: only for code you trust)"),
+    h("label", { class: "check" }, sb, "Run in the sandbox (off: trusted code only)"),
     h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
-    h("label", { class: "check" }, par, "Allow parallel work: tool runs and parts at once, as many as the document asks (budget.workers, parallel_parts); off: one at a time"),
+    h("label", { class: "check" }, par, "Allow parallel work"),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
     h("div", { class: "form-actions" }, h("span", { class: "muted small" }, saveLabel === "Save" ? "Changes save as you make them." : "Kept for the new loop as you make them."), mark)]);
 }
@@ -1024,7 +1024,7 @@ async function loopPage(name, owner, path = "") {
 
   const crumbBar = h("div", {});
   const leaveBtn = () => act("Leave", async () => {           // D702: a shared loop, left by its guest
-    if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `It goes from your list; ${info.owner} is told and may share it again.`, { ok: "Leave" })) return;
+    if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `${info.owner} is told.`, { ok: "Leave" })) return;
     toast((await api(`/apps/${enc(name)}/shares/me?owner=${enc(info.owner)}`, { method: "DELETE" })).ok, "ok"); location.hash = "#/";
   });
   function drawCrumbs() {
@@ -1083,7 +1083,7 @@ async function loopPage(name, owner, path = "") {
     const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
     const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
     banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
-        h("span", { class: "muted" }, left ? `answer within ${dur(left)}, or it decides` : "its time is up: it decided")),
+        h("span", { class: "muted" }, left ? `${dur(left)} left` : "timed out")),
       h("pre", { class: "question" }, question.question), mine ? [ans,
       h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))] : ""));
   }
@@ -1111,7 +1111,7 @@ async function loopPage(name, owner, path = "") {
       el.classList.toggle("asking", !!open);
       if (open) {
         const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
-        ask.replaceChildren(h("strong", {}, "The agent asks"), h("span", { class: "muted" }, left ? ` · answer within ${dur(left)}, or it decides` : " · its time is up: it decided"),
+        ask.replaceChildren(h("strong", {}, "The agent asks"), h("span", { class: "muted" }, left ? ` · ${dur(left)} left` : " · timed out"),
           h("pre", { class: "question" }, question.question));
         ta.placeholder = "Your answer to the agent (Enter sends)"; sendBtn.textContent = "Answer";
       } else {
@@ -1183,7 +1183,7 @@ async function loopPage(name, owner, path = "") {
   function ignoredToggle() {
     const box = h("input", { type: "checkbox", checked: showIgnored(), id: "show-ignored" });
     box.addEventListener("change", () => { try { localStorage.setItem("flux-show-ignored", box.checked ? "1" : "0"); } catch (_) { /* per viewer */ } drawBody(); });
-    return h("label", { class: "check small ignored-toggle", title: "Files the loop's .gitignore ignores; .git is never shown" }, box, "show ignored files");
+    return h("label", { class: "check small ignored-toggle", title: "Files .gitignore leaves out, and names starting with ." }, box, "show ignored files");
   }
   function fileList(list) {
     // D829: a loop's own parts stand out: its documents and the folders Flux keeps
@@ -1268,9 +1268,8 @@ async function loopPage(name, owner, path = "") {
     body.replaceChildren(
       card(null, h("div", { class: "tl-head" }, startSel, passSel,
         h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${t.bars.length} phase(s) · ${t.passes.length} pass(es)`))),
-      card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed lines: a pass begins. Hover a bar for its phase.")]),
-      card("Where the time goes", [kindsTable,
-        h("p", { class: "muted small" }, "Each call that does the work (a tool, an agent, a model call) counts in the kind of its nearest named phase. Total: the wall clock its calls held, work side by side counted once.")]));
+      card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed: a pass begins.")]),
+      card("Where the time goes", [kindsTable]));
   }
 
   /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
@@ -1281,7 +1280,7 @@ async function loopPage(name, owner, path = "") {
     const unit = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
     const limitOf = (m) => r.limits.find(l => l.metric === m);
     const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted") : h("span", { class: "pill bad" }, "failed");
-    const detail = h("div", { class: "detail" }, empty("Select a design to see the limits it misses, every stage's numbers and its source."));
+    const detail = h("div", { class: "detail" }, empty("Select a design."));
     async function open(d, tr) {
       if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
       tr.classList.add("sel");
@@ -1327,7 +1326,7 @@ async function loopPage(name, owner, path = "") {
       const ops = fa.artifact != null && fb.artifact != null ? lineDiff(fa.artifact, fb.artifact) : null;
       const changed = ops ? ops.filter(o => o[0] !== " ").length : 0;
       await dialog(`${a.name} → ${b.name}`, h("div", { class: "compare" },
-        h("p", { class: "muted" }, "B against A: the change, green where B is better by the metric's direction."),
+        h("p", { class: "muted" }, "Green: B is better."),
         h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "stage"), h("th", {}, "metric"),
             h("th", { class: "num" }, "A ", verdictPill(a)), h("th", { class: "num" }, "B ", verdictPill(b)), h("th", { class: "num" }, "B − A"))),
           h("tbody", {}, rows.map(row => h("tr", {}, h("td", { class: "muted" }, row.st), h("td", {}, row.m), cell(row.va), cell(row.vb), delta(row))))),
@@ -1421,7 +1420,7 @@ async function loopPage(name, owner, path = "") {
           : empty("Pick a metric to chart."));
     }
     drawPareto(); drawTime();
-    const thinned = r.rows_total > (r.rows || []).length ? h("p", { class: "muted small" }, `${r.rows.length} of ${r.rows_total} measurements drawn: every new best, and an even share of the rest.`) : "";
+    const thinned = r.rows_total > (r.rows || []).length ? h("p", { class: "muted small" }, `${r.rows.length} of ${r.rows_total} measurements shown`) : "";
     let shut = false;
     try { shut = localStorage.getItem("flux-charts") === "shut"; } catch (_) { /* a default */ }
     const charts = nums.length ? h("details", { class: "charts-box", open: !shut, ontoggle: (e) => { try { localStorage.setItem("flux-charts", e.target.open ? "open" : "shut"); } catch (_) { /* per viewer */ } } },
@@ -1446,7 +1445,7 @@ async function loopPage(name, owner, path = "") {
   // question to an agent about it -- the drawer, from every tab; no bar docked under Live any more
   const drawer = h("aside", { class: "drawer", "aria-label": "Talk to this loop" },
     h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
-  const askFab = h("button", { class: "ask-fab", type: "button", title: "Notes to the running loop, and questions to an agent about it", onclick: () => setAsk(!askOpen) }, "Talk");
+  const askFab = h("button", { class: "ask-fab", type: "button", onclick: () => setAsk(!askOpen) }, "Talk");
   function setAsk(open) {
     askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
     if (open) { askBox.replaceChildren(skeleton(4)); askView(); } else clearTimeout(askTimer);
@@ -1464,13 +1463,13 @@ async function loopPage(name, owner, path = "") {
     if (mine && st.running) {                       // D758: the running loop's notes, and its agent's open question
       composer.update();
       drawNotes();
-      steer = card("A note to the running loop", [h("p", { class: "muted" }, "It joins the loop's next prompt; when its agent asks, it is the answer."),
+      steer = card("A note to the running loop", [h("p", { class: "muted" }, "Sent with its next prompt."),
         composer.el], { cls: "steer-card" });
     }
     if (mine) {
       const q = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
       const who = await agentSelect("ask-who");
-      form = card(null, [h("p", { class: "muted" }, "The agent reads the loop -- its document and files, a copy of its record, its log -- in the sandbox, and answers. It changes nothing."),
+      form = card(null, [h("p", { class: "muted" }, "An agent reads the loop and answers; it changes nothing."),
         h("label", { class: "stack" }, "Your question", q),
         h("div", { class: "row" }, h("label", { class: "stack" }, "Who answers", who), h("span", { class: "grow" }),
           act("Ask", async () => {
@@ -1490,7 +1489,7 @@ async function loopPage(name, owner, path = "") {
         : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))]],
       { cls: "ask-card has-bin" });
     askBox.replaceChildren(steer, mine ? h("h3", { class: "drawer-sub" }, "Ask an agent about it") : "", form,
-      ...(list.length ? list.map(one) : [card(null, empty(mine ? "No question yet." : "No question asked yet."))]));
+      ...(list.length ? list.map(one) : [card(null, empty("No questions."))]));
   }
   /** The loop's settings (D697): its environment variables over the user's and the server's, and
       what only an admin sets -- the sandbox and its limits. */
@@ -1499,8 +1498,8 @@ async function loopPage(name, owner, path = "") {
     const e = await api(`/apps/${enc(name)}/env${qs}`);
     if (tab !== "Settings") return;
     const varsCard = card("Environment variables", [
-      h("p", { class: "muted" }, isOwner ? "What this loop's runs and checks get, over your own and the server's. A secret is stored encrypted and never shown again."
-        : `What this loop's runs and checks get, over ${info.owner}'s own and the server's: the runs are ${info.owner}'s. A secret is stored encrypted and never shown again.`),
+      h("p", { class: "muted" }, isOwner ? "This loop's variables win over yours and the server's."
+        : `This loop's variables win over ${info.owner}'s and the server's.`),
       envEditor(e.loop, mine ? async (v) => { await api(`/apps/${enc(name)}/env`, { method: "PUT", body: v }); settingsView(); } : null, "loop"),
       e.user.length || e.server.length ? h("div", { class: "blk" }, h("h3", {}, "Under them"),
         envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))],
@@ -1574,7 +1573,7 @@ async function loopPage(name, owner, path = "") {
         dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
         topDesigns(r, 3)],
         { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
-      : card("The decision", [empty(designs.length ? "No decision yet: the loop decides at the end of its first pass." : "No design measured yet."),
+      : card("The decision", [empty(designs.length ? "No decision yet." : "No design measured yet."),
           topDesigns(r, 3)]);
     const q0 = st.question;
     if (tab !== "Overview") return;                   // the tab changed while it loaded
@@ -1653,7 +1652,7 @@ async function loopPage(name, owner, path = "") {
         return;
       }
       body.replaceChildren(h("div", { class: "live-wrap" },
-        h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Not running: the last start's tree."), live.tree], { cls: "tree-card" }),
+        h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "The last start."), live.tree], { cls: "tree-card" }),
           h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
         ""));
       live.draw(); liveLog.fill(); composer.update();
@@ -1666,7 +1665,7 @@ async function loopPage(name, owner, path = "") {
     } else if (tab === "Agents") {
       body.replaceChildren(card(null, skeleton(7)));
       const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
-      const one = h("div", { class: "detail" }, empty("Select a turn to read its prompt, reply and tool calls."));
+      const one = h("div", { class: "detail" }, empty("Select a turn."));
       const pick = async (t, tr) => {
         for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
         const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
@@ -1709,7 +1708,7 @@ async function loopPage(name, owner, path = "") {
     } else if (tab === "Results") {
       body.replaceChildren(card(null, skeleton(7)));
       const r = await api(`/apps/${enc(name)}/results${qs}`);
-      if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No result yet: a design is a result once a stage measured it."))); return; }
+      if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No results yet."))); return; }
       body.replaceChildren(resultsView(r));
     } else if (tab === "Files" && !curSub()) {
       const files = await api(`/apps/${enc(name)}/files${qs}${showIgnored() ? (qs ? "&" : "?") + "ignored=true" : ""}`);
@@ -1725,9 +1724,9 @@ async function loopPage(name, owner, path = "") {
               h("a", { href: "javascript:void 0", onclick: () => openFile(b.path, false) }, b.path.split("/").pop()),
               h("small", { class: "muted" }, " ", ago(b.mtime)), b.first ? h("div", { class: "first" }, b.first) : ""))));
           })
-        : empty("Empty. The coding agents keep the tools they build and the notes they write here, across starts.")),
+        : empty("Empty.")),
         card(null, viewer, { cls: "viewer-card" })));
-      viewer.replaceChildren(empty("Select a tool or a note."));
+      viewer.replaceChildren(empty(""));
     }
   }
   let beat = 0, busy = false;
@@ -1877,7 +1876,7 @@ function logView(base, qs) {
   drawStarts();
   const bar = h("div", { class: "toolbar" }, startSel,
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
-    h("label", { class: "check" }, problems, "problems only"), h("label", { class: "check", title: "Each line's time (lines written since D732)" }, times, "times"),
+    h("label", { class: "check" }, problems, "problems only"), h("label", { class: "check", title: "Each line's time" }, times, "times"),
     filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const pill = streamPill();
   // D759: a day-long run's log opens on its last 2 MB; the earlier lines on asking
@@ -2231,7 +2230,7 @@ function liveTree(base, qs, onQuestion) {
       stream("result", "The last command's output", f["last tool output"]),
       stream("reply", "Its words", f["reply (live tail)"], "reply"),
       stream("stderr", "stderr", f.stderr, "err"),
-      !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing from the agent yet: it is starting, or thinking without saying." : "The agent said nothing the page could show.") : "");
+      !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing yet." : "No output.") : "");
   }
   /** A tool at work (D709): its command, folder and exit, and the ends of its stdout and
       stderr -- live while it runs, kept when it ends. */
@@ -2248,11 +2247,11 @@ function liveTree(base, qs, onQuestion) {
       p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono" }, p.command)) : "",
       stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, "err"),
-      !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "This run of the tool was recorded without its command and output.") : "");
+      !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "No output recorded.") : "");
   }
   let detailTab = "";
   function drawDetail(now) {
-    if (!selected) { detail.replaceChildren(empty("Select a task to see its parameters, live fields and output.")); return; }
+    if (!selected) { detail.replaceChildren(empty("Select a task.")); return; }
     const n = selected;
     // D702: a stream read upward keeps its place across the redraw each second
     const kept = new Map([...detail.querySelectorAll("pre[data-k], .cv[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
@@ -2413,7 +2412,7 @@ function filesPanel(name, yamlOf) {
   }
   async function remove(f) {
     if (!name) { staged.delete(f.path); draw(); return; }
-    if (!await confirmDialog(`Delete ${f.path}?`, "The file goes from the loop; the document may still name it.", { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete ${f.path}?`, "The document may still name it.", { ok: "Delete", danger: true })) return;
     await api(`/apps/${enc(name)}/file?path=${enc(f.path)}`, { method: "DELETE" }); toast(`${f.path} deleted`, "ok"); draw();
   }
   const dz = dropZone("Drop scripts, models or folders here", async (got) => {
@@ -2437,7 +2436,7 @@ function filesPanel(name, yamlOf) {
       files.length ? h("ul", { class: "files flist" }, files.map(f => h("li", {},
         h("a", { href: "javascript:void 0", onclick: () => open(f) }, h("span", { class: "ic" }, "·"), f.path),
         h("small", { class: "muted" }, f.size < 1024 ? `${f.size} B` : `${(f.size / 1024).toFixed(1)} KB`, f.staged ? " · with the new loop" : ""),
-        h("button", { class: "link danger-link", title: `Delete ${f.path}`, onclick: () => remove(f) }, "×")))) : h("p", { class: "muted" }, "No file beside the document yet."),
+        h("button", { class: "link danger-link", title: `Delete ${f.path}`, onclick: () => remove(f) }, "×")))) : h("p", { class: "muted" }, "No files."),
       missing.length ? h("div", { class: "callout bad" }, h("strong", {}, "The document names these, and the loop does not have them: "),
         missing.map((p, i) => [i ? ", " : "", h("a", { href: "javascript:void 0", title: "Write it here", onclick: () => editor(p, "") }, p)])) : "",
       h("div", { class: "row" }, h("button", { class: "small", type: "button", onclick: () => editor("", "") }, "New file"), into), dz);
@@ -2463,7 +2462,7 @@ async function cloneDialog(name, owner) {
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, h("div", { class: "stack" },
     h("label", { class: "stack" }, "The new loop's name", to),
     h("label", { class: "check" }, wb, "with its workbench (the agents' notes and tools)"),
-    h("p", { class: "muted small" }, "It gets the problem: its documents, the files they name, library/, its sub-loops. Not its runs: out/ (the record, the decision) and runs/ (the log, notes, questions) start empty.")),
+    h("p", { class: "muted small" }, "Copies the problem, not its runs.")),
     [["Cancel", null], ["Clone", () => ({ to: to.value.trim(), workbench: wb.checked }), "primary"]]);
   if (!go || !go.to) return;
   const got = await api(`/apps/${enc(name)}/clone${owner ? `?owner=${enc(owner)}` : ""}`, { method: "POST", body: go });
@@ -2473,8 +2472,7 @@ async function cloneDialog(name, owner) {
 /** D825: a loop's baseline -- the skeleton problem.yaml, the README of its parts, library/ -- then its configurator. */
 function emptyForm(body) {
   const name = h("input", { id: "empty-name", placeholder: "my_loop", class: "mono", autocomplete: "off" });
-  body.replaceChildren(card(null, [h("p", { class: "muted" }, "A loop's folder as it starts: problem.yaml with every part present and what goes there, ",
-      "a README of what each part of the folder is for, an empty library/. Nothing of any case: you fill it in, in the configurator or directly."),
+  body.replaceChildren(card(null, [h("p", { class: "muted" }, "A skeleton problem.yaml, a README and an empty library/."),
     h("label", { class: "stack" }, "Its name", name),
     h("div", { class: "form-actions" }, act("Make the empty loop", async () => {
       const got = await api("/apps/new-empty", { method: "POST", body: { name: name.value.trim() } });
@@ -2486,7 +2484,7 @@ async function cloneForm(body) {
   const loops = await api("/loops");
   const pick = h("select", { id: "clone-from", "aria-label": "The loop to clone" },
     loops.map(l => { const o = l.owner && l.owner !== me.name ? l.owner : ""; return h("option", { value: JSON.stringify([o, l.name || l.app]) }, `${o ? o + " / " : ""}${l.name || l.app}`); }));
-  body.replaceChildren(card(null, loops.length ? [h("p", { class: "muted" }, "A loop you have, or one shared with you, as the start of a new one: its problem -- documents, files, library/, sub-loops -- without its runs."),
+  body.replaceChildren(card(null, loops.length ? [h("p", { class: "muted" }, "A new loop from one you have: its problem, not its runs."),
     h("label", { class: "stack" }, "Clone", pick),
     h("div", { class: "form-actions" }, act("Clone…", () => { const [o, n] = JSON.parse(pick.value); return cloneDialog(n, o || null); }, { cls: "primary" }))]
     : empty("No loop to clone yet.")));
@@ -2540,7 +2538,7 @@ async function crafterView(body, name, owner) {
   const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
   if (name) {                                           // an existing loop, read back
     const v = await api(`/apps/${enc(name)}/document`);
-    if (!v.document) { body.replaceChildren(card(null, empty("This loop has no problem document yet: an agent may be writing it (the loop's Overview), or use Direct edit."))); return; }
+    if (!v.document) { body.replaceChildren(card(null, empty("No problem document yet."))); return; }
     if (v.raw == null) {                                // D710: not YAML at all -- the form would read nothing and save over it
       body.replaceChildren(card(null, [h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error),
         h("p", { class: "muted" }, "The configurator cannot read it. Fix it in ", h("a", { href: `${appHref(owner, name)}/settings/problem/edit` }, "Direct edit"), ".")]));
@@ -2548,7 +2546,7 @@ async function crafterView(body, name, owner) {
     }
     const got = C.fromDoc(v.raw, v.normal || v.raw);
     const panel = filesPanel(name, yamlOf);
-    body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving rewrites it from this form; comments are not kept",
+    body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving drops its comments",
         got.kept.length ? "; what the form does not edit is kept as written" : ""),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
       host, panel.el);
@@ -2630,8 +2628,7 @@ async function directEdit(body, name) {
     refused.replaceChildren(v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "");
     return v.error || "";
   }
-  body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "The document", fileIn),
-      h("span", { class: "muted" }, "As written: comments and everything kept. Check before starting: Start runs the check on what you saved.")),
+  body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "The document", fileIn)),
     refused, ed.el, h("div", { class: "form-actions" }, save)]), panel.el);
   if (doc) loaderSays();
   setTimeout(panel.draw, 200);
@@ -2651,7 +2648,7 @@ async function newByAgent(body) {
     toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
   }, { cls: "primary" });
   body.replaceChildren(card(null, [
-    h("p", { class: "muted" }, "The agent writes the problem document and the files it names (a golden model, a generator, checks) in the loop's folder, in the sandbox, and the document is checked. Nothing runs: you review it (Configure), then start it."),
+    h("p", { class: "muted" }, "An agent writes the problem and its files; nothing runs until you start it."),
     h("div", { class: "row" }, h("label", { class: "stack", style: "flex:1" }, "Name", name), h("label", { class: "stack" }, "Agent", who)),
     h("label", { class: "stack" }, "What should the loop do?", ask),
     h("h3", {}, "Files it should read"), files.el,
@@ -2678,7 +2675,7 @@ async function reviseByAgent(body, name, owner) {
     poll();
   }, { cls: "primary" });
   body.replaceChildren(card(null, [
-    h("p", { class: "muted" }, "The agent edits the document (and its files) in the loop's folder as you say, in the sandbox, and the document is checked; the loop's record stays. You see what changed below."),
+    h("p", { class: "muted" }, "An agent edits the problem as you say; the record stays. The changes show below."),
     h("div", { class: "row" }, h("label", { class: "stack" }, "Agent", who)),
     h("label", { class: "stack" }, "What should change?", ask),
     h("h3", {}, "Files it should read"), files.el,
@@ -2703,7 +2700,7 @@ async function adminPage(sub = "") {
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
   const body = h("div", {});
   show(crumbs(["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null),
-    head("Admin", "Every loop and the controls over them, what the machine holds up, users and their limits, the audit trail."), tabBar, body);
+    head("Admin"), tabBar, body);
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
@@ -2774,31 +2771,50 @@ async function adminAudit(body) {
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 
+/** D846: a notification from the admin to every user, or the ones picked, in their bell. */
+async function notifyDialog() {
+  const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
+  const text = h("textarea", { rows: 3, placeholder: "The message", style: "width:100%" });
+  const kind = h("select", {}, ["info", "warn", "bad"].map(k => h("option", { value: k }, k === "info" ? "information" : k === "warn" ? "warning" : "alert")));
+  const all = h("input", { type: "checkbox", checked: true });
+  const picks = users.map(u => h("label", { class: "check" }, h("input", { type: "checkbox", value: u }), u));
+  const who = h("div", { class: "notify-who", hidden: true }, picks);
+  all.addEventListener("change", () => { who.hidden = all.checked; });
+  const body = h("div", { class: "stack" }, text, h("div", { class: "row" }, kind, h("label", { class: "check" }, all, "everyone")), who);
+  const go = await dialog("Send a notification", body, [["Cancel", null], ["Send", () => true, "primary"]]);
+  if (!go) return;
+  const to = all.checked ? [] : picks.map(l => l.querySelector("input")).filter(i => i.checked).map(i => i.value);
+  if (!text.value.trim() || (!all.checked && !to.length)) { toast("Nothing sent: a message and someone to send it to", "warn"); return; }
+  const r = await api("/admin/notify", { method: "POST", body: { text: text.value, to, kind: kind.value } });
+  toast(`Sent to ${r.sent} user(s)`, "ok");
+}
+
 async function adminLoops(body) {
   const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null)]);
   // D816: the documents of an earlier form, looked for when asked (each loop's documents are tried)
   const migration = h("div", {});
-  const migrateBtn = act("Migrate documents of an earlier form…", async () => { migrateBtn.hidden = true; await adminDocuments(migration); },
-    { cls: "small", title: "Each loop's documents, what would change to be of today's form, and the migration" });
+  const migrateBtn = act("Migrate old documents…", async () => { migrateBtn.hidden = true; await adminDocuments(migration); }, { cls: "small" });
   const paused = res ? res.paused : null;
   const running = allApps.filter(l => l.running).length;
-  const reason = h("input", { placeholder: "why (users see it)", style: "min-width:260px" });
-  const controls = card("Controls", [
-    paused ? h("div", { class: "callout bad" }, h("strong", {}, "New starts are paused: "), paused, " ",
-      act("Resume starts", async () => { await api("/admin/paused", { method: "PUT", body: { reason: null } }); toast("Starts resumed", "ok"); route(); }, { cls: "small primary" }))
-      : h("div", { class: "row" }, reason, act("Pause new starts", async () => {
-          await api("/admin/paused", { method: "PUT", body: { reason: reason.value.trim() || "maintenance" } }); toast("New starts paused; running loops go on", "ok"); route();
-        }), h("span", { class: "muted" }, "running loops go on; nobody can start one")),
-    h("div", { class: "row", style: "margin-top:10px" },
-      h("span", {}, `${running} loop(s) running`),
-      act("Stop every loop after its pass", async () => {
-        if (!await confirmDialog("Stop every loop?", `Each of the ${running} running loop(s) stops at the end of its pass.`, { ok: "Stop after the pass" })) return;
+  const reason = h("input", { placeholder: "why (users see it)" });
+  // D846: one line per control -- what it is, then its buttons
+  const line = (label, ...kids) => h("div", { class: "ctl-line" }, h("span", { class: "ctl-label" }, label), h("div", { class: "ctl-acts" }, ...kids));
+  const controls = card("Controls", h("div", { class: "ctl-grid" },
+    paused ? line("Starts", h("span", { class: "pill bad" }, "paused"), h("span", { class: "muted" }, paused),
+        act("Resume starts", async () => { await api("/admin/paused", { method: "PUT", body: { reason: null } }); toast("Starts resumed", "ok"); route(); }, { cls: "small primary" }))
+      : line("Starts", reason, act("Pause new starts", async () => {
+          await api("/admin/paused", { method: "PUT", body: { reason: reason.value.trim() || "maintenance" } }); toast("New starts paused", "ok"); route();
+        }, { cls: "small" })),
+    line(`Running: ${running}`,
+      act("Stop all after the pass", async () => {
+        if (!await confirmDialog("Stop every loop?", `${running} loop(s) stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
         const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${Object.keys(r.stopped).length} loop(s) asked to stop`, "ok"); route();
-      }),
-      act("Stop every loop now", async () => {
-        if (!await confirmDialog("Stop every loop now?", `Each of the ${running} running loop(s) ends its pass at once; the records keep what was judged.`, { ok: "Stop now", danger: true })) return;
+      }, { cls: "small" }),
+      act("Stop all now", async () => {
+        if (!await confirmDialog("Stop every loop now?", `${running} loop(s) end their pass at once.`, { ok: "Stop now", danger: true })) return;
         const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
-      }, { cls: "danger" }))]);
+      }, { cls: "small danger" })),
+    line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
   const box = h("div", {}, loopsBrowser(allApps, { who: true }));
   body.replaceChildren(controls, card("Every loop", box, { actions: [migrateBtn] }), migration);
   pageRefresh = async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); };
@@ -2809,7 +2825,7 @@ async function adminLoops(body) {
 function timeChart(samples, series, { title, top = null, ref = null, refLabel = "", fmt = (v) => num4(v) } = {}) {
   const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;
   const pts = samples.filter(s => series.some(se => se.get(s) != null));
-  if (pts.length < 2) return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title)), h("p", { class: "muted small" }, "Not enough samples yet: one a minute."));
+  if (pts.length < 2) return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title)), h("p", { class: "muted small" }, "Not enough samples yet."));
   const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
   const vals = pts.flatMap(s => series.map(se => se.get(s)).filter(v => v != null));
   const hi = top != null ? top : Math.max(...vals, ref || 0) * 1.1 || 1;
@@ -2885,7 +2901,7 @@ async function adminResources(body) {
             h("td", { class: "num mono" }, c.mem != null ? bytes(Math.round(c.mem)) : ""),
             h("td", { class: "num mono" }, c.pids != null ? String(c.pids) : ""),
             h("td", { class: "right" }, c.orphan ? act("Kill", async () => {
-                if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it: it is stopped and removed.", { ok: "Kill", danger: true })) return;
+                if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it; it is removed.", { ok: "Kill", danger: true })) return;
                 toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
               }, { cls: "small danger" })
               : act("Stop the loop now", async () => { await stopLoop(c.loop, true, c.user); load(); }, { cls: "small" }))))))) : empty("No sandbox container."));
@@ -2904,7 +2920,7 @@ async function adminResources(body) {
             cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay."))))),
         h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {}))))));
     const other = r.caches;
-    const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "A cache of a deleted loop, or not the web's (a `flux task run` on this machine). Deleting one frees its space; a loop that comes back rebuilds it."),
+    const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "Deleting one frees its space; it is rebuilt when needed."),
       h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Cache", "Whose", "Size", "Last touched", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
         h("tbody", {}, other.map(c => h("tr", {}, h("td", { class: "mono" }, c.key),
           h("td", {}, c.kind === "gone" ? h("span", {}, `${c.user}'s ${c.app}, `, h("span", { class: "pill warn" }, "deleted")) : h("span", { class: "muted" }, "not the web's")),
@@ -2937,7 +2953,7 @@ async function adminResources(body) {
     const ranges = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"]];
     overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
         h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
-      hx.sampling ? "" : h("p", { class: "muted small" }, "This server process does not sample (only `flux serve` does): what is shown was sampled before."),
+      hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
       h("div", { class: "tcharts" }, ...tokenCharts,
         timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
@@ -2959,13 +2975,12 @@ async function adminApplications(body) {
   const r = await api("/admin/applications");
   if (!r.root) { body.replaceChildren(card(null, empty("No applications folder: set FLUX_APPLICATIONS to one."))); return; }
   const use = async (a, refresh) => {
-    if (refresh && !await confirmDialog(`Refresh ${a.name}?`, "Its files are taken again from the folder; edits made to them in the loop go. Its record, log and workbench stay.", { ok: "Refresh" })) return;
+    if (refresh && !await confirmDialog(`Refresh ${a.name}?`, "Edits to its files in the loop are lost; its record and log stay.", { ok: "Refresh" })) return;
     await api(`/admin/applications/${enc(a.name)}/use${refresh ? "?refresh=true" : ""}`, { method: "POST" });
     toast(refresh ? `${a.name}: its files taken again` : `${a.name} is one of your loops`, "ok");
     location.hash = `#/app/${enc(a.name)}`;
   };
-  body.replaceChildren(card(`The applications folder`, [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root),
-      ". Use one to make it a loop of yours: its files are linked in (no copy on the same disk), and a run writes only the loop's own record, log and workbench."),
+  body.replaceChildren(card(`The applications folder`, [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root)),
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Application", "What it asks", "Size", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
       h("tbody", {}, r.applications.map(a => h("tr", {},
         h("td", {}, h("strong", {}, a.name), h("div", { class: "mono muted small" }, a.document)),
@@ -3007,11 +3022,9 @@ async function adminDocuments(body) {
       d.said.length ? h("details", {}, h("summary", { class: "small" }, `${d.said.length} change(s)`),
         h("ul", { class: "small mono" }, d.said.map(x => h("li", {}, x))),
         d.text ? h("pre", { class: "log small" }, d.text) : "") : ""))));
-  body.replaceChildren(card("Documents of an earlier form", [
-    h("p", { class: "muted" }, `${r.documents} document(s) in ${r.total} loop(s); `, r.loops.length ? `${r.loops.length} loop(s) with one to bring to today's form.` : "all of today's form.",
-      " A migration writes a document only when the result loads; the original is kept beside it as ", h("code", {}, "<file>.orig"),
-      " (YAML comments are not carried over). A loop whose id was not its folder's name keeps its record, renamed. What a migration cannot do -- a ",
-      h("code", {}, "world:"), " to say as commands -- is said for a person."),
+  body.replaceChildren(card("Old documents", [
+    h("p", { class: "muted small" }, r.loops.length ? `${r.loops.length} of ${r.total} loop(s) to migrate. ` : `All ${r.total} loop(s) current. `,
+      "Originals kept as ", h("code", {}, "<file>.orig"), "."),
     ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
     ...(r.loops.length ? rows : [empty("Nothing to migrate.")])]));
 }
@@ -3040,9 +3053,9 @@ async function adminSandbox(body) {
   const sbMark = saveMark();
   body.replaceChildren(
     r.sandboxed ? "" : h("p", { class: "callout bad" }, "This server runs without the sandbox (--no-sandbox): none of this applies."),
-    card("Network", [h("p", { class: "muted" }, "What the containers may reach. With an allowlist they have no network of their own: a proxy on this machine forwards to the allowed hosts and refuses the rest, a name resolved and checked against the IPs and CIDRs. A loop's Settings may add hosts for that loop; a loop an admin runs on the host has the machine's network."),
+    card("Network", [h("p", { class: "muted" }, "What the containers may reach. A loop's Settings may add hosts."),
       h("label", { class: "stack" }, "Mode", mode), allowBox]),
-    card("PATH", [h("p", { class: "muted" }, "Every directory on the runs' PATH is mounted read-only in the container."),
+    card("PATH", [h("p", { class: "muted" }, "Mounted read-only."),
       h("details", {}, h("summary", { class: "muted" }, `The server's own PATH: ${r.path.length} directories`), h("pre", { class: "val small" }, r.path.join("\n"))),
       h("label", { class: "check" }, loginP, `add ${r.home}'s login PATH`, adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"),
       h("label", { class: "stack" }, "and these directories, first", paths)]),
@@ -3116,7 +3129,7 @@ async function adminInsights(body, part = "failures") {   // D819: one part of t
     h("thead", {}, h("tr", {}, h("th", {}, "Host"), h("th", { class: "num" }, "Times"), h("th", {}, "By"), h("th", {}, "Last"))),
     h("tbody", {}, r.network.map(n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
       h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last))))))
-    : h("p", { class: "muted" }, "Nothing refused: every host the loops asked for was allowed (or the network is open)."));
+    : h("p", { class: "muted" }, "Nothing refused."));
   const maxDisk = Math.max(...r.disk.map(d => d.total), 1);
   const diskCard = card("Disk by user", h("table", { class: "list compact" },
     h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
@@ -3167,7 +3180,7 @@ async function adminAgents(body) {
         h("div", { class: "grid-2" },
           h("label", { class: "stack" }, "Login command", login),
           h("label", { class: "stack" }, "Extra arguments, every run", args),
-          h("label", { class: "stack", title: "Where a login of this build is kept, in a user's home: what says they are logged in" }, "Login files (when not its usual)", creds),
+          h("label", { class: "stack", title: "The file in a user's home that says they are logged in" }, "Login files (when not its usual)", creds),
           h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
           h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts))),
       h("p", { class: "small muted" }, "Ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
@@ -3184,18 +3197,17 @@ async function adminAgents(body) {
     const p = panelOf(a);
     if (offered.has(a.id)) panels[a.id] = p;
     else extraTabs.push({ tab: a.label, noSave: true, el: h("fieldset", { class: "set-group with-panel" }, h("legend", {}, a.label), p.el,
-      h("p", { class: "muted small" }, "Its model and its own variables are set here once its program is found.")) });
+      h("p", { class: "muted small" }, "Program not found.")) });
   }
   extraTabs.push({ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent"),
-    h("p", { class: "muted small" }, "Every run on this server gets these, and each of its agents whatever the name (an ANTHROPIC_API_KEY here reaches Claude Code and OpenCode alike); a user's and a loop's own come over them. The sandbox's own variables cannot be set here: a loop's Settings tab has them."),
+    h("p", { class: "muted small" }, "Every run and agent gets these; a user's and a loop's own win."),
     envEditor(genv, async (v) => { await api("/admin/env", { method: "PUT", body: v }); route(); }, "server")) });
   const name = h("input", { id: "ag-new-name", placeholder: "nga", class: "mono", autocomplete: "off" });
   const kind = h("select", { id: "ag-new-kind", "aria-label": "Its kind" }, r.kinds.map(k => h("option", { value: k.id }, k.label)));
   const nlabel = h("input", { id: "ag-new-label", placeholder: "NGA (our OpenCode)", autocomplete: "off" });
   const nbin = h("input", { id: "ag-new-bin", placeholder: "/opt/nga/bin/nga", class: "mono", autocomplete: "off" });
   extraTabs.push({ tab: "+ Add an agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Add an agent"),
-    h("p", { class: "muted small" }, "Another build of a kind -- an OpenCode of your own beside the plain one -- under a name of its own, which a document names (",
-      h("code", {}, "generate: nga"), "). It runs as its kind does, with its own program, login and settings, and is offered to users once its program is found."),
+    h("p", { class: "muted small" }, "Another build of a kind under its own name (", h("code", {}, "generate: nga"), ")."),
     h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Name (lower case)", name), h("label", { class: "stack" }, "Kind", kind),
       h("label", { class: "stack" }, "Name shown", nlabel), h("label", { class: "stack" }, "Program (a path)", nbin)),
     h("div", { class: "form-actions" }, act("Add", async () => {
@@ -3204,7 +3216,7 @@ async function adminAgents(body) {
       toast(`${name.value.trim()} added`, "ok"); route();
     }, { cls: "primary" }))) });
   const save = async (values) => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); };   // D833: quiet, field by field
-  body.replaceChildren(card("Agents and models", [h("p", { class: "muted small" }, "What the server sets, every run gets unless its user sets their own. Keys are stored encrypted and never shown again."),
+  body.replaceChildren(card("Agents and models", [h("p", { class: "muted small" }, "Defaults for every user. Keys are encrypted and never shown."),
     ...settingsForm(st, { save, scope: "server", panels, extraTabs, agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
       save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
 }
@@ -3247,7 +3259,7 @@ async function adminUsers(body) {
           act(u.pending ? "New invitation link" : "Password reset link", async () => {
             const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" });
             await linkDialog(u.name, got.token, got.kind);
-          }, { cls: "small", title: "A one-time link to choose a password (D818); an earlier link stops working" })))); })))),
+          }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); })))),
     h("div", { class: "row add-user" }, name, pw, newKind,
       act("Add user", async () => {
         const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, role: newKind.value } });
@@ -3255,14 +3267,13 @@ async function adminUsers(body) {
         else toast(`${name.value} added`, "ok");
         route();
       }, { cls: "primary" })),
-    h("p", { class: "muted small" }, "Internal: their runs use the server's model, agent and environment settings. External: they set their own on their Account page, ",
-      "and log their agents in there, into a home of their own. The network rules apply to everyone.")]));
+    h("p", { class: "muted small" }, "Internal: the server's settings. External: their own (Account).")]));
 }
 
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
     the admin's values a field falls back to when empty (a key only said to be set). */
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
-  FLUX_REMOTE_API_KEY: "Key", FLUX_REMOTE_PRICE_IN: "Price in (USD per 1M tokens)", FLUX_REMOTE_PRICE_OUT: "Price out (USD per 1M tokens)",
+  FLUX_REMOTE_API_KEY: "Key", 
   FLUX_DEFAULT_AGENT: "Agent" };
 /** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables
     for it alone (`agentEnv(name)`: its rows and how to save one, or null). */
@@ -3274,7 +3285,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const secret = new Set(st.secret);
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
   const priceKeys = new Set(st.groups.flatMap(g => g.prices || []));
-  const row = (k) => {
+  const field = (k) => {
     const fall = server ? server[k] : null, sec = secret.has(k), price = priceKeys.has(k);
     const holder = (cur) => sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set")
       : price ? (fall ? `the admin's: $${fall}` : "not priced") : (fall ? `the server's: ${fall}` : "not set");
@@ -3298,10 +3309,15 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       if (sec) { inputs[k].value = ""; inputs[k].placeholder = holder("set"); }
       drawClear();
     }, mark, { typing: !sec });
-    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, labels[k] || k),
-      h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }), clearBox, mark),
-      h("code", { class: "muted small var" }, k));
+    Object.assign(inputs[k], { id: `set-${scope}-${k}`, title: k });          // D846: the variable's name, on hover
+    return { label: labels[k] || k, cell: h("span", { class: "inline" }, inputs[k], clearBox, mark) };
   };
+  const row = (k) => { const f = field(k);
+    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}`, title: k }, f.label), f.cell); };
+  // D846: a price in and out, one row
+  const priceRow = ([pin, pout]) => { const a = field(pin), b = field(pout);
+    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${pin}` }, "Price ($ / 1M tokens)"),
+      h("span", { class: "price-pair" }, h("span", { class: "muted small" }, "in"), a.cell, h("span", { class: "muted small" }, "out"), b.cell)); };
   const groups = st.groups.map(g => {
     const own = [...g.public, ...g.secret].some(k => st.values[k]);
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
@@ -3314,19 +3330,18 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       h("summary", {}, title, n ? h("span", { class: "muted small" }, ` · ${n} set`) : h("span", { class: "muted small" }, " · none")), ...kids);
     const prices = g.prices || [];
     const rows = [g.hint ? h("p", { class: "muted small" }, g.hint) : "", note ? h("p", { class: "small hint-line" }, note) : "",
-      ...g.public.filter(k => !prices.includes(k)).map(row), ...g.secret.map(row), ...prices.map(row)];
+      ...g.public.filter(k => !prices.includes(k)).map(row), ...g.secret.map(row), prices.length === 2 ? priceRow(prices) : ""];
     // D835: a user prices only an endpoint of their own; on the server's, the admin's prices count
     if (server && prices.length && inputs[g.endpoint]) {
       const why = h("p", { class: "muted small price-said" });
       const gate = () => { const own = !!inputs[g.endpoint].value.trim();
         for (const k of prices) inputs[k].disabled = !own;
-        why.textContent = own ? "" : "Your own prices count with your own endpoint; on the server's, the admin's prices apply."; };
+        why.textContent = own ? "" : "Your prices count with your own endpoint."; };
       inputs[g.endpoint].addEventListener("input", gate); gate();
       rows.push(why);
     }
     const nVars = vars ? vars.rows.length + ((vars.server || []).length) : 0;
     const varsEl = vars ? fold(`Variables for ${g.label} alone`, nVars, nVars > 0,
-      h("p", { class: "muted small" }, "Only this agent gets these (e.g. ANTHROPIC_API_KEY for an OpenCode); a variable for every agent goes on Every agent."),
       envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
       vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
         envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "";
@@ -3376,13 +3391,11 @@ async function accountPage() {
     // D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's
     // model; the variables every agent of yours gets
     card("My agents and models", [
-      h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Log each agent in on its tab, or set its endpoint, model and key. Keys are stored encrypted and never shown again. "
-        : "Empty: the server's settings, shown in grey. Naming your own endpoint for a tool sends none of the server's values of it to your runs. Keys are stored encrypted and never shown again. ",
-        "Your agents log in into a home of your own on the server, in the sandbox; your loops use an agent once its Test passed for you, and it is tested again each day."),
+      h("p", { class: "muted" }, st.external ? "Your own settings only. Keys are encrypted and never shown."
+        : "Empty: the server's (grey). Your own endpoint uses only your values. Keys are encrypted and never shown."),
       ...settingsForm(st, { server: st.server, save, scope: "me", panels: logins.panels,
         extraTabs: [{ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent of yours"),
-          h("p", { class: "muted small" }, st.external ? "Every run of yours gets these (yours alone: nothing of the server's), and each of its agents; a loop's own (its Settings tab) come over them."
-            : "Every run of yours gets these, over the server's, and each of its agents; a loop's own (its Settings tab) come over them."),
+          h("p", { class: "muted small" }, "Every run and agent of yours gets these; a loop's own win."),
           envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
           myEnv.server.length ? h("div", { class: "blk" }, h("h4", {}, "The server's"), envTable(myEnv.server.map(x => ({ ...x, from: "the server" })), new Set(myEnv.mine.map(x => x.name)))) : "") }],
         agentEnv: (a) => { const e = (st.agent_env || {})[a] || { mine: [], server: [] };
@@ -3391,8 +3404,7 @@ async function accountPage() {
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),
         h("div", { class: "form-actions" }, act("Change", async () => { await api("/password", { method: "POST", body: { text: pw.value } }); pw.value = ""; toast("Password changed", "ok"); }))]),
-      card("Notifications", [h("p", { class: "muted" }, "You are told when a loop stops, fails, or its agent asks a question, in the page and in the bell."),
-        "Notification" in window ? (Notification.permission === "granted" ? h("p", {}, "Desktop notifications are on.")
+      card("Notifications", [        "Notification" in window ? (Notification.permission === "granted" ? h("p", {}, "Desktop notifications are on.")
           : Notification.permission === "denied" ? h("p", { class: "muted" }, "Desktop notifications are blocked in this browser's settings.")
           : act("Allow desktop notifications", async () => { await Notification.requestPermission(); route(); })) : ""])));
 }
@@ -3457,7 +3469,7 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
           const got = await api(`/agents/${a.id}/test`, { method: "POST" });
           toast(got.ok ? `${a.label} is ready for your loops` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
           await drawList();
-        }, { cls: "small", title: "Its program, your login, one short answer -- as your loops run it" }),
+        }, { cls: "small", title: "Test this agent as your loops run it" }),
         act(a.logged_in ? "Log in again" : "Log in", async () => {
           await api(`/logins/${a.id}`, { method: "POST" });
           text = ""; offset = 0; out.replaceChildren(); term.hidden = false; poll();
@@ -3473,9 +3485,7 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
   cleanup.push(() => { clearTimeout(timer); clearTimeout(testTimer); });
   await drawList();
   if (holders) return { box, term };
-  return card("Agent logins", [h("p", { class: "muted" }, "Your agents log in into a home of your own on the server; your runs use what the login writes. ",
-    "The login runs as a run does, in the sandbox, under the server's network rules. ",
-    "Your loops run on your logins -- also when someone you share one with starts it -- and use an agent once its Test passed for you; a login that ends well is tested at once."), box, term]);
+  return card("Agent logins", [h("p", { class: "muted" }, "Your loops run on your logins, also when someone you share one with starts it."), box, term]);
 }
 
 // ================================================================ routing
