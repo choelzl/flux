@@ -1618,11 +1618,13 @@ def model_use(task: "TaskSpec") -> str:
     if any((s if isinstance(s, str) else (s or {}).get("policy", "")) in ("llm", "model") for s in specs):
         reasons.append("a search phase asks it for points")
     for box in ("plan", "critique", "validate"):
-        if flow.get(box) == "llm":
-            reasons.append(f"{box}: llm")
+        if flow.get(box) in ("llm", "model"):
+            reasons.append(f"{box}: model")
     reasons += [f"stage {r.name} estimates with it" for r in task.stages if r.estimate and r.estimate.kind == "model"]
     orch = (task.roles or {}).get("orchestrator")
-    if orch in ("llm", "model", "agent") or (isinstance(orch, dict) and set(orch) & {"llm", "model", "agent"}):
+    coding = isinstance(orch, dict) and isinstance(orch.get("agent"), dict) and orch["agent"].get("coding")
+    if not coding and (orch in ("llm", "model", "agent") or (isinstance(orch, dict) and set(orch) & {"llm", "model", "agent"})):
+        # D843: a coding agent orchestrating (`orchestrate: opencode`, D640) picks by its own turns, not Flux's model
         reasons.append(f"the orchestrator is the {orch if isinstance(orch, str) else next(iter(orch))}")
     return "; ".join(reasons)
 

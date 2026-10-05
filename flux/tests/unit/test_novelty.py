@@ -76,3 +76,17 @@ def test_an_exploring_pass_with_nothing_to_explore_from_says_so(tmp_path):
     state.say = said.append
     assert _explore_items(PromptProblem(task), state) == []
     assert any("nothing to explore from -- no design admitted yet" in m for m in said), said
+
+
+def test_a_coding_agent_orchestrating_needs_no_model(tmp_path):
+    """D843: `orchestrate: opencode` is a coding agent's turns (D640): no start refused for want of
+    Flux's model; a box the model answers still needs it."""
+    from flux_loop import load_task
+    from flux_loop.task import model_use
+
+    (tmp_path / "problem.yaml").write_text("statement: s\nflow:\n  test: 'true'\n  generate: opencode\n  orchestrate: opencode\nobjectives: []\n")
+    assert model_use(load_task(str(tmp_path / "problem.yaml"))) == ""
+    (tmp_path / "problem.yaml").write_text("statement: s\nflow:\n  test: 'true'\n  generate: opencode\n  plan: model\nobjectives: []\n")
+    assert model_use(load_task(str(tmp_path / "problem.yaml"))) == "plan: model"
+    (tmp_path / "problem.yaml").write_text("statement: s\nflow:\n  test: 'true'\n  orchestrate: opencode\nobjectives: []\n")
+    assert model_use(load_task(str(tmp_path / "problem.yaml"))) == "it writes the candidates", "no generate: the model drafts"
