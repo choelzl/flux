@@ -33,6 +33,9 @@ def server(tmp_path, monkeypatch):
     fake = tmp_path / "flux-fake"
     fake.write_text(FAKE)
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    from web_agents import install
+
+    install(monkeypatch, tmp_path)                                  # D807: offered where installed
     import flux_web.authoring as au
 
     monkeypatch.setattr(au.shutil, "which", lambda name, path=None: str(fake) if name == "flux" else None)

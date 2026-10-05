@@ -2571,7 +2571,8 @@ async function adminPage(sub = "") {
     const save = async (values) => { await api("/admin/settings", { method: "PUT", body: { values } }); toast("The server's model settings saved", "ok"); route(); };
     const genv = await api("/admin/env");
     body.replaceChildren(card("The server's models", [h("p", { class: "muted" }, "What every run gets, for Flux's own model calls and for each coding agent, unless its user sets their own on their Account page. Keys are stored encrypted and never shown again."),
-      ...settingsForm(st, { save, scope: "server" })]),
+      ...settingsForm(st, { save, scope: "server", agentEnv: (a) => ({ rows: (st.agent_env || {})[a] || [],
+        save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]),
       card("The server's environment variables", [h("p", { class: "muted" }, "Every run on this server gets these; a user's and a loop's own come over them. The sandbox's own variables cannot be set here: a loop's Settings tab has them."),
         envEditor(genv, async (v) => { await api("/admin/env", { method: "PUT", body: v }); route(); }, "server")]));
     return;
@@ -2658,9 +2659,11 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
   const X = (t) => L + (W - L - R) * (t - t0) / Math.max(1, t1 - t0), Y = (v) => T + (H - T - B) * (1 - Math.min(v, hi) / hi);
   const span = t1 - t0, stamp = (t) => new Date(t * 1000).toLocaleString(undefined, span > 86400 ? { weekday: "short", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
   const last = pts[pts.length - 1];
-  return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title), " ",
-      series.map((se, i) => h("span", { class: "muted" }, i ? " · " : "", h("i", { class: `sw s${i}` }), se.label, " ", h("strong", {}, last && se.get(last) != null ? fmt(se.get(last)) : "—")))),
-    sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart tchart-svg", role: "img", "aria-label": title },
+  // the sample under the pointer: a guide, its points, and a bubble with its time and values
+  const guide = sv("line", { y1: T, y2: H - B, class: "hover-guide", visibility: "hidden" });
+  const dots = series.map((_, i) => sv("circle", { r: 3, class: `hover-dot s${i}`, visibility: "hidden" }));
+  const tip = h("div", { class: "tchart-tip", hidden: true });
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart tchart-svg", role: "img", "aria-label": title },
       [0, 0.5, 1].map(f => [sv("line", { x1: L, x2: W - R, y1: Y(hi * f), y2: Y(hi * f), class: "grid" }),
         sv("text", { x: L - 5, y: Y(hi * f) + 4, class: "tick", "text-anchor": "end" }, fmt(hi * f))]),
       ref != null ? [sv("line", { x1: L, x2: W - R, y1: Y(ref), y2: Y(ref), class: "limit" }), sv("text", { x: W - R, y: Y(ref) - 3, class: "tick limit-t", "text-anchor": "end" }, refLabel)] : "",
@@ -2670,7 +2673,33 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
         return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
           sv("path", { d, class: `ln s${i}` })];
       }),
-      sv("text", { x: L, y: H - 5, class: "tick" }, stamp(t0)), sv("text", { x: W - R, y: H - 5, class: "tick", "text-anchor": "end" }, stamp(t1))));
+      sv("text", { x: L, y: H - 5, class: "tick" }, stamp(t0)), sv("text", { x: W - R, y: H - 5, class: "tick", "text-anchor": "end" }, stamp(t1)),
+      guide, dots);
+  const fig = h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title), " ",
+      series.map((se, i) => h("span", { class: "muted" }, i ? " · " : "", h("i", { class: `sw s${i}` }), se.label, " ", h("strong", {}, last && se.get(last) != null ? fmt(se.get(last)) : "—")))),
+    h("div", { class: "tchart-plot" }, svg, tip));
+  const hide = () => { tip.hidden = true; guide.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); };
+  svg.addEventListener("pointermove", (e) => {
+    const box = svg.getBoundingClientRect();
+    if (!box.width) return;
+    const x = (e.clientX - box.left) * W / box.width;
+    if (x < L - 4 || x > W - R + 4) { hide(); return; }
+    const t = t0 + (Math.min(Math.max(x, L), W - R) - L) / (W - L - R) * Math.max(1, t1 - t0);
+    let s = pts[0];
+    for (const p of pts) if (Math.abs(p.t - t) < Math.abs(s.t - t)) s = p;
+    const gx = X(s.t);
+    guide.setAttribute("x1", gx); guide.setAttribute("x2", gx); guide.setAttribute("visibility", "visible");
+    series.forEach((se, i) => { const v = se.get(s);
+      if (v == null) { dots[i].setAttribute("visibility", "hidden"); return; }
+      dots[i].setAttribute("cx", gx); dots[i].setAttribute("cy", Y(v)); dots[i].setAttribute("visibility", "visible"); });
+    tip.replaceChildren(h("div", { class: "mono small" }, new Date(s.t * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
+      ...series.map((se, i) => h("div", {}, h("i", { class: `sw s${i}` }), se.label, " ", h("strong", {}, se.get(s) != null ? fmt(se.get(s)) : "—"))));
+    tip.hidden = false;
+    const px = gx / W * box.width, half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.min(Math.max(px - half, 0), box.width - tip.offsetWidth)}px`;
+  });
+  svg.addEventListener("pointerleave", hide);
+  return fig;
 }
 
 let historyHours = 24;
@@ -2716,8 +2745,7 @@ async function adminResources(body) {
           h("td", { class: "right" }, l.running || !l.cache ? "" : h("div", { class: "actions end" },
             cleanBtn(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need."),
             cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay."))))),
-        h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {}))))),
-      { actions: [h("span", { class: "muted small" }, "sizes kept for a minute")] });
+        h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {}))))));
     const other = r.caches;
     const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "A cache of a deleted loop, or not the web's (a `flux task run` on this machine). Deleting one frees its space; a loop that comes back rebuilds it."),
       h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Cache", "Whose", "Size", "Last touched", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
@@ -2752,8 +2780,7 @@ async function adminResources(body) {
           top: Math.max(100, ...ss.map(s => s.cpu || 0)) * 1.05, fmt: (v) => `${Math.round(v)}%` }),
         timeChart(ss, [{ label: "memory", get: (s) => s.cmem }], { title: "The containers' memory", fmt: (v) => bytes(Math.round(v)) }),
         timeChart(ss, [{ label: "loops", get: (s) => s.loops }, { label: "containers", get: (s) => s.containers }],
-          { title: "Running", top: 2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2), fmt: (v) => String(Math.round(v)) })),
-      h("p", { class: "muted small" }, "Load and CPU: the highest in each step; the rest: the mean."));
+          { title: "Running", top: 2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2), fmt: (v) => String(Math.round(v)) })));
   }
   await load();
   const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);
@@ -2883,27 +2910,34 @@ async function adminInsights(body) {
   body.replaceChildren(h("div", { class: "toolbar" }, h("span", { class: "muted" }, "Over the last"), pick), failCard, usageCard, epCard, netCard, diskCard);
 }
 
-/** Admin › Agents (D756): each coding agent as the server runs it -- found or not and its version,
-    its program, login command and extra arguments, the files every home starts with for it, the
-    hosts it needs on the allowlist -- and who has it ready (a passed Test on their Account). */
+/** Admin › Agents (D756, D807): every agent the server knows -- the three built-in ones and those
+    the admin adds (a name, a kind, its program) -- found or not and its version (only a found one is
+    offered to users), its program, login command and extra arguments, the files every home starts
+    with for it, the hosts it needs on the allowlist -- and who has it ready (a passed Test on their
+    Account, asked again each day). */
 async function adminAgents(body) {
   body.replaceChildren(skeleton(6));
   const r = await api("/admin/agents");
   const lines = (a) => (a || []).join("\n");
   const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
-  body.replaceChildren(...r.agents.map(a => {
+  const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
+  const cards = r.agents.map(a => {
     const f = (id, value, ph) => h("input", { id: `ag-${a.id}-${id}`, value, placeholder: ph, class: "mono", autocomplete: "off" });
-    const bin = f("bin", a.bin, a.id), login = f("login", a.login, a.login_default), args = f("args", a.args, "none");
-    const home = h("textarea", { id: `ag-${a.id}-home`, rows: 2, class: "mono", placeholder: { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" }[a.id] || "", value: lines(a.home) });
+    const label = h("input", { id: `ag-${a.id}-label`, value: a.label, placeholder: a.id, autocomplete: "off" });
+    const bin = f("bin", a.bin, a.builtin ? a.id : "/path/to/its/program"), login = f("login", a.login, a.login_default), args = f("args", a.args, "none");
+    const home = h("textarea", { id: `ag-${a.id}-home`, rows: 2, class: "mono", placeholder: HOME_PH[a.kind] || "", value: lines(a.home) });
     const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     return card(a.label, [
       h("div", { class: "agent-found" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
-        h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}` : `${a.bin || a.id} is not on the runs' PATH`)),
+        h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`), h("code", { class: "small" }, a.id),
+        h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
+          : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`)),
       h("div", { class: "grid-2" },
-        h("label", { class: "stack" }, "Program (a path, or a name on PATH)", bin),
+        h("label", { class: "stack" }, "Name shown", label),
+        h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
         h("label", { class: "stack" }, "Login command", login),
         h("label", { class: "stack" }, "Extra arguments, every run", args),
         h("label", { class: "stack", title: "Where a login of this build is kept, in a user's home: what says they are logged in" }, "Login files (when not its usual)", creds),
@@ -2911,12 +2945,31 @@ async function adminAgents(body) {
         h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts)),
       h("p", { class: "small" }, h("strong", {}, "Ready for: "), ready.length ? ready.join(", ") : "nobody yet",
         failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
-        h("span", { class: "muted" }, " (each user tests it on their Account page)")),
-      h("div", { class: "form-actions" }, act("Save", async () => {
-        await api(`/admin/agents/${a.id}`, { method: "PUT", body: { bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) } });
-        toast(`${a.label} saved: from the next start, login and test`, "ok"); route();
-      }, { cls: "primary" }))]);
-  }));
+        h("span", { class: "muted" }, " (each user tests it on their Account page; it is tested again each day)")),
+      h("div", { class: "form-actions" },
+        a.builtin ? "" : act("Remove", async () => {
+          if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
+          await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
+        }, { cls: "danger" }),
+        act("Save", async () => {
+          await api(`/admin/agents/${a.id}`, { method: "PUT", body: { label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) } });
+          toast(`${label.value || a.label} saved: from the next start, login and test`, "ok"); route();
+        }, { cls: "primary" }))]);
+  });
+  const name = h("input", { id: "ag-new-name", placeholder: "nga", class: "mono", autocomplete: "off" });
+  const kind = h("select", { id: "ag-new-kind", "aria-label": "Its kind" }, r.kinds.map(k => h("option", { value: k.id }, k.label)));
+  const nlabel = h("input", { id: "ag-new-label", placeholder: "NGA (our OpenCode)", autocomplete: "off" });
+  const nbin = h("input", { id: "ag-new-bin", placeholder: "/opt/nga/bin/nga", class: "mono", autocomplete: "off" });
+  const add = card("Add an agent", [
+    h("p", { class: "muted" }, "Another build of a kind -- an OpenCode of your own beside the plain one -- under a name of its own, which a document names (",
+      h("code", {}, "generate: nga"), "). It runs as its kind does, with its own program, login and settings, and is offered to users once its program is found."),
+    h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Name (lower case)", name), h("label", { class: "stack" }, "Kind", kind),
+      h("label", { class: "stack" }, "Name shown", nlabel), h("label", { class: "stack" }, "Program (a path)", nbin)),
+    h("div", { class: "form-actions" }, act("Add", async () => {
+      await api("/admin/agents", { method: "POST", body: { name: name.value.trim(), kind: kind.value, label: nlabel.value, bin: nbin.value } });
+      toast(`${name.value.trim()} added`, "ok"); route();
+    }, { cls: "primary" }))]);
+  body.replaceChildren(...cards, add);
 }
 
 async function adminUsers(body) {
@@ -2973,20 +3026,18 @@ async function adminUsers(body) {
     the admin's values a field falls back to when empty (a key only said to be set). */
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
   FLUX_LLM_MODEL: "Local model (Ollama tag)", OLLAMA_BASE_URL: "Ollama URL", FLUX_REMOTE_API_KEY: "Key", OPENROUTER_API_KEY: "OpenRouter key",
-  FLUX_OPENCODE_BASE_URL: "Endpoint URL (OpenAI-compatible)", FLUX_OPENCODE_MODEL: "Model", FLUX_OPENCODE_API_KEY: "Key",
-  ANTHROPIC_BASE_URL: "Endpoint URL", FLUX_CLAUDE_MODEL: "Model", ANTHROPIC_API_KEY: "Anthropic key",
-  OPENAI_BASE_URL: "Endpoint URL", FLUX_CODEX_MODEL: "Model", OPENAI_API_KEY: "OpenAI key",
-  FLUX_OPENCODE_BIN: "Program (admins)", FLUX_CLAUDE_BIN: "Program (admins)", FLUX_CODEX_BIN: "Program (admins)", FLUX_DEFAULT_AGENT: "Agent",
-  FLUX_OPENCODE_LOGIN: "Login command (admins)", FLUX_CLAUDE_LOGIN: "Login command (admins)", FLUX_CODEX_LOGIN: "Login command (admins)" };
-function settingsForm(st, { server = null, save, scope }) {
+  FLUX_DEFAULT_AGENT: "Agent" };
+/** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables
+    for it alone (`agentEnv(name)`: its rows and how to save one, or null). */
+function settingsForm(st, { server = null, save, scope, agentEnv = null }) {
   const inputs = {};
   const secret = new Set(st.secret);
+  const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
   const row = (k) => {
     const cur = st.values[k], fall = server ? server[k] : null, sec = secret.has(k);
-    const locked = server && (st.admin_only || []).includes(k);      // D705: the admin's, for every run
-    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""), disabled: locked || null,
-      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : locked ? "the agent's own (an admin sets this)" : "not set") });
-    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, SETTING_LABELS[k] || k),
+    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""),
+      placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set") });
+    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, labels[k] || k),
       h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }),
         cur ? act("Clear", () => save({ [k]: null }), { cls: "small" }) : ""),
       h("code", { class: "muted small var" }, k));
@@ -2995,11 +3046,17 @@ function settingsForm(st, { server = null, save, scope }) {
     const own = [...g.public, ...g.secret].some(k => st.values[k]);
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
+    const vars = g.agent && agentEnv ? agentEnv(g.agent) : null;
     const el = h("fieldset", { class: "set-group" }, h("legend", {}, g.label), g.hint ? h("p", { class: "muted small" }, g.hint) : "",
       note ? h("p", { class: "small hint-line" }, note) : "",
-      // D756: an agent's program and login are Admin › Agents'
-      ...g.public.filter(k => !/_(BIN|LOGIN)$/.test(k)).map(row), ...g.secret.map(row),
-      g.public.some(k => /_(BIN|LOGIN)$/.test(k)) && scope === "server" ? h("p", { class: "muted small" }, "Its program, login command and arguments: ",
+      ...g.public.map(row), ...g.secret.map(row),
+      // D807: variables for this agent alone (a variable for every agent is an ordinary one)
+      vars ? h("div", { class: "blk agent-vars" }, h("h4", {}, `Variables for ${g.label} alone`),
+        h("p", { class: "muted small" }, "Only this agent gets these (e.g. ANTHROPIC_API_KEY for an OpenCode); a variable for every agent goes with the environment variables."),
+        envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
+        vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
+          envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "",
+      g.agent && scope === "server" ? h("p", { class: "muted small" }, "Its program, login command and arguments: ",
         h("a", { href: "#/admin/agents" }, "Admin › Agents"), ".") : "");
     return { g, el, own };
   });
@@ -3022,7 +3079,7 @@ function settingsForm(st, { server = null, save, scope }) {
   draw();
   return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el)), h("div", { class: "form-actions" }, act("Save", () => {
     const values = {};
-    for (const k of st.public) if (!inputs[k].disabled && (inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
+    for (const k of st.public) if ((inputs[k].value || "") !== (st.values[k] || "")) values[k] = inputs[k].value || null;
     for (const k of st.secret) if (inputs[k].value) values[k] = inputs[k].value;
     return save(values);
   }, { cls: "primary" }))];
@@ -3045,7 +3102,8 @@ async function accountPage() {
     card("Models for my runs", [
       h("p", { class: "muted" }, st.external ? "Your runs use these alone (an external account: nothing of the server's). Set an endpoint, model and key, or log an agent in below. Keys are stored encrypted and never shown again."
         : "Empty: the server's settings, shown in grey. Naming your own endpoint in a group sends none of the server's values of that group to your runs. Keys are stored encrypted and never shown again."),
-      ...settingsForm(st, { server: st.server, save, scope: "me" })]),
+      ...settingsForm(st, { server: st.server, save, scope: "me", agentEnv: (a) => { const e = (st.agent_env || {})[a] || { mine: [], server: [] };
+        return { rows: e.mine, server: e.server, save: async (v) => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; } })]),
     await loginsCard(),
     h("div", { class: "grid-2" },
       card("Password", [h("label", { class: "stack" }, "New password (10+)", pw),

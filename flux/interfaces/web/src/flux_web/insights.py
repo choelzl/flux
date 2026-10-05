@@ -29,7 +29,9 @@ def failures(store: Any, runs: Any, since: float) -> dict[str, Any]:
             starts.append({"user": r["user"], "app": r["app"], "when": r["ended"], "rc": r["rc"], "why": [w.strip() for w in runs.failure(r)]})
     tests = []
     for u in store.users():
-        for agent in ("opencode", "claude", "codex"):
+        from .agents import registry
+
+        for agent in registry(store):
             t = store.server_get(f"agent-test:{u.name}:{agent}") or {}
             if t.get("when") and not t.get("ok"):
                 bad = next((s for s in t.get("steps") or [] if not s.get("ok")), {})

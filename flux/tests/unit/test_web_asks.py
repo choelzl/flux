@@ -70,6 +70,9 @@ def server(tmp_path, monkeypatch):
     import flux_web.asks as asks_mod
 
     monkeypatch.setattr(asks_mod.shutil, "which", lambda name, path=None: str(fake) if name == "flux" else None)
+    from web_agents import install
+
+    install(monkeypatch, tmp_path)                                  # D807: offered where installed
     store = Store(tmp_path / "data")
     store.add_user("ada", "correct horse battery", "admin")
     store.add_user("bob", "another long secret")
@@ -129,10 +132,11 @@ def test_an_agents_program_is_the_admins_for_every_run_and_mounted(server, tmp_p
     ada, bob = _c(app, "ada", "correct horse battery"), _c(app, "bob", "another long secret")
     tool = tmp_path / "opt" / "oc-mod" / "bin"
     tool.mkdir(parents=True)
-    assert ada.put("/api/admin/settings", json={"values": {"FLUX_OPENCODE_BIN": str(tool / "opencode")}}, headers=H).status_code == 200
-    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CLAUDE_BIN": "rm -rf /"}}, headers=H).status_code == 400
-    assert bob.put("/api/settings", json={"values": {"FLUX_OPENCODE_BIN": "/tmp/mine"}}, headers=H).status_code == 400, "the admin's only"
+    (tool / "opencode").write_text("#!/bin/sh\necho 9\n")
+    (tool / "opencode").chmod(0o755)
+    assert ada.put("/api/admin/agents/opencode", json={"bin": str(tool / "opencode")}, headers=H).status_code == 200
+    assert ada.put("/api/admin/agents/claude", json={"bin": "rm -rf /"}, headers=H).status_code == 400
+    assert bob.put("/api/admin/agents/opencode", json={"bin": "/tmp/mine"}, headers=H).status_code == 403, "the admin's only"
+    assert bob.put("/api/settings", json={"values": {"FLUX_OPENCODE_BIN": "/tmp/mine"}}, headers=H).status_code == 400
     env = run_env(store, store.user(name="bob"))
-    assert env["FLUX_OPENCODE_BIN"] == str(tool / "opencode") and env["PATH"].split(":")[0] == str(tool), "its folder on PATH: mounted"
-    assert bob.get("/api/settings").json()["admin_only"] == ["FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN",
-                                                            "FLUX_OPENCODE_LOGIN", "FLUX_CLAUDE_LOGIN", "FLUX_CODEX_LOGIN"]   # D734
+    assert env["FLUX_OPENCODE_BIN"] == str(tool / "opencode") and str(tool) in env["PATH"].split(":"), "its folder on PATH: mounted"

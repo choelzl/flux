@@ -82,6 +82,24 @@ PRESETS: dict[str, dict[str, Any]] = {
                  "output": "opencode", "config": {"OPENCODE_CONFIG_CONTENT": _OPENCODE_DENY}},
 }
 OUTPUTS = ("text", "opencode", "claude")
+#: An agent's name (D807): the presets', or one a server adds -- `nga`, an OpenCode of its own.
+AGENT_NAME = r"[a-z][a-z0-9_]{0,23}"
+
+
+def agent_kinds(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Each agent's name -> its kind, the preset it runs as (D807): the presets themselves, and
+    the agents a server adds (`FLUX_AGENTS`, {name: kind}) -- an OpenCode of a company's own is an
+    `opencode` under another name, its program `FLUX_<NAME>_BIN`, its settings its own."""
+    env = os.environ if env is None else env
+    out = {p: p for p in PRESETS}
+    try:
+        extra = json.loads(env.get("FLUX_AGENTS") or "{}")
+    except ValueError:
+        extra = {}
+    for name, kind in (extra.items() if isinstance(extra, dict) else ()):
+        if isinstance(name, str) and kind in PRESETS and re.fullmatch(AGENT_NAME, name):
+            out.setdefault(name, kind)
+    return out
 POLICIES = ("decide", "model", "operator")
 SESSIONS = ("turn", "pass")
 
@@ -101,6 +119,7 @@ class AgentSpec:
     add_dir: tuple[str, ...] = ()  # the option that opens a folder outside the work directory (the workbench, D677)
     probe: tuple[tuple[str, int], ...] | None = (("gate", 20), ("stages", 3))   # `flux probe` per turn (D678); None = off
     allowed: tuple[str, ...] = ()  # denied commands this agent was given back (`allow:`, D678)
+    kind: str = ""                 # the preset it runs as (D807); "" for a command of one's own
 
 
 def agent_spec(spec: Any) -> AgentSpec:
@@ -144,11 +163,13 @@ def agent_spec(spec: Any) -> AgentSpec:
         resume = tuple(str(t) for t in spec["resume"]) if spec.get("resume") else None
         return AgentSpec(str(spec.get("name") or Path(first).name), argv, resume, output, **common)
     preset = str(spec.get("preset") or "")
-    if preset not in PRESETS:
-        raise ValueError(f"agent {preset!r} is not a preset; presets: {', '.join(PRESETS)}; or give `command: [...]`")
-    p = PRESETS[preset]
+    kinds = agent_kinds()
+    if preset not in kinds:
+        raise ValueError(f"agent {preset!r} is not an agent here; agents: {', '.join(kinds)}; or give `command: [...]`")
+    kind = kinds[preset]
+    p = PRESETS[kind]
     # the executable alone may differ per machine (an installed name, a path): the document's
-    # `bin`, else FLUX_<PRESET>_BIN, else the preset's own; the arguments stay the preset's (D670)
+    # `bin`, else FLUX_<NAME>_BIN, else the preset's own; the arguments stay the kind's (D670, D807)
     exe = str(spec.get("bin") or os.environ.get(f"FLUX_{preset.upper()}_BIN") or p["argv"][0])
     exe = os.path.expanduser(exe)
     # extra arguments, e.g. OpenCode's `--agent flux`: the document's `args`, else FLUX_<PRESET>_ARGS
@@ -164,7 +185,7 @@ def agent_spec(spec: Any) -> AgentSpec:
     resume = _in_box(_with_args((exe, *_allowed(p["resume"][1:], allow)), extra)) if p["resume"] else None
     config = tuple((k, json.dumps(_allowed_config(v, allow))) for k, v in (p.get("config") or {}).items())
     return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()),
-                     allowed=tuple(allow))
+                     allowed=tuple(allow), kind=kind)
 
 
 def _in_box(argv: tuple[str, ...]) -> tuple[str, ...]:
@@ -224,13 +245,26 @@ _AGENT_VARS = {"claude": ("ANTHROPIC_", "CLAUDE_CODE_", "FLUX_CLAUDE_"),
 
 
 def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[str, str]:
-    """`env` without the other coding agents' variables. The agent is its preset's tool, else
-    the program's name; one Flux does not know keeps everything."""
-    who = spec.tool if spec.tool in _AGENT_VARS else Path(program).name if Path(program).name in _AGENT_VARS else None
-    if who is None:
-        return env
-    theirs = tuple(p for k, ps in _AGENT_VARS.items() if k != who for p in ps)
-    return {k: v for k, v in env.items() if not k.startswith(theirs)}
+    """`env` as this agent gets it (D718, D807): without the other kinds' variables -- but those
+    the run was given for every agent (`FLUX_SHARED_VARS`: the web's variables, set on purpose) --
+    without any agent's own set, then with its own (`FLUX_<NAME>_ENV`, a JSON object: its
+    endpoint, key, model, variables, as the web's settings made them). The kind is its preset's,
+    else the program's name; a program Flux does not know keeps everything but the agents' sets."""
+    kind = spec.kind or spec.tool
+    who = kind if kind in _AGENT_VARS else Path(program).name if Path(program).name in _AGENT_VARS else None
+    shared = {n for n in env.get("FLUX_SHARED_VARS", "").split(",") if n}
+    sets = re.compile(r"FLUX_[A-Z][A-Z0-9_]*_ENV")
+    out = {k: v for k, v in env.items() if not sets.fullmatch(k)}
+    if who is not None:
+        theirs = tuple(p for k, ps in _AGENT_VARS.items() if k != who for p in ps)
+        out = {k: v for k, v in out.items() if not k.startswith(theirs) or k in shared}
+    try:
+        own = json.loads(env.get(f"FLUX_{spec.tool.upper()}_ENV") or "{}")
+    except ValueError:
+        own = {}
+    if isinstance(own, dict):
+        out.update({str(k): str(v) for k, v in own.items()})
+    return out
 
 
 def _config_env(spec: AgentSpec, env: dict[str, str]) -> dict[str, str]:
@@ -781,7 +815,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # stdin closed: an agent that reads a piped prompt from stdin (OpenCode) would otherwise
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
-    env = _own_env(spec, _config_env(spec, {**os.environ, "PWD": str(workdir)}), cmd[0])
+    env = _config_env(spec, _own_env(spec, {**os.environ, "PWD": str(workdir)}, cmd[0]))
     if subs.get("probe"):
         env["FLUX_PROBE"] = subs["probe"]            # `flux probe` finds its turn's context (D678)
     # the prompt on stdin unless the command names a slot for it (D672); a resume's answer

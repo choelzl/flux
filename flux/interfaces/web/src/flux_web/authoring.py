@@ -23,26 +23,19 @@ from typing import Any
 
 __all__ = ["AUTHORS", "Authoring", "available"]
 
-#: Who may write a problem: the coding agents' presets, and Flux's own model.
+#: The built-in agents' and Flux's own model's names; the server's agents are its own (D807).
 AUTHORS = {"opencode": "OpenCode", "claude": "Claude Code", "codex": "Codex", "model": "Flux's own model"}
 ATTACHED = ".attachments"
 WORK = ".author-work"                                   # the agent's copy of the loop's own files (D704)
 _NOT_THE_PROBLEMS = {"out", "runs", "workbench", ATTACHED, WORK, ".git", "__pycache__", ".flux-app.json"}
 
 
-def available(env: dict[str, str]) -> list[dict[str, Any]]:
-    """Each author and whether it can work here: an agent's command on the run's PATH, a model
-    when one is set."""
-    out = []
-    for key, label in AUTHORS.items():
-        if key == "model":
-            ok = bool(env.get("FLUX_REMOTE_BASE_URL") or env.get("FLUX_LLM_MODEL") or env.get("OLLAMA_BASE_URL"))
-            why = "" if ok else "no model is set (Models)"
-        else:
-            exe = env.get(f"FLUX_{key.upper()}_BIN") or key
-            ok = bool(shutil.which(exe, path=env.get("PATH")))
-            why = "" if ok else f"`{exe}` is not installed on this server"
-        out.append({"id": key, "label": label, "available": ok, "why": why})
+def available(env: dict[str, str], agents: dict[str, Any]) -> list[dict[str, Any]]:
+    """Each author: the agents the server offers (D807: their program found), and Flux's own
+    model, available when one is set."""
+    out = [{"id": n, "label": a.label, "available": True, "why": ""} for n, a in agents.items()]
+    ok = bool(env.get("FLUX_REMOTE_BASE_URL") or env.get("FLUX_LLM_MODEL") or env.get("OLLAMA_BASE_URL"))
+    out.append({"id": "model", "label": AUTHORS["model"], "available": ok, "why": "" if ok else "no model is set (Models)"})
     return out
 
 
@@ -90,8 +83,6 @@ class Authoring:
     def start(self, *, app_dir: Path, workspace: Any, name: str, prompt: str, author: str, env: dict[str, str],
               attachments: list[Path], revise: str | None, by: str) -> None:
         """`revise`: the loop's document name, when it has one to revise."""
-        if author not in AUTHORS:
-            raise ValueError(f"an author is one of {', '.join(AUTHORS)}")
         with self._lock:
             if self.state(app_dir).get("running"):
                 raise ValueError("an agent is writing this loop's problem already")
@@ -122,7 +113,7 @@ class Authoring:
                 argv += ["--file", str(a)]
             with open(f["log"], "a") as fh:
                 fh.write(f"\n── {'revision' if revise else 'authoring'} {time.strftime('%Y-%m-%d %H:%M:%S')} by {by} · "
-                         f"{AUTHORS[author]} ──\n")
+                         f"{AUTHORS.get(author, author)} ──\n")
             log = open(f["log"], "ab")
             proc = subprocess.Popen(argv, cwd=str(work), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                     env=env, start_new_session=True)

@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     ag_p = subparsers.add_parser("agent", help="Coding agents: is one ready for you (D751).")
     ag_sub = ag_p.add_subparsers(dest="agent_command", required=True)
     at_p = ag_sub.add_parser("test", help="The agent's program, its login, its own status; --live: one short answer as a loop asks it.")
-    at_p.add_argument("agent", choices=("opencode", "claude", "codex"))
+    at_p.add_argument("agent", help="opencode, claude, codex, or an agent the server adds (D807)")
     at_p.add_argument("--live", action="store_true", help="Also ask it one short question (a few hundred tokens).")
     at_p.add_argument("--json", default=None, help="Also write the result as JSON to this file ('-': stdout only).")
     at_p.add_argument("--no-sandbox", action="store_true", help="Run on this machine, not in the sandbox (also FLUX_SANDBOX=0).")

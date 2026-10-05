@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import shutil
 import signal
 import subprocess
@@ -19,18 +18,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-__all__ = ["CREDENTIALS", "LOGIN_DEFAULTS", "Logins", "logged_in"]
+__all__ = ["Logins", "logged_in"]
 
-#: The login command each agent runs unless the admin sets another (`FLUX_<AGENT>_LOGIN`).
-LOGIN_DEFAULTS = {"opencode": "opencode auth login", "claude": "claude setup-token", "codex": "codex login"}
-#: Where each agent keeps what a login gives it, under HOME: present means logged in. (Not
-#: `.claude.json`: Claude Code writes it on any start, logged in or not -- D748.)
-CREDENTIALS = {"opencode": (".local/share/opencode/auth.json",), "claude": (".claude/.credentials.json",),
-               "codex": (".codex/auth.json",)}
-#: D748: a login that prints its secret instead of keeping it -- `claude setup-token` prints a
-#: year-long token for CLAUDE_CODE_OAUTH_TOKEN. Taken from the output into the user's own
-#: settings (encrypted), and never shown again: the transcript has it masked.
-PRINTED = {"claude": (re.compile(r"sk-ant-oat\d+-[A-Za-z0-9_\-]{20,}"), "CLAUDE_CODE_OAUTH_TOKEN")}
+#: Each kind's login command, where it keeps its login and what it prints instead are the kind's
+#: (`agents.KINDS`, D807); an agent's own command is the admin's. D748: a login that prints its
+#: secret instead of keeping it -- `claude setup-token` prints a year-long token -- is taken from
+#: the output into the user's own settings (encrypted, the agent's `FLUX_<NAME>_OAUTH_TOKEN`), and
+#: never shown again: the transcript has it masked.
 KEYS = {"enter": "\r", "up": "\x1b[A", "down": "\x1b[B", "left": "\x1b[D", "right": "\x1b[C", "tab": "\t", "escape": "\x1b",
         "ctrl-c": "\x03", "backspace": "\x7f", "space": " "}
 _RIGHT = re.compile(r"\x1b\[(\d*)C")
@@ -38,10 +32,12 @@ _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\
 LIMIT_S = 15 * 60
 
 
-def logged_in(home: Path, extra: dict[str, list[str]] | None = None) -> dict[str, bool]:
-    """Each agent logged in: its own login file in `home`, or one the admin names for it (D760)."""
-    return {a: any((home / p).is_file() and (home / p).stat().st_size > 0 for p in [*ps, *((extra or {}).get(a) or [])])
-            for a, ps in CREDENTIALS.items()}
+def logged_in(home: Path, agents: dict[str, Any]) -> dict[str, bool]:
+    """Each agent logged in: its kind's login file in `home`, or one the admin names for it (D760)."""
+    from .agents import KINDS
+
+    return {n: any((home / p).is_file() and (home / p).stat().st_size > 0 for p in [*KINDS[a.kind]["credentials"], *a.login_files])
+            for n, a in agents.items()}
 
 
 class _Session:
@@ -53,6 +49,7 @@ class _Session:
         self.pending = ""                       # D748: a line that may still be a secret being printed
         self.on_secret: Any = None
         self.on_end: Any = None                 # D768: told the exit once the login ends
+        self.printed: Any = None                # D748: (pattern, setting) of a secret it prints
         self.lock = threading.Lock()
 
     def text(self) -> str:
@@ -65,18 +62,8 @@ class Logins:
         self._by: dict[str, _Session] = {}
         self._lock = threading.Lock()
 
-    def command(self, agent: str, settings: dict[str, str]) -> list[str]:
-        if agent not in LOGIN_DEFAULTS:
-            raise ValueError(f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
-        line = settings.get(f"FLUX_{agent.upper()}_LOGIN") or LOGIN_DEFAULTS[agent]
-        cmd = shlex.split(line)
-        program = settings.get(f"FLUX_{agent.upper()}_BIN")
-        if program and cmd and cmd[0] == agent:                 # the admin's program for this agent (D705)
-            cmd[0] = program
-        return cmd
-
     def start(self, user: str, agent: str, home: Path, cmd: list[str], env: dict[str, str], on_secret: Any = None,
-              on_end: Any = None) -> None:
+              on_end: Any = None, printed: Any = None) -> None:
         with self._lock:
             old = self._by.get(user)
             if old and old.ended is None:
@@ -90,6 +77,7 @@ class Logins:
             sess = self._by[user] = _Session(agent, proc, proc.stdout.fileno())
             sess.on_secret = on_secret
             sess.on_end = on_end
+            sess.printed = printed
         threading.Thread(target=self._read, args=(sess,), daemon=True).start()
         threading.Thread(target=self._limit, args=(sess,), daemon=True).start()
 
@@ -131,7 +119,7 @@ class Logins:
     def _kept(sess: _Session, text: str, end: bool = False) -> str:
         """What the transcript shows of `text` (D748): a secret the agent printed, saved through
         `on_secret` and masked; a line that may still be one held back until it ends."""
-        found = PRINTED.get(sess.agent)
+        found = sess.printed
         if found is None:
             return text
         text = sess.pending + text

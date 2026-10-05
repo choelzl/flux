@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .runs import ADVANCED, HOME_SEED, HOST_RULE, RunManager, advanced, home_ready, sandbox_config, login_path, loop_files, machine_env, run_env, sandbox_env
-from .store import PUBLIC_SETTINGS, SECRET_SETTINGS, SESSION_DAYS, Store, User
+from .store import SESSION_DAYS, Store, User
 from .workspace import Workspace, WorkspaceError
 
 COOKIE = "flux_session"
@@ -127,12 +127,20 @@ class Advanced(BaseModel):
 
 
 class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's
+    label: str = Field(default="", max_length=80)
     bin: str = Field(default="", max_length=1024)
     login: str = Field(default="", max_length=1024)
     args: str = Field(default="", max_length=1024)
     home: list[str] = Field(default_factory=list)
     hosts: list[str] = Field(default_factory=list)
     login_files: list[str] = Field(default_factory=list)     # D760: where its login is kept, when not the agent's usual
+
+
+class AgentNew(BaseModel):               # D807: an agent the admin adds -- a name, a kind, its program
+    name: str = Field(max_length=24)
+    kind: str = Field(max_length=16)
+    label: str = Field(default="", max_length=80)
+    bin: str = Field(default="", max_length=1024)
 
 
 class SandboxConfig(BaseModel):          # D698: what every sandbox gets
@@ -297,25 +305,42 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(user.name, "change password")
         return {"ok": "changed"}
 
-    def _groups() -> list[dict[str, Any]]:
+    def _groups(agents: dict[str, Any]) -> list[dict[str, Any]]:
+        """Flux's own settings, then a group per agent offered (D807: its kind's endpoint, model
+        and key, each its own), then the other providers -- a tab each."""
+        from .agents import KINDS
         from .store import GROUPS
 
-        return [{"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
-                 "endpoint": g["endpoint"], "hint": g.get("hint", "")} for k, g in GROUPS.items()]
+        def static(k: str, g: dict[str, Any]) -> dict[str, Any]:
+            return {"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
+                    "endpoint": g["endpoint"], "hint": g.get("hint", "")}
+
+        per = [{"id": a.name, "label": f"{a.label} ({a.kind})" if not a.builtin else a.label, "tab": a.label,
+                "public": list(a.keys()["public"]), "secret": list(a.keys()["secret"]), "endpoint": a.keys()["public"][0],
+                "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name} for a in agents.values()]
+        return [*(static(k, g) for k, g in GROUPS.items() if k != "other"), *per, static("other", GROUPS["other"])]
+
+    def _keys_of(groups: list[dict[str, Any]]) -> dict[str, list[str]]:
+        return {"public": [k for g in groups for k in g["public"]], "secret": [k for g in groups for k in g["secret"]]}
 
     @app.get("/api/settings")
     def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
         """The user's model settings, and the server's they fall back to (D696): a server key is
-        only said to be set, never shown."""
-        from .store import ADMIN_ONLY
+        only said to be set, never shown. Each agent's variables, the user's and the server's (D807)."""
+        from .agents import visible
 
+        agents = visible(store)
+        groups = _groups(agents)
         # D734: an external user's runs fall back to nothing of the server's: no server value is offered
-        server = {k: v for k, v in store.server_settings().items() if k in ADMIN_ONLY} if user.external else store.server_settings()
-        return {"values": store.settings(user), "server": server, "groups": _groups(), "admin_only": list(ADMIN_ONLY),
-                "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS), "external": user.external}
+        server = {} if user.external else store.server_settings()
+        env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _env_list(f"agent:{n}")}
+               for n in agents}
+        return {"values": store.settings(user), "server": server, "groups": groups, **_keys_of(groups),
+                "agent_env": env, "external": user.external}
 
     # ---- every user's agent logins (D734, D747: internal users too, since each has a home of their own)
-    from .logins import LIMIT_S, LOGIN_DEFAULTS, Logins, logged_in
+    from .agents import KINDS, check_new, found, registry, version, visible
+    from .logins import LIMIT_S, Logins, logged_in
 
     logins = Logins()
 
@@ -326,20 +351,24 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def agents_gate(user: User, agents: list[str]) -> None:
         """A start, an authoring agent or an ask refused while an agent it needs has not passed
         its test for the loop's owner, whose logins it runs on (D769) -- before a turn is spent (D751)."""
-        from .authoring import AUTHORS
-
-        bad = [AUTHORS.get(a, a) for a in agents if a in LOGIN_DEFAULTS and not agent_test_of(user, a).get("ok")]
+        reg = registry(store)
+        bad = [reg[a].label for a in agents if a in reg and not agent_test_of(user, a).get("ok")]
         if bad:
             raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: {user.name}'s Account › Agent logins, log in and Test")
 
     def author_agent(author: Any) -> list[str]:
         name = author.get("preset") if isinstance(author, dict) else author
-        return [str(name)] if name in LOGIN_DEFAULTS else []
+        return [str(name)] if name in registry(store) else []
+
+    def check_author(author: str) -> None:
+        """Who writes or answers (D704, D705): an agent offered here (D807), or Flux's own model."""
+        if author != "model" and author not in visible(store):
+            raise HTTPException(400, f"who writes or answers is one of {', '.join([*visible(store), 'model'])}")
 
     testing: set[tuple[str, str]] = set()
     testing_lock = threading.Lock()
 
-    def run_agent_test(user: User, agent: str) -> dict[str, Any]:
+    def run_agent_test(user: User, agent: str, why: str = "") -> dict[str, Any]:
         """`flux agent test <agent> --live`, sandboxed as the user's runs are: their home, their
         settings, the network rules. Its result is kept: a passed test enables the agent (D751)."""
         with testing_lock:
@@ -362,35 +391,81 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
             got["when"] = time.time()
             store.server_set(f"agent-test:{user.name}:{agent}", got)
-            store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}")
+            store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}{f' ({why})' if why else ''}")
             return got
         finally:
             with testing_lock:
                 testing.discard((user.name, agent))
 
+    #: D807: an agent's test is asked again a day after the last one -- a login whose session it
+    #: refreshes stays alive, and one that can no longer be refreshed is said (and its runs held)
+    #: before a loop finds out
+    RETEST_S = 24 * 3600.0
+    retesting: set[tuple[str, str]] = set()
+
+    def retest_due(now: float | None = None) -> list[tuple[str, str]]:
+        """Starts one test that is due (each minute's sample asks): the oldest, of an agent a user
+        tested before and is offered, while nothing else of theirs is being tested or logged in."""
+        now = time.time() if now is None else now
+        if retesting:
+            return []
+        due = []
+        for u in store.users():
+            if u.disabled or logins.state(u.name).get("running"):
+                continue
+            for n in visible(store):
+                t = agent_test_of(u, n)
+                if t.get("when") and now - float(t["when"]) >= RETEST_S and (u.name, n) not in testing:
+                    due.append((float(t["when"]), u, n, bool(t.get("ok"))))
+        if not due:
+            return []
+        _when, u, n, was = min(due, key=lambda x: x[0])
+        retesting.add((u.name, n))
+
+        def go() -> None:
+            try:
+                got = run_agent_test(u, n, why="daily")
+                if was and not got.get("ok"):
+                    store.notify(u.name, f"{registry(store)[n].label}'s daily test failed: your loops wait for it -- "
+                                 "Account › Agent logins, log in again", "#/account", "warn")
+            finally:
+                retesting.discard((u.name, n))
+
+        threading.Thread(target=go, daemon=True).start()
+        return [(u.name, n)]
+
+    app.state.retest_due = retest_due
+
+    def offered(agent: str) -> Any:
+        a = visible(store).get(agent)
+        if a is None:
+            raise HTTPException(404, f"{agent} is not an agent offered here; agents: {', '.join(visible(store))}")
+        return a
+
     @app.post("/api/agents/{agent}/test")
     def test_agent(agent: str, user: User = Depends(user_of)) -> dict[str, Any]:
-        if agent not in LOGIN_DEFAULTS:
-            raise HTTPException(404, f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
+        offered(agent)
         return run_agent_test(user, agent)
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
-        have = logged_in(store.home_of(user), {a: (c or {}).get("login_files") or [] for a, c in (store.server_get("agents") or {}).items()})
+        """The agents offered here (D807: their program found), each logged in or not, tested or not."""
+        agents = visible(store)
+        have = logged_in(store.home_of(user), agents)
         mine = store.settings(user)
-        have["claude"] = have["claude"] or bool(mine.get("CLAUDE_CODE_OAUTH_TOKEN"))      # D748: a printed token, kept
-        cmds = store.server_settings(reveal=True)
-        from .authoring import AUTHORS
-
-        return {"external": user.external, "agents": [{"id": a, "label": AUTHORS[a], "logged_in": have[a], "tested": agent_test_of(user, a),
-                                              "testing": (user.name, a) in testing,
-                                              "command": " ".join(logins.command(a, cmds))} for a in LOGIN_DEFAULTS],
+        for n, a in agents.items():                       # D748: a printed token, kept
+            have[n] = have[n] or bool(mine.get(f"FLUX_{a.up}_OAUTH_TOKEN"))
+        return {"external": user.external, "agents": [{"id": n, "label": a.label, "kind": a.kind, "logged_in": have[n],
+                                                       "tested": agent_test_of(user, n), "testing": (user.name, n) in testing,
+                                                       "command": " ".join(a.login_command())} for n, a in agents.items()],
                 "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
 
     @app.post("/api/logins/{agent}")
     def start_login(agent: str, user: User = Depends(user_of)) -> dict[str, str]:
+        a = offered(agent)
         try:
-            cmd = logins.command(agent, store.server_settings(reveal=True))
+            cmd = a.login_command()
+            printed = KINDS[a.kind]["printed"]
             home_ready(store, user)
             store.server_set(f"agent-test:{user.name}:{agent}", None)        # D751: a new login is tested again
             env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.login", "PYTHONUNBUFFERED": "1",
@@ -403,7 +478,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
             logins.start(user.name, agent, store.home_of(user), cmd, env,
                          on_secret=lambda name, value: store.set_setting(user, name, value),   # D748
-                         on_end=tested_after)
+                         on_end=tested_after, printed=(printed, f"FLUX_{a.up}_OAUTH_TOKEN") if printed else None)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "agent login", f"{agent}: {' '.join(cmd)}")
@@ -428,7 +503,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/admin/settings")
     def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
-        return {"values": store.server_settings(), "groups": _groups(), "public": list(PUBLIC_SETTINGS), "secret": list(SECRET_SETTINGS)}
+        from .agents import visible
+
+        agents = visible(store)
+        groups = _groups(agents)
+        return {"values": store.server_settings(), "groups": groups, **_keys_of(groups),
+                "agent_env": {n: _env_list(f"agent:{n}") for n in agents}}
 
     @app.put("/api/admin/settings")
     def put_server_settings(body: Settings, a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -471,9 +551,14 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return out
 
     def _sample() -> dict[str, Any]:
-        """One minute's sample of the machine (D699); the sandboxes' refusals into the audit (D708)."""
+        """One minute's sample of the machine (D699); the sandboxes' refusals into the audit (D708);
+        an agent's daily test, when one is due (D807)."""
         try:
             store.take_refusals()
+        except Exception:  # noqa: BLE001 -- the sample goes on
+            pass
+        try:
+            retest_due()
         except Exception:  # noqa: BLE001 -- the sample goes on
             pass
         from flux_cli.sandbox import _local
@@ -666,88 +751,117 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             out.append(x)
         return list(dict.fromkeys(out))
 
-    # ---- Admin › Agents (D756): each coding agent's program, login, arguments, the files every
-    # home starts with for it, the hosts it needs; whether this server finds it; who has it ready
-    def _agent_found(agent: str, settings: dict[str, str]) -> tuple[str, str]:
-        exe = settings.get(f"FLUX_{agent.upper()}_BIN") or agent
-        cfg = store.server_get("sandbox") or {}
-        path_dirs = [*(cfg.get("path") or []), *(login_path() if cfg.get("login_path") else []), *os.environ.get("PATH", "").split(os.pathsep)]
-        found = exe if "/" in exe and os.path.exists(exe) else (shutil.which(exe, path=os.pathsep.join(d for d in path_dirs if d)) or "")
-        version = ""
-        if found:
-            try:
-                key = (found, os.stat(found).st_mtime)
-            except OSError:
-                key = (found, 0)
-            if key not in _VERSIONS:                       # asked once per program as it is on disk
-                try:
-                    r = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
-                    lines = (r.stdout or r.stderr).strip().splitlines()
-                    _VERSIONS[key] = lines[-1][:80] if lines else ""
-                except (OSError, subprocess.TimeoutExpired):
-                    _VERSIONS[key] = ""
-            version = _VERSIONS[key]
-        return found, version
+    # ---- Admin › Agents (D756, D807): every agent -- the three built-in ones and those added, each a
+    # kind -- its program, login, arguments, the files every home starts with for it, the hosts it
+    # needs; whether this server finds it (only then is it offered to users); who has it ready
+    def _paths(raw: list[str], what: str) -> list[str]:
+        out = []
+        for rel in raw:
+            r = rel.strip().removeprefix("~/")
+            if r.startswith("/") or ".." in r.split("/"):            # before the slashes go: /etc/passwd is not in a home
+                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as {what}")
+            r = r.strip("/")
+            if r:
+                out.append(r)
+        return out
 
-    _VERSIONS: dict[tuple[str, float], str] = {}
+    def _program(exe: str) -> str:
+        exe = exe.strip()
+        if exe and not (exe.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", exe)):
+            raise HTTPException(400, "the program: an absolute path, or a name found on PATH")
+        return exe
 
     @app.get("/api/admin/agents")
     def admin_agents(_a: User = Depends(admin_of)) -> dict[str, Any]:
-        from .authoring import AUTHORS
-
         from concurrent.futures import ThreadPoolExecutor
 
-        settings = store.server_settings()
-        cfg = store.server_get("agents") or {}
-        with ThreadPoolExecutor(max_workers=len(LOGIN_DEFAULTS)) as pool:       # each asked at once
-            seen = dict(zip(LOGIN_DEFAULTS, pool.map(lambda a: _agent_found(a, settings), LOGIN_DEFAULTS)))
+        reg = registry(store)
+        with ThreadPoolExecutor(max_workers=max(1, len(reg))) as pool:       # each asked at once
+            seen = dict(zip(reg, pool.map(lambda a: (lambda f: (f, version(f)))(found(a, store)), reg.values())))
         out = []
-        for agent in LOGIN_DEFAULTS:
-            up, mine = agent.upper(), cfg.get(agent) or {}
-            found, version = seen[agent]
+        for name, a in reg.items():
+            prog, ver = seen[name]
             users = []
             for u in store.users():
-                t = agent_test_of(u, agent)
+                t = agent_test_of(u, name)
                 users.append({"user": u.name, "kind": u.role, "state": "ready" if t.get("ok") else "failed" if t.get("when") else "not tested",
                               "when": t.get("when")})
-            out.append({"id": agent, "label": AUTHORS.get(agent, agent), "bin": settings.get(f"FLUX_{up}_BIN") or "",
-                        "login": settings.get(f"FLUX_{up}_LOGIN") or "", "login_default": LOGIN_DEFAULTS[agent],
-                        "args": mine.get("args") or "", "home": mine.get("home") or [], "hosts": mine.get("hosts") or [],
-                        "login_files": mine.get("login_files") or [],
-                        "found": found, "version": version, "users": users})
-        return {"agents": out}
+            out.append({"id": name, "kind": a.kind, "builtin": a.builtin, "label": a.label, "bin": a.bin, "login": a.login,
+                        "login_default": KINDS[a.kind]["login"], "args": a.args, "home": a.home, "hosts": a.hosts,
+                        "login_files": a.login_files, "found": prog, "version": ver, "users": users})
+        return {"agents": out, "kinds": [{"id": k, "label": v["label"]} for k, v in KINDS.items()]}
+
+    @app.post("/api/admin/agents")
+    def add_admin_agent(body: AgentNew, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """An agent of a kind under a name of its own (D807): an OpenCode of a company's own beside
+        the plain one -- offered once its program is found."""
+        try:
+            name = check_new(store, body.name, body.kind)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        cfg = store.server_get("agents") or {}
+        cfg[name] = {"kind": body.kind, "label": body.label.strip() or name, "bin": _program(body.bin)}
+        store.server_set("agents", cfg)
+        store.audit(a.name, "agent added", f"{name}: a {body.kind}, program {cfg[name]['bin'] or '(none yet)'}")
+        return {"ok": f"{name} added", "found": found(registry(store)[name], store)}
+
+    @app.delete("/api/admin/agents/{agent}")
+    def remove_admin_agent(agent: str, a: User = Depends(admin_of)) -> dict[str, str]:
+        reg = registry(store)
+        if agent not in reg:
+            raise HTTPException(404, f"no agent named {agent}")
+        if reg[agent].builtin:
+            raise HTTPException(409, f"{agent} is built in: clear its program instead")
+        keys = sum(reg[agent].keys().values(), ())
+        store.forget_settings(keys)                               # its settings, the server's and every user's
+        store.server_set(f"env:agent:{agent}", None)
+        for u in store.users():
+            store.server_set(f"env:agent:{agent}:user:{u.id}", None)
+            store.server_set(f"agent-test:{u.name}:{agent}", None)
+        cfg = store.server_get("agents") or {}
+        cfg.pop(agent, None)
+        store.server_set("agents", cfg or None)
+        store.audit(a.name, "agent removed", agent)
+        return {"ok": f"{agent} removed"}
 
     @app.put("/api/admin/agents/{agent}")
     def put_admin_agent(agent: str, body: AgentConfig, a: User = Depends(admin_of)) -> dict[str, Any]:
-        if agent not in LOGIN_DEFAULTS:
-            raise HTTPException(404, f"an agent is one of {', '.join(LOGIN_DEFAULTS)}")
-        exe = body.bin.strip()
-        if exe and not (exe.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", exe)):
-            raise HTTPException(400, "the program: an absolute path, or a name found on PATH")
-        home, login_files = [], []
-        for rel in body.login_files:
-            r = rel.strip().removeprefix("~/")
-            if r.startswith("/") or ".." in r.split("/"):            # before the slashes go: /etc/passwd is not in a home
-                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .local/share/nga/auth.json")
-            r = r.strip("/")
-            if r:
-                login_files.append(r)
-        for rel in body.home:
-            r = rel.strip().removeprefix("~/")
-            if r.startswith("/") or ".." in r.split("/"):
-                raise HTTPException(400, f"{rel!r}: a path inside the home folder, such as .config/opencode")
-            r = r.strip("/")
-            if r:
-                home.append(r)
-        up = agent.upper()
-        store.set_server_setting(f"FLUX_{up}_BIN", exe or None)
-        store.set_server_setting(f"FLUX_{up}_LOGIN", body.login.strip() or None)
+        reg = registry(store)
+        if agent not in reg:
+            raise HTTPException(404, f"no agent named {agent}; agents: {', '.join(reg)}")
+        login = body.login.strip()
+        if login:
+            import shlex
+
+            try:
+                if not shlex.split(login):
+                    raise ValueError
+            except ValueError as exc:
+                raise HTTPException(400, "the login command: a command line, e.g. opencode auth login") from exc
+        x = reg[agent]
+        x.bin, x.login, x.args = _program(body.bin), login, body.args.strip()
+        x.label = body.label.strip() or x.label
+        x.home, x.hosts, x.login_files = _paths(body.home, ".config/opencode"), _rules(body.hosts), _paths(body.login_files, ".local/share/nga/auth.json")
         cfg = store.server_get("agents") or {}
-        cfg[agent] = {"args": body.args.strip(), "home": home, "hosts": _rules(body.hosts), "login_files": login_files}
+        cfg[agent] = x.stored()
         store.server_set("agents", cfg)
-        store.audit(a.name, "agent settings", f"{agent}: program {exe or '(on PATH)'}; login {body.login.strip() or '(default)'}; "
-                    f"{len(home)} home path(s), {len(cfg[agent]['hosts'])} host(s)")
+        store.audit(a.name, "agent settings", f"{agent}: program {x.bin or '(on PATH)'}; login {x.login or '(default)'}; "
+                    f"{len(x.home)} home path(s), {len(x.hosts)} host(s)")
         return {"ok": f"{agent} saved"}
+
+    # ---- each agent's own variables (D807): the server's (an admin's), a user's own
+    def _agent_named(agent: str) -> str:
+        if agent not in registry(store):
+            raise HTTPException(404, f"no agent named {agent}")
+        return agent
+
+    @app.put("/api/admin/agents/{agent}/env")
+    def put_agent_env(agent: str, body: EnvVar, a: User = Depends(admin_of)) -> list[dict[str, Any]]:
+        return _set_env(f"agent:{_agent_named(agent)}", body, a, f"the server's {agent}")
+
+    @app.put("/api/agents/{agent}/env")
+    def put_my_agent_env(agent: str, body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        return _set_env(f"agent:{_agent_named(agent)}:user:{user.id}", body, user, f"{user.name}'s {agent}")
 
     @app.get("/api/admin/sandbox")
     def get_sandbox(_a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -946,7 +1060,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         from .authoring import available
 
         env = run_env(store, user)
-        got = available(env)
+        got = available(env, visible(store))
         default = env.get("FLUX_DEFAULT_AGENT")     # D705: the admin's, or the user's own
         for a in got:
             a["default"] = a["id"] == default
@@ -958,6 +1072,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         """A new loop whose problem an agent writes from a description and files (D704)."""
         if not prompt.strip():
             raise HTTPException(400, "say what the loop should do")
+        check_author(author)
         w = ws(user)
         try:
             d = w.create_empty(name)
@@ -983,6 +1098,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(409, "stop the loop first: its problem is in use")
         if not prompt.strip():
             raise HTTPException(400, "say what to change")
+        check_author(author)
         try:
             got = await _attach(d, files)
             authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name, user, author),
@@ -1016,13 +1132,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     @app.post("/api/apps/{name}/asks")
     def ask_about(name: str, body: AskIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """An agent reads the loop (its files, its record, its log) and answers; it changes nothing."""
-        from .authoring import AUTHORS
-
         _w, whose, d, _run = loop_of(name, user, owner, edit=True)
         if not body.question.strip():
             raise HTTPException(400, "ask something")
-        if body.author not in AUTHORS:
-            raise HTTPException(400, f"who answers is one of {', '.join(AUTHORS)}")
+        check_author(body.author)
         try:
             ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author), by=user.name)
         except ValueError as exc:

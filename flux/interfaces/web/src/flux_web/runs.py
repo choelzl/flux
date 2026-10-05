@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -30,9 +31,6 @@ _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_A
 _MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OLLAMA_", "OPENROUTER_", "ANTHROPIC_", "OPENAI_", "FLUX_OPENCODE_",
                "FLUX_CLAUDE_", "FLUX_CODEX_", "OPENCODE_", "CLAUDE_", "CODEX_", "FLUX_DEFAULT_AGENT")
 
-
-#: The logins kept as settings (D748): a person's, so whoever starts a run lends theirs.
-_LOGIN_SETTINGS = ("CLAUDE_CODE_OAUTH_TOKEN",)
 #: The agents' folders in the server account's environment, never a run's (D748): each user's are in their home.
 _OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "NGA_DATA_HOME", "XDG_CONFIG_HOME",
                 "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME")
@@ -62,9 +60,9 @@ HOME_SEED = (".config/opencode",
 def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     """The environment of a user's run or check (D684, D696): the server's, then the model
     settings the admin set for the server, then the user's own. A run never reads the server's
-    flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, OpenCode,
-    Claude Code, Codex), a user who names their own endpoint gets none of the server's values of
-    that group -- no server key goes to someone else's endpoint. HOME (D744) is `user`'s Flux home:
+    flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, each agent's
+    own, D807), a user who names their own endpoint gets none of the server's values of that group
+    -- no server key goes to someone else's endpoint. HOME (D744) is `user`'s Flux home:
     a loop's owner, whose agents' logins a shared loop runs on, whoever starts it (D769)."""
     from .store import GROUPS
 
@@ -73,15 +71,14 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     # the user's home: their login and sessions would land in the scratch of the server's HOME path
     for k in _OWN_FOLDERS:
         env.pop(k, None)
+    env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)       # D748: a login is a person's, never the server account's
     server, mine = store.server_settings(reveal=True), store.settings(user, reveal=True)
     if user.external:
         # D734: an external user brings their own: none of the machine's model and agent settings
         # (the server's flux.env is in its environment) and none of the admin's -- only the
         # agents' programs, which say what runs, not on whose account
-        from .store import ADMIN_ONLY
-
-        env = {k: v for k, v in env.items() if not k.startswith(_MODEL_VARS) or k in ADMIN_ONLY}
-        server = {k: v for k, v in server.items() if k in ADMIN_ONLY}
+        env = {k: v for k, v in env.items() if not k.startswith(_MODEL_VARS) or k.endswith("_BIN")}
+        server = {}
     web: dict[str, str] = {}
     for name, g in GROUPS.items():
         keys = (*g["public"], *g["secret"])
@@ -98,36 +95,20 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
                 env.pop("FLUX_REMOTE_API_KEY_FILE", None)             # a key set here wins over the server's file
         web.update(vals)
     env.update(web)
-    # D705: an agent's program set by the admin -- its folder on PATH, so the sandbox mounts it
-    for k in ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"):
-        exe = server.get(k)
-        if exe:
-            env[k] = exe
-            folder = os.path.dirname(exe)
-            if folder and folder not in env.get("PATH", "").split(os.pathsep):
-                env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
-    for agent, a in (store.server_get("agents") or {}).items():   # D756: the admin's extra arguments for an agent
-        if a.get("args"):
-            env[f"FLUX_{agent.upper()}_ARGS"] = f"{a['args']} {env.get(f'FLUX_{agent.upper()}_ARGS', '')}".strip()
-        if a.get("login_files"):                                   # D760: where its login is kept
-            env[f"FLUX_{agent.upper()}_LOGIN_FILES"] = ",".join(a["login_files"])
-    _agents(env, web)
+    names: list[str] = list(web)
+    _agents(store, user, env, server, mine, web, names)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
-    # their names pass into the sandbox whatever they look like
-    # D748: an agent's login kept as a setting is a person's, like the files in their home -- the
-    # loop's owner's (D769); and the settings' names pass into the sandbox whatever they look like
-    for k in _LOGIN_SETTINGS:
-        env.pop(k, None)
-        own = store.settings(user, reveal=True).get(k)
-        if own:
-            env[k] = own
-    names: list[str] = [k for k in (*web, *_LOGIN_SETTINGS) if k in env]
+    # their names pass into the sandbox whatever they look like, and to every agent (D807)
+    shared: list[str] = []
     for scope in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
         for name, x in store.env(scope, reveal=True).items():
             env[name] = x["value"]
             names.append(name)
+            shared.append(name)
+    if shared:
+        env["FLUX_SHARED_VARS"] = ",".join(dict.fromkeys(shared))
     if names:
         env["FLUX_SANDBOX_PASS"] = ",".join(dict.fromkeys(names))
     env["FLUX_SANDBOX_REFUSALS"] = str(store.refusals_file)      # D708: hosts its sandbox refused, for the audit
@@ -204,9 +185,8 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
     if cfg.get("network") == "allowlist":
         allow = [*(cfg.get("allow") or []), *loop, *(asked if cfg.get("users_add") else [])]
         if cfg.get("endpoints"):
-            for k in ("FLUX_REMOTE_BASE_URL", "FLUX_OPENCODE_BASE_URL", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "OLLAMA_BASE_URL"):
-                if env.get(k):
-                    allow.append(urlsplit(env[k]).hostname or "")
+            for url in _endpoints(env):
+                allow.append(urlsplit(url).hostname or "")
         allow = [a for a in dict.fromkeys(a.strip() for a in allow) if a]
         env["FLUX_SANDBOX_NET"] = "allowlist"
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
@@ -216,6 +196,21 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any], a
         env["FLUX_SANDBOX_ALLOW"] = ",".join(allow)
         return _net_said(allow)
     return ""
+
+
+def _endpoints(env: dict[str, str]) -> list[str]:
+    """The endpoints a run's model and agents call: Flux's, Ollama's, each agent's own (D807)."""
+    out = [env[k] for k in ("FLUX_REMOTE_BASE_URL", "OLLAMA_BASE_URL", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL") if env.get(k)]
+    for k, v in env.items():
+        if re.fullmatch(r"FLUX_[A-Z0-9_]+_ENV", k):
+            try:
+                own = json.loads(v)
+                oc = json.loads(own.get("OPENCODE_CONFIG_CONTENT") or "{}")
+            except (ValueError, AttributeError):
+                continue
+            out += [own[x] for x in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL") if own.get(x)]
+            out += [p.get("options", {}).get("baseURL") for p in (oc.get("provider") or {}).values() if isinstance(p, dict)]
+    return [u for u in out if u]
 
 
 def _net_said(allow: list[str]) -> str:
@@ -256,33 +251,38 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
             env[var] = str(adv[key])
 
 
-def _agents(env: dict[str, str], web: dict[str, str]) -> None:
-    """The coding agents told their endpoint and model (D696). OpenCode: a provider in
-    OPENCODE_CONFIG_CONTENT (merged under the loop's own permissions), its key from an
-    environment variable; its own settings, else Flux's model's. Claude Code and Codex: a
-    `--model` among their arguments, their endpoint and key in their own variables."""
-    import shlex
+def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],
+            flux: dict[str, str], names: list[str]) -> None:
+    """Each agent the server offers, as its runs get it (D807): its program (its folder on PATH, so
+    the sandbox mounts it, D705), the admin's arguments and login files (D756, D760), and its own
+    variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
+    then the user's -- in `FLUX_<NAME>_ENV`, which only that agent is given; an added agent's kind
+    in `FLUX_AGENTS`."""
+    from .agents import found, run_settings, visible
 
-    base = web.get("FLUX_OPENCODE_BASE_URL") or web.get("FLUX_REMOTE_BASE_URL")
-    model = web.get("FLUX_OPENCODE_MODEL") or (web.get("FLUX_REMOTE_MODEL") if not web.get("FLUX_OPENCODE_BASE_URL") else None)
-    if base and model:
-        key = web.get("FLUX_OPENCODE_API_KEY") or (web.get("FLUX_REMOTE_API_KEY") if not web.get("FLUX_OPENCODE_BASE_URL") else None)
-        options: dict[str, object] = {"baseURL": base.rstrip("/"), "timeout": 1800000}
-        if key:
-            env["FLUX_OPENCODE_API_KEY"] = key
-            options["apiKey"] = "{env:FLUX_OPENCODE_API_KEY}"
-        try:
-            have = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
-        except ValueError:
-            have = {}
-        have.setdefault("provider", {})["flux"] = {"npm": "@ai-sdk/openai-compatible", "name": "Flux (web settings)",
-                                                   "options": options, "models": {model: {"name": model}}}
-        have["model"] = f"flux/{model}"
-        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(have)
-    for preset, key in (("CLAUDE", "FLUX_CLAUDE_MODEL"), ("CODEX", "FLUX_CODEX_MODEL")):
-        if web.get(key):
-            args = env.get(f"FLUX_{preset}_ARGS", "")
-            env[f"FLUX_{preset}_ARGS"] = f"{args} --model {shlex.quote(web[key])}".strip()
+    added: dict[str, str] = {}
+    for a in visible(store).values():
+        exe = found(a, store)
+        if a.bin or "/" in exe:
+            env[f"FLUX_{a.up}_BIN"] = exe
+            folder = os.path.dirname(exe)
+            if folder and folder not in env.get("PATH", "").split(os.pathsep):
+                env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
+        if not a.builtin:
+            added[a.name] = a.kind
+        variables = {**({} if user.external else {n: x["value"] for n, x in store.env(f"agent:{a.name}", reveal=True).items()}),
+                     **{n: x["value"] for n, x in store.env(f"agent:{a.name}:user:{user.id}", reveal=True).items()}}
+        own, args = run_settings(a, server, mine, flux, variables, env)
+        if own:
+            env[f"FLUX_{a.up}_ENV"] = json.dumps(own)
+            names.append(f"FLUX_{a.up}_ENV")
+        extra = " ".join(x for x in (a.args, env.get(f"FLUX_{a.up}_ARGS", ""), " ".join(shlex.quote(t) for t in args)) if x)
+        if extra:
+            env[f"FLUX_{a.up}_ARGS"] = extra
+        if a.login_files:
+            env[f"FLUX_{a.up}_LOGIN_FILES"] = ",".join(a.login_files)
+    if added:
+        env["FLUX_AGENTS"] = json.dumps(added)
 
 
 def loop_files(app_dir: Path) -> dict[str, Path]:

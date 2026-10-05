@@ -1177,7 +1177,13 @@ _KNOWLEDGE_KEYS = ("files", "sheet", "text", "off", "agent")
 #: D795: every box says who works it the same way -- a word (`rules`, `model`, `off`, ...) or
 #: `{by: <who>, ...its settings}`, `by` a word, an agent preset (opencode, claude, codex) or an
 #: agent of one's own (`{command: [...]}`), the agent's options (session, timeout_s, ...) beside.
-AGENT_PRESETS = ("opencode", "claude", "codex")
+
+
+def _agents() -> tuple[str, ...]:
+    """The agents a box may name: the presets, and those the server adds (D807)."""
+    from .agent import agent_kinds
+
+    return tuple(agent_kinds())
 _DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select", "knowledge"})
 _AGENT_OPTS = ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow",
                "output", "resume", "name")
@@ -1200,9 +1206,9 @@ def _who(box: str, by: Any, opts: dict[str, Any]) -> Any:
     """An agent spec from `by` and the options beside it, or the box's inside word for a word."""
     if isinstance(by, dict):
         return {**by, **opts}
-    if by in AGENT_PRESETS:
+    if by in _agents():
         return {"preset": by, **opts} if opts else by
-    raise TaskError(f"flow.{box}.by is " + " | ".join([*(_BY_WORDS.get(box) or {}), *AGENT_PRESETS])
+    raise TaskError(f"flow.{box}.by is " + " | ".join([*(_BY_WORDS.get(box) or {}), *_agents()])
                     + f" or an agent of your own ({{command: [...]}}), not {by!r}")
 
 
@@ -1245,12 +1251,12 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
                 if value in ("llm", "agent"):
                     raise TaskError("flow.dse: a model or an agent proposing points is `{by: model}` or `{by: claude}` (D795)")
                 continue                                       # a policy's name
-            if value in AGENT_PRESETS:
+            if value in _agents():
                 value = {"by": value}
             elif box == "orchestrate" and value not in ("llm", "agent", "none") and value not in words:
                 continue                                       # a registered orchestrator; the roles say if not
             elif value not in words:
-                raise TaskError(f"flow.{box} is " + " | ".join([*words, *(AGENT_PRESETS if box in _DELEGABLE else ())])
+                raise TaskError(f"flow.{box} is " + " | ".join([*words, *(_agents() if box in _DELEGABLE else ())])
                                 + (" or {by: ..., ...}" if box in _DELEGABLE else "") + f", not {value!r} (D795)")
             else:
                 inner = words[value]

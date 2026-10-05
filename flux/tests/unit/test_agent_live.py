@@ -228,6 +228,46 @@ def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch)
     assert cl["ANTHROPIC_API_KEY"] == "claude-key" and "OPENAI_API_KEY" not in cl and "FLUX_OPENCODE_API_KEY" not in cl
 
 
+
+def test_an_added_agent_runs_as_its_kind_with_its_own_set(tmp_path, monkeypatch):
+    """D807: a server adds `nga`, an OpenCode of its own -- its kind's arguments, its program, its
+    own variables (`FLUX_NGA_ENV`), none of another agent's set; a variable the run was given for
+    every agent (`FLUX_SHARED_VARS`) reaches it whatever its name."""
+    import os
+
+    from flux_loop.agent import agent_kinds, agent_spec
+    from flux_loop.document import TaskError, TaskSpec
+
+    prog = tmp_path / "nga-bin"
+    prog.write_text(f"#!{sys.executable}\nimport json, os, sys\n"
+                    f"json.dump({{'env': dict(os.environ), 'argv': sys.argv}}, open({str(tmp_path / 'nga.json')!r}, 'w'))\n")
+    prog.chmod(0o755)
+    monkeypatch.setenv("FLUX_AGENTS", json.dumps({"nga": "opencode", "BAD": "opencode", "x": "cursor"}))
+    monkeypatch.setenv("FLUX_NGA_BIN", str(prog))
+    monkeypatch.setenv("FLUX_NGA_ENV", json.dumps({"NGA_TOKEN": "nga-own", "ANTHROPIC_API_KEY": "for-nga"}))
+    monkeypatch.setenv("FLUX_CLAUDE_ENV", json.dumps({"ANTHROPIC_API_KEY": "claude-own"}))
+    monkeypatch.setenv("OPENAI_API_KEY", "everyone")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://codex-only.example")
+    monkeypatch.setenv("FLUX_SHARED_VARS", "OPENAI_API_KEY")
+    assert agent_kinds()["nga"] == "opencode" and "BAD" not in agent_kinds() and "x" not in agent_kinds()
+    spec = agent_spec("nga")
+    assert (spec.tool, spec.kind, spec.argv[0]) == ("nga", "opencode", str(prog)) and spec.argv[1:3] == ("run", "--format")
+    run_turn(spec, spec.argv, {"prompt": "p", "name": "n", "workdir": str(tmp_path)}, workdir=tmp_path)
+    got = json.loads((tmp_path / "nga.json").read_text())["env"]
+    assert got["NGA_TOKEN"] == "nga-own" and got["ANTHROPIC_API_KEY"] == "for-nga", "its own set, its own names"
+    assert "FLUX_CLAUDE_ENV" not in got and "FLUX_NGA_ENV" not in got, "no agent's set as such"
+    assert got["OPENAI_API_KEY"] == "everyone" and "OPENAI_BASE_URL" not in got, "a shared variable, not another kind's"
+    assert "permission" in json.loads(got["OPENCODE_CONFIG_CONTENT"]), "its kind's denials"
+    doc = {"id": "t", "statement": "s", "language": "text", "flow": {"generate": "nga", "test": "true"}}
+    assert TaskSpec.from_dict(doc).generator == {"agent": "nga"}
+    monkeypatch.delenv("FLUX_AGENTS")
+    try:
+        TaskSpec.from_dict(doc)
+        raise AssertionError("an agent this machine does not have is refused")
+    except TaskError as exc:
+        assert "nga" in str(exc)
+
+
 LEAVES = r'''import subprocess, sys
 # a server it starts and leaves running, holding the turn's output
 subprocess.Popen([sys.executable, "-c", "import time; open(sys.argv[1], 'w').write('up'); time.sleep(300)", sys.argv[1]])

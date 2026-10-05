@@ -357,10 +357,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     and drafts one part at a time whatever its document asks (the log says so); on, the document
     says how many (`budget.workers`, `parallel_parts`). Only an admin changes the advanced
     settings (also when creating a loop); everyone sees them.
-- **Agents (Admin › Agents, D756):** per coding agent: found on this server or not, and its version; its
-  program, login command, extra arguments, where a build of its own keeps its login (D760: e.g. `.cache/nga/auth.json`;
+- **Agents (Admin › Agents, D756, D807):** OpenCode, Claude Code and Codex, and any the admin adds -- **Add an
+  agent**: a name (lower case: what a document says, `generate: nga`), a kind (opencode, claude or codex: how it
+  runs) and its program (a path) -- e.g. a company's own OpenCode beside the plain one. An agent is offered to users
+  (pickers, Agent logins, its Models tab) only where its program is found and runnable; here every agent is listed,
+  found or not. Per agent: its name shown, program, login command, extra arguments, where a build of its own keeps its login (D760: e.g. `.cache/nga/auth.json`;
   `~/.cache` is the user's own); the files every home starts with for it; the hosts it needs on the
-  allowlist; whom it is ready for (each user's Test).
+  allowlist; whom it is ready for (each user's Test); an added agent can be removed (its settings and variables,
+  the server's and every user's, go with it).
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist the container has no network; a proxy on the host forwards to allowed hosts
@@ -405,16 +409,21 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   banner says when the server cannot be reached. A stopped server waits at most 3 s for open
   streams; a restarted one finds its running loops again.
 - **The agent by default** (Admin › Models and variables, Account): who writes problems and answers
-  questions unless chosen otherwise (opencode, claude, codex or model); a user's own over the
-  admin's. **Program (admins):** the program each agent is (`FLUX_OPENCODE_BIN`, `FLUX_CLAUDE_BIN`,
-  `FLUX_CODEX_BIN`), for every run; its folder goes on the run's PATH, so the sandbox mounts it. On the
+  questions unless chosen otherwise (an agent's name, or model); a user's own over the admin's. An agent's
+  program is Admin › Agents' (D807), for every run; its folder goes on the run's PATH, so the sandbox mounts
+  it (without one, a built-in agent's own name on PATH, or the machine's `FLUX_<AGENT>_BIN`). On the
   command line (`flux.env`) the sandbox mounts the program itself, the file alone with its link followed,
   and names it so inside (D804): a link in `~/.config/flux` works without the key beside it going in.
 - **Models (Admin › Models, Account):** a tab per tool (D721) -- Flux (its own model, and the agent by
-  default), OpenCode, Claude Code, Codex, Other (Ollama's URL and model, OpenRouter's key); a tab with
-  settings of its own is marked •, one Save covers them all. endpoint, model and key for Flux's own model calls and for
-  each coding agent: OpenCode (its own, else Flux's model's), Claude Code and Codex (a `--model`,
-  their endpoint and key). The admin sets them for the server; on their Account a user sees the
+  default), one per agent offered (D807), Other (Ollama's URL and model, OpenRouter's key); a tab with
+  settings of its own is marked •, one Save covers them all. Each agent's tab is its own: an endpoint, a
+  model and a key as its kind reads them (`FLUX_<AGENT>_BASE_URL`, `_MODEL`, `_API_KEY`) -- an OpenCode gets
+  them as a provider (the built-in OpenCode, with none of its own, Flux's model's), Claude Code and Codex as
+  their `ANTHROPIC_*` / `OPENAI_*` variables and a `--model` -- and **variables for that agent alone**
+  (an `ANTHROPIC_API_KEY` for an OpenCode, a whole `OPENCODE_CONFIG_CONTENT`): a run hands them to that
+  agent only (`FLUX_<AGENT>_ENV`), never to another nor to Flux itself. A variable for every agent at once
+  is an ordinary environment variable (the server's, a user's, a loop's), which each agent gets whatever its
+  name. The admin sets them for the server; on their Account a user sees the
   server's values in grey and may set their own. A user who names their own endpoint in a group
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
@@ -424,16 +433,18 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
     environment variables -- only their own (Account) and the admin's agent programs; the network rules apply to
     everyone. Every user (D744) has a home of their own (see Homes); on Account, **Agent logins** runs each
-    agent's login command (`FLUX_<AGENT>_LOGIN`, the admin's; defaults `opencode auth login`, `claude setup-token`,
+    agent's login command (the admin's, in Admin › Agents; by kind, `opencode auth login`, `claude setup-token`,
     `codex login`) in the sandbox, with that home writable, in a small terminal: its output with links, a line to
     type, ↑ ↓ Enter Esc Tab Ctrl-C. What it writes stays in their home, where their runs use it. Claude Code's
     `claude setup-token` prints a year-long token instead of keeping it: the login saves it to the user's settings
-    (`CLAUDE_CODE_OAUTH_TOKEN`, encrypted) and never shows it (D748). For Codex set `FLUX_CODEX_LOGIN` to
-    `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost). Inside the
+    (the agent's `FLUX_<AGENT>_OAUTH_TOKEN`, encrypted; its runs get it as `CLAUDE_CODE_OAUTH_TOKEN`) and never
+    shows it (D748). For Codex set its login command to `codex login --device-auth` (a code to enter on the site; the default waits for a redirect to localhost). Inside the
     sandbox Codex runs without its own (bubblewrap cannot start there): the container is its sandbox (D750).
     **Test** (D751) checks an agent for you -- its program, your login or key, one short answer
     (`flux agent test <agent> --live` on the command line): a loop, a new loop's author or a question uses an
     agent only once its test passed for whoever starts it; `task check` says which agents a document needs.
+    **Each day** (D807) an agent a user tested is tested again, one at a time: an answer keeps its login fresh;
+    a failure is told to the user (the bell) and their loops that need it wait until a Test passes again.
   - **admin**: internal, and the admin pages.
 - **Admin** (tabs: Loops, Insights, Applications, Resources, Sandbox, Agents, Models and variables, Users, Audit):
   - **Insights** (D766): over the last day, 7 or 30 days -- the starts that failed with why (their log's
@@ -451,7 +462,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
     and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
     memory, disks, the containers' CPU and memory, loops running), kept a week, charted over the
-    last hour, 6 hours, day or week. The sandbox's containers with CPU, memory and PIDs, each with its
+    last hour, 6 hours, day or week; hovering a chart shows the sample under the pointer, its time and values. The sandbox's containers with CPU, memory and PIDs, each with its
     loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no

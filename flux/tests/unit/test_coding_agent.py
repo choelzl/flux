@@ -94,7 +94,7 @@ def test_the_presets_and_the_missing_binary():
         assert argv[argv.index("--allowedTools") + 1] == "Bash" and "Bash(yosys:*)" in argv and "Bash(bash:*)" in argv
     a = agent_spec({"preset": "codex", "timeout_s": 60, "questions": "model"})
     assert a.tool == "codex" and a.timeout_s == 60.0 and a.questions == "model" and a.resume is None
-    with pytest.raises(ValueError, match="not a preset"):
+    with pytest.raises(ValueError, match="not an agent here"):
         agent_spec("cursor")
     with pytest.raises(ValueError, match="questions is one of decide, model, operator"):
         agent_spec({"preset": "opencode", "questions": "ask-me"})

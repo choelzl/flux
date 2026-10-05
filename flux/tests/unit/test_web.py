@@ -131,19 +131,23 @@ def test_a_users_model_settings_are_theirs_and_their_keys_secret(server, monkeyp
     assert bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "ftp://x"}}, headers=H).status_code == 400
     assert bob.put("/api/settings", json={"values": {"PATH": "/evil"}}, headers=H).status_code == 400
     r = bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "https://bob.example/v1", "FLUX_REMOTE_MODEL": "m",
-                                                   "ANTHROPIC_API_KEY": "sk-bob"}}, headers=H)
-    assert r.status_code == 200 and r.json()["values"]["ANTHROPIC_API_KEY"] == "set"
+                                                   "FLUX_CLAUDE_API_KEY": "sk-bob"}}, headers=H)
+    assert r.status_code == 200 and r.json()["values"]["FLUX_CLAUDE_API_KEY"] == "set"
     assert "sk-bob" not in bob.get("/api/settings").text
     assert b"sk-bob" not in (tmp / "data" / "flux-web.db").read_bytes(), "encrypted at rest"
     store = app.state.store
     env = run_env(store, store.user(name="bob"))
-    assert env["FLUX_REMOTE_BASE_URL"] == "https://bob.example/v1" and env["ANTHROPIC_API_KEY"] == "sk-bob"
+    from web_agents import install
+
+    install(monkeypatch, tmp)                                       # D807: an agent's settings reach it where it is offered
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_REMOTE_BASE_URL"] == "https://bob.example/v1" and "sk-bob" in env["FLUX_CLAUDE_ENV"] and "ANTHROPIC_API_KEY" not in env
     assert "FLUX_REMOTE_API_KEY" not in env and "FLUX_REMOTE_API_KEY_FILE" not in env, "the server's key never goes to bob's endpoint"
     assert env["FLUX_LLM_REMOTE"] == "1" and env["FLUX_CONFIG"].startswith("/dev/null")
     ada_env = run_env(store, store.user(name="ada"))
     assert ada_env["FLUX_REMOTE_API_KEY"] == "the-servers-key", "no settings: the server's model"
-    bob.put("/api/settings", json={"values": {"ANTHROPIC_API_KEY": None}}, headers=H)
-    assert "ANTHROPIC_API_KEY" not in bob.get("/api/settings").json()["values"]
+    bob.put("/api/settings", json={"values": {"FLUX_CLAUDE_API_KEY": None}}, headers=H)
+    assert "FLUX_CLAUDE_API_KEY" not in bob.get("/api/settings").json()["values"]
 
 
 def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(server):

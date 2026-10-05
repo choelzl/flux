@@ -294,6 +294,7 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#who') && document.querySelector('#who').textContent.includes('bob')", what="bob logged in")
         b.js(WATCH)
         r.check("a name logs in whatever its case and spaces", True)
+        b.wait("document.querySelector('#main').innerText.includes('No loop yet.')", timeout=30, what="the empty list")
         r.check("the empty list says so, without buttons in the middle", "No loop yet." in r.text()
                 and not b.js("return !!document.querySelector('.empty a.btn, .empty button')"))
         r.clean("loops page")
@@ -308,7 +309,9 @@ def flows(r: Run) -> None:
         r.button("Agent", "#main .tabs")
         b.wait("document.querySelector('#ag-who')", what="the agent form")
         opts = b.js("return [...document.querySelectorAll('#ag-who option')].map(o => [o.value, o.disabled])")
-        r.check("the agent picker lists the four, the uninstalled disabled", [o[0] for o in opts] == ["opencode", "claude", "codex", "model"], str(opts))
+        ids = [o[0] for o in opts]
+        r.check("the agent picker lists the agents installed here, then the model (D807)",
+                ids[-1:] == ["model"] and set(ids) <= {"opencode", "claude", "codex", "model"}, str(opts))
         r.check("the Agent tab has its address", b.js("return location.hash") == "#/configure/agent")
         r.clean("New loop › Agent")
         # D719: one name, a calm checklist, and a loop started from an example
@@ -565,9 +568,18 @@ def flows(r: Run) -> None:
             r.page(f"#/admin{'/' + t if t else ''}", "document.querySelector('#main .tabs')", f"admin {t or 'loops'}")
             b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
             r.clean(f"admin › {t or 'loops'}")
+        r.page("#/admin/resources", "document.querySelector('#main .tchart')", "the resources over time")
+        r.check("the resources page has no notes on how sizes and samples are kept",
+                "kept for a minute" not in r.text() and "the highest in each step" not in r.text())
+        said = b.js("""const svg = document.querySelector('#main .tchart-svg'); if (!svg) return null;
+            const b = svg.getBoundingClientRect();
+            svg.dispatchEvent(new PointerEvent('pointermove', {clientX: b.left + b.width * 0.6, clientY: b.top + b.height / 2, bubbles: true}));
+            const tip = svg.parentNode.querySelector('.tchart-tip'); return tip && !tip.hidden ? tip.textContent : '';""")
+        r.check("hovering a chart shows its time and value in a bubble", said is None or bool(said), repr(said))
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
-        r.check("the model settings have a tab per tool (D721)", tabs == ["Flux", "OpenCode", "Claude Code", "Codex", "Other"], str(tabs))
+        r.check("the model settings have a tab per tool, an agent's where it is installed (D721, D807)",
+                tabs[:1] == ["Flux"] and tabs[-1:] == ["Other"] and set(tabs[1:-1]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
         r.button("Other", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Other providers: Ollama, OpenRouter"], str(shown))
@@ -599,7 +611,7 @@ def flows(r: Run) -> None:
         r.login("ex", "ex has a long secret")
         r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "an external user's account")
         rows = b.js("return [...document.querySelectorAll('.card table.list tbody tr')].map(t => t.children[0].textContent)")
-        r.check("an external user logs their agents in from their account", rows[:3] == ["OpenCode", "Claude Code", "Codex"], str(rows))
+        r.check("an external user logs their agents in from their account", "Agent logins" in r.text(), str(rows))
         offered = b.js("return [...document.querySelectorAll('#main input')].map(i => i.placeholder).filter(p => /the server's/.test(p))")
         r.check("and is offered nothing of the server's", not offered and "the server's settings apply" not in r.text(), str(offered))
         r.clean("external user")
@@ -676,9 +688,9 @@ def flows(r: Run) -> None:
                         "else: sys.stdin.read(); print('FLUX-OK')\n")
         fake.chmod(0o755)
         r.login("ada")
-        r.check("the admin names the agent's program", r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_BIN": str(fake)}})["status"] == 200)
+        r.check("the admin names the agent's program", r.api("/admin/agents/codex", "PUT", {"bin": str(fake)})["status"] == 200)
         r.login("bob")
-        r.api("/settings", "PUT", {"values": {"OPENAI_API_KEY": "sk-e2e-not-a-key"}})
+        r.api("/settings", "PUT", {"values": {"FLUX_CODEX_API_KEY": "sk-e2e-not-a-key"}})
         refused = r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})
         r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "Agent logins" in refused["body"], refused["body"][:200])
         r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agent logins')", "Account")
@@ -696,6 +708,20 @@ def flows(r: Run) -> None:
         r.check("Admin › Agents: the program found with its version, ready for who tested it",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
         r.clean("Admin › Agents")
+        # D807: an agent added under a name of its own, of a kind, by its program -- offered once found
+        b.js("document.querySelector('#ag-new-name').value = 'corp'; document.querySelector('#ag-new-kind').value = 'codex';"
+             f"document.querySelector('#ag-new-bin').value = {json.dumps(str(fake))}; return 1")
+        r.button("Add", "#main")
+        b.wait("[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'corp')", timeout=30, what="corp added")
+        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.querySelector('h2').textContent === 'corp').textContent"))
+        r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
+        r.check("it has a tab of its own, with variables for it alone",
+                "corp" in b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent).join(' ')")
+                and b.js("return !!document.querySelector('#env-server-corp-name')"))
+        r.login("bob")
+        r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'corp')", "corp in bob's agent logins")
+        r.login("ada")
+        r.check("an added agent is removed", r.api("/admin/agents/corp", "DELETE")["status"] == 200)
         r.clean("agent test")
     r.step("agent test", agent_test)
 

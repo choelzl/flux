@@ -33,8 +33,9 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS server (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
-#: The model settings of runs (D684, D696), by what uses them: Flux's own model calls, and each
-#: coding agent. The admin sets them for the server; a user's own override theirs. Keys are
+#: The model settings of runs (D684, D696), by what uses them: Flux's own model calls, the agent by
+#: default, other providers; each coding agent's are its own (D807: `agents.py`, a group per
+#: agent). The admin sets them for the server; a user's own override theirs. Keys are
 #: secret: stored encrypted, never sent back, only handed to runs. `endpoint`: a user who names
 #: their own gets none of the server's values of that group.
 #: D721: each group shows on a tab of its own (`tab`); the agent by default beside Flux's model.
@@ -44,42 +45,33 @@ GROUPS: dict[str, dict[str, Any]] = {
               "secret": ("FLUX_REMOTE_API_KEY",),
               "hint": "The endpoint Flux's own model calls go to (a proposer, a critic, an Ask answered by the model)."},
     "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
-              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: opencode, claude, codex or model."},
-    "opencode": {"label": "OpenCode", "tab": "OpenCode", "endpoint": "FLUX_OPENCODE_BASE_URL",
-                 "public": ("FLUX_OPENCODE_BASE_URL", "FLUX_OPENCODE_MODEL", "FLUX_OPENCODE_BIN", "FLUX_OPENCODE_LOGIN"), "secret": ("FLUX_OPENCODE_API_KEY",),
-                 "hint": "Empty: Flux's own model's endpoint, model and key; with neither, OpenCode's own configuration."},
-    "claude": {"label": "Claude Code", "tab": "Claude Code", "endpoint": "ANTHROPIC_BASE_URL",
-               "public": ("ANTHROPIC_BASE_URL", "FLUX_CLAUDE_MODEL", "FLUX_CLAUDE_BIN", "FLUX_CLAUDE_LOGIN"), "secret": ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"),
-               "hint": "Empty: Claude Code's own login and model."},
-    "codex": {"label": "Codex", "tab": "Codex", "endpoint": "OPENAI_BASE_URL",
-              "public": ("OPENAI_BASE_URL", "FLUX_CODEX_MODEL", "FLUX_CODEX_BIN", "FLUX_CODEX_LOGIN"), "secret": ("OPENAI_API_KEY",),
-              "hint": "Empty: Codex's own login and model."},
+              "hint": "Who writes a problem and answers questions about a loop unless chosen otherwise: an agent's name, or model."},
     "other": {"label": "Other providers: Ollama, OpenRouter", "tab": "Other", "endpoint": "OLLAMA_BASE_URL",
               "public": ("OLLAMA_BASE_URL", "FLUX_LLM_MODEL"), "secret": ("OPENROUTER_API_KEY",),
               "hint": "Ollama: Flux's model calls go to a local Ollama when no endpoint is set on the Flux tab; FLUX_LLM_MODEL names its "
                       "model. OpenRouter: its key, used when Flux's endpoint is OpenRouter's (the default when a key is set)."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])
-#: D705: the program each agent is (a modified OpenCode, a Claude Code elsewhere): the admin's only,
-#: for every run -- a user shown it, never setting their own
-ADMIN_ONLY = ("FLUX_OPENCODE_BIN", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN",
-              # D734: how an external user logs each agent in, from their Account page
-              "FLUX_OPENCODE_LOGIN", "FLUX_CLAUDE_LOGIN", "FLUX_CODEX_LOGIN")
 SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 
 
 #: Names a run's variables never take (D697): the sandbox and the loop's own plumbing, the
 #: process's basics, and the model settings (set under Models).
 _RESERVED_ENV = re.compile(r"(FLUX_SANDBOX.*|FLUX_CONFIG|FLUX_FEEDBACK_INBOX|FLUX_RUN_LOG|FLUX_TRACE_ROOT|FLUX_SANDBOXED|"
-                           r"FLUX_LLM_REMOTE|FLUX_[A-Z]+_ARGS|FLUX_[A-Z]+_BIN|OPENCODE_CONFIG_CONTENT|PATH|HOME|PWD|USER|SHELL|"
+                           r"FLUX_LLM_REMOTE|FLUX_[A-Z0-9_]+_ARGS|FLUX_[A-Z0-9_]+_BIN|FLUX_[A-Z0-9_]+_ENV|FLUX_[A-Z0-9_]+_LOGIN_FILES|"
+                           r"FLUX_AGENTS|FLUX_SHARED_VARS|FLUX_AGENT_API_KEY|OPENCODE_CONFIG_CONTENT|PATH|HOME|PWD|USER|SHELL|"
                            r"TMPDIR|TMP|TEMP|LD_.*|PYTHON.*|XDG_.*|NIX_.*)")
 
 
-def check_env_name(name: str) -> str:
+#: What an agent's own variables may set besides (D807): its kind's configuration, for that agent alone.
+_AGENT_OWN = ("OPENCODE_CONFIG_CONTENT",)
+
+
+def check_env_name(name: str, agent: bool = False) -> str:
     name = str(name or "").strip()
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name):
         raise ValueError(f"{name!r}: a variable's name is letters, digits and _, not starting with a digit")
-    if _RESERVED_ENV.fullmatch(name.upper()):
+    if _RESERVED_ENV.fullmatch(name.upper()) and not (agent and name in _AGENT_OWN):
         raise ValueError(f"{name} is the sandbox's or the loop's own; it cannot be set here")
     if name in PUBLIC_SETTINGS + SECRET_SETTINGS:
         raise ValueError(f"{name} is a model setting: set it under Models")
@@ -289,45 +281,42 @@ class Store:
             os.chmod(keyfile, 0o600)
         return Fernet(keyfile.read_bytes())
 
-    @staticmethod
-    def _checked(key: str, value: str | None) -> str | None:
-        if key not in PUBLIC_SETTINGS + SECRET_SETTINGS:
-            raise ValueError(f"{key} is not a setting; settings: {', '.join(PUBLIC_SETTINGS + SECRET_SETTINGS)}")
+    def _keys(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """(public, secret): Flux's own settings and every agent's (D807)."""
+        from .agents import setting_keys
+
+        a = setting_keys(self)
+        return PUBLIC_SETTINGS + a["public"], SECRET_SETTINGS + a["secret"]
+
+    def _checked(self, key: str, value: str | None) -> str | None:
+        public, secret = self._keys()
+        if key not in public + secret:
+            raise ValueError(f"{key} is not a setting; settings: {', '.join(public + secret)}")
         if value is None or not str(value).strip():
             return None
         value = str(value).strip()
         if key.endswith("_BASE_URL") and not value.startswith(("http://", "https://")):
             raise ValueError(f"{key}: an endpoint is an http(s) URL")
-        if key == "FLUX_DEFAULT_AGENT" and value not in ("opencode", "claude", "codex", "model"):
-            raise ValueError("the agent by default is opencode, claude, codex or model")
-        if key.endswith("_LOGIN"):
-            import shlex
+        if key == "FLUX_DEFAULT_AGENT":
+            from .agents import registry
 
-            try:
-                if not shlex.split(value):
-                    raise ValueError
-            except ValueError as exc:
-                raise ValueError(f"{key}: a command line, e.g. opencode auth login") from exc
-            return value
-        if key in ADMIN_ONLY and not (value.startswith("/") or re.fullmatch(r"[A-Za-z0-9_.+-]+", value)):
-            raise ValueError(f"{key}: an absolute path to the program, or its name on PATH")
+            if value not in (*registry(self), "model"):
+                raise ValueError(f"the agent by default is one of {', '.join([*registry(self), 'model'])}")
         return value
 
     def set_setting(self, user: User, key: str, value: str | None) -> None:
-        if key in ADMIN_ONLY:
-            raise ValueError(f"{key} is set by an admin, for every run")
         value = self._checked(key, value)
         with self._db() as db:
             if value is None:
                 db.execute("DELETE FROM settings WHERE user_id = ? AND key = ?", (user.id, key))
                 return
-            stored = self._fernet().encrypt(value.encode()).decode() if key in SECRET_SETTINGS else value
+            stored = self._fernet().encrypt(value.encode()).decode() if key in self._keys()[1] else value
             db.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (user.id, key, stored))
 
     def set_server_setting(self, key: str, value: str | None) -> None:
         """The server's model settings (D696): what every run gets unless its user sets their own."""
         value = self._checked(key, value)
-        stored = None if value is None else (self._fernet().encrypt(value.encode()).decode() if key in SECRET_SETTINGS else value)
+        stored = None if value is None else (self._fernet().encrypt(value.encode()).decode() if key in self._keys()[1] else value)
         self.server_set(f"setting:{key}", stored)
 
     def server_settings(self, reveal: bool = False) -> dict[str, str]:
@@ -336,11 +325,12 @@ class Store:
         import json
 
         out = {}
+        public, secret = self._keys()
         for r in rows:
             k, v = r["key"].split(":", 1)[1], json.loads(r["value"])
-            if k in SECRET_SETTINGS:
+            if k in secret:
                 out[k] = self._fernet().decrypt(v.encode()).decode() if reveal else "set"
-            elif k in PUBLIC_SETTINGS:
+            elif k in public:
                 out[k] = v
         return out
 
@@ -349,12 +339,20 @@ class Store:
         with self._db() as db:
             rows = db.execute("SELECT key, value FROM settings WHERE user_id = ?", (user.id,)).fetchall()
         out = {}
+        secret = self._keys()[1]
         for r in rows:
-            if r["key"] in SECRET_SETTINGS:
+            if r["key"] in secret:
                 out[r["key"]] = self._fernet().decrypt(r["value"].encode()).decode() if reveal else "set"
             else:
                 out[r["key"]] = r["value"]
         return out
+
+    def forget_settings(self, keys: tuple[str, ...]) -> None:
+        """These settings, the server's and every user's (an agent removed, D807)."""
+        with self._db() as db:
+            for k in keys:
+                db.execute("DELETE FROM settings WHERE key = ?", (k,))
+                db.execute("DELETE FROM server WHERE key = ?", (f"setting:{k}",))
 
     # ---- the server's own settings (D695): starts paused, a user's running limit
     def server_get(self, key: str, default: Any = None) -> Any:
@@ -387,7 +385,9 @@ class Store:
         return out
 
     def set_env(self, scope: str, name: str, value: str | None, secret: bool = False) -> None:
-        name = check_env_name(name)
+        name = check_env_name(name, agent=scope.startswith("agent:"))
+        if name in sum(self._keys(), ()):
+            raise ValueError(f"{name} is an agent's setting: set it on its tab under Models")
         got = self.server_get(f"env:{scope}") or {}
         if value is None:
             got.pop(name, None)

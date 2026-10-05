@@ -63,10 +63,13 @@ def test_claude_code_and_codex_are_launched_with_the_webs_model(server, monkeypa
     from flux_loop.agent import agent_spec
 
     _app, store = server
+    from web_agents import install
+
+    install(monkeypatch, store.data.parent)                        # D807: offered where installed
     store.set_server_setting("FLUX_CLAUDE_MODEL", "claude-sonnet-5")
     store.set_server_setting("FLUX_CODEX_MODEL", "gpt-x")
     env = run_env(store, store.user(name="bob"))
-    for k in ("FLUX_CLAUDE_ARGS", "FLUX_CODEX_ARGS"):
+    for k in ("FLUX_CLAUDE_ARGS", "FLUX_CODEX_ARGS", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"):
         monkeypatch.setenv(k, env[k])
     claude = agent_spec("claude").argv
     codex = agent_spec("codex").argv

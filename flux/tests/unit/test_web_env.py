@@ -15,7 +15,10 @@ H = {"X-Flux": "1"}
 
 
 @pytest.fixture()
-def server(tmp_path):
+def server(tmp_path, monkeypatch):
+    from web_agents import install
+
+    install(monkeypatch, tmp_path)                                  # D807: offered where installed
     store = Store(tmp_path / "data")
     store.add_user("ada", "correct horse battery", "admin")
     store.add_user("bob", "another long secret")
@@ -39,7 +42,7 @@ def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
     assert bob.put("/api/apps/x/env", json={"name": "LEVEL", "value": "loop"}, headers=H).status_code == 200
     assert bob.put("/api/apps/x/env", json={"name": "SEED", "value": "7"}, headers=H).status_code == 200
     for bad in ("FLUX_SANDBOX", "FLUX_SANDBOX_ALLOW", "PATH", "LD_PRELOAD", "FLUX_CLAUDE_ARGS", "OPENCODE_CONFIG_CONTENT",
-                "ANTHROPIC_API_KEY", "1X", "A-B"):
+                "FLUX_CLAUDE_ENV", "FLUX_AGENTS", "FLUX_SHARED_VARS", "FLUX_CLAUDE_API_KEY", "FLUX_REMOTE_MODEL", "1X", "A-B"):
         assert bob.put("/api/apps/x/env", json={"name": bad, "value": "0"}, headers=H).status_code == 400, bad
     seen = bob.get("/api/apps/x/env").json()
     assert {x["name"]: x["value"] for x in seen["server"]} == {"HF_TOKEN": "set", "LEVEL": "server"}, "a secret is never sent back"
@@ -47,7 +50,8 @@ def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
     bob_u = store.user(name="bob")
     env = run_env(store, bob_u, "x")
     assert env["LEVEL"] == "loop" and env["SEED"] == "7" and env["HF_TOKEN"] == "hf-secret"
-    assert set(env["FLUX_SANDBOX_PASS"].split(",")) == {"LEVEL", "HF_TOKEN", "SEED"}
+    assert {"LEVEL", "HF_TOKEN", "SEED"} <= set(env["FLUX_SANDBOX_PASS"].split(","))
+    assert set(env["FLUX_SHARED_VARS"].split(",")) == {"LEVEL", "HF_TOKEN", "SEED"}, "D807: every agent gets these"
     assert run_env(store, bob_u)["LEVEL"] == "user", "without the loop: the user's over the server's"
     assert run_env(store, store.user(name="ada"))["LEVEL"] == "server"
     assert bob.put("/api/apps/x/env", json={"name": "SEED", "value": None}, headers=H).status_code == 200
@@ -101,19 +105,23 @@ def test_admin_agents_sets_each_agents_program_login_files_and_hosts(server, tmp
     (srv_home / ".config/corp-opencode/provider.json").write_text("{}")
     monkeypatch.setenv("HOME", str(srv_home))
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
-    body = {"bin": "/opt/corp/bin/opencode", "login": "opencode auth login https://ai.corp.example", "args": "--agent flux",
+    corp = tmp_path / "opt/corp/bin/opencode"
+    corp.parent.mkdir(parents=True)
+    corp.write_text("#!/bin/sh\necho corp 2.0\n")
+    corp.chmod(0o755)
+    body = {"bin": str(corp), "login": "opencode auth login https://ai.corp.example", "args": "--agent flux",
             "home": [".config/corp-opencode"], "hosts": ["ai.corp.example"]}
     assert bob.put("/api/admin/agents/opencode", json=body, headers=H).status_code == 403
     assert ada.put("/api/admin/agents/opencode", json={**body, "home": ["../etc"]}, headers=H).status_code == 400
     assert ada.put("/api/admin/agents/opencode", json=body, headers=H).status_code == 200
     got = {a["id"]: a for a in ada.get("/api/admin/agents").json()["agents"]}
     oc = got["opencode"]
-    assert oc["bin"] == "/opt/corp/bin/opencode" and oc["login"].endswith("ai.corp.example") and oc["found"] == ""
+    assert oc["bin"] == str(corp) and oc["login"].endswith("ai.corp.example") and oc["found"] == str(corp) and oc["version"] == "corp 2.0"
     assert {u["user"]: u["state"] for u in oc["users"]} == {"ada": "not tested", "bob": "not tested"}
     bob_user = store.user(name="bob")
     assert (home_ready(store, bob_user) / ".config/corp-opencode/provider.json").is_file(), "every home starts with its files"
     env = run_env(store, bob_user, "x")
-    assert env["FLUX_OPENCODE_BIN"] == "/opt/corp/bin/opencode" and env["FLUX_OPENCODE_ARGS"].startswith("--agent flux")
+    assert env["FLUX_OPENCODE_BIN"] == str(corp) and env["FLUX_OPENCODE_ARGS"].startswith("--agent flux")
     store.server_set("sandbox", {"network": "allowlist", "allow": ["a.example"]})
     env = {"PATH": "/usr/bin", "FLUX_SANDBOX": "1"}
     machine_env(env, sandbox_config(store), {}, [])
@@ -161,7 +169,10 @@ def test_a_corporate_builds_login_file_says_its_user_is_logged_in(server, tmp_pa
     monkeypatch.setenv("HOME", str(tmp_path / "server-home"))
     ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
     assert ada.put("/api/admin/agents/opencode", json={"login": "nga auth login", "login_files": ["/etc/passwd"]}, headers=H).status_code == 400
-    assert ada.put("/api/admin/agents/opencode", json={"bin": "nga", "login": "nga auth login",
+    fake = tmp_path / "nga"
+    fake.write_text("#!/bin/sh\necho nga 1.0\n")
+    fake.chmod(0o755)
+    assert ada.put("/api/admin/agents/opencode", json={"bin": str(fake), "login": "nga auth login",
                                                         "login_files": [".local/share/nga/auth.json"]}, headers=H).status_code == 200
     home = store.home_of(store.user(name="bob"))
     assert not {a["id"]: a["logged_in"] for a in bob.get("/api/logins").json()["agents"]}["opencode"]
@@ -171,9 +182,6 @@ def test_a_corporate_builds_login_file_says_its_user_is_logged_in(server, tmp_pa
     env = run_env(store, store.user(name="bob"), "x")
     assert env["FLUX_OPENCODE_LOGIN_FILES"] == ".local/share/nga/auth.json"
     env = {k: v for k, v in env.items() if k != "OPENCODE_CONFIG_CONTENT"}
-    fake = tmp_path / "nga"
-    fake.write_text("#!/bin/sh\necho nga 1.0\n")
-    fake.chmod(0o755)
     got = check_agent("opencode", env={**env, "HOME": str(home), "FLUX_OPENCODE_BIN": str(fake)})
     login = next(s for s in got["steps"] if s["step"] == "login")
     assert login["ok"] and "nga/auth.json" in login["said"]
