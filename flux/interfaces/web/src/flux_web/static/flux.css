@@ -785,3 +785,4 @@ details.set-fold[open] > summary { margin-bottom: 4px; }
 details.agent-more > summary { cursor: pointer; }
 
 /* D824: a loop's folder, said */
+ul.files li.own > a { font-weight: 600; }   /* D829 */

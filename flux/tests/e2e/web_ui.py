@@ -822,6 +822,10 @@ def flows(r: Run) -> None:
             b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/')) && document.querySelector('.path-crumbs').textContent.endsWith('runs')",
                    what="back in runs/")
             r.check("a path's folders are links that open them", True)
+            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
+            bold = b.js("return [...document.querySelectorAll('#main ul.files li.own > a')].map(a => a.textContent.replace(/^[▸·]/, ''))")
+            r.check("a loop's own parts are bold: its documents, out/ runs/ workbench/ library/ (D829)",
+                    "problem.yaml" in bold and "runs/" in bold and "check.py" not in bold, str(bold))
             b.click(".ask-fab")
             b.wait("document.querySelector('.ask-card .bin')", timeout=30, what="the question's bin")
             b.click(".ask-card .bin")

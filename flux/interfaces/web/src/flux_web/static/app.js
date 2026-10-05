@@ -1154,7 +1154,10 @@ async function loopPage(name, owner, path = "") {
     return h("label", { class: "check small ignored-toggle", title: "Files the loop's .gitignore ignores; .git is never shown" }, box, "show ignored files");
   }
   function fileList(list) {
-    return h("ul", { class: "files" }, list.map(f => h("li", { class: f.ignored ? "ignored" : "" },
+    // D829: a loop's own parts stand out: its documents and the folders Flux keeps
+    const own = (f) => !f.path.includes("/") && (f.dir ? ["out", "runs", "workbench", "library"].includes(f.path)
+      : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml"));
+    return h("ul", { class: "files" }, list.map(f => h("li", { class: (f.ignored ? "ignored" : "") + (own(f) ? " own" : "") },
       h("a", { href: "javascript:void 0", onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
       f.ignored ? h("span", { class: "pill small" }, "ignored") : "", f.dir ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
