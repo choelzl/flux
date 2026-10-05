@@ -19,8 +19,11 @@ The study is the document and the commands of `flux_imapping.steps` (D800) -- no
 candidate is a pair, written as JSON (a catalog policy by name, any other as its XOR taps; the
 fabric's fields); `orchestrate: {command: steps search ...}` proposes them a round at a time --
 the cross product of the policy field and the fabrics little loop A found, the model's taps
-(`llm_rounds`), then the big loop's rounds -- and ends with the conclusion: the balanced pick,
-the corners, the consensus fabric, the certificates by exhaustion over the front.
+(`llm_rounds`), then the big loop's rounds -- and ends with the conclusion: the corners, the
+consensus fabric, the certificates by exhaustion over the front. The balanced pick is the run's
+DECISION, the knee of the document's four objectives, and there is one (D878): the front is
+Pareto over all four, its knee climbs to `synth` with the finalists, and the decision is the knee
+of what `synth` measured among the pairs that meet the 600 MHz limit.
 
 The record goes to `applications/interconnect_mapping/out/interconnect_mapping.db` unless
 `--db` says otherwise. The knobs are the document's `params:` -- `seed`, `ops`,
@@ -46,22 +49,25 @@ so neither half is searched alone:
   mappings for the front's fabrics, fit fabrics for the front's mappings, re-score
   everything identically, repeat until the front stops moving (`params.coordination_rounds`).
 
-Measured effect (seed 0): all three coordinated pairs reached the front, and the
-knee-point balanced pick IS one of them -- the per-fabric hash beats the ideal-tuned
-hash on its own fabric.
+Measured effect (seed 0): the coordinated pairs reach the front -- a per-fabric hash
+beats the ideal-tuned hash on its own fabric (the latency corner is `S6-xor@hier-8x4 +
+hier-8x4`).
 
 ## What the full study does
 
-1. **A curated field of six solutions**, each honest about which of the three conflict
+1. **A curated field of eight solutions**, each honest about which of the three conflict
    categories it targets (intra-operand, intra-unit, system), what metadata a real
    system must carry for it (tensor descriptors, group ids, slot schedules), and what
    it assumes (compiler passes, padding, latency):
    S0 modulo baseline, S1 global XOR fold, S2 metadata swizzle (per-tensor pitch bits),
    S3 bank-group partition (space separation), S4 unit time-slots + fetch buffers
-   (time separation), S5 pitch-pad skew (odd row pitch, Cost B paid and measured).
-2. **Search extends the field**: a hill-climb over injective XOR tap sets, and
-   optional LLM rounds -- every proposal passes the injectivity gate or is refused
-   with the reason.
+   (time separation), S5 pitch-pad skew (odd row pitch, Cost B paid and measured),
+   S7 read/write stagger (writes land one phase late), S9 A/B operand stagger (the MU's
+   B input one phase behind).
+2. **Search extends the field**: a hill-climb over injective XOR tap sets
+   (S6-xor-searched, and S6-xor@<fabric> per fabric), bankmap's z3 fold (S10-z3-proven,
+   when one exists), and optional LLM rounds (S8-xor-llm-k) -- every proposal passes
+   the injectivity gate or is refused with the reason.
 3. **Anti-overfitting is structural**: solutions tune on TRAIN workloads (seeded
    GEMM/VU/DMA traffic with operation info) and are judged ONLY on a disjoint HOLDOUT
    split; both numbers print, so a memorized hash exposes itself.
@@ -85,9 +91,14 @@ hash on its own fabric.
 - `lib/src/flux_imapping/workloads.py` -- seeded operation traffic, train/holdout split
 - `lib/src/flux_imapping/solutions.py` -- the field, injectivity gate, fabric pricing
 - `lib/src/flux_imapping/flow.py` -- study loop, hash search, certificates, Pareto
-- `lib/src/flux_imapping/steps.py` -- the document's phases as commands (D800): `search` (the rounds below, a pass each), `check` (the hash is injective), `score` (the cycle law on train and holdout), `phys` (Yosys + OpenSTA on the pair's blocks)
+- `lib/src/flux_imapping/steps.py` -- the document's phases as commands (D800): `search` (the rounds below, a pass each), `check` (the hash is injective), `score` (the cycle law on train and holdout), `synth` (Yosys + OpenSTA on the pair's hash block and one switch element)
 
 Area is a structural gate-unit score (identical rules for every candidate: ranking,
-not um2); the interconnect application's whole-fabric OpenROAD flow is the
-upgrade path for frontier rows and the fmax>600 MHz check. Hash RTL comes from
-`flux_bankmap.mapping.verilog()` -- a few XOR gates on each port's address path.
+not um2). The `synth` stage grounds the finalists: Yosys + OpenSTA on ASAP7 for the
+pair's hash block and one switching element of its fabric's family (a fabric of no
+known family is refused, not priced as another), the element's um2 scaled by the
+structural units to a composed area, and the worst slack at 1667 ps -- the 600 MHz
+restriction, a limit of the document (`worst_slack_ps >= 0` on `synth`). It is a
+screen of the pieces that set fmax, not the whole fabric placed and routed; that flow
+does not exist here. Hash RTL comes from `flux_bankmap.mapping.verilog()` -- a few XOR
+gates on each port's address path.

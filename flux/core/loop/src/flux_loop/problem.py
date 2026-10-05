@@ -360,7 +360,15 @@ class OrchestratorRole(_Role):
     def frontier(self, scored: list[Scored], state: LoopState) -> list[Scored]:
         """frontier: everything measured on the first stage that nothing else beats on
         every axis. Two axes from `frontier_axes` by default (D446); a problem with more
-        objectives overrides this (Pareto over four costs). No axes = all of it."""
+        objectives overrides this (Pareto over four costs). No axes = all of it.
+
+        More than two `balance` objectives decide together, as a knee: the front is Pareto
+        over all of them (D878), or the first two alone would choose what climbs."""
+        balance = self.objectives().balance
+        if len(balance) > 2:
+            from flux_frontier import pareto
+
+            return pareto(scored, key=lambda s: tuple(o.signed(s.metrics) for o in balance))
         axes = self.frontier_axes()
         if axes is None:
             return list(scored)

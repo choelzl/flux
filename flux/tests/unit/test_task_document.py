@@ -663,6 +663,11 @@ def test_a_stage_that_does_not_measure_an_objective_is_refused():
     task = TaskSpec.from_dict(doc)
     wrong = PromptProblem(task).validate(request_for(task))
     assert len(wrong) == 1 and "the cost stage does not measure latency_cycles" in wrong[0]
+    # a limit named for the deeper stage waits there: the shallower one need not measure it (D878)
+    doc["objectives"] = [{"metric": "area_mm2", "direction": "minimize"},
+                         {"metric": "latency_cycles", "direction": "minimize", "goal": 500, "stage": "model"}]
+    task = TaskSpec.from_dict(doc)
+    assert PromptProblem(task).validate(request_for(task)) == []
 
 
 @pytest.mark.parametrize("key, value", [("world", "pkg.mod:World"), ("hooks", {"judge": "pkg.mod:judge"})])

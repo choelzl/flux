@@ -5,7 +5,7 @@ scripts -- no world.
     python -m flux_imapping.steps search HISTORY STATE PARAMS   # the rounds of the big loop
     python -m flux_imapping.steps check ARTIFACT PARAMS         # the hash is injective
     python -m flux_imapping.steps score ARTIFACT PARAMS         # the cycle law, train and holdout
-    python -m flux_imapping.steps phys ARTIFACT PARAMS          # Yosys + OpenSTA on its blocks
+    python -m flux_imapping.steps synth ARTIFACT PARAMS         # Yosys + OpenSTA on its blocks
 
 A candidate is a pair -- a map policy and a switching fabric -- and its artifact is the pair as
 JSON: a catalog policy by name, any other as its XOR taps; the fabric's fields. The search's
@@ -15,8 +15,9 @@ rounds (D386, D392):
              field -- the catalog, the XOR hill-climb, bankmap's z3 fold -- and their cross product.
   model      `llm_rounds` rounds: a model proposes XOR taps, paired with every fabric.
   coordinate `coordination_rounds` rounds of the big loop, the two little loops alternated on
-             the front, until it stops moving; then the conclusion: the balanced pick, the
-             corners, the consensus fabric and the certificates by exhaustion over the front.
+             the front, until it stops moving; then the conclusion: the corners, the
+             consensus fabric and the certificates by exhaustion over the front. The balanced
+             pick is the run's decision, the knee of the document's four objectives (D878).
 """
 
 from __future__ import annotations
@@ -217,10 +218,9 @@ def conclude_front(front: list, ask: dict[str, Any], mem: Memory) -> dict[str, A
 
     certs = certificates(front, ask, mem)
     c = conclude(front, front, certs) if front else {"note": "nothing measured"}
+    # D878: one balanced pick -- the run's DECISION, the knee of the four objectives over what the
+    # deepest stage measured; the study names the corners and the consensus, not a second knee
     lessons = []
-    bal = c.get("balanced_pick") or {}
-    if bal.get("pair"):
-        lessons.append(f"the balanced pick (the knee over latency, throughput, area, padding): {bal['pair']}")
     for label, key in (("latency corner", "latency_corner"), ("throughput corner", "throughput_corner"),
                        ("area corner", "area_corner")):
         if (c.get(key) or {}).get("pair"):
@@ -287,9 +287,9 @@ def score_cmd(artifact: str, params_path: str) -> int:
     return 0
 
 
-def phys_cmd(artifact: str, params_path: str) -> int:
+def synth_cmd(artifact: str, params_path: str) -> int:
     from .flow import score
-    from .phys import screen_pairs
+    from .synth import screen_pairs
 
     ask = ask_of(json.loads(Path(params_path).read_text()))
     mem = Memory(m=int(ask["bank_bits"]))
@@ -313,14 +313,14 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("search")
     s.add_argument("history"); s.add_argument("state"); s.add_argument("params")
-    for name in ("check", "score", "phys"):
+    for name in ("check", "score", "synth"):
         c = sub.add_parser(name)
         c.add_argument("artifact"); c.add_argument("params")
     args = p.parse_args(argv)
     if args.cmd == "search":
         print(json.dumps(search(args.history, args.state, args.params), default=str))
         return 0
-    return {"check": check_cmd, "score": score_cmd, "phys": phys_cmd}[args.cmd](args.artifact, args.params)
+    return {"check": check_cmd, "score": score_cmd, "synth": synth_cmd}[args.cmd](args.artifact, args.params)
 
 
 if __name__ == "__main__":

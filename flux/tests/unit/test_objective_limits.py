@@ -63,6 +63,37 @@ def test_the_balance_is_the_knee_among_the_designs_meeting_every_limit():
         Objectives.from_doc([{"metric": "x", "goal": 1, "balance": True}])
 
 
+def test_a_limit_on_a_deeper_stages_metric_waits_for_that_stage():
+    """interconnect_mapping: the knee of four costs on the cycle law, and worst slack >= 0 where
+    synthesis measures it. The cycle law's pool measures no slack: the limit waits rather than
+    every design missing it alike; on synth it binds, and a failed (NaN) slack misses (D878)."""
+    objs = Objectives.from_doc([{"metric": "lat", "direction": "minimize", "balance": True},
+                                {"metric": "area", "direction": "minimize", "balance": True},
+                                {"metric": "slack", "direction": "maximize", "goal": 0, "stage": "synth"}])
+    stages = ["analytic", "synth"]
+    screen = [_sc("fast", "analytic", lat=1, area=100), _sc("knee", "analytic", lat=2, area=20),
+              _sc("small", "analytic", lat=9, area=10)]
+    pick, why = objs.decide(screen, stages)
+    assert pick.candidate.name == "knee" and why == "the knee of lat / area"
+    synth = [_sc("knee", "synth", lat=2, area=20, slack=-5.0), _sc("fast", "synth", lat=1, area=100, slack=3.0),
+             _sc("small", "synth", lat=9, area=10, slack=float("nan"))]
+    pick, why = objs.decide(synth, stages)
+    assert pick.candidate.name == "fast" and "slack >= 0" in why
+
+
+def test_more_than_two_balance_objectives_make_a_pareto_front_over_all_of_them():
+    """The first two axes alone would keep only the area/padding corner (D878)."""
+    spec = TaskSpec.from_dict({"id": "t", "statement": "s",
+                               "objectives": [{"metric": m, "direction": "minimize", "balance": True}
+                                              for m in ("area", "pad", "lat")],
+                               "flow": {"test": {"test": ["true"]},
+                                        "measure": {"screen": {"command": ["true"], "metrics": ["area", "pad", "lat"]}}}})
+    prob = PromptProblem(spec)
+    pool = [_sc("cheap", "screen", area=1, pad=0, lat=9), _sc("fast", "screen", area=5, pad=0, lat=1),
+            _sc("worse", "screen", area=6, pad=0, lat=2)]
+    assert [s.candidate.name for s in prob.frontier(pool, None)] == ["cheap", "fast"]
+
+
 def test_keep_is_still_a_limit_resolved_over_the_pool():
     objs = Objectives.from_doc([{"metric": "speedup", "direction": "maximize", "keep": 0.9, "above": 1.0},
                                 {"metric": "bytes", "direction": "minimize", "goal": 4096},

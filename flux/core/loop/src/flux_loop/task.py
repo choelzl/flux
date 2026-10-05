@@ -486,8 +486,11 @@ class PromptProblem(Problem):
         if self.task.stages and not unknown:
             # each stage ranks its own rows by the objectives (D351): a stage that lacks one has
             # no front, so nothing climbs from it and nothing is decided on it (D625)
-            wanted = [o.metric for o in self.task.objectives]
-            for stage in self.task.stages:
+            # A limit named for a deeper stage ranks nothing above it: it waits there (D878)
+            names = [s.name for s in self.task.stages]
+            for i, stage in enumerate(self.task.stages):
+                wanted = [o.metric for o in self.task.objectives
+                          if not (o.goal is not None and o.stage in names and names.index(o.stage) > i)]
                 lacks = [m for m in wanted if m not in {*stage.metrics_re, *stage.metrics}]
                 if lacks:
                     wrong.append(f"the {stage.name} stage does not measure {', '.join(lacks)}: every stage must "

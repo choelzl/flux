@@ -241,6 +241,14 @@ class Objectives(tuple):
         """The limits these numbers miss (an unmeasured one is missed)."""
         return [o for o in self.limits if not o.meets(metrics, stage, stages)]
 
+    @staticmethod
+    def _judged(o: Objective, pool: list[Any], stage: str | None, stages: Sequence[str] | None) -> bool:
+        """Whether a pool on `stage` can judge limit `o`: it is the limit's own stage, or some
+        design in it measured the metric (a failed measurement still misses)."""
+        own = o.stage is None or stage is None or o.stage == stage or (
+            o.stage == "deepest" and (not stages or stage == list(stages)[-1]))
+        return own or any(o.value(getattr(p, "metrics", None)) is not None for p in pool)
+
     def _steps(self) -> list[Objective | tuple[Objective, ...]]:
         """What orders the designs past the limits: each goal-less objective in written order,
         the balance ones as one group where the first of them stands."""
@@ -358,8 +366,13 @@ class Objectives(tuple):
             resolved = Objectives(o.resolved(pool) for o in self)
             if resolved != self:
                 return resolved.decide(pool, stages)
-        limits = self.limits
         stage = getattr(pool[0], "stage", None)
+        waiting = [o for o in self.limits if not self._judged(o, pool, stage, stages)]
+        if waiting:
+            # D878: a limit on another stage's metric, which nothing in this stage's pool
+            # measures, misses for every design alike: it waits for its stage instead
+            return Objectives(o for o in self if o not in waiting).decide(pool, stages)
+        limits = self.limits
         at = " and ".join(o.said(stage, stages) for o in limits)
         meeting = [p for p in pool if not self.missed(p.metrics, getattr(p, "stage", None), stages)]
         if limits and not meeting:

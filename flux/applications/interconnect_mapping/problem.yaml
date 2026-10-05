@@ -28,16 +28,18 @@ flow:
   measure:
     analytic: {command: "{python} -m flux_imapping.steps score {artifact} {params}",
                metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, train_latency]}
-    phys: {command: "{python} -m flux_imapping.steps phys {artifact} {params}",
-           metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps],
-           needs: [yosys, openroad]}
+    synth: {command: "{python} -m flux_imapping.steps synth {artifact} {params}",   # one hash block + one switch element
+            metrics: [area_score, pad_fraction, holdout_latency, holdout_throughput, area_um2, worst_slack_ps],
+            needs: [yosys, openroad]}
   select: {finalists: 6}
 
-objectives:                   # no goal, all four balanced: the decision is the front's knee (D658)
+objectives:                   # four balanced: the decision is their knee (D658), the one balanced pick (D878)
   - {metric: area_score, direction: minimize, unit: areaU, balance: true}
   - {metric: pad_fraction, direction: minimize, balance: true}
   - {metric: holdout_latency, direction: minimize, unit: cy, balance: true}
   - {metric: holdout_throughput, direction: maximize, unit: rows/cy, balance: true}
+  # the hard restriction: > 600 MHz post-synthesis, the 1667 ps clock met where synth measures it (D878)
+  - {metric: worst_slack_ps, direction: maximize, goal: 0, stage: synth, unit: ps}
 
 
 budget:

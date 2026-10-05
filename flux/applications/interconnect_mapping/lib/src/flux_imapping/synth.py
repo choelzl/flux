@@ -1,8 +1,11 @@
-"""The `phys` stage: real Yosys + OpenSTA on ASAP7 for the pieces that set fmax and area.
+"""The `synth` stage: real Yosys + OpenSTA on ASAP7 for the pieces that set fmax and area -- one
+pair's hash block and one switching element of its fabric's family, not the whole fabric placed
+(D878: hence `synth`, not `phys`).
 
-The hard restriction is fmax > 600 MHz post-synthesis. For the frontier's finalists this
-synthesizes each pair's hash block and its fabric family's switching element via
-`run_synthesis_flow` (~2 s each) at a 1667 ps clock, and reports worst slack.
+The hard restriction is fmax > 600 MHz post-synthesis: the document's limit
+`worst_slack_ps >= 0` on this stage (D878). For the frontier's finalists this synthesizes each
+pair's hash block and its fabric family's switching element via `run_synthesis_flow` (~2 s each)
+at a 1667 ps clock, and reports worst slack.
 
 Composed area = element_um2 x (structural units / element structural units). It is a screen,
 not a placement (composed and whole-fabric numbers disagree both ways, D272), so the number
@@ -54,10 +57,13 @@ _FAMILY_ELEMENT: dict[str, tuple[int, int]] = {
 
 
 def _family_of(fabric: FabricModel) -> str:
+    """The family whose element stands for `fabric` -- named, or refused (D878): a fabric of no
+    known family priced as a 2:1 butterfly would be a number about another fabric."""
     for key in _FAMILY_ELEMENT:
-        if fabric.name.startswith(key):
+        if fabric.name == key or fabric.name.startswith(key + "-"):
             return key
-    return "fly-r2"
+    raise ValueError(f"fabric {fabric.name!r} is of no family the synth stage has an element for "
+                     f"({', '.join(_FAMILY_ELEMENT)})")
 
 
 @dataclass(frozen=True, slots=True)

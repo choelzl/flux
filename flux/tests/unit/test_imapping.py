@@ -306,3 +306,31 @@ def test_run_study_end_to_end_without_model():
     d = study.to_dict()
     assert d["front"] and " + " in d["front"][0]
     assert isinstance(d["certificates"][0]["tile"], list)
+
+
+def test_the_synth_stage_refuses_a_fabric_of_no_known_family():
+    """Every generated fabric has its family's element; an unknown one is refused, not priced as
+    a 2:1 butterfly (D878)."""
+    from dataclasses import replace
+
+    from flux_imapping.synth import _family_of
+
+    for f in generate_fabrics(MEM.m):
+        assert _family_of(replace(f, name=f.name + "-fit")) == _family_of(f)
+    with pytest.raises(ValueError, match="no family"):
+        _family_of(replace(xbar_full(MEM.banks), name="mesh-4x4"))
+    with pytest.raises(ValueError, match="no family"):
+        _family_of(replace(xbar_full(MEM.banks), name="fly-r8"))
+
+
+def test_the_study_names_no_balanced_pick_of_its_own():
+    """One balanced pick per report: the run's decision (D878). The study's conclusion keeps the
+    corners and the consensus fabric, and its record read-back names the decision."""
+    from flux_imapping.flow import _balanced_pick, conclude
+
+    train, holdout = train_holdout(1, ops=2)
+    scored = [score(s, f, train, holdout, MEM) for s in catalog(MEM)[:3] for f in generate_fabrics(MEM.m)[:2]]
+    c = conclude(scored, pareto_front(scored))
+    assert "balanced_pick" not in c and "knee_rank" not in c and c["latency_corner"]["pair"]
+    said = _balanced_pick({"decision": "S1-xor-global + ring-16", "holdout_latency": 3.5})
+    assert said == "an earlier run's balanced pick: S1-xor-global + ring-16 (3.50 cy)"

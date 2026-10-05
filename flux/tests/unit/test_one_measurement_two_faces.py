@@ -84,7 +84,7 @@ def test_openroads_two_faces_reach_the_same_flow(monkeypatch):
     assert "error" not in got and len(seen) == before + 1 and seen[-1][0] == "synthesis"
 
     # face 2 again: the NLU study and the mapping study's block screen, same function
-    from flux_imapping.phys import screen_block
+    from flux_imapping.synth import screen_block
 
     before = len(seen)
     report = screen_block("module m(); endmodule", "m", "a-block")

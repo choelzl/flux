@@ -7,7 +7,7 @@ Shape (D378):
    model rounds when the document asks; every proposal passes the injectivity gate and the
    same evaluator, or is refused with the reason.
 3. Everything re-measured on holdout workloads (anti-overfitting); both numbers reported.
-4. Four costs: A = area score (structural gate-units; the `phys` stage grounds finalists in
+4. Four costs: A = area score (structural gate-units; the `synth` stage grounds finalists in
    um2), B = padding fraction (stored/true - 1, exact), C = average access latency,
    D = throughput (rows/cycle). Pareto dominance over all four.
 5. Certificates: per (mode, tile, pitch) family, intra-operand conflict-freedom is proved by
@@ -43,7 +43,7 @@ class Scored:
     train: TrafficMetrics
     holdout: TrafficMetrics
     pad_fraction: float          # Cost B, exact
-    area_score: float            # Cost A, structural gate-units (the `phys` stage grounds it in um2)
+    area_score: float            # Cost A, structural gate-units (the `synth` stage grounds it in um2)
 
     @property
     def pair_name(self) -> str:
@@ -397,13 +397,13 @@ def conclude(scored: list[Scored], front: list[Scored],
              certificates: Sequence[Certificate] = ()) -> dict[str, Any]:
     """The decision-first summary, derived from the measured field (never hard-coded).
 
-    Names the front's three corners, the consensus fabric (most frontier rows), every policy
-    and fabric with no frontier row plus its best showing, and the recommended pair's proved
-    tile families."""
+    Names the front's three corners, the consensus fabric (most frontier rows near the knee) and
+    every policy and fabric with no frontier row plus its best showing. No balanced pick: that is
+    the run's decision, the knee of the document's objectives (D878), and two would disagree."""
     if not front:
         return {"note": "empty front"}
     # flux_frontier's corners with deterministic tie-breaks (equal throughput -> lower
-    # latency, equal latency -> smaller area) and the balanced pick as the knee of all four.
+    # latency, equal latency -> smaller area); the knee ranks the front only for the consensus.
     from flux_frontier import corner, knee_ranked
 
     lat = corner(front, lambda s: s.holdout.avg_latency, lambda s: s.area_score)
@@ -439,11 +439,6 @@ def conclude(scored: list[Scored], front: list[Scored],
                 fname, f"best showing {best.holdout.avg_latency:.2f} cy at "
                        f"{best.area_score:.0f} areaU ({best.solution.name})")
 
-    balanced = ranked[0]
-    proved = [f"{c.mode} tile {c.tile}" for c in certificates
-              if c.solution == balanced.pair_name and c.holds]
-    refuted = sum(1 for c in certificates
-                  if c.solution == balanced.pair_name and not c.holds)
     return {
         "latency_corner": {"pair": lat.pair_name,
                            "latency": lat.holdout.avg_latency,
@@ -455,14 +450,6 @@ def conclude(scored: list[Scored], front: list[Scored],
                         "latency": cheap.holdout.avg_latency},
         "consensus_fabric": consensus,
         "consensus_frontier_rows": fabric_rows[consensus],
-        "knee_rank": [s_.pair_name for s_ in ranked[:5]],
-        "balanced_pick": {"pair": balanced.pair_name,
-                          "latency": balanced.holdout.avg_latency,
-                          "throughput": balanced.holdout.throughput,
-                          "pad_fraction": balanced.pad_fraction,
-                          "metadata": list(balanced.solution.metadata),
-                          "proved_families": proved,
-                          "refuted_families": refuted},
         "never_on_front": losers,
     }
 
@@ -479,6 +466,11 @@ def conclude_dict_safe(scored: list[Scored]) -> dict[str, Any]:
 
 
 def _balanced_pick(c: dict) -> str | None:
+    """An earlier run's balanced pick: its decision (D878), or the study's own knee in a record
+    from before it had none."""
+    if c.get("decision"):
+        lat = c.get("holdout_latency")
+        return f"an earlier run's balanced pick: {c['decision']}" + (f" ({lat:.2f} cy)" if isinstance(lat, (int, float)) else "")
     bal = (c.get("conclusion") or {}).get("balanced_pick") or {}
     return (f"an earlier run's balanced pick: {bal['pair']} ({bal.get('latency', 0):.2f} cy)"
             if bal.get("pair") else None)
