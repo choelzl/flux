@@ -18,9 +18,10 @@ def golden(x: int) -> dict:
     v = float(np.uint16(x).view(np.float16))
     if math.isnan(v):
         return {"y": 0x7E00}
-    try:
-        y = 1.0 / (1.0 + math.exp(-v)) if v > -745 else 0.0
-    except OverflowError:
-        y = math.inf
+    if v >= 0:
+        y = 1.0 / (1.0 + math.exp(-v))
+    else:                                    # exp(v) never overflows here: a very negative x gives 0
+        e = math.exp(v)
+        y = e / (1.0 + e)
     with np.errstate(all="ignore"):
         return {"y": int(np.float16(y).view(np.uint16))}

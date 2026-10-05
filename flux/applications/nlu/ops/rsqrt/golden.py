@@ -19,7 +19,7 @@ def golden(x: int) -> dict:
     if math.isnan(v):
         return {"y": 0x7E00}
     try:
-        y = 1.0 / math.sqrt(v) if v > 0 else (math.inf if v == 0 else math.nan)
+        y = 1.0 / math.sqrt(v) if v > 0 else (math.copysign(math.inf, v) if v == 0 else math.nan)   # -0 gives -Inf
     except OverflowError:
         y = math.inf
     with np.errstate(all="ignore"):
