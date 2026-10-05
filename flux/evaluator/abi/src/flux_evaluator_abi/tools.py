@@ -111,9 +111,12 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
     shown = shown if len(shown) <= 2000 else shown[:2000] + " ..."
     try:
         with phase(f"tool:{binary}", why=what, command=shown, folder=str(cwd or os.getcwd())) as out:
+            # D854: the tool and everything it starts are one process group of their own: the whole
+            # call is bounded by `timeout_s` -- its output drained too -- and the group goes with it
             proc = subprocess.Popen(
                 cmd, cwd=None if cwd is None else str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                stdin=None if stdin is None else subprocess.PIPE, env=None if env is None else dict(env))
+                stdin=None if stdin is None else subprocess.PIPE, env=None if env is None else dict(env),
+                start_new_session=True)
             streams: dict[str, list[bytes]] = {"stdout": [], "stderr": []}
 
             def read(fh: Any, into: list[bytes]) -> None:
@@ -134,24 +137,33 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
             for t in readers:
                 t.start()
             end, said = time.monotonic() + timeout_s, (0, 0)
-            while True:
-                try:
-                    proc.wait(timeout=max(0.0, min(1.0, end - time.monotonic())))
-                    break
-                except subprocess.TimeoutExpired:
-                    if time.monotonic() >= end:
-                        proc.kill()
-                        proc.wait()
-                        for t in readers:
-                            t.join(5)
-                        out.update(exit="timed out", stdout=_end(streams["stdout"]), stderr=_end(streams["stderr"]))
-                        raise
-                    now = (len(streams["stdout"]), len(streams["stderr"]))
-                    if now != said:                         # what it printed since: the ends, live
-                        said = now
-                        progress(**{"stdout (live tail)": _end(streams["stdout"]), "stderr (live tail)": _end(streams["stderr"])})
-            for t in readers:
-                t.join()
+            try:
+                while True:
+                    try:
+                        proc.wait(timeout=max(0.0, min(1.0, end - time.monotonic())))
+                        break
+                    except subprocess.TimeoutExpired:
+                        if time.monotonic() >= end:
+                            raise
+                        now = (len(streams["stdout"]), len(streams["stderr"]))
+                        if now != said:                         # what it printed since: the ends, live
+                            said = now
+                            progress(**{"stdout (live tail)": _end(streams["stdout"]), "stderr (live tail)": _end(streams["stderr"])})
+                # the tool ended; a child it left may still hold its output open -- within the same bound
+                for t in readers:
+                    t.join(max(0.0, end - time.monotonic()))
+                if any(t.is_alive() for t in readers):
+                    raise subprocess.TimeoutExpired(cmd, timeout_s)
+            except subprocess.TimeoutExpired:
+                _end_group(proc)
+                for t in readers:
+                    t.join(5)
+                out.update(exit="timed out", stdout=_end(streams["stdout"]), stderr=_end(streams["stderr"]))
+                raise
+            except BaseException:                           # an interruption: the tool goes with it
+                _end_group(proc)
+                raise
+            # a normal end leaves the group be: its leader reaped, its number could be another's
             run = ToolRun(tuple(cmd), proc.returncode, _decode(streams["stdout"]), _decode(streams["stderr"]))
             out.update(exit=run.returncode, stdout=run.stdout[-TAIL_CHARS:], stderr=run.stderr[-TAIL_CHARS:])
     except FileNotFoundError as exc:
@@ -161,6 +173,22 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
     if error is not None and not run.ok:
         raise error(f"{label} failed (exit={run.returncode}):\n{run.tail()}")
     return run
+
+
+def _end_group(proc: subprocess.Popen) -> None:
+    """The tool's process group killed (D854): the tool, and every process it started that is
+    still there -- called while one of them lives (the tool itself, or a child holding its
+    output), so the group's number is still theirs. Quiet when they are all gone already."""
+    import signal
+
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    try:
+        proc.wait(5)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
 
 
 def clone(url: str, into: Path, *, what: str, timeout_s: float, ref: str | None = None,

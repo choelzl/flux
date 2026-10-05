@@ -148,3 +148,36 @@ def test_a_timed_out_tool_keeps_what_it_printed_and_odd_bytes_are_replaced(seen)
     assert failed and out["exit"] == "timed out" and out["stdout"] == "started\n"
     run = run_tool([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'a\\xffb\\r\\nc')"], timeout_s=30)
     assert run.stdout == "a�b\nc", "never an exception for a byte that is not UTF-8; newlines as text mode reads them"
+
+
+def test_a_tool_whose_child_holds_its_output_is_bounded_and_its_group_ends(tmp_path):
+    """D854, the review's reproduction (#8): a tool exits while a child it started keeps its output
+    open -- `run_tool` waited for the child (1.56 s for a 0.2 s timeout, and for ever for a child that
+    never exits). Now the whole call is bounded, and on a timeout the child is gone too."""
+    import os
+    import time
+
+    import pytest
+
+    pidfile = tmp_path / "child.pid"
+    script = ("import subprocess, sys; p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+              f"open({str(pidfile)!r}, 'w').write(str(p.pid)); print('started')")
+    t0 = time.monotonic()
+    with pytest.raises(RuntimeError, match="timed out"):
+        run_tool([sys.executable, "-c", script], timeout_s=1.0, what="leaky")
+    assert time.monotonic() - t0 < 10, "bounded by the timeout, not by the child"
+    child = int(pidfile.read_text())
+    time.sleep(0.2)
+    with pytest.raises(ProcessLookupError):
+        os.kill(child, 0)                                   # the child went with the group
+    # a tool that runs past its time: it and its children are gone when the call returns
+    pidfile.unlink()
+    slow = ("import subprocess, sys, time; p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+            f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); open({str(pidfile)!r}, 'w').write(str(p.pid)); time.sleep(30)")
+    with pytest.raises(RuntimeError, match="timed out"):
+        run_tool([sys.executable, "-c", slow], timeout_s=1.0, what="slow")
+    time.sleep(0.2)
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)
+    # an ordinary tool is unchanged
+    assert run_tool([sys.executable, "-c", "print('ok')"], timeout_s=10).stdout.strip() == "ok"

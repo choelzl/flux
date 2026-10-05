@@ -309,12 +309,8 @@ class RunManager:
         paused = self.store.server_get("paused")
         if paused:
             raise ValueError(f"starts are paused by an admin: {paused}")
-        mine = self.store.runs(user)
-        if any(r["app"] == app and self.live(r) for r in mine):
-            raise ValueError(f"{app} is running")
-        limit = self.limit(user)
-        if sum(1 for r in mine if self.live(r)) >= limit:
-            raise ValueError(f"at most {limit} loop(s) running at once for {user.name}")
+        for r in self.store.runs(user):              # rows whose process went away while unwatched: ended
+            self.live(r)
         (app_dir / "out").mkdir(exist_ok=True)
         files = loop_files(app_dir)
         files["log"].parent.mkdir(exist_ok=True)
@@ -348,12 +344,18 @@ class RunManager:
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else [])   # D720: not the network
         from .confine import append
 
-        append(files["log"], f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n", app_dir)
-        run_id = self.store.add_run(user, app, str(db), str(files["log"]), argv, options)
-        # D732: through the stamper, which writes each line with its time
-        proc = subprocess.Popen([sys.executable, "-m", "flux_web.stamp", str(files["log"]), "--", *argv], cwd=str(app_dir),
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-                                env=env, start_new_session=True)
+        # D854: the start reserved atomically -- the loop not running nor starting, the user under
+        # their limit -- before anything is launched; a launch that fails gives the place back
+        run_id = self.store.reserve_run(user, app, self.limit(user), str(db), str(files["log"]), argv, options)
+        try:
+            append(files["log"], f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n", app_dir)
+            # D732: through the stamper, which writes each line with its time
+            proc = subprocess.Popen([sys.executable, "-m", "flux_web.stamp", str(files["log"]), "--", *argv], cwd=str(app_dir),
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                                    env=env, start_new_session=True)
+        except BaseException:
+            self.store.set_run(run_id, ended=time.time(), rc=-1)
+            raise
         self.store.set_run(run_id, pid=proc.pid)
         threading.Thread(target=self._wait, args=(run_id, proc), daemon=True).start()
 
@@ -371,8 +373,8 @@ class RunManager:
         if run.get("ended"):
             return False
         pid = run.get("pid")
-        if not pid:
-            return False
+        if not pid:                                  # D854: reserved, its process about to start
+            return time.time() - float(run.get("started") or 0) < self.store.STARTING_S
         try:
             os.kill(int(pid), 0)
         except ProcessLookupError:

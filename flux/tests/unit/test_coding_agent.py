@@ -338,3 +338,23 @@ def test_an_agents_printed_design_is_its_fenced_code_not_its_prose():
     assert _printed_artifact("Here it is:\n```python\ndef f():\n    return 1\n```\nDone.") == "def f():\n    return 1\n"
     assert _printed_artifact('{"artifact": "x = 1\\n"}') == "x = 1\n"
     assert _printed_artifact("```\na\n```\n```py\nlonger\nblock\n```") == "longer\nblock\n", "the largest block"
+
+
+def test_an_agent_that_cannot_start_is_a_failed_turn_not_a_crash(tmp_path):
+    """D854, the review's reproduction (#10): an agent file of mode 0644 raised PermissionError out
+    of the turn. Now it -- and a file that is no program, or whose interpreter is missing -- is a
+    failed turn that says why; the tools check names a program that cannot run."""
+    from flux_loop.agent import _run_turn, missing_agent
+
+    cases = {"not-executable": ("#!/bin/sh\necho hi\n", 0o644, "is not executable"),
+             "not-a-program": ("\x00\x01garbage", 0o755, "is not a program"),
+             "no-interpreter": ("#!/no/such/interpreter\n", 0o755, "interpreter was not found")}
+    for name, (body, mode, said) in cases.items():
+        prog = tmp_path / name
+        prog.write_text(body)
+        prog.chmod(mode)
+        spec = agent_spec({"command": [str(prog), "{prompt_file}"], "output": "text", "timeout_s": 10})
+        (tmp_path / "w").mkdir(exist_ok=True)
+        turn = _run_turn(spec, spec.argv, {"prompt": "x", "prompt_file": str(tmp_path / "p.md")}, workdir=tmp_path / "w")
+        assert not turn.ok and said in turn.stderr, (name, turn.stderr)
+    assert missing_agent({"command": [str(tmp_path / "not-executable")], "output": "text"}) == [str(tmp_path / "not-executable")]

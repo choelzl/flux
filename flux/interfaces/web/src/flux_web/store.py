@@ -319,6 +319,39 @@ class Store:
                              (user.id, app, db_path, log, json.dumps(argv), time.time(), json.dumps(options)))
             return int(cur.lastrowid)
 
+    #: A run row without its process yet is a start under way (D854) -- for this long at most.
+    STARTING_S = 120.0
+
+    def reserve_run(self, user: User, app: str, limit: int, db_path: str, log: str, argv: list[str],
+                    options: dict[str, Any]) -> int:
+        """A start's row, reserved atomically (D854): in one write transaction, the loop must not be
+        running or starting, and the user's running and starting loops must be under `limit`; else
+        ValueError. Two starts at once: the second waits for the first's transaction, then sees it."""
+        import json
+
+        now = time.time()
+        active = "ended IS NULL AND (pid IS NOT NULL OR started > ?)"
+        con = self._db()
+        try:
+            con.isolation_level = None
+            con.execute("BEGIN IMMEDIATE")
+            if con.execute(f"SELECT 1 FROM runs WHERE user_id = ? AND app = ? AND {active}",
+                           (user.id, app, now - self.STARTING_S)).fetchone():
+                raise ValueError(f"{app} is running")
+            n = con.execute(f"SELECT COUNT(*) FROM runs WHERE user_id = ? AND {active}", (user.id, now - self.STARTING_S)).fetchone()[0]
+            if n >= limit:
+                raise ValueError(f"at most {limit} loop(s) running at once for {user.name}")
+            cur = con.execute("INSERT INTO runs(user_id, app, db, log, argv, started, options) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                              (user.id, app, db_path, log, json.dumps(argv), now, json.dumps(options)))
+            con.execute("COMMIT")
+            return int(cur.lastrowid)
+        except BaseException:
+            if con.in_transaction:
+                con.execute("ROLLBACK")
+            raise
+        finally:
+            con.close()
+
     def set_run(self, run_id: int, **fields: Any) -> None:
         cols = ", ".join(f"{k} = ?" for k in fields)
         with self._db() as db:

@@ -907,9 +907,18 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     feed = None if slots & {"prompt", "prompt_file", "answer"} else subs.get("answer", subs.get("prompt"))
     # D768: a group of its own -- what the agent starts (a shell, a language server, a server it
     # left running) ends with its turn, and never holds the turn open
-    proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            stdin=subprocess.PIPE if feed is not None else subprocess.DEVNULL,
-                            text=True, env=env, bufsize=1, start_new_session=True)
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                stdin=subprocess.PIPE if feed is not None else subprocess.DEVNULL,
+                                text=True, env=env, bufsize=1, start_new_session=True)
+    except OSError as exc:
+        # D854: a program that cannot start -- not executable, not a program, its interpreter
+        # missing, gone since the check -- is a failed turn with why, on the record like any other
+        why = ("is not executable" if isinstance(exc, PermissionError) else
+               "is not a program this machine can run" if getattr(exc, "errno", None) == 8 else
+               "or its interpreter was not found" if isinstance(exc, FileNotFoundError) else "could not start")
+        return Turn(False, 126 if isinstance(exc, PermissionError) else 127, "",
+                    stderr=f"the coding agent's program {cmd[0]} {why}: {exc}")
     lines: queue.Queue = queue.Queue()
     err: list[str] = []
 
@@ -1147,4 +1156,5 @@ def missing_agent(spec: Any) -> list[str]:
     except ValueError:
         return []
     head = head_argv[0].format(python=sys.executable, prompt="", prompt_file="", artifact="", workdir="", part="", name="")
-    return [] if (shutil.which(head) or Path(head).is_file()) else [head]
+    # D854: a file that is there but cannot be run is as missing as one that is not there
+    return [] if (shutil.which(head) or (Path(head).is_file() and os.access(head, os.X_OK))) else [head]
