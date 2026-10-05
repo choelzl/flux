@@ -253,10 +253,13 @@ def test_the_running_python_is_mounted_and_runs_flux(monkeypatch, tmp_path):
     assert not any(p.startswith("/usr/") for p in ro), ("the system mounts cover their own", [p for p in ro if p.startswith("/usr/")])
     seen = {}
     monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
-    monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd: seen.setdefault("cmd", cmd) and 0)
+    monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd, env=None: seen.update(cmd=cmd, env=env) or 0)
     sandbox.launch(["task", "run", "x"], _args(tmp_path), "task run")
     assert seen["cmd"][-6:] == [sys.executable, "-m", "flux_cli", "task", "run", "x"], \
         "not sys.argv[0]: under `python -m` it is a source file, not a program"
+    tmp = seen["env"]["TMPDIR"]
+    assert tmp.endswith(f"flux-sandbox-{os.getuid()}/" + seen["cmd"][seen["cmd"].index("--name") + 1]), \
+        "D848: Podman's scratch (conmon's console socket) on the run's local folder, not a FUSE/NFS TMPDIR"
 
 
 def test_a_name_looked_up_inside_is_asked_of_the_proxy(monkeypatch, tmp_path):

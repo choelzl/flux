@@ -96,7 +96,7 @@ def test_an_empty_allowlist_refuses_every_host_instead_of_opening(tmp_path, monk
     monkeypatch.delenv("FLUX_SANDBOX_ALLOW", raising=False)
     monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
     seen = {}
-    monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd: seen.setdefault("cmd", cmd) and 0)
+    monkeypatch.setattr(sandbox.subprocess, "call", lambda cmd, env=None: seen.update(cmd=cmd, env=env) or 0)
     import flux_cli.sandbox_proxy as sp
 
     class Proxy:                                        # no socket: what it would be told is enough

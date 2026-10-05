@@ -487,7 +487,9 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     # D720: the run's log says where it runs, not how its network is limited nor how to leave the sandbox
     print(f"flux {command}: in the {eng} sandbox {name}", file=sys.stderr, flush=True)
     try:
-        return subprocess.call(cmd)
+        # D848: the engine's own scratch on the run's local folder: with -it Podman binds conmon's console
+        # socket under TMPDIR, which a home on FUSE/NFS refuses ("container create failed"); inside, TMPDIR is /tmp
+        return subprocess.call(cmd, env={**os.environ, "TMPDIR": str(mine)})
     except KeyboardInterrupt:
         subprocess.run([*engine_cli(eng), "kill", "--signal", "INT", name], capture_output=True)
         return 130
