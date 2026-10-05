@@ -24,10 +24,10 @@ back with their numbers and asks for better ones.
 one that issues no prefetches, and the stages measure it beside Bingo's shipped configuration.
 
 ```bash
-flux task check applications/prefetcher
-flux task run applications/prefetcher --db demo-prefetcher.db --tui
+flux task check applications/prefetcher/problem.yaml
+flux task run applications/prefetcher/problem.yaml --db demo-prefetcher.db --tui
 flux task run applications/prefetcher/invent.problem.yaml --db demo-invent.db --tui
 ```
 
 A coding agent can write either file instead of the model: `flow: {generate: opencode}`.
-`bingo` beside `scooby`, `mlop` or `next_line` crashes; `knobs.md` says so.
+`bingo` beside `scooby`, `mlop` or `next_line` crashes; `bingo.py check` refuses it (D872).

@@ -1,4 +1,4 @@
-"""The prefetcher as a worldless document: `prefetcher.problem.yaml` on `bingo.py`, and
+"""The prefetcher as a worldless document: `applications/prefetcher/problem.yaml` on `bingo.py`, and
 `applications/prefetcher/invent.problem.yaml` on `flux champsim`. The loop runs against the FAKE ChampSim of
 test_champsim_generic.py, so nothing here needs the traces or the simulator."""
 

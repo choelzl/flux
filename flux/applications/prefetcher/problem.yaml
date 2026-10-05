@@ -1,6 +1,6 @@
 # The L2 prefetcher configuration -- Bingo, the partners beside it and every knob -- written by the
 # model as a ChampSim .ini and measured on the three 5G baseband traces in traces/.
-#     flux task run applications/prefetcher --db demo-prefetcher.db --tui
+#     flux task run applications/prefetcher/problem.yaml --db demo-prefetcher.db --tui
 
 statement: >-
   The L2 prefetcher configuration for 5G baseband workloads (FFT-heavy signal processing,
