@@ -134,3 +134,26 @@ def check(mapping: Mapping, request: MappingRequest) -> Verdict:
         per += [check_stage(mapping, s, request.concurrent, request.bank_bits,
                             request.address_bits, st) for s in request.strides]
     return Verdict(conflict_free=all(v.conflict_free for v in per), per_stride=tuple(per))
+
+
+def check_verilog(source: str, mapping: Mapping, request: MappingRequest, *, count: int = 256,
+                  seed: int = 0, module: str = "bankmap"):
+    """The artifact itself, Verilated, against `banks_of` (D876): the exhaustive check above is
+    of the numpy model, and Verilog that computes something else (a product cut to 32 bits) would
+    pass it and build bank 0. The address corners, the windows of every stride from them, and
+    `count` random addresses; a `flux_codegen_rtl_harness.Check` (`.ok`, `.why`)."""
+    from flux_codegen_rtl_harness import Golden, check_rtl
+
+    ab, bb = request.address_bits, request.bank_bits
+    space = 1 << ab
+    corners = [0, 1, space - 1, space >> 1, (space >> 1) - 1]
+    addrs = {(c + k * s) % space for c in corners for s in request.strides for k in range(request.concurrent)}
+    addrs |= {int(x) for x in np.random.default_rng(seed).integers(0, space, size=count, dtype=np.uint64)}
+    at = np.array(sorted(addrs), dtype=np.uint64)
+    banks = mapping.banks_of(at, bb)
+    ports = ({"name": "addr", "dir": "in", "bits": ab, "unsigned": True},
+             {"name": "bank", "dir": "out", "bits": bb, **({"unsigned": True} if bb > 1 else {})})
+    rows = tuple({"inputs": {"addr": int(a)}, "expected": {"bank": int(b)}} for a, b in zip(at, banks))
+    golden = Golden(ports=ports, vectors=rows, behavior=f"bank = {mapping.describe()}",
+                    fn=lambda addr: {"bank": int(mapping.banks_of(np.array([addr], dtype=np.uint64), bb)[0])})
+    return check_rtl(source, golden, module=module)

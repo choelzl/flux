@@ -11,7 +11,6 @@ checker share one representation.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,7 +37,15 @@ class Mapping:
         raise NotImplementedError
 
     def verilog(self, address_bits: int, bank_bits: int) -> str:
+        """The body of the `bankmap` module: assignments to `bank` from `addr` (`module_verilog`)."""
         raise NotImplementedError
+
+
+def module_verilog(mapping: Mapping, address_bits: int, bank_bits: int, name: str = "bankmap") -> str:
+    """The mapping as a module that compiles, `addr` in and `bank` out (D876): the artifact is
+    Verilated against `banks_of`, not trusted to agree with it."""
+    return (f"module {name} (\n  input  wire [{address_bits - 1}:0] addr,\n"
+            f"  output wire [{bank_bits - 1}:0] bank\n);\n{mapping.verilog(address_bits, bank_bits)}\nendmodule")
 
 
 @dataclass(frozen=True)
@@ -145,10 +152,6 @@ class InvalidExpression(ValueError):
     pass
 
 
-#: The address, as a whole word: the `a` of `0xa` or of `addr` is not it.
-_A = re.compile(r"\ba\b")
-
-
 @dataclass(frozen=True)
 class Expr(Mapping):
     """`bank = <expression in a> mod B`, for the families XOR-folds cannot express.
@@ -247,9 +250,33 @@ class Expr(Mapping):
         return {"kind": "expr", "text": self.text}
 
     def verilog(self, address_bits: int, bank_bits: int) -> str:
-        return (f"// bank = ({self.text}) mod {1 << bank_bits}  -- an expression mapping; "
-                f"synthesise the arithmetic explicitly\nassign bank = ({_A.sub('addr', self.text)}) "
-                f"& {bank_bits}'h{(1 << bank_bits) - 1:x};")
+        """At 64 bits, the width `banks_of` computes in (D876): every operand is a 64-bit
+        unsigned, a shift amount is taken mod 64 as numpy's is, and the bank is the low bits.
+        Spelled from the parse, fully bracketed, so Python's precedence is the one built."""
+        pad = f"{{{64 - address_bits}'d0, addr}}" if address_bits < 64 else "addr"
+        return (f"// bank = ({self.text}) mod {1 << bank_bits}\n"
+                f"wire [63:0] a = {pad};\nwire [63:0] h = {_sv(self._compile())};\n"
+                f"assign bank = h[{bank_bits - 1}:0];")
+
+
+_SV = {_ast.BitXor: "^", _ast.BitAnd: "&", _ast.BitOr: "|", _ast.RShift: ">>", _ast.LShift: "<<",
+       _ast.Add: "+", _ast.Sub: "-", _ast.Mult: "*", _ast.Mod: "%"}
+
+
+def _sv(node) -> str:
+    """An expression's parse as 64-bit Verilog over the wire `a` (`Expr.banks_of`'s arithmetic)."""
+    if isinstance(node, _ast.Expression):
+        return _sv(node.body)
+    if isinstance(node, _ast.Name):
+        return "a"
+    if isinstance(node, _ast.Constant):
+        return f"64'd{node.value}"
+    if isinstance(node, _ast.UnaryOp):
+        return f"(~{_sv(node.operand)})"
+    op, left, right = type(node.op), _sv(node.left), _sv(node.right)
+    if op in (_ast.RShift, _ast.LShift):
+        right = f"({right} & 64'd63)"
+    return f"({left} {_SV[op]} {right})"
 
 
 def from_dict(d: dict[str, Any]) -> Mapping:

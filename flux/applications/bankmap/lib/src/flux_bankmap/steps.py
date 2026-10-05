@@ -2,7 +2,7 @@
 runs, so the study is a document and these scripts -- no world.
 
     python -m flux_bankmap.steps search HISTORY STATE PARAMS   # the chain, a round per call
-    python -m flux_bankmap.steps check ARTIFACT PARAMS         # the exhaustive conflict checker
+    python -m flux_bankmap.steps check ARTIFACT PARAMS         # the exhaustive checker, then the Verilog
     python -m flux_bankmap.steps cost ARTIFACT                 # the hardware cost, a formula
 
 The chain, cheapest and most certain first (D356), one round per call of `search`:
@@ -14,7 +14,7 @@ The chain, cheapest and most certain first (D356), one round per call of `search
   4. MODEL      `llm_round` mappings a model proposes per round, told what failed and why;
                 `model_rounds` rounds (0: the solver only).
 
-A candidate's artifact is its Verilog with a first line `// flux_bankmap: {...}` -- the mapping
+A candidate's artifact is its Verilog module `bankmap` (`addr` in, `bank` out) with a first line `// flux_bankmap: {...}` -- the mapping
 and the wiring it is checked against -- so `check` and `cost` read it back.
 """
 
@@ -28,9 +28,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable
 
-from .check import check
+from .check import check, check_verilog
 from .impossible import find_impossibility, max_feasible_concurrency
-from .mapping import Mapping, Modulo, XorFold, from_dict
+from .mapping import Mapping, Modulo, XorFold, from_dict, module_verilog
 from .problem import MappingRequest
 
 HEADER = "// flux_bankmap: "
@@ -66,7 +66,7 @@ def rule_wired(req: MappingRequest) -> MappingRequest:
 
 def artifact(mapping: Mapping, req: MappingRequest, partition: Any = None) -> str:
     head = json.dumps({"mapping": mapping.to_dict(), "wiring": partition})
-    return f"{HEADER}{head}\n{mapping.verilog(req.address_bits, req.bank_bits)}\n"
+    return f"{HEADER}{head}\n{module_verilog(mapping, req.address_bits, req.bank_bits)}\n"
 
 
 def read_artifact(path: str) -> tuple[Mapping, Any]:
@@ -275,13 +275,20 @@ def check_cmd(artifact_path: str, params_path: str) -> int:
     v = check(mapping, req)
     print(v.summary(req.concurrent))
     bad = 0 if v.conflict_free else max(1, round((1.0 - v.clean_fraction) * 1000))
+    if v.conflict_free:                          # the Verilog is what is built: it must agree (D876)
+        rtl = check_verilog(Path(artifact_path).read_text(), mapping, req)
+        if not rtl.ok:
+            print(f"the Verilog does not compute the mapping the checker accepted: {rtl.why}")
+            bad = 1000
+        else:
+            print(f"the Verilog agrees on {rtl.total} addresses (Verilator)")
     print(f"{bad} failing")                      # per-mille of conflicting start addresses, at the worst resource
-    return 0 if v.conflict_free else 1
+    return 0 if bad == 0 else 1
 
 
 def cost_cmd(artifact_path: str) -> int:
     mapping, _ = read_artifact(artifact_path)
-    print(f"hardware_cost={float(mapping.hardware_cost())} clean_fraction=1.0")
+    print(f"hardware_cost={float(mapping.hardware_cost())}")
     return 0
 
 

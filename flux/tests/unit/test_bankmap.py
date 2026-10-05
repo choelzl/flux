@@ -103,10 +103,62 @@ def test_expression_cost_prices_the_divider_and_the_multiplier():
     assert Expr("a * 3").hardware_cost() >= 60
 
 
-def test_expression_verilog_renames_the_address_and_not_a_hex_digit():
-    """`a` is the address; the `a` of `0xa` and `0x3a` is a digit and must stay one."""
+def test_expression_verilog_is_spelled_from_the_parse_at_64_bits():
+    """`a` is the address; the `a` of `0xa` and `0x3a` is a digit and must stay one. Every
+    constant and the address are 64 bits wide, as in `banks_of` (D876)."""
     v = Expr("(a ^ (a >> 0xa)) + 0x3a").verilog(20, 3)
-    assert "assign bank = ((addr ^ (addr >> 0xa)) + 0x3a) & 3'h7;" in v
+    assert "wire [63:0] a = {44'd0, addr};" in v
+    assert "wire [63:0] h = ((a ^ (a >> (64'd10 & 64'd63))) + 64'd58);" in v
+    assert "assign bank = h[2:0];" in v
+
+
+def _rtl_req(strides, n, banks=8, bits=20):
+    return MappingRequest(strides=tuple(strides), concurrent=n, banks=banks, address_bits=bits, z3_seconds=20)
+
+
+def test_the_verilog_of_every_family_computes_what_the_checker_checked():
+    """The artifact is a module that compiles and, Verilated, agrees with `banks_of` (D876)."""
+    from flux_bankmap import check_verilog, module_verilog
+
+    r = _rtl_req([1, 8, 16], 4)
+    for m in (Modulo(2), XorFold(taps=((1, 4), (3,), (0, 5))),
+              Expr("(a ^ (a >> 7) ^ ~a * 3) % 7 + (a << 70) - 0x3a")):     # a Verilator build each
+        got = check_verilog(module_verilog(m, r.address_bits, r.bank_bits), m, r)
+        assert got.ok, (m.describe(), got.why)
+
+
+def test_a_product_cut_to_32_bits_is_caught_by_the_verilog_check():
+    """`(a*2654435761)>>32` in numpy is the top of a 52-bit product; in the address's 32-bit
+    Verilog context the product is cut and the bank is 0 everywhere. The old spelling passed the
+    exhaustive checker; the cross-check refuses it, and the 64-bit spelling agrees (D876)."""
+    import numpy as np
+
+    from flux_bankmap import check_verilog, module_verilog
+
+    m = Expr("(a * 2654435761) >> 32")
+    r = _rtl_req([1], 2)
+    assert len(set(m.banks_of(np.arange(1 << 12, dtype=np.uint64), 3).tolist())) == 8, "numpy spreads the banks"
+    old = "module bankmap (input wire [19:0] addr, output wire [2:0] bank);\n" \
+          "assign bank = ((addr * 2654435761) >> 32) & 3'h7;\nendmodule"
+    refused = check_verilog(old, m, r)
+    assert not refused.ok and refused.failing > 0
+    assert check_verilog(module_verilog(m, r.address_bits, r.bank_bits), m, r).ok
+
+
+def test_the_check_step_refuses_an_artifact_whose_verilog_disagrees(tmp_path, capsys):
+    import json
+
+    from flux_bankmap import steps
+
+    params = {"strides": [1, 8, 16], "concurrent": 4, "banks": 8, "address_bits": 12}
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    fold = XorFold(taps=((1, 4), (3,), (0, 5)))
+    good = steps.artifact(fold, steps.request_of(params))
+    (tmp_path / "good.v").write_text(good)
+    assert steps.check_cmd(str(tmp_path / "good.v"), str(tmp_path / "params.json")) == 0
+    (tmp_path / "bad.v").write_text(good.replace("addr[4]", "addr[6]"))   # the header says one map, the RTL builds another
+    assert steps.check_cmd(str(tmp_path / "bad.v"), str(tmp_path / "params.json")) == 1
+    assert "does not compute the mapping" in capsys.readouterr().out
 
 
 def test_an_expression_is_checked_exactly_like_a_fold():

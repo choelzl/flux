@@ -27,9 +27,9 @@ flow:
   orchestrate:                  # the chain: baseline, proof, z3, then the model's rounds
     command: "{python} -m flux_bankmap.steps search {history} {state} {params}"
   test:
-    exhaustive: "{python} -m flux_bankmap.steps check {artifact} {params}"
+    exhaustive: "{python} -m flux_bankmap.steps check {artifact} {params}"   # every start address, then the Verilog Verilated
   measure:
-    exhaustive: {command: "{python} -m flux_bankmap.steps cost {artifact}", metrics: [hardware_cost, clean_fraction]}
+    exhaustive: {command: "{python} -m flux_bankmap.steps cost {artifact}", metrics: [hardware_cost]}
 
 budget:
   prototype: false

@@ -9,13 +9,16 @@ cd flux
 nix develop --command flux task run applications/bankmap --tui       # baseline, proof, z3, then model rounds
 ```
 
+A pass is a round of the chain, and the first pass is the baseline alone: `--passes N` needs
+N >= 2 to reach a candidate (`--passes 1` ends after the modulo with NO CANDIDATE, exit 1).
+
 The study is the document and the commands of `flux_bankmap.steps`, one per phase (D799) -- no
 world. The chain below is `orchestrate: {command: "... steps search {history} {state} {params}"}`:
 the loop calls it once a round with what was measured and refused so far, and it prints the next
 candidates (each a mapping's Verilog with a `// flux_bankmap:` line saying the mapping and the
 wiring), lessons, and -- when nothing conflict-free exists -- the best partial answer as the run's
-conclusion. The gate is `steps check` (the exhaustive checker), the one stage `steps cost` (the
-XOR count). A model round asks the run's own model (`FLUX_REMOTE_*`, a local Ollama), told the
+conclusion. The gate is `steps check` (the exhaustive checker, then the candidate's Verilog
+Verilated against it), the one stage `steps cost` (the XOR count). A model round asks the run's own model (`FLUX_REMOTE_*`, a local Ollama), told the
 solver's outcome, the counter-examples, what was refused and what the operator typed.
 
 The record and the chosen mapping's Verilog go to `applications/bankmap/out/` (`bankmap.db`,
@@ -53,9 +56,16 @@ params:
 | feasible | z3 again, descending N and growing the stride set | s | what the request's strides *do* admit |
 | model | non-linear expressions a local model proposes, told what failed | minutes | a family the solver cannot express |
 
-Every stage is judged by one **exhaustive checker** (`check.py`): every start address in the
-space, vectorised in numpy, a few milliseconds per stride. A sample is not a guarantee, and the
-kernel does not get to choose where its arrays are placed.
+Every stage is judged by one **exhaustive checker** (`lib/src/flux_bankmap/check.py`): every
+start address in the space, vectorised in numpy, a few milliseconds per stride. A sample is not a
+guarantee, and the kernel does not get to choose where its arrays are placed.
+
+The checker judges the numpy model of a mapping; what is built is its Verilog (a module
+`bankmap`, `addr` in, `bank` out). So a mapping the checker accepts has its Verilog Verilated
+too (`check_verilog`: the corners, every stride's windows from them, 256 random addresses) and
+must give the same bank. An expression mapping is spelled at 64 bits, the width numpy computes
+in: in the address's own 32-bit context, `(a * 2654435761) >> 32` passed the checker and built
+bank 0 for every address.
 
 ## What the first runs established
 
