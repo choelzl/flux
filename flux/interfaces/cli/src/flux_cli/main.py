@@ -90,8 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
     serve_p.add_argument("--no-sandbox", action="store_true", help="Runs on the host, not sandboxed: a single trusted user only.")
     serve_p.set_defaults(func=_cmd_serve)
     user_p = subparsers.add_parser("user", help="The web interface's accounts, from the server's machine.")
-    user_p.add_argument("action", choices=["add", "list", "passwd", "disable", "enable", "role"])
+    user_p.add_argument("action", choices=["add", "list", "passwd", "disable", "enable", "role", "link"])
     user_p.add_argument("name", nargs="?", default=None)
+    user_p.add_argument("--invite", action="store_true", help="add: no password -- a link for them to choose it (D818).")
+    user_p.add_argument("--url", default=None, help="add --invite, link: the server's address, to print the whole link.")
     user_p.add_argument("--admin", action="store_true", help="add: an admin (as --role admin).")
     user_p.add_argument("--role", choices=["admin", "internal", "external"], default=None,
                         help="add or role: internal (the server's model and agent settings, the default), external (their own, "

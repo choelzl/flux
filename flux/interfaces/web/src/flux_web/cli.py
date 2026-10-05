@@ -49,13 +49,20 @@ def user(args) -> int:
     if not args.name:
         print(f"flux user {args.action}: which user?", file=sys.stderr)
         return 2
+    link = None
     try:
         if args.action == "add":
-            pw = getpass.getpass(f"password for {args.name}: ")
-            if pw != getpass.getpass("again: "):
-                print("the two differ", file=sys.stderr)
-                return 2
+            pw = None
+            if not getattr(args, "invite", False):
+                pw = getpass.getpass(f"password for {args.name}: ")
+                if pw != getpass.getpass("again: "):
+                    print("the two differ", file=sys.stderr)
+                    return 2
             store.add_user(args.name, pw, "admin" if args.admin else (getattr(args, "role", None) or "internal"))
+            if pw is None:
+                link = store.invite(args.name)[0]                # D818: they choose it from the link
+        elif args.action == "link":
+            link = store.invite(args.name)[0]
         elif args.action == "role":
             if not getattr(args, "role", None):
                 print("flux user role: which? --role admin|internal|external", file=sys.stderr)
@@ -70,6 +77,9 @@ def user(args) -> int:
         print(f"flux user {args.action}: {exc}", file=sys.stderr)
         return 2
     store.audit(None, f"cli {args.action}", args.name)
+    if link:
+        base = (getattr(args, "url", None) or "").rstrip("/")
+        print(f"send {args.name} this link (once, for a week): {base or '<the server address>'}/#/invite/{link}")
     print(f"{args.action}: {args.name} (the server's data: {store.data}; `flux serve` must use the same, "
           f"or `--data {store.data}`)")
     return 0

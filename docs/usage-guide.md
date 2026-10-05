@@ -439,6 +439,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
+- **Invitations** (D818): an admin adds a user without a password (Users, or `flux user add NAME --invite --url https://flux.example`) and gets a link to send them -- it lets them choose their password (10 or more characters) and logs them in; until then the account cannot be used. **Password reset link** (Users, or `flux user link NAME`) is the same for an existing user: their password works until the link is used, and their sessions end then. A link works once, for a week; a new one replaces it. There is no mail: the admin sends it.
 - **Kinds of user** (D734; the Users tab, or `flux user add NAME --role internal|external|admin`, `flux user role NAME --role ...`):
   - **internal** (the default): their runs use the server's model, agent and environment settings, under their own.
   - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
@@ -462,7 +463,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     result), where it goes (`<id>.problem.yaml` with an `id:` becomes `problem.yaml`; the record follows a
     renamed id) -- migrated one loop at a time or all at once; a running loop is left until stopped; a loop's
     Start says when its document needs it.
-  - **Insights and audit** (D766, D816; the audit trail at the end): over the last day, 7 or 30 days -- the starts that failed with why (their log's
+  - **Insights and audit** (D766, D816, D819; a sub-tab each -- Failures, Usage and disk, Endpoints and network, Audit trail): over the last day, 7 or 30 days -- the starts that failed with why (their log's
     words) and the agents' Tests that failed; turns, tokens and cost by user and by agent or model, a bar a
     day, and the loops that used most; each model endpoint and agent with its turns, failures, median and
     slow (95%) time and its last failure; the hosts the sandboxes refused, by which loops; the disk by user

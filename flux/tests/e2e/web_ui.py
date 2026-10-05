@@ -150,6 +150,7 @@ return true;
 class Run:
     def __init__(self) -> None:
         self.results: list[tuple[str, bool, str]] = []
+        self.timings: list[tuple[str, float]] = []
         HOME.mkdir(parents=True, exist_ok=True)
         self.shots = HOME / "shots"
         shutil.rmtree(self.shots, ignore_errors=True)
@@ -191,11 +192,16 @@ class Run:
                 pass
 
     def step(self, name, fn):
+        only = [x.strip() for x in os.environ.get("FLUX_E2E_STEPS", "").split(",") if x.strip()]
+        if only and name not in only:                   # D821: while working on a few, only those
+            return
+        t0 = time.monotonic()
         try:
             fn()
         except Exception as exc:  # noqa: BLE001 -- a step that breaks is a failure, the next steps go on
             self.check(name, False, f"{type(exc).__name__}: {exc}")
             traceback.print_exc()
+        self.timings.append((name, time.monotonic() - t0))
 
     def clean(self, where):
         """No error and no red notice on this page since the last look."""
@@ -216,7 +222,8 @@ class Run:
         b.type("form.login input:not([type=password])", name)
         b.type("form.login input[type=password]", password or PASSWORDS[name])
         b.click("form.login button[type=submit]")
-        b.wait(f"document.querySelector('#who') && document.querySelector('#who').textContent.includes('{name}')", what=f"{name} logged in")
+        # the login's own move to the loops (not a name the header still shows from before), so the next page is not overtaken
+        b.wait(f"location.hash === '#/' && document.querySelector('#who') && document.querySelector('#who').textContent.includes('{name}')", what=f"{name} logged in")
         b.js(WATCH)
 
     def page(self, hash_, ready, what):
@@ -585,17 +592,17 @@ def flows(r: Run) -> None:
         r.button("Every agent", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
         r.check("a tab shows its own groups only", shown == ["Variables for every run and every agent"], str(shown))
-        r.page("#/admin/audit", "document.querySelector('#audit select[aria-label=What]')", "the audit")   # D723
-        opts = b.js("return [...document.querySelectorAll('#audit select[aria-label=What] option')].map(o => [o.value, o.textContent])")
+        r.page("#/admin/audit", "document.querySelector('#insights-part select[aria-label=What]')", "the audit")   # D723
+        opts = b.js("return [...document.querySelectorAll('#insights-part select[aria-label=What] option')].map(o => [o.value, o.textContent])")
         values = [v for v, _ in opts if v]
         r.check("the audit's What offers groups only (D733)", "Users and sign-in" in values and "Runs" in values
-                and "login" not in values and not b.js("return !!document.querySelector('#audit select[aria-label=What] optgroup')"), str(opts))
-        b.js("const s = document.querySelector('#audit select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
-        whats = b.js("return [...document.querySelectorAll('#audit tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
+                and "login" not in values and not b.js("return !!document.querySelector('#insights-part select[aria-label=What] optgroup')"), str(opts))
+        b.js("const s = document.querySelector('#insights-part select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
+        whats = b.js("return [...document.querySelectorAll('#insights-part tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
         r.check("a group shows its kinds together", "login" in whats and set(whats) <= {"login", "login refused", "add user", "change user", "change password"}, str(whats))
-        b.js("const s = document.querySelector('#audit select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
-             "const w = document.querySelector('#audit select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
-        whos = b.js("return [...document.querySelectorAll('#audit tbody tr')].map(t => t.children[1].textContent)")
+        b.js("const s = document.querySelector('#insights-part select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
+             "const w = document.querySelector('#insights-part select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
+        whos = b.js("return [...document.querySelectorAll('#insights-part tbody tr')].map(t => t.children[1].textContent)")
         r.check("the audit narrows to one user", whos and set(whos) == {"bob"}, str(whos))
         r.page("#/admin", "document.querySelector('#main .tabs')", "admin loops")
         b.wait("document.querySelector('#main').innerText.includes('sw')", what="every loop listed")
@@ -865,6 +872,31 @@ def flows(r: Run) -> None:
                 and said.get("ok") is True and "flow:" in text, f"{info.get('document')} {said}")
     r.step("documents migrated", documents_migrated)
 
+    def invitation():
+        """D818: a user added without a password gets a link; it sets the password and logs them in."""
+        r.login("ada")
+        r.page("#/admin/users", "document.querySelector('.add-user')", "Admin › Users")
+        b.js("const r = document.querySelector('.add-user'); r.querySelector('input').value = 'newbie'; return 1")
+        r.button("Add user", ".add-user")
+        b.wait("document.querySelector('#invite-url')", timeout=20, what="the invitation link")
+        url = b.js("return document.querySelector('#invite-url').value")
+        r.check("adding a user without a password shows an invitation link", "#/invite/" in url, url)
+        b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Done').click(); return 1")
+        b.wait("[...document.querySelectorAll('#main td')].some(t => t.textContent.includes('newbie') && t.textContent.includes('invited'))", timeout=20, what="newbie invited")
+        r.api("/logout", "POST")
+        b.js("location.hash = '#/login'; return 1")
+        token = url.split("#/invite/")[1]
+        r.page(f"#/invite/{token}", "document.querySelector('#inv-pw')", "the invitation")
+        r.check("the link greets the user", "Welcome, newbie" in r.text(), r.text()[:200])
+        b.type("#inv-pw", "newbie's long secret")
+        b.type("#inv-pw2", "newbie's long secret")
+        b.click("form.login button[type=submit]")
+        b.wait("document.querySelector('#who') && document.querySelector('#who').textContent.includes('newbie')", timeout=20, what="newbie logged in")
+        r.check("the link set the password and logged them in", True)
+        r.clean("invitation")
+        r.login("ada")
+    r.step("invitation", invitation)
+
     def error_feedback():
         """D757: what a user is told when something is wrong -- before (a document that does not load,
         a check that fails), after (why a start stopped, a tool that broke), and around (a refused
@@ -922,15 +954,23 @@ def flows(r: Run) -> None:
     def insights():
         """D766: Admin › Insights -- the failed start above with its why, the agents' turns, the disk by user."""
         r.login("ada")
-        r.page("#/admin/insights", "[...document.querySelectorAll('#main .card h2')].some(x => x.textContent === 'Disk by user')", "Admin › Insights")
-        cards = b.js("const o = {}; for (const c of document.querySelectorAll('#main .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
+        r.page("#/admin/insights", "document.querySelector('#main .subtabs')", "Admin › Insights")
+        cards, per = {}, {}
+        first = {"Failures": "Failures", "Usage and disk": "Usage", "Endpoints and network": "Endpoints and agents"}
+        for label in ("Failures", "Usage and disk", "Endpoints and network"):      # D819: a sub-tab each
+            r.button(label, "#main .subtabs")
+            b.wait(f"[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === '{first[label]}')", timeout=20, what=label)
+            got = b.js("const o = {}; for (const c of document.querySelectorAll('#insights-part .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
+            per[label] = sorted(got)
+            cards.update(got)
+        r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage and disk": ["Disk by user", "Usage"],
+                "Endpoints and network": ["Endpoints and agents", "Network refused"]}, str(per))
         r.check("Insights: the failed start with why it stopped", "bob/broken" in cards.get("Failures", "") and "not on PATH" in cards.get("Failures", ""),
                 cards.get("Failures", "")[:300])
-        r.check("Insights: every card there", all(k in cards for k in ("Failures", "Usage", "Endpoints and agents", "Network refused", "Disk by user")), str(list(cards)))
         r.check("Insights: the disk by user, each user", all(u in cards.get("Disk by user", "") for u in ("ada", "bob")), cards.get("Disk by user", "")[:300])
         b.js("const s = document.querySelector('#main select[aria-label=\"Over the last\"]'); s.value = '30'; s.dispatchEvent(new Event('change')); return 1")
         b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
-               "&& document.querySelectorAll('#main .card').length >= 5", timeout=15, what="30 days")
+               "&& document.querySelectorAll('#insights-part .card').length >= 2", timeout=15, what="30 days")
         r.check("Insights: over 30 days", True)
         r.clean("Admin › Insights")
     r.step("insights", insights)
@@ -973,6 +1013,7 @@ def main() -> int:
     finally:
         run.close()
     failed = [x for x in run.results if not x[1]]
+    print("\nsteps by time: " + ", ".join(f"{n} {t:.0f}s" for n, t in sorted(run.timings, key=lambda x: -x[1])))
     print(f"\n{len(run.results) - len(failed)} of {len(run.results)} checks passed" + (f"; screenshots of failures in {run.shots}" if failed else ""))
     for name, _ok, detail in failed:
         print(f"  FAIL {name}: {detail}")

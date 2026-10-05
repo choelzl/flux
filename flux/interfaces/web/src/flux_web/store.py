@@ -32,7 +32,15 @@ CREATE TABLE IF NOT EXISTS failures (name TEXT NOT NULL, t REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (
     user_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
 CREATE TABLE IF NOT EXISTS server (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL, created REAL NOT NULL, expires REAL NOT NULL);
 """
+#: D818: how long an invitation or a reset link opens
+INVITE_DAYS = 7
+#: a password set from a link: as the page asks
+MIN_PASSWORD = 10
+#: the password of an account invited and not yet set: no password matches it
+_UNSET = "unset"
 
 #: The model settings of runs (D684, D696), by what uses them: Flux's own model calls, the agent by
 #: default, other providers; each coding agent's are its own (D807: `agents.py`, a group per
@@ -138,13 +146,14 @@ class Store:
         got = Store.hash_password(password, bytes.fromhex(salt)).split("$")[2]
         return hmac.compare_digest(got, want)
 
-    def add_user(self, name: str, password: str, role: str = "internal") -> User:
+    def add_user(self, name: str, password: str | None, role: str = "internal") -> User:
+        """`password` None (D818): the account is unusable until its invitation is used."""
         name = (name or "").strip()
         if self.user(name=name) is not None:              # D699: names are one whatever their case
             raise ValueError(f"user {name!r} exists")
         if not name or not name.replace("-", "").replace("_", "").isalnum() or len(name) > 40:
             raise ValueError("a user name is letters, digits, - and _ (at most 40)")
-        if len(password) < 6:
+        if password is not None and len(password) < 6:
             raise ValueError("a password has at least 6 characters")
         role = _role(role)
         if role not in ROLES:
@@ -152,7 +161,7 @@ class Store:
         with self._db() as db:
             try:
                 cur = db.execute("INSERT INTO users(name, pw, role, created) VALUES (?, ?, ?, ?)",
-                                 (name, self.hash_password(password), role, time.time()))
+                                 (name, self.hash_password(password) if password is not None else _UNSET, role, time.time()))
             except sqlite3.IntegrityError as exc:
                 raise ValueError(f"user {name!r} exists") from exc
             return User(cur.lastrowid, name, role, False)
@@ -195,6 +204,51 @@ class Store:
                 if _role(role) not in ROLES:
                     raise ValueError("a user is admin, internal or external")
                 db.execute("UPDATE users SET role = ? WHERE name = ?", (_role(role), name))
+
+    # ---- invitations and reset links (D818): one-time, kept as a digest, a week long
+    def invite(self, name: str) -> tuple[str, str]:
+        """(a new link's token, its kind: "invite" for an account whose password is not set yet, else
+        "reset"); an earlier link of that user stops working."""
+        u = self.user(name=name)
+        if u is None:
+            raise ValueError(f"no user {name!r}")
+        kind = "invite" if self.pending(u.name) else "reset"
+        token = secrets.token_urlsafe(32)
+        now = time.time()
+        with self._db() as db:
+            db.execute("DELETE FROM invites WHERE user_id = ?", (u.id,))
+            db.execute("INSERT INTO invites VALUES (?, ?, ?, ?, ?)", (_digest(token), u.id, kind, now, now + INVITE_DAYS * 86400))
+        return token, kind
+
+    def pending(self, name: str) -> bool:
+        """Invited, its password not set yet."""
+        with self._db() as db:
+            r = db.execute("SELECT pw FROM users WHERE name = ? COLLATE NOCASE", (name,)).fetchone()
+        return bool(r) and r["pw"] == _UNSET
+
+    def invite_of(self, token: str) -> dict[str, Any] | None:
+        """{name, kind, expires} of a link that still opens, else None."""
+        with self._db() as db:
+            r = db.execute("SELECT u.name, i.kind, i.expires FROM invites i JOIN users u ON u.id = i.user_id "
+                           "WHERE i.token = ? AND i.expires > ? AND u.disabled = 0", (_digest(token or ""), time.time())).fetchone()
+        return {"name": r["name"], "kind": r["kind"], "expires": r["expires"]} if r else None
+
+    def use_invite(self, token: str, password: str) -> tuple[User, str]:
+        """The link's password set, the link spent, every session of the user ended; (the user, a new session's token)."""
+        got = self.invite_of(token)
+        if got is None:
+            raise ValueError("this link has been used or has expired: ask an admin for a new one")
+        if len(password) < MIN_PASSWORD:
+            raise ValueError(f"a password has at least {MIN_PASSWORD} characters")
+        u = self.user(name=got["name"])
+        now = time.time()
+        session = secrets.token_urlsafe(32)
+        with self._db() as db:
+            db.execute("UPDATE users SET pw = ? WHERE id = ?", (self.hash_password(password), u.id))
+            db.execute("DELETE FROM invites WHERE user_id = ?", (u.id,))
+            db.execute("DELETE FROM sessions WHERE user_id = ?", (u.id,))
+            db.execute("INSERT INTO sessions VALUES (?, ?, ?, ?)", (_digest(session), u.id, now, now + SESSION_DAYS * 86400))
+        return u, session
 
     # ---- login and sessions
     #: D702: failures in ten minutes that lock a name from one address, and from everywhere

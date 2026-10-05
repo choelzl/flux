@@ -15,8 +15,8 @@ from flux_web import create_app
 from flux_web.store import Store
 
 H = {"X-Flux": "1"}
-#: What answers without a login: logging in and out.
-PUBLIC = {("POST", "/api/login"), ("POST", "/api/logout")}
+#: What answers without a login: logging in and out, and a link to choose one's password (D818).
+PUBLIC = {("POST", "/api/login"), ("POST", "/api/logout"), ("GET", "/api/invite/{token}"), ("POST", "/api/invite/{token}")}
 
 
 @pytest.fixture(scope="module")

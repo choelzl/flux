@@ -395,6 +395,45 @@ async function loginPage() {
   name.focus();
 }
 
+/** D818: a link to set one's password -- for an invited user, or after a reset; one use, a week. */
+async function invitePage(token) {
+  const show = pageShow();
+  let got;
+  try { got = await api(`/invite/${enc(token)}`); }
+  catch (x) { show(h("div", { class: "card login" }, h("div", { class: "login-mark" }, logo(56)), h("h1", {}, "Flux"), h("p", { class: "err" }, x.message),
+    h("a", { class: "btn", href: "#/login" }, "Log in"))); return; }
+  const pw = h("input", { type: "password", autocomplete: "new-password", required: true, minlength: 10, id: "inv-pw" });
+  const pw2 = h("input", { type: "password", autocomplete: "new-password", required: true, id: "inv-pw2" });
+  const err = h("p", { class: "err" });
+  const form = h("form", { class: "card login", onsubmit: async (e) => {
+      e.preventDefault(); err.textContent = "";
+      if (pw.value.length < 10) { err.textContent = "At least 10 characters."; return; }
+      if (pw.value !== pw2.value) { err.textContent = "The two are not the same."; return; }
+      try { me = await api(`/invite/${enc(token)}`, { method: "POST", body: { text: pw.value } }); location.hash = "#/"; route(); }
+      catch (x) { err.textContent = x.message; }
+    } },
+    h("div", { class: "login-mark" }, logo(56)), h("h1", {}, "Flux"),
+    h("p", { class: "sub" }, got.kind === "invite" ? `Welcome, ${got.name}: choose your password.` : `${got.name}: choose a new password.`),
+    h("label", { class: "stack" }, "Password (10 or more characters)", pw), h("label", { class: "stack" }, "Again", pw2),
+    h("button", { class: "primary wide", type: "submit" }, got.kind === "invite" ? "Set it and log in" : "Change it and log in"), err,
+    h("p", { class: "muted small" }, `This link works once, until ${new Date(got.expires * 1000).toLocaleString()}.`));
+  show(form);
+  pw.focus();
+}
+
+/** D818: the link an admin sends -- shown with a copy button; it is never shown again. */
+function linkDialog(name, token, kind) {
+  const url = `${location.origin}${location.pathname}#/invite/${token}`;
+  const field = h("input", { value: url, readonly: true, class: "mono", style: "width:100%", id: "invite-url" });
+  const copy = h("button", { type: "button", class: "small", onclick: async () => {
+    try { await navigator.clipboard.writeText(url); toast("Copied", "ok"); } catch (_) { field.select(); toast("Selected: copy it", "info"); } } }, "Copy");
+  return dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`, h("div", { class: "stack" },
+    h("p", {}, kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
+      : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`),
+    h("div", { class: "row" }, field, copy),
+    h("p", { class: "muted small" }, "It works once, for a week, and is not shown again; a new link replaces it.")), [["Done", true, "primary"]]);
+}
+
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
 async function startLoop(name, owner) {
   return withOwner(owner || pageOwner, () => startLoopOwned(name));
@@ -867,10 +906,11 @@ function envTable(rows, shadowed = new Set()) {
       h("td", { class: "mono" }, x.secret ? h("span", { class: "muted" }, "secret · set") : x.value), h("td", { class: "muted" }, x.from, shadowed.has(x.name) ? " · overridden" : "")))));
 }
 function envEditor(rows, save, scope) {
-  const nameIn = h("input", { placeholder: "NAME", class: "mono", id: `env-${scope}-name`, style: "width:180px", autocomplete: "off" });
-  const valIn = h("input", { placeholder: "value", class: "mono", id: `env-${scope}-value`, style: "flex:1;min-width:160px", autocomplete: "off" });
+  const quiet = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" };     // D820: no password manager here
+  const nameIn = h("input", { placeholder: "NAME", class: "mono", id: `env-${scope}-name`, style: "width:180px", autocomplete: "off", ...quiet });
+  const valIn = h("input", { placeholder: "value", class: "mono", id: `env-${scope}-value`, style: "flex:1;min-width:160px", autocomplete: "off", ...quiet });
   const secret = h("input", { type: "checkbox", id: `env-${scope}-secret` });
-  secret.addEventListener("change", () => { valIn.type = secret.checked ? "password" : "text"; });
+  secret.addEventListener("change", () => { valIn.type = secret.checked ? "password" : "text"; valIn.autocomplete = secret.checked ? "new-password" : "off"; });
   const list = rows.length ? h("table", { class: "list compact env" }, h("tbody", {}, rows.map(x => h("tr", {}, h("td", { class: "mono" }, x.name),
       h("td", { class: "mono" }, x.secret ? h("span", { class: "muted" }, "secret · set") : x.value),
       h("td", { class: "right" }, save ? act("Remove", async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }, { cls: "small" }) : "")))))
@@ -2593,10 +2633,19 @@ async function adminPage(sub = "") {
   if (tab === "sandbox") return adminSandbox(body);
   if (tab === "agents") return adminAgents(body);
   if (tab === "insights") {
-    const ins = h("div", {}), aud = h("div", { id: "audit" });
-    body.replaceChildren(ins, aud);
-    await Promise.all([adminInsights(ins), adminAudit(aud)]);
-    if (sub === "audit") aud.scrollIntoView();
+    // D819: a sub-tab each, a box or two that go together, so nothing scrolls far; the last looked at kept
+    const PARTS = [["failures", "Failures"], ["usage", "Usage and disk"], ["endpoints", "Endpoints and network"], ["audit", "Audit trail"]];
+    let cur = sub === "audit" ? "audit" : (() => { try { return localStorage.getItem("flux-insights-part"); } catch (_) { return null; } })();
+    if (!PARTS.some(([k]) => k === cur)) cur = "failures";
+    const bar = h("div", { class: "subtabs", role: "tablist" }), part = h("div", { id: "insights-part" });
+    const draw = async () => {
+      bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
+        onclick: () => { cur = k; try { localStorage.setItem("flux-insights-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
+      part.replaceChildren(skeleton(6));
+      if (cur === "audit") await adminAudit(part); else await adminInsights(part, cur);
+    };
+    body.replaceChildren(bar, part);
+    await draw();
     return;
   }
   if (tab === "applications") return adminApplications(body);
@@ -2922,10 +2971,10 @@ async function adminSandbox(body) {
 
 /** Admin › Insights (D766): what went wrong, what was used, how the endpoints and agents did,
     what the network refused, where the disk goes -- over the last days. */
-async function adminInsights(body) {
+async function adminInsights(body, part = "failures") {   // D819: one part of them: failures, usage, endpoints
   let days = 7;
   try { days = Number(localStorage.getItem("flux-insights-days")) || 7; } catch (_) {}
-  const pick = h("select", { "aria-label": "Over the last", onchange: () => { try { localStorage.setItem("flux-insights-days", pick.value); } catch (_) {} adminInsights(body); } },
+  const pick = h("select", { "aria-label": "Over the last", onchange: () => { try { localStorage.setItem("flux-insights-days", pick.value); } catch (_) {} adminInsights(body, part); } },
     [[1, "day"], [7, "7 days"], [30, "30 days"]].map(([v, t]) => h("option", { value: v, selected: v === days }, t)));
   body.replaceChildren(skeleton(8));
   const r = await api(`/admin/insights?days=${days}`);
@@ -2978,7 +3027,8 @@ async function adminInsights(body) {
     h("tbody", {}, r.disk.map(d => h("tr", {}, h("td", { class: "strong" }, d.user), h("td", { class: "num mono" }, bytes(d.home)),
       h("td", { class: "num mono" }, `${bytes(d.loops)} (${d.count})`), h("td", {}, d.largest ? [loopLink(d.user, d.largest.app), " ", h("span", { class: "muted mono small" }, bytes(d.largest.size))] : "—"),
       h("td", { class: "num mono strong" }, bytes(d.total)), h("td", { class: "meter-cell" }, meter(d.total / maxDisk)))))));
-  body.replaceChildren(h("div", { class: "toolbar" }, h("span", { class: "muted" }, "Over the last"), pick), failCard, usageCard, epCard, netCard, diskCard);
+  const parts = { failures: [failCard], usage: [usageCard, diskCard], endpoints: [epCard, netCard] };
+  body.replaceChildren(h("div", { class: "toolbar" }, h("span", { class: "muted" }, "Over the last"), pick), ...(parts[part] || parts.failures));
 }
 
 /** Admin › Agents and models (D756, D807, D814): one tab per tool -- Flux's own model and the agent by
@@ -3062,7 +3112,7 @@ async function adminAgents(body) {
 
 async function adminUsers(body) {
   const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/resources").catch(() => null)]);
-  const name = h("input", { placeholder: "name" }); const pw = h("input", { type: "password", placeholder: "password (10+)" });
+  const name = h("input", { placeholder: "name", autocomplete: "off", "data-lpignore": "true" }); const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "password (empty: send an invitation link)", style: "min-width:280px" });
   // D734: the kinds -- internal users' runs inherit the server's settings, external ones bring their own
   const KINDS = [["internal", "internal"], ["external", "external"], ["admin", "admin"]];
   const kindSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, KINDS.map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
@@ -3082,7 +3132,8 @@ async function adminUsers(body) {
       h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Role"), h("th", { title: "Loops running at once; empty: the server's default" }, "Running limit"),
         h("th", { class: "num" }, "Loops"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Time"), h("th", { class: "num" }, "Tokens in → out"), h("th", { class: "num" }, "Cost"), h("th", {}, ""))),
       h("tbody", {}, users.map(u => { const x = useOf(u.name); return h("tr", {},
-        h("td", { class: "strong" }, u.name), h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
+        h("td", { class: "strong" }, u.name, u.pending ? h("span", { class: "pill live small", title: "Invited: their password is not set yet" }, "invited") : ""),
+        h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
           : kindSel(u.role, async (e) => {
               const to = e.target.value;
               try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { role: to } }); toast(`${u.name} is ${to} now`, "ok"); }
@@ -3096,15 +3147,16 @@ async function adminUsers(body) {
             if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
             await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
           }, { cls: "small" }),
-          act("Reset password", async () => {
-            const p = await promptDialog(`New password for ${u.name}`, "At least 10 characters", { type: "password", min: 10 });
-            if (p === null) return;
-            await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { password: p } }); toast(`${u.name}'s password changed`, "ok");
-          }, { cls: "small" })))); })))),
+          act(u.pending ? "New invitation link" : "Password reset link", async () => {
+            const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" });
+            await linkDialog(u.name, got.token, got.kind);
+          }, { cls: "small", title: "A one-time link to choose a password (D818); an earlier link stops working" })))); })))),
     h("div", { class: "row add-user" }, name, pw, newKind,
       act("Add user", async () => {
-        await api("/users", { method: "POST", body: { name: name.value, password: pw.value, role: newKind.value } });
-        toast(`${name.value} added`, "ok"); route();
+        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, role: newKind.value } });
+        if (got.token) await linkDialog(got.ok, got.token, got.kind);           // D818: an invitation to send
+        else toast(`${name.value} added`, "ok");
+        route();
       }, { cls: "primary" })),
     h("p", { class: "muted small" }, "Internal: their runs use the server's model, agent and environment settings. External: they set their own on their Account page, ",
       "and log their agents in there, into a home of their own. The network rules apply to everyone.")]));
@@ -3126,7 +3178,9 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
   const row = (k) => {
     const cur = st.values[k], fall = server ? server[k] : null, sec = secret.has(k);
-    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: "off", value: sec ? "" : (cur || ""),
+    // D820: a key is a secret of the server's, not a login: no password manager fills it, nor the field before it
+    inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: sec ? "new-password" : "off", name: `flux-setting-${k}`,
+      "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other", value: sec ? "" : (cur || ""),
       placeholder: sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set") : (fall ? `the server's: ${fall}` : "not set") });
     return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}` }, labels[k] || k),
       h("span", { class: "inline" }, Object.assign(inputs[k], { id: `set-${scope}-${k}` }),
@@ -3329,6 +3383,7 @@ async function route() {
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
   const hash = location.hash || "#/";
   if (hash === "#/login") { drawNav(); return loginPage(); }
+  { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return invitePage(m[1]); } }   // D818: before any login
   if (!me) { try { me = await api("/me"); pollLoops(); } catch (_) { return; } }
   drawNav();
   try {

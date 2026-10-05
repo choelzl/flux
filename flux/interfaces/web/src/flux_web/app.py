@@ -39,7 +39,7 @@ class Login(BaseModel):
 
 class NewUser(BaseModel):
     name: str
-    password: str
+    password: str | None = None              # D818: none -- an invitation link to set it
     role: str = "internal"
 
 
@@ -278,16 +278,52 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     @app.get("/api/users")
     def users(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        return [{"name": u.name, "role": u.role, "disabled": u.disabled} for u in store.users()]
+        return [{"name": u.name, "role": u.role, "disabled": u.disabled, "pending": store.pending(u.name)} for u in store.users()]
 
     @app.post("/api/users")
-    def add_user(body: NewUser, a: User = Depends(admin_of)) -> dict[str, str]:
+    def add_user(body: NewUser, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """A user (D818: with no password, an invitation to set it -- the link's token, for the admin to send)."""
         try:
-            store.add_user(body.name, body.password, body.role)
+            u = store.add_user(body.name, body.password, body.role)
         except ValueError as exc:
             raise fail(exc) from exc
         store.audit(a.name, "add user", body.name)
-        return {"ok": body.name}
+        if body.password is not None:
+            return {"ok": u.name}
+        token, kind = store.invite(u.name)
+        store.audit(a.name, "invite user", u.name)
+        return {"ok": u.name, "token": token, "kind": kind}
+
+    @app.post("/api/users/{name}/link")
+    def user_link(name: str, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """A new link for the user (D818): an invitation while their password is not set, else a reset;
+        the earlier one stops working. Their password stays as it is until the link is used."""
+        try:
+            token, kind = store.invite(name)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        store.audit(a.name, "invite user" if kind == "invite" else "password reset link", name)
+        return {"token": token, "kind": kind}
+
+    @app.get("/api/invite/{token}")
+    def invite_info(token: str) -> dict[str, Any]:
+        """For everyone (D818): whose link it is and what for, while it opens."""
+        got = store.invite_of(token)
+        if got is None:
+            raise HTTPException(404, "this link has been used or has expired: ask an admin for a new one")
+        return got
+
+    @app.post("/api/invite/{token}")
+    def invite_use(token: str, body: FileText, response: Response) -> dict[str, Any]:
+        """The password set from a link (D818), the user logged in, every other session of theirs ended."""
+        try:
+            u, session = store.use_invite(token, body.text)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        response.set_cookie(COOKIE, session, httponly=True, samesite="strict", secure=secure_cookie,
+                            max_age=SESSION_DAYS * 86400, path="/")
+        store.audit(u.name, "password set from a link")
+        return {"name": u.name, "role": u.role}
 
     @app.patch("/api/users/{name}")
     def change_user(name: str, body: UserChange, a: User = Depends(admin_of)) -> dict[str, str]:
