@@ -1,14 +1,16 @@
 # The L2 prefetcher configuration: what an `.ini` may say
 
 The file is ChampSim knobs, one `name = value` per line. `bingo_default.ini` beside this file is
-the shipped configuration (Bingo alone); start from it.
+the shipped configuration (Bingo alone); start from it. Only the knobs on this page: any other
+(a simulator knob such as `simulation_instructions` or `dram_io_freq`) is refused.
 
 ## The stack
 
-`l2c_prefetcher_types = bingo[,partner,...]`: Bingo always, plus any partners beside it in the L2
-slot: `sms`, `ampm`, `stride`, `streamer`, `spp_ppf_dev`, `power7`, `sandbox`, `spp_dev2`,
-`ipcp`. `scooby`, `mlop` and `next_line` crash beside Bingo. A partner's knobs are read only
-when it is in the stack; a knob left out takes its shipped value.
+`l2c_prefetcher_types = bingo[,partner,...]`: Bingo first, plus any partners beside it in the L2
+slot, each once: `sms`, `ampm`, `stride`, `streamer`, `spp_ppf_dev`, `power7`, `sandbox`,
+`spp_dev2`, `ipcp`. `scooby`, `mlop` and `next_line` crash beside Bingo and are refused. A
+partner's knob is allowed only when the partner is in the stack; a knob left out takes its
+shipped value.
 
 ## Bingo (shipped value in brackets)
 
@@ -23,7 +25,7 @@ when it is in the stack; a knob left out takes its shipped value.
 - `bingo_l2c_thresh` [0.8]: confidence before the L2 prefetches, 0..1, lower is more aggressive;
   it costs no storage.
 - Keep `bingo_debug_level = 0`, `bingo_l1d_thresh = 1.01`, `bingo_llc_thresh = 0.05`,
-  `bingo_pc_address_fill_level = L2`.
+  `bingo_pc_address_fill_level = L2`; another value is refused.
 
 Every table keeps a tag: key bits - log2(sets) >= 0, where the filter/accumulation key is
 48 - log2(region_size), the streamer's 64 - log2(region_size) and the pattern table's
@@ -37,15 +39,20 @@ of the shipped 35 KB. The accumulation payload grows with pattern_len, the strea
 
 ## Partners' knobs (shipped value in brackets)
 
+Degrees are 0..64, sizes and counts at least 1.
+
 - sms: `sms_pref_degree` [4], `sms_pht_size` [2048], `sms_pht_assoc` [16], `sms_region_size`
-  [4096], `sms_ft_size` [64], `sms_at_size` [32], `sms_pref_buffer_size` [256]
+  [4096], `sms_ft_size` [64], `sms_at_size` [32], `sms_pref_buffer_size` [256]. The region is a
+  power of two, 64..4096; the pattern table's sets (size / assoc) a power of two.
 - ampm: `ampm_pref_degree` [4], `ampm_pred_degree` [4], `ampm_pb_size` [64],
   `ampm_pref_buffer_size` [256]
 - stride: `stride_pref_degree` [2], `stride_num_trackers` [256]
 - streamer: `streamer_pref_degree` [5], `streamer_num_trackers` [64]
-- spp_ppf_dev: `ppf_perc_threshold_hi` [-5], `ppf_perc_threshold_lo` [-15]
+- spp_ppf_dev: `ppf_perc_threshold_hi` [-5], `ppf_perc_threshold_lo` [-15], -256..256, lo <= hi
 - power7: `power7_default_streamer_degree` [4], `power7_explore_epoch` [20000],
-  `power7_exploit_epoch` [200000]
+  `power7_exploit_epoch` [200000]. It runs a stride and a streamer of its own, sized by the
+  stride and streamer knobs above.
 - sandbox: `sandbox_pref_degree` [4], `sandbox_num_access_in_phase` [256],
-  `sandbox_bloom_filter_size` [2048], `sandbox_num_cycle_offsets` [4]
+  `sandbox_bloom_filter_size` [2048] (at least num_access_in_phase), `sandbox_num_cycle_offsets`
+  [4] (0..16)
 - spp_dev2, ipcp: no knobs

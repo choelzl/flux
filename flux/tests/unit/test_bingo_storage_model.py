@@ -88,7 +88,7 @@ def test_storage_is_monotone_in_table_size():
 
 def test_an_illegal_configuration_is_refused_before_the_simulator():
     """bingo.cc aborts on these; `bingo.py check` must refuse them with the reason."""
-    legal = {**DEFAULT, "bingo_l2c_thresh": 0.8}
+    legal = {**DEFAULT, "bingo_l2c_thresh": 0.8, "l2c_prefetcher_types": "bingo"}
     assert bingo.invalid_reason(legal) is None
     for patch, why in [({"bingo_pattern_len": 16}, "bingo.cc aborts"),
                        ({"bingo_min_addr_width": 20}, "max_addr_width < min_addr_width"),

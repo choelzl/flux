@@ -1,5 +1,6 @@
 """A ChampSim `.ini` for the L2 prefetcher slot: check it, measure it. A knob the file leaves out
-takes its shipped value (`bingo_default.ini`); `bingo_pattern_len` follows `bingo_region_size`.
+takes its shipped value (`bingo_default.ini`, a partner's from knobs.md); `bingo_pattern_len` follows
+`bingo_region_size`. `check` refuses what knobs.md does not allow (D872).
 
     python bingo.py check ARTIFACT [--max-storage B]      # `0 failing` or `1 failing: <why>`
     python bingo.py measure ARTIFACT --traces DIR --warmup N --sim M
@@ -33,6 +34,31 @@ RANGES = {
     "bingo_ft_size": (1, MAX_ENTRIES), "bingo_at_size": (1, MAX_ENTRIES), "bingo_pht_size": (1, MAX_ENTRIES),
     "bingo_pht_ways": (1, MAX_ENTRIES), "bingo_pf_streamer_size": (1, MAX_ENTRIES),
 }
+
+#: Kept at the shipped value (knobs.md): the L1D/LLC thresholds and the fill level are not this study's.
+FIXED = {"bingo_debug_level": "0", "bingo_l1d_thresh": "1.01", "bingo_llc_thresh": "0.05",
+         "bingo_pc_address_fill_level": "L2"}
+CRASH = ("scooby", "mlop", "next_line")        # crash beside Bingo (knobs.md)
+_DEG, _N = (0, 64), (1, MAX_ENTRIES)
+#: partner -> {knob: (shipped, min, max)}: the knobs knobs.md lists, shipped values from Pythia's
+#: `config/<partner>.ini`. A knob is read only with its partner in the stack; power7 runs a stride and
+#: a streamer of its own, so it reads their knobs too.
+PARTNERS: dict[str, dict[str, tuple[int, int, int]]] = {
+    "sms": {"sms_pref_degree": (4, *_DEG), "sms_pht_size": (2048, *_N), "sms_pht_assoc": (16, *_N),
+            "sms_region_size": (4096, BLOCK_SIZE, PAGE_SIZE), "sms_ft_size": (64, *_N), "sms_at_size": (32, *_N),
+            "sms_pref_buffer_size": (256, *_N)},
+    "ampm": {"ampm_pref_degree": (4, *_DEG), "ampm_pred_degree": (4, *_DEG), "ampm_pb_size": (64, *_N),
+             "ampm_pref_buffer_size": (256, *_N)},
+    "stride": {"stride_pref_degree": (2, *_DEG), "stride_num_trackers": (256, *_N)},
+    "streamer": {"streamer_pref_degree": (5, *_DEG), "streamer_num_trackers": (64, *_N)},
+    "spp_ppf_dev": {"ppf_perc_threshold_hi": (-5, -256, 256), "ppf_perc_threshold_lo": (-15, -256, 256)},
+    "power7": {"power7_default_streamer_degree": (4, *_DEG), "power7_explore_epoch": (20000, 1, 1 << 31),
+               "power7_exploit_epoch": (200000, 1, 1 << 31)},
+    "sandbox": {"sandbox_pref_degree": (4, *_DEG), "sandbox_num_access_in_phase": (256, *_N),
+                "sandbox_bloom_filter_size": (2048, *_N), "sandbox_num_cycle_offsets": (4, 0, 16)},
+    "spp_dev2": {}, "ipcp": {},
+}
+PARTNERS["power7"] = {**PARTNERS["power7"], **PARTNERS["stride"], **PARTNERS["streamer"]}
 
 class Invalid(ValueError):
     pass
@@ -71,9 +97,68 @@ def storage_bytes(k: dict[str, int]) -> int:
     return (storage_bits(k) + 7) // 8
 
 
-def invalid_reason(k: dict[str, object]) -> str | None:
-    """Why ChampSim would reject, abort on or misread these knobs, or None."""
+def stack(k: dict[str, object]) -> list[str]:
+    """The L2 prefetchers `l2c_prefetcher_types` names, in order."""
+    return [t.strip() for t in str(k.get("l2c_prefetcher_types", "")).split(",") if t.strip()]
+
+
+def _pow2(n: int) -> bool:
+    return n >= 1 and n & (n - 1) == 0
+
+
+def _same(name: str, value: object) -> bool:
+    keep = FIXED[name]
     try:
+        return float(str(value)) == float(keep)
+    except ValueError:
+        return str(value).strip() == keep
+
+
+def _contract(k: dict[str, object]) -> None:
+    """What the contract forbids (D872): a stack without Bingo first, a crashing or unlisted partner,
+    a knob knobs.md does not list (`simulation_instructions` or `dram_io_freq` change the run, not
+    the prefetcher, and the no-prefetcher baseline never sees them), a partner's knob without the
+    partner, a fixed knob changed."""
+    types = stack(k)
+    _require(types[:1] == ["bingo"], f"l2c_prefetcher_types = {','.join(types) or '(empty)'}: bingo must come first")
+    _require(len(set(types)) == len(types), f"l2c_prefetcher_types names a prefetcher twice: {','.join(types)}")
+    for t in types[1:]:
+        _require(t not in CRASH, f"{t} crashes beside bingo (knobs.md)")
+        _require(t in PARTNERS, f"{t} is not a partner knobs.md lists ({', '.join(PARTNERS)})")
+    bingo = {"l2c_prefetcher_types", "bingo_l2c_thresh", *RANGES, *FIXED}
+    for name in k:
+        owners = [p for p, knobs in PARTNERS.items() if name in knobs]
+        _require(name in bingo or owners, f"{name} is not a knob knobs.md lists")
+        _require(name in bingo or any(p in types for p in owners),
+                 f"{name} is read only with {' or '.join(owners)} in l2c_prefetcher_types")
+    for name in FIXED:
+        _require(name not in k or _same(name, k[name]), f"{name}={k.get(name)}: knobs.md keeps it at {FIXED[name]}")
+    p = partner_knobs(k)
+    for t in types[1:]:
+        for name, (_, lo, hi) in PARTNERS[t].items():
+            _require(lo <= p[name] <= hi, f"{name}={p[name]} outside {lo}..{hi}")
+    if "sms" in types:
+        sets = p["sms_pht_size"] // p["sms_pht_assoc"]
+        _require(_pow2(p["sms_region_size"]), f"sms_region_size {p['sms_region_size']} is not a power of two")
+        _require(p["sms_pht_size"] == sets * p["sms_pht_assoc"] and _pow2(sets),
+                 f"sms_pht_size {p['sms_pht_size']} is not a power-of-two number of {p['sms_pht_assoc']}-way sets")
+    if "sandbox" in types:
+        _require(p["sandbox_bloom_filter_size"] >= p["sandbox_num_access_in_phase"],
+                 "sandbox_bloom_filter_size < sandbox_num_access_in_phase gives the bloom filter no hash function")
+    if "spp_ppf_dev" in types:
+        _require(p["ppf_perc_threshold_lo"] <= p["ppf_perc_threshold_hi"], "ppf_perc_threshold_lo > ppf_perc_threshold_hi")
+
+
+def partner_knobs(k: dict[str, object]) -> dict[str, int]:
+    """Every knob of the stack's partners, as ints: the file's value, else the shipped one."""
+    return {name: int(k.get(name, shipped)) for t in stack(k)[1:] if t in PARTNERS
+            for name, (shipped, _, _) in PARTNERS[t].items()}
+
+
+def invalid_reason(k: dict[str, object]) -> str | None:
+    """Why the contract refuses these knobs, or ChampSim would reject, abort on or misread them, or None."""
+    try:
+        _contract(k)
         for name, (lo, hi) in RANGES.items():
             _require(name in k, f"{name} is missing")
             _require(lo <= int(k[name]) <= hi, f"{name}={k[name]} outside {lo}..{hi}")
@@ -96,11 +181,16 @@ def read_ini(path: str | Path) -> dict[str, str]:
 
 
 def full(path: str | Path) -> dict[str, str]:
-    """The file's knobs over the shipped ones, pattern_len derived when the file does not say it."""
+    """The file's knobs over the shipped ones, pattern_len derived when the file does not say it. A
+    partner in the stack gets its shipped knobs too: ChampSim's compiled defaults are not the values
+    knobs.md lists (stride_num_trackers 64, not 256)."""
     mine = read_ini(path)
     k = {**read_ini(Path(__file__).with_name("bingo_default.ini")), **mine}
     if "bingo_pattern_len" not in mine and "bingo_region_size" in mine:
         k["bingo_pattern_len"] = str(int(mine["bingo_region_size"]) // BLOCK_SIZE)
+    for t in stack(k)[1:]:
+        for name, (shipped, _, _) in PARTNERS.get(t, {}).items():
+            k.setdefault(name, str(shipped))
     return k
 
 

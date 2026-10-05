@@ -46,6 +46,50 @@ def test_a_file_that_leaves_knobs_out_takes_the_shipped_ones(tmp_path, capsys):
         "1 failing: pc_width + min_addr_width must exceed 0 (the PHT would have no key)"]
 
 
+def test_the_check_refuses_what_the_contract_forbids(tmp_path, capsys):
+    """D872: these all passed `0 failing`; `dram_io_freq = 9600` scored 1.04418 against 1.03685, the
+    prefetcher unchanged, since the no-prefetcher baseline runs without the file."""
+    bingo = _bingo()
+    cheats = {
+        "l2c_prefetcher_types = sms\n": "bingo must come first",
+        "l2c_prefetcher_types = sms,bingo\n": "bingo must come first",
+        "l2c_prefetcher_types = bingo,scooby\n": "scooby crashes beside bingo",
+        "l2c_prefetcher_types = bingo,mlop\n": "mlop crashes beside bingo",
+        "l2c_prefetcher_types = bingo,next_line\n": "next_line crashes beside bingo",
+        "l2c_prefetcher_types = bingo,bop\n": "bop is not a partner",
+        "l2c_prefetcher_types = bingo,sms,sms\n": "names a prefetcher twice",
+        "dram_io_freq = 9600\n": "dram_io_freq is not a knob knobs.md lists",
+        "simulation_instructions = 1000\n": "simulation_instructions is not a knob",
+        "warmup_instructions = 0\n": "warmup_instructions is not a knob",
+        "l1d_prefetcher_types = stride\n": "l1d_prefetcher_types is not a knob",
+        "sms_pht_size = 4096\n": "sms_pht_size is read only with sms in l2c_prefetcher_types",
+        "bingo_debug_level = 1\n": "knobs.md keeps it at 0",
+        "bingo_l1d_thresh = 0.5\n": "knobs.md keeps it at 1.01",
+        "bingo_llc_thresh = 0.9\n": "knobs.md keeps it at 0.05",
+        "bingo_pc_address_fill_level = LLC\n": "knobs.md keeps it at L2",
+        "l2c_prefetcher_types = bingo,sms\nsms_region_size = 3000\n": "not a power of two",
+        "l2c_prefetcher_types = bingo,stride\nstride_pref_degree = 1000\n": "outside 0..64",
+        "l2c_prefetcher_types = bingo,sandbox\nsandbox_bloom_filter_size = 16\n": "no hash function",
+    }
+    for i, text in enumerate(cheats):
+        (tmp_path / f"c{i}.ini").write_text(text)
+        assert bingo.main(["check", str(tmp_path / f"c{i}.ini")]) == 0
+    got = capsys.readouterr().out.splitlines()
+    for (text, why), line in zip(cheats.items(), got):
+        assert line.startswith("1 failing:") and why in line, (text, line)
+    fine = ["l2c_prefetcher_types = bingo,sms,stride\nsms_pht_size = 1024\nstride_num_trackers = 32\n",
+            "l2c_prefetcher_types = bingo,power7\nstride_num_trackers = 32\nstreamer_pref_degree = 3\n",
+            "bingo_l1d_thresh = 1.010\nbingo_debug_level = 0\nbingo_pc_address_fill_level = L2\n",
+            "l2c_prefetcher_types = bingo,spp_ppf_dev,ipcp,spp_dev2\nppf_perc_threshold_lo = -20\n"]
+    for i, text in enumerate(fine):
+        (tmp_path / f"f{i}.ini").write_text(text)
+        assert bingo.main(["check", str(tmp_path / f"f{i}.ini")]) == 0
+    assert capsys.readouterr().out.splitlines() == ["0 failing"] * len(fine)
+    k = bingo.full(tmp_path / "f0.ini")
+    assert k["sms_pht_size"] == "1024" and k["sms_region_size"] == "4096" and k["stride_pref_degree"] == "2", \
+        "a partner's knob left out takes knobs.md's shipped value, not ChampSim's compiled one"
+
+
 def test_the_model_writes_the_file_and_it_is_measured_on_a_fake_champsim(fake, tmp_path, monkeypatch):  # noqa: F811
     from flux_llm import ScriptedProposer
 
