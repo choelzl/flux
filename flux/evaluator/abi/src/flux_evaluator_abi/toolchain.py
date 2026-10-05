@@ -20,8 +20,9 @@ from pathlib import Path
 MEASURING_TOOLS: tuple[str, ...] = ("openroad", "yosys", "verilator")
 #: The RECIPE the tools run (D564): part of every measurement's fingerprint beside the tool
 #: builds, so a number cached or recorded under another recipe is never taken for this one.
-#: "abc-full": Yosys maps with the full ABC script, not `abc -fast`.
-FLOW_RECIPE = "abc-full"
+#: "abc-full": Yosys maps with the full ABC script, not `abc -fast`. "area-exact" (D870): a
+#: placed area is OpenROAD's sum unrounded, so a whole-um^2 number recorded before is not reused.
+FLOW_RECIPE = "abc-full+area-exact"
 
 _NIX_STORE = "/nix/store/"
 

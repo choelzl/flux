@@ -33,6 +33,17 @@ def test_area_report_parses_the_real_format():
     assert m and (int(m.group(1)), int(m.group(2))) == (1928, 40)
 
 
+def test_the_placed_area_is_read_unrounded():
+    """report_design_area prints whole um^2; the flow's own line keeps the decimals (D870)."""
+    from flux_evaluator_openroad.flow import _AREA_EXACT_RE, _openroad_tcl
+
+    log = _REAL_AREA + "\nFLUX_DESIGN_AREA_UM2 6.3132\n"
+    assert float(_AREA_EXACT_RE.search(log).group(1)) == 6.3132
+    assert _AREA_EXACT_RE.search(_REAL_AREA) is None
+    import inspect
+    assert "FLUX_DESIGN_AREA_UM2" in inspect.getsource(_openroad_tcl)
+
+
 def test_power_report_parses_the_total_row_not_a_group_row():
     m = _POWER_TOTAL_RE.search(_REAL_POWER)
     assert m is not None
@@ -119,9 +130,9 @@ def test_the_full_abc_mapping_is_the_flow_and_the_fingerprint_says_so():
 
     for fn in (_yosys_synth, run_synthesis_flow, run_ppa_flow):
         assert inspect.signature(fn).parameters["full_mapping"].default is True, fn.__name__
-    assert FLOW_RECIPE == "abc-full"
+    assert FLOW_RECIPE == "abc-full+area-exact"
     fp = toolchain_fingerprint()
-    assert not fp or fp["flow"] == "abc-full"
+    assert not fp or fp["flow"] == FLOW_RECIPE
 
 
 def test_every_openroad_run_is_given_its_threads(monkeypatch):

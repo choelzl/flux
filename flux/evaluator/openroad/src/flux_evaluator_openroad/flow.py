@@ -308,6 +308,9 @@ def _openroad_tcl(
         f"{_parasitics_block(flow_depth, clock_port)}"
         'puts "FLUX_AREA_REPORT_BEGIN"\n'
         "report_design_area\n"
+        # report_design_area rounds to whole um^2 (D870): 6.3 and 6.9 both read 6, and an area
+        # tie-break goes blind. The same sum, unrounded.
+        'puts "FLUX_DESIGN_AREA_UM2 [format %.4f [expr {[rsz::design_area] * 1e12}]]"\n'
         'puts "FLUX_POWER_REPORT_BEGIN"\n'
         "report_power\n"
         'puts "FLUX_SLACK_REPORT_BEGIN"\n'
@@ -476,6 +479,8 @@ def parse_critical_path(log: str) -> dict[str, Any] | None:
 #   `Total   1.45e-02   2.51e-02   9.85e-07   3.97e-02 100.0%`
 #   `worst slack max -707.03`
 _AREA_RE = re.compile(r"Design area (\d+) um\^2 (\d+)% utilization")
+#   `FLUX_DESIGN_AREA_UM2 6.3132`: the flow's own unrounded line (D870)
+_AREA_EXACT_RE = re.compile(r"^FLUX_DESIGN_AREA_UM2 ([\d.eE+-]+)\s*$", re.MULTILINE)
 _POWER_TOTAL_RE = re.compile(
     r"^Total\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)", re.MULTILINE
 )
@@ -552,6 +557,7 @@ def run_ppa_flow(
         if "FLUX_DONE" not in log:
             raise OpenRoadError(f"openroad flow did not reach completion:\n{log[-3000:]}")
         area = _AREA_RE.search(log)
+        exact = _AREA_EXACT_RE.search(log)
         power = _POWER_TOTAL_RE.search(log)
         slack = _SLACK_RE.search(log)
         if not (area and power and slack):
@@ -564,7 +570,7 @@ def run_ppa_flow(
         internal, switching, leakage, total = (float(g) for g in power.groups())
         yosys_log = (scratch / "yosys.log").read_text()
         return PpaReport(
-            area_um2=float(area.group(1)),
+            area_um2=float(exact.group(1)) if exact else float(area.group(1)),
             utilization_pct=float(area.group(2)),
             power_total_w=total,
             power_breakdown_w={
