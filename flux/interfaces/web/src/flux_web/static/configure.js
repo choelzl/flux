@@ -231,6 +231,8 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
   drawTabs(); draw();
 }
 
+let agentsAsked = false;                                  // D934: the server's agents, asked by the first configurator
+
 /** The configurator (D686): the crafter, the loop's files beside it. */
 async function crafterView(body, name, owner, draft = null, onDraft = null) {
   const C = window.FluxCrafter;
@@ -240,7 +242,15 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
     C.setCatalog(crafterCatalog);
   }
   // D934: the server's agents in every box's agent choices -- an admin-added one by name, with its label
-  if (C.setAgents) await api("/agents").then(list => C.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
+  // asked once and awaited, then refreshed behind each view; a draft discarded meanwhile has a state at once
+  if (draft && !draft.state) draft.state = C.base();
+  const agentsOf = () => api("/agents").then(list => C.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
+  if (C.setAgents && !agentsAsked) {
+    agentsAsked = true;
+    const shown = body.firstElementChild;               // the view drawn meanwhile (another way, another page) wins
+    await agentsOf();
+    if (!body.isConnected || body.firstElementChild !== shown) return;
+  } else if (C.setAgents) agentsOf();
   const host = h("div", { class: "flux-crafter" });
   const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
   if (name) {                                           // an existing loop, read back
