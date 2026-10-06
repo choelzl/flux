@@ -22,7 +22,7 @@ from .models import (
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env
 from .store import User
-from .workspace import Workspace, WorkspaceError
+from .workspace import Exists, Workspace, WorkspaceError
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -153,6 +153,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         got = [(f.filename or "file", await f.read()) for f in files]
         try:
             meta = ws(user).create(name, got, replace=replace)
+        except Exists as exc:                              # D906: only an explicit `replace` replaces
+            raise HTTPException(409, str(exc)) from exc
         except WorkspaceError as exc:
             raise fail(exc) from exc
         store.audit(user.name, "upload", f"{name}: {len(got)} file(s)")
@@ -363,6 +365,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def from_text(body: DocText, user: User = Depends(user_of)) -> dict[str, Any]:
         try:
             meta = ws(user).create_from_text(body.name, body.filename, body.text)
+        except Exists as exc:                              # D906: a name taken is a conflict, never replaced
+            raise HTTPException(409, str(exc)) from exc
         except WorkspaceError as exc:
             raise fail(exc) from exc
         store.audit(user.name, "write document", body.name)

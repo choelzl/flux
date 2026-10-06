@@ -110,7 +110,7 @@ def test_a_replacement_is_never_written_through_a_link(tmp_path):
     source.write_text("statement: the original\n")
     (d / "problem.yaml").unlink()
     os.link(source, d / "problem.yaml")
-    w.create_from_text("x", "problem.yaml", "statement: edited\n")
+    w.create("x", [("problem.yaml", b"statement: edited\n")], replace=True)
     assert source.read_text() == "statement: the original\n", "the source of an import is never edited"
     assert (d / "problem.yaml").read_text() == "statement: edited\n"
     w.write("x", "problem.yaml", "statement: again\n")

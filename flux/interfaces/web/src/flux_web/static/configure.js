@@ -3,7 +3,7 @@
 
 import { codeEditor, langOf } from "./highlight.js";
 import { cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
-import { act, api, appHref, card, confirmDialog, crumbs, dialog, empty, enc, h, head, owned, pageShow, skeleton, toast } from "./ui.js";
+import { act, api, appHref, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, skeleton, toast } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm } from "./loops.js";
 
 // ================================================================ the configurator (D686)
@@ -288,7 +288,7 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
       const name = String(state.id || "").trim();
       // D912: said beside the button pressed, the name's box focused
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw Object.assign(new Error("Give the loop a name first (The problem › Loop name): a letter, then letters, digits or _."), { field: "id" });
-      await api("/apps/from-text", { method: "POST", body: { name, filename: "problem.yaml", text: yaml } });
+      if (!await createFromText(name, "problem.yaml", yaml)) return "Not created: the name is taken.";   // D906
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
       if (DRAFT === draft) DRAFT = null;                    // made: the draft is the loop now

@@ -504,6 +504,27 @@ def flows(r: Run) -> None:
         r.clean("direct edit")
     r.step("direct edit", direct_edit)
 
+    def create_a_taken_name():
+        """D906: creating a loop under a name taken replaces nothing: Open it, or choose another name."""
+        before = r.api("/apps/sw/file?path=problem.yaml")["body"]
+        r.page("#/new", "document.querySelector('#main input[placeholder=\"application name\"]')", "Write a problem document")
+        b.type("#main input[placeholder=\"application name\"]", "sw")
+        b.js("const t = document.querySelector('#main .editor textarea'); t.value = 'statement: another\\n'; t.dispatchEvent(new Event('input')); return 1")
+        r.button("Create")
+        said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText", what="the taken name said")
+        r.check("a taken name is said, with Open it and Choose another name", "already exists" in said and "Open it" in said
+                and "Choose another name" in said, said[:200])
+        r.dialog_button("Choose another name")
+        b.wait("!document.querySelector('dialog.dlg[open]')", what="the dialog closed")
+        r.check("choosing another name stays on the form", b.js("return location.hash") == "#/new")
+        r.check("the existing loop's document is unchanged", r.api("/apps/sw/file?path=problem.yaml")["body"] == before)
+        r.button("Create")
+        r.dialog_button("Open it")
+        b.wait("location.hash === '#/app/sw'", what="the existing loop opened")
+        r.check("Open it opens the existing loop", True)
+        r.clean("create a taken name")
+    r.step("create a taken name", create_a_taken_name)
+
     def variables_and_sharing():
         r.page("#/app/sw/settings/loop", "document.querySelector('#env-loop-name')", "Settings")
         b.type("#env-loop-name", "SEED")

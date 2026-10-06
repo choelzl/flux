@@ -32,6 +32,10 @@ class WorkspaceError(ValueError):
     pass
 
 
+class Exists(WorkspaceError):
+    """A loop's name already taken (D906): a creation never replaces it -- 409 on the web."""
+
+
 def check_name(name: str) -> str:
     if not _NAME.match(name or ""):
         raise WorkspaceError("an application name is letters, digits, - and _ (at most 60), starting with a letter or digit")
@@ -78,7 +82,7 @@ class Workspace:
         single .zip among them is unpacked. Returns its meta: which file is the document."""
         d = self.root / check_name(name)
         if d.exists() and not replace:
-            raise WorkspaceError(f"application {name!r} exists")
+            raise Exists(f"application {name!r} exists")
         unzipped = len(files) == 1 and files[0][0].lower().endswith(".zip")
         if unzipped:
             files = _unzip(files[0][1])
@@ -96,7 +100,10 @@ class Workspace:
         if not doc.endswith((".problem.yaml", ".problem.yml")) and doc != DOCUMENT_FILE:
             rels = [DOCUMENT_FILE if r == doc else r for r in rels]      # D786: a document of another name is the problem.yaml
             doc = DOCUMENT_FILE
-        d.mkdir(parents=True, exist_ok=True)
+        try:
+            d.mkdir(parents=True, exist_ok=replace)                   # D906: two creations at once, one wins
+        except FileExistsError as exc:
+            raise Exists(f"application {name!r} exists") from exc
         for rel, (_p, content) in zip(rels, files):
             _replace(d, rel, content)                                 # D852: never through a link, an import's source kept
         meta = {"document": doc, "id": name}                          # D786: the loop's name is the problem's id
@@ -265,10 +272,22 @@ class Workspace:
         return d
 
     def create_from_text(self, name: str, filename: str, text: str) -> dict[str, Any]:
-        """A loop from a document's text: its problem.yaml, or the NAME.problem.yaml it is called (D787)."""
+        """A loop from a document's text: its problem.yaml, or the NAME.problem.yaml it is called (D787).
+        A name taken is Exists (D906): never replaced here -- a change of a loop is its edit, with a
+        diff. The same request again (a retry after a lost answer) finds its own document and is
+        answered as made, `existing` set."""
         doc = PurePosixPath(filename or "").name
         doc = doc if doc.endswith((".problem.yaml", ".problem.yml")) else DOCUMENT_FILE
-        return self.create(name, [(doc, text.encode())], replace=(self.root / name).exists())
+        if (self.root / check_name(name)).exists():
+            meta = self.meta(name)
+            try:
+                same = meta.get("document") == doc and self.path(name, doc).read_text() == text
+            except (OSError, ValueError):
+                same = False
+            if same:
+                return {**meta, "existing": True}
+            raise Exists(f"a loop named {name!r} exists: open it, or choose another name")
+        return self.create(name, [(doc, text.encode())])
 
     def documents(self, name: str) -> list[dict[str, Any]]:
         """The loop's problems (D787): its problem.yaml and each NAME.problem.yaml, with whether

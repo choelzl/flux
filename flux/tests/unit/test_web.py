@@ -71,7 +71,7 @@ def test_uploads_are_checked_and_users_are_apart(server):
     files = [("files", ("sw/sw.problem.yaml", b"statement: x\n")), ("files", ("sw/golden.py", b"def golden(a): return {}\n"))]
     r = bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H)
     assert r.status_code == 200 and r.json()["document"] == "sw.problem.yaml" and r.json()["id"] == "sw", r.text
-    assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 400, "exists"
+    assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 409, "exists (D906)"
     assert bob.get("/api/apps/sw/file", params={"path": "golden.py"}).text.startswith("def golden")
     for bad in ("../../../etc/passwd", "/etc/passwd", "a/../../x"):
         assert bob.get("/api/apps/sw/file", params={"path": bad}).status_code == 400, bad

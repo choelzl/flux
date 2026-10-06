@@ -4,7 +4,7 @@
 
 import { codeBlock, codeEditor } from "./highlight.js";
 import { me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, autosave, bytes, card, confirmDialog, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, statePill, toast, toasts, when, withOwner } from "./ui.js";
+import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 
@@ -412,7 +412,7 @@ async function newPage() {
       h("a", { class: "btn", href: "#/configure" }, "Use the configurator instead")),
     card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "Application", name), h("label", { class: "stack" }, "File", file)), ed.el,
       h("div", { class: "form-actions" }, act("Create", async () => {
-        await api("/apps/from-text", { method: "POST", body: { name: name.value, filename: file.value, text: text.value } });
+        if (!await createFromText(name.value, file.value, text.value)) { name.focus(); return; }      // D906
         toast(`${name.value} created`, "ok"); location.hash = `#/app/${enc(name.value)}`;
       }, { cls: "primary" }))]));
 }

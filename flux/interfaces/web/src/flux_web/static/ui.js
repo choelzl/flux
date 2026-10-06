@@ -50,10 +50,12 @@ async function api(path, { method = "GET", body, form } = {}) {
   const type = r.headers.get("content-type") || "";
   const data = type.includes("json") ? await r.json() : await r.text();
   if (!r.ok) {
-    if (data && data.detail) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    // D906: the status goes with the error -- a caller tells a conflict (409) from a refusal
+    const fail = (m) => Object.assign(new Error(m), { status: r.status });
+    if (data && data.detail) throw fail(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
     // D700: an error page that is not the server's own (a proxy's, a crash): its status at least
     const said = typeof data === "string" ? data.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) : "";
-    throw new Error(r.status === 413 ? "Too large for the server (or a proxy in front of it): 413." : `The server answered ${r.status} ${r.statusText}${said ? ": " + said : ""}`);
+    throw fail(r.status === 413 ? "Too large for the server (or a proxy in front of it): 413." : `The server answered ${r.status} ${r.statusText}${said ? ": " + said : ""}`);
   }
   return data;
 }
@@ -224,6 +226,22 @@ function promptDialog(title, label, { type = "text", ok = "Save", min = 0 } = {}
   return dialog(title, body, [["Cancel", null], [ok, () => (input.value.length >= min ? input.value : null), "primary"]]);
 }
 
+/** A new loop from a document's text (D906): a name already taken is never replaced -- the user
+    opens that loop or chooses another name. True when made (or found made by this same request). */
+async function createFromText(name, filename, text) {
+  try {
+    await api("/apps/from-text", { method: "POST", body: { name, filename, text } });
+    return true;
+  } catch (x) {
+    if (x.status !== 409) throw x;
+    const go = await dialog(`${name} exists`, h("p", {}, `A loop named ${name} already exists. Creating does not replace it: `
+      + "open it (and change it there, with a diff before saving), or choose another name."),
+      [["Choose another name", false, "primary"], ["Open it", true]]);
+    if (go) location.hash = `#/app/${enc(name)}`;
+    return false;
+  }
+}
+
 /** Sizes as people read them (moved from the admin pages, D889: the uploads use it too). */
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 /** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
@@ -250,6 +268,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0) {
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty,
+export { NARROW, act, ago, api, appHref, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };
