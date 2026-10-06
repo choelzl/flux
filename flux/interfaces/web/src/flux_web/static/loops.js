@@ -348,8 +348,31 @@ async function agentSelect(id) {
   const list = await api("/agents").catch(() => []);
   // D705: the agent by default -- the user's (Account), else the admin's (Models) -- else the first that works here
   const first = list.find(a => a.available && a.default) || list.find(a => a.available);
-  return h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
-    a.label + (a.available ? "" : ` (${a.why})`))));
+  // D924: an installed agent says whether its connection was verified -- not disabled for it (the start's gate
+  // says so too), and tested from here, the draft kept
+  const said = { ready: "", untested: "installed · connection untested", failed: "installed · connection failed", changed: "installed · changed since test" };
+  const sel = h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
+    a.label + (a.available ? (said[a.verified] ? ` (${said[a.verified]})` : "") : ` (${a.why})`))));
+  const status = h("span", { class: "agent-pick-said small" });
+  const draw = () => {
+    const a = list.find(x => x.id === sel.value);
+    const st = a && a.verified;
+    status.replaceChildren(!st || st === "ready" ? "" : h("span", { class: "muted" }, said[st], " · ",
+      act("Test connection", async () => {
+        toast(`Testing ${a.label}: it is asked one short question…`, "info");
+        const got = await api(`/agents/${enc(a.id)}/test`, { method: "POST" });
+        a.verified = got.ok ? "ready" : "failed";
+        [...sel.options].find(o => o.value === a.id).textContent = a.label + (said[a.verified] ? ` (${said[a.verified]})` : "");
+        toast(got.ok ? `${a.label} is ready` : `${a.label} is not ready: Account › My agents and models says why`, got.ok ? "ok" : "warn");
+        draw();
+      }, { cls: "small" }), " ",
+      h("a", { href: "#/account", target: "_blank", rel: "noopener" }, "Set it up")));
+  };
+  sel.addEventListener("change", draw);
+  draw();
+  const wrap = h("span", { class: "agent-pick" }, sel, status);
+  Object.defineProperty(wrap, "value", { get: () => sel.value, set: (v) => { sel.value = v; draw(); } });   // as the select it wraps
+  return wrap;
 }
 /** Files for an agent to read (D704): dropped or chosen, listed, removable. */
 /** `items`: a list of {file, path} the caller keeps (D912: a creation draft's staged files), told by `onChange`. */

@@ -10,6 +10,10 @@ import { route } from "./app.js";
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
 const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users" };
+/** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
+const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
+const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
+
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
   return h("div", { class: `meter ${cls}${f > 0.9 ? " high" : f > 0.75 ? " mid" : ""}` }, h("div", { style: `width:${(f * 100).toFixed(1)}%` }));
@@ -514,6 +518,8 @@ async function adminAgents(body) {
     const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
+    const changed = a.users.filter(u => u.state === "changed since its test").map(u => u.user);
+    const c = a.connection || { mechanism: "none", said: "" };
     const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
     let first = JSON.stringify(body_());
     const mark = saveMark();
@@ -530,8 +536,15 @@ async function adminAgents(body) {
         h("span", { class: "mono muted" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`),
         h("span", { class: "muted" }, "ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
-          failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : ""),
+          failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
+          changed.length ? h("span", { class: "warn" }, ` · changed since the test for ${changed.join(", ")}`) : ""),
         mark),
+      // D924: the server's own connection for it -- what a user without settings of their own gets; each user's login is theirs
+      h("dl", { class: "agent-states" }, h("dt", {}, "Connection"),
+        h("dd", {}, h("span", { class: `pill ${c.mechanism === "none" ? "" : "ok"}` }, c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism),
+          h("span", { class: "muted small" }, c.mechanism === "none" ? "no key or provider for every user: each logs in or sets a key on their Account" : c.said)),
+        ...((a.conflicts || []).length || (a.unused || []).length ? [h("dt", {}, "Said"), h("dd", {}, h("ul", { class: "small hint-line agent-notes" },
+          [...(a.conflicts || []), ...(a.unused || [])].map(x => h("li", {}, x))))] : [])),
       h("div", { class: "grid-2 set-fields" },
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
         h("label", { class: "stack" }, "Name shown", label)),
@@ -748,4 +761,4 @@ function linkDialog(name, token, kind) {
     h("p", { class: "muted small" }, "Single use, valid a week, shown once.")), [["Done", true, "primary"]]);
 }
 
-export { adminPage, settingsForm };
+export { MECHANISM, VERIFIED, adminPage, settingsForm };

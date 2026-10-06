@@ -291,11 +291,18 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """Who can write a problem on this server for this user (D704)."""
         from .authoring import available
 
-        env = run_env(store, user)
+        from flux_loop.agent_check import connection
+
+        c = context(user)
+        env = c[0]
         got = available(env, visible(store))
         default = env.get("FLUX_DEFAULT_AGENT")     # D705: the admin's, or the user's own
         for a in got:
             a["default"] = a["id"] == default
+            if a["id"] in visible(store):           # D924: installed -- and whether its connection was verified, before a draft is spent
+                mine, eff, ident = effective(user, a["id"], None, c)
+                a["verified"] = verified(user, a["id"], None, ident)["state"]
+                a["connection"] = connection(registry(store)[a["id"]].kind, mine, eff)["mechanism"]
         return got
 
     # ---- Admin › Agents (D756, D807): every agent -- the three built-in ones and those added, each a

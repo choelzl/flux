@@ -1,10 +1,10 @@
 // Flux web: logging in, an invite's page, one's account and agent logins (D889: split out of app.js).
 
 import { cleanup, me, setMe } from "./state.js";
-import { act, api, card, dur, enc, fmtTok, h, head, pageShow, toast } from "./ui.js";
+import { act, api, card, dur, enc, fmtTok, h, head, pageShow, toast, when } from "./ui.js";
 import { logo } from "./charts.js";
 import { envEditor, envTable } from "./loops.js";
-import { settingsForm } from "./admin.js";
+import { MECHANISM, VERIFIED, settingsForm } from "./admin.js";
 import { route } from "./app.js";
 
 // ================================================================ pages
@@ -61,7 +61,7 @@ async function accountPage() {
   const holders = Object.fromEntries(st.groups.filter(g => g.agent).map(g => [g.agent, h("div", { class: "agent-login" })]));
   const lg = await loginsCard(holders);
   const logins = { box: lg.box, term: lg.term, panels: Object.fromEntries(Object.entries(holders).map(([a, el]) =>
-    [a, { el: h("div", { class: "agent-panel" }, h("h4", { class: "set-sub first" }, "Its login"), el) }])) };
+    [a, { el: h("div", { class: "agent-panel" }, h("h4", { class: "set-sub first" }, "Connection"), el) }])) };   // D924: connection first
   show(head("Account", `Logged in as ${me.name}`),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
@@ -124,40 +124,57 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
   async function drawList() {
     const lg = await api("/logins").catch(() => null);
     if (!lg || !box.isConnected && box.parentNode) return;
-    // D751: an agent is used in your loops once its test passed -- the program, the login, one short answer
-    const tested = (a) => { const t = a.tested || {}; return a.testing ? ["live", "testing…"] : t.ok ? ["ok", "ready"] : t.when ? ["bad", "test failed"] : ["", "not tested"]; };
+    // D751: an agent is used in your loops once its test passed -- the program, its connection, one short answer
     // D768: a login that ended well is tested at once, on the server -- said here when it is done
     for (const a of lg.agents) if (wasTesting.has(a.id) && !a.testing && a.tested)
-      toast(a.tested.ok ? `${a.label} is logged in and ready for your loops` : `${a.label} is logged in but its Test failed: see its steps`, a.tested.ok ? "ok" : "warn");
+      toast(a.tested.ok ? `${a.label} is ready for your loops` : `${a.label}'s Test failed: see its steps`, a.tested.ok ? "ok" : "warn");
     wasTesting = new Set(lg.agents.filter(a => a.testing).map(a => a.id));
     clearTimeout(testTimer);
     if (wasTesting.size) testTimer = setTimeout(drawList, 2000);
     const steps = (t) => h("ul", { class: "agent-steps small" }, (t.steps || []).map(st =>
       h("li", { class: st.ok ? "" : "bad" }, h("span", { class: "mono" }, st.ok ? "✓ " : "✗ "), h("strong", {}, st.step), " ", st.said)));
-    const rowsOf = (a) => [h("tr", {},
-      h("td", { class: "strong" }, a.label),
-      h("td", {}, (() => { const viaKey = !a.logged_in && ((a.tested || {}).steps || []).some(st => st.step === "login" && st.ok);
-        return h("span", { class: `pill ${a.logged_in || viaKey ? "ok" : ""}`, title: viaKey ? "No login of its own: a key or endpoint from the settings" : "" },
-          a.logged_in ? "logged in" : viaKey ? "key in settings" : "not logged in"); })()),
-      h("td", {}, h("span", { class: `pill ${tested(a)[0]}`, title: a.tested && a.tested.when ? `tested ${new Date(a.tested.when * 1000).toLocaleString()}` : "" }, tested(a)[1])),
-      h("td", { class: "mono muted small", title: a.command }, a.command.replace(/^\S*\//, "")),
-      h("td", { class: "right" }, h("div", { class: "actions end" },
-        a.testing ? h("span", { class: "muted small" }, "testing…") : act("Test", async () => {
-          toast(`Testing ${a.label}: it is asked one short question…`, "info");
-          const got = await api(`/agents/${a.id}/test`, { method: "POST" });
-          toast(got.ok ? `${a.label} is ready for your loops` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
-          await drawList();
-        }, { cls: "small", title: "Test this agent as your loops run it" }),
-        act(a.logged_in ? "Log in again" : "Log in", async () => {
-          await api(`/logins/${a.id}`, { method: "POST" });
-          text = ""; offset = 0; out.replaceChildren(); term.hidden = false; poll();
-        }, { cls: "small" })))),
-      ...(a.tested && a.tested.steps && a.tested.steps.length ? [h("tr", { class: "agent-test-row" }, h("td", { colspan: 5 }, steps(a.tested)))] : [])];
-    const table = (as) => h("table", { class: "list compact" }, h("tbody", {}, as.flatMap(rowsOf)));
+    const test = (a, loop = "") => async () => {
+      toast(`Testing ${a.label}${loop ? ` for ${loop}` : ""}: it is asked one short question…`, "info");
+      const got = await api(`/agents/${a.id}/test${loop ? `?loop=${enc(loop)}` : ""}`, { method: "POST" });
+      toast(got.ok ? `${a.label} is ready${loop ? ` for ${loop}` : " for your loops"}` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
+      await drawList();
+    };
+    // D924: three states apart -- installation, connection (how, from where; never a value), verification
+    const panelOf = (a) => {
+      const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
+      const ver = a.testing ? ["live", "testing…"] : VERIFIED[v.state] || VERIFIED.untested;
+      const line = (dt, ...dd) => [h("dt", {}, dt), h("dd", {}, ...dd)];
+      const loops = (a.loops || []).map(x => h("li", {}, h("span", { class: "mono" }, x.loop), " ",
+        h("span", { class: `pill ${(VERIFIED[x.state] || VERIFIED.untested)[0]}` }, (VERIFIED[x.state] || VERIFIED.untested)[1]), " ",
+        a.testing ? "" : act("Test for this loop", test(a, x.loop), { cls: "small", title: "Its variables give this agent another configuration there" })));
+      return h("div", { class: "agent-conn", "data-agent": a.id },
+        h("dl", { class: "agent-states" },
+          ...line("Installation", h("span", { class: `pill ${a.program ? "ok" : "bad"}` }, a.program ? "installed" : "missing")),
+          ...line("Connection", h("span", { class: `pill ${c.mechanism === "none" ? "" : "ok"}` }, MECHANISM[c.mechanism] || c.mechanism),
+            h("span", { class: "muted small" }, c.said)),
+          ...line("Verification", h("span", { class: `pill ${ver[0]}`, title: v.when ? `tested ${when(v.when)}` : "" }, ver[1]),
+            v.state === "ready" && v.when ? h("span", { class: "muted small" }, when(v.when)) : "",
+            v.state === "failed" && v.said ? h("span", { class: "bad small" }, v.said) : "",
+            v.state === "changed" ? h("span", { class: "muted small" }, "its endpoint, model or credential is not what was tested") : "")),
+        (a.conflicts || []).length || (a.unused || []).length ? h("ul", { class: "small hint-line agent-notes" },
+          [...(a.conflicts || []), ...(a.unused || [])].map(x => h("li", {}, x))) : "",
+        h("div", { class: "actions" }, a.testing ? h("span", { class: "muted small" }, "testing…")
+          : act("Test connection", test(a), { cls: "primary small", title: "Ask it one short question, as your loops run it" })),
+        loops.length ? h("div", { class: "small" }, h("span", { class: "muted" }, "Loops whose variables set it otherwise:"), h("ul", { class: "agent-loops" }, loops)) : "",
+        a.tested && a.tested.steps && a.tested.steps.length ? h("details", { class: "set-fold" }, h("summary", {}, "Last test's steps"), steps(a.tested)) : "",
+        h("details", { class: "set-fold agent-login-fold" }, h("summary", {}, "Interactive login",
+            h("span", { class: "muted small" }, a.logged_in ? " · logged in" : " · optional")),
+          h("p", { class: "muted small" }, "One way to connect: its own login, kept in your Flux home. Not needed with a key or a provider configuration."),
+          h("div", { class: "row" }, h("code", { class: "small", title: a.command }, a.command.replace(/^\S*\//, "")),
+            act(a.logged_in ? "Log in again" : "Log in", async () => {
+              await api(`/logins/${a.id}`, { method: "POST" });
+              text = ""; offset = 0; out.replaceChildren(); term.hidden = false; poll();
+            }, { cls: "small" }))));
+    };
     const placed = holders ? lg.agents.filter(a => holders[a.id]) : [];
-    for (const a of placed) holders[a.id].replaceChildren(table([a]));
+    for (const a of placed) holders[a.id].replaceChildren(panelOf(a));
     const rest = lg.agents.filter(a => !placed.includes(a));
-    box.replaceChildren(rest.length ? table(rest) : "");
+    box.replaceChildren(...rest.map(a => h("div", { class: "agent-panel" }, h("h4", { class: "agent-panel-name" }, a.label), panelOf(a))));
     if (lg.session && lg.session.running && term.hidden) { term.hidden = false; poll(); }
   }
   cleanup.push(() => { clearTimeout(timer); clearTimeout(testTimer); });

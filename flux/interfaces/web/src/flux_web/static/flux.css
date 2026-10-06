@@ -787,6 +787,16 @@ fieldset.set-group.with-panel { grid-column: 1 / -1; }
 h4.set-sub { margin: 10px 0 2px; font-size: 0.95em; border-top: 1px solid var(--line); padding-top: 8px; }
 .set-extra { grid-column: 1 / -1; min-width: 0; }
 h4.set-sub.first { border-top: 0; padding-top: 0; margin-top: 0; }
+/* D924: an agent's three states apart -- installation, connection, verification -- each a label and what it is */
+dl.agent-states { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
+dl.agent-states dt { color: var(--muted); font-size: 12.5px; }
+dl.agent-states dd { margin: 0; display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.agent-conn { display: grid; gap: 8px; min-width: 0; }
+.agent-notes, .agent-loops { margin: 0; padding-left: 18px; }
+.agent-loops li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.agent-pick { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.agent-pick-said { overflow-wrap: anywhere; }
+@media (max-width: 640px) { dl.agent-states { grid-template-columns: minmax(0, 1fr); gap: 2px; } dl.agent-states dd { margin-bottom: 6px; } }
 
 /* D823: folded parts of an agent's tab */
 details.set-fold { border-top: 1px solid var(--line); padding-top: 6px; display: grid; gap: 8px; min-width: 0; }

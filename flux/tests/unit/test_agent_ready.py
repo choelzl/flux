@@ -115,3 +115,14 @@ def test_opencode_accepts_a_provider_key_it_will_forward(tmp_path, monkeypatch):
     assert got["ok"] and got["connection"]["mechanism"] == "key", got
     got = check_agent("opencode", env={**env, "ANTHROPIC_API_KEY": "synthetic"})
     assert not got["ok"], "another kind's key, not given to it: not its connection"
+
+
+def test_the_authoring_picker_says_installed_and_whether_its_connection_was_tested(server):
+    """D924 (A6): /api/agents offers an installed agent with its verification -- untested, then failed --
+    so the picker says so before a draft is spent; it is not disabled for it."""
+    c, store = server
+    codex = next(a for a in c.get("/api/agents").json() if a["id"] == "codex")
+    assert codex["available"] and codex["verified"] == "untested" and codex["connection"] == "none"
+    c.post("/api/agents/codex/test", headers=H)
+    codex = next(a for a in c.get("/api/agents").json() if a["id"] == "codex")
+    assert codex["available"] and codex["verified"] == "failed"

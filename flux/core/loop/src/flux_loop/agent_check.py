@@ -106,13 +106,13 @@ def connection(kind: str, env: dict[str, str], eff: Any = None, files: list[str]
                 "said": "a provider in its configuration" + (f" with a key ({', '.join(keys)})" if keys else "") + also}
     if keys:
         return {"mechanism": "key", "names": keys, "source": ", ".join(sources),
-                "said": f"an API key ({', '.join(keys)}, from {', '.join(sources)})" + also}
+                "said": f"an API key ({', '.join(keys)} · {', '.join(sources)})" + also}
     if files:
         return {"mechanism": "login", "names": list(files), "source": "its login", "said": f"logged in ({', '.join(files)})"}
     base = {"claude": "ANTHROPIC_BASE_URL", "codex": "OPENAI_BASE_URL"}.get(kind)
     if base and env.get(base):
         return {"mechanism": "endpoint", "names": [base], "source": src.get(base, "the environment"),
-                "said": f"an endpoint without a key ({base}, from {src.get(base, 'the environment')})"}
+                "said": f"an endpoint without a key ({base} · {src.get(base, 'the environment')})"}
     return {"mechanism": "none", "names": [], "source": "", "said": "no key, provider configuration or login detected"}
 
 

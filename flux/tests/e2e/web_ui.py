@@ -1090,9 +1090,15 @@ def flows(r: Run) -> None:
         refused = r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})
         r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "My agents and models" in refused["body"], refused["body"][:200])
         r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "Account")
-        b.wait("[...document.querySelectorAll('.card tr')].some(t => t.textContent.includes('Codex') && t.textContent.includes('not tested'))", timeout=20, what="Codex, not tested")
-        b.js("const row = [...document.querySelectorAll('.card tr')].find(t => t.children[0] && t.children[0].textContent === 'Codex'); [...row.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test').click(); return 1")
-        b.wait("[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Codex' && t.textContent.includes('ready'))",
+        b.wait("(document.querySelector('.agent-conn[data-agent=codex]') || {textContent: ''}).textContent.includes('untested')", timeout=20, what="Codex, untested")
+        # D924: three states apart; a key set leads with the key, never with "not logged in"
+        states = b.js("return [...document.querySelectorAll('.agent-conn[data-agent=codex] dl.agent-states dt')].map(x => x.textContent)")
+        conn = b.js("const d = [...document.querySelectorAll('.agent-conn[data-agent=codex] dl.agent-states dt')].find(x => x.textContent === 'Connection'); return d.nextElementSibling.textContent")
+        r.check("Installation, Connection and Verification shown apart (D924)", states == ["Installation", "Connection", "Verification"], str(states))
+        r.check("a key set: the connection is the API key, from the account, no secret (D924)",
+                conn.startswith("API key") and "yours" in conn and "sk-e2e" not in conn and "not logged in" not in r.text(), conn)
+        b.js("[...document.querySelectorAll('.agent-conn[data-agent=codex] button')].find(x => x.textContent.trim() === 'Test connection').click(); return 1")
+        b.wait("(document.querySelector('.agent-conn[data-agent=codex]') || {textContent: ''}).textContent.includes('ready')",
                timeout=120, what="Codex ready")
         steps = b.js("return [...document.querySelectorAll('.agent-steps li')].map(x => x.textContent)")
         r.check("the test says each step, the answer last", any("answer" in x and "FLUX-OK" in x for x in steps), str(steps))
@@ -1134,7 +1140,7 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Corp Codex')", timeout=20, what="corp renamed")
         r.check("an agent's name shown is the admin's", True)
         r.login("bob")
-        r.page("#/account", "[...document.querySelectorAll('.card tr')].some(t => t.children[0] && t.children[0].textContent === 'Corp Codex')", "corp in bob's agent logins")
+        r.page("#/account", "!!document.querySelector('.agent-conn[data-agent=corp]')", "corp in bob's agent connections")
         r.button("Corp Codex", ".set-tabs")
         b.js(add_var, "me-corp", "CORP_USER", "bob")
         b.wait("[...document.querySelectorAll('.agent-vars td')].some(t => t.textContent === 'CORP_USER')", timeout=20, what="bob's variable for corp")
@@ -1423,12 +1429,15 @@ def flows(r: Run) -> None:
         width -- the browser's own window does not go below 500 pixels, so the check used to run at 500."""
         pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results", "#/app/sw/results/graphs",
                                       "#/app/sw/files", "#/app/sw/settings", "#/account")]
-        pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/maintenance", "#/admin/audit", "#/admin/models")]
+        pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/maintenance", "#/admin/audit", "#/admin/models",
+                                       "#/admin/agents")]
         who = None
         for user, h in pages:
             if user != who:
                 r.login(user)
                 who = user
+            if h in ("#/account", "#/admin/agents"):          # D924: on the agent's tab -- its three states and its Test
+                b.js("try { localStorage.setItem(arguments[0], 'Codex'); } catch (_) {} return 1", "flux-models-tab-" + ("me" if h == "#/account" else "server"))
             for width in (390, 320):
                 b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
                      "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/' + arguments[1]; document.body.append(f); return 1", width, h)
@@ -1443,6 +1452,12 @@ def flows(r: Run) -> None:
                         .map(e => e.tagName.toLowerCase() + '.' + [...e.classList].join('.') + ' ' + Math.round(e.getBoundingClientRect().right));
                     return [d.documentElement.scrollWidth, w.innerWidth, over];""")
                 r.check(f"phone {h} at {width}px: nothing wider than the screen", got[0] <= got[1] + 1 and not got[2], f"{got}")
+                if h == "#/account":
+                    seen = b.js("const d = document.getElementById('phone').contentDocument, c = d.querySelector('.agent-conn[data-agent=codex]');"
+                                "return c ? [c.getBoundingClientRect().height > 0, [...c.querySelectorAll('dt')].map(x => x.textContent),"
+                                " !![...c.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test connection')] : null")
+                    r.check(f"phone {h} at {width}px: the agent's states and Test connection on its tab (D924)",
+                            bool(seen) and seen[0] and seen[1] == ["Installation", "Connection", "Verification"] and seen[2], str(seen))
             b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})   # a reload: the page is the app again
             b.wait("document.querySelector('#main')", timeout=20)
             r.clean(f"phone {h}")
