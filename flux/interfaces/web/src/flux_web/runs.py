@@ -27,6 +27,8 @@ __all__ = ["OK_RC", "RunManager", "loop_files", "run_env"]
 #: the exit statuses of a start that did not fail: 0 a qualifying answer, 3 designs but none qualifying yet
 #: (D900), 130 stopped; None, no status known
 OK_RC = (0, 3, None, 130)
+#: D918: "look the latest start up" -- a caller that has it passes it (None: never started)
+LOOKUP: Any = object()
 
 #: The server's own model keys: never in the run of a user who brought their own endpoint.
 _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
@@ -421,8 +423,7 @@ class RunManager:
         return True
 
     def latest(self, user: User, app: str) -> dict[str, Any] | None:
-        runs = self.store.runs(user, app)
-        return runs[0] if runs else None
+        return self.store.latest_run(user, app)               # D918: one indexed row, not every start
 
     @staticmethod
     def roots(run: dict[str, Any] | None) -> tuple[str, ...]:
@@ -481,12 +482,14 @@ class RunManager:
         said = [ln for ln in lines if self._PROBLEM.search(ln)]
         return [ln[:400] for ln in (said or lines)[-n:]]
 
-    def state(self, user: User, app: str) -> dict[str, Any]:
+    def state(self, user: User, app: str, run: Any = LOOKUP) -> dict[str, Any]:
         """The loop's state: running or not, since when, its last activity, and while it runs its
-        pass, whether a stop is asked, its sandbox and an open question."""
+        pass, whether a stop is asked, its sandbox and an open question. `run`: its latest start, when
+        the caller has it already (D918: a list's, from one query)."""
         from flux_loop import ops
 
-        run = self.latest(user, app)
+        if run is LOOKUP:
+            run = self.latest(user, app)
         info: dict[str, Any] = {"app": app, "user": user.name, "running": False, "since": None, "last_active": None,
                                 "failed": False, "stopped": False, "question": None, "events": False, "options": {}}
         if run is None:

@@ -331,3 +331,31 @@ def window_start(path: str, passes: int, budget: int = 24 << 20, reach: int = 64
                 fh.readline()
             at = fh.tell()
         return at, got[1], got[2]
+
+
+def start_offset(path: str, reach: int = 64 << 20) -> int:
+    """D918: the byte where the journal's latest start (its last `hello`) begins -- a short start
+    appended to a long journal opens there, not at byte 0. From `marks.jsonl`, else read backwards
+    at most `reach` bytes; 0 when not found."""
+    HELLO = b'"ev": "hello"'
+    try:
+        size = os.path.getsize(path)
+        fh = open(path, "rb")
+    except OSError:
+        return 0
+    with fh:
+        known = _marks_of(path, size)
+        if known is not None:
+            return known[0]
+        end, carry = size, b""
+        while end > 0 and size - end <= reach:
+            begin = max(0, end - (4 << 20))
+            fh.seek(begin)
+            block = fh.read(end - begin) + carry
+            cut = block.find(b"\n") + 1 if begin > 0 else 0     # a partial first line waits for the next block
+            carry, body = block[:cut], block[cut:]
+            hello = body.rfind(HELLO)
+            if hello >= 0:
+                return begin + cut + body.rfind(b"\n", 0, hello) + 1
+            end = begin
+    return 0

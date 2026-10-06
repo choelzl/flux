@@ -203,14 +203,16 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def _events_part(whose: User, name: str, at: tuple[int | None, int], window: int) -> tuple[Any, tuple[str, ...]]:
         """The latest start's journal; `window` (D759): only its last that many passes, a first
         `window` event saying how many came before -- a day-long run's tree opens at once."""
-        from flux_loop.journal import window_start
+        from flux_loop.journal import start_offset, window_start
 
         run = runs.latest(whose, name)
         preface: tuple[str, ...] = ()
         path = _confined(runs.events_path(run), runs.roots(run))   # D852
-        if window > 0 and at[1] == 0 and path and os.path.exists(path):
-            got = window_start(path, window)
-            if got is not None:
+        if at[1] == 0 and path and os.path.exists(path):
+            got = window_start(path, window) if window > 0 else None
+            if got is None:                                    # D918: the whole start -- from its hello, not byte 0
+                at = (os.stat(path).st_ino, start_offset(path))
+            else:
                 at = (os.stat(path).st_ino, got[0])
                 said = {"ev": "window", "before": got[1], "t": 0, "cut": got[2] is not None}
                 preface = (f"event: events\ndata: {json.dumps(said)}\n\n",)

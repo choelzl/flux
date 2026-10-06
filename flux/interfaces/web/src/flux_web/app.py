@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from . import routes_accounts, routes_admin, routes_agents, routes_loops, routes_results
 from .models import EnvVar
 from .routes_results import journal_messages  # noqa: F401 -- D888: still importable from here
-from .runs import HOST_RULE, RunManager, loop_files
+from .runs import HOST_RULE, LOOKUP, RunManager, loop_files
 from .store import Store, User
 from .workspace import Workspace, WorkspaceError
 
@@ -170,12 +170,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
         return Masks(store.server_get("stderr_masks") or [])
 
-    def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
+    def _summary(w: Workspace, whose: User, name: str, run: Any = LOOKUP) -> dict[str, Any]:
         """A loop in a line (D693): designs measured, accepted, and the decision's value on the
-        first objective."""
+        first objective. `run`: its latest start, when the caller has it (D918)."""
         from .results import designs
 
-        run = runs.latest(whose, name)
+        if run is LOOKUP:
+            run = runs.latest(whose, name)
         if not run or not os.path.exists(run["db"]):
             return {"designs": 0, "accepted": 0}
         from .results import decision_doc

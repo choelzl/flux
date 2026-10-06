@@ -166,11 +166,18 @@ function liveTree(base, qs, onQuestion, stream) {
   const collapse = h("input", { type: "checkbox", checked: true });
   const search = h("input", { placeholder: "search tasks", class: "filter" });
   const treeBox = h("div", { class: "tree" }), graphBox = h("div", { class: "tgraph" }), detail = h("div", { class: "detail" }), stand = h("div", { class: "standings" });
+  let painted = false, loaded = false, frame = 0;
+  // D918: the first tasks drawn on the next frame after they come, not at the next 1 s tick
+  const soon = () => { if (!painted && !frame && treeBox.isConnected) frame = requestAnimationFrame(() => { frame = 0; draw(); }); };
   function onEvent(e) {
     const r = LT.apply(mdl, e);
-    if (r.reset) { open.clear(); selected = null; selLeafKey = null; }
+    if (r.reset) { open.clear(); selected = null; selLeafKey = null; painted = false; }
     if (r.question) onQuestion(r.question);
-    dirty = true;
+    if (e.ev === "start" && lastLive && lastLive.updates && lastLive.updates[e.id]) {   // D918: a live snapshot that came before its task
+      const n = nodes.get(e.id);
+      if (n && n.t1 == null) n.fields = lastLive.updates[e.id];
+    }
+    dirty = true; soon();
   }
   const running = LT.running, failedBelow = LT.failedBelow;
   function followTarget() {                              // the deepest running task, an agent first
@@ -236,7 +243,7 @@ function liveTree(base, qs, onQuestion, stream) {
     else drawLoopTree(now, q);
     drawDetail(now);
     drawStandings();
-    dirty = false;
+    dirty = false; painted = nodes.size > 0;
   }
   const leafLine = LT.leafLine;
   function drawLoopTree(now, q) {
@@ -276,7 +283,8 @@ function liveTree(base, qs, onQuestion, stream) {
           it.key === "end" || it.earlier ? "" : h("span", { class: "dur" }, dur(took))),
         opened ? h("div", { class: "kids" }, it.kids.map(k => row(k, /^Pass /.test(it.title) ? it.why.split(" · ")[0] : ""))) : "");
     };
-    treeBox.replaceChildren(...(items.length ? items.map(row) : [empty("Waiting for the run's first events…")]));
+    // D918: the saved journal still coming, or read whole and the run not begun
+    treeBox.replaceChildren(...(items.length ? items.map(row) : [empty(loaded ? "Waiting for new events…" : "Loading saved tasks…")]));
   }
   /** The leaf the detail belongs to, when it has several tasks (D739): each a line to open. */
   function leafOf(n) {
@@ -581,14 +589,16 @@ function liveTree(base, qs, onQuestion, stream) {
   const WINDOW = 30;
   // D917: the journal and the live state are parts of the loop's one stream
   let lastLive = null;
-  stream.on("events", { onData: onEvent, onState: (st) => { pill.set(st); if (lastLive) LT.applyLive(mdl, lastLive); } }, { window: WINDOW });
+  stream.on("events", { onData: onEvent, onState: (st) => { pill.set(st); if (lastLive) LT.applyLive(mdl, lastLive); },
+    onReady: () => { loaded = true; dirty = true; if (!painted && treeBox.isConnected) draw(); } }, { window: WINDOW });
   // D761: what runs now -- its live fields, the standings -- from live.json, whole each time it changes
-  stream.on("live", { onData: (doc) => { lastLive = doc; LT.applyLive(mdl, lastLive); dirty = true; } });
+  stream.on("live", { onData: (doc) => { lastLive = doc; LT.applyLive(mdl, lastLive); dirty = true; soon(); } });
   loadAll = () => {
-    LT.apply(mdl, { ev: "hello" }); open.clear(); selected = null; selLeafKey = null; dirty = true;
+    LT.apply(mdl, { ev: "hello" }); open.clear(); selected = null; selLeafKey = null; dirty = true; loaded = false;
     stream.restart("events", { window: 0 });
   };
-  const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
+  // D918: a view not shown is not drawn -- drawn again when it is (drawBody)
+  const tick = setInterval(() => { if (treeBox.isConnected && (dirty || [...nodes.values()].some(running))) draw(); }, 1000);
   const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
   const bar = h("div", { class: "toolbar" }, h("div", { class: "seg", role: "group", "aria-label": "View" }, modeBtns.tree, modeBtns.graph),
     h("label", { class: "check" }, follow, "follow the running task"),

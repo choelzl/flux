@@ -37,9 +37,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """Every user's loops and their state (D684, D689)."""
         out = []
         for u in store.users():
-            for a in Workspace(store.data, u.name).apps():
-                out.append({**a, "owner": u.name, **runs.state(u, a["name"]),
-                            "summary": _summary(Workspace(store.data, u.name), u, a["name"])})
+            last = store.latest_runs(u)                   # D918: a user's latest starts in one query
+            w = Workspace(store.data, u.name)
+            for a in w.apps():
+                out.append({**a, "owner": u.name, **runs.state(u, a["name"], last.get(a["name"])),
+                            "summary": _summary(w, u, a["name"], last.get(a["name"]))})
         return out
 
     # ---- the machine and its controls (D695)

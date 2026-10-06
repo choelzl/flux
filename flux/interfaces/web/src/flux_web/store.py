@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS runs (
     pid INTEGER, argv TEXT NOT NULL, started REAL NOT NULL, ended REAL, rc INTEGER, options TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY, t REAL NOT NULL, user TEXT, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
+CREATE INDEX IF NOT EXISTS runs_latest ON runs(user_id, app, id);
 CREATE TABLE IF NOT EXISTS failures (name TEXT NOT NULL, t REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (
     user_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (user_id, key));
@@ -370,6 +371,20 @@ class Store:
             q += " WHERE " + " AND ".join(where)
         with self._db() as db:
             return [_record_checked(dict(r)) for r in db.execute(q + " ORDER BY r.id DESC", args)]
+
+    def latest_run(self, user: User, app: str) -> dict[str, Any] | None:
+        """The loop's latest start (D918): one row from the index, not every start checked."""
+        with self._db() as db:
+            r = db.execute("SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id "
+                           "WHERE r.user_id = ? AND r.app = ? ORDER BY r.id DESC LIMIT 1", (user.id, app)).fetchone()
+        return _record_checked(dict(r)) if r else None
+
+    def latest_runs(self, user: User) -> dict[str, dict[str, Any]]:
+        """Each of the user's loops' latest start, by its name (D918): a list of loops in one query."""
+        with self._db() as db:
+            rows = db.execute("SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id WHERE r.id IN "
+                              "(SELECT MAX(id) FROM runs WHERE user_id = ? GROUP BY app)", (user.id,)).fetchall()
+        return {r["app"]: _record_checked(dict(r)) for r in rows}
 
     def run(self, run_id: int) -> dict[str, Any] | None:
         with self._db() as db:

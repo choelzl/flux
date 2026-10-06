@@ -144,7 +144,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """The user's loops, each running or not (D689), the most recently active first."""
         w = ws(user)
-        out = [{**a, **runs.state(user, a["name"]), "summary": _summary(w, user, a["name"])} for a in w.apps()]
+        last = store.latest_runs(user)                    # D918: every loop's latest start in one query
+        out = [{**a, **runs.state(user, a["name"], last.get(a["name"])), "summary": _summary(w, user, a["name"], last.get(a["name"]))}
+               for a in w.apps()]
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
         return out
 
@@ -607,7 +609,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def loops_state(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """Every loop of the user with its state, and those shared with them (D702: `owner` set):
         what the page's notifications watch."""
-        out = [runs.state(user, a["name"]) for a in ws(user).apps()]
+        last = store.latest_runs(user)                    # D918: one query for the user's loops
+        out = [runs.state(user, a["name"], last.get(a["name"])) for a in ws(user).apps()]
         for owner, app_name, _perm in store.shared_with(user.name):
             o = store.user(name=owner)
             if o is not None and (Workspace(store.data, owner).root / app_name).is_dir():
