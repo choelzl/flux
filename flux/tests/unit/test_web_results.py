@@ -104,6 +104,47 @@ def test_the_decision_is_the_records_latest_pass_and_the_best_are_ranked_by_the_
     assert decision_of(str(tmp_path / "none.db"), tmp_path / "missing.json") is None
 
 
+def test_past_a_page_the_counts_are_of_every_design(tmp_path):
+    """D901 (B2): with 1,200 accepted designs the Loops list said 1,000 designs, 1,200 accepted and 1,000 this
+    start; the total and the designs since a start are counted before the page is cut."""
+    import time
+
+    db = str(tmp_path / "many.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.phase("search")
+    for i in range(1200):
+        rec.trial({"name": f"d{i}", "artifact": f"design {i}"}, f"t:d{i}@screen", stage="screen", strategy="loop",
+                  metrics={"area_um2": float(i)}, evaluator="screen")
+    rec.close("paused")
+    got = designs(db, [{"name": "screen"}], since=0)
+    assert len(got["designs"]) == 1000 and got["total"] == 1200 and got["counts"]["accepted"] == 1200
+    assert got["this_start"] == 1200 and "_firsts" not in got
+    assert designs(db, [{"name": "screen"}], since=time.time() + 60)["this_start"] == 0, "none since a later start"
+
+
+def test_one_view_per_record_however_often_the_decision_changes(tmp_path, monkeypatch):
+    """D901 (B3): the kept views were keyed by the decision too, so every new winner kept another full
+    snapshot (20 decisions, 20 x 1,000 designs). The decision checks the view; a changed one replaces it."""
+    import flux_web.results as res
+
+    monkeypatch.setattr(res, "_KEPT", res.OrderedDict())
+    db = _record(tmp_path)
+    for name in ("fast", "slow", "tiny", "fast", "slow"):
+        assert any(d["name"] == name for d in designs(db, STAGES, decision=name)["designs"])
+    assert len(res._KEPT) == 1, list(res._KEPT)
+    first = designs(db, STAGES, decision="slow")
+    assert designs(db, STAGES, decision="slow") is first, "the same decision and record: kept"
+    assert designs(db, STAGES, decision="fast") is not first, "another decision: read again, in its place"
+    monkeypatch.setattr(res, "_KEEP_VIEWS", 2)
+    other = []
+    for i in range(4):                                     # more records than the bound: the oldest go
+        sub = tmp_path / f"r{i}"
+        sub.mkdir()
+        other.append(_record(sub))
+        designs(other[-1], STAGES)
+    assert len(res._KEPT) == 2 and [k[0] for k in res._KEPT] == other[-2:]
+
+
 def test_no_feasible_design_shows_no_decision_and_the_closest(tmp_path):
     """D900: a pass with no design meeting every requirement concludes with no decision and names its
     closest; a conclusion from before that named a design missing a limit marks no decision either --

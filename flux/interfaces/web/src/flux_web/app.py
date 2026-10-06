@@ -170,22 +170,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
         return Masks(store.server_get("stderr_masks") or [])
 
-    def _since(designs: list[dict[str, Any]], started: Any) -> int:
-        """The designs first measured since the loop's latest start (D837)."""
-        from datetime import datetime
-
-        def at(s: Any) -> float:
-            try:
-                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
-            except ValueError:
-                return 0.0
-
-        try:
-            t0 = float(started)
-        except (TypeError, ValueError):
-            return 0
-        return sum(1 for d in designs if at(d.get("first")) >= t0)
-
     def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
         """A loop in a line (D693): designs measured, accepted, and the decision's value on the
         first objective."""
@@ -201,11 +185,13 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except WorkspaceError:
             decision = None
         try:
-            got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
+            got = designs(run["db"], _stages(w, name), decision, stale_s=30,      # D774: a running loop's line, every 30 s
+                          since=run.get("started"))
         except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
             return {"designs": 0, "accepted": 0}
-        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"],
-                               "this_run": _since(got["designs"], run.get("started"))}
+        # D901: every design, not the first page's -- 1,200 designs were said as 1,000, 1,000 this start
+        out: dict[str, Any] = {"designs": got["total"], "accepted": got["counts"]["accepted"],
+                               "this_run": got["this_start"], "feasible": got["feasible"]}
         dec = next((d for d in got["designs"] if d["decision"]), None)
         if dec is not None:
             lim = got["limits"][0] if got["limits"] else None

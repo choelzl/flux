@@ -14,10 +14,12 @@ answer's."""
 
 from __future__ import annotations
 
+import bisect
 import json
 import os
 import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 __all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "designs", "thin"]
@@ -226,8 +228,13 @@ def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-_KEPT: dict[tuple, tuple[tuple, float, dict[str, Any]]] = {}
+#: D901: one current view per record and view (its stages, its page size), the decision and the record's
+#: disk signature what it is checked against, not part of its key -- a winner that changes replaces the
+#: view, never adds one -- least recently used first out past `_KEEP_VIEWS` views or `_KEEP_DESIGNS` designs
+_KEPT: "OrderedDict[tuple, tuple[tuple, str, float, dict[str, Any], list[float]]]" = OrderedDict()
 _KEEPING = threading.Lock()
+_KEEP_VIEWS = 32
+_KEEP_DESIGNS = 100_000
 
 
 def _signature(db: str) -> tuple:
@@ -243,20 +250,45 @@ def _signature(db: str) -> tuple:
 
 
 def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, limit: int = 1000,
-            stale_s: float = 0.0) -> dict[str, Any]:
+            stale_s: float = 0.0, since: Any = None) -> dict[str, Any]:
     """`stages`: the document's stages as the loader writes them (name, cutoff). D774: kept
     while the record is unchanged; with `stale_s`, also while it changed less than that ago --
-    a running loop's line in a list need not be read again on every look."""
-    key = (db, json.dumps(stages, sort_keys=True, default=str), json.dumps(decision, sort_keys=True, default=str), limit)
+    a running loop's line in a list need not be read again on every look. `since` (a start's
+    time, D901): the result also says `this_start`, the designs first measured since, counted over
+    every design, not the page."""
+    key = (db, json.dumps(stages, sort_keys=True, default=str), limit)
+    said = json.dumps(decision, sort_keys=True, default=str)
     sig = _signature(db)
     with _KEEPING:
         got = _KEPT.get(key)
-    if got is not None and (got[0] == sig or time.monotonic() - got[1] < stale_s):
-        return got[2]
-    out = _designs(db, stages, decision, limit)
-    with _KEEPING:                                     # as it stands after the read (opening it touches its log)
-        _KEPT[key] = (_signature(db), time.monotonic(), out)
-    return out
+        if got is not None:
+            _KEPT.move_to_end(key)
+    if got is not None and got[1] == said and (got[0] == sig or time.monotonic() - got[2] < stale_s):
+        out, firsts = got[3], got[4]
+    else:
+        out = _designs(db, stages, decision, limit)
+        firsts = out.pop("_firsts", [])
+        with _KEEPING:                                 # as it stands after the read (opening it touches its log)
+            _KEPT[key] = (_signature(db), said, time.monotonic(), out, firsts)
+            _KEPT.move_to_end(key)
+            while len(_KEPT) > 1 and (len(_KEPT) > _KEEP_VIEWS or sum(len(v[4]) for v in _KEPT.values()) > _KEEP_DESIGNS):
+                _KEPT.popitem(last=False)
+    if since is None:
+        return out
+    try:
+        t0 = float(since)
+    except (TypeError, ValueError):
+        return {**out, "this_start": 0}
+    return {**out, "this_start": len(firsts) - bisect.bisect_left(firsts, t0)}
+
+
+def _when(s: Any) -> float:
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
 
 
 def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit: int) -> dict[str, Any]:
@@ -363,7 +395,8 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
-    return {"designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
+    return {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
+            "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
             "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
 
