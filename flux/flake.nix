@@ -106,7 +106,9 @@
           chipTools = {
             inherit (chipPkgs) verilator sv-lang yosys iverilog pythia;
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit (chipPkgs) openroad openroad-flow-scripts yosys-slang timeloop icsc;
+            # OpenROAD-flow-scripts over this OpenROAD and Yosys (`orfs`, below); KLayout for its GDS
+            # step, not the host's (D947)
+            inherit (chipPkgs) openroad openroad-flow-scripts klayout yosys-slang timeloop icsc;
           };
 
           # manylinux wheels (numpy, onnx, ...) dlopen libstdc++/zlib at import time;
@@ -172,6 +174,12 @@
             printf '#!/usr/bin/env bash\nexec python3 -c "import sys; from flux_cli.main import main; sys.exit(main())" "$@"\n' > "$FLUX_BIN/flux"
             chmod +x "$FLUX_BIN/flux"
             export PATH="$FLUX_BIN:$PATH"
+            # D947: `orfs <target> DESIGN_CONFIG=...` in a copy made by `openroad-flow-scripts-init <dir>`:
+            # its make run serially -- a -j (this machine's profile sets MAKEFLAGS=-j32) stops it at the
+            # first .sdc a step writes beside its .odb; each step uses every core itself -- and its
+            # report's images drawn offscreen (QT_QPA_PLATFORM=xcb for its gui_ targets)
+            printf '#!/usr/bin/env bash\nMAKEFLAGS= QT_QPA_PLATFORM="''${QT_QPA_PLATFORM:-offscreen}" exec openroad-flow-scripts-make "$@"\n' > "$FLUX_BIN/orfs"
+            chmod +x "$FLUX_BIN/orfs"
             echo "flux dev shell: flux from $FLUX_ROOT, python $(python3 --version), no venv/pip install needed"
             echo "  python -m pytest -q     # run tests directly"
             echo "  flux --help              # the flux-cli console script (wrapper, see flake.nix)"
@@ -206,7 +214,7 @@
               # variable as the NAME of its binary and execs it -- every compile failed "Permission
               # denied". Unset, the script finds its own verilator_bin.
               unset VERILATOR_BIN
-              echo "flux dev shell: python + Verilator/Yosys/OpenROAD, Pythia/ChampSim, SystemC/ICSC, Timeloop"
+              echo "flux dev shell: python + Verilator/Yosys/OpenROAD/ORFS, Pythia/ChampSim, SystemC/ICSC, Timeloop"
               echo "  FLUX_TIMELOOP_LOCAL=1   # the hermetic Timeloop; the adapter defaults to Docker regardless"
             '' + shellHook;
           };
