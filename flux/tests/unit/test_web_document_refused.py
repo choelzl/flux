@@ -3,8 +3,11 @@ and Direct edit get the loader's own words for it, never a 500."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+import flux_web
 from flux_web import create_app
 from flux_web.configure import views
 from flux_web.store import Store
@@ -41,9 +44,12 @@ def test_views_still_refuses_a_document_that_is_not_a_mapping(tmp_path):
 
 
 def test_the_page_and_its_scripts_are_asked_again_after_an_update(tmp_path, monkeypatch):
-    """D719: no heuristic caching of app.js or crafter.js -- a browser revalidates them."""
+    """D719: no heuristic caching of app.js or crafter.js -- a browser revalidates them; D889: app.js's
+    modules too, so a browser never runs an old module with a new one."""
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
     c = TestClient(create_app(tmp_path / "data", sandbox=False))
-    for path in ("/", "/static/app.js", "/crafter-assets/crafter.js"):
+    modules = sorted(p.name for p in (Path(flux_web.__file__).parent / "static").glob("*.js"))
+    assert {"app.js", "ui.js", "state.js", "loops.js"} <= set(modules), modules
+    for path in ("/", *(f"/static/{m}" for m in modules), "/crafter-assets/crafter.js"):
         r = c.get(path)
         assert r.status_code == 200 and r.headers.get("cache-control") == "no-cache", (path, r.headers.get("cache-control"))

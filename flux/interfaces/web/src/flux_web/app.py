@@ -263,7 +263,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         if not request.url.path.startswith("/api/"):
             # D719: the page, its scripts and styles asked again each time (a 304 when unchanged):
-            # without it a browser keeps an old crafter.js or app.js after an update, by heuristic
+            # without it a browser keeps an old crafter.js or app.js after an update, by heuristic;
+            # D889: app.js's modules (ui.js, loops.js, ...) too, so an update never mixes old and new
             resp.headers.setdefault("Cache-Control", "no-cache")
         return resp
 
