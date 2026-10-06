@@ -36,17 +36,30 @@ function designPoints(designs, obj) {
   return (designs || []).map(d => {
     const stage = want || d.shown, v = ((d.stages || {})[stage] || {})[obj.metric];
     const t = Date.parse(d.first || d.last || "") / 1000;
-    return v == null || !isFinite(t) ? null : { when: t, stage, name: d.name, metrics: { [obj.metric]: v } };
+    return v == null || !isFinite(t) ? null : { when: t, stage, name: d.name, group: d.group || "", metrics: { [obj.metric]: v } };
   }).filter(Boolean);
+}
+/** D896: a design of parts, coloured by part -- the whole first, then its parts in order; one group
+    (or none) draws as before. Returns (group -> its colour class, the groups) . */
+function groupsOf(items) {
+  const gs = [...new Set(items.map(x => x.group || ""))];
+  if (gs.length < 2 && !gs.includes("whole")) return { cls: () => "", list: [] };
+  const list = gs.sort((a, b) => (a === "whole" ? -1 : b === "whole" ? 1 : a.localeCompare(b)));
+  return { cls: (g) => ` g${Math.min(list.indexOf(g || ""), 7)}`, list };
+}
+function groupLegend(G) {
+  return G.list.length ? h("span", { class: "legend groups" }, G.list.map(g => [h("i", { class: "sw" + G.cls(g) }), `${g || "other"} `])) : "";
 }
 function bestChart(rows, obj, passes) {
   const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
   const pts = rows.filter(r => r.metrics[obj.metric] != null && (!obj.stage || obj.stage === "deepest" || r.stage === obj.stage))
-    .map(r => ({ t: r.when, v: Number(r.metrics[obj.metric]) })).sort((a, b) => a.t - b.t);
+    .map(r => ({ t: r.when, v: Number(r.metrics[obj.metric]), group: r.group || "" })).sort((a, b) => a.t - b.t);
+  const G = groupsOf(pts);
   if (!pts.length) return empty(`No ${obj.metric} measured${obj.stage ? " at " + obj.stage : ""} yet.`);
   const maxi = obj.direction !== "minimize";
   let best = null; const steps = [];
-  for (const p of pts) { if (best === null || (maxi ? p.v > best : p.v < best)) best = p.v; steps.push({ t: p.t, v: best }); }
+  // with parts, the best so far is the whole's (D895: a part is never the answer)
+  for (const p of pts) { if ((!G.list.includes("whole") || p.group === "whole") && (best === null || (maxi ? p.v > best : p.v < best))) best = p.v; steps.push({ t: p.t, v: best }); }
   const vals = pts.map(p => p.v).concat(obj.goal != null ? [obj.goal] : []);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; }
@@ -55,8 +68,9 @@ function bestChart(rows, obj, passes) {
   const n = pts.length, t0 = pts[0].t, t1 = pts[n - 1].t;
   const xi = (i) => L + (W - L - R) * (n === 1 ? 0.5 : i / (n - 1)), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
   pts.forEach((p, i) => { p.x = xi(i); }); steps.forEach((p, i) => { p.x = xi(i); });
+  const firstBest = steps.findIndex(p => p.v !== null);
   const passX = (w) => { const k = pts.filter(p => p.t <= w).length; return k <= 0 || k >= n ? null : (xi(k - 1) + xi(k)) / 2; };
-  const path = steps.map((p, i) => (i ? `H${p.x.toFixed(1)}V${y(p.v).toFixed(1)}` : `M${p.x.toFixed(1)},${y(p.v).toFixed(1)}`)).join("") + `H${xi(n - 1).toFixed(1)}`;
+  const path = firstBest < 0 ? "" : steps.slice(firstBest).map((p, i) => (i ? `H${p.x.toFixed(1)}V${y(p.v).toFixed(1)}` : `M${p.x.toFixed(1)},${y(p.v).toFixed(1)}`)).join("") + `H${xi(n - 1).toFixed(1)}`;
   const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": `${obj.metric}: best so far ${num4(best)}` },
     sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }),
     [lo + pad, (lo + hi) / 2, hi - pad].map(v => [sv("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }),
@@ -64,14 +78,15 @@ function bestChart(rows, obj, passes) {
     (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
     obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
       sv("text", { x: W - R, y: y(obj.goal) - 4, class: "tick limit-t", "text-anchor": "end" }, `${maxi ? "≥" : "≤"} ${num4(obj.goal)}`)] : "",
-    pts.map(p => sv("circle", { cx: p.x, cy: y(p.v), r: 3, class: "pt" + (obj.goal != null && (maxi ? p.v < obj.goal : p.v > obj.goal) ? " miss" : "") },
-      sv("title", {}, `${num4(p.v)} · ${new Date(p.t * 1000).toLocaleString()}`))),
-    sv("path", { d: path, class: "best" }),
+    pts.map(p => sv("circle", { cx: p.x, cy: y(p.v), r: 3, class: "pt" + G.cls(p.group) + (obj.goal != null && (maxi ? p.v < obj.goal : p.v > obj.goal) ? " miss" : "") },
+      sv("title", {}, `${num4(p.v)}${p.group ? " · " + p.group : ""} · ${new Date(p.t * 1000).toLocaleString()}`))),
+    path ? sv("path", { d: path, class: "best" }) : "",
     sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} design(s), in order`),
     sv("text", { x: L, y: H - 8, class: "tick" }, new Date(t0 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
     sv("text", { x: W - R, y: H - 8, class: "tick", "text-anchor": "end" }, new Date(t1 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
-    ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · best `), h("strong", {}, num4(best))), g);
+    ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · best${G.list.length ? " whole" : ""} `),
+    h("strong", {}, best === null ? "—" : num4(best)), " ", groupLegend(G)), g);
 }
 
 /** Which way a metric is better (D693): the objective's direction, else the name's plain sense. */
@@ -89,8 +104,11 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick) {
   if (!pts.length) return empty(`No design has both ${xm} and ${ym}${stage ? " at " + stage : ""}.`);
   const dx = directionOf(xm, objectives), dy = directionOf(ym, objectives);
   const better = (a, b, dir) => dir === "minimize" ? a < b : a > b, notWorse = (a, b, dir) => dir === "minimize" ? a <= b : a >= b;
-  const dominated = (p) => pts.some(o => o !== p && notWorse(o.x, p.x, dx) && notWorse(o.y, p.y, dy) && (better(o.x, p.x, dx) || better(o.y, p.y, dy)));
-  const front = pts.filter(p => !dominated(p)).sort((a, b) => a.x - b.x);
+  const G = groupsOf(pts.map(p => p.d));
+  // with parts, the front is the whole's: a part beside the whole is not a trade-off of it (D895)
+  const rivals = G.list.includes("whole") ? pts.filter(p => p.d.group === "whole") : pts;
+  const dominated = (p) => rivals.some(o => o !== p && notWorse(o.x, p.x, dx) && notWorse(o.y, p.y, dy) && (better(o.x, p.x, dx) || better(o.y, p.y, dy)));
+  const front = rivals.filter(p => !dominated(p)).sort((a, b) => a.x - b.x);
   const goal = (m) => { const o = (objectives || []).find(x => x.metric === m); return o && o.goal != null ? Number(o.goal) : null; };
   const gx = goal(xm), gy = goal(ym);
   const span = (vals) => { let lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; } const p = (hi - lo) * 0.08; return [lo - p, hi + p]; };
@@ -112,7 +130,7 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick) {
       const on = front.includes(p);
       const c = sv(p.d.decision ? "rect" : "circle", p.d.decision
         ? { x: X(p.x) - 5, y: Y(p.y) - 5, width: 10, height: 10, transform: `rotate(45 ${X(p.x)} ${Y(p.y)})`, class: `pt ${p.d.verdict} decided` }
-        : { cx: X(p.x), cy: Y(p.y), r: on ? 4.5 : 3.2, class: `pt ${p.d.verdict}${on ? " on-front" : ""}` },
+        : { cx: X(p.x), cy: Y(p.y), r: on ? 4.5 : 3.2, class: `pt ${p.d.verdict}${on ? " on-front" : ""}${G.cls(p.d.group)}` },
         sv("title", {}, `${p.d.name}${p.d.part ? " (" + p.d.part + ")" : ""} · ${p.d.verdict}${on ? " · on the front" : ""}\n${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}`));
       if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
       return c;
@@ -121,7 +139,8 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick) {
     sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, `${front.length} on the front`),
     h("span", { class: "muted" }, ` of ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"} · `),
-    h("span", { class: "legend" }, h("i", { class: "sw accepted" }), "accepted ", h("i", { class: "sw failed" }), "failed ", h("i", { class: "sw decided" }), "the decision")), g);
+    G.list.length ? [groupLegend(G), h("span", { class: "legend" }, h("i", { class: "sw decided" }), "the decision")]
+      : h("span", { class: "legend" }, h("i", { class: "sw accepted" }), "accepted ", h("i", { class: "sw failed" }), "failed ", h("i", { class: "sw decided" }), "the decision")), g);
 }
 
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;

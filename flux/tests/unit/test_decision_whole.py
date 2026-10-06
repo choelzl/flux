@@ -66,3 +66,15 @@ def test_parts_without_a_whole_decide_nothing(tmp_path):
     out = run_loop(Two(whole=False), LoopRequest(db=str(tmp_path / "t.db"), prototype=False, critique_rounds=0, steps=4),
                    proposer=None, log=said.append)
     assert out.decision is None, out.decision
+
+
+def test_the_results_say_which_piece_each_design_is(tmp_path):
+    """D896: the web's results name each design's group -- the whole, or its part -- so the charts
+    can colour them apart."""
+    from flux_web.results import _designs
+
+    db = str(tmp_path / "t.db")
+    run_loop(Two(), LoopRequest(db=db, prototype=False, critique_rounds=0, steps=4), proposer=None, log=lambda _m: None)
+    got = _designs(db, [{"name": "screen"}], None, 100)
+    groups = {d["name"]: d["group"] for d in got["designs"]}
+    assert all(g == "whole" for n, g in groups.items() if n.startswith("ab")) and groups.get("a2") == "a", groups

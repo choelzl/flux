@@ -248,7 +248,9 @@ def _doc(cand: Candidate, provenance: dict[str, Any] | None = None) -> dict[str,
     """The record's candidate document: the knobs first (what the extractor duels over),
     then the name, the text and the meta -- with what made the row (D510)."""
     meta = {**(cand.meta or {}), **({"provenance": provenance} if provenance else {})}
-    return {**cand.knobs, "name": cand.name, "artifact": cand.artifact, **({"meta": meta} if meta else {})}
+    return {**cand.knobs, "name": cand.name, "artifact": cand.artifact, **({"meta": meta} if meta else {}),
+            # D896: the part a design measured alone is, so the record (and the web's charts) can tell it
+            **({"subgoal": cand.subgoal} if cand.subgoal else {})}
 
 
 def _strategy(cand: Candidate) -> str:

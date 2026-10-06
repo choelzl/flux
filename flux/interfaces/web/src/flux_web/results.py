@@ -251,8 +251,12 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 name = str(c.get("name") or t.candidate_key or "?")
                 part = str(c.get("subgoal") or (c.get("knobs") or {}).get("part") or "")
                 ck = content_key(c)                 # D840: a name a later start gave again is another design
-                d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "stages": {},
-                                                     "first": t.created_at, "last": t.created_at})
+                # D896: which piece of a design of parts it is -- the whole (a composition of named parts,
+                # D511), else its part: named, or (measured alone, recorded without it, D507) its name's head
+                composed = [x for x in ((c.get("meta") or {}).get("composed") or ()) if x != "*"]
+                group = "whole" if composed else (part or (name.split("#", 1)[0] if "#" in name else ""))
+                d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "group": group,
+                                                     "stages": {}, "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]
     finally:

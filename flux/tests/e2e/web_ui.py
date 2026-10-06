@@ -636,7 +636,7 @@ def flows(r: Run) -> None:
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
         r.check("the model settings have a tab per tool, an agent's where it is installed, no Other (D721, D807, D817)",
-                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-3:] == ["Every agent", "Hidden output", "+ Add an agent"]
+                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
                 and set(tabs[1:-3]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
         r.button("Every agent", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
@@ -805,7 +805,7 @@ def flows(r: Run) -> None:
         r.check("tested, the agent is accepted", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 200)
         r.login("ada")                                     # D756: the admin sees it found, and whom it is ready for
         r.page("#/admin/agents", "[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Codex')", "Admin › Agents")
-        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('Ready for bob'))",
+        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('ready for bob'))",
                timeout=30, what="Codex found, ready for bob")
         r.check("Admin › Agents: the program found with its version, ready for who tested it",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
@@ -829,7 +829,7 @@ def flows(r: Run) -> None:
             return 1"""
         r.button("corp", ".set-tabs")
         folds = b.js("const f = document.querySelector('#env-server-corp-name').closest('fieldset'); return [...f.querySelectorAll('details.set-fold')].map(d => [d.querySelector('summary').textContent, d.open])")
-        r.check("an agent's model and its variables are folded while nothing is set (D823)", len(folds) == 2 and not any(o for _t, o in folds), str(folds))
+        r.check("an agent's model and its login, model and variables are folded while nothing is set (D823)", len(folds) == 3 and not any(o for _t, o in folds), str(folds))
         b.js(add_var, "server-corp", "CORP_REGION", "eu")
         b.wait("[...document.querySelectorAll('.agent-vars td')].some(t => t.textContent === 'CORP_REGION')", timeout=20, what="the server's variable for corp")
         r.check("and open by themselves once something is set", b.js("const f = document.querySelector('#env-server-corp-name').closest('details.set-fold'); return f && f.open") is True)
@@ -852,7 +852,7 @@ def flows(r: Run) -> None:
         r.login("ada")
         r.page("#/admin/models", "document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN')", "the model settings")
         b.js("const i = document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN'); i.value = '0.4'; i.dispatchEvent(new Event('change')); return 1")
-        b.wait("(document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').closest('.set-row').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the price saved")
+        b.wait("(document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').closest('.stack').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the price saved")
         r.check("the admin sets a price, saved as it changes", json.loads(r.api("/admin/settings")["body"])["values"].get("FLUX_REMOTE_PRICE_IN") == "0.4")
         r.login("bob")
         r.page("#/account", "document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN')", "bob's model settings")
@@ -1115,10 +1115,9 @@ def flows(r: Run) -> None:
         left = [n["key"] for n in json.loads(r.api("/admin/insights?days=30")["body"])["network"]]
         r.check("Insights: a removed host leaves the list (D850)", "many.example:443" not in left and "few.example:443" in left, str(left))
         b.js("localStorage.removeItem('flux-insights-net-sort'); return 1")
-        r.page("#/admin/agents", "document.querySelector('.set-tabs')", "Agents and models")
-        r.button("Hidden output", ".set-tabs")
+        r.page("#/admin/sandbox", "document.querySelector('#stderr-masks')", "Sandbox, with Hidden output (D896)")
         b.js("const t = document.querySelector('#stderr-masks'); t.value = 'stale arg0\\n/^ERROR rmcp/'; t.dispatchEvent(new Event('change')); return 1")
-        b.wait("(document.querySelector('#stderr-masks').closest('fieldset').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the masks saved")
+        b.wait("(document.querySelector('#stderr-masks').closest('.card').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the masks saved")
         r.check("the admin's stderr masks save as they change (D850)",
                 json.loads(r.api("/admin/masks")["body"])["masks"] == ["stale arg0", "/^ERROR rmcp/"])
         r.api("/admin/masks", "PUT", {"masks": []})

@@ -57,18 +57,20 @@ async function settingsView(ctx) {
   // D885: the loop's own clean-up, for whoever may change it; what each did last on this loop
   const mt = await api(`/apps/${enc(name)}/maintenance${qs}`).catch(() => null);
   const mtCard = mt && mt.tasks.length ? card("Maintenance", [h("p", { class: "muted" }, ctx.st.running ? "Stop the loop first: a running loop is never touched." : "Run on this loop now; the admin's schedule runs them on every loop."),
-    h("div", { class: "mt-list" }, mt.tasks.map(t => {
-      const last = h("div", { class: "small" });
-      const said = (x) => last.replaceChildren(x ? h("span", { class: x.ok ? "" : "bad" }, ago(x.t), " · ", x.said) : "");
-      said(t.last);
-      const run = act("Run", async () => {
-        const got = await api(`/apps/${enc(name)}/maintenance/${t.key}${qs}`, { method: "POST" });
-        said(got); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
-      }, { cls: "small" });
-      run.disabled = !!ctx.st.running;
-      return h("div", { class: "mt-row" }, h("div", { class: "mt-head" }, h("strong", {}, t.title), run),
-        h("p", { class: "muted small" }, t.what), last);
-    }))]) : "";
+    // D896: a table, as Admin › Maintenance's
+    h("div", { class: "scroll-x" }, h("table", { class: "list compact mt-table" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Task"), h("th", {}, "Last run on this loop"), h("th", {}, ""))),
+      h("tbody", {}, mt.tasks.map(t => {
+        const last = h("td", { "data-label": "Last run on this loop", class: "mt-said" });
+        const said = (x) => last.replaceChildren(x ? h("span", { class: x.ok ? "" : "bad", title: x.said }, ago(x.t), " · ", x.said) : h("span", { class: "muted" }, "never"));
+        said(t.last);
+        const run = act("Run", async () => {
+          const got = await api(`/apps/${enc(name)}/maintenance/${t.key}${qs}`, { method: "POST" });
+          said(got); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
+        }, { cls: "small" });
+        run.disabled = !!ctx.st.running;
+        return h("tr", {}, h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)), last, h("td", { class: "right mt-acts" }, run));
+      }))))]) : "";
   body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
     await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
   }), mtCard, danger);

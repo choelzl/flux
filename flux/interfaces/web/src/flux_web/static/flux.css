@@ -864,14 +864,43 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
   summary { padding-block: 8px; }
 }
 
-/* D885: Admin › Maintenance, a row a task */
-.mt-list { display: grid; gap: 0; }
-.mt-row { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--line); min-width: 0; }
-.mt-row:first-child { border-top: none; }
-.mt-row.off { opacity: .7; }
-.mt-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
-.mt-row p { margin: 0; }
-.mt-ctl { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
-.mt-ctl label.stack { font-size: 12.5px; }
-.mt-ctl select { max-width: 100%; min-width: 0; }
-.mt-last { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; min-width: 0; overflow-wrap: anywhere; }
+/* D885, D896: Admin › Maintenance, a table */
+.mt-table td { vertical-align: middle; }
+.mt-table tr.off td:not(.mt-acts) { opacity: .65; }
+.mt-table .mt-said { max-width: 36em; overflow-wrap: anywhere; font-size: 12.5px; }
+.mt-table .mt-acts { white-space: nowrap; text-align: right; }
+.mt-table .mt-acts > * + * { margin-left: 6px; }
+.mt-edit { display: grid; gap: 10px; min-width: min(420px, 80vw); }
+.mt-edit .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mt-edit label.stack { margin: 0; }
+
+/* D896: an agent's tab in one layout -- every field its label above it, two to a row, as its program's */
+.set-fields { gap: 10px 16px; align-items: start; }
+.set-fields > div.stack { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.set-fields > div.stack > label { color: var(--muted); }
+.set-fields .inline { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.set-fields .inline input { flex: 1; min-width: 0; color: var(--ink); font-size: 14px; }
+.set-fields .price-pair { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.set-fields .price-pair .inline { flex: 1 1 7em; }
+.agent-found { gap: 6px 10px; }
+details.set-fold > summary { font-weight: 600; font-size: 0.95em; color: var(--ink); }
+.set-fields label.stack { margin-bottom: 0; }
+
+/* D896: a design of parts on the charts -- the whole and each part a colour of its own; a miss or a
+   failure keeps its red as an outline */
+:root { --g0: #2563eb; --g1: #d97706; --g2: #059669; --g3: #9333ea; --g4: #db2777; --g5: #0891b2; --g6: #65a30d; --g7: #78716c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --g0: #60a5fa; --g1: #fbbf24; --g2: #34d399; --g3: #c084fc; --g4: #f472b6; --g5: #22d3ee; --g6: #a3e635; --g7: #a8a29e; } }
+:root[data-theme="dark"] { --g0: #60a5fa; --g1: #fbbf24; --g2: #34d399; --g3: #c084fc; --g4: #f472b6; --g5: #22d3ee; --g6: #a3e635; --g7: #a8a29e; }
+svg.chart .pt.g0, .legend .sw.g0 { fill: var(--g0); background: var(--g0); }
+svg.chart .pt.g1, .legend .sw.g1 { fill: var(--g1); background: var(--g1); }
+svg.chart .pt.g2, .legend .sw.g2 { fill: var(--g2); background: var(--g2); }
+svg.chart .pt.g3, .legend .sw.g3 { fill: var(--g3); background: var(--g3); }
+svg.chart .pt.g4, .legend .sw.g4 { fill: var(--g4); background: var(--g4); }
+svg.chart .pt.g5, .legend .sw.g5 { fill: var(--g5); background: var(--g5); }
+svg.chart .pt.g6, .legend .sw.g6 { fill: var(--g6); background: var(--g6); }
+svg.chart .pt.g7, .legend .sw.g7 { fill: var(--g7); background: var(--g7); }
+svg.chart .pt[class*=" g"] { fill-opacity: .8; }
+svg.chart .pt[class*=" g"].miss, svg.chart.pareto .pt[class*=" g"].failed { stroke: var(--bad); stroke-width: 1.5; }
+.legend.groups { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; }
+
+.set-fields .inline .save-mark { min-width: 0; }

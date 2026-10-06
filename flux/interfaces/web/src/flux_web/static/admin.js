@@ -308,41 +308,55 @@ const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separ
   max_mb: "condense over (MB)", keep_mb: "keep recent (MB)", failures_days: "login failures (days)",
   notices_days: "notifications (days)", audit_days: "audit trail (days, 0 keeps all)", delete: "delete them (not only report)" };
 async function adminMaintenance(body) {
+  // D896: a table -- the task, its schedule, when it last ran and what it did, Run; its settings and
+  // a run on one loop in Edit
   const r = await api("/admin/maintenance");
-  const row = (t) => {
+  const unitOf = (hrs) => hrs >= 24 && hrs % 24 === 0 ? EVERY_UNITS[2] : hrs >= 1 ? EVERY_UNITS[1] : EVERY_UNITS[0];
+  const every = (t) => { const [u, m] = unitOf(t.every_h); return `every ${Math.round(t.every_h / m)} ${u}`; };
+  const result = (x) => x ? h("span", { class: x.ok ? "" : "bad", title: x.said }, x.loop ? `${x.loop}: ` : "", x.said) : h("span", { class: "muted" }, "—");
+  const edit = async (t) => {
     const mark = saveMark();
-    const on = h("input", { type: "checkbox", checked: t.on, "aria-label": `${t.title} on` });
-    const [unit, mult] = t.every_h >= 24 && t.every_h % 24 === 0 ? EVERY_UNITS[2] : t.every_h >= 1 ? EVERY_UNITS[1] : EVERY_UNITS[0];
-    const n = h("input", { type: "number", min: 1, step: 1, value: Math.round(t.every_h / mult), style: "width:70px", "aria-label": "every" });
+    const on = h("input", { type: "checkbox", checked: t.on });
+    const [unit, mult] = unitOf(t.every_h);
+    const n = h("input", { type: "number", min: 1, step: 1, value: Math.round(t.every_h / mult), style: "width:80px", "aria-label": "every" });
     const u = h("select", { "aria-label": "unit" }, EVERY_UNITS.map(([k]) => h("option", { value: k, selected: k === unit }, k)));
-    const params = Object.entries(t.params).map(([k, v]) => {
-      const f = typeof v === "boolean" ? h("input", { type: "checkbox", checked: v })
-        : h("input", { type: typeof v === "number" ? "number" : "text", min: 0, value: v, style: typeof v === "number" ? "width:90px" : "" });
+    const fields = Object.entries(t.params).map(([k, v]) => {
+      const f = typeof v === "boolean" ? h("input", { type: "checkbox", checked: v }) : h("input", { type: typeof v === "number" ? "number" : "text", min: 0, value: v });
       f.dataset.k = k;
-      return h("label", { class: typeof v === "boolean" ? "check" : "stack" }, typeof v === "boolean" ? [f, PARAM_LABEL[k] || k] : [PARAM_LABEL[k] || k, f]);
+      return f;
     });
-    const fields = params.map(l => l.querySelector("input"));
     autosave([on, n, u, ...fields], () => api(`/admin/maintenance/${t.key}`, { method: "PUT", body: {
       on: on.checked, every_h: Math.max(1, Number(n.value) || 1) * EVERY_UNITS.find(([k]) => k === u.value)[1],
       params: Object.fromEntries(fields.map(f => [f.dataset.k, f.type === "checkbox" ? f.checked : f.type === "number" ? Number(f.value) : f.value])) } }), mark);
-    const pick = t.per_loop ? h("select", { "aria-label": "which loops" }, h("option", { value: "" }, "every loop"),
-      ...r.loops.map(l => h("option", { value: l }, l))) : null;
-    const last = h("div", { class: "small" });
-    const said = (x) => last.replaceChildren(x ? h("span", { class: x.ok ? "" : "bad" }, ago(x.t), x.loop ? ` · ${x.loop}` : "", " · ", x.said) : h("span", { class: "muted" }, "not run yet"));
-    said(t.last);
-    const run = act("Run now", async () => {
-      const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: pick && pick.value ? pick.value : null } });
-      said(got); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
-    }, { cls: "small" });
-    const nextSaid = t.on && t.next ? h("span", { class: "muted small" }, t.next <= Date.now() / 1000 + 60 ? "next: within the minute" : ["next: ", h("time", { title: when(t.next) }, when(t.next))]) : "";
-    return h("div", { class: "mt-row" + (t.on ? "" : " off") },
-      h("div", { class: "mt-head" }, h("label", { class: "check" }, on, h("strong", {}, t.title)), mark),
-      h("p", { class: "muted small" }, t.what),
-      h("div", { class: "mt-ctl" }, h("span", { class: "small" }, "every"), n, u, ...params, pick || "", run),
-      h("div", { class: "mt-last" }, last, nextSaid));
+    const pick = t.per_loop ? h("select", { "aria-label": "a loop" }, r.loops.map(l => h("option", { value: l }, l))) : null;
+    const once = pick && r.loops.length ? h("div", { class: "row" }, pick, act("Run on this loop", async () => {
+      const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: pick.value } });
+      toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
+    }, { cls: "small" })) : "";
+    await dialog(t.title, h("div", { class: "mt-edit" }, h("p", { class: "muted" }, t.what),
+      h("label", { class: "check" }, on, "on a schedule"),
+      h("div", { class: "row" }, h("span", {}, "every"), n, u),
+      ...fields.map(f => h("label", { class: f.type === "checkbox" ? "check" : "stack" },
+        f.type === "checkbox" ? [f, PARAM_LABEL[f.dataset.k] || f.dataset.k] : [PARAM_LABEL[f.dataset.k] || f.dataset.k, f])),
+      once ? h("div", { class: "stack" }, h("span", { class: "muted small" }, "Once, on one loop"), once) : "",
+      h("p", { class: "muted small" }, "Changes save as you make them. ", mark)), [["Close", false]]);
+    adminMaintenance(body);
   };
-  body.replaceChildren(card("Maintenance", [h("p", { class: "muted" }, "Clean-up on a schedule. A running loop is never touched. Every run is in the audit trail."),
-    h("div", { class: "mt-list" }, r.tasks.map(row))]));
+  const rowOf = (t) => h("tr", { class: t.on ? "" : "off" },
+    h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)),
+    h("td", { "data-label": "Schedule", class: t.on ? "" : "muted" }, t.on ? every(t) : "off"),
+    h("td", { "data-label": "Last run" }, t.running ? h("span", { class: "pill live" }, "running") : t.last ? ago(t.last.t) : h("span", { class: "muted" }, "never")),
+    h("td", { "data-label": "Result", class: "mt-said" }, result(t.last)),
+    h("td", { class: "right mt-acts" },
+      act("Run", async () => {
+        const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: null } });
+        toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad"); adminMaintenance(body);
+      }, { cls: "small" }),
+      h("button", { type: "button", class: "small", onclick: () => edit(t) }, "Edit")));
+  body.replaceChildren(card("Maintenance", [h("p", { class: "muted small" }, "Clean-up on a schedule. A running loop is never touched; every run is in the audit trail."),
+    h("div", { class: "scroll-x" }, h("table", { class: "list compact mt-table" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Task"), h("th", {}, "Schedule"), h("th", {}, "Last run"), h("th", {}, "Result"), h("th", {}, ""))),
+      h("tbody", {}, r.tasks.map(rowOf))))]));
 }
 
 /** What every sandbox gets (D698): the network, PATH directories, what every home starts with (D744). */
@@ -365,6 +379,14 @@ async function adminSandbox(body) {
   const showAllow = () => { allowBox.hidden = mode.value !== "allowlist"; };
   mode.addEventListener("change", showAllow); showAllow();
   const sbMark = saveMark();
+  // D850: the stderr lines the pages leave out -- here since D896, beside what every sandbox gets
+  const maskBox = h("textarea", { id: "stderr-masks", rows: 4, class: "mono", placeholder: "failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/" });
+  api("/admin/masks").then(m => { maskBox.value = (m.masks || []).join("\n"); }).catch(() => {});
+  const maskMark = saveMark();
+  autosave(maskBox, async () => { const got = await api("/admin/masks", { method: "PUT", body: { masks: maskBox.value.split("\n") } });
+    if (document.activeElement !== maskBox) maskBox.value = got.masks.join("\n"); }, maskMark, { delay: 1200 });
+  const maskCard = card("Hidden output", [h("p", { class: "muted" }, "Stderr lines the pages leave out, one per line: a piece of text or a /regular expression/. The record keeps them."),
+    maskBox, h("div", { class: "row" }, maskMark)]);
   body.replaceChildren(
     r.sandboxed ? "" : h("p", { class: "callout bad" }, "This server runs without the sandbox (--no-sandbox): none of this applies."),
     card("Network", [h("p", { class: "muted" }, "What the containers may reach. A loop's Settings may add hosts."),
@@ -373,6 +395,7 @@ async function adminSandbox(body) {
       h("details", {}, h("summary", { class: "muted" }, `The server's own PATH: ${r.path.length} directories`), h("pre", { class: "val small" }, r.path.join("\n"))),
       h("label", { class: "check" }, loginP, `add ${r.home}'s login PATH`, adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"),
       h("label", { class: "stack" }, "and these directories, first", paths)]),
+    maskCard,
     card("Homes", [h("p", { class: "muted" }, "Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. ",
         "Each user logs their agents in on their Account page; no one's login is shared."),
       h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
@@ -497,26 +520,30 @@ async function adminAgents(body) {
     const put = async () => { if (JSON.stringify(body_()) === first) return; await api(`/admin/agents/${a.id}`, { method: "PUT", body: body_() }); first = JSON.stringify(body_()); };
     autosave([login, args, home, hosts, creds], put, mark);                       // D833
     autosave([label, bin], async () => { const was = first; await put(); if (was !== first) route(); }, mark, { typing: false });
+    const nMore = [a.login, a.args, a.login_files.length, a.home.length, a.hosts.length].filter(Boolean).length;
+    // D896: one status line -- found or not, its kind, what a document says, its program, who has it ready
     const el = h("div", { class: "agent-panel", "data-agent": a.id, "data-label": a.label },
-      h("div", { class: "agent-found" },
+      h("div", { class: "agent-found small" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
-        h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`), h("code", { class: "small" }, a.id),
-        mark, h("span", { class: "mono small" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
-          : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`)),
-      h("div", { class: "grid-2" },
+        h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`),
+        h("span", { class: "muted" }, "in a document: ", h("code", {}, a.id)),
+        h("span", { class: "mono muted" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
+          : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`),
+        h("span", { class: "muted" }, "ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
+          failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : ""),
+        mark),
+      h("div", { class: "grid-2 set-fields" },
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
         h("label", { class: "stack" }, "Name shown", label)),
-      // D816: what is set once and rarely looked at again, folded
-      h("details", { class: "agent-more" }, h("summary", { class: "small" }, "Login, arguments, home files, hosts",
-          [a.login, a.args, ...a.login_files, ...a.home, ...a.hosts].some(Boolean) ? h("span", { class: "set-dot" }, " •") : ""),
-        h("div", { class: "grid-2" },
+      // D816: what is set once and rarely looked at again, folded -- as its model and variables are (D896)
+      h("details", { class: "set-fold", open: null }, h("summary", {}, "Login and files",
+          h("span", { class: "muted small" }, nMore ? ` · ${nMore} set` : " · none")),
+        h("div", { class: "grid-2 set-fields" },
           h("label", { class: "stack" }, "Login command", login),
           h("label", { class: "stack" }, "Extra arguments, every run", args),
           h("label", { class: "stack", title: "The file in a user's home that says they are logged in" }, "Login files (when not its usual)", creds),
           h("label", { class: "stack" }, "Every home starts with (paths in this server account's home)", home),
           h("label", { class: "stack" }, "Hosts it needs, under a network allowlist", hosts))),
-      h("p", { class: "small muted" }, "Ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
-        failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "", "."),
       a.builtin ? "" : h("div", { class: "form-actions" }, act("Remove", async () => {
         if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
         await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
@@ -538,15 +565,6 @@ async function adminAgents(body) {
   const kind = h("select", { id: "ag-new-kind", "aria-label": "Its kind" }, r.kinds.map(k => h("option", { value: k.id }, k.label)));
   const nlabel = h("input", { id: "ag-new-label", placeholder: "NGA (our OpenCode)", autocomplete: "off" });
   const nbin = h("input", { id: "ag-new-bin", placeholder: "/opt/nga/bin/nga", class: "mono", autocomplete: "off" });
-  // D850: the stderr lines the pages leave out
-  const maskBox = h("textarea", { id: "stderr-masks", rows: 6, class: "mono", placeholder: "failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/" });
-  api("/admin/masks").then(m => { maskBox.value = (m.masks || []).join("\n"); }).catch(() => {});
-  const maskMark = saveMark();
-  autosave(maskBox, async () => { const got = await api("/admin/masks", { method: "PUT", body: { masks: maskBox.value.split("\n") } });
-    if (document.activeElement !== maskBox) maskBox.value = got.masks.join("\n"); }, maskMark, { delay: 1200 });
-  extraTabs.push({ tab: "Hidden output", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Stderr lines to hide"),
-    h("p", { class: "muted small" }, "One per line: a piece of text, or a /regular expression/. Hidden from the pages, kept in the record."),
-    maskBox, h("div", { class: "row" }, maskMark)) });
   extraTabs.push({ tab: "+ Add an agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Add an agent"),
     h("p", { class: "muted small" }, "Another build of a kind under its own name (", h("code", {}, "generate: nga"), ")."),
     h("div", { class: "grid-2" }, h("label", { class: "stack" }, "Name (lower case)", name), h("label", { class: "stack" }, "Kind", kind),
@@ -653,11 +671,12 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     Object.assign(inputs[k], { id: `set-${scope}-${k}`, title: k });          // D846: the variable's name, on hover
     return { label: labels[k] || k, cell: h("span", { class: "inline" }, inputs[k], clearBox, mark) };
   };
+  // D896: a field as the agent's own are -- its label above it, two to a row
   const row = (k) => { const f = field(k);
-    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${k}`, title: k }, f.label), f.cell); };
-  // D846: a price in and out, one row
+    return h("div", { class: "stack" }, h("label", { for: `set-${scope}-${k}`, title: k }, f.label), f.cell); };
+  // D846: a price in and out, one field
   const priceRow = ([pin, pout]) => { const a = field(pin), b = field(pout);
-    return h("div", { class: "set-row" }, h("label", { class: "lbl", for: `set-${scope}-${pin}` }, "Price ($ / 1M tokens)"),
+    return h("div", { class: "stack" }, h("label", { for: `set-${scope}-${pin}` }, "Price ($ / 1M tokens)"),
       h("span", { class: "price-pair" }, h("span", { class: "muted small" }, "in"), a.cell, h("span", { class: "muted small" }, "out"), b.cell)); };
   const groups = st.groups.map(g => {
     const own = [...g.public, ...g.secret].some(k => st.values[k]);
@@ -671,7 +690,8 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       h("summary", {}, title, n ? h("span", { class: "muted small" }, ` · ${n} set`) : h("span", { class: "muted small" }, " · none")), ...kids);
     const prices = g.prices || [];
     const rows = [g.hint ? h("p", { class: "muted small" }, g.hint) : "", note ? h("p", { class: "small hint-line" }, note) : "",
-      ...g.public.filter(k => !prices.includes(k)).map(row), ...g.secret.map(row), prices.length === 2 ? priceRow(prices) : ""];
+      h("div", { class: "grid-2 set-fields" }, ...g.public.filter(k => !prices.includes(k)).map(row), ...g.secret.map(row),
+        prices.length === 2 ? priceRow(prices) : "")];
     // D835: a user prices only an endpoint of their own; on the server's, the admin's prices count
     if (server && prices.length && inputs[g.endpoint]) {
       const why = h("p", { class: "muted small price-said" });
@@ -682,12 +702,12 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       rows.push(why);
     }
     const nVars = vars ? vars.rows.length + ((vars.server || []).length) : 0;
-    const varsEl = vars ? fold(`Variables for ${g.label} alone`, nVars, nVars > 0,
+    const varsEl = vars ? fold("Variables (this agent only)", nVars, nVars > 0,
       envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
       vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
         envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "";
     const el = h("fieldset", { class: "set-group" + (panel ? " with-panel" : "") }, h("legend", {}, g.label), panel ? panel.el : "",
-      g.agent ? fold("Its model: endpoint, model, key, prices", setHere, setHere > 0, ...rows) : rows,
+      g.agent ? fold("Model", setHere, setHere > 0, ...rows) : rows,
       varsEl);
     return { g, el, own };
   });
