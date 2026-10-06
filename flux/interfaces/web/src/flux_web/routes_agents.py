@@ -28,7 +28,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     _rules, _set_env = ctx.rules, ctx.set_env
 
     # ---- every user's agent logins (D734, D747: internal users too, since each has a home of their own)
-    from .agents import KINDS, check_new, found, registry, version, visible
+    from .agents import KINDS, check_new, found, known_version, registry, version, visible
     from .logins import LIMIT_S, Logins, logged_in
 
     logins = Logins()
@@ -325,13 +325,29 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(400, "the program: an absolute path, or a name found on PATH")
         return exe
 
-    @app.get("/api/admin/agents")
-    def admin_agents(_a: User = Depends(admin_of)) -> dict[str, Any]:
+    def _versions(reg: dict[str, Any]) -> dict[str, str]:
+        """Each found agent's `--version`, asked at once (each kept for its program as it is on disk)."""
         from concurrent.futures import ThreadPoolExecutor
 
-        reg = registry(store)
         with ThreadPoolExecutor(max_workers=max(1, len(reg))) as pool:       # each asked at once
-            seen = dict(zip(reg, pool.map(lambda a: (lambda f: (f, version(f)))(found(a, store)), reg.values())))
+            return dict(zip(reg, pool.map(lambda a: version(found(a, store)), reg.values())))
+
+    @app.get("/api/admin/agents/versions")
+    def admin_agent_versions(_a: User = Depends(admin_of)) -> dict[str, str]:
+        """D921: the versions apart -- a cold `--version` can take seconds each; the page asks this
+        after drawing the agents."""
+        return _versions(registry(store))
+
+    @app.get("/api/admin/agents")
+    def admin_agents(probe: bool = True, _a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Every agent; `probe=false` (D921): a version not known yet is null, nothing run -- the
+        page draws at once and asks /agents/versions after."""
+        reg = registry(store)
+        if probe:
+            vers = _versions(reg)
+            seen = {n: (found(a, store), vers[n]) for n, a in reg.items()}
+        else:
+            seen = {n: (lambda f: (f, known_version(f)))(found(a, store)) for n, a in reg.items()}
         import os
 
         from flux_loop.agent_check import connection

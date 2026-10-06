@@ -19,7 +19,7 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 __all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day", "window"]
 
 DAY = 86400.0
-_TURNS: dict[str, tuple[tuple[int, float], list[tuple]]] = {}
+_TURNS: dict[str, tuple[int, int, list[tuple]]] = {}   # path -> (inode, bytes read, its turns): D921
 
 
 def window(days: float, now: float | None = None) -> tuple[float, float]:
@@ -51,45 +51,54 @@ def failures(store: Any, runs: Any, since: float, until: float | None = None) ->
 
 
 def _rows(path: str) -> list[tuple]:
-    """A loop's turns, each (ts, kind, who, endpoint, ok, seconds, tokens in, out, cost, error),
-    read once per change of the file."""
+    """A loop's turns, each (ts, kind, who, endpoint, ok, seconds, tokens in, out, cost, error).
+    D921: read as the file grows -- a turn appended is that turn read, not the transcript again
+    (another file, or one cut, from its start)."""
+    from .usage import grown
+
     try:
         st = os.stat(path)
     except OSError:
         return []
-    key = (st.st_size, st.st_mtime)
     got = _TURNS.get(path)
-    if got and got[0] == key:
-        return got[1]
-    out = []
-    with open(path, "rb") as fh:
-        for raw in fh:
-            try:
-                t = json.loads(raw)
-            except ValueError:
-                continue
-            kind = str(t.get("kind") or "turn")
-            if kind == "agent":
-                who = str(t.get("agent") or "agent")
-                model = str(t.get("about") or "").split(",")[0].strip()
-                where = f"{who} · {model}" if model and not model.startswith(who) else (model or who)
-                ok = bool(t.get("ok")) and not t.get("error")
-                err = "" if ok else (str(t.get("error") or "") or f"exit {t.get('rc')}: " + " ".join(str(t.get("stderr") or "").split())[-200:])
-            else:
-                who = str(t.get("model") or kind)
-                where = (urlsplit(str(t.get("server") or "")).hostname or "local") + " · " + who
-                ok = not t.get("error")
-                err = str(t.get("error") or "")[:300]
-            err = " ".join(_ANSI.sub("", err).split())
-            notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
-            tin = t.get("tokens_in", notes.get("input_tokens")) or 0
-            tout = t.get("tokens_out", notes.get("output_tokens")) or 0
-            try:
-                out.append((float(t.get("ts") or 0), kind, who, where, ok, float(t.get("seconds") or 0), float(tin), float(tout),
-                            float(t.get("cost_usd") or 0), err))
-            except (TypeError, ValueError):
-                continue
-    _TURNS[path] = (key, out)
+    if got is None or got[0] != st.st_ino or got[1] > st.st_size:
+        got = (st.st_ino, 0, [])
+    ino, read, out = got
+    more = grown(path, read)
+    if more is None:
+        return []
+    if more[0] != ino:
+        ino, out = more[0], []
+        more = grown(path, 0) or (ino, [], 0)
+    for raw in more[1]:
+        try:
+            t = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(t, dict):
+            continue
+        kind = str(t.get("kind") or "turn")
+        if kind == "agent":
+            who = str(t.get("agent") or "agent")
+            model = str(t.get("about") or "").split(",")[0].strip()
+            where = f"{who} · {model}" if model and not model.startswith(who) else (model or who)
+            ok = bool(t.get("ok")) and not t.get("error")
+            err = "" if ok else (str(t.get("error") or "") or f"exit {t.get('rc')}: " + " ".join(str(t.get("stderr") or "").split())[-200:])
+        else:
+            who = str(t.get("model") or kind)
+            where = (urlsplit(str(t.get("server") or "")).hostname or "local") + " · " + who
+            ok = not t.get("error")
+            err = str(t.get("error") or "")[:300]
+        err = " ".join(_ANSI.sub("", err).split())
+        notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
+        tin = t.get("tokens_in", notes.get("input_tokens")) or 0
+        tout = t.get("tokens_out", notes.get("output_tokens")) or 0
+        try:
+            out.append((float(t.get("ts") or 0), kind, who, where, ok, float(t.get("seconds") or 0), float(tin), float(tout),
+                        float(t.get("cost_usd") or 0), err))
+        except (TypeError, ValueError):
+            continue
+    _TURNS[path] = (ino, more[2], out)
     return out
 
 

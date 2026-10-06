@@ -125,7 +125,8 @@ async function notifyDialog() {
 }
 
 async function adminLoops(body) {
-  const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/resources").catch(() => null)]);
+  // D921: the pause from the controls -- never Resources' disk walk and containers, seconds cold
+  const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/controls").catch(() => null)]);
   // D816: the documents of an earlier form, looked for when asked (each loop's documents are tried)
   const migration = h("div", {});
   const migrateBtn = act("Migrate old documents…", async () => { migrateBtn.hidden = true; await adminDocuments(migration); }, { cls: "small" });
@@ -183,7 +184,8 @@ async function adminResources(body) {
                 if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it; it is removed.", { ok: "Kill", danger: true })) return;
                 toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
               }, { cls: "small danger" })
-              : act("Stop the loop now", async () => { await stopLoop(c.loop, true, c.user); load(); }, { cls: "small" }))))))) : empty("No sandbox container."));
+              : act("Stop the loop now", async () => { await stopLoop(c.loop, true, c.user); load(); }, { cls: "small" }))))))) : empty("No sandbox container."),
+      { actions: r.containers_at ? [h("span", { class: "muted small" }, "asked ", ago(r.containers_at))] : null });   // D921: a sample, said with its time
     const loops = r.loops.slice().sort((a, b) => b.total - a.total);
     const totalOf = (k) => loops.reduce((s, l) => s + (l[k] || 0), 0);
     const cleanBtn = (l, what, label, text) => act(label, async () => {
@@ -547,7 +549,17 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
     users are offered it, and its model, once it is found. */
 async function adminAgents(body) {
   body.replaceChildren(skeleton(6));
-  const [r, st, genv] = await Promise.all([api("/admin/agents"), api("/admin/settings"), api("/admin/env")]);
+  // D921: drawn at once, each version not known yet filled in when its probe answers
+  const [r, st, genv] = await Promise.all([api("/admin/agents?probe=false"), api("/admin/settings"), api("/admin/env")]);
+  if (r.agents.some(a => a.found && a.version == null)) {
+    api("/admin/agents/versions").then((vs) => {
+      for (const a of r.agents) {                         // a panel drawn later reads it from `a`
+        if (a.version == null) a.version = vs[a.id] || "";
+        const el = a.found && a.version ? body.querySelector(`.agent-panel[data-agent="${CSS.escape(a.id)}"] .agent-version`) : null;
+        if (el) el.textContent = ` · ${a.version}`;
+      }
+    }).catch(() => { /* the versions only: the rest is drawn */ });
+  }
   const lines = (a) => (a || []).join("\n");
   const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
   const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
@@ -574,7 +586,7 @@ async function adminAgents(body) {
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
         h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`),
         h("span", { class: "muted" }, "in a document: ", h("code", {}, a.id)),
-        h("span", { class: "mono muted" }, a.found ? `${a.found}${a.version ? " · " + a.version : ""}`
+        h("span", { class: "mono muted" }, a.found ? [a.found, h("span", { class: "agent-version" }, a.version ? " · " + a.version : "")]
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`),
         h("span", { class: "muted" }, "ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
           failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
@@ -635,7 +647,7 @@ async function adminAgents(body) {
 }
 
 async function adminUsers(body) {
-  const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/resources").catch(() => null)]);
+  const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/controls").catch(() => null)]);   // D921
   const name = h("input", { placeholder: "name", autocomplete: "off", "data-lpignore": "true" }); const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "password (empty: send an invitation link)", style: "min-width:280px" });
   // D734: the kinds -- internal users' runs inherit the server's settings, external ones bring their own
   const KINDS = [["internal", "internal"], ["external", "external"], ["admin", "admin"]];

@@ -11,7 +11,7 @@ from typing import Any
 __all__ = ["usage"]
 
 _KEYS = ("tokens_in", "tokens_out", "tokens_cached", "cost_usd")
-_CACHE: dict[str, tuple[tuple[int, float], dict[str, Any]]] = {}
+_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}   # path -> (inode, bytes read, the sums so far): D921
 
 
 def _num(v: Any) -> float:
@@ -40,8 +40,26 @@ def _add(into: dict[str, Any], t: dict[str, Any]) -> None:
     into["cost_usd"] += _num(t.get("cost_usd"))
 
 
+def grown(path: str, read: int) -> tuple[int, list[bytes], int] | None:
+    """D921: a transcript's whole lines after byte `read` -- (its inode, the lines, the offset after
+    them); a line being written waits. None when it is gone."""
+    try:
+        with open(path, "rb") as fh:
+            st = os.fstat(fh.fileno())
+            if st.st_size <= read:
+                return st.st_ino, [], read
+            fh.seek(read)
+            data = fh.read(st.st_size - read)
+    except OSError:
+        return None
+    end = data.rfind(b"\n") + 1
+    return st.st_ino, data[:end].splitlines(), read + end
+
+
 def usage(path: str | None) -> dict[str, Any]:
-    """{total, by: [{who, kind, ...}], first, last} for a transcript; zeros without one."""
+    """{total, by: [{who, kind, ...}], first, last} for a transcript; zeros without one. D921: summed
+    as the file grows -- a turn appended adds that turn, the transcript is not read again (another
+    file, or one cut, is read from its start)."""
     out: dict[str, Any] = {"total": _empty(), "by": [], "first": None, "last": None}
     if not path:
         return out
@@ -49,25 +67,31 @@ def usage(path: str | None) -> dict[str, Any]:
         st = os.stat(path)
     except OSError:
         return out
-    key = (st.st_size, st.st_mtime)
     got = _CACHE.get(path)
-    if got and got[0] == key:
-        return got[1]
-    by: dict[tuple[str, str], dict[str, Any]] = {}
-    with open(path, "rb") as fh:
-        for raw in fh:
-            try:
-                t = json.loads(raw)
-            except ValueError:
-                continue
-            kind = str(t.get("kind") or "turn")
-            who = str(t.get("agent") or t.get("model") or kind)
-            _add(out["total"], t)
-            _add(by.setdefault((kind, who), {"kind": kind, "who": who, **_empty()}), t)
-            ts = _num(t.get("ts")) or None
-            if ts:
-                out["first"] = min(out["first"] or ts, ts)
-                out["last"] = max(out["last"] or ts, ts)
-    out["by"] = sorted(by.values(), key=lambda b: -b["seconds"])
-    _CACHE[path] = (key, out)
-    return out
+    if got is None or got[0] != st.st_ino or got[1] > st.st_size:
+        got = (st.st_ino, 0, {"total": _empty(), "by": {}, "first": None, "last": None})
+    ino, read, s = got
+    more = grown(path, read)
+    if more is None:
+        return out
+    if more[0] != ino:                                         # replaced between the look and the read: from its start
+        ino, read, s = more[0], 0, {"total": _empty(), "by": {}, "first": None, "last": None}
+        more = grown(path, 0) or (ino, [], 0)
+    for raw in more[1]:
+        try:
+            t = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(t, dict):
+            continue
+        kind = str(t.get("kind") or "turn")
+        who = str(t.get("agent") or t.get("model") or kind)
+        _add(s["total"], t)
+        _add(s["by"].setdefault((kind, who), {"kind": kind, "who": who, **_empty()}), t)
+        ts = _num(t.get("ts")) or None
+        if ts:
+            s["first"] = min(s["first"] or ts, ts)
+            s["last"] = max(s["last"] or ts, ts)
+    _CACHE[path] = (ino, more[2], s)
+    return {"total": dict(s["total"]), "by": sorted((dict(b) for b in s["by"].values()), key=lambda b: -b["seconds"]),
+            "first": s["first"], "last": s["last"]}

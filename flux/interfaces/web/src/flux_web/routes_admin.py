@@ -82,7 +82,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                "disks": {d["label"]: d["used"] / d["total"] for d in m["disks"] if not d.get("same_as") and d["total"]},
                                "loops": len(live)}
         if live:                                     # the containers' own use, when there are any
-            cs = [c for c in adm.containers()["containers"] if c.get("state") == "running"]
+            cs = [c for c in adm.containers_seen()[0]["containers"] if c.get("state") == "running"]   # D921: shared with Resources
             out.update(containers=len(cs), cpu=sum(c.get("cpu") or 0 for c in cs), cmem=sum(c.get("mem") or 0 for c in cs))
         else:
             out.update(containers=0, cpu=0.0, cmem=0.0)
@@ -124,7 +124,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 loops.append({"user": u.name, "app": a["name"], "running": (u.name, a["name"]) in live,
                               "container": st.get("container"), "last_active": st.get("last_active"), **disk})
         by_key = {adm._key(x["user"], x["app"]): x for x in loops}
-        cont = adm.containers()
+        cont, seen_at = adm.containers_seen()                # D921: asked at most every 15 s, its time said
+        cont = {**cont, "containers": [dict(c) for c in cont["containers"]]}
         for c in cont["containers"]:
             owner = by_key.get(adm._key(*c["app"].split(".", 1))) if c.get("app") and "." in c["app"] else None
             owner = owner or next((x for x in loops if x.get("container") == c["name"]), None)
@@ -135,7 +136,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return {"machine": adm.machine({k: v for k, v in paths.items() if os.path.exists(v)}), **cont, "loops": loops,
                 "caches": caches, "paused": store.server_get("paused"), "max_running": runs.max_running,
                 "limits": {u.name: store.server_get(f"max_running:{u.name}") for u in users},
-                "running": [{"user": k[0], "app": k[1]} for k in live]}
+                "running": [{"user": k[0], "app": k[1]} for k in live], "containers_at": seen_at}
 
     @app.post("/api/admin/containers/{cname}/kill")
     def kill_container(cname: str, a: User = Depends(admin_of)) -> dict[str, str]:
@@ -217,6 +218,13 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 for (u, app_name), r in _live_loops().items()}
         store.audit(a.name, "stop all", f"{len(said)} loop(s){' now' if body.now else ''}")
         return {"stopped": said}
+
+    @app.get("/api/admin/controls")
+    def admin_controls(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D921: what Admin's home and Users read of the controls -- starts paused, the running
+        limits -- from the store alone: no disk walk, no container asked (Resources' own)."""
+        return {"paused": store.server_get("paused"), "max_running": runs.max_running,
+                "limits": {u.name: store.server_get(f"max_running:{u.name}") for u in store.users()}}
 
     @app.put("/api/admin/paused")
     def set_paused(body: Paused, a: User = Depends(admin_of)) -> dict[str, Any]:

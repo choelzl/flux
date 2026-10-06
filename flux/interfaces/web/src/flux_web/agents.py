@@ -164,6 +164,17 @@ def version(program: str) -> str:
     return _VERSIONS[key]
 
 
+def known_version(program: str) -> str | None:
+    """D921: its `--version` when asked already (as it is on disk), else None -- nothing run."""
+    if not program:
+        return ""
+    try:
+        key = (program, os.stat(program).st_mtime)
+    except OSError:
+        key = (program, 0.0)
+    return _VERSIONS.get(key)
+
+
 def visible(store: Any) -> dict[str, Agent]:
     """The agents users are offered: those whose program is found and runnable."""
     return {n: a for n, a in registry(store).items() if found(a, store)}

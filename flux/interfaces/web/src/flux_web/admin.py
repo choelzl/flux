@@ -13,6 +13,7 @@ import re
 import shutil
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -154,12 +155,27 @@ def containers() -> dict[str, Any]:
     return {"engine": eng, "containers": out, "error": None}
 
 
+_SEEN: list[Any] = [0.0, None]
+_SEEN_LOCK = threading.Lock()
+
+
+def containers_seen(max_age: float = 15.0) -> tuple[dict[str, Any], float]:
+    """D921: the containers as last asked, and when -- asked again only when older than `max_age`
+    (each ask runs the engine's `ps` and `stats`, seconds on a busy machine): Resources and the
+    minute's sample share one answer; one asker at a time, the others take it."""
+    with _SEEN_LOCK:
+        if _SEEN[1] is None or time.time() - _SEEN[0] > max_age:
+            _SEEN[1], _SEEN[0] = containers(), time.time()
+        return _SEEN[1], _SEEN[0]
+
+
 def kill_container(name: str) -> str:
     """A sandbox container stopped and removed: one left behind by a run that is gone."""
     from flux_cli.sandbox import engine, engine_cli
 
     if not re.fullmatch(r"flux-[0-9a-f]{6,32}", name):
         raise ValueError("not a sandbox container's name")
+    _SEEN[1] = None                                         # D921: asked afresh next time
     cli = engine_cli(engine())
     subprocess.run([*cli, "kill", name], capture_output=True, text=True, timeout=60)
     r = subprocess.run([*cli, "rm", "-f", name], capture_output=True, text=True, timeout=60)
