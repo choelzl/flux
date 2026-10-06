@@ -22,16 +22,19 @@ import shutil
 import sys
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable, TYPE_CHECKING
 
-from .estimate import KINDS as ESTIMATE_KINDS, Estimator
-from .objective import Objective, Objectives
-from .types import (LoopRequest)
+from ..estimate import KINDS as ESTIMATE_KINDS, Estimator
+from ..objective import Objectives
+from ..types import LoopRequest
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .roles import Roles
+    from ..objective import Objective
+    from ..roles import Roles
+
 
 __all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "describe_flow", "load_task", "read_input", "request_for", "resolve"]
+
 
 #: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
 #: a name neither is stays as written (a script's own braces are its business)
@@ -320,7 +323,7 @@ class TaskSpec:
         if "command" in generator:
             generator = {"command": list(_command(generator["command"], "flow.generate.command"))}
         elif "agent" in generator:
-            from .agent import agent_spec
+            from ..agent import agent_spec
 
             try:
                 agent_spec(generator["agent"])
@@ -336,7 +339,7 @@ class TaskSpec:
                 raise TaskError("flow.generate.catalog must be a non-empty list of paths")
         roles = dict(doc.get("roles") or {})             # from the flow's boxes
         if roles:
-            from .roles import available_roles, make_role
+            from ..roles import available_roles, make_role
 
             for role, spec in roles.items():
                 try:            # an unknown role is a load error, not a
@@ -354,7 +357,7 @@ class TaskSpec:
         record = str(doc.get("_record") or doc.get("id") or "").strip()
         ladder = doc.get("ladder")
         if isinstance(ladder, dict):
-            from .ladder import Ladder
+            from ..ladder import Ladder
 
             known_ladder = {f.name for f in fields(Ladder)}
             bad_ladder = sorted(set(ladder) - known_ladder)
@@ -422,7 +425,7 @@ class TaskSpec:
             skills_raw = [skills_raw]
         if not isinstance(skills_raw, list) or not all(isinstance(x, str) for x in skills_raw):
             raise TaskError("`skills` is a list of folders (a skill, or a folder of skills), beside the document")
-        from .skills import SkillError, load_skills
+        from ..skills import SkillError, load_skills
 
         try:
             skills = tuple(str(sk.path) for sk in load_skills(skills_raw, base=Path(base) if base is not None else None))
@@ -527,7 +530,7 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
     take -- `flux rtl ...` is SystemVerilog, a ChampSim build C++ -- from the tool catalog's
     `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
     when nothing decides."""
-    from .toolbox import TOOLS
+    from ..toolbox import TOOLS
 
     hdl = {"systemverilog", "verilog"}
 
@@ -877,7 +880,7 @@ def _rig_for(task: TaskSpec, caller: "Roles | None") -> "Roles":
     """The task's own roles, overlaid by the caller's (D460). A caller's filled slot wins; its
     empty ones leave the document's alone, so `--role orchestrator=rules` switches exactly the
     one role it names."""
-    from .roles import ROLES, Roles, rig
+    from ..roles import ROLES, Roles, rig
 
     out = rig(**dict(task.roles)) if task.roles else Roles()
     if caller is None:
@@ -1224,7 +1227,7 @@ _KNOWLEDGE_KEYS = ("files", "sheet", "text", "off", "agent")
 
 def _agents() -> tuple[str, ...]:
     """The agents a box may name: the presets, and those the server adds (D807)."""
-    from .agent import agent_kinds
+    from ..agent import agent_kinds
 
     return tuple(agent_kinds())
 #: what a document calls the boxes an agent may work (D830: never the loop's inside names, dse or extract)
@@ -1377,7 +1380,7 @@ def _by_doc(spec: Any, more: dict[str, Any]) -> Any:
 
 def _dse_words() -> tuple[str, ...]:
     """The search policies a document names by word (D797: as its `orchestrate`)."""
-    from .roles import available_roles
+    from ..roles import available_roles
 
     return tuple(n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent", "model"))
 
@@ -1614,7 +1617,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     flow: dict[str, Any] = {}
     doc = dict(doc)
     roles: dict[str, Any] = {}
-    from .boxes import DELEGABLE, NEVER
+    from ..boxes import DELEGABLE, NEVER
 
     for box, value in raw.items():
         if not (isinstance(value, dict) and "agent" in value) or box in ("generate", "knowledge"):   # their own (D773)
@@ -1625,7 +1628,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             raise TaskError(f"flow.{box} is not a box an agent answers; those are {', '.join(sorted(DELEGABLE))}")
         if set(value) != {"agent"}:
             raise TaskError(f"flow.{box} is {{agent: <preset or spec>}}, not {sorted(value)}")
-        from .agent import agent_spec
+        from ..agent import agent_spec
 
         try:
             agent_spec(value["agent"])
@@ -1660,7 +1663,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         if isinstance(value, dict) and set(value) == {"agent"}:
             value = {"llm": {"agent": value["agent"]}}      # a coding agent proposes the points (D640)
         if isinstance(value, list):                              # D583: phases, in order
-            from .dse import validate_phase
+            from ..dse import validate_phase
 
             for i, spec in enumerate(value):
                 try:
@@ -1669,7 +1672,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                     raise TaskError(f"flow.dse[{i}]: {exc}") from exc
             value = {"phases": {"phases": value}}
         elif isinstance(value, str) and ":" in value:          # D602: a policy of your own
-            from .dse import validate_phase
+            from ..dse import validate_phase
 
             try:
                 validate_phase(value)
@@ -1677,7 +1680,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
                 raise TaskError(f"flow.dse: {exc}") from exc
             value = {"phases": {"phases": [value]}}
         if value != "none":
-            from .roles import available_roles
+            from ..roles import available_roles
 
             name = value if isinstance(value, str) else next(iter(value), None) if isinstance(value, dict) else None
             if name == "llm":                                   # D554: the model's half of the box
@@ -1709,7 +1712,7 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             try:
                 if set(sources) != {"agent"}:
                     raise ValueError
-                from .agent import agent_spec
+                from ..agent import agent_spec
 
                 agent_spec(sources["agent"])
             except (ValueError, TypeError) as exc:
@@ -1771,7 +1774,7 @@ def _dse_policies(value: Any) -> list[str]:
 
 
 def _agent_tool(spec: Any) -> str:
-    from .agent import agent_spec
+    from ..agent import agent_spec
 
     try:
         a = agent_spec(spec)
@@ -1796,7 +1799,7 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
     space = dict(task.space)
     if not space and problem is not None:
         try:
-            from .types import LoopRequest, LoopState
+            from ..types import LoopRequest, LoopState
 
             space = dict(problem.space(LoopState(request=LoopRequest(), say=lambda _m: None,
                                                   proposer=None, feedback=None)) or {})
@@ -1824,7 +1827,7 @@ _KIND_OF_WORK = "rules pick the kind of work: a design sent back is improved fir
 
 def describe_orchestrate(task: "TaskSpec") -> str:
     """The orchestrate line's half, in words (D666)."""
-    from .roles import available_roles
+    from ..roles import available_roles
 
     raw = task.flow.get("orchestrate")
     orch = task.roles.get("orchestrator")
@@ -1864,7 +1867,7 @@ def describe_stage(stage: "Stage", modelled: bool = False) -> str:
 def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     """The drawing, one line per box, with the half in force for this document: from `flow:`,
     the other keys, the world (`problem`, when given) and the defaults (D542)."""
-    from .roles import available_roles
+    from ..roles import available_roles
 
     flow = task.flow
     policies = [n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent")]
