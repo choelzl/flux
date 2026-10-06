@@ -169,7 +169,7 @@ def test_a_search_draws_and_checks_only_the_generator_that_runs():
     out = json.loads(r.stdout)
     for name in ("model", "agent"):
         assert out[name]["half"] == "off"
-        assert any(m["level"] == "error" and "only through a script" in m["text"] and m["step"] == 4 for m in out[name]["checks"]), out[name]
+        assert any(m["level"] == "error" and "only through a script" in m["text"] and m["step"] == 3 for m in out[name]["checks"]), out[name]   # D941: Graph
     assert out["script"]["half"] == "rules" and not [m for m in out["script"]["checks"] if m["level"] == "error"]
     tune = out["tune"]
     assert tune["half"] == "off" and not [m for m in tune["checks"] if m["level"] == "error"]
@@ -184,3 +184,36 @@ def test_the_checklist_knows_the_loops_own_placeholders():
                         str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == list(BUILTIN_SUBS)
+
+
+def test_the_wizard_has_six_steps_and_old_steps_land_on_theirs():
+    """D941: Prompt, Check & Measure, Objective, Graph, Extra, Save -- every message names one of them,
+    and the seven steps' names and numbers (D826) land on the step that holds their fields now."""
+    js = ("const c = require(process.argv[1]); process.stdout.write(JSON.stringify({ids: c.STEP_IDS, of: c.STEP_OF,"
+          " old: [0, 1, 2, 3, 4, 5, 6].map(i => c.stepIndex(i, true)), steps: c.check(c.base()).map(m => m.step)}))")
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["ids"] == ["prompt", "measure", "objective", "graph", "extra", "save"]
+    assert out["old"] == [0, 1, 1, 2, 3, 4, 5]
+    assert [out["of"][k] for k in ("problem", "checks", "measurements", "objectives", "flow", "more", "review")] == [0, 1, 1, 2, 3, 4, 5]
+    assert set(out["steps"]) <= set(range(5)) and {0, 1, 2} <= set(out["steps"])
+
+
+def test_the_crafters_docs_tokens_are_the_apps():
+    """D941: on the docs page the crafter wears the web app's colours -- crafter.css's token set for
+    Material's light and dark schemes is flux.css's light and dark :root, value for value."""
+    import re
+
+    def tokens(block: str) -> dict[str, str]:
+        return {k: v.strip() for k, v in re.findall(r"(--[a-z-]+):\s*([^;]+);", block)}
+
+    flux = (REPO / "flux/interfaces/web/src/flux_web/static/flux.css").read_text()
+    crafter = (ASSETS / "crafter.css").read_text()
+    app_light = tokens(re.search(r":root \{(.*?)\}", flux, re.S).group(1))
+    app_dark = tokens(re.search(r':root\[data-theme="dark"\] \{(.*?)\}', flux, re.S).group(1))
+    docs_light = tokens(re.search(r"\[data-md-color-scheme\] \.flux-crafter \{(.*?)\}", crafter, re.S).group(1))
+    docs_dark = tokens(re.search(r'\[data-md-color-scheme="slate"\] \.flux-crafter \{(.*?)\}', crafter, re.S).group(1))
+    assert {"--ink", "--muted", "--line", "--panel", "--bg", "--soft", "--accent", "--accent-ink", "--ok", "--bad", "--warn"} <= set(docs_light) & set(docs_dark)
+    for app, docs in ((app_light, docs_light), (app_dark, docs_dark)):
+        assert {k: v for k, v in docs.items() if k in app} == {k: app[k] for k in docs if k in app}

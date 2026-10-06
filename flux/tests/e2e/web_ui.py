@@ -396,14 +396,21 @@ def flows(r: Run) -> None:
         r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.fc-checks .fc-error') && !!document.querySelector('.fc-checks .fc-todo')"))
         r.check("no command-line next steps", "Next steps" not in r.text())
         steps = b.js("return [...document.querySelectorAll('.fc-stepbar button')].map(x => x.textContent.replace(/^\\d+/, ''))")
-        r.check("the configurator is steps, not one long form (D826)", steps == ["Problem", "Checks", "Measurements", "Objectives",
-                "Who does each step", "More", "Review and save"], str(steps))
+        r.check("the configurator is six steps (D826, D941)", steps == ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"], str(steps))
+        r.check("its step bar is the app's subtabs, its fields label.stack (D941)",
+                b.js("return !!document.querySelector('.fc-stepbar.subtabs button.on') && !!document.querySelector('.fc-step label.stack.fc-field')"))
         r.check("one step at a time: the document is the last step's", b.js("return document.querySelector('.fc-output').hidden") is True)
         b.js("[...document.querySelectorAll('.fc-stepnav button')].find(x => x.textContent.startsWith('Next')).click(); return 1")
-        b.wait("document.querySelector('.fc-stepbar li.fc-on') && document.querySelector('.fc-stepbar li.fc-on').textContent.endsWith('Checks')", timeout=10, what="the Checks step")
-        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Review and save')).click(); return 1")
+        b.wait("document.querySelector('.fc-stepbar button.on') && document.querySelector('.fc-stepbar button.on').textContent.endsWith('Check & Measure')", timeout=10, what="the Check & Measure step")
+        r.check("Check & Measure: the checks, then the measurements (D941)",
+                b.js("return [...document.querySelectorAll('.fc-step h3')].map(x => x.textContent.trim().split(' ')[0])") == ["Checks", "Measurements"])
+        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Save')).click(); return 1")
         r.check("the last step shows the document and what is left to do", b.js("return !document.querySelector('.fc-output').hidden && !!document.querySelector('.fc-yaml code').textContent"))
-        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Who does each step')).click(); return 1")
+        order = b.js("""const at = (css) => { const e = document.querySelector('.fc-step ' + css); return e ? [...document.querySelectorAll('.fc-step *')].indexOf(e) : -1; };
+            return [at('.fc-summary'), at('.fc-ready'), at('.fc-stepnav'), at('.fc-yaml-fold'), document.querySelector('.fc-yaml-fold').open]""")
+        r.check("Save: the summary, where it stands, the actions, then the document folded (D941)",
+                0 <= order[0] < order[1] < order[2] < order[3] and order[4] is False, str(order))
+        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Graph')).click(); return 1")
         r.check("the drawing is its step's", b.wait("document.querySelector('.fc-step svg .fc-box')", timeout=10, what="the drawing") is not None)
         r.check("New loop has no Example tab (D767)", not b.js("return [...document.querySelectorAll('#main .tabs a, #main .tabs button')].some(t => t.textContent.trim() === 'Example')"))
         r.check("nor a way to make a loop from an example", r.api("/apps/from-example", "POST", {"name": "x", "kind": "sweep"})["status"] in (404, 405))
@@ -428,12 +435,12 @@ def flows(r: Run) -> None:
         b.js(setv, "dialog.dlg[open] .file-edit textarea", "print('0 failing')")
         r.dialog_button("Save")
         b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file")
-        b.js(click, ".fc-stepbar button", "3")
+        b.js(click, ".fc-stepbar button", "2")             # D941: Check & Measure
         b.js(click, ".fc-step button", "+ Add a measurement")
         named = b.wait("(document.querySelector('.files-panel .callout.bad') || {}).textContent", timeout=10, what="the measurement's script named")
         r.check("a measurement added names its script in the files at once (D912)", "bench.py" in named, named)
-        b.js(click, ".fc-stepbar button", "7")
-        ready = b.wait("(document.querySelector('.fc-ready') || {}).innerText", timeout=10, what="where it stands")
+        b.js(click, ".fc-stepbar button", "6")
+        ready =b.wait("(document.querySelector('.fc-ready') || {}).innerText", timeout=10, what="where it stands")
         r.check("Review says a missing file apart, no 'complete' over it (D912)", "missing bench.py" in ready and "Looks complete" not in r.text(), ready)
         r.button("Agent", "#main .tabs")
         b.wait("document.querySelector('#ag-name')", what="the agent form")
@@ -1928,7 +1935,8 @@ def flows(r: Run) -> None:
     def phone_wizard():
         """D913: on a phone the wizard's step and its first field are on the first screen -- a step menu
         in place of the step bar, the ways a menu -- at 390 and 320 pixels, every step, nothing wider
-        than the screen. FLUX_E2E_SHOTS: each step at 390 to that folder."""
+        than the screen, one action bar (D941: six steps; Save's first is its summary). FLUX_E2E_SHOTS: each
+        step at 390 to that folder, and on a desktop, light and dark."""
         r.login("bob")
         shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
         if shots:
@@ -1941,13 +1949,13 @@ def flows(r: Run) -> None:
                      "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/' + arguments[1]; document.body.append(f); return 1", width, h)
                 b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stephead select'); })()",
                        timeout=20, what=f"the wizard of {h} at {width}")
-                for step in range(7):
+                for step in range(6):
                     first = ("[...document.getElementById('phone').contentDocument.querySelectorAll('.fc-step input, .fc-step select, .fc-step textarea,"
-                             " .fc-step button, .fc-step summary, .fc-step svg .fc-box')].find(e => e.getBoundingClientRect().height > 0)")
+                             " .fc-step button, .fc-step summary, .fc-step svg .fc-box, .fc-step .fc-summary > div')].find(e => e.getBoundingClientRect().height > 0)")
                     b.js("""const [step] = arguments, w = document.getElementById('phone').contentWindow, d = w.document;
                         const m = d.querySelector('.fc-stephead select'); m.value = String(step); m.dispatchEvent(new Event('change'));
                         w.scrollTo(0, 0); return 1""", step)
-                    b.wait(f"document.getElementById('phone').contentDocument.querySelector('.fc-stepof').textContent === 'Step {step + 1} of 7' && {first}",
+                    b.wait(f"document.getElementById('phone').contentDocument.querySelector('.fc-stepof').textContent === 'Step {step + 1} of 6' && {first}",
                            timeout=10, what=f"step {step + 1}")
                     got = b.js(f"""const w = document.getElementById('phone').contentWindow, d = w.document;
                         const head = d.querySelector('.fc-stephead').getBoundingClientRect();
@@ -1955,15 +1963,20 @@ def flows(r: Run) -> None:
                         const f = first ? first.getBoundingClientRect() : null;
                         return [d.querySelector('.fc-stepof').textContent, Math.round(head.bottom), f ? Math.round(f.bottom) : -1,
                                 d.documentElement.scrollWidth, w.innerWidth, !!d.querySelector('.fc-stepbar') && d.querySelector('.fc-stepbar').offsetParent === null];""", step)
-                    ok = got[0] == f"Step {step + 1} of 7" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
+                    ok = got[0] == f"Step {step + 1} of 6" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: the step and its first field on the first screen", ok, str(got))
                     cut = b.js("""const d = document.getElementById('phone').contentDocument;
                         return [...d.querySelectorAll('.fc-step .fc-label')].filter(l => l.offsetParent && l.scrollWidth > l.clientWidth + 1).map(l => l.textContent)""")
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: no label cut short (D913b)", not cut, str(cut))
-                    if step == 6 and h != "#/configure":
+                    bars = b.js("return [...document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepnav')].filter(e => e.offsetParent).length")
+                    r.check(f"phone wizard {h} at {width}px, step {step + 1}: one action bar (D913, D941)", bars == 1, str(bars))
+                    if step == 5 and h != "#/configure":
                         said = b.wait("(() => { const t = (document.getElementById('phone').contentDocument.querySelector('.fc-ready') || {}).innerText || '';"
                                       " return !t.includes('reading the loop') && t; })()", timeout=10, what="the loop's check on Review")
                         r.check(f"Review's Checked line is the loop's own check at {width}px (D913b)", expect in said, f"{pre} {said}")
+                        b.js("const f = document.getElementById('phone').contentDocument.querySelector('.fc-diff-fold'); f.open = true; return 1")
+                        diff = b.wait("(document.getElementById('phone').contentDocument.querySelector('.fc-diff') || {}).innerText", timeout=10, what="the changes")
+                        r.check(f"Save's folded Changes read the save's preview at {width}px (D941)", "No change" in diff or "line(s) added" in diff, diff)
                     if shots and width == 390:
                         el = b.find("#phone")
                         png = b.cmd("WebDriver:TakeScreenshot", {"id": el, "full": False})["value"]
@@ -1976,6 +1989,19 @@ def flows(r: Run) -> None:
             time.sleep(0.5)
             png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
             (shots / "wizard-loop-review-desktop.png").write_bytes(base64.b64decode(png))
+            # D941: every step on a desktop, light and dark, a new loop's and a loop's own
+            for theme in ("light", "dark"):
+                b.js("localStorage.setItem('flux-theme', arguments[0]); return 1", theme)
+                for h in ("#/configure", "#/app/sw/settings/problem"):
+                    b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                         "f.style.cssText = 'width:1280px;height:1000px;border:0'; f.src = '/?shots=' + Date.now() + arguments[0]; document.body.append(f); return 1", h)
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stepbar button'); })()", timeout=20)
+                    for step in range(6):
+                        b.js("document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepbar button')[arguments[0]].click(); return 1", step)
+                        time.sleep(0.6)
+                        png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
+                        (shots / f"wizard-{'new' if h == '#/configure' else 'loop'}-step{step + 1}-desktop-{theme}.png").write_bytes(base64.b64decode(png))
+            b.js("localStorage.removeItem('flux-theme'); return 1")
         b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})
         b.wait("document.querySelector('#main')", timeout=20)
         r.clean("phone wizard")

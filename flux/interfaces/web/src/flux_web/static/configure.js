@@ -184,6 +184,15 @@ async function configurePage(name, owner, mode = "configurator") {
     and a detour to another page, until the loop is created or the draft discarded. */
 let DRAFT = null;
 function newDraft() { return { state: null, staged: new Map(), step: 0 }; }
+/** D941: Save draft keeps the draft's state and step in this browser, per user (its staged files stay in the page). */
+const draftKey = () => `flux-config-draft:${me.name || ""}`;
+function storedDraft() {
+  try {
+    const got = JSON.parse(localStorage.getItem(draftKey()) || "null");
+    return got && got.state ? { ...newDraft(), state: got.state, step: got.step || 0 } : null;
+  } catch (_) { return null; }
+}
+function forgetDraft() { try { localStorage.removeItem(draftKey()); } catch (_) { /* per viewer */ } }
 function draftUsed(d) {
   const s = d && d.state;
   return !!(d && (d.staged.size || (s && (String(s.id || "").trim() || String(s.statement || "").trim() || (s.checks || []).length || (s.stages || []).length))));
@@ -193,7 +202,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
   const isNew = !name;
   const modes = isNew ? ["empty", "configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
-  const draft = isNew ? (DRAFT = DRAFT || newDraft()) : null;
+  const draft = isNew ? (DRAFT = DRAFT || storedDraft() || newDraft()) : null;
   const body = h("div", {}), tabBar = h("div", { class: (small ? "subtabs" : "tabs") + " config-modes", role: "tablist" });
   const keptLine = h("div", { class: "draft-line muted small" });
   // D913: on a phone, the ways are one compact menu, not a wrapped row of tabs
@@ -213,7 +222,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
       draft.staged.size ? ` · ${draft.staged.size} file(s) staged` : "", " · ",
       h("button", { type: "button", class: "link", onclick: async () => {
         if (!await confirmDialog("Discard the draft?", "Its name, statement, checks, measurements and staged files go.", { ok: "Discard", danger: true })) return;
-        Object.assign(draft, newDraft()); draw(); drawKept();
+        Object.assign(draft, newDraft()); forgetDraft(); draw(); drawKept();
       } }, "Discard the draft"));
   }
   async function draw() {
@@ -270,6 +279,13 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
       host, panel.el);
     crafter = C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
       onChange: panel.watch, files: (paths) => panel.missing(paths), checked: () => checkedOf(pre),
+      // D941: Save's folded Changes -- the same preview the save confirms
+      changes: async (yaml) => {
+        const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
+        if (p.before === p.after) return h("p", { class: "muted" }, "No change: the document already says this.");
+        const ops = lineDiff(p.before, p.after);
+        return h("div", {}, h("p", { class: "muted small" }, `${ops.filter(o => o[0] === "+").length} line(s) added, ${ops.filter(o => o[0] === "-").length} removed.`), diffView(ops));
+      },
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
@@ -293,11 +309,16 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
     can_advance: true, sandboxed_server: true }, async (a) => { adv = a; }, "Keep for the new loop") : "";
-  body.replaceChildren(host, panel.el, advBox);
+  body.replaceChildren(host, panel.el);                     // D941: the advanced settings are the Extra step's
   setTimeout(panel.draw, 300);
   // D719: one name -- the form's, the problem's id and the loop's; the checklist calm until used;
   // no command-line next steps; who does each step folded, its defaults being usually right
   crafter = C.mount(host, false, { state: draft.state, step: draft.step, touched: draftUsed(draft), onStep: (i) => { draft.step = i; },
+    extra: advBox || null,
+    saveDraft: (state, step) => {
+      localStorage.setItem(draftKey(), JSON.stringify({ state, step }));
+      return draft.staged.size ? "Draft saved in this browser (its staged files stay with this page)." : "Draft saved in this browser.";
+    },
     onChange: () => { panel.watch(); if (onDraft) onDraft(); }, files: (paths) => panel.missing(paths),
     checked: () => ["note", "not checked yet: once created, Check runs it where it will run"],
     saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
@@ -305,11 +326,11 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
     save: async (yaml, state) => {
       const name = String(state.id || "").trim();
       // D912: said beside the button pressed, the name's box focused
-      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw Object.assign(new Error("Give the loop a name first (The problem › Loop name): a letter, then letters, digits or _."), { field: "id" });
+      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw Object.assign(new Error("Give the loop a name first (Prompt › Loop name): a letter, then letters, digits or _."), { field: "id" });
       if (!await createFromText(name, "problem.yaml", yaml)) return "Not created: the name is taken.";   // D906
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
-      if (DRAFT === draft) DRAFT = null;                    // made: the draft is the loop now
+      if (DRAFT === draft) { DRAFT = null; forgetDraft(); }  // made: the draft is the loop now
       toast(`${name} created${n ? ` with ${n} file(s)` : ""}`, "ok");
       setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);
       return "Created.";
@@ -396,7 +417,7 @@ async function newByAgent(body, draft = null, onDraft = null) {
     if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
     const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
     const r = await api("/apps/new-by-agent", { method: "POST", form: fd });
-    if (draft && DRAFT === draft) DRAFT = null;          // D912: the agent writes the loop the draft was
+    if (draft && DRAFT === draft) { DRAFT = null; forgetDraft(); }   // D912: the agent writes the loop the draft was
     toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
   }, { cls: "primary" });
   body.replaceChildren(card(null, [

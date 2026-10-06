@@ -91,14 +91,14 @@
                 { value: "command", half: "rules", label: "My script writes it" }]
         .concat(agentChoices("A coding agent writes it")) },
     test: { title: "Check it works", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
-      fixed: "Configured in the Checks list above.",
+      fixed: "Configured in Check & Measure: its checks.",
       choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
     critique: { title: "Second opinion", says: "Optionally, a critic questions the parts, each admitted part and the final choice.",
       choices: [{ value: "off", half: "off", label: "No critic" },
                 { value: "model", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
     measure: { title: "Measure", says: "Runs your measurements, cheapest first; a design that fails a gate is dropped.",
-      fixed: "Configured in the Measurements list above (each may estimate first).",
+      fixed: "Configured in Check & Measure: its measurements (each may estimate first).",
       choices: [{ value: "stages", half: "fixed", label: "Your measurements (fixed)" }] },
     calibrate: { title: "Compare measures", says: "Checks how well the cheap measurement predicts the costly one.",
       choices: [{ value: "on", half: "rules", label: "On" }, { value: "off", half: "off", label: "Off" }] },
@@ -821,8 +821,22 @@
     return files;
   }
 
-  /** The step of the web's wizard each part of the state is edited on (D912). */
-  var STEP_OF = { problem: 0, checks: 1, measurements: 2, objectives: 3, flow: 4, more: 5 };
+  /** The step of the web's wizard each part of the state is edited on (D912). D941: six steps, by id;
+      the old seven's names land on the step that holds them now (checks and measurements are one). */
+  var STEP_IDS = ["prompt", "measure", "objective", "graph", "extra", "save"];
+  var STEP_OF = { prompt: 0, measure: 1, objective: 2, graph: 3, extra: 4, save: 5,
+                  problem: 0, checks: 1, measurements: 1, objectives: 2, flow: 3, more: 4, review: 5 };
+  /** D941: D826's seven steps (0-based) on the six. */
+  var OLD_STEPS = [0, 1, 1, 2, 3, 4, 5];
+  /** A step as an index of the six: an index, an id or an old step's name; `old`: a number is one of the seven. */
+  function stepIndex(x, old) {
+    if (typeof x === "string" && /^\d+$/.test(x)) x = Number(x);
+    if (typeof x === "number" && isFinite(x)) {
+      if (old) return OLD_STEPS[Math.max(0, Math.min(OLD_STEPS.length - 1, Math.floor(x)))];
+      return Math.max(0, Math.min(STEP_IDS.length - 1, Math.floor(x)));
+    }
+    return Object.prototype.hasOwnProperty.call(STEP_OF, x) ? STEP_OF[x] : 0;
+  }
 
   /** What is wrong or missing, as `{level: "error"|"warning"|"note", text, step, field}`, plain
       words; `step`: the wizard's step that fixes it, `field`: the box at fault (D912). */
@@ -961,7 +975,7 @@
       if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
     var searching = flow.dse && flow.dse !== "none";
-    if (searching && !knobs.length) error("A search needs settings to walk: add some under More > Settings to search.");
+    if (searching && !knobs.length) error("A search needs settings to walk: add some under Extra > Settings to search.");
     at = STEP_OF.flow;
     if (flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
     if (!searching && knobs.length) warn("The settings are only searched when \"Search the settings\" is on.");
@@ -1387,7 +1401,7 @@
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
               explain: explain, explainEstimate: explainEstimate, choicesOf: choicesOf, choiceText: choiceText, shellSplit: shellSplit,
-              namedFiles: namedFiles, BUILTIN_SUBS: BUILTIN_SUBS, STEP_OF: STEP_OF };
+              namedFiles: namedFiles, BUILTIN_SUBS: BUILTIN_SUBS, STEP_OF: STEP_OF, STEP_IDS: STEP_IDS, stepIndex: stepIndex };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof document === "undefined") return;
@@ -1419,7 +1433,7 @@
     var stepped = opts.stepped !== false;              // D826: steps unless a page asks for the whole form
     var state = opts.state || base();
     var openBox = null, openNode = null;
-    var parts = { step: opts.step || 0, touched: !!opts.touched, visited: {} };
+    var parts = { step: stepIndex(opts.step || 0), touched: !!opts.touched, visited: {} };   // D941: an index or a step's id
     parts.visited[parts.step] = true;
 
     function changed(structural) {
@@ -1452,8 +1466,9 @@
       // compact: the hint is the input's tooltip, not a line of its own
       if (opts.compact && opts.hint) input.setAttribute("title", opts.hint);
       if (opts.key) input.setAttribute("data-fc-field", opts.key);     // D912: a save's error focuses its box
-      return h("label", { class: "fc-field" + (opts.wide ? " fc-wide" : "") + (opts.narrow ? " fc-narrow" : "") + (opts.grow ? " fc-grow" : "") },
-               [h("span", { class: "fc-label", text: label }), input, opts.hint && !opts.compact ? h("small", { text: opts.hint }) : null]);
+      // D941: the app's field -- a label.stack, its words above the box (flux.css; crafter.css on the docs page)
+      return h("label", { class: "stack fc-field" + (opts.wide ? " fc-wide" : "") + (opts.narrow ? " fc-narrow" : "") + (opts.grow ? " fc-grow" : "") },
+               [h("span", { class: "fc-label", text: label }), input, opts.hint && !opts.compact ? h("small", { class: "muted", text: opts.hint }) : null]);
     }
 
     function section(title, kids, cls) {
@@ -1466,7 +1481,7 @@
     }
 
     function button(text, fn, cls) {
-      return h("button", { type: "button", class: "fc-btn " + (cls || ""), text: text, on: { click: fn } });
+      return h("button", { type: "button", class: "fc-btn " + (cls || ""), text: text, on: { click: fn } });   // D941: styled as the app's (small, primary)
     }
 
     // -- ordered boxes: up, down, remove, and a "more" drawer
@@ -1481,9 +1496,9 @@
 
     function rowButtons(listOf, i, extra) {
       return h("div", { class: "fc-row-buttons" }, (extra || []).concat([
-        button("↑", function () { move(listOf, i, -1); }, "fc-small fc-icon" + (i === 0 ? " fc-hidden" : "")),
-        button("↓", function () { move(listOf, i, 1); }, "fc-small fc-icon" + (i === listOf.length - 1 ? " fc-hidden" : "")),
-        button("×", function () { listOf.splice(i, 1); changed(true); }, "fc-small fc-icon")]));
+        button("↑", function () { move(listOf, i, -1); }, "small fc-icon" + (i === 0 ? " fc-hidden" : "")),
+        button("↓", function () { move(listOf, i, 1); }, "small fc-icon" + (i === listOf.length - 1 ? " fc-hidden" : "")),
+        button("×", function () { listOf.splice(i, 1); changed(true); }, "small fc-icon")]));
     }
 
     function moreButton(row) {
@@ -1491,7 +1506,7 @@
       var b = button(open ? "less" : "more", function () {
         if (moreOpen.has(row)) moreOpen.delete(row); else moreOpen.add(row);
         changed(true);
-      }, "fc-small fc-more-btn");
+      }, "small fc-more-btn");
       b.setAttribute("aria-expanded", open ? "true" : "false");
       return b;
     }
@@ -1579,7 +1594,7 @@
         var rep = reports(st);
         line.push(rowButtons(state.stages, i, [button("+ gate", function () {
           st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); changed(true);
-        }, "fc-small"), moreButton(st)]));
+        }, "small"), moreButton(st)]));
         var kids = [h("div", { class: "fc-line" }, line)];
         st.gates.forEach(function (g, j) {
           kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : "go on only if" }),
@@ -1588,7 +1603,7 @@
             field("Rule", function () { return g.rule; }, function (v) { g.rule = v; },
                   { compact: true, structural: true, options: [["at", "at least"], ["below", "at most"], ["within", "within % of the best"]] }),
             field(g.rule === "within" ? "Percent" : "Value", function () { return g.value; }, function (v) { g.value = v; }, { compact: true, narrow: true }),
-            button("×", function () { st.gates.splice(j, 1); changed(true); }, "fc-small fc-icon")]));
+            button("×", function () { st.gates.splice(j, 1); changed(true); }, "small fc-icon")]));
         });
         if (moreOpen.has(st)) {
           var more = [];
@@ -1655,8 +1670,8 @@
       parts.goalWords.textContent = words.length ? "In words: " + words[0] + "." : "";
     }
 
-    // -- level 1
-    function renderLevel1() {
+    // -- level 1: the prompt (D941: step 1), then the checks, the measurements and the objective
+    function renderPrompt() {
       var implied = impliedLanguage(state);                // D832: optional -- the tools usually tell
       var langs = [["", implied ? "from the tools: " + implied : "from the tools (none tells yet)"]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
       var what = titled("1. What do you want?", [], [
@@ -1676,9 +1691,13 @@
                 function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
         // D828: who digests library/'s papers is a box of the drawing ("Digest the papers"), not a field here
       ]);
-      var kids = [what];
-      if (!CATALOG.length) kids.push(h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." }));
-      return h("div", { class: "fc-level" }, kids.concat([renderChecks(), renderStages(), renderObjective()]));
+      return what;
+    }
+    function noCatalog() {
+      return CATALOG.length ? null : h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." });
+    }
+    function renderLevel1() {
+      return h("div", { class: "fc-level" }, [renderPrompt(), noCatalog(), renderChecks(), renderStages(), renderObjective()]);
     }
 
     // -- level 2: the drawing
@@ -1777,7 +1796,7 @@
       });
       nodes().forEach(function (n) {
         var fixed = n.box === "parts" || isFixed(n.box), half = fixed ? "fixed" : halfOf(state, n.box);
-        var box = BOXES[n.box] || { title: "Parts", fixed: "Set under Advanced > Parts." };
+        var box = BOXES[n.box] || { title: "Parts", fixed: "Set under Extra > Parts." };
         var title = n.id === "crit-division" ? "Critic: division" : n.id === "crit-part" ? "Critic: each part"
                   : n.id === "crit-decision" ? "Critic: decision" : n.id === "parts" ? "parts: sub-loops, composed" : box.title;
         var live = !fixed && !readonly;
@@ -1884,7 +1903,7 @@
       var box = BOXES[openBox];
       p.setAttribute("aria-label", box.title);
       p.appendChild(h("div", { class: "fc-pop-head" }, [h("strong", { text: box.title }), h("code", { text: openBox }),
-        button("\u00d7", function () { openPopover(null, true); }, "fc-small fc-icon fc-pop-close")]));
+        button("\u00d7", function () { openPopover(null, true); }, "small fc-icon fc-pop-close")]));
       p.appendChild(h("p", { text: box.says }));
       var now = explain(openBox, state);
       if (now) p.appendChild(h("p", { class: "fc-hint fc-now", text: "As set: " + now + "." }));
@@ -2006,10 +2025,10 @@
                 { compact: true, placeholder: "block", hint: "Its name; {name} in a command is the value tried" }),
           field("Its choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
                 { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas; a \"quoted\" choice stays text (\"01\", \"a,b\")" }),
-          h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")])])]);
+          h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
-      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the drawing (who does each step)", [
+      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the Graph", [
         h("div", { class: "fc-rows" }, knobs),
         button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 
@@ -2034,16 +2053,18 @@
     }
 
     // D826: steps instead of one long form -- a step bar, one step at a time, Back and Next; the
-    // document, its checklist and the save on the last step (and Save on every step when editing)
-    var STEPS = ["Problem", "Checks", "Measurements", "Objectives", "Who does each step", "More", "Review and save"];
+    // document, its checklist and the save on the last step (and Save on every step when editing).
+    // D941: six -- the prompt, the checks with the measurements, the objective, the graph, the rest, the save
+    var STEPS = ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"];
     // D828: what each step is for, in a line -- in place of the long form's numbered titles
     var STEP_SAYS = [
-      "What the loop designs, in your words, and what every design must respect.",
-      "Each check refuses a wrong design. They run in order; the first that fails sends the design back to be repaired.",
-      "Each measurement sizes or times a design that passed the checks, cheapest first; a costly one runs only on the best of the cheaper.",
+      "What the loop designs, in your words: what to make, the rules every design must respect, the files the model reads.",
+      "Checks first: each refuses a wrong design, in order, and the first that fails sends it back to be repaired. " +
+        "Then the measurements: each sizes or times a design that passed, cheapest first; a costly one runs only on the best of the cheaper.",
       "What makes one design better: limits it must meet, then what to push, most important first.",
       "Who works each step: built-in rules, a model, or a coding agent. Click a box to change it; the defaults are usually right.",
-      "The budget, settings to search over, and splitting one design into parts. An empty field keeps the default, shown greyed.",
+      "The budget, settings to search over, splitting one design into parts" + (opts.extra ? ", the loop's resources" : "") +
+        ". An empty field keeps the default, shown greyed.",
       ""];
     function renderForm() {
       parts.form.innerHTML = "";
@@ -2053,47 +2074,48 @@
         parts.form.appendChild(renderLevel3());
         return;
       }
-      var step = parts.step || 0;
+      var step = parts.step || 0, id = STEP_IDS[step];
+      // D941: the step bar is the app's subtabs, each step a button
       parts.stepItems = STEPS.map(function (t, i) {
-        return h("li", { class: i === step ? "fc-on" : "" }, [h("button", { type: "button", role: "tab",
-          "aria-selected": i === step ? "true" : "false", on: { click: function () { go(i); } } }, [h("span", { class: "fc-num", text: String(i + 1) }), t])]);
+        return h("button", { type: "button", role: "tab", class: i === step ? "on" : "", "data-step": STEP_IDS[i],
+          "aria-selected": i === step ? "true" : "false", on: { click: function () { go(i); } } }, [h("span", { class: "fc-num", text: String(i + 1) }), t]);
       });
-      var bar = h("ol", { class: "fc-stepbar", role: "tablist" }, parts.stepItems);
+      var bar = h("div", { class: "subtabs fc-stepbar", role: "tablist", "aria-label": "Steps" }, parts.stepItems);
       var body;
-      if (step <= 3) {
-        var kids = Array.prototype.slice.call(renderLevel1().childNodes), n = kids.length;
-        body = step === 0 ? kids.slice(0, n - 3) : [kids[n - 4 + step]];
-      } else if (step === 4) {
+      if (id === "prompt") body = [renderPrompt()];
+      else if (id === "measure") body = [noCatalog(), renderChecks(), renderStages()];
+      else if (id === "objective") body = [renderObjective()];
+      else if (id === "graph") {
         var was = opts.foldSteps; opts.foldSteps = false; body = [renderLevel2()]; opts.foldSteps = was;
-      } else if (step === 5) {
-        parts.advancedOpen = true; body = [renderLevel3()];
-      } else {
-        body = [h("p", { class: "fc-hint", text: opts.save ? "What is left to do first, then what it runs, then the document and the save." :
-          "What is left to do, what it runs, and the document. Copy or download it." })];
-      }
-      // D913: on a phone, "Step 1 of 7" and a menu of the steps in place of the bar
+      } else if (id === "extra") {
+        parts.advancedOpen = true; body = [renderLevel3()].concat(opts.extra ? [opts.extra] : []);
+      } else body = [];
+      body = body.filter(Boolean);
+      // D913: on a phone, "Step 1 of 6" and a menu of the steps in place of the bar
       var menu = h("select", { "aria-label": "Step", class: "fc-stepmenu" }, STEPS.map(function (t, i) {
         var o = h("option", { value: String(i), text: t }); if (i === step) o.selected = true; return o;
       }));
       menu.addEventListener("change", function () { go(Number(menu.value)); });
       var stephead = h("div", { class: "fc-stephead" }, [h("span", { class: "fc-stepof", text: "Step " + (step + 1) + " of " + STEPS.length }), menu]);
+      var last = step === STEPS.length - 1;
       var back = step > 0 ? button("Back", function () { go(step - 1); }, "fc-back") : h("span", { class: "fc-back" });
-      var next = step < STEPS.length - 1 ? h("button", { type: "button", class: "fc-btn fc-primary fc-next", on: { click: function () { go(step + 1); } } },
-                                             ["Next", h("span", { class: "fc-next-what", text: ": " + STEPS[step + 1] })]) : null;
+      var next = !last ? h("button", { type: "button", class: "fc-btn primary fc-next", on: { click: function () { go(step + 1); } } },
+                           ["Next", h("span", { class: "fc-next-what", text: ": " + STEPS[step + 1] })]) : null;
       // D912: the save's status beside the button pressed, said aloud, on every step; D913: one bar,
       // Back, the save, Next -- the save the primary action on the last step
       parts.navStatus = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
-      var last0 = step === STEPS.length - 1;
-      parts.navSave = opts.save ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }, "fc-save" + (last0 ? " fc-primary" : "")) : null;
-      var nav = h("div", { class: "fc-stepnav" + (opts.save ? "" : " fc-nosave") }, [back, h("span", { class: "fc-grow" }), parts.navStatus, parts.navSave, next]);
+      parts.navSave = opts.save ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }, "fc-save" + (last ? " primary" : "")) : null;
+      // D941: a new loop's draft kept in this browser, from Save
+      var draftBtn = last && opts.saveDraft ? button("Save draft", saveDraft, "fc-draft") : null;
+      var nav = h("div", { class: "fc-stepnav" + (opts.save ? "" : " fc-nosave") + (draftBtn ? " fc-has-draft" : "") },
+                  [back, h("span", { class: "fc-grow" }), parts.navStatus, draftBtn, parts.navSave, next]);
       body.forEach(function (el) {                       // the long form's titles: the step bar says them
         if (!el.querySelectorAll) return;
         var t = el.querySelector("h3");
-        if (t && step !== 6) t.parentNode.removeChild(t);
+        if (t && id !== "measure") t.parentNode.removeChild(t);       // two sections: each keeps its title
         Array.prototype.forEach.call(el.querySelectorAll(".fc-advanced-body"), function (b) { b.hidden = false; });
       });
       if (STEP_SAYS[step]) body.unshift(h("p", { class: "fc-step-says", text: STEP_SAYS[step] }));
-      var last = step === STEPS.length - 1;
       if (parts.out) {                                   // the document is the last step's own, inside it
         parts.out.hidden = !last;
         if (last) body.push(parts.out);
@@ -2101,16 +2123,18 @@
       }
       parts.form.appendChild(bar);
       parts.form.appendChild(stephead);
-      parts.form.appendChild(h("div", { class: "fc-step" + (last ? " fc-step-last" : "") }, body));
-      parts.form.appendChild(nav);
+      parts.form.appendChild(h("div", { class: "fc-step" + (last ? " fc-step-last" : ""), "data-step": id }, body));
+      // D941: on Save, the actions after the summary and what blocks it, before the folded document
+      if (last && parts.navSlot) parts.navSlot.replaceChildren(nav);
+      else { if (parts.navSlot) parts.navSlot.replaceChildren(); parts.form.appendChild(nav); }
       showStatus();
-      if (step === 4) setTimeout(renderDiagram, 0);
+      if (id === "graph") setTimeout(renderDiagram, 0);
     }
     function go(i) {
       parts.visited[parts.step || 0] = true;
       parts.step = Math.max(0, Math.min(STEPS.length - 1, i));
       parts.visited[parts.step] = true;
-      if (opts.onStep) opts.onStep(parts.step);
+      if (opts.onStep) opts.onStep(parts.step, STEP_IDS[parts.step]);
       renderForm();
       renderOutput();
       if (parts.form.scrollIntoView && parts.form.getBoundingClientRect && parts.form.getBoundingClientRect().top < 0) parts.form.scrollIntoView();
@@ -2126,6 +2150,15 @@
       });
     }
 
+    /** D941: the draft kept where the page keeps it (`opts.saveDraft(state, step)` returns a line to say). */
+    function saveDraft() {
+      try {
+        parts.status = { kind: "ok", text: opts.saveDraft(state, STEP_IDS[parts.step || 0]) || "Draft saved." };
+      } catch (e) {
+        parts.status = { kind: "err", text: (e && e.message) || String(e) };
+      }
+      showStatus();
+    }
     /** D912: the save's state, pending, done or failed -- beside both save buttons. */
     function showStatus() {
       var st = parts.status || { kind: "", text: "" };
@@ -2194,32 +2227,51 @@
       });
       parts.checks.innerHTML = "";
       var todo = msgs.filter(function (m) { return !m.files; });      // the files: in Where it stands
-      if (!todo.length) parts.checks.appendChild(h("li", { class: "fc-ok", text: "Nothing left to do in the document." }));
       var calm = opts.calmChecks && !parts.touched;   // nothing typed yet: what is left to do, not errors
-      todo.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text })); });
+      // D941: what blocks it first, then what to look at, then the notes; nothing when nothing is left
+      var rank = { error: 0, warning: 1, note: 2 };
+      todo.slice().sort(function (a, b) { return rank[a.level] - rank[b.level]; }).forEach(function (m) {
+        parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text }));
+      });
       renderSummary();
+      if (parts.diffFold && parts.diffFold.open) { clearTimeout(parts.diffTimer); parts.diffTimer = setTimeout(showChanges, 500); }
       if (parts.next) parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
     }
 
-    /** D913: what runs, in words -- the checks, the measurements, the goal, who works, the budget. */
+    /** D913: what runs, in words. D941: short -- what it makes, its checks and measurements, the goal,
+        and only what differs from the defaults (who works, the budget); the steps show the rest. */
     function renderSummary() {
       if (!parts.summary) return;
       var r = resolve(state), rows = [];
-      rows.push(["Checks", r.checks.length ? r.checks.map(function (c) { return c.name; }).join(" → ") : "none yet"]);
-      rows.push(["Measurements", r.stages.length ? r.stages.map(function (s) { return s.name; }).join(" → ") : "none yet"]);
+      var what = String(state.statement || "").trim().replace(/\s+/g, " ");
+      rows.push(["Makes", what ? (what.length > 160 ? what.slice(0, 159) + "…" : what) : "not said yet"]);
+      var line = function (xs) { return xs.length ? xs.map(function (x) { return x.name; }).join(" → ") : "none yet"; };
+      rows.push(["Checks, then measures", line(r.checks) + " · " + line(r.stages)]);
       var words = describeObjectives(r.objectives);
       rows.push(["Goal", words.length ? words[0] : "none yet"]);
-      var who = FLOW_BOXES.concat(["digest", "lessons"]).filter(function (b) { return BOXES[b] && !isFixed(b); }).map(function (b) {
-        var c = choiceOf(b, state.flow[b]), half = halfOf(state, b);
-        return half === "off" && b !== "generate" ? null : BOXES[b].title + ": " + (b === "generate" && paramOnly(state) ? "not run (settings only)" : c ? c.label : state.flow[b]);
-      }).filter(Boolean);
-      rows.push(["Who works", who.join("; ")]);
+      var dflt = defaultFlow();
+      var who = FLOW_BOXES.concat(["digest", "lessons"]).filter(function (b) { return BOXES[b] && !isFixed(b) && state.flow[b] !== dflt[b]; }).map(function (b) {
+        var c = choiceOf(b, state.flow[b]);
+        return BOXES[b].title + ": " + (b === "generate" && paramOnly(state) ? "not run (settings only)" : c ? c.label : state.flow[b]);
+      });
+      rows.push(["Who works", who.length ? who.join("; ") : "the defaults"]);
       var bu = state.budget || {}, said = Object.keys(bu).filter(function (k) { return String(bu[k] || "").trim(); });
-      rows.push(["Budget", said.length ? said.map(function (k) { return k + " " + bu[k]; }).join(", ") : "the defaults"]);
+      if (said.length) rows.push(["Budget", said.map(function (k) { return k + " " + bu[k]; }).join(", ")]);
       var kn = knobNames(state);
-      if (kn.length) rows.push(["Settings searched", kn.join(", ")]);
+      if (kn.length) rows.push(["Searches", kn.join(", ")]);
       parts.summary.innerHTML = "";
       rows.forEach(function (x) { parts.summary.appendChild(h("div", {}, [h("dt", { text: x[0] }), h("dd", { text: x[1] })])); });
+    }
+
+    /** D941: what the save would change, folded until asked (`opts.changes(yaml)`: a node, or its promise). */
+    function showChanges() {
+      if (!parts.diffBody) return;
+      var asked = parts.diffAsked = (parts.diffAsked || 0) + 1;
+      Promise.resolve().then(function () { return opts.changes(buildYaml(state), state); }).then(function (node) {
+        if (asked === parts.diffAsked) parts.diffBody.replaceChildren(node || h("p", { class: "fc-hint", text: "No change." }));
+      }, function (e) {
+        if (asked === parts.diffAsked) parts.diffBody.replaceChildren(h("p", { class: "fc-hint", text: "The changes could not be read: " + ((e && e.message) || e) }));
+      });
     }
 
     function copy() {
@@ -2256,24 +2308,34 @@
     parts.checks = h("ul", { class: "fc-checks" });
     parts.ready = h("ul", { class: "fc-checks fc-ready" });            // D912: document, files, check, start -- apart
     parts.next = opts.nextSteps === false ? null : h("code", {});
-    parts.copyBtn = button("Copy", copy, opts.save ? "" : "fc-primary");
+    parts.copyBtn = button("Copy", copy, opts.save ? "" : "primary");
     parts.saved = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
     // stepped, the save is the step bar's (D913); the whole form keeps its own beside the document
-    var saveBtn = opts.save && !stepped ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "fc-primary") : null;
-    var keptNotes = (opts.notes || []).length ? [h("h4", { text: "Kept as written" }),
-      h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))] : [];
+    var saveBtn = opts.save && !stepped ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "primary") : null;
+    var keptNotes = (opts.notes || []).length ? [h("details", { class: "fc-fold fc-kept-fold" }, [
+      h("summary", {}, [h("strong", { text: "Kept as written" }), " ", h("span", { class: "fc-hint", text: "(" + opts.notes.length + ")" })]),
+      h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))])] : [];
     parts.saveBtn = saveBtn;
     parts.summary = h("dl", { class: "fc-summary" });
-    // D913: Review reads top down -- where it stands and what to fix, what it runs, then the document folded
-    var yamlBox = h("details", { class: "fc-yaml-fold" }, [h("summary", {}, [h("strong", { text: "Document" }), " ", parts.file]),
+    parts.navSlot = stepped ? h("div", { class: "fc-navslot" }) : null;
+    // D913: Review reads top down. D941: Save -- the summary, what blocks it, the actions; the changes,
+    // what is kept as written and the document folded below
+    var changes = [];
+    if (opts.changes) {
+      parts.diffBody = h("div", { class: "fc-diff" });
+      parts.diffFold = h("details", { class: "fc-fold fc-diff-fold" }, [h("summary", {}, [h("strong", { text: "Changes" }), " ",
+        h("span", { class: "fc-hint", text: "against the saved document" })]), parts.diffBody]);
+      parts.diffFold.addEventListener("toggle", function () { if (parts.diffFold.open) showChanges(); });
+      changes.push(parts.diffFold);
+    }
+    var yamlBox = h("details", { class: "fc-fold fc-yaml-fold" }, [h("summary", {}, [h("strong", { text: "Document" }), " ", parts.file]),
+      h("div", { class: "fc-yaml-acts" }, [parts.copyBtn, button("Download", download)]),
       h("pre", { class: "fc-yaml" }, [parts.code])]);
     if (!opts.save) yamlBox.open = true;             // the docs' page: the document is what one takes away
     var out = parts.out = h("div", { class: "fc-output" }, [
-      h("div", { class: "fc-output-head" }, [h("span", { class: "fc-grow" }), saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
-      h("h4", { text: "Where it stands" }), parts.ready,
-      h("h4", { text: "To do" }), parts.checks,
-      h("h4", { text: "What it runs" }), parts.summary].concat(keptNotes).concat([yamlBox]).concat(opts.nextSteps === false ? [] : [
-      h("h4", { text: "Next steps" }),
+      saveBtn ? h("div", { class: "fc-output-head" }, [h("span", { class: "fc-grow" }), parts.saved, saveBtn]) : null,
+      parts.summary, parts.ready, parts.checks, parts.navSlot].concat(changes).concat(keptNotes).concat([yamlBox]).concat(opts.nextSteps === false ? [] : [
+      h("h3", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]));
     parts.bodyEl = h("div", { class: "fc-body" + (stepped ? " fc-stepped" : "") }, [parts.form, out]);

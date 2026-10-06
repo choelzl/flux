@@ -1,83 +1,198 @@
-/* The Flux problem builder (crafter.js): Material's colours, so light and dark both work.
-   Widths are in em: Material's rem grows with the window (20px to 30px), the form's own font
-   (1em) with it. */
-.flux-crafter {
-  --fc-line: var(--md-default-fg-color--lightest);
-  --fc-muted: var(--md-default-fg-color--light);
-  --fc-rules: #2b7a86;  --fc-rules-bg: #e3f2f4;
-  --fc-model: #6a4bd8;  --fc-model-bg: #ece7fc;
-  --fc-agent: #c46a12;  --fc-agent-bg: #fbecdc;
-  --fc-fixed: #5f6670;  --fc-fixed-bg: #eceef1;
-  --fc-off:   #9aa0a8;  --fc-off-bg:   transparent;
-  --fc-error: #c62828;  --fc-warning: #b26a00;  --fc-ok: #2e7d32;
-  font-size: .75rem;
+/* The Flux problem builder (crafter.js). D941: it wears the web app's own look -- its cards, label.stack
+   fields, inputs, buttons (primary, small), subtabs, spacing and colours (flux_web/static/flux.css) --
+   and this file keeps only what the app has no rule for: the drawing, the rows of the lists, the step
+   bar's numbers, the popover, the Save step. Every colour is one of the app's tokens (--ink, --muted,
+   --line, --panel, --bg, --soft, --accent, --ok, --bad, --warn). The web app defines them; the docs
+   pages (Material, no flux.css) get the same token set and a copy of the app's few rules the crafter
+   uses, scoped to `[data-md-color-scheme] .flux-crafter` -- keep both in step with flux.css (a unit
+   test compares the tokens). */
+
+/* ---- the docs page: the app's tokens, light and dark by Material's scheme (D941) */
+[data-md-color-scheme] .flux-crafter {
+  --bg: #f5f6f4; --panel: #ffffff; --ink: #1c1e22; --muted: #697079; --line: #e3e5e1; --soft: #f0f1ee;
+  --accent: #2c64d8; --accent-ink: #ffffff; --ok: #1d8148; --bad: #c0352d; --warn: #9a6200;
+  --shadow: 0 1px 2px rgba(20, 24, 30, .06), 0 1px 1px rgba(20, 24, 30, .03);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 10px;
 }
 [data-md-color-scheme="slate"] .flux-crafter {
-  --fc-rules: #6cc4cf;  --fc-rules-bg: #173a3f;
-  --fc-model: #a996ff;  --fc-model-bg: #2c2552;
-  --fc-agent: #f0a254;  --fc-agent-bg: #43301c;
-  --fc-fixed: #aab1bb;  --fc-fixed-bg: #2c3037;
-  --fc-off:   #7d838c;
-  --fc-error: #ef6f6c;  --fc-warning: #f0b453;  --fc-ok: #7cc47f;
+  --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
+  --accent: #6f9dff; --accent-ink: #0d1420; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
 }
 
-.flux-crafter h3 { margin: .7em 0 .3em; font-size: 1.13em; }
-.flux-crafter h4 { margin: .5em 0 .2em; font-size: 1.04em; }
-.flux-crafter .fc-hint, .flux-crafter small { color: var(--fc-muted); }
-.flux-crafter small { display: block; font-size: 0.827em; margin-top: 1px; }
-.flux-crafter p { margin: .3em 0; }
-.fc-inline { font-size: 0.867em; font-weight: 400; }
+/* ---- the drawing's halves: a colour each, its fill mixed into the panel (so both themes) */
+.flux-crafter {
+  --fc-rules: #2b7a86; --fc-model: #6a4bd8; --fc-agent: #c46a12; --fc-fixed: #5f6670; --fc-off: #9aa0a8;
+  --fc-rules-bg: color-mix(in srgb, var(--fc-rules) 13%, var(--panel));
+  --fc-model-bg: color-mix(in srgb, var(--fc-model) 13%, var(--panel));
+  --fc-agent-bg: color-mix(in srgb, var(--fc-agent) 13%, var(--panel));
+  --fc-fixed-bg: color-mix(in srgb, var(--fc-fixed) 12%, var(--panel));
+  --fc-off-bg: transparent;
+}
+[data-md-color-scheme="slate"] .flux-crafter,
+:root[data-theme="dark"] body:not([data-md-color-scheme]) .flux-crafter {
+  --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #f0a254; --fc-fixed: #aab1bb; --fc-off: #7d838c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body:not([data-md-color-scheme]) .flux-crafter {
+    --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #f0a254; --fc-fixed: #aab1bb; --fc-off: #7d838c;
+  }
+}
 
-/* the builder's page only: a wider grid, the file beside the form */
+/* ---- the docs page: the app's rules the crafter uses (flux.css: .card, h3, controls, label.stack, .subtabs) */
+[data-md-color-scheme] .flux-crafter { font: 14px/1.5 var(--sans); color: var(--ink); }
+[data-md-color-scheme] #flux-crafter.flux-crafter {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin: 1em 0; }
+[data-md-color-scheme] .flux-crafter *, [data-md-color-scheme] .flux-crafter *::before { box-sizing: border-box; }
+[data-md-color-scheme] .flux-crafter h3 { font-size: 11.5px; margin: 12px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+[data-md-color-scheme] .flux-crafter p { margin: 4px 0; }
+[data-md-color-scheme] .flux-crafter .muted { color: var(--muted); }
+[data-md-color-scheme] .flux-crafter pre, [data-md-color-scheme] .flux-crafter code { font-family: var(--mono); font-size: 12.5px; }
+[data-md-color-scheme] .flux-crafter code { background: none; padding: 0; color: inherit; }
+[data-md-color-scheme] .flux-crafter pre { margin: 6px 0; }
+[data-md-color-scheme] .flux-crafter button {
+  font: inherit; font-weight: 500; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  padding: 6px 13px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 1.3; }
+[data-md-color-scheme] .flux-crafter button:hover { background: var(--soft); }
+[data-md-color-scheme] .flux-crafter button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+[data-md-color-scheme] .flux-crafter button.primary:hover { filter: brightness(1.06); }
+[data-md-color-scheme] .flux-crafter button.small { padding: 3px 9px; font-size: 12.5px; }
+[data-md-color-scheme] .flux-crafter button:disabled { opacity: .55; cursor: default; }
+[data-md-color-scheme] .flux-crafter input, [data-md-color-scheme] .flux-crafter textarea, [data-md-color-scheme] .flux-crafter select {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+[data-md-color-scheme] .flux-crafter textarea { width: 100%; resize: vertical; }
+[data-md-color-scheme] .flux-crafter input:focus, [data-md-color-scheme] .flux-crafter textarea:focus, [data-md-color-scheme] .flux-crafter select:focus {
+  border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+[data-md-color-scheme] .flux-crafter :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-md-color-scheme] .flux-crafter label.stack { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+[data-md-color-scheme] .flux-crafter label.stack input, [data-md-color-scheme] .flux-crafter label.stack textarea { color: var(--ink); font-size: 14px; }
+[data-md-color-scheme] .flux-crafter details summary { cursor: pointer; color: var(--accent); font-weight: 500; margin: 6px 0; }
+/* not Material's admonition, nor its lists */
+[data-md-color-scheme] .flux-crafter details { display: block; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: none; font-size: inherit; overflow: visible; }
+[data-md-color-scheme] .flux-crafter details > summary { display: list-item; padding: 0; background: none; border: 0; font-size: inherit; font-weight: 500; min-height: 0; }
+[data-md-color-scheme] .flux-crafter details > summary::before, [data-md-color-scheme] .flux-crafter details > summary::after { content: none; display: none; }
+[data-md-color-scheme] .flux-crafter details[open] > summary { margin-bottom: 8px; }
+[data-md-color-scheme] .flux-crafter ul, [data-md-color-scheme] .flux-crafter li { list-style: none; }
+[data-md-color-scheme] .flux-crafter ul li { margin-left: 0; }
+[data-md-color-scheme] .flux-crafter ul li::marker { content: none; }
+[data-md-color-scheme] .flux-crafter dl, [data-md-color-scheme] .flux-crafter dd { margin: 0; }
+[data-md-color-scheme] .flux-crafter .subtabs { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; flex-wrap: wrap; }
+[data-md-color-scheme] .flux-crafter .subtabs button { border: 0; background: transparent; padding: 4px 12px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+[data-md-color-scheme] .flux-crafter .subtabs button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .08); font-weight: 600; }
+[data-md-color-scheme] .flux-crafter .subtabs button:hover:not(.on) { color: var(--ink); }
+[data-md-color-scheme] .flux-crafter [hidden] { display: none !important; }
+[data-md-color-scheme] .fc-pop { font: 14px/1.5 var(--sans); }
+@media (max-width: 560px), (pointer: coarse) {     /* D883: touch targets, as the app's */
+  [data-md-color-scheme] .flux-crafter button { min-height: 40px; }
+  [data-md-color-scheme] .flux-crafter button.small { min-height: 36px; padding: 6px 12px; }
+  [data-md-color-scheme] .flux-crafter input:not([type="radio"]), [data-md-color-scheme] .flux-crafter select,
+  [data-md-color-scheme] .flux-crafter textarea { min-height: 40px; font-size: 16px; }
+}
+/* the builder's page only: a wider grid */
 .md-main .md-grid:has(#flux-crafter) { max-width: 100rem; }
-.fc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 4px; }
-@media (min-width: 1100px) {
-  .fc-body { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
-  .fc-output { position: sticky; top: 3.4rem; max-height: calc(100vh - 4rem); overflow: auto; }
-  .fc-yaml { max-height: none !important; }
-}
-.fc-section { border-top: 1px solid var(--fc-line); padding-top: 1px; }
-.fc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11em, 1fr)); gap: 2px 10px; }
-.fc-field { display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; margin: 2px 0; min-width: 0; }
-.fc-field.fc-wide { grid-column: 1 / -1; }
-.fc-label { font-weight: 600; font-size: 0.867em; color: var(--fc-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fc-field.fc-wide > .fc-label { white-space: normal; }
-.flux-crafter input[type="text"], .flux-crafter select, .flux-crafter textarea {
-  font: inherit; width: 100%; box-sizing: border-box; padding: 3px 6px; border-radius: 4px;
-  border: 1px solid var(--fc-line); background: var(--md-code-bg-color); color: var(--md-default-fg-color);
-}
-.flux-crafter textarea { resize: vertical; }
-.fc-line textarea { min-height: 1.87em; height: 1.87em; }
-.flux-crafter input:focus, .flux-crafter select:focus, .flux-crafter textarea:focus {
-  outline: 2px solid var(--md-accent-fg-color); outline-offset: 0;
-}
-.fc-rows { display: flex; flex-direction: column; gap: 4px; }
-.fc-row { padding: 2px 8px 3px; border: 1px solid var(--fc-line); border-radius: 5px; }
-/* one line per box: fields side by side, wrapping on a narrow screen */
-.fc-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 8px; }
-.fc-line > .fc-field { flex: 0 1 10em; }
-.fc-line > .fc-field.fc-narrow { flex: 0 1 7em; }
-.fc-line > .fc-grow, .fc-line > .fc-field.fc-grow { flex: 1 1 11em; }
-.fc-gate > .fc-field { flex: 0 1 9em; }
-.fc-gate > .fc-field.fc-narrow { flex: 0 1 6em; }
-.fc-line > .fc-wide { flex: 1 1 100%; }
-.fc-idx { align-self: center; min-width: 1.1em; font-weight: 700; color: var(--fc-muted); }
-.fc-more { border-top: 1px dashed var(--fc-line); margin-top: 3px; padding-top: 1px; }
-.fc-gate { padding-left: 1.4em; }
-.fc-gate-word { align-self: center; font-size: 0.867em; color: var(--fc-muted); }
-.fc-btn {
-  font: inherit; cursor: pointer; padding: 3px 10px; margin: 4px 4px 0 0; border-radius: 4px;
-  border: 1px solid var(--fc-line); background: transparent; color: var(--md-typeset-a-color);
-}
-.fc-btn:hover { border-color: var(--md-accent-fg-color); }
-.fc-btn.fc-primary { background: var(--md-primary-fg-color); color: var(--md-primary-bg-color); border-color: transparent; }
-.fc-btn.fc-small { padding: 1px 7px; margin: 0 0 2px; }
-.fc-btn.fc-icon { min-width: 1.8em; padding: 1px 4px; }
-.fc-add-btn { margin-top: 4px; }
 
-/* the drawing */
-.fc-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 2px 0; font-size: 0.867em; }
-.fc-key { display: inline-flex; align-items: center; gap: 5px; }
+/* ---- the form's own layout: fields side by side in a line, wrapping on a narrow screen */
+.fc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.flux-crafter .fc-hint, .fc-pop .fc-hint { color: var(--muted); }
+.fc-inline { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+.flux-crafter label.stack.fc-field { margin-bottom: 8px; min-width: 0; justify-content: flex-end; }
+.flux-crafter label.stack.fc-field > small { font-size: 12px; }
+.fc-field.fc-wide { grid-column: 1 / -1; }
+.fc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0 14px; }
+.fc-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 12px; }
+.fc-line > .fc-field { flex: 0 1 11em; }
+.fc-line > .fc-field.fc-narrow { flex: 0 1 7em; }
+.fc-line > .fc-grow, .fc-line > .fc-field.fc-grow { flex: 1 1 12em; }
+.fc-line > .fc-wide { flex: 1 1 100%; }
+.fc-gate > .fc-field { flex: 0 1 10em; }
+.fc-gate > .fc-field.fc-narrow { flex: 0 1 6em; }
+.fc-line textarea { min-height: 0; }
+.flux-crafter [aria-invalid="true"] { border-color: var(--bad); }
+
+/* ---- the ordered lists: a row each, its buttons on the right, more in a drawer */
+.fc-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.fc-row { padding: 10px 12px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.fc-idx { align-self: center; min-width: 1.2em; margin-bottom: 8px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fc-more { border-top: 1px dashed var(--line); padding-top: 8px; }
+.fc-gate { padding-left: 1.6em; }
+.fc-gate-word { align-self: center; margin-bottom: 8px; font-size: 12.5px; color: var(--muted); }
+.fc-row-buttons { display: flex; gap: 4px; margin-left: auto; align-self: flex-end; margin-bottom: 8px; }
+/* a row's small buttons as tall as its boxes, level with them */
+.fc-row-buttons > .fc-btn, .fc-gate > .fc-btn { min-height: 35px; }
+.fc-gate > .fc-btn { align-self: flex-end; margin-bottom: 8px; }
+.fc-btn.fc-icon { min-width: 2.2em; justify-content: center; }
+.flux-crafter .fc-btn.fc-next { gap: 0; }
+.fc-btn.fc-hidden { visibility: hidden; }
+.flux-crafter select.fc-add { width: auto; max-width: 100%; }
+.fc-obj-metric { align-self: center; margin-bottom: 8px; }
+.fc-warn { color: var(--warn); align-self: center; margin-bottom: 8px; }
+.fc-goal-words { font-weight: 600; }
+.fc-section + .fc-section { margin-top: 18px; }
+.fc-sub + .fc-sub { margin-top: 14px; }
+.fc-sub h4 { font-size: 11.5px; margin: 12px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.fc-sub h4 .fc-inline { margin-left: 4px; }
+
+/* the long form's folded sections (a page that asks for the whole form, not the steps) */
+.fc-toggle { font: inherit; font-weight: inherit; cursor: pointer; padding: 0; border: 0; background: none; color: inherit; text-align: left; }
+.fc-toggle::before { content: "\25B8"; display: inline-block; width: 1.1em; color: var(--muted); }
+.fc-toggle[aria-expanded="true"]::before { content: "\25BE"; }
+.fc-advanced-body[hidden] { display: none; }
+
+/* ---- the steps (D826): the app's subtabs, each with its number; done green, to fix red (D912) */
+.fc-stepbar { margin: 0 0 14px; }
+.fc-stepbar .fc-num { display: inline-grid; place-items: center; width: 1.55em; height: 1.55em; border-radius: 50%;
+  border: 1px solid var(--line); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fc-stepbar button.on .fc-num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.fc-stepbar button.fc-done .fc-num { border-color: var(--ok); color: var(--ok); }
+.fc-stepbar button.fc-bad .fc-num { border-color: var(--bad); color: var(--bad); }
+.fc-step-says { color: var(--muted); margin: 0 0 12px !important; max-width: 60em; }
+.fc-step { min-height: 12em; }
+.fc-step.fc-step-last { min-height: 0; }
+.fc-stepnav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.fc-stepnav .fc-grow { flex: 1; }
+.fc-status { font-size: 12.5px; color: var(--muted); }
+.fc-status:empty { display: none; }
+.fc-status.fc-ok { color: var(--ok); }
+.fc-status.fc-err { color: var(--bad); font-weight: 600; }
+.fc-stephead { display: none; }
+
+/* ---- Save (D941): the summary, what blocks it, the actions, then the folds */
+.fc-output { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.fc-output-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fc-output-head .fc-grow { flex: 1; }
+.fc-summary { margin: 0; display: grid; gap: 4px; }
+.fc-summary > div { display: grid; grid-template-columns: 11em minmax(0, 1fr); gap: 12px; }
+.fc-summary dt { color: var(--muted); font-size: 12.5px; padding-top: 1px; }
+.fc-summary dd { margin: 0; overflow-wrap: anywhere; }
+.fc-checks { list-style: none; margin: 0 !important; padding: 0; }
+.fc-checks:empty { display: none; }
+.fc-checks li { margin: 3px 0 !important; padding-left: 1.4em; position: relative; }
+.fc-checks li::before { position: absolute; left: 0; font-weight: 700; }
+.fc-checks .fc-error { color: var(--bad); }
+.fc-checks .fc-error::before { content: "✗"; }
+.fc-checks .fc-warning::before { content: "!"; color: var(--warn); }
+.fc-checks .fc-note { color: var(--muted); }
+.fc-checks .fc-note::before { content: "→"; }
+.fc-checks .fc-todo::before { content: "○"; color: var(--muted); font-weight: 400; }
+.fc-checks .fc-ok::before { content: "✓"; color: var(--ok); }
+.fc-ready { border: 1px solid var(--line); border-radius: 8px; background: var(--soft); padding: 6px 10px !important; }
+.fc-ready strong { font-weight: 600; }
+.fc-navslot:empty { display: none; }
+.fc-navslot .fc-stepnav { margin-top: 0; }
+.fc-fold > summary { margin: 0; }
+.fc-fold { border-top: 1px solid var(--line); padding-top: 8px; }
+.fc-fold[open] > summary { margin-bottom: 8px; }
+.fc-file { font-family: var(--mono); font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.fc-yaml-acts { display: flex; gap: 8px; margin-bottom: 8px; }
+.fc-yaml { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 10px; max-height: 60vh; overflow: auto; margin: 0; }
+.fc-yaml code { display: block; white-space: pre; }
+.fc-diff pre { margin: 0; }
+
+/* ---- the drawing (the loop's boxes: who works each) */
+.fc-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 2px 0 6px; font-size: 12.5px; color: var(--muted); }
+.fc-key { display: inline-flex; align-items: center; gap: 6px; }
 .fc-key i { width: 14px; height: 10px; border-radius: 3px; border: 2px solid var(--fc-c); background: var(--fc-b); }
 .fc-key.fc-off i { border-style: dashed; }
 .fc-rules { --fc-c: var(--fc-rules); --fc-b: var(--fc-rules-bg); }
@@ -86,77 +201,61 @@
 .fc-fixed { --fc-c: var(--fc-fixed); --fc-b: var(--fc-fixed-bg); }
 .fc-off   { --fc-c: var(--fc-off);   --fc-b: var(--fc-off-bg); }
 .fc-drawing { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
-.fc-diagram { width: 100%; max-width: 560px; height: auto; display: block; }
+.flux-crafter svg.fc-diagram { width: 100%; max-width: 560px; height: auto; display: block; font-family: var(--sans); }
 .fc-box { cursor: pointer; }
 .fc-box rect { fill: var(--fc-b); stroke: var(--fc-c); stroke-width: 2; }
-.fc-box.fc-off rect { stroke-dasharray: 5 4; fill: var(--md-default-bg-color); }
+.fc-box.fc-off rect { stroke-dasharray: 5 4; fill: var(--panel); }
 .fc-box:hover rect, .fc-box:focus-visible rect { stroke-width: 3.5; }
 .fc-box:focus { outline: none; }
-.fc-box:focus-visible rect { stroke: var(--md-accent-fg-color); stroke-width: 4; stroke-dasharray: none; }
+.fc-box:focus-visible rect { stroke: var(--accent); stroke-width: 4; stroke-dasharray: none; }
 .fc-box.fc-open rect { stroke-width: 4; }
-.fc-box-name { font-size: 12.5px; font-weight: 600; fill: var(--md-default-fg-color); }
+.fc-box-name { font-size: 12.5px; font-weight: 600; fill: var(--ink); }
 .fc-box-half { font-size: 11px; fill: var(--fc-c); }
-.fc-edge { fill: none; stroke: var(--md-default-fg-color--light); stroke-width: 1.6; }
+.fc-box-small { font-size: 12px; font-weight: 600; fill: var(--ink); }
+.fc-box-small.fc-tiny { font-size: 10.5px; font-weight: 500; }
+.fc-edge { fill: none; stroke: var(--muted); stroke-width: 1.6; }
 .fc-edge.fc-side { stroke-dasharray: 4 3; }
-.fc-edge.fc-back { stroke: var(--md-default-fg-color--lighter); }
-.fc-arrowhead { fill: var(--md-default-fg-color--light); }
-.fc-edge-label { font-size: 12px; fill: var(--fc-muted); }
-.fc-choices { display: flex; flex-direction: column; gap: 4px; }
-.fc-choice {
-  display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; cursor: pointer;
-  border-left: 4px solid var(--fc-c);
-}
-.fc-choice:hover { background: var(--md-code-bg-color); }
-.fc-choice.fc-off { border-left-style: dashed; }
+.fc-edge.fc-back { stroke: color-mix(in srgb, var(--muted) 60%, transparent); }
+.fc-arrowhead { fill: var(--muted); }
+.fc-edge-label { font-size: 12px; fill: var(--muted); }
+.fc-edge.fc-red { stroke: var(--bad); stroke-dasharray: 2 3; stroke-width: 1.6; }
+.fc-arrowhead-red { fill: var(--bad); }
+.fc-red-label { fill: var(--bad); font-size: 11px; }
+.fc-drop { fill: var(--bad); font-size: 15px; font-weight: 700; }
+.fc-box.fc-static, .fc-box.fc-inert { cursor: default; }
+.fc-box.fc-inert:hover rect { stroke-width: 2; }
+.fc-box.fc-static rect { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1.2; stroke-dasharray: none; }
+.fc-box.fc-static:hover rect { stroke-width: 1.2; }
+.fc-box.fc-static .fc-box-name, .fc-box.fc-static .fc-box-half, .fc-box.fc-static .fc-box-small { fill: var(--muted); }
+.fc-box rect.fc-stack { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1; }
+.fc-lock { fill: var(--muted); }
+.fc-lock-shackle { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.fc-lists { font-size: 12.5px; overflow-wrap: anywhere; }
+/* D726: a running loop over the drawing (the web's Live › Tasks › Graph) */
+.fc-box.fc-act-idle { opacity: .45; }
+.fc-box.fc-act rect { stroke-width: 2.5; }
+.fc-box.fc-act-running rect { stroke: var(--run, var(--accent)); stroke-width: 3.5; }
+.fc-box.fc-act-running .fc-box-half { fill: var(--run, var(--accent)); font-weight: 600; }
+.fc-box.fc-act-failed rect { stroke: var(--bad); }
+.fc-box.fc-act-failed .fc-box-half { fill: var(--bad); }
+.fc-box.fc-pick { cursor: pointer; }
+.fc-box.fc-pick:hover rect, .fc-box.fc-pick:focus rect { stroke-width: 4; }
+.fc-box.fc-sel rect { stroke-width: 4.5; }
+@keyframes fc-pulse { 50% { stroke-opacity: .45; } }
+@media (prefers-reduced-motion: no-preference) { .fc-box.fc-act-running rect { animation: fc-pulse 1.4s ease-in-out infinite; } }
+/* the loop page (guide/loop-shape.md): the drawing alone, and its table's keys on one line */
+#flux-loop-drawing { margin: .6em 0; }
+.md-typeset td code { white-space: nowrap; }
 
-/* advanced: the form's own fields and rows, behind one toggle */
-.fc-toggle { font: inherit; font-weight: inherit; cursor: pointer; padding: 0; border: 0; background: none; color: inherit; text-align: left; }
-.fc-toggle::before { content: "\25B8"; display: inline-block; width: 1.1em; color: var(--fc-muted); }
-.fc-toggle[aria-expanded="true"]::before { content: "\25BE"; }
-.fc-toggle:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 2px; }
-.fc-advanced-body[hidden] { display: none; }
-.fc-advanced-body { padding-left: 1.1em; }
-.fc-sub h4 { font-size: 0.933em; font-weight: 600; }
-.fc-sub + .fc-sub { border-top: 1px dashed var(--fc-line); margin-top: 6px; }
-
-/* output */
-.fc-output { border: 1px solid var(--fc-line); border-radius: 6px; padding: 4px 10px; }
-.fc-output-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.fc-file { font-family: var(--md-code-font-family); font-weight: 600; margin-right: auto; overflow-wrap: anywhere; }
-.flux-crafter pre { margin: .5em 0; }
-.flux-crafter pre code { display: block; overflow-x: auto; white-space: pre; font-size: 0.933em; }
-.fc-yaml { max-height: 60vh; overflow: auto; }
-.fc-checks { list-style: none; margin: 0 !important; padding: 0; }
-.fc-checks li { margin: 3px 0 !important; padding-left: 1.4em; position: relative; }
-.fc-checks li::before { position: absolute; left: 0; font-weight: 700; }
-.fc-checks .fc-error { color: var(--fc-error); }
-.fc-checks .fc-error::before { content: "✗"; }
-.fc-checks .fc-warning::before { content: "!"; color: var(--fc-warning); }
-.fc-checks .fc-note::before { content: "→"; color: var(--fc-muted); }
-.fc-checks .fc-todo::before { content: "○"; color: var(--fc-muted); font-weight: 400; }
-.fc-checks .fc-ok { color: var(--fc-ok); }
-.fc-checks .fc-ok::before { content: "✓"; }
-
-
-/* ordered rows */
-.fc-row-buttons { display: flex; gap: 2px; margin-left: auto; align-self: flex-end; padding-bottom: 2px; }
-.fc-row-buttons .fc-btn { margin: 0; }
-.fc-btn.fc-hidden { visibility: hidden; }
-.flux-crafter select.fc-add { margin-top: 4px; width: auto; max-width: 100%; }
-.fc-obj-metric { align-self: center; }
-.fc-warn { color: var(--fc-warning); align-self: center; }
-.fc-goal-words { font-weight: 600; }
-.fc-lists { font-size: 0.867em; overflow-wrap: anywhere; }
-
-/* the popover of a chosen box: beside it with an arrow, or a bottom sheet on a narrow screen */
+/* ---- a box's choices: beside it with an arrow (the app's dialog look), a bottom sheet on a narrow screen */
 .fc-pop {
-  position: fixed; z-index: 5; width: 25.3em; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto;
-  background: var(--md-default-bg-color); color: var(--md-default-fg-color); border: 1px solid var(--fc-line);
-  border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); padding: 6px 10px 10px; font-size: 0.96em;
-}
+  position: fixed; z-index: 30; width: 26em; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, .25); padding: 10px 14px 14px; }
 .fc-pop[hidden] { display: none; }
-.fc-pop-head { display: flex; align-items: center; gap: 6px; }
-.fc-pop-head code { font-size: 0.827em; }
+.fc-pop p { margin: 4px 0; }
+.fc-pop-head { display: flex; align-items: center; gap: 8px; }
+.fc-pop-head code { font-size: 12px; color: var(--muted); }
 .fc-pop-close { margin-left: auto !important; }
 .fc-pop::before { content: ""; position: absolute; width: 12px; height: 12px; background: inherit;
   border: inherit; border-width: 0; transform: rotate(45deg); }
@@ -166,101 +265,32 @@
 .fc-pop.fc-right, .fc-pop.fc-left, .fc-pop.fc-below { overflow: visible; }
 .fc-pop.fc-sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto; max-width: none;
   max-height: 60vh; border-radius: 12px 12px 0 0; }
+.fc-choices { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.fc-choice { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 7px; cursor: pointer; border-left: 4px solid var(--fc-c); }
+.fc-choice:hover { background: var(--soft); }
+.fc-choice.fc-off { border-left-style: dashed; }
 
-/* the drawing's refusals and fixed boxes */
-.fc-edge.fc-red { stroke: var(--fc-error); stroke-dasharray: 2 3; stroke-width: 1.6; }
-.fc-arrowhead-red { fill: var(--fc-error); }
-.fc-red-label { fill: var(--fc-error); font-size: 11px; }
-.fc-drop { fill: var(--fc-error); font-size: 15px; font-weight: 700; }
-.fc-box.fc-static, .fc-box.fc-inert { cursor: default; }
-.fc-box.fc-inert:hover rect { stroke-width: 2; }
-.fc-box.fc-static rect { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1.2; stroke-dasharray: none; }
-.fc-box.fc-static:hover rect { stroke-width: 1.2; }
-.fc-box.fc-static .fc-box-name, .fc-box.fc-static .fc-box-half, .fc-box.fc-static .fc-box-small { fill: var(--fc-muted); }
-.fc-box rect.fc-stack { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1; }
-.fc-lock { fill: var(--fc-muted); }
-.fc-lock-shackle { fill: none; stroke: var(--fc-muted); stroke-width: 1.3; }
-.fc-box-small { font-size: 12px; font-weight: 600; fill: var(--md-default-fg-color); }
-.fc-box-small.fc-tiny { font-size: 10.5px; font-weight: 500; }
-
-/* one control height for every input and select */
-.flux-crafter input[type="text"], .flux-crafter select { height: 1.87em; line-height: 1.2; }
-
-/* the loop page (guide/loop-shape.md): the drawing alone, and its table's keys on one line */
-#flux-loop-drawing { margin: .6em 0; }
-.md-typeset td code { white-space: nowrap; }
-/* D726: a running loop over the drawing (the web's Live › Tasks › Graph) */
-.fc-box.fc-act-idle { opacity: .45; }
-.fc-box.fc-act rect { stroke-width: 2.5; }
-.fc-box.fc-act-running rect { stroke: var(--fc-live, #2c64d8); stroke-width: 3.5; }
-.fc-box.fc-act-running .fc-box-half { fill: var(--fc-live, #2c64d8); font-weight: 600; }
-.fc-box.fc-act-failed rect { stroke: var(--fc-error, #c0352d); }
-.fc-box.fc-act-failed .fc-box-half { fill: var(--fc-error, #c0352d); }
-.fc-box.fc-pick { cursor: pointer; }
-.fc-box.fc-pick:hover rect, .fc-box.fc-pick:focus rect { stroke-width: 4; }
-.fc-box.fc-sel rect { stroke-width: 4.5; }
-@keyframes fc-pulse { 50% { stroke-opacity: .45; } }
-@media (prefers-reduced-motion: no-preference) { .fc-box.fc-act-running rect { animation: fc-pulse 1.4s ease-in-out infinite; } }
-
-/* D826: steps instead of one long form */
-@media (min-width: 1100px) { .fc-body.fc-stepped { grid-template-columns: minmax(0, 1fr); } .fc-body.fc-stepped .fc-output { position: static; max-height: none; } }
-.fc-stepbar { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 10px; padding: 0; counter-reset: none; }
-.fc-stepbar li { margin: 0; }
-.fc-stepbar button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--fc-line); background: transparent;
-  color: var(--fc-muted); border-radius: 999px; padding: 3px 10px 3px 4px; font: inherit; cursor: pointer; }
-.fc-stepbar .fc-num { display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; border-radius: 50%;
-  border: 1px solid var(--fc-line); font-size: .9em; }
-.fc-stepbar li.fc-done button { color: inherit; }
-.fc-stepbar li.fc-done .fc-num { border-color: var(--fc-ok); color: var(--fc-ok); }
-.fc-stepbar li.fc-on button { color: inherit; border-color: var(--fc-rules); font-weight: 600; }
-.fc-stepbar li.fc-on .fc-num { background: var(--fc-rules); border-color: var(--fc-rules); color: #fff; }
-.fc-step { min-height: 12em; }
-.fc-step > .fc-section:first-child { border-top: 0; }
-.fc-stepnav { display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--fc-line); margin-top: 12px; padding-top: 10px; }
-.fc-stepnav .fc-grow { flex: 1; }
-
-/* D828: a step's line of what it is for */
-.fc-step-says { color: var(--fc-muted); margin: 0 0 .8em !important; }
-.fc-step.fc-step-last { min-height: 0; }
-/* D912: a visited step with something to fix; the save's status beside its button; where it stands */
-.fc-stepbar li.fc-bad .fc-num { border-color: var(--fc-error); color: var(--fc-error); }
-.fc-status { font-size: .9em; color: var(--fc-muted); }
-.fc-status:empty { display: none; }
-.fc-status.fc-ok { color: var(--fc-ok); }
-.fc-status.fc-err { color: var(--fc-error); font-weight: 600; }
-.fc-ready strong { font-weight: 600; }
-.flux-crafter [aria-invalid="true"] { border-color: var(--fc-error); }
-/* D913: Review top down -- where it stands, to do, what it runs, the document folded last */
-.fc-output-head .fc-grow { flex: 1; }
-.fc-summary { margin: 0; display: grid; gap: 2px; }
-.fc-summary > div { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 8px; }
-.fc-summary dt { color: var(--fc-muted); }
-.fc-summary dd { margin: 0; overflow-wrap: anywhere; }
-.fc-yaml-fold { margin-top: .8em; }
-.fc-yaml-fold > summary { cursor: pointer; }
-.fc-yaml-fold .fc-file { margin-right: 0; }
-/* D913: the step's name and a menu of the steps, on a phone, in place of the bar */
-.fc-stephead { display: none; }
+/* ---- a phone (D913, D913b): "Step N of 6" and a menu in place of the bar, one action bar, nothing cut short */
 @media (max-width: 640px) {
-  .fc-stepbar { display: none; }
-  .fc-stephead { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+  .flux-crafter .fc-stepbar, [data-md-color-scheme] .flux-crafter .fc-stepbar { display: none; }   /* over .subtabs */
+  .fc-stephead { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
   .fc-stepof { font-weight: 600; white-space: nowrap; }
   .flux-crafter select.fc-stepmenu { flex: 1; min-width: 0; width: auto; font-weight: 600; }
-  .fc-step-says { font-size: .9em; margin: 0 0 .5em !important; }
+  .fc-step-says { font-size: 13px; margin: 0 0 8px !important; }
   .fc-step { min-height: 0; }
   /* one bar, three places: Back, the save, Next -- the status above them, beside the save */
   .fc-stepnav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .fc-stepnav.fc-nosave { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fc-stepnav .fc-grow { display: none; }
   .fc-stepnav .fc-status { grid-column: 1 / -1; grid-row: 1; }
-  .fc-stepnav .fc-btn { margin: 0; width: 100%; white-space: normal; line-height: 1.2; min-height: 2.6em; }
+  .fc-stepnav .fc-btn { margin: 0; width: 100%; justify-content: center; white-space: normal; line-height: 1.2; min-height: 2.9em; }
   .fc-stepnav .fc-next-what { display: none; }
-  .fc-stepnav .fc-save.fc-primary { grid-column: 2 / -1; }
+  .fc-stepnav .fc-save.primary { grid-column: 2 / -1; }
+  .fc-stepnav.fc-has-draft .fc-save.primary { grid-column: auto; }
   .fc-summary > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  /* D913b: a label wraps, never cut short; a field takes the row (a narrow one, half), so a choice reads whole */
-  .fc-label { white-space: normal; overflow: visible; }
+  /* a field takes the row (a narrow one, half), so a choice reads whole */
   .fc-line > .fc-field, .fc-line > .fc-field.fc-grow, .fc-gate > .fc-field { flex: 1 1 100%; }
   .fc-line > .fc-field.fc-narrow, .fc-gate > .fc-field.fc-narrow { flex: 1 1 40%; }
   .fc-grid { grid-template-columns: minmax(0, 1fr); }
+  .fc-row { padding: 8px 10px 0; }
 }
-.fc-step-last .fc-output { border: 0; padding: 0; }

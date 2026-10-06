@@ -271,17 +271,9 @@ dialog.dlg h2 { font-size: 16px; margin-bottom: 8px; }
 .bell-item.ok { border-left-color: var(--ok); } .bell-item.bad { border-left-color: var(--bad); } .bell-item.warn { border-left-color: var(--warn); }
 .bell-item small { color: var(--muted); }
 
-/* ---- the configurator (website/docs/assets/crafter.css reads the docs theme's variables: ours, D686) */
-.flux-crafter { --md-default-fg-color: var(--ink); --md-default-fg-color--light: var(--muted);
-  --md-default-fg-color--lighter: var(--muted); --md-default-fg-color--lightest: var(--line);
-  --md-default-bg-color: var(--panel); --md-code-bg-color: var(--bg); --md-accent-fg-color: var(--accent);
-  --md-primary-fg-color: var(--accent); --md-primary-bg-color: #fff; --md-typeset-a-color: var(--accent);
-  --md-code-font-family: var(--mono);
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
-.flux-crafter textarea { min-height: 0; }
-/* D828: the configurator at the app's own size, not the docs site's */
-.flux-crafter { font-size: 14px; }
-.flux-crafter input, .flux-crafter select, .flux-crafter textarea { font-size: 14px; }
+/* ---- the configurator (website/docs/assets/crafter.css): a card; D941: its fields, buttons and step bar are
+   this file's own (label.stack, button.small/.primary, .subtabs), its colours these tokens */
+.flux-crafter { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
 /* D912, D913: the creation draft's line; the ways to make a problem, a menu on a phone */
 .draft-line:empty { display: none; }
 .draft-line { margin: -6px 0 10px; }
