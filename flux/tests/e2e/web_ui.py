@@ -522,9 +522,15 @@ def flows(r: Run) -> None:
         r.check("stopped", True)
         # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped
         # at rest has a last pass that built nothing)
+        asked = time.time()
         r.check("a pass started again", r.api("/apps/sw/start", "POST", {"passes": 1, "screen_only": False})["status"] == 200)
-        b.wait("document.querySelector('.page-head .pill.live')", timeout=30, what="running again")
-        b.wait("!document.querySelector('.page-head .pill.live')", timeout=120, what="its pass ended")
+        # its end on record, not its being seen running: a fast pass can end before the page polls
+        for _ in range(240):
+            st = json.loads(r.api("/apps/sw/state")["body"])
+            if not st.get("running") and (st.get("last_active") or 0) >= asked:
+                break
+            time.sleep(0.5)
+        r.check("its pass ended", not st.get("running") and (st.get("last_active") or 0) >= asked, str(st)[:200])
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live, stopped")
         r.button("Graph", ".tree-card .seg")                                   # D726: the loop's own drawing
         b.wait("document.querySelector('.tasks-drawing .fc-box.fc-act[data-node=test]') && document.querySelector('.tree').hidden", timeout=60, what="the loop's drawing, its gate run")
