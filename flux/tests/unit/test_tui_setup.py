@@ -95,3 +95,69 @@ def test_the_form_keeps_its_footer_and_its_focus_on_a_small_screen():
     (row,) = [t for k, t in f.screen(59, 14) if k == "focus"]
     assert "…" in row and row.rstrip().endswith("end▏"), "a long value shows its end, where one types"
     assert "too small" in f.screen(30, 2)[0][1]
+
+
+def test_the_pass_cap_is_an_editable_number_and_until_stopped_a_choice():
+    """D902, from an external review: each digit replaced the whole value, so typing 10 saved 0 --
+    until stopped. Now the first digit replaces, the next append, Backspace edits, a leading 0 is
+    refused, and until stopped is chosen (u, or Left from 1), never typed by accident."""
+    def typed(seq: str, start: int = 0) -> int:
+        f = SetupForm(prompt="x", passes=start, focus=FIELDS.index("passes"))
+        keys(f, seq)
+        return f.settings()["passes"]
+
+    assert [typed(s) for s in ("12", "10", "20", "0", "05", "100")] == [12, 10, 20, 0, 5, 100]
+    assert typed("7", start=12) == 7, "the first digit on arriving replaces the value"
+    f = SetupForm(prompt="x", focus=FIELDS.index("passes"))
+    keys(f, "12")
+    f.handle(127)                                  # Backspace edits
+    keys(f, "5")
+    assert f.passes == 15
+    f.handle(curses.KEY_BACKSPACE)
+    f.handle(curses.KEY_BACKSPACE)
+    assert f.passes == 0 and "until stopped" in f.message
+    keys(f, "3")
+    f.handle(ord("u"))                             # the explicit choice
+    assert f.passes == 0 and "< until stopped >" in "".join(t for _k, t in f.lines(100))
+    f.handle(curses.KEY_RIGHT)
+    assert f.passes == 1
+    f.handle(9)
+    f.handle(curses.KEY_BTAB)                      # back on the field: a digit replaces again
+    keys(f, "42")
+    assert f.settings()["passes"] == 42
+
+
+def test_the_form_keeps_every_printable_character(tmp_path):
+    """D902: the keys come wide (get_wch) -- a str per character -- and printable Unicode is kept in
+    the prompt, a path and the directory; control keys stay keys."""
+    from flux_tui.input import key_code
+
+    text = "Zürich café λ ≤ 10ns"
+    f = SetupForm()
+    for ch in text:
+        f.handle(key_code(ch))
+    assert f.settings()["prompt"] == text
+    folder = tmp_path / "Zürich λ"
+    folder.mkdir()
+    (folder / "spéc.md").write_text("x")
+    f.handle(key_code("\t"))                       # a control character is the key it names
+    assert f.field == "files"
+    for ch in str(folder / "spéc.md"):
+        f.handle(key_code(ch))
+    f.handle(key_code("\n"))
+    assert f.files == [str(folder / "spéc.md")]
+    f.focus = FIELDS.index("workdir")
+    for ch in "/tmp/λ":
+        f.handle(key_code(ch))
+    assert f.settings()["workdir"].endswith("/tmp/λ")
+
+
+def test_a_long_prompt_shows_its_cursor_row_at_the_minimum_size():
+    """D902: at 40x14 a wrapped prompt taller than the view showed its first rows while one typed
+    on the last; the view follows the cursor, and no row is cut at the right edge."""
+    f = SetupForm()
+    keys(f, "a fairly long requirement " * 12 + "END")
+    for width, height in ((39, 11), (39, 9), (59, 14)):
+        rows = f.screen(width, height)
+        assert any(k == "focus" and t.rstrip().endswith("END▏") for k, t in rows), (width, height, rows)
+        assert all(len(t) <= width for _k, t in rows)

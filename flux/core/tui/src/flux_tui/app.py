@@ -18,7 +18,7 @@ import time
 from typing import Any, Callable
 
 from .events import BusWriter, EventBus
-from .input import LineEditor, TuiFeedback
+from .input import LineEditor, TuiFeedback, read_key, window
 from .panels import (PANELS, build, info_rows, log_rows, mentor_rows, results_browse, task_rows, timing_rows)
 
 
@@ -533,7 +533,7 @@ def _main(scr, bus: EventBus, feedback: TuiFeedback, title: str, subtitle: str,
     panes = {"task": _Pane(), "mentor": _Pane(), "results": _Pane()}
     timing = _Timing()
     while True:
-        key = scr.getch()
+        key = read_key(scr)                              # D902: wide characters, whole
         if _handle_key(key, view, panes, timing, bus, feedback, feedback_enabled) == "quit":
             return
         with contextlib.suppress(Exception):
@@ -544,7 +544,7 @@ def _main(scr, bus: EventBus, feedback: TuiFeedback, title: str, subtitle: str,
             time.sleep(0.05)                             # idle politely once done
 
 
-def _handle_key(key: int, view: _View, panes: dict[str, _Pane], timing: _Timing, bus: EventBus,
+def _handle_key(key: int | str, view: _View, panes: dict[str, _Pane], timing: _Timing, bus: EventBus,
                 feedback: TuiFeedback, feedback_enabled: bool) -> str | None:
     """One key against the view: the modes first (typing a filter or a note), then the
     tabs, the panes, the toggles, the mouse. "quit" when the loop should end."""
@@ -554,7 +554,7 @@ def _handle_key(key: int, view: _View, panes: dict[str, _Pane], timing: _Timing,
     if view.filter_mode:
         # typing the log filter: Esc cancels, Enter applies
         if key == 27:
-            editor.buffer = ""
+            editor.set("")
             view.filter_mode = False
         else:
             text = editor.handle(key)
@@ -567,7 +567,7 @@ def _handle_key(key: int, view: _View, panes: dict[str, _Pane], timing: _Timing,
         # modal feedback entry: every key belongs to the line until Esc or Enter,
         # so digits, r, q, t are typeable without fighting the keybinds.
         if key == 27:                                # Esc cancels
-            editor.buffer = ""
+            editor.set("")
             view.input_mode = False
         else:
             text = editor.handle(key)
@@ -575,6 +575,8 @@ def _handle_key(key: int, view: _View, panes: dict[str, _Pane], timing: _Timing,
                 feedback.submit(text)
                 bus.log(f'feedback noted: "{text}" -- reaches the next drain point')
                 view.input_mode = False
+        return None
+    if isinstance(key, str):                         # a non-ASCII character outside a field: no keybind
         return None
     ch = chr(key) if 0 <= key < 256 else ""
     panel = view.panel
@@ -600,7 +602,7 @@ def _handle_key(key: int, view: _View, panes: dict[str, _Pane], timing: _Timing,
     elif key in (10, 13, curses.KEY_ENTER, ord(" ")) and panel == "timing":
         timing.folded = _toggle_fold(timing.folded, timing.cursor, timing.paths, timing.kids)
     elif ch == "/" and panel == "log":
-        editor.buffer = view.log_filter
+        editor.set(view.log_filter)
         view.filter_mode = True
     elif key == 27 and panel == "log" and view.log_filter:
         view.log_filter, view.scroll = "", 0
@@ -692,7 +694,7 @@ def _mouse(view: _View, panes: dict[str, _Pane], timing: _Timing, bus: EventBus,
     return None
 
 
-def _advance(view: _View, bus: EventBus, rerun, key: int) -> dict[str, Any]:
+def _advance(view: _View, bus: EventBus, rerun, key: int | str) -> dict[str, Any]:
     """The bus's snapshot for this frame. A finished run lands on the results tab once, then
     rolls into the next pass when the loop toggle is on, unless `flux stop` asked for the
     boundary or the campaign is at rest."""
@@ -909,10 +911,12 @@ def _bottom(scr, view: _View, snap: dict[str, Any], subtitle: str, feedback_enab
     """The optional prompt row, then the status bar: one token per toggle, the key and its
     state fused."""
     editor = view.editor
-    if feedback_enabled and view.input_mode:
-        scr.addnstr(h - 2, 0, f" feedback ❯ {editor.buffer}", w - 1, curses.A_BOLD)
-    elif view.filter_mode:
-        scr.addnstr(h - 2, 0, f" filter ❯ {editor.buffer}", w - 1, curses.A_BOLD)
+    typing = "feedback" if feedback_enabled and view.input_mode else "filter" if view.filter_mode else ""
+    if typing:
+        # D902: the line scrolls around its insertion point, never past the right edge
+        label = f" {typing} ❯ "
+        shown, col = window(editor.buffer, editor.pos, w - 2 - len(label))
+        scr.addnstr(h - 2, 0, label + shown, w - 1, curses.A_BOLD)
     loop_tag = " · r loop:ON" if view.loop_on else " · r loop"
     think_tag = " · t think:ON" if view.think_state is True else " · t think"
     if view.input_mode or view.filter_mode:
@@ -928,7 +932,5 @@ def _bottom(scr, view: _View, snap: dict[str, Any], subtitle: str, feedback_enab
             bar = bar[: w - 1 - len(tail)] + tail
     view.bar = bar
     scr.addnstr(h - 1, 0, bar, w - 1, curses.A_REVERSE)
-    if feedback_enabled and view.input_mode:
-        scr.move(h - 2, min(len(f" feedback ❯ {editor.buffer}"), w - 2))
-    elif view.filter_mode:
-        scr.move(h - 2, min(len(f" filter ❯ {editor.buffer}"), w - 2))
+    if typing:
+        scr.move(h - 2, len(label) + col)

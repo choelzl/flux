@@ -16,7 +16,9 @@ opens the loop TUI.
 tests drive it without a terminal; `run_setup` is the thin curses shell around it.
 Keys: Tab / Shift-Tab (or Up / Down outside the prompt) move between fields; in the prompt,
 Enter is a new line; in the files field, Enter adds the typed path (Tab completes it) and
-Delete removes the last file; Left / Right change a choice or a number; Space toggles a box;
+Delete removes the last file; Left / Right change a choice or a number; in Passes, digits type
+a cap (the first replaces, the next append, Backspace edits) and u (or Left from 1) is until
+stopped (D902); Space toggles a box;
 Enter on Start (or F5 anywhere) starts; Esc on an empty field, or Quit, leaves.
 """
 
@@ -31,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .input import read_key, typed
+
 __all__ = ["AUTHORS", "FIELDS", "SetupForm", "run_setup", "slug"]
 
 AUTHORS = ("model", "opencode", "claude", "codex")
@@ -40,6 +44,7 @@ _LABEL = {"prompt": "Prompt", "files": "Files", "skills": "Skills", "author": "A
 
 TAB, BTAB, ENTER, ESC, BACKSPACES, DELETE = 9, curses.KEY_BTAB, (10, 13, curses.KEY_ENTER), 27, (8, 127, curses.KEY_BACKSPACE), curses.KEY_DC
 F5 = curses.KEY_F5
+MAX_PASSES = 9999
 
 
 def slug(prompt: str) -> str:
@@ -59,6 +64,7 @@ class SetupForm:
     focus: int = 0
     path_input: str = ""                      # the path being typed into the files field
     message: str = ""                         # the last thing the form said (a refused path, a missing prompt)
+    passes_typing: bool = False               # D902: a digit appends once one was typed here; the first replaces
 
     @property
     def field(self) -> str:
@@ -75,6 +81,7 @@ class SetupForm:
     def _move(self, d: int) -> None:
         self.focus = (self.focus + d) % len(FIELDS)
         self.message = ""
+        self.passes_typing = False
 
     def _add_path(self) -> None:
         p = self.path_input.strip()
@@ -109,7 +116,30 @@ class SetupForm:
             return None
         return "start"
 
-    def handle(self, key: int) -> str | None:
+    def _passes(self, key: int | str) -> None:
+        """The pass cap as an editable number (D902): the first digit typed here replaces the
+        value, the next ones append (1 then 0 is 10, never 0); Backspace takes the last digit off;
+        until stopped (0) is chosen, never typed -- u, or Left from 1 -- and a leading 0 is refused."""
+        if key == curses.KEY_LEFT:
+            self.passes = max(0, self.passes - 1)
+        elif key == curses.KEY_RIGHT:
+            self.passes = min(MAX_PASSES, self.passes + 1)
+        elif key in (ord("u"), ord("U")):
+            self.passes = 0
+        elif key in BACKSPACES:
+            self.passes = int(str(self.passes)[:-1] or 0) if self.passes else 0
+        elif isinstance(key, int) and 48 <= key <= 57:
+            now = str(self.passes) if self.passes and self.passes_typing else ""
+            if not now and key == 48:
+                self.message = "a cap starts at 1; u (or Left from 1) is until stopped"
+                return
+            self.passes = min(MAX_PASSES, int(now + chr(key)))
+        else:
+            return
+        self.passes_typing = key not in (curses.KEY_LEFT, curses.KEY_RIGHT, ord("u"), ord("U"))
+        self.message = "" if self.passes else "until stopped: type a number to cap the passes"
+
+    def handle(self, key: int | str) -> str | None:
         """One key; returns "start" or "quit" when the form is done."""
         f = self.field
         if key == F5:
@@ -137,8 +167,8 @@ class SetupForm:
                 self.prompt = self.prompt[:-1]
             elif key in (curses.KEY_UP, curses.KEY_DOWN):
                 self._move(-1 if key == curses.KEY_UP else 1)
-            elif 32 <= key < 127:
-                self.prompt += chr(key)
+            elif (ch := typed(key)) is not None:          # D902: any printable character
+                self.prompt += ch
             return None
         if f in ("files", "skills"):
             if key == TAB:
@@ -152,26 +182,21 @@ class SetupForm:
                 self.path_input = self.path_input[:-1]
             elif key == DELETE and getattr(self, f):
                 self.message = f"removed {getattr(self, f).pop()}"
-            elif 32 <= key < 127:
-                self.path_input += chr(key)
+            elif (ch := typed(key)) is not None:
+                self.path_input += ch
             return None
         if f == "author" and key in (curses.KEY_LEFT, curses.KEY_RIGHT, 32):
             i = AUTHORS.index(self.author) if self.author in AUTHORS else 0
             self.author = AUTHORS[(i + (-1 if key == curses.KEY_LEFT else 1)) % len(AUTHORS)]
         elif f == "passes":
-            if key == curses.KEY_LEFT:
-                self.passes = max(0, self.passes - 1)
-            elif key == curses.KEY_RIGHT:
-                self.passes = min(20, self.passes + 1)
-            elif 48 <= key <= 57:
-                self.passes = int(chr(key))
+            self._passes(key)
         elif f in ("screen_only", "review") and key in (32, *ENTER):
             setattr(self, f, not getattr(self, f))
         elif f == "workdir":
             if key in BACKSPACES:
                 self.workdir = (self.workdir or self.directory())[:-1]
-            elif 32 <= key < 127:
-                self.workdir = (self.workdir or "") + chr(key)
+            elif (ch := typed(key)) is not None:
+                self.workdir = (self.workdir or "") + ch
         elif f == "start" and key in ENTER:
             return self._start()
         elif f == "quit" and key in ENTER:
@@ -203,7 +228,8 @@ class SetupForm:
 
         wrapped: list[str] = []
         for ln in (self.prompt or "").split("\n"):
-            wrapped += textwrap.wrap(ln, room, break_long_words=True, replace_whitespace=False) or [""]
+            # D902: room left for the "…" and the cursor, so neither is cut at the right edge
+            wrapped += textwrap.wrap(ln, room - 2, break_long_words=True, replace_whitespace=False, drop_whitespace=False) or [""]
         cut = len(wrapped) > 6
         shown = wrapped[-6:] if cut else wrapped
         for i, ln in enumerate(shown):
@@ -219,7 +245,9 @@ class SetupForm:
                 rows.append(("focus", f" {'':<13}+ {tail(self.path_input, 3)}▏"[:width]))
                 rows.append(("dim", f" {'':<13}Enter adds, Tab completes, Del removes the last"[:width]))
         row("author", f"< {self.author} >")
-        row("passes", f"< {self.passes or 'until stopped'} >")
+        row("passes", f"< {self.passes or 'until stopped'} >" + ("▏" if self.field == "passes" and self.passes_typing else ""))
+        if self.field == "passes":
+            rows.append(("dim", f" {'':<13}digits cap it, Backspace edits, u until stopped"[:width]))
         row("screen_only", "[x]" if self.screen_only else "[ ]")
         row("review", ("[x]" if self.review else "[ ]") + "  show the problem before the loop runs it")
         row("workdir", tail(self.directory(), 1 if self.field == "workdir" else 0) + ("▏" if self.field == "workdir" else ""))
@@ -247,6 +275,9 @@ class SetupForm:
         last = max(i for i, (k, _t) in enumerate(body) if k == "focus") if any(k == "focus" for k, _t in body) else 0
         span = room - 2                                   # a row each for the "more" marks
         top = min(max(0, last - span + 1), max(0, focus))
+        # D902: a focused field taller than the view shows the row one types on (its cursor)
+        cursor = next((i for i, (k, t) in enumerate(body) if k == "focus" and "▏" in t), focus)
+        top = max(top, cursor - span + 1)
         top = min(top, len(body) - span)
         shown = body[top:top + span]
         up = ("dim", f" ↑ {top} more"[:width]) if top else ("", "")
@@ -292,7 +323,7 @@ def run_setup(form: SetupForm | None = None) -> dict[str, Any] | None:
         scr.keypad(True)
         while True:
             _draw(scr, form)
-            key = scr.getch()
+            key = read_key(scr)                        # D902: wide characters, whole
             got = form.handle(key)
             if got == "start":
                 return form.settings()

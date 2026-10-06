@@ -276,6 +276,32 @@ def test_line_editor_edits_and_submits():
     assert ed.handle(10) is None  # empty submit is not a note
 
 
+def test_line_editor_keeps_unicode_and_scrolls_around_its_cursor():
+    """D902, from an external review: the feedback/filter line took ASCII only (`Zürich café λ ≤
+    10ns` was sent as `Zrich caf   10ns`) and drew its buffer from the start, the cursor clamped at
+    the edge. Wide keys are kept; the line edits at its cursor and shows the cursor's part."""
+    import curses
+
+    from flux_tui.input import key_code, window
+
+    ed = LineEditor()
+    for ch in "Zürich café λ ≤ 10ns":
+        ed.handle(key_code(ch))
+    for _ in range(6):                             # back over "≤ 10ns"
+        ed.handle(curses.KEY_LEFT)
+    ed.handle(key_code("~"))
+    ed.handle(curses.KEY_END)
+    ed.handle(key_code("!"))
+    assert ed.handle(key_code("\n")) == "Zürich café λ ~≤ 10ns!"
+    text = "".join(str(i % 10) for i in range(60)) + "TAIL"
+    shown, col = window(text, len(text), 20)
+    assert len(shown) <= 20 and shown.startswith("…") and shown.endswith("TAIL") and col == len(shown)
+    shown, col = window(text, 0, 20)
+    assert shown.startswith("0123") and shown.endswith("…") and col == 0
+    shown, col = window(text, 30, 20)
+    assert shown[col - 1] == text[29] and 0 < col < 20
+
+
 def test_tui_feedback_is_channel_shaped():
     fb = TuiFeedback()
     fb.start()

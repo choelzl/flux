@@ -142,3 +142,27 @@ def test_the_first_q_on_a_live_run_asks_for_a_stop_at_the_pass_boundary(tmp_path
     _main(scr, bus, _Feedback(), "t", "", False, lambda: None, {}, lambda: 1)
     assert "q in the TUI" in ops.stop_requested()
     assert any("stopping at the end of this pass" in ln for ln in bus.snapshot()["log"])
+
+
+class _WideScreen(_FakeScreen):
+    """Answers `get_wch` as a terminal does: a str per character, an int per function key, and
+    curses.error on the timeout."""
+
+    def get_wch(self):
+        if not self.keys:
+            raise curses.error("no input")
+        return self.keys.pop(0)
+
+
+def test_feedback_typed_as_wide_keys_is_submitted_whole_at_the_minimum_size():
+    """D902: the real key path -- get_wch, the keybinds, the editor -- submits Unicode whole, and at
+    40x14 the line shows its end where the cursor is."""
+    bus = _finished_bus()
+    note = "Zürich café λ ≤ 10ns and a note longer than the line TAIL"
+    fb = _Feedback()
+    fb.notes = []
+    scr = _WideScreen(["r", "f", *note, "\n", "q"], size=(14, 40))
+    _main(scr, bus, fb, "t", "", True, lambda: None, {}, lambda: 1)
+    assert fb.notes == [note]
+    shown = [t for y, _x, t in scr.drawn if y == 12 and "feedback ❯" in t]
+    assert shown and shown[-1].rstrip().endswith("TAIL") and all(len(t) <= 39 for t in shown)
