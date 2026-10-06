@@ -3,7 +3,7 @@
 
 import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
-import { bestChart, designPoints, num4 } from "./charts.js";
+import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -129,7 +129,7 @@ async function overview(ctx) {
       bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
         h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
         b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
-      h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes)) : empty("The objective has no number to chart.")),
+      h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("The objective has no number to chart.")),
         lastPass(ctx, r))));
 }
 
