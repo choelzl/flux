@@ -202,6 +202,10 @@
             YOSYS_SLANG_PLUGIN = pkgs.lib.optionalString pkgs.stdenv.isLinux
               "${chipPkgs.yosys-slang}/share/yosys/plugins/slang.so";
             shellHook = nixchip.lib.mkNixchipVarsHook chipTools + "\n" + ''
+              # D944: the hook's VERILATOR_BIN is its bin/ folder, but Verilator's script reads that
+              # variable as the NAME of its binary and execs it -- every compile failed "Permission
+              # denied". Unset, the script finds its own verilator_bin.
+              unset VERILATOR_BIN
               echo "flux dev shell: python + Verilator/Yosys/OpenROAD, Pythia/ChampSim, SystemC/ICSC, Timeloop"
               echo "  FLUX_TIMELOOP_LOCAL=1   # the hermetic Timeloop; the adapter defaults to Docker regardless"
             '' + shellHook;
