@@ -113,7 +113,7 @@ async function loopPage(name, owner, path = "") {
   const noteList = h("div", { class: "notes" });
   async function sendNote(text) {
     const r = await api(`/apps/${enc(name)}/notes`, { method: "POST", body: { text } });
-    toast(r.ok, "ok"); noteText.value = ""; question = null; drawBanner(); drawNotes();
+    toast(r.ok, "ok"); noteText.value = ""; question = null; asked++; drawBanner(); drawNotes();   // D919: a state asked before it is not drawn
   }
   async function drawNotes() {
     const notes = await api(`/apps/${enc(name)}/notes${qs}`).catch(() => []);
@@ -121,16 +121,24 @@ async function loopPage(name, owner, path = "") {
       mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
         async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawNotes(); }) : "")));
   }
+  // D919: the banner is built once per question (by when it was asked) and kept across the polls --
+  // an unsent answer stays until it is sent; only the time left is said again
+  let bannerFor = null, bannerLeft = null;
   function drawBanner() {
     composer.update();
     askFab.classList.toggle("asking", !!(question && st.running));   // D758: the agent waits: the button says so
-    if (!question || !st.running) { banner.replaceChildren(); return; }
+    if (!question || !st.running) { banner.replaceChildren(); bannerFor = null; return; }
     const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
-    const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
-    banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
-        h("span", { class: "muted" }, left ? `${dur(left)} left` : "timed out")),
-      h("pre", { class: "question" }, question.question), mine ? [ans,
-      h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))] : ""));
+    const key = `${question.asked}\n${question.question}`;
+    if (bannerFor !== key || !banner.firstChild) {
+      bannerFor = key;
+      bannerLeft = h("span", { class: "muted" });
+      const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
+      banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"), bannerLeft),
+        h("pre", { class: "question" }, question.question), mine ? [ans,
+        h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))] : ""));
+    }
+    bannerLeft.textContent = left ? `${dur(left)} left` : "timed out";
   }
   /** Notes and answers (D697): one line docked under the Live tab, as a chat's. Enter sends,
       Shift+Enter breaks the line. When the agent asks, the line says so and answers it. */
@@ -196,12 +204,17 @@ async function loopPage(name, owner, path = "") {
   const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; results = null; setUrl(); drawTabs(); drawBody(); };
   // D892: the page as its tabs (loop_*.js) read it, instead of this function's closure: `st` and `tab`
   // are getters, so a tab that awaited reads them as they are now, not as they were when it began
-  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, body, curSub, goTab, drawBody, refresh,
+  // D919: each drawing of the body is numbered; `still()` -- taken before a tab's first wait -- says
+  // whether it is still the latest after it, so a slow answer never draws over the tab chosen since
+  let drawn = 0;
+  const still = () => { const mine = drawn; return () => mine === drawn && !show.stale(); };
+  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, body, curSub, goTab, drawBody, refresh, still,
     get st() { return st; }, get tab() { return tab; } };
   const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
   /** Questions about the loop (D705): an agent reads it -- its files, its record, its log -- and
       answers; nothing changes. Kept with the loop, newest first; one answered at a time. */
-  let askTimer = null;
+  let askTimer = null, askWho = null;
+  const askQ = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
   cleanup.push(() => clearTimeout(askTimer));
   const askBox = h("div", { class: "drawer-body" });
   // D758: one place to talk to a loop -- a note to it while it runs (an answer when its agent asks), and a
@@ -216,9 +229,11 @@ async function loopPage(name, owner, path = "") {
   const onKey = (e) => { if (e.key === "Escape" && askOpen && !document.querySelector("dialog[open]")) setAsk(false); };
   document.addEventListener("keydown", onKey);
   cleanup.push(() => document.removeEventListener("keydown", onKey));
+  let askSeq = 0;
   async function askView() {
+    const my = ++askSeq;                                  // D919: the latest look at the drawer draws it
     const list = await api(`/apps/${enc(name)}/asks${qs}`).catch(() => []);
-    if (!askOpen) return;
+    if (!askOpen || my !== askSeq) return;
     const busy = list.some(a => a.running);
     clearTimeout(askTimer);
     if (busy) askTimer = setTimeout(() => { if (askOpen && !askBox.contains(document.activeElement)) askView(); else if (askOpen) askTimer = setTimeout(askView, 3000); }, 3000);
@@ -230,14 +245,16 @@ async function loopPage(name, owner, path = "") {
         composer.el], { cls: "steer-card" });
     }
     if (mine) {
-      const q = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
-      const who = await agentSelect("ask-who");
+      // D919: the question being written and who answers are kept across the drawer's refreshes
+      const q = askQ, who = askWho = askWho || await agentSelect("ask-who");
+      if (!askOpen || my !== askSeq) return;
       form = card(null, [h("p", { class: "muted" }, "An agent reads the loop and answers; it changes nothing."),
         h("label", { class: "stack" }, "Your question", q),
         h("div", { class: "row" }, h("label", { class: "stack" }, "Who answers", who), h("span", { class: "grow" }),
           act("Ask", async () => {
             if (!q.value.trim()) { toast("Ask something.", "warn"); q.focus(); return; }
             toast((await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: q.value, author: who.value } })).ok, "ok");
+            q.value = "";                                   // sent: the draft's work is done
             askView();
           }, { cls: "primary", title: busy ? "Another question is being answered" : null }))]);
     }
@@ -261,6 +278,8 @@ async function loopPage(name, owner, path = "") {
       class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false", onclick: () => { sub = k; mode = ""; setUrl(); drawCrumbs(); drawBody(); } }, label))) : "");
   }
   async function drawBody() {
+    drawn++;
+    const ok = still();
     drawBanner(); drawSubs();
     // D917: the stream carries what the view shows -- Tasks: the journal, the live state and the
     // log's card; the Log: the log; any other tab: nothing (each part resumes where it was)
@@ -273,6 +292,7 @@ async function loopPage(name, owner, path = "") {
     if (tab === "Overview") {
       if (!st.running && !st.last_active) {
         const ab = await authorBox();
+        if (!ok()) return;
         body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
           : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : "")));
         return;
@@ -305,7 +325,7 @@ async function loopPage(name, owner, path = "") {
       if (!results) {
         body.replaceChildren(card(null, skeleton(7)));
         const r = await api(`/apps/${enc(name)}/results${qs}`);
-        if (tab !== "Results") return;
+        if (!ok()) return;                                   // D919: another tab chosen meanwhile
         if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No results yet."))); return; }
         results = resultsView(ctx, r);
       }

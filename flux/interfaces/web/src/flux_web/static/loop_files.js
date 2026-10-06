@@ -249,7 +249,9 @@ function filesTab(ctx) {
   const rootList = () => api(`/apps/${enc(name)}/files${qs}${showIgnored() ? (qs ? "&" : "?") + "ignored=true" : ""}`);
   async function refreshList() { listBox.replaceChildren(fileList(await rootList())); }      // D908: after a rename, move or delete
   async function filesView() {
+    const ok = ctx.still();                               // D919: Results -> Files: the late answer draws nothing
     const files = await rootList();
+    if (!ok()) return;
     draft = null;
     listBox.replaceChildren(fileList(files));
     body.replaceChildren(h("div", { class: "grid-app" }, card("Files", [listBox, mine ? adder() : ""], { cls: "files-card", actions: [ignoredToggle()] }), card(null, viewer, { cls: "viewer-card" })));
@@ -257,7 +259,9 @@ function filesTab(ctx) {
   }
   async function workbenchView() {
     draft = null;
+    const ok = ctx.still();                               // D919
     const bench = await api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []);
+    if (!ok()) return;
     body.replaceChildren(h("div", { class: "grid-app" }, card("Agents' workbench", bench.length
       ? ["tools", "notes", ""].map(kind => {
           const items = bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)));

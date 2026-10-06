@@ -29,12 +29,17 @@ function usageCard(u) {
 /** The Agents tab: the turns' cost, the turns, one turn's detail. */
 async function agentsView(ctx) {
   const { name, qs, q, body } = ctx;
+  const ok = ctx.still();                                 // D919: drawn only while still the tab chosen
   body.replaceChildren(card(null, skeleton(7)));
   const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
+  if (!ok()) return;
   const one = h("div", { class: "detail" }, empty("Select a turn."));
+  let picked = 0;                                         // D919: the turn selected last is the one shown
   const pick = async (t, tr) => {
     for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
+    const my = ++picked;
     const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
+    if (my !== picked) return;
     const nt = full.notes && typeof full.notes === "object" ? full.notes : {};
     const facts = [["kind", full.kind], ["model", full.about || nt.model || full.model], ["server", full.server],
       ["session", full.session ? `${full.session}${full.session_id ? " · " + full.session_id : ""}` : null], ["exit", full.rc],

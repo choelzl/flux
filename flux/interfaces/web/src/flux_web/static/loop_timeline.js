@@ -16,8 +16,9 @@ function timelineTab(ctx) {
   async function timelineView() {
     const params = new URLSearchParams(owner ? { owner } : {});
     if (tlStart != null) params.set("start", tlStart);
+    const ok = ctx.still();                             // D919
     const t = await api(`/apps/${enc(name)}/timeline?${params}`);
-    if (ctx.tab !== "Live" || curSub() !== "timeline") return;
+    if (ctx.tab !== "Live" || curSub() !== "timeline" || !ok()) return;
     if (!t.bars.length) { body.replaceChildren(card(null, empty("No phase in the journal yet."))); return; }
     const color = {}; t.kinds.forEach((k, i) => { color[k.kind] = PALETTE[i % PALETTE.length]; });
     const startSel = h("select", { onchange: (e) => { tlStart = Number(e.target.value); tlPass = ""; timelineView(); } },

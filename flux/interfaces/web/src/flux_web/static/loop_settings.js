@@ -39,9 +39,10 @@ async function sharingCard(name, isOwner) {
     what only an admin sets -- the sandbox and its limits. */
 async function settingsView(ctx) {
   const { name, qs, body, info, mine, isOwner } = ctx;
+  const ok = ctx.still();                               // D919
   body.replaceChildren(card(null, skeleton(7)));
   const e = await api(`/apps/${enc(name)}/env${qs}`);
-  if (ctx.tab !== "Settings") return;
+  if (ctx.tab !== "Settings" || !ok()) return;
   const varsCard = card("Environment variables", [
     h("p", { class: "muted" }, isOwner ? "This loop's variables win over yours and the server's."
       : `This loop's variables win over ${info.owner}'s and the server's.`),
@@ -71,7 +72,9 @@ async function settingsView(ctx) {
         run.disabled = !!ctx.st.running;
         return h("tr", {}, h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)), last, h("td", { class: "right mt-acts" }, run));
       }))))]) : "";
-  body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
+  const shares = await sharingCard(name, isOwner);
+  if (!ok()) return;
+  body.replaceChildren(varsCard, shares, advancedCard(e, async (adv) => {
     await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
   }), mtCard, danger);
 }

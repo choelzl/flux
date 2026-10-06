@@ -79,6 +79,7 @@ function closestCard(ctx, r) {
     per objective, the latest notes and the agents' newest workbench entries. */
 async function overview(ctx) {
   const { name, qs, body, mine, goTab, drawBody } = ctx;
+  const ok = ctx.still();                               // D919: drawn only while still the latest
   const [r, notes, bench, use] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
     api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null)]);
   const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
@@ -103,7 +104,7 @@ async function overview(ctx) {
         topDesigns(ctx, r, 3)]);
   const st = ctx.st;                                // D892: the state as it is now, after the wait
   const q0 = st.question;
-  if (ctx.tab !== "Overview") return;                   // the tab changed while it loaded
+  if (ctx.tab !== "Overview" || !ok()) return;          // the tab changed while it loaded
   body.replaceChildren(
     h("div", { class: "stats five ov-stats" },
       stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
