@@ -106,7 +106,7 @@
           chipTools = {
             inherit (chipPkgs) verilator sv-lang yosys iverilog pythia;
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-            inherit (chipPkgs) openroad yosys-slang timeloop icsc;
+            inherit (chipPkgs) openroad openroad-flow-scripts yosys-slang timeloop icsc;
           };
 
           # manylinux wheels (numpy, onnx, ...) dlopen libstdc++/zlib at import time;
