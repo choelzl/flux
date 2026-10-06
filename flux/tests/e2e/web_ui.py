@@ -964,21 +964,41 @@ def flows(r: Run) -> None:
 
         b.wait("[...document.querySelectorAll('.tree .node.leaf.running .nm')].some(x => x.textContent === 'Measure')", timeout=90,
                what="the minute-long bench under way")
-        pg = int(run["pid"])                                       # the run's own session: its group is the run
+        top = int(run["pid"])
 
-        def benching():                                            # bench.py asleep in the run's process group
+        def family():                                              # the run's process and every process below it
+            kids: dict[int, list[int]] = {}
             for d in Path("/proc").iterdir():
                 try:
-                    if d.name.isdigit() and os.getpgid(int(d.name)) == pg and b"bench.py" in (d / "cmdline").read_bytes():
+                    if d.name.isdigit():
+                        ppid = int((d / "stat").read_text().rsplit(")", 1)[1].split()[1])
+                        kids.setdefault(ppid, []).append(int(d.name))
+                except (OSError, ValueError, IndexError):
+                    continue
+            out, todo = [], [top]
+            while todo:
+                p = todo.pop()
+                out.append(p)
+                todo += kids.get(p, [])
+            return out
+
+        def benching():                                            # bench.py asleep below the run
+            for p in family():
+                try:
+                    if b"bench.py" in Path(f"/proc/{p}/cmdline").read_bytes():
                         return True
-                except (OSError, ProcessLookupError):
+                except OSError:
                     continue
             return False
         end = time.time() + 60
         while time.time() < end and not benching():
             time.sleep(0.2)
         r.check("the run is mid-measurement, its bench asleep", benching())
-        os.killpg(pg, signal.SIGKILL)                              # no orderly end: the journal is cut short
+        for p in reversed(family()):                               # no orderly end: the journal is cut short
+            try:
+                os.kill(p, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         end = time.time() + 60
         while time.time() < end and Store(r.data).run(run["id"]).get("rc") is None:     # the server's own record of the end
             time.sleep(0.5)
