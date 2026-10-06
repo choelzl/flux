@@ -1467,6 +1467,10 @@ def flows(r: Run) -> None:
                     return [d.documentElement.scrollWidth, w.innerWidth, over];""")
                 r.check(f"phone {h} at {width}px: nothing wider than the screen", got[0] <= got[1] + 1 and not got[2], f"{got}")
                 if h == "#/account":
+                    try:                                  # its connections come after the page's first draw
+                        b.wait("!!document.getElementById('phone').contentDocument.querySelector('.agent-conn[data-agent=codex]')", timeout=20)
+                    except AssertionError:
+                        pass
                     seen = b.js("const d = document.getElementById('phone').contentDocument, c = d.querySelector('.agent-conn[data-agent=codex]');"
                                 "return c ? [c.getBoundingClientRect().height > 0, [...c.querySelectorAll('dt')].map(x => x.textContent),"
                                 " !![...c.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test connection')] : null")
