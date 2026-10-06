@@ -4,6 +4,7 @@ crafter. Every path a request names is resolved inside the application and refus
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
@@ -12,7 +13,7 @@ import shutil
 import threading
 import zipfile
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Iterator
 
 MAX_BYTES = 256 * 1024 * 1024           # one request (D700: the page sends a large upload in batches)
 MAX_FILES = 900                         # below the 1000 files a request may carry (Starlette)
@@ -26,6 +27,33 @@ TEXT_MAX = 2 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
 DOCUMENT_FILE = "problem.yaml"            # D786: a loop's document; the loop's name is its id
 DOC_SUFFIXES = (".problem.yaml", ".problem.yml", ".task.json", ".task.yaml", ".yaml", ".yml", ".json")
+
+
+#: What runs write (D696): never one of the loop's own files, never descended into (D907)
+RUN_DIRS = ("out", "runs", "workbench")
+_ROOMS: dict[str, list[float]] = {}     # D907: a loop's own files and partial uploads, [when, count, bytes]
+ROOM_FRESH = 60.0                       # seconds a tally serves the parts of an upload before a new walk
+
+
+def own_files(root: Path, skip: tuple[str, ...] = ("__pycache__", ".git")) -> list[tuple[str, Path, os.stat_result]]:
+    """(relative path, path, lstat) of each file of the loop, sorted as its path's parts (D907): the
+    folders runs write (out/, runs/, workbench/) and `skip` folders pruned before descending, so
+    a run's 20,000 outputs cost nothing; links to folders not followed. One walk for the digest,
+    the input list and the room an upload has."""
+    out = []
+    for folder, dirs, names in os.walk(root):
+        rel_dir = os.path.relpath(folder, root)
+        top = rel_dir == "."
+        dirs[:] = [d for d in dirs if d not in skip and not (top and d in RUN_DIRS)]
+        for n in names:
+            p = Path(folder) / n
+            try:
+                st = p.lstat()
+            except OSError:
+                continue
+            out.append((n if top else f"{rel_dir}/{n}", p, st))
+    out.sort(key=lambda x: x[0].split("/"))
+    return out
 
 
 class WorkspaceError(ValueError):
@@ -132,20 +160,11 @@ class Workspace:
             written.append(rel)
         return written
 
-    def _check_room(self, name: str, more_bytes: int, more_files: int, replacing: Any = ()) -> None:
+    def _check_room(self, name: str, more_bytes: int, more_files: int, replacing: Any = (), fresh: bool = True) -> None:
         """A loop's own files stay under LOOP_BYTES and LOOP_FILES in all (D700) -- counting the
         uploads under way (D855: their partial files), and a file being replaced by the difference
         its new content makes, not twice."""
-        n, size = 0, 0
-        for rec in self.inputs(name):
-            n += 1
-            size += rec["size"]
-        root = self.app(name)
-        for part in root.rglob("*.part-upload"):
-            try:
-                size += part.lstat().st_size
-            except OSError:
-                pass
+        n, size = self._tally(name, fresh)
         for old in replacing:
             try:
                 if old.is_file() and not old.is_symlink():
@@ -155,6 +174,29 @@ class Workspace:
                 pass
         if size + more_bytes > LOOP_BYTES or n + more_files > LOOP_FILES:
             raise WorkspaceError(f"a loop holds at most {LOOP_FILES} files and {LOOP_BYTES // 2**30} GB of its own")
+
+    def _tally(self, name: str, fresh: bool = False) -> tuple[int, int]:
+        """(files, bytes) of the loop's own files and its uploads under way (D907): one walk, out/,
+        runs/ and workbench/ pruned; kept a minute for the parts of an upload that follow, each
+        counted as written -- not the whole tree walked again for every part."""
+        import time
+
+        key = str(self.app(name).resolve())
+        got = _ROOMS.get(key)
+        if got is None or fresh or time.monotonic() - got[0] > ROOM_FRESH:
+            n = size = 0
+            for _rel, p, st in own_files(Path(key)):
+                if p.name == ".flux-app.json":
+                    continue
+                if not p.name.endswith(".part-upload"):
+                    n += 1
+                size += st.st_size
+            got = _ROOMS[key] = [time.monotonic(), n, size]
+        return int(got[1]), int(got[2])
+
+    def _changed(self, name: str) -> None:
+        """The loop's files changed other than by a part: its tally walked again next time (D907)."""
+        _ROOMS.pop(str(self.app(name).resolve()), None)
 
     def put_part(self, name: str, rel: str, offset: int, data: bytes, final: bool) -> int:
         """A large file in parts (D700): each part written at its offset into a hidden partial
@@ -176,14 +218,19 @@ class Workspace:
                 raise WorkspaceError(f"a file is at most {LOOP_BYTES // 2**30} GB")
             # D855: every part against the loop's room -- what it holds, the uploads under way, this
             # part -- the file it replaces counted out (its new content takes its place)
-            self._check_room(name, len(data), 1 if offset == 0 and not target.exists() else 0, [target])
+            # D907: a file's first part walks the loop once; the parts after it count on that walk
+            self._check_room(name, len(data), 1 if offset == 0 and not target.exists() else 0, [target], fresh=offset == 0)
             fd = os.open(part, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)   # D852: not through a link
             with os.fdopen(fd, "ab") as fh:
                 fh.write(data)
             size = part.stat().st_size
+            got = _ROOMS.get(str(self.app(name).resolve()))
+            if got is not None:                       # the part counted as written; the rest of the tally holds
+                got[2] += len(data)
         if final:
             target.unlink(missing_ok=True)
             part.replace(target)
+            self._changed(name)
         return size
 
     def drop_part(self, name: str, rel: str) -> None:
@@ -191,6 +238,7 @@ class Workspace:
         target = self.path(name, safe_rel(rel))
         part = target.with_name(f".{target.name}.part-upload")
         part.unlink(missing_ok=True)
+        self._changed(name)
         root, d = self.app(name).resolve(), part.parent
         while d != root and d.is_dir() and not any(d.iterdir()):
             d.rmdir()
@@ -386,14 +434,21 @@ class Workspace:
         runs/, the workbench) -- a change here is what a check before starting looks for."""
         import hashlib
 
+        import stat
+
         root = self.app(name).resolve()
         h = hashlib.sha256()
-        for p in sorted(root.rglob("*")):
-            rel = p.relative_to(root)
-            if not p.is_file() or p.is_symlink() or rel.parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json" \
-                    or "__pycache__" in rel.parts:
+        for rel, p, st in own_files(root, skip=("__pycache__",)):
+            if not stat.S_ISREG(st.st_mode) or p.name == ".flux-app.json":
                 continue
-            h.update(str(rel).encode() + b"\0" + p.read_bytes() + b"\0")
+            h.update(rel.encode() + b"\0")
+            try:
+                with open(p, "rb") as fh:                  # D907: in pieces, never the whole file at once
+                    while chunk := fh.read(1 << 20):
+                        h.update(chunk)
+            except OSError:
+                pass
+            h.update(b"\0")
         return h.hexdigest()[:16]
 
     def inputs(self, name: str) -> list[dict[str, Any]]:
@@ -405,13 +460,11 @@ class Workspace:
         doc = self.meta(name).get("document")
         ig = Ignores(root)
         out = []
-        for p in sorted(root.rglob("*")):
-            rel = p.relative_to(root)
-            if not p.is_file() or rel.parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json" \
-                    or "__pycache__" in rel.parts or ".git" in rel.parts or p.name.endswith(".part-upload"):
+        for rel, p, st in own_files(root):                  # D907: out/, runs/, workbench/ pruned, not listed then dropped
+            if p.name in (".flux-app.json", ".git") or p.name.endswith(".part-upload") or not p.is_file():
                 continue
-            ignored = ig.ignored(str(rel))                  # D703: what .gitignore ignores, marked
-            out.append({"path": str(rel), "size": p.lstat().st_size, "document": str(rel) == doc, "ignored": ignored})
+            ignored = ig.ignored(rel)                       # D703: what .gitignore ignores, marked
+            out.append({"path": rel, "size": st.st_size, "document": rel == doc, "ignored": ignored})
         return out
 
     def remove(self, name: str, rel: str) -> None:
@@ -432,8 +485,28 @@ class Workspace:
             d.rmdir()
             d = d.parent
 
-    def read(self, name: str, rel: str) -> tuple[bytes, bool]:
-        """(content, whether it is text) of a file, at most TEXT_MAX for text; never under `.git` (D703)."""
+    def read(self, name: str, rel: str) -> tuple[bytes, bool, int]:
+        """(its first TEXT_MAX bytes, whether it is text, its whole size) of a file (D907: a preview
+        is bounded, a cut multi-byte character left out; the whole file is `open_file`'s, in
+        pieces); never under `.git` (D703)."""
+        with self.open_file(name, rel) as (fh, size):
+            data = fh.read(TEXT_MAX)
+        is_text = b"\x00" not in data[:8192]
+        if is_text:
+            try:
+                data.decode()
+            except UnicodeDecodeError as exc:
+                if size > len(data) and exc.start >= len(data) - 3 and exc.reason == "unexpected end of data":
+                    data = data[:exc.start]               # cut inside a character at the bound
+                else:
+                    is_text = False
+        return data, is_text, size
+
+    @contextlib.contextmanager
+    def open_file(self, name: str, rel: str) -> Iterator[tuple[Any, int]]:
+        """(the file open for reading, its size), confined to the loop, its last step not a link
+        followed (D852); never under `.git`."""
+        from .confine import Escape, open_read
         from .gitignore import Ignores
 
         if Ignores.hidden(rel):
@@ -441,14 +514,12 @@ class Workspace:
         p = self.path(name, rel)
         if not p.is_file():
             raise WorkspaceError(f"no file {rel!r}")
-        data = p.read_bytes()
-        is_text = b"\x00" not in data[:8192]
-        if is_text:
-            try:
-                data[:TEXT_MAX].decode()
-            except UnicodeDecodeError:
-                is_text = False
-        return data, is_text
+        try:
+            fh = open_read(p, self.app(name).resolve())
+        except (Escape, OSError) as exc:
+            raise WorkspaceError(f"{rel!r} cannot be read here") from exc
+        with fh:
+            yield fh, os.fstat(fh.fileno()).st_size
 
     def write(self, name: str, rel: str, text: str) -> None:
         self.path(name, rel)                           # inside the application

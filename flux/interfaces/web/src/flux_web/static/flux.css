@@ -383,6 +383,8 @@ th .arrow { font-size: 10px; }
 @keyframes flash { 0% { background: color-mix(in srgb, var(--warn) 40%, transparent); } }
 select.starts { max-width: 330px; padding: 4px 8px; }
 .callout.good { border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--ok); }
+.callout.warn { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }   /* D907: a preview cut short */
+.viewer .callout.truncated { margin: 6px 0; }
 .preflight { margin: 6px 0 12px; }
 .preflight .callout { color: inherit; }
 .preflight .callout.good strong { color: var(--ok); }

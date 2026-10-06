@@ -33,7 +33,9 @@ async function withOwner(owner, fn) {
   const was = pageOwner; setPageOwner(owner || null);
   try { return await fn(); } finally { setPageOwner(was); }
 }
-async function api(path, { method = "GET", body, form } = {}) {
+/** A server call's answer, checked (D907): the session that ended, the server out of reach and an
+    error said as for any call -- for a caller that reads the body itself (a file, its headers). */
+async function request(path, { method = "GET", body, form } = {}) {
   path = owned(path);
   const opt = { method, headers: { "X-Flux": "1" }, credentials: "same-origin" };
   if (form) opt.body = form;
@@ -47,9 +49,9 @@ async function api(path, { method = "GET", body, form } = {}) {
     if (me && location.hash !== "#/login") toast("Your session ended: log in again.", "warn", { timeout: 8000 });
     setMe(null); location.hash = "#/login"; throw new Error("log in");
   }
-  const type = r.headers.get("content-type") || "";
-  const data = type.includes("json") ? await r.json() : await r.text();
   if (!r.ok) {
+    const type = r.headers.get("content-type") || "";
+    const data = type.includes("json") ? await r.json().catch(() => null) : await r.text();
     // D906: the status goes with the error -- a caller tells a conflict (409) from a refusal
     const fail = (m) => Object.assign(new Error(m), { status: r.status });
     if (data && data.detail) throw fail(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
@@ -57,7 +59,11 @@ async function api(path, { method = "GET", body, form } = {}) {
     const said = typeof data === "string" ? data.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) : "";
     throw fail(r.status === 413 ? "Too large for the server (or a proxy in front of it): 413." : `The server answered ${r.status} ${r.statusText}${said ? ": " + said : ""}`);
   }
-  return data;
+  return r;
+}
+async function api(path, opts = {}) {
+  const r = await request(path, opts);
+  return (r.headers.get("content-type") || "").includes("json") ? r.json() : r.text();
 }
 
 // ---- the server out of reach (D694): a banner while it is, gone at the next answer
@@ -268,6 +274,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0) {
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, api, appHref, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, ago, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };

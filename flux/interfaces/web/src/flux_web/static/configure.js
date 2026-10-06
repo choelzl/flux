@@ -3,7 +3,7 @@
 
 import { codeEditor, langOf } from "./highlight.js";
 import { cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
-import { act, api, appHref, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, skeleton, toast } from "./ui.js";
+import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm } from "./loops.js";
 
 // ================================================================ the configurator (D686)
@@ -74,8 +74,9 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
   }
   async function open(f) {
     if (!name) { const x = staged.get(f.path); if (x.text != null) return editor(f.path, x.text); toast("A dropped file is kept as it is.", "info"); return; }
-    const r = await fetch(`/api/apps/${enc(name)}/file?path=${enc(f.path)}`, { credentials: "same-origin" });
+    const r = await request(`/apps/${enc(name)}/file?path=${enc(f.path)}`);       // D907: an error is said, not taken for a binary
     if (!(r.headers.get("content-type") || "").startsWith("text/")) { toast("A binary file: replace it by dropping a new one.", "info"); return; }
+    if (r.headers.get("x-flux-truncated")) { toast(`${f.path} is too large to edit here (${bytes(+r.headers.get("x-flux-size"))}): download it from Files.`, "info"); return; }
     editor(f.path, await r.text());
   }
   async function remove(f) {

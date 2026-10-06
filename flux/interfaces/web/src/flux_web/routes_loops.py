@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 
 from .models import (
     DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn,
@@ -408,14 +409,28 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/apps/{name}/file")
     def app_file(name: str, path: str, download: bool = False, owner: str | None = None, user: User = Depends(user_of)):
+        """A file: text as a preview of at most TEXT_MAX bytes, `X-Flux-Truncated` and its whole
+        size said when cut (D907); a download, or a file not text, streamed whole in pieces."""
+        from urllib.parse import quote
+
+        w = reader(user, owner, name)[0]
         try:
-            data, is_text = reader(user, owner, name)[0].read(name, path)
+            data, is_text, size = w.read(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
         if download or not is_text:
-            return Response(data, media_type="application/octet-stream",
-                            headers={"Content-Disposition": f'attachment; filename="{Path(path).name}"'})
-        return Response(data, media_type="text/plain; charset=utf-8")
+            def pieces():
+                with w.open_file(name, path) as (fh, _size):
+                    while chunk := fh.read(1 << 20):
+                        yield chunk
+            leaf = Path(path).name
+            ascii_leaf = leaf.encode("ascii", "replace").decode().replace('"', "_")
+            return StreamingResponse(pieces(), media_type="application/octet-stream", headers={
+                "Content-Disposition": f"attachment; filename=\"{ascii_leaf}\"; filename*=UTF-8''{quote(leaf)}",
+                "Content-Length": str(size)})
+        cut = size > len(data)
+        return Response(data, media_type="text/plain; charset=utf-8",
+                        headers={"X-Flux-Size": str(size), **({"X-Flux-Truncated": "1"} if cut else {})})
 
     @app.get("/api/apps/{name}/inputs")
     def list_inputs(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:

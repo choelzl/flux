@@ -2,7 +2,7 @@
 // workbench (D892: out of loopPage).
 
 import { codeEditor, langOf } from "./highlight.js";
-import { act, ago, api, card, empty, enc, h, skeleton, toast } from "./ui.js";
+import { act, ago, api, card, empty, enc, h, request, skeleton, toast } from "./ui.js";
 import { dropZone, progressDialog, sendFiles } from "./loops.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -28,13 +28,25 @@ function filesTab(ctx) {
       viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, true)), fileList(list));
       return;
     }
-    const r = await fetch(fileUrl(path), { credentials: "same-origin" });
+    // D907: the answer's status first -- an error (a file gone since the list, a session ended) is
+    // said with the file's name and a retry, never shown as a binary file or put in the editor
+    let r;
+    try { r = await request(`/apps/${enc(name)}/file?path=${enc(path)}${q}`); }
+    catch (x) {
+      if (x.message === "log in") return;
+      viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, false)),
+        empty(`${path} could not be opened: ${x.message}`, act("Retry", () => openFile(path, false), { cls: "small" })));
+      return;
+    }
     if ((r.headers.get("content-type") || "").startsWith("text/")) {
-      const ed = codeEditor(await r.text(), langOf(path), { readonly: !mine });
+      const cut = !!r.headers.get("x-flux-truncated");              // D907: a bounded preview, said; not saved back
+      const ed = codeEditor(await r.text(), langOf(path), { readonly: !mine || cut });
       viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, false),
-          h("div", { class: "actions" }, mine ? act("Save", async () => {
+          h("div", { class: "actions" }, mine && !cut ? act("Save", async () => {
             await api(`/apps/${enc(name)}/file?path=${enc(path)}`, { method: "PUT", body: { text: ed.textarea.value } }); toast(`${path} saved`, "ok");
-          }, { cls: "small" }) : "", h("a", { class: "btn small", href: fileUrl(path, true) }, "Download"))), ed.el);
+          }, { cls: "small" }) : "", h("a", { class: "btn small", href: fileUrl(path, true) }, "Download"))),
+        cut ? h("div", { class: "callout warn truncated" }, `Showing the first ${size(new TextEncoder().encode(ed.textarea.value).length)} of ${size(+r.headers.get("x-flux-size"))}: `
+          + "too large to show or edit here whole. Download has all of it.") : "", ed.el);
     } else {
       viewer.replaceChildren(h("div", { class: "viewer-head" }, pathCrumbs(path, false)),
         empty("A binary file.", h("a", { class: "btn", href: fileUrl(path, true) }, "Download")));
