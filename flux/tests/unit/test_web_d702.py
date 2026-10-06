@@ -69,7 +69,7 @@ def test_claude_code_and_codex_are_launched_with_the_webs_model(server, monkeypa
     store.set_server_setting("FLUX_CLAUDE_MODEL", "claude-sonnet-5")
     store.set_server_setting("FLUX_CODEX_MODEL", "gpt-x")
     env = run_env(store, store.user(name="bob"))
-    for k in ("FLUX_CLAUDE_ARGS", "FLUX_CODEX_ARGS", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"):
+    for k in ("FLUX_CLAUDE_ENV", "FLUX_CODEX_ENV", "FLUX_CLAUDE_BIN", "FLUX_CODEX_BIN"):           # D922: the model in its own set
         monkeypatch.setenv(k, env[k])
     claude = agent_spec("claude").argv
     codex = agent_spec("codex").argv

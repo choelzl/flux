@@ -298,6 +298,7 @@ def agent_programs() -> dict[str, str]:
 def _env() -> dict[str, str]:
     # D697: the variables `flux serve` set for this run on purpose pass, whatever their names
     passed = {n for n in os.environ.get("FLUX_SANDBOX_PASS", "").split(",") if n}
+    passed |= {"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"}   # D922: an agent's own credentials, as its key is (the agent alone gets them)
     out = {}
     for k, v in os.environ.items():
         if k in _DROP or (any(s in k.upper() for s in _SECRETISH) and not k.startswith("FLUX_") and k not in passed):

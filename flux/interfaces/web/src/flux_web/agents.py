@@ -11,7 +11,6 @@ variable (Models and variables, Account, a loop's Settings).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shlex
@@ -210,45 +209,48 @@ def run_timeout(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> s
     return ""
 
 
-def run_settings(agent: Agent, server: dict[str, str], mine: dict[str, str], flux: dict[str, str],
-                 variables: dict[str, str], base_env: dict[str, str]) -> tuple[dict[str, str], list[str]]:
-    """What a run hands `agent` (D807): (its own variables, extra arguments). `server` and `mine`
-    are the settings (revealed); a user who names their own endpoint gets none of the server's
-    settings of this agent; a Claude login's token is only ever the user's own (D748). `flux`:
-    Flux's own model settings, the built-in OpenCode's when it has none of its own (D696).
-    `variables`: the agent's own, the server's then the user's."""
-    k = agent.keys()
-    base_key, model_key, api_key = k["public"][0], k["public"][1], k["secret"][0]
-    vals = _resolved(agent, server, mine)
-    token = mine.get(f"FLUX_{agent.up}_OAUTH_TOKEN")
-    own: dict[str, str] = {}
-    args: list[str] = []
-    base, model, key = vals.get(base_key), vals.get(model_key), vals.get(api_key)
-    if agent.kind == "opencode":
-        if agent.name == "opencode" and not base:
-            base, model, key = flux.get("FLUX_REMOTE_BASE_URL"), model or flux.get("FLUX_REMOTE_MODEL"), key or flux.get("FLUX_REMOTE_API_KEY")
-        if base and model:
-            options: dict[str, Any] = {"baseURL": base.rstrip("/"), "timeout": 1800000}
-            if key:
-                own["FLUX_AGENT_API_KEY"] = key
-                options["apiKey"] = "{env:FLUX_AGENT_API_KEY}"
-            try:
-                have = json.loads(base_env.get("OPENCODE_CONFIG_CONTENT") or "{}")
-            except ValueError:
-                have = {}
-            have.setdefault("provider", {})["flux"] = {"npm": "@ai-sdk/openai-compatible", "name": "Flux (web settings)",
-                                                       "options": options, "models": {model: {"name": model}}}
-            have["model"] = f"flux/{model}"
-            own["OPENCODE_CONFIG_CONTENT"] = json.dumps(have)
-    else:
-        pre = "ANTHROPIC" if agent.kind == "claude" else "OPENAI"
-        if base:
-            own[f"{pre}_BASE_URL"] = base
-        if key:
-            own[f"{pre}_API_KEY"] = key
-        if token and agent.kind == "claude":
-            own["CLAUDE_CODE_OAUTH_TOKEN"] = token
-        if model:
-            args += ["--model", model]
-    own.update(variables)
-    return own, args
+#: D922/D925: a layer's word -- what the Account and Admin pages show as a field's source.
+FROM_SERVER = "From Server"
+
+
+def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str], mine: dict[str, str],
+                 server_vars: dict[str, str], my_vars: dict[str, str], loop_vars: dict[str, str] | None = None,
+                 flux: dict[str, str] | None = None) -> list[tuple[str, dict[str, str]]]:
+    """The scopes an agent's configuration comes from (D922), lowest first: the server's process
+    (its environment, flux.env included), the server's settings and variables, the user's, the
+    loop's. `server_vars`/`my_vars`: the variables for every agent, then this agent's own, merged.
+    A Claude login's token is only ever the user's own (D748). `flux`: Flux's own model, the
+    built-in OpenCode's when nothing names its endpoint (D696) -- the lowest layer."""
+    names = (*agent.keys()["public"][:2], *agent.keys()["secret"])
+    token = f"FLUX_{agent.up}_OAUTH_TOKEN"
+    out = [(f"{FROM_SERVER} (its environment)", dict(machine)),
+           (f"{FROM_SERVER} (its settings)", {**server_vars, **{n: server[n] for n in names if server.get(n) and n != token}}),
+           ("yours", {**my_vars, **{n: mine[n] for n in names if mine.get(n)}})]
+    if loop_vars:
+        out.append(("this loop's", dict(loop_vars)))
+    if agent.name == "opencode" and flux and flux.get("FLUX_REMOTE_BASE_URL"):
+        from flux_loop.agent_env import resolve
+
+        if "endpoint" not in resolve(agent.name, agent.kind, out).fields:
+            out.insert(0, ("Flux's model", {"FLUX_OPENCODE_BASE_URL": flux["FLUX_REMOTE_BASE_URL"],
+                                            "FLUX_OPENCODE_MODEL": flux.get("FLUX_REMOTE_MODEL", ""),
+                                            "FLUX_OPENCODE_API_KEY": flux.get("FLUX_REMOTE_API_KEY", "")}))
+    return out
+
+
+def run_settings(agent: Agent, layers: list[tuple[str, dict[str, str]]], variables: dict[str, str],
+                 agents: tuple[str, ...] = ()) -> tuple[dict[str, str], Any]:
+    """What a run hands `agent` (D807): (its own variables, the resolved configuration). D922: the
+    one core resolver (`flux_loop.agent_env`) over `layers` -- its fields as its kind reads them,
+    the model as FLUX_<NAME>_MODEL (the turn makes it `--model`); `variables`: the agent's own, the
+    server's then the user's, under the resolved fields; a field's native not used goes."""
+    from flux_loop.agent_env import aliases, resolve
+
+    eff = resolve(agent.name, agent.kind, layers, agents=agents)
+    own = {**variables}
+    for n in eff.unset:
+        own.pop(n, None)
+    own.update(eff.env)
+    if eff.args:
+        own[aliases(agent.name, agent.kind)["model"]] = eff.fields["model"]["value"]
+    return own, eff

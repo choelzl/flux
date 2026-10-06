@@ -103,22 +103,50 @@ def user_config_path() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "flux" / "flux.env"
 
 
+#: flux.env's schema (D922): Flux's own settings (`FLUX_*`, `OLLAMA_*`) and the coding agents' own
+#: names, which they read themselves -- an agent's endpoint, key and login token
+#: (FLUX_<NAME>_BASE_URL / _API_KEY / _MODEL / _OAUTH_TOKEN are Flux's aliases of them, mapped by
+#: the agent's kind when it runs: `flux_loop.agent_env`). Anything else is said and not loaded.
+CONFIG_NATIVE = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
+                 "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_CONFIG_CONTENT")
+#: The names the last `load_user_config` set (a field's source shows as flux.env, D922).
+LOADED: list[str] = []
+
+
 def load_user_config(path: Path | None = None) -> list[str]:
     """The user's `FLUX_*=value` lines into the environment, where the shell did not set them
     already (the shell wins). Returns the names it set. Blank lines and `#` comments are skipped;
-    anything that is not a `FLUX_` or `OLLAMA_` variable is ignored (D651)."""
+    beside `FLUX_` and `OLLAMA_` variables (D651) the agents' own names of CONFIG_NATIVE load too
+    (D922); any other line, and a recognized setting no agent will use, is said on stderr."""
+    import sys
+
     path = path or user_config_path()
     if not path.is_file():
         return []
-    set_now = []
+    set_now, seen, said = [], {}, []
     for line in path.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         name, value = (t.strip() for t in line.split("=", 1))
-        if name.startswith(("FLUX_", "OLLAMA_")) and name not in os.environ:
+        name = name.removeprefix("export ").strip()
+        if not name.startswith(("FLUX_", "OLLAMA_")) and name not in CONFIG_NATIVE:
+            said.append(f"{name}: not a Flux setting nor an agent's own -- ignored")
+            continue
+        seen[name] = value.strip("'\"")
+        if name not in os.environ:
             os.environ[name] = value.strip("'\"")
             set_now.append(name)
+    LOADED[:] = set_now
+    try:                                          # D922: recognized, but no agent will use it
+        from flux_loop.agent import agent_kinds
+        from flux_loop.agent_env import config_warnings
+
+        said += config_warnings(seen, agent_kinds())
+    except ImportError:
+        pass
+    for w in said:
+        print(f"flux: {path.name}: {w}", file=sys.stderr)
     # coding agents (OpenCode's config reads {env:FLUX_REMOTE_API_KEY}) inherit the key from the
     # environment, in memory only, never written anywhere (D669)
     if "FLUX_REMOTE_API_KEY" not in os.environ and os.environ.get("FLUX_REMOTE_API_KEY_FILE"):

@@ -222,7 +222,8 @@ def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch)
         run_turn(spec, spec.argv, {"prompt": "p", "name": "n", "workdir": str(tmp_path)}, workdir=tmp_path)
     oc = json.loads((tmp_path / "opencode.env").read_text())
     assert not {"ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "CLAUDE_CODE_USE_BEDROCK"} & set(oc)
-    assert oc["FLUX_OPENCODE_API_KEY"] == "oc-key" and oc["FLUX_REMOTE_API_KEY"] == "flux-key" and "OPENCODE_CONFIG_CONTENT" in oc
+    # D922: Flux's alias is resolved, not handed on -- a key without an endpoint and a model makes no provider
+    assert "FLUX_OPENCODE_API_KEY" not in oc and oc["FLUX_REMOTE_API_KEY"] == "flux-key" and "OPENCODE_CONFIG_CONTENT" in oc
     assert "ANTHROPIC_API_KEY" not in json.loads((tmp_path / "opencode.version.env").read_text()), "its version asked with its own too"
     cl = json.loads((tmp_path / "claude.env").read_text())
     assert cl["ANTHROPIC_API_KEY"] == "claude-key" and "OPENAI_API_KEY" not in cl and "FLUX_OPENCODE_API_KEY" not in cl

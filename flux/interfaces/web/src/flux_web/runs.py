@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import shutil
 import signal
 import subprocess
@@ -103,13 +102,15 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
     names: list[str] = list(web)
-    _agents(store, user, env, server, mine, web, names)
     # D697: the variables set on the web -- the server's, the user's, the loop's, in that order;
     # their names pass into the sandbox whatever they look like, and to every agent (D807)
+    scopes = {s: {n: x["value"] for n, x in store.env(s, reveal=True).items()}
+              for s in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else []))}
+    _agents(store, user, env, server, mine, web, names, scopes)
     shared: list[str] = []
-    for scope in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else [])):
-        for name, x in store.env(scope, reveal=True).items():
-            env[name] = x["value"]
+    for vals in scopes.values():
+        for name, value in vals.items():
+            env[name] = value
             names.append(name)
             shared.append(name)
     if shared:
@@ -257,14 +258,21 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
 
 
 def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],
-            flux: dict[str, str], names: list[str]) -> None:
+            flux: dict[str, str], names: list[str], scopes: dict[str, dict[str, str]] | None = None) -> None:
     """Each agent the server offers, as its runs get it (D807): its program (its folder on PATH, so
     the sandbox mounts it, D705), the admin's arguments and login files (D756, D760), and its own
     variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
     then the user's -- in `FLUX_<NAME>_ENV`, which only that agent is given; an added agent's kind
-    in `FLUX_AGENTS`."""
-    from .agents import found, run_prices, run_settings, run_timeout, visible
+    in `FLUX_AGENTS`. D922: resolved by the core resolver over every scope -- the server's
+    environment, its settings and variables, the user's, the loop's (which win, D923) -- and Flux's
+    aliases (FLUX_<NAME>_BASE_URL, ...) of the server's environment taken out: resolved here."""
+    from flux_loop.agent_env import aliases
 
+    from .agents import found, registry, run_prices, run_settings, run_timeout, visible
+
+    scopes = scopes or {}
+    machine = dict(env)
+    every = registry(store)
     added: dict[str, str] = {}
     for a in visible(store).values():
         exe = found(a, store)
@@ -275,9 +283,7 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
                 env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
         if not a.builtin:
             added[a.name] = a.kind
-        variables = {**({} if user.external else {n: x["value"] for n, x in store.env(f"agent:{a.name}", reveal=True).items()}),
-                     **{n: x["value"] for n, x in store.env(f"agent:{a.name}:user:{user.id}", reveal=True).items()}}
-        own, args = run_settings(a, server, mine, flux, variables, env)
+        own, _eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, flux, scopes), tuple(every))
         for k in a.prices():                                     # D835: the web's prices, not the machine's
             env.pop(k, None)
         for k, v in run_prices(a, server, mine, flux).items():
@@ -290,13 +296,33 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
         if own:
             env[f"FLUX_{a.up}_ENV"] = json.dumps(own)
             names.append(f"FLUX_{a.up}_ENV")
-        extra = " ".join(x for x in (a.args, env.get(f"FLUX_{a.up}_ARGS", ""), " ".join(shlex.quote(t) for t in args)) if x)
+        extra = " ".join(x for x in (a.args, env.get(f"FLUX_{a.up}_ARGS", "")) if x)
         if extra:
             env[f"FLUX_{a.up}_ARGS"] = extra
         if a.login_files:
             env[f"FLUX_{a.up}_LOGIN_FILES"] = ",".join(a.login_files)
+    for name, a in every.items():                                # D922: resolved above, into each agent's own set
+        for k in aliases(name, a.kind).values():
+            env.pop(k, None)
     if added:
         env["FLUX_AGENTS"] = json.dumps(added)
+
+
+def agent_scopes(store: Store, user: User | None, a: Any, machine: dict[str, str], server: dict[str, str],
+                 mine: dict[str, str], flux: dict[str, str] | None, scopes: dict[str, dict[str, str]]) -> tuple[list[tuple[str, dict[str, str]]], dict[str, str]]:
+    """Agent `a`'s layers for `user` (D922): the server's environment, the server's settings and
+    variables (every agent's, then its own), the user's, the loop's (`scopes`, as `run_env` reads
+    them), and its own variables (the server's, then the user's); `user` None: the server's alone (Admin)."""
+    from .agents import agent_layers
+
+    external = bool(user and user.external)
+    server_own = {} if external else {n: x["value"] for n, x in store.env(f"agent:{a.name}", reveal=True).items()}
+    my_own = {n: x["value"] for n, x in store.env(f"agent:{a.name}:user:{user.id}", reveal=True).items()} if user else {}
+    loop_vars = next((v for s, v in scopes.items() if s.startswith("loop:")), {})
+    layers = agent_layers(a, machine=machine, server=server, mine=mine, flux=flux, loop_vars=loop_vars,
+                          server_vars={**({} if external else scopes.get("global", {})), **server_own},
+                          my_vars={**(scopes.get(f"user:{user.id}", {}) if user else {}), **my_own})
+    return layers, {**server_own, **my_own}
 
 
 def loop_files(app_dir: Path) -> dict[str, Path]:

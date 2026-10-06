@@ -198,6 +198,10 @@ def agent_spec(spec: Any) -> AgentSpec:
     if isinstance(extra, str) or not all(isinstance(a, (str, int, float)) for a in extra):
         raise ValueError("agent.args is a list of arguments, e.g. [--agent, flux]")
     extra = tuple(str(a) for a in extra)
+    # D922: the agent's model (FLUX_<NAME>_MODEL, from wherever) as its kind takes it, unless an argument names one
+    eff = agent_config(preset, kind, dict(os.environ))[1]
+    if eff is not None and eff.args and not any(a in ("--model", "-m") or a.startswith("--model=") for a in extra):
+        extra = (*extra, *eff.args)
     argv = _in_box(_with_args((exe, *_allowed(p["argv"][1:], allow)), extra))
     resume = _in_box(_with_args((exe, *_allowed(p["resume"][1:], allow)), extra)) if p["resume"] else None
     config = tuple((k, json.dumps(_allowed_config(v, allow))) for k, v in (p.get("config") or {}).items())
@@ -269,8 +273,16 @@ def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[st
     the run was given for every agent (`FLUX_SHARED_VARS`: the web's variables, set on purpose) --
     without any agent's own set, then with its own (`FLUX_<NAME>_ENV`, a JSON object: its
     endpoint, key, model, variables, as the web's settings made them). The kind is its preset's,
-    else the program's name; a program Flux does not know keeps everything but the agents' sets."""
-    kind = spec.kind or spec.tool
+    else the program's name; a program Flux does not know keeps everything but the agents' sets.
+    D922: Flux's aliases (FLUX_<NAME>_BASE_URL, ...) translated by the one resolver, whatever set them."""
+    return agent_config(spec.tool, spec.kind or spec.tool, env, program)[0]
+
+
+def agent_config(name: str, kind: str, env: dict[str, str], program: str = "") -> tuple[dict[str, str], Any]:
+    """(the environment agent `name` gets, its resolved configuration -- `agent_env.Effective`, or
+    None for a program Flux does not know) (D922)."""
+    from .agent_env import resolve
+
     who = kind if kind in _AGENT_VARS else Path(program).name if Path(program).name in _AGENT_VARS else None
     shared = {n for n in env.get("FLUX_SHARED_VARS", "").split(",") if n}
     sets = re.compile(r"FLUX_[A-Z][A-Z0-9_]*_ENV")
@@ -279,12 +291,21 @@ def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[st
         theirs = tuple(p for k, ps in _AGENT_VARS.items() if k != who for p in ps)
         out = {k: v for k, v in out.items() if not k.startswith(theirs) or k in shared}
     try:
-        own = json.loads(env.get(f"FLUX_{spec.tool.upper()}_ENV") or "{}")
+        own = json.loads(env.get(f"FLUX_{name.upper()}_ENV") or "{}")
     except ValueError:
         own = {}
-    if isinstance(own, dict):
-        out.update({str(k): str(v) for k, v in own.items()})
-    return out
+    own = {str(k): str(v) for k, v in own.items()} if isinstance(own, dict) else {}
+    if who is None:
+        return {**out, **own}, None
+    eff = resolve(name, who, [("the environment", out), ("its own settings", own)], agents=tuple(agent_kinds(env)))
+    try:                                          # D922: a line of flux.env says so
+        from flux_llm.openai_compat import LOADED
+    except ImportError:
+        LOADED = ()
+    for x in eff.fields.values():
+        if x["layer"] == 0 and x["name"] in LOADED:
+            x["source"] = "flux.env"
+    return eff.apply({**out, **own}), eff
 
 
 def _config_env(spec: AgentSpec, env: dict[str, str]) -> dict[str, str]:

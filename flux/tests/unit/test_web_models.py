@@ -64,7 +64,9 @@ def test_a_run_gets_the_servers_models_unless_its_user_names_their_own(server, m
     assert oc["model"] == "flux/qwen" and oc["provider"]["flux"]["options"]["baseURL"] == "https://llm.example/v1"
     assert oc["provider"]["flux"]["options"]["apiKey"] == "{env:FLUX_AGENT_API_KEY}" and own(env, "opencode")["FLUX_AGENT_API_KEY"] == "server-key", \
         "OpenCode: Flux's model when it has none of its own; the key by variable, not in the config"
-    assert env["FLUX_CLAUDE_ARGS"] == "--model opus" and env["FLUX_CODEX_ARGS"] == "--model gpt-x"
+    # D922: the model goes in the agent's own set as FLUX_<NAME>_MODEL; its turn makes it --model
+    assert own(env, "claude")["FLUX_CLAUDE_MODEL"] == "opus" and own(env, "codex")["FLUX_CODEX_MODEL"] == "gpt-x"
+    assert "FLUX_CLAUDE_ARGS" not in env and "FLUX_CLAUDE_MODEL" not in env
     assert own(env, "claude")["ANTHROPIC_API_KEY"] == "sk-server" and "ANTHROPIC_API_KEY" not in env, "Claude Code's alone"
     assert "ANTHROPIC_API_KEY" not in own(env, "opencode") and "OPENCODE_CONFIG_CONTENT" not in env
     # bob names his own endpoint for Flux's model: none of the server's values of that group
