@@ -281,19 +281,40 @@ class MeasureMixin:
         return f"{self.task.id}.json"
 
     def cache_key(self, cand: Candidate, stage: str, state: LoopState) -> str:
-        """What makes a measurement the same one (D567, D790): the candidate, and what measures
-        it -- the stage's command or evaluator, the files under `{home}` the command names, the
-        document's params and workload. A changed clock, script or parameter measures again; a
-        world with its own key replaces this."""
+        """What makes a measurement the same one (D567, D790, D898): the candidate, and what
+        measures it -- the stage's command or evaluator, the files under `{home}` the command
+        names, the document's params and workload. A changed clock, script or parameter measures
+        again; a world with its own key replaces this.
+
+        D898: the one evidence identity -- the disk cache's key and every row's `measured_as`, so
+        `records.fresh` asks the same question the cache does. Beside the artifact it holds what
+        the command reads of the candidate (the knobs it substitutes, `{point}`, `{part}`), how
+        numbers are read from the output (`metrics_re`), and the builds of the tools the stage
+        runs or `needs`. `Candidate.key` stays the design's content, for telling designs apart."""
         import hashlib
+
+        from flux_evaluator_abi import tool_fingerprint, toolchain_fingerprint
+
+        from .document.commands import _PLACEHOLDER
 
         spec = next((r for r in self.task.stages if r.name == stage), None)
         if spec is None:
             return cand.key()
+        named = {m for tok in spec.command or () for m in _PLACEHOLDER.findall(tok)}
+        seen = ({k: v for k, v in sorted((cand.knobs or {}).items()) if "point" in named or k in named}
+                if cand.artifact else {})              # an artifact-less candidate's key is its knobs already
+        if "part" in named:
+            seen["{part}"] = cand.subgoal or ""
+        tools = [t for t in (*spec.needs, *(spec.command or ())[:1]) if not _PLACEHOLDER.search(t)]
+        builds = {t: tool_fingerprint(t) or "absent" for t in dict.fromkeys(tools)}
+        if spec.evaluator:
+            builds.update(toolchain_fingerprint())      # an evaluator runs the measuring tools
         # D853: the workload as read (its file's content, not its name) and the loop's inputs -- a
         # helper or a data file a stage reads changed, the measurement is not the same one
         h = hashlib.sha256(json.dumps([list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
-                                       self.task.params, self._workload(), self.inputs()], sort_keys=True, default=str).encode())
+                                       self.task.params, self._workload(), self.inputs(),
+                                       sorted(spec.metrics_re.items()), seen, builds],
+                                      sort_keys=True, default=str).encode())
         home = self.task.home
         for token in spec.command or ():
             if home and "{home}/" in token:
