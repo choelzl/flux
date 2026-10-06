@@ -1153,6 +1153,29 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
             reached = st
     state.reached = reached
     state.on_stage = {**on_stage, **pools}
+    # D895: a design of parts decides on the whole only -- a part measured alone climbs, so it can
+    # be improved, but is never the loop's answer (the NLU's decision was one operator, pass after pass)
+    if _of_parts(problem, state, [*recalled, *state.scored]):
+        # a composition the pass did not measure again, as its design was just measured (a one-part
+        # whole is its part), counts by its key
+        whole = lambda s: _whole(s) or s.candidate.key() in state.compositions   # noqa: E731
+        state.on_stage = {st: ws for st, pool in state.on_stage.items() if (ws := [s for s in pool if whole(s)])}
+        state.reached = next((st for st in reversed(stages) if st in state.on_stage), stages[0])
+
+
+def _whole(s: Scored) -> bool:
+    """A composition of named parts (D511 marks it with them; a one-design loop's is `*`)."""
+    return any(p != "*" for p in ((s.candidate.meta or {}).get("composed") or ()))
+
+
+def _of_parts(problem: Problem, state: LoopState, rows: list[Scored]) -> bool:
+    """Whether the loop's answer is a whole made of parts: the problem names parts, it has admitted
+    some, or a composition of parts was measured."""
+    try:
+        named = bool(problem.subgoals())
+    except Exception:  # noqa: BLE001
+        named = False
+    return named or any(k != "*" for k in state.admitted) or any(_whole(s) for s in rows)
 
 
 def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> None:
@@ -1254,8 +1277,13 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         _note_once(state, "nothing was measured; there is no frontier")
         return _result(problem, state, None, "nothing measured", [], [])
     reached = state.reached or stages[0]
-    on_stage = state.on_stage or {reached: [s for s in state.scored if s.stage == reached]}
+    parts = _of_parts(problem, state, state.scored)
+    on_stage = state.on_stage or ({} if parts else {reached: [s for s in state.scored if s.stage == reached]})
     pool = on_stage.get(reached) or []
+    if parts and not pool:
+        # D895: parts measured, no whole yet: no decision -- a part is not the answer
+        _note_once(state, "no whole design measured yet: the parts are measured, the decision waits for their composition")
+        return _result(problem, state, None, "no whole design measured yet", [], [])
     with _phase("frontier", why=f"{len(pool)} on {reached}"):
         front = list(problem.frontier(pool, state))
     with _phase("decide", why=f"{len(pool)} in the pool") as out:
