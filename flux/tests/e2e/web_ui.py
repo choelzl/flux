@@ -1446,12 +1446,14 @@ def flows(r: Run) -> None:
         r.check("tested, the agent is accepted", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 200)
         r.login("ada")                                     # D756: the admin sees it found, and whom it is ready for
         r.page("#/admin/agents", "[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Codex')", "Admin › Agents")
-        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('ready for bob'))",
-               timeout=30, what="Codex found, ready for bob")
+        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex'))", timeout=30, what="Codex found")
+        r.check("Admin › Agents: bob's test counts (the card no longer says whom it is ready for, D945)",
+                any(u.get("user") == "bob" and u.get("state") == "ready" for a in json.loads(r.api("/admin/agents")["body"]).get("agents", [])
+                    if a.get("id") == "codex" for u in a.get("users", [])))
         # D921: versions are filled in when their probe answers, after the page is drawn
         b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('0.0-e2e'))",
                timeout=30, what="its version filled in")
-        r.check("Admin › Agents: the program found with its version, ready for who tested it",
+        r.check("Admin › Agents: the program found with its version",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
         r.clean("Admin › Agents")
         # D807: an agent added under a name of its own, of a kind, by its program -- offered once found

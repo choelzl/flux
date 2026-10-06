@@ -16,7 +16,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from .models import LoginInput, EnvVar, AgentConfig, AgentNew
+from .models import LoginInput, EnvVar, AgentConfig, AgentNew, AgentRename
 from .runs import home_ready, sandbox_config, machine_env, run_env, sandbox_env
 from .store import User
 
@@ -468,6 +468,61 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         store.server_set("agents", cfg or None)
         store.audit(a.name, "agent removed", agent)
         return {"ok": f"{agent} removed"}
+
+    def _naming(name: str) -> list[str]:
+        """The loops whose documents name `name` (D945): every user's, each document read as text."""
+        import re
+
+        word = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])")
+        out = []
+        for u in store.users():
+            root = store.data / "users" / u.name / "apps"
+            for app_dir in sorted(root.iterdir()) if root.is_dir() else []:
+                for doc in sorted(app_dir.glob("*.yaml")) + sorted(app_dir.glob("*.yml")) + sorted(app_dir.glob("*/*.yaml")):
+                    try:
+                        if not doc.is_symlink() and doc.stat().st_size < 1 << 20 and word.search(doc.read_text(errors="replace")):
+                            out.append(f"{u.name}/{app_dir.name} ({doc.relative_to(app_dir)})")
+                    except OSError:
+                        continue
+        return out
+
+    @app.post("/api/admin/agents/{agent}/rename")
+    def rename_admin_agent(agent: str, body: AgentRename, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """An added agent's name -- what a document says -- changed (D945): its settings, variables and
+        tests, the server's and every user's, move with it; a default agent naming it names the new
+        one. Documents are not rewritten: `dry_run` lists the loops that name it, to warn first."""
+        reg = registry(store)
+        if agent not in reg:
+            raise HTTPException(404, f"no agent named {agent}")
+        if reg[agent].builtin:
+            raise HTTPException(409, f"{agent} is built in: its name is the program's")
+        try:
+            new = check_new(store, body.name, reg[agent].kind)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        loops = _naming(agent)
+        if body.dry_run:
+            return {"loops": loops, "name": new}
+        old_a = reg[agent]
+        from .agents import Agent
+
+        new_a = Agent(new, old_a.kind, old_a.label, old_a.bin, old_a.login, old_a.args, old_a.home, old_a.hosts, old_a.login_files)
+        olds, news = sum(old_a.keys().values(), ()), sum(new_a.keys().values(), ())
+        store.rename_settings(dict(zip(olds, news)), default_agent=(agent, new))
+        moves = {f"env:agent:{agent}": f"env:agent:{new}", _server_test_key(agent): _server_test_key(new)}
+        for u in store.users():
+            moves[f"env:agent:{agent}:user:{u.id}"] = f"env:agent:{new}:user:{u.id}"
+            moves[f"agent-test:{u.name}:{agent}"] = f"agent-test:{u.name}:{new}"
+        for k_old, k_new in moves.items():
+            v = store.server_get(k_old)
+            if v is not None:
+                store.server_set(k_new, v)
+                store.server_set(k_old, None)
+        cfg = store.server_get("agents") or {}
+        cfg[new] = cfg.pop(agent, old_a.stored())
+        store.server_set("agents", cfg)
+        store.audit(a.name, "agent renamed", f"{agent} -> {new}" + (f"; {len(loops)} loop(s) still name {agent}" if loops else ""))
+        return {"ok": f"{agent} is {new} now", "name": new, "loops": loops}
 
     @app.put("/api/admin/agents/{agent}")
     def put_admin_agent(agent: str, body: AgentConfig, a: User = Depends(admin_of)) -> dict[str, Any]:

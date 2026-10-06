@@ -240,8 +240,10 @@ def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str
     built-in OpenCode's when nothing names its endpoint (D696) -- the lowest layer."""
     names = (*agent.keys()["public"][:2], *agent.keys()["secret"])
     token = f"FLUX_{agent.up}_OAUTH_TOKEN"
-    out = [(f"{FROM_SERVER} (its environment)", dict(machine)),
-           (f"{FROM_SERVER} (its settings)", {**server_vars, **{n: server[n] for n in names if server.get(n) and n != token}}),
+    # D945: the server's settings are just "From Server"; its machine environment (flux.env, the shell)
+    # is said apart, as it is set outside the web
+    out = [(f"{FROM_SERVER} (environment)", dict(machine)),
+           (FROM_SERVER, {**server_vars, **{n: server[n] for n in names if server.get(n) and n != token}}),
            ("yours", {**my_vars, **{n: mine[n] for n in names if mine.get(n)}})]
     if loop_vars:
         out.append(("this loop's", dict(loop_vars)))

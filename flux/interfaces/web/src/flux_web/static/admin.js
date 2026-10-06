@@ -72,7 +72,7 @@ async function adminAudit(body, ok = () => true) {
       "edit", "upload", "add files", "delete file", "move file", "delete app", "asked about a loop", "clone loop", "empty loop",
       "document migrated"]],
     ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
-    ["Agents", ["agent added", "agent removed", "agent settings", "agent login", "agent test"]],
+    ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test"]],
     // D885: the scheduled clean-up and its settings are the server's
     ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
       "maintenance settings", "notification", "past turns priced", "stderr masks", "insights: removed"]],
@@ -576,7 +576,7 @@ async function adminAgents(body) {
     const home = h("textarea", { id: `ag-${a.id}-home`, rows: 2, class: "mono", placeholder: HOME_PH[a.kind] || "", value: lines(a.home) });
     const hosts = h("textarea", { id: `ag-${a.id}-hosts`, rows: 2, class: "mono", placeholder: "auth.example.com", value: lines(a.hosts) });
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
-    const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
+    const failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     const changed = a.users.filter(u => u.state === "changed since its test").map(u => u.user);
     const c = a.connection || { mechanism: "none", said: "" }, st = a.server_test || { state: "untested" };
     const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
@@ -591,12 +591,35 @@ async function adminAgents(body) {
       h("div", { class: "agent-found small" },
         h("span", { class: `pill ${a.found ? "ok" : "bad"}` }, a.found ? "found" : "not found"),
         h("span", { class: "pill" }, a.builtin ? "built in" : `a ${a.kind}`),
-        h("span", { class: "muted" }, "in a document: ", h("code", {}, a.id)),
+        h("span", { class: "muted" }, "in a document: ", h("code", {}, a.id),
+          // D945: an added agent's name may change -- the loops that name it are said first, as they break
+          a.builtin ? "" : [" ", act("Rename", async () => {
+            const box = h("input", { value: a.id, class: "mono", autocomplete: "off", "aria-label": "New name" });
+            const warn = h("div", { class: "small" });
+            const look = async () => {
+              const v = box.value.trim();
+              if (!v || v === a.id) { warn.replaceChildren(); return; }
+              try {
+                const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: v, dry_run: true } });
+                warn.replaceChildren(r.loops.length ? h("p", { class: "callout bad" }, `${r.loops.length} loop(s) name ${a.id} and will not start until their documents say ${v}: `,
+                  h("span", { class: "mono" }, r.loops.join(", "))) : h("p", { class: "muted" }, `No loop names ${a.id}.`));
+              } catch (x) { warn.replaceChildren(h("p", { class: "bad" }, x.message)); }
+            };
+            box.addEventListener("change", look); box.addEventListener("keyup", (e) => { if (e.key === "Enter") look(); });
+            const go = await dialog(`Rename ${a.label}`, h("div", { class: "stack" },
+              h("label", { class: "stack" }, "Its name in a document (lower case)", box),
+              h("p", { class: "muted small" }, "Its settings, variables and tests move with it. Documents are not rewritten."), warn),
+              [["Cancel", false], ["Rename", true, "danger"]]);
+            if (!go) return;
+            const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: box.value.trim() } });
+            toast(r.ok + (r.loops.length ? ` -- ${r.loops.length} loop(s) still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
+            route();
+          }, { cls: "small" })]),
         h("span", { class: "mono muted" }, a.found ? [a.found, h("span", { class: "agent-version" }, a.version ? " · " + a.version : "")]
           : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`),
-        h("span", { class: "muted" }, "ready for ", ready.length ? h("strong", {}, ready.join(", ")) : "nobody yet",
-          failed.length ? h("span", { class: "bad" }, ` · its test failed for ${failed.join(", ")}`) : "",
-          changed.length ? h("span", { class: "warn" }, ` · changed since the test for ${changed.join(", ")}`) : ""),
+        // D945: whom it is ready for said nothing useful; only what needs looking at stays
+        failed.length ? h("span", { class: "bad" }, `test failed for ${failed.join(", ")}`) : "",
+        changed.length ? h("span", { class: "warn" }, `changed since the test for ${changed.join(", ")}`) : "",
         mark),
       // D924: the server's own connection for it -- what a user without settings of their own gets; each user's login is theirs
       h("dl", { class: "agent-states" }, h("dt", {}, "Connection"),

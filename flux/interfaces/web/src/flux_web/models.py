@@ -182,3 +182,8 @@ class SandboxConfig(BaseModel):          # D698: what every sandbox gets
 
 class Settings(BaseModel):
     values: dict[str, str | None]
+
+
+class AgentRename(BaseModel):                  # D945
+    name: str
+    dry_run: bool = False

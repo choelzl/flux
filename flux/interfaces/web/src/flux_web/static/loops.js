@@ -524,7 +524,7 @@ function advancedCard(e, save, saveLabel = "Save") {
     h("label", { class: "check" }, par, "Allow parallel work"),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
     h("label", { class: "stack" }, "Host folders in its sandbox, for its runs, Check and agent Tests (host path:path inside:ro or rw, one per line)", mounts),
-    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, saveLabel === "Save" ? "Changes save as you make them." : "Kept for the new loop as you make them."), mark)]);
+    h("div", { class: "form-actions" }, mark)]);                                 // D939/D945: the check says it
 }
 
 export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,

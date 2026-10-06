@@ -497,6 +497,23 @@ class Store:
                     n += 1
         return n
 
+    def rename_settings(self, moves: dict[str, str], default_agent: tuple[str, str] | None = None) -> None:
+        """Settings renamed, the server's and every user's (an agent renamed, D945): values untouched
+        (Fernet binds no name), and a default agent naming the old name names the new one."""
+        import json
+
+        with self._db() as db:
+            for a, b in moves.items():
+                db.execute("DELETE FROM settings WHERE key = ?", (b,))
+                db.execute("UPDATE settings SET key = ? WHERE key = ?", (b, a))
+                db.execute("DELETE FROM server WHERE key = ?", (f"setting:{b}",))
+                db.execute("UPDATE server SET key = ? WHERE key = ?", (f"setting:{b}", f"setting:{a}"))
+            if default_agent:
+                was, now = default_agent
+                db.execute("UPDATE settings SET value = ? WHERE key = 'FLUX_DEFAULT_AGENT' AND value = ?", (now, was))
+                db.execute("UPDATE server SET value = ? WHERE key = 'setting:FLUX_DEFAULT_AGENT' AND value = ?",
+                           (json.dumps(now), json.dumps(was)))
+
     def forget_settings(self, keys: tuple[str, ...]) -> None:
         """These settings, the server's and every user's (an agent removed, D807)."""
         with self._db() as db:
