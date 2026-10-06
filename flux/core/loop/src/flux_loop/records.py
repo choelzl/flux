@@ -12,7 +12,7 @@ from .types import Candidate, LoopState, Scored, StageNames, Verdict
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
 
-__all__ = ["_record_trial", "_reload", "_reload_measured", "prototype_digest"]
+__all__ = ["_record_trial", "_reload", "_reload_measured", "fresh", "prototype_digest"]
 
 
 def prototype_digest(code: str) -> str:
@@ -106,7 +106,15 @@ def shortlist_of(problem: Problem, options: list[Candidate], stage: str | None, 
     return out
 
 
-_NOT_KNOBS = ("name", "artifact", "meta", "subgoal", "knobs", "score", "why")
+def fresh(problem: Problem, cand: Candidate, stage: str, state: LoopState) -> bool:
+    """Whether a row's numbers stand today (D853): it was measured as the stage's key now -- its
+    command, the loop's inputs and params. A row without one (made before) or a key that cannot be
+    made is not fresh: it is measured again."""
+    was = ((cand.meta or {}).get("provenance") or {}).get("measured_as")
+    try:
+        return bool(was) and was == problem.cache_key(cand, stage, state)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def history(problem: Problem, state: LoopState) -> list[Scored]:
@@ -124,16 +132,9 @@ def history(problem: Problem, state: LoopState) -> list[Scored]:
             for t in state.records.store.trials(state.records.campaign_id, status="ok"):
                 if t.stage not in stages or t.result is None:
                     continue
-                doc = dict(t.candidate or {})
-                knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
-                cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
-                                 dict(doc.get("meta") or {}), doc.get("subgoal"))
-                was = ((doc.get("meta") or {}).get("provenance") or {}).get("measured_as")
-                try:
-                    if not was or was != problem.cache_key(cand, t.stage, state):
-                        continue                         # D853: numbers of other inputs are not today's
-                except Exception:  # noqa: BLE001
-                    continue
+                cand = Candidate.from_record(dict(t.candidate or {}))
+                if not fresh(problem, cand, t.stage, state):
+                    continue                             # D853: numbers of other inputs are not today's
                 latest[(cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
                                                        {"recalled": True})
         except Exception:  # noqa: BLE001 -- a record that cannot be read back: no history
@@ -158,20 +159,11 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
         for t in state.records.store.trials(state.records.campaign_id, status="ok"):
             if t.stage not in stages or t.result is None:
                 continue
-            doc = dict(t.candidate or {})
-            knobs = dict(doc.get("knobs") or {k: v for k, v in doc.items() if k not in _NOT_KNOBS})
-            cand = Candidate(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), knobs,
-                             dict(doc.get("meta") or {}), doc.get("subgoal"))
+            cand = Candidate.from_record(dict(t.candidate or {}))
             k = (cand.name, cand.key(), t.stage)
-            # D853: a row stands only for what measured it -- the stage's key today (its command, the
-            # loop's inputs and params) must be the one it was measured as; a row without one (made
-            # before) is measured again. The stale row stays on the record, out of the search.
-            was = ((doc.get("meta") or {}).get("provenance") or {}).get("measured_as")
-            try:
-                now = problem.cache_key(cand, t.stage, state)
-            except Exception:  # noqa: BLE001
-                now = None
-            if not was or was != now:
+            # D853: a row stands only for what measured it; a stale row stays on the record, out of
+            # the search, and its design is measured again
+            if not fresh(problem, cand, t.stage, state):
                 stale.add(k[:2])
                 latest.pop(k, None)
                 continue

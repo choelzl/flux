@@ -28,6 +28,10 @@ class BuildError(RuntimeError):
     """`Problem.build` refused the artifact; `str(exc)` is what the repair prompt reads."""
 
 
+#: A record row's fields that are the design's own, not its knobs (D886)
+RECORD_FIELDS = ("name", "artifact", "meta", "subgoal", "knobs", "score", "why")
+
+
 @dataclass(frozen=True)
 class Candidate:
     """One thing the loop can build and judge.
@@ -63,9 +67,11 @@ class Candidate:
 
     @classmethod
     def from_record(cls, doc: dict[str, Any]) -> "Candidate":
-        return cls(str(doc.get("name", "?")), str(doc.get("artifact", "")),
-                   dict(doc.get("knobs") or {}), dict(doc.get("meta") or {}),
-                   doc.get("subgoal"))
+        """A record row's design -- the one reader of rows (D886): its knobs as written, or, a row
+        from before rows kept them apart, every field that is not the design's own."""
+        knobs = doc.get("knobs") or {k: v for k, v in doc.items() if k not in RECORD_FIELDS}
+        return cls(str(doc.get("name") or "?"), str(doc.get("artifact") or ""), dict(knobs),
+                   dict(doc.get("meta") or {}), doc.get("subgoal"))
 
 
 @dataclass(frozen=True)

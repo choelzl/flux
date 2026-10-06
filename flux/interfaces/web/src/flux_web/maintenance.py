@@ -331,6 +331,7 @@ def stale_rows(app_dir: Path) -> dict[Path, list[int]]:
     import json
 
     from flux_loop import LoopRequest, PromptProblem, load_task
+    from flux_loop.records import fresh
     from flux_loop.types import Candidate, LoopState
 
     meta = {}
@@ -361,15 +362,12 @@ def stale_rows(app_dir: Path) -> dict[Path, list[int]]:
                 c = json.loads(cj)
             except ValueError:
                 continue
-            knobs = dict(c.get("knobs") or {})
-            cand = Candidate(str(c.get("name") or "?"), str(c.get("artifact") or ""), knobs,
-                             dict(c.get("meta") or {}), c.get("subgoal"))
-            was = ((c.get("meta") or {}).get("provenance") or {}).get("measured_as")
+            cand = Candidate.from_record(c)        # D886: read as the loop reads it, or a good row looks stale
             try:
-                now = problem.cache_key(cand, stage, state)
+                problem.cache_key(cand, stage, state)
             except Exception:  # noqa: BLE001 -- what cannot be keyed today is not called stale
                 continue
-            if was != now:
+            if not fresh(problem, cand, stage, state):
                 ids.append(rid)
         if ids:
             out[db] = ids
