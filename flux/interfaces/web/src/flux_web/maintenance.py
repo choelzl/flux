@@ -52,6 +52,16 @@ TASKS: dict[str, Task] = {t.key: t for t in (
     Task("tables", "Prune server tables", "Expired sessions and invitations, old login failures and "
          "notifications, and audit lines past their age.", 24, True,
          {"failures_days": 30, "notices_days": 30, "audit_days": 365}),
+    # D940: what else grows with nothing tidying it
+    Task("orphans", "Remove orphaned caches", "A sandbox cache whose loop was deleted (Admin > Resources lists it "
+         "as gone).", 168, True),
+    Task("runs", "Prune run history", "Each loop keeps its latest starts in the server's run list; older rows "
+         "go (a running start never).", 24, True, {"keep": 200}),
+    Task("journals", "Condense task journals", "A loop's task journal (the Live tree's history) over a size keeps "
+         "its recent starts whole; older ones are gzipped beside it.", 24, True, {"max_mb": 20, "keep_mb": 4},
+         per_loop=True),
+    Task("refused", "Prune refused-host log", "The sandbox proxies' log of refused connections keeps its last "
+         "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
          "counts them. Reports them; deletes them when told to.", 168, False, {"delete": False}, per_loop=True),
 )}
@@ -305,6 +315,71 @@ class Maintenance:
         return (f"{s} session(s), {i} invitation(s), {f} login failure(s), {notes} notification(s), {a} audit line(s) removed",
                 bool(s or i or f or notes or a))
 
+    def _orphans(self, _p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
+        from .admin import caches, clean
+
+        live = {(u, a) for u, a, _d in self.loops()}
+        users = {u.name for u in self.store.users()}
+        gone = [c for c in caches(live, users) if c["kind"] == "gone"]   # a user's, its loop deleted
+        freed = sum(clean(c["key"], "all") for c in gone)
+        return f"{len(gone)} orphaned cache(s) removed, {_mb(freed)} freed", bool(gone)
+
+    def _runs(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
+        keep = max(1, int(p["keep"]))
+        with self.store._db() as db:
+            n = db.execute(
+                "DELETE FROM runs WHERE ended IS NOT NULL AND id NOT IN ("
+                " SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, app ORDER BY id DESC) AS k FROM runs)"
+                " WHERE k <= ?)", (keep,)).rowcount
+        return f"{n} old start(s) removed, the latest {keep} of each loop kept", n > 0
+
+    def _journals(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        from .admin import _key, cache_root
+
+        idle, busy = self._loops(loop)
+        limit, keep = float(p["max_mb"]) * 1e6, float(p["keep_mb"]) * 1e6
+        n, freed = 0, 0
+        for u, a, _d in idle:
+            for ev in sorted((cache_root() / _key(u, a)).glob("tmp/flux-traces/*/events.jsonl")):
+                if ev.is_symlink() or ev.stat().st_size <= limit:
+                    continue
+                got = _condense_journal(ev, int(keep))
+                if got:
+                    n, freed = n + 1, freed + got
+        return f"{n} journal(s) condensed, {_mb(freed)} freed" + self._skipped(busy), n > 0
+
+    def _refused(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
+        import json
+
+        from .store import _REFUSALS
+
+        f = Path(self.store.refusals_file)
+        if not f.is_file():
+            return "no refused-host log yet", False
+        cutoff = time.time() - float(p["days"]) * DAY
+        with _REFUSALS:                                   # the sampler reads it under the same lock
+            self.store._take_refusals()                   # what is new goes to the audit first
+            data = f.read_bytes()
+            kept = []
+            for raw in data.splitlines():
+                try:
+                    t = float(json.loads(raw).get("t") or 0)
+                except (ValueError, AttributeError):
+                    t = 0
+                if t >= cutoff:
+                    kept.append(raw)
+            dropped = len(data.splitlines()) - len(kept)
+            if not dropped:
+                return "nothing older than the kept days", False
+            late = f.read_bytes()[len(data):]             # a proxy's line written meanwhile (it opens per line)
+            tmp = f.with_name(f.name + ".pruning")
+            tmp.write_bytes(b"\n".join(kept) + (b"\n" if kept else b"") + late)
+            os.chmod(tmp, f.stat().st_mode & 0o777)
+            os.replace(tmp, f)
+            st = f.stat()
+            self.store.server_set("refusals_read", {"ino": st.st_ino, "offset": st.st_size - len(late)})
+        return f"{dropped} refused connection(s) older than {p['days']:g} days removed", True
+
     def _stale(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
         idle, busy = self._loops(loop)
         found = gone = 0
@@ -472,6 +547,36 @@ def _last_run(app_dir: Path) -> float:
         except OSError:
             continue
     return got
+
+
+def _condense_journal(ev: Path, keep: int) -> int:
+    """A task journal (D761) keeps its recent starts whole: cut at the earliest start (a hello mark)
+    within the last `keep` bytes -- else at the latest start, so it alone is kept -- the part before
+    appended to `events.jsonl.1.gz`, `marks.jsonl`'s offsets moved to match. The bytes freed."""
+    import json
+
+    marks = ev.with_name("marks.jsonl")
+    try:
+        rows = [json.loads(x) for x in marks.read_bytes().splitlines() if x.strip()]
+    except (OSError, ValueError):
+        return 0                                         # no index to trust: left whole
+    data = ev.read_bytes()
+    hellos = [int(r["at"]) for r in rows if r.get("ev") == "hello" and int(r.get("at", -1)) < len(data)]
+    if not hellos:
+        return 0
+    cut = next((at for at in hellos if at >= len(data) - keep), hellos[-1])
+    if cut <= 0:
+        return 0
+    with gzip.open(ev.with_name(ev.name + ".1.gz"), "ab") as gz:
+        gz.write(data[:cut])
+    for path, body in ((ev, data[cut:]),
+                       (marks, b"".join(json.dumps({**r, "at": int(r["at"]) - cut}).encode() + b"\n"
+                                        for r in rows if int(r.get("at", -1)) >= cut))):
+        tmp = path.with_name(path.name + ".condensing")
+        tmp.write_bytes(body)
+        os.chmod(tmp, path.stat().st_mode & 0o777)
+        os.replace(tmp, path)
+    return cut
 
 
 def _condense(log: Path, keep: int) -> int:

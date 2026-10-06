@@ -187,3 +187,77 @@ def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(
     assert c["bob"].post("/api/apps/x/maintenance/compact", headers=H).json()["by"] == "bob"
     assert c["bob"].post("/api/apps/x/maintenance/tables", headers=H).status_code == 404, "a server task is the admin's"
     assert c["cy"].post("/api/apps/x/maintenance/compact", params={"owner": "bob"}, headers=H).status_code in (403, 404)
+
+
+# ---- D940: four more things that grow
+def test_an_orphaned_cache_goes_and_a_live_loops_stays(tmp_path, monkeypatch):
+    from flux_web.admin import _key, cache_root
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    store = _store(tmp_path)
+    d = _loop(tmp_path, "kept")
+    for app in ("kept", "deleted"):
+        (cache_root() / _key("bob", app) / "cache").mkdir(parents=True)
+        (cache_root() / _key("bob", app) / "cache" / "f").write_text("x" * 1000)
+    got = _m(store, [("bob", "kept", d)]).run("orphans", by="ada")
+    assert got["said"].startswith("1 orphaned cache(s) removed"), got
+    assert (cache_root() / _key("bob", "kept")).exists() and not (cache_root() / _key("bob", "deleted")).exists()
+
+
+def test_run_history_keeps_the_latest_starts_and_never_a_running_one(tmp_path):
+    store = _store(tmp_path)
+    bob = store.user(name="bob")
+    ids = [store.add_run(bob, "x", "db", "log", ["x"], {}) for _ in range(5)]
+    with store._db() as db:
+        db.execute("UPDATE runs SET ended = 1 WHERE id != ?", (ids[0],))      # the oldest still running
+    m = _m(store, [])
+    m.set_config("runs", None, None, {"keep": 2})
+    got = m.run("runs", by="ada")
+    left = [r["id"] for r in store.runs(bob, "x")]
+    assert got["said"].startswith("2 old start(s) removed"), got
+    assert sorted(left) == sorted([ids[0], ids[3], ids[4]]), left
+
+
+def test_a_long_journal_keeps_its_recent_starts_whole(tmp_path, monkeypatch):
+    import json
+
+    from flux_loop.journal import window_start
+    from flux_web.admin import _key, cache_root
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    d = _loop(tmp_path)
+    run = cache_root() / _key("bob", "x") / "tmp" / "flux-traces" / "x"
+    run.mkdir(parents=True)
+    ev, marks, body, idx = run / "events.jsonl", run / "marks.jsonl", b"", []
+    for start in range(3):
+        idx.append({"at": len(body), "ev": "hello", "n": 0})
+        body += json.dumps({"t": start, "ev": "hello", "id": 0}).encode() + b"\n"
+        for p in range(1, 3):
+            idx.append({"at": len(body), "ev": "pass", "n": p})
+            body += json.dumps({"t": start, "ev": "mark", "name": "pass", "n": p}).encode() + b"\n"
+            body += (json.dumps({"t": start, "ev": "start", "id": p, "name": "x" * 400_000}) + "\n").encode()
+    ev.write_bytes(body)
+    marks.write_text("".join(json.dumps(r) + "\n" for r in idx))
+    m = _m(_store(tmp_path), [("bob", "x", d)])
+    m.set_config("journals", None, None, {"max_mb": 1, "keep_mb": 1})
+    got = m.run("journals", by="ada")
+    assert got["said"].startswith("1 journal(s) condensed"), got
+    kept = ev.read_bytes()
+    assert kept.startswith(b'{"t": 2, "ev": "hello"'), "cut at the latest start that fits, whole"
+    assert gzip.open(run / "events.jsonl.1.gz").read() + kept == body, "nothing lost"
+    rows = [json.loads(x) for x in marks.read_text().splitlines()]
+    assert rows[0] == {"at": 0, "ev": "hello", "n": 0} and all(kept[r["at"]:].startswith(b"{") for r in rows)
+    assert window_start(str(ev), 30) is None or window_start(str(ev), 30)[0] >= 0
+
+
+def test_the_refused_host_log_keeps_its_days_and_the_audit_all_of_it(tmp_path):
+    import json
+
+    store = _store(tmp_path)
+    f = store.refusals_file
+    f.write_text("".join(json.dumps({"t": t, "host": h, "port": 443, "how": "proxy"}) + "\n"
+                         for t, h in ((OLD - 40 * 86400, "old.example"), (time.time(), "new.example"))))
+    got = _m(store, []).run("refused", by="ada")
+    assert got["said"].startswith("1 refused connection(s)"), got
+    assert "new.example" in f.read_text() and "old.example" not in f.read_text()
+    assert store._take_refusals() == 0, "what was kept was already read into the audit"

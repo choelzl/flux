@@ -354,8 +354,14 @@ async function adminMaintenance(body) {
   const rowOf = (t) => h("tr", { class: t.on ? "" : "off" },
     h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)),
     h("td", { "data-label": "Schedule", class: t.on ? "" : "muted" }, t.on ? every(t) : "off"),
-    h("td", { "data-label": "Last run" }, t.running ? h("span", { class: "pill live" }, "running") : t.last ? ago(t.last.t) : h("span", { class: "muted" }, "never")),
-    h("td", { "data-label": "Result", class: "mt-said" }, result(t.last)),
+    // D940: a scheduled run that found nothing to do is not kept as a run (D885), but it ran: the
+    // latest check is the last run, said as nothing to do -- not "never"
+    ...(() => {
+      const idle = t.checked && (!t.last || t.checked > t.last.t + 1);
+      return [h("td", { "data-label": "Last run" }, t.running ? h("span", { class: "pill live" }, "running")
+          : idle ? ago(t.checked) : t.last ? ago(t.last.t) : h("span", { class: "muted" }, "never")),
+        h("td", { "data-label": "Result", class: "mt-said" }, idle ? h("span", { class: "muted", title: t.last ? `last change ${when(t.last.t)}: ${t.last.said}` : "" }, "nothing to do") : result(t.last))];
+    })(),
     h("td", { class: "right mt-acts" },
       act("Run", async () => {
         const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: null } });

@@ -1139,6 +1139,9 @@ def flows(r: Run) -> None:
         r.page("#/admin/agents", "[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Codex')", "Admin › Agents")
         b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('ready for bob'))",
                timeout=30, what="Codex found, ready for bob")
+        # D921: versions are filled in when their probe answers, after the page is drawn
+        b.wait("[...document.querySelectorAll('#main .card')].some(c => c.textContent.includes('fake-codex') && c.textContent.includes('0.0-e2e'))",
+               timeout=30, what="its version filled in")
         r.check("Admin › Agents: the program found with its version, ready for who tested it",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
         r.clean("Admin › Agents")
