@@ -151,9 +151,9 @@ async function adminLoops(body) {
         const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
       }, { cls: "small danger" })),
     line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
-  const box = h("div", {}, loopsBrowser(allApps, { who: true }));
+  const box = h("div", {}, loopsBrowser(allApps, { who: true, memo: "flux-sort-admin-loops" }));
   body.replaceChildren(controls, card("Every loop", box, { actions: [migrateBtn] }), migration);
-  setPageRefresh(async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true })); });
+  setPageRefresh(async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true, memo: "flux-sort-admin-loops" })); });
 }
 let historyHours = 24;
 async function adminResources(body) {
@@ -661,22 +661,33 @@ async function adminUsers(body) {
   const newKind = kindSel("internal", null, "Kind of the new user");
   const useOf = (n) => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4;
+  // D926: the rows sort by what was saved -- a role or a limit saved is written back here
+  const limits = Object.assign({}, res && res.limits);
   const limitCell = (u) => {
-    const cur = res && res.limits ? res.limits[u.name] : null;
+    const cur = limits[u.name];
     const inp = h("input", { type: "number", min: 0, max: 64, value: cur ?? "", placeholder: String(def), style: "width:64px", "aria-label": `${u.name}'s running limit` });
     const mark = saveMark();
-    autosave(inp, () => api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: inp.value.trim() === "" ? null : Number(inp.value) } }), mark);   // D833
+    autosave(inp, async () => {                                                   // D833
+      const v = inp.value.trim() === "" ? null : Number(inp.value);
+      await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: v } });
+      limits[u.name] = v;
+    }, mark);
     return h("td", {}, h("span", { class: "inline" }, inp, mark));
   };
-  body.replaceChildren(card("Users", [h("div", { class: "scroll-x" }, h("table", { class: "list" },
-      h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Role"), h("th", { title: "Loops running at once; empty: the server's default" }, "Running limit"),
-        h("th", { class: "num" }, "Loops"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Time"), h("th", { class: "num" }, "Tokens in → out"), h("th", { class: "num" }, "Cost"), h("th", {}, ""))),
-      h("tbody", {}, users.map(u => { const x = useOf(u.name); return h("tr", {},
+  // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
+  const cols = [
+    { label: "User", key: u => u.name, asc: true }, { label: "Role", key: u => u.role, asc: true },
+    { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
+    { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
+    { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
+    { label: "Tokens in → out", key: u => { const x = useOf(u.name); return x.counted ? [x.tokens_in, x.tokens_out] : null; }, num: true },
+    { label: "Cost", key: u => useOf(u.name).cost_usd || null, num: true }, { label: "" }];
+  const table = sortableTable("flux-sort-users", cols, users, u => { const x = useOf(u.name); return h("tr", { "data-user": u.name },
         h("td", { class: "strong" }, u.name, u.pending ? h("span", { class: "pill live small", title: "Invited: their password is not set yet" }, "invited") : ""),
         h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
           : kindSel(u.role, async (e) => {
               const to = e.target.value;
-              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { role: to } }); toast(`${u.name} is ${to} now`, "ok"); }
+              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { role: to } }); u.role = to; toast(`${u.name} is ${to} now`, "ok"); }
               catch (_) { e.target.value = u.role; }
             }, `${u.name}'s kind`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
         limitCell(u),
@@ -690,7 +701,8 @@ async function adminUsers(body) {
           act(u.pending ? "New invitation link" : "Password reset link", async () => {
             const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" });
             await linkDialog(u.name, got.token, got.kind);
-          }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); })))),
+          }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); }, 0, { cls: "list users" });
+  body.replaceChildren(card("Users", [table.strip, h("div", { class: "scroll-x" }, table),
     h("div", { class: "row add-user" }, name, pw, newKind,
       act("Add user", async () => {
         const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, role: newKind.value } });

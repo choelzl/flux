@@ -892,6 +892,13 @@ ul.files li > a { margin-right: auto; }
 .th-sort:hover, .th-sort.on { color: var(--ink); }
 .th-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .th-arrow { font-size: 10px; }
+/* D926: a phone hides a list's header -- its sort is a column menu and an order button above the rows */
+.sort-strip { display: none; }
+@media (max-width: 640px) {
+  .sort-strip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 6px; }
+  .sort-strip .sort { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+  .sort-strip select { min-width: 0; max-width: 100%; }
+}
 
 /* D883: touch targets. On a phone (or any coarse pointer) a control is at least 40 px tall -- tabs 44 --
    while the data text stays compact; an inline link button grows its hit area, not its line. 16 px

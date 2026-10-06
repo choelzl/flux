@@ -127,6 +127,14 @@ class Browser:
         self.cmd("WebDriver:ElementClear", {"id": el})
         self.cmd("WebDriver:ElementSendKeys", {"id": el, "text": text})
 
+    def keys(self, *ks):
+        """Real key presses to what has the focus (D929): TAB and ENTER below, or any character."""
+        acts = [a for k in ks for a in ({"type": "keyDown", "value": k}, {"type": "keyUp", "value": k})]
+        self.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": acts}]})
+        self.cmd("WebDriver:ReleaseActions", {})
+
+    TAB, ENTER, SHIFT = "", "", ""
+
     def attach(self, css, path):
         self.cmd("WebDriver:ElementSendKeys", {"id": self.find(css), "text": str(path)})
 
@@ -1361,6 +1369,121 @@ def flows(r: Run) -> None:
         r.check("an empty loop is the baseline, opened in its configurator", sorted(files) == ["README.md", "library", "problem.yaml"], str(files))
         r.clean("clone and empty loop")
     r.step("clone", clone)
+
+    def sorted_lists():
+        """D926: Loops, Admin › Loops and Admin › Users sort by their column headers -- buttons with
+        aria-sort, a keyboard's Enter, each list its own remembered order, names natural and
+        case-insensitive, missing values last; on a phone a column menu and an order button; a Users
+        sort keeps an edit being made, its pending save and the focus."""
+        r.login("bob")
+        for n in ("n2", "N10", "n1"):
+            r.api("/apps/from-text", "POST", {"name": n, "filename": "problem.yaml", "text": "statement: a list's row\n"})
+        b.js("for (const k of Object.keys(localStorage)) if (k.startsWith('flux-sort-')) localStorage.removeItem(k); return 1")
+        tbl = "document.querySelector('#main table.list.sortable')"
+        names = f"[...{tbl}.querySelectorAll('tbody tr')].map(tr => tr.querySelector('td a.strong').textContent)"
+        sorts = f"Object.fromEntries([...{tbl}.querySelectorAll('th[aria-sort]')].map(th => [th.dataset.label, th.getAttribute('aria-sort')]))"
+        head = ("[...document.querySelector('#main table.list.sortable').querySelectorAll('th button.th-sort')]"
+                ".find(x => x.parentNode.dataset.label === arguments[0])")
+        r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops, sortable")
+        r.check("Loops has no Order menu: its headers sort (D926)", not b.js("return !!document.querySelector('#main .list-bar select')")
+                and b.js(f"return {tbl}.querySelectorAll('th button.th-sort').length") == 5, r.text()[:200])
+        r.check("the loops open on their newest activity (D926)", b.js(f"return {sorts}")["Activity"] == "descending", str(b.js(f"return {sorts}")))
+        acts = b.js(f"return [...{tbl}.querySelectorAll('tbody tr')].map(tr => tr.children[2].textContent)")
+        never = [i for i, a in enumerate(acts) if a == "never run"]
+        r.check("a loop never run is after every loop that ran (D926)", not never or never == list(range(never[0], len(acts))), str(acts))
+        b.js(f"const x = {head}; x.focus(); return 1", "Loop")
+        b.keys(b.ENTER)
+        got = [n for n in b.js(f"return {names}") if n.lower().startswith("n") and n[1:].isdigit()]
+        r.check("Enter on the Loop header sorts by name, natural and case-insensitive (D926)", got == ["n1", "n2", "N10"]
+                and b.js(f"return {sorts}")["Loop"] == "ascending", str(got))
+        b.keys(b.ENTER)
+        got = [n for n in b.js(f"return {names}") if n.lower().startswith("n") and n[1:].isdigit()]
+        r.check("the same header again turns the order round, the focus on it", got == ["N10", "n2", "n1"]
+                and b.js("return document.activeElement.classList.contains('th-sort')"), str(got))
+        r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops again")
+        r.check("the order is remembered for the list (D926)", b.js(f"return {sorts}")["Loop"] == "descending", str(b.js(f"return {sorts}")))
+        for d in ("first", "again"):
+            b.js(f"{head}.click(); return 1", "Designs")
+            cells = b.js(f"return [...{tbl}.querySelectorAll('tbody tr')].map(tr => tr.children[3].textContent.trim())")
+            gone = [i for i, c in enumerate(cells) if c == "—"]
+            r.check(f"Designs sorted ({d}): a loop without designs last either way (D926)", not gone or gone == list(range(gone[0], len(cells))), str(cells))
+        b.js(f"{head}.click(); return 1", "Best")
+        r.check("Best sorts a decision first, then by name (D926)", b.js(f"return {sorts}")["Best"] == "ascending")
+        b.js(f"{head}.click(); return 1", "Loop")                    # back to names, ascending
+        # a phone: no header, a menu and an order button instead
+        for width in (390, 320):
+            b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                 "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/#/'; document.body.append(f); return 1", width)
+            b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main table.list.sortable tbody tr'); })()",
+                   timeout=20, what=f"the loops at {width}")
+            pnames = "[...document.getElementById('phone').contentDocument.querySelectorAll('#main table.list.sortable tbody tr')].map(tr => tr.querySelector('td a.strong').textContent).filter(n => /^n\\d+$/i.test(n))"
+            got = b.js("""const d = document.getElementById('phone').contentDocument, s = d.querySelector('#main .sort-strip');
+                return [!!s && s.getBoundingClientRect().height > 0, getComputedStyle(d.querySelector('#main table.list.sortable thead')).display,
+                        s ? s.querySelector('select').selectedOptions[0].textContent : null];""")
+            r.check(f"at {width}px the sort is a visible menu, the header hidden (D926)", got == [True, "none", "Loop"], str(got))
+            before = b.js(f"return {pnames}")
+            b.js("document.getElementById('phone').contentDocument.querySelector('#main .sort-strip button').click(); return 1")
+            after = b.js(f"return {pnames}")
+            r.check(f"at {width}px the order button turns the order round (D926)", before == ["n1", "n2", "N10"] and after == ["N10", "n2", "n1"], f"{before} {after}")
+            b.js("document.getElementById('phone').contentDocument.querySelector('#main .sort-strip button').click(); return 1")
+            if os.environ.get("FLUX_E2E_SHOTS") and width == 390:
+                out = Path(os.environ["FLUX_E2E_SHOTS"])
+                out.mkdir(parents=True, exist_ok=True)
+                time.sleep(0.5)
+                (out / "loops-390px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-sort={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops for a screenshot")
+            time.sleep(0.5)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "loops-desktop.png")
+        r.clean("sorted loops")
+        # Admin › Loops: the same headers, its own remembered order
+        r.login("ada")
+        r.page("#/admin", f"{tbl} && {names}.includes('N10')", "admin loops, sortable")
+        r.check("Admin › Loops has no Order menu: its headers sort, User among them (D926)", not b.js("return !!document.querySelector('#main .list-bar select')")
+                and b.js(f"return {head} ? 1 : 0", "User") == 1)
+        b.js(f"{head}.click(); return 1", "User")
+        kept = b.js("return [localStorage.getItem('flux-sort-admin-loops'), localStorage.getItem('flux-sort-loops')]")
+        r.check("Admin › Loops keeps its own order, not the Loops page's (D926)", '"User"' in (kept[0] or "") and '"User"' not in (kept[1] or ""), str(kept))
+        r.clean("admin › loops sorted")
+        # Admin › Users: sorted with an edit being made -- the row moved, not rebuilt
+        utbl = "document.querySelector('#main table.list.users')"
+        users = f"[...{utbl}.querySelectorAll('tbody tr')].map(tr => tr.dataset.user)"
+        uhead = f"[...{utbl}.querySelectorAll('th button.th-sort')].find(x => x.parentNode.dataset.label === arguments[0])"
+        r.page("#/admin/users", f"{utbl} && {users}.length >= 3", "the users, sortable")
+        r.check("Admin › Users sorts by its headers, User ascending first (D926)", b.js(f"return {users}")[:3] == ["ada", "bob", "cy"]
+                and b.js(f"return {utbl}.querySelector('th[data-label=User]').getAttribute('aria-sort')") == "ascending", str(b.js(f"return {users}")))
+        r.check("the actions column does not sort", b.js(f"return [...{utbl}.querySelectorAll('th')].pop().querySelector('button') === null"))
+        lim = f"{utbl}.querySelector('tr[data-user=bob] input[type=number]')"
+        before = b.js(f"return {users}")
+        b.js(f"const i = {lim}; i.__mine = 1; i.focus(); i.value = '7'; i.dispatchEvent(new Event('input')); return 1")   # a save pending (900 ms)
+        b.js(f"{uhead}.click(); return 1", "User")
+        got = b.js(f"const i = {lim}; return [{users}, i.__mine === 1, i.value, document.activeElement === i]")
+        r.check("sorting Users keeps the edit being made, its field and the focus (D926)", got[0] == before[::-1] and got[1:] == [True, "7", True], f"{before} {got}")
+        saved = b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.textContent === 'saved'; })()", timeout=10, what="the limit saved")
+        ctl = json.loads(r.api("/admin/controls")["body"])
+        r.check("the pending save went through after the sort (D926)", bool(saved) and (ctl.get("limits") or {}).get("bob") == 7, str(ctl.get("limits")))
+        b.js(f"{uhead}.click(); return 1", "Running limit")
+        got = b.js(f"return {users}")
+        r.check("a saved limit sorts as saved; no limit last (D926)", got[0] == "bob", str(got))
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            time.sleep(0.5)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "admin-users-desktop.png")
+        b.js(f"const i = {lim}; i.value = ''; i.dispatchEvent(new Event('change')); return 1")
+        b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.textContent === 'saved'; })()", timeout=10, what="the limit cleared")
+        b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+             "f.style.cssText = 'width:390px;height:800px;border:0'; f.src = '/#/admin/users'; document.body.append(f); return 1")
+        b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main table.list.users tbody tr'); })()", timeout=20, what="Users at 390")
+        got = b.js("const d = document.getElementById('phone').contentDocument, s = d.querySelector('#main .sort-strip'); return !!s && s.getBoundingClientRect().height > 0")
+        r.check("Admin › Users at 390px sorts by a visible menu (D926)", got)
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            time.sleep(0.5)
+            (Path(os.environ["FLUX_E2E_SHOTS"]) / "admin-users-390px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-sort={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("admin › users sorted")
+    r.step("sorted lists", sorted_lists)
 
     def error_feedback():
         """D757: what a user is told when something is wrong -- before (a document that does not load,

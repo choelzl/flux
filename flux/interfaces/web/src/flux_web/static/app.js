@@ -87,7 +87,7 @@ document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.co
 // ---- D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's name
 function labelTables(root) {
   for (const t of root.querySelectorAll("table.list")) {
-    const heads = [...t.querySelectorAll(":scope > thead th")].map(th => th.textContent.trim());
+    const heads = [...t.querySelectorAll(":scope > thead th")].map(th => th.dataset.label || th.textContent.trim());   // D926: not a sort arrow
     if (!heads.some(Boolean)) continue;
     for (const tr of t.querySelectorAll(":scope > tbody > tr")) {
       [...tr.children].forEach((td, i) => { if (heads[i] && td.dataset.label !== heads[i]) td.dataset.label = heads[i]; });

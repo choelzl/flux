@@ -311,23 +311,83 @@ async function createFromText(name, filename, text) {
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(2)} GiB`;
 /** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
     keyboard reaches it too) and `aria-sort`; the same header again turns the order round. A column's
-    first order is descending (most, newest) unless it says `asc`. Kept per table in this browser. */
-function sortableTable(memo, cols, rows, rowFn, firstCol = 0) {
+    first order is descending (most, newest) unless it says `asc`. Kept per table in this browser.
+    D926: names natural and case-insensitive (item2 before Item10), numbers as numbers, a list key one
+    value after the other (what a cell shows, in its order); ties keep the rows' own order; a missing
+    value (null, "") last either way. Each row's node is made once and moved, never rebuilt -- a field
+    being edited, its pending save and the focus stay. On a phone (the header hidden) `table.strip`,
+    a column menu and an order button above the rows, sorts the same way: the caller places it. */
+const COLLATE = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const isMissing = (v) => v == null || v === "" || (typeof v === "number" && isNaN(v))
+  || (Array.isArray(v) && v.every(x => x == null || x === ""));
+function cmpSort(x, y) {
+  if (Array.isArray(x) || Array.isArray(y)) {
+    const a = [].concat(x), b = [].concat(y);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const ma = isMissing(a[i]), mb = isMissing(b[i]);
+      if (ma || mb) { if (ma !== mb) return ma ? 1 : -1; continue; }
+      const c = cmpSort(a[i], b[i]); if (c) return c;
+    }
+    return 0;
+  }
+  if (typeof x === "number" && typeof y === "number") return x - y;
+  return COLLATE.compare(String(x), String(y));
+}
+const sortMemo = new Map();                       // D926: when this browser keeps nothing, kept for the page's life
+function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list compact" } = {}) {
+  const idOf = (c) => c.id || c.label;
   let col = firstCol, desc = !cols[firstCol].asc;
-  try { const m = JSON.parse(localStorage.getItem(memo) || "null"); if (m && cols[m.col] && cols[m.col].key) { col = m.col; desc = m.desc; } } catch (_) { /* a default */ }
-  const head = h("tr", {}), body = h("tbody", {});
-  const draw = () => {
-    const k = cols[col].key, cmp = (a, b) => { const x = k(a), y = k(b); return x < y ? -1 : x > y ? 1 : 0; };
-    body.replaceChildren(...rows.slice().sort((a, b) => desc ? cmp(b, a) : cmp(a, b)).map(rowFn));
-    head.replaceChildren(...cols.map((c, i) => h("th", { class: c.num ? "num" : "", "aria-sort": !c.key ? null : i === col ? (desc ? "descending" : "ascending") : "none" },
-      c.key ? h("button", { type: "button", class: "th-sort" + (i === col ? " on" : ""), onclick: () => {
-        if (i === col) desc = !desc; else { col = i; desc = !c.asc; }
-        try { localStorage.setItem(memo, JSON.stringify({ col, desc })); } catch (_) { /* per viewer */ }
-        draw();
-      } }, c.label, h("span", { class: "th-arrow", "aria-hidden": "true" }, i === col ? (desc ? " ▾" : " ▴") : "")) : c.label)));
-  };
+  try {
+    let m = sortMemo.get(memo);
+    try { m = JSON.parse(localStorage.getItem(memo) || "null") || m; } catch (_) { /* this page's own */ }
+    const at = m ? (m.id != null ? cols.findIndex(c => c.key && idOf(c) === m.id) : m.col) : -1;
+    if (at >= 0 && cols[at] && cols[at].key) { col = at; desc = !!m.desc; }
+  } catch (_) { /* a default */ }
+  const nodes = new Map();                         // a row -> its <tr>, made once
+  const nodeOf = (r) => { let n = nodes.get(r); if (!n) nodes.set(r, n = rowFn(r)); return n; };
+  const body = h("tbody", {});
+  const ths = cols.map((c, i) => {
+    if (!c.key) return h("th", { class: c.num ? "num" : "", title: c.title || null }, c.label);
+    const arrow = h("span", { class: "th-arrow", "aria-hidden": "true" });
+    const btn = h("button", { type: "button", class: "th-sort", onclick: () => pick(i, i === col ? !desc : !c.asc) }, c.label, arrow);
+    return Object.assign(h("th", { class: c.num ? "num" : "", title: c.title || null, "data-label": c.label }, btn), { arrow, btn });
+  });
+  const colSel = h("select", { "aria-label": "Sort by", onchange: () => pick(Number(colSel.value), !cols[Number(colSel.value)].asc) },
+    cols.map((c, i) => c.key ? h("option", { value: String(i) }, c.label) : null));
+  const dirBtn = h("button", { type: "button", class: "small sort-dir", onclick: () => pick(col, !desc) });
+  const strip = h("div", { class: "sort-strip" }, h("label", { class: "sort" }, "Sort by ", colSel), dirBtn);
+  function pick(i, d) {
+    col = i; desc = d;
+    const m = { id: idOf(cols[col]), desc };
+    sortMemo.set(memo, m);
+    try { localStorage.setItem(memo, JSON.stringify(m)); } catch (_) { /* per viewer */ }
+    draw();
+  }
+  function draw() {
+    const k = cols[col].key;
+    const keyed = rows.map((r, i) => ({ r, i, v: k(r) }));
+    keyed.sort((a, b) => {
+      const ma = isMissing(a.v), mb = isMissing(b.v);
+      if (ma || mb) return ma === mb ? a.i - b.i : ma ? 1 : -1;               // missing last, either way
+      return (desc ? cmpSort(b.v, a.v) : cmpSort(a.v, b.v)) || a.i - b.i;    // ties: the rows' own order
+    });
+    const had = document.activeElement;
+    body.append(...keyed.map(x => nodeOf(x.r)));                           // moved, not rebuilt
+    if (had && had !== document.activeElement && body.contains(had)) had.focus({ preventScroll: true });
+    ths.forEach((th, i) => {
+      if (!cols[i].key) return;
+      th.setAttribute("aria-sort", i === col ? (desc ? "descending" : "ascending") : "none");
+      th.btn.classList.toggle("on", i === col);
+      th.arrow.textContent = i === col ? (desc ? " ▾" : " ▴") : "";
+    });
+    colSel.value = String(col);
+    dirBtn.textContent = desc ? "▾ Descending" : "▴ Ascending";
+    dirBtn.title = "Turn the order round";
+  }
   draw();
-  return h("table", { class: "list compact sortable" }, h("thead", {}, head), body);
+  const table = h("table", { class: `${cls} sortable` }, h("thead", {}, h("tr", {}, ths)), body);
+  table.strip = strip;
+  return table;
 }
 
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)

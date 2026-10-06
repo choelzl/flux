@@ -4,7 +4,7 @@
 
 import { codeBlock, codeEditor } from "./highlight.js";
 import { me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, statePill, toast, toasts, when, withOwner } from "./ui.js";
+import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 
@@ -164,53 +164,59 @@ function dropZone(label, onFiles) {
   return z;
 }
 
-function loopsTable(loops, { who = false } = {}) {
+/** D926: a list of loops sorted by its column headers (a menu on a phone), each list its own order
+    kept (`memo`); newest activity first until one is chosen. Designs sorts by what it shows (this run,
+    then every run); Best by whether a decision is there, then the name -- the values are of
+    different metrics, never ranked across loops. */
+const STATE_RANK = (l) => l.running ? 4 : l.failed ? 3 : l.stopped ? 2 : l.last_active ? 1 : 0;
+function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
   if (!loops.length) return empty("No loop yet.");
-  return h("table", { class: "list" },
-    h("thead", {}, h("tr", {}, who ? h("th", {}, "User") : "", h("th", {}, "Loop"), h("th", {}, "State"), h("th", {}, "Activity"),
-      h("th", { class: "num", title: "this run / every run" }, "Designs"), h("th", {}, "Best"), h("th", {}, ""))),
-    h("tbody", {}, loops.map(l => {
-      const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
-      const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
-      const acts = owner ? (l.perm === "watch" ? [h("span", { class: "pill" }, "watching")]
-          : l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
-          : l.perm === "edit" ? [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })] : [])
-        : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
-        : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
-           h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
-      return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
-        who ? h("td", {}, l.owner) : "",
-        h("td", {}, h("a", { href, class: "strong" }, name)),
-        h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
-        h("td", { class: "muted" }, lastSaid(l)),
-        h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
-          sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
-        h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
-          title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
-          sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
-        h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
-    })));
+  const sm = (l) => l.summary || {};
+  const cols = [
+    ...(who ? [{ label: "User", key: l => l.owner || "", asc: true }] : []),
+    { label: "Loop", key: l => l.name || l.app, asc: true },
+    { label: "State", key: STATE_RANK },
+    { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
+    { label: "Designs", key: l => sm(l).designs ? [sm(l).this_run || 0, sm(l).designs] : null, num: true, title: "this run / every run" },
+    { label: "Best", key: l => sm(l).best ? l.name || l.app : null, asc: true, title: "a decision first, by name" },
+    { label: "" }];
+  const t = sortableTable(memo, cols, loops, l => {
+    const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
+    const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
+    const acts = owner ? (l.perm === "watch" ? [h("span", { class: "pill" }, "watching")]
+        : l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+        : l.perm === "edit" ? [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })] : [])
+      : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+      : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
+         h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
+    return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
+      who ? h("td", {}, l.owner) : "",
+      h("td", {}, h("a", { href, class: "strong" }, name)),
+      h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
+      h("td", { class: "muted" }, lastSaid(l)),
+      h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
+        sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
+      h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
+        title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
+        sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
+      h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
+  }, who ? 3 : 2, { cls: "list" });                     // newest activity first (D926)
+  return h("div", {}, t.strip, t);
 }
 
-const loopView = { q: "", state: "all", sort: "activity" };     // the list's search, filter and order (D693)
-function loopsBrowser(loops, { who = false } = {}) {
+const loopView = { q: "", state: "all" };     // the list's search and filter (D693); its order is the table's (D926)
+function loopsBrowser(loops, { who = false, memo } = {}) {
   const box = h("div", {});
   const stateOf = (l) => l.running ? "running" : l.failed ? "failed" : "idle";
-  const bestOf = (l) => (l.summary && l.summary.best) ? l.summary.best.value : null;
   function draw() {
     const q = loopView.q.trim().toLowerCase();
-    let list = loops.filter(l => (loopView.state === "all" || stateOf(l) === loopView.state)
+    const list = loops.filter(l => (loopView.state === "all" || stateOf(l) === loopView.state)
       && (!q || [l.name, l.document, l.owner].some(x => String(x || "").toLowerCase().includes(q))));
-    if (loopView.sort === "name") list = list.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    else if (loopView.sort === "designs") list = list.slice().sort((a, b) => ((b.summary || {}).accepted || 0) - ((a.summary || {}).accepted || 0));
-    else if (loopView.sort === "best") list = list.slice().sort((a, b) => (bestOf(a) == null) - (bestOf(b) == null) || a.name.localeCompare(b.name));
     const count = (k) => loops.filter(l => k === "all" || stateOf(l) === k).length;
     bar.replaceChildren(search,
       h("div", { class: "chips" }, ["all", "running", "idle", "failed"].map(k => h("button", { class: `chip${loopView.state === k ? " on" : ""}`,
-        onclick: () => { loopView.state = k; draw(); } }, `${k[0].toUpperCase() + k.slice(1)} ${count(k)}`))),
-      h("label", { class: "sort" }, "Order ", h("select", { onchange: (e) => { loopView.sort = e.target.value; draw(); } },
-        [["activity", "latest activity"], ["name", "name"], ["designs", "accepted designs"], ["best", "has a decision"]].map(([v, t]) => h("option", { value: v, selected: loopView.sort === v }, t)))));
-    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list, { who }));
+        onclick: () => { loopView.state = k; draw(); } }, `${k[0].toUpperCase() + k.slice(1)} ${count(k)}`))));
+    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list, { who, memo }));
   }
   const search = h("input", { type: "search", placeholder: "Search loops", value: loopView.q, class: "search",
     oninput: (e) => { loopView.q = e.target.value; draw(); } });
@@ -412,7 +418,7 @@ async function appsPage() {
   const show = pageShow();
   const [loops, shared] = await Promise.all([api("/apps"), api("/shared").catch(() => [])]);
   const box = h("div", {}, loopsBrowser(loops));
-  const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true }) : "");
+  const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true, memo: "flux-sort-shared" }) : "");
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
       h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
@@ -420,7 +426,7 @@ async function appsPage() {
   setPageRefresh(async () => {
     if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps")));
     const sh = await api("/shared").catch(() => []);
-    sharedBox.replaceChildren(sh.length ? loopsTable(sh, { who: true }) : "");
+    sharedBox.replaceChildren(sh.length ? loopsTable(sh, { who: true, memo: "flux-sort-shared" }) : "");
   });
 }
 
