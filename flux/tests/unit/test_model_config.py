@@ -8,7 +8,8 @@ import pytest
 from flux_llm import OpenAIChatProposer, describe_model
 from flux_llm.openai_compat import remote_enabled
 
-VARS = ("FLUX_LLM_REMOTE", "FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY", "FLUX_REMOTE_MODEL")
+VARS = ("FLUX_LLM_REMOTE", "FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY",
+        "FLUX_REMOTE_MODEL")
 
 
 @pytest.fixture

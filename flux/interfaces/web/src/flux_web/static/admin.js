@@ -58,12 +58,17 @@ async function adminAudit(body) {
   const pick = (label, all, entries, name) => h("select", { "aria-label": label },
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
   // D724: the kinds in groups; a kind not listed is Other
-  const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password"]],
-    ["Runs", ["start", "stop", "note", "stop all", "starts paused", "running limit", "kill container"]],
+  const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password",
+      "invite user", "password set from a link"]],
+    ["Runs", ["start", "stop", "note", "note removed", "stop all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
-      "edit", "upload", "add files", "delete file", "delete app", "asked about a loop"]],
+      "edit", "upload", "add files", "delete file", "delete app", "asked about a loop", "clone loop", "empty loop",
+      "document migrated"]],
     ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings"]],
-    ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed"]],
+    ["Agents", ["agent added", "agent removed", "agent settings", "agent login", "agent test"]],
+    // D885: the scheduled clean-up and its settings are the server's
+    ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
+      "maintenance settings", "notification", "past turns priced", "stderr masks", "insights: removed"]],
     ["Network", ["network refused"]]];
   const groupOf = (a) => a.startsWith("cli ") ? "Users and sign-in" : (GROUPS.find(([, ks]) => ks.includes(a)) || ["Other"])[0];
   const kinds = new Map(tally(x => x.action));

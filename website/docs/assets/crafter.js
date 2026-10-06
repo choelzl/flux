@@ -2,7 +2,7 @@
 
    A form that writes a `problem.yaml`. The document side is pure and runs under node too:
    `buildYaml(state) -> string` and `check(state) -> [{level, text}]`, with the vocabulary they draw
-   from. The words mirror flux_loop/document.py (DOCUMENT_KEYS, FLOW_BOXES,
+   from. The words mirror flux_loop/document/ (DOCUMENT_KEYS, FLOW_BOXES,
    _FLOW_WORDS, EXTENSIONS), flux_loop/boxes.py (DELEGABLE, NEVER) and the registered DSE
    policies; flux/tests/unit/test_loop_crafter.py loads what this writes with the real loader.
    The page wiring (`mount`) is at the bottom and only runs in a browser; on a page with a
@@ -11,7 +11,7 @@
   "use strict";
 
   // ------------------------------------------------------------------ the vocabulary
-  /** document.py EXTENSIONS: the languages whose file extension Flux knows. */
+  /** flux_loop.document EXTENSIONS: the languages whose file extension Flux knows. */
   var LANGUAGES = ["systemverilog", "verilog", "vhdl", "chisel", "python", "c", "cpp", "cuda", "opencl",
                    "rust", "scala", "shell", "bash", "text", "yaml", "json", "markdown"];
   var AGENTS = ["opencode", "claude", "codex"];
@@ -20,7 +20,7 @@
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
   var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
   var NEVER = ["test", "calibrate"];
-  /** The boxes a document may say a half for, in flow order (document.py FLOW_BOXES, less the
+  /** The boxes a document may say a half for, in flow order (flux_loop.document FLOW_BOXES, less the
       ones the loop no longer takes as settings: analytical, simulation, records). */
   var FLOW_BOXES = ["validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "calibrate",
                     "select", "feedback", "knowledge"];
@@ -109,7 +109,7 @@
   }
 
   /** What the loop does for a box as this state leaves it, in `flux task check`'s own words
-      (document.py describe_flow: the parenthesis of the box's line); null where the line has
+      (flux_loop.document describe_flow: the parenthesis of the box's line); null where the line has
       none. The test compares these with describe_flow for the same document. */
   var KIND_OF_WORK = "rules pick the kind of work: a design sent back is improved first, then the parts, then the search";
   function explain(box, state) {
@@ -181,7 +181,7 @@
   }
   function isCustom(id) { return id === "custom-check" || id === "custom-stage"; }
 
-  /** document.py RTL_METRICS: what the loader infers for a `flux rtl measure` stage. */
+  /** flux_loop.document RTL_METRICS: what the loader infers for a `flux rtl measure` stage. */
   var LOADER_RTL = ["fmax_mhz", "area_um2", "power_w", "cell_count"];
   /** objective.py UNITS: the units Flux knows; any other known unit is written as `unit:`. */
   var UNITS = { fmax_mhz: "MHz", area_um2: "um2", area_mm2: "mm2", power_w: "W", power_mw: "mW", time_ms: "ms",

@@ -494,6 +494,9 @@ def flows(r: Run) -> None:
         r.check("the picked problem is checked", "passes" in said, said)
         b.js("const s = document.querySelector('dialog.dlg[open] select'); s.value = 'problem.yaml'; s.dispatchEvent(new Event('change')); return 1")
         b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good')", timeout=60, what="problem.yaml checked again")
+        # until stopped: the checks below talk to a running loop, and one pass of the sweep could end
+        # before the Talk drawer opens -- it did whenever the sweep ran fast (a git worktree)
+        b.js("const c = [...document.querySelectorAll('dialog.dlg[open] label.check')].find(l => l.textContent.includes('until I stop it')).querySelector('input'); if (!c.checked) c.click(); return 1")
         r.dialog_button("Start")
         r.check("the alternative removed", r.api("/apps/sw/file?path=fast.problem.yaml", "DELETE")["status"] == 200)
         b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.live')", timeout=30, what="running")
@@ -514,8 +517,14 @@ def flows(r: Run) -> None:
         r.check("a note sent is confirmed and listed under the line", True)
         b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
         r.button("Stop now", ".page-head")
+        r.dialog_button("Stop now")                       # it asks first; a one-pass loop had ended before it was asked
         b.wait("!document.querySelector('.page-head .pill.live')", timeout=60, what="stopped")
         r.check("stopped", True)
+        # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped
+        # at rest has a last pass that built nothing)
+        r.check("a pass started again", r.api("/apps/sw/start", "POST", {"passes": 1, "screen_only": False})["status"] == 200)
+        b.wait("document.querySelector('.page-head .pill.live')", timeout=30, what="running again")
+        b.wait("!document.querySelector('.page-head .pill.live')", timeout=120, what="its pass ended")
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live, stopped")
         r.button("Graph", ".tree-card .seg")                                   # D726: the loop's own drawing
         b.wait("document.querySelector('.tasks-drawing .fc-box.fc-act[data-node=test]') && document.querySelector('.tree').hidden", timeout=60, what="the loop's drawing, its gate run")
