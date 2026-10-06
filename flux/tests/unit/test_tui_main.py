@@ -144,6 +144,77 @@ def test_the_first_q_on_a_live_run_asks_for_a_stop_at_the_pass_boundary(tmp_path
     assert any("stopping at the end of this pass" in ln for ln in bus.snapshot()["log"])
 
 
+class _FrameScreen(_FakeScreen):
+    """Keeps the last frame only: what is on the screen now."""
+
+    def erase(self):
+        super().erase()
+        self.drawn = []
+
+
+def _parts_bus(n: int) -> EventBus:
+    bus = EventBus()
+    bus.standing("standings", {"at": "after step 1", "step": 1, "steps": 3, "judged": n, "proven": n, "parts_total": n,
+                               "objective": {"goal": "latency under 10 ns", "now": "measuring", "composed": "7 ns"},
+                               "parts": [{"part": f"part_{i:03}", "state": "proven", "name": f"impl_{i:03}",
+                                          "prototype": "def f(x):\n    return x\n", "report": f"report of part {i:03}"}
+                                         for i in range(n)],
+                               "front": [{"x": 1.0, "y": 2.0, "stage": "confirm"}, {"x": 2.0, "y": 1.0, "stage": "confirm"}],
+                               "axes": ["latency", "cost"]})
+    for i in range(40):
+        bus.result(f"report line {i}")
+    bus.done()
+    return bus
+
+
+def test_the_results_tab_shows_the_selected_part_and_the_objective_at_80x24():
+    """D903, from an external review: with 30 parts at 80x24 the tab drew the tail of an oversized
+    table, so selecting the first part changed the preview while its row stayed off-screen, and the
+    objective area was cut. The list is a window that follows the highlight under a kept objective."""
+    bus = _parts_bus(30)
+    scr = _FrameScreen([ord("r"), ord("3"), *[curses.KEY_UP] * 31, ord("q")], size=(24, 80))   # r: no rerun; ↑ from the report to the first part
+    _main(scr, bus, _Feedback(), "t", "", False, lambda: None, {}, lambda: 1)
+    rows = {y: t for y, _x, t in scr.drawn}
+    body = [rows.get(y, "") for y in range(3, 23)]
+    assert any(t.startswith("▸") and "part_000" in t for t in body), body
+    assert any("OBJECTIVE" in t and "latency under 10 ns" in t for t in body) and any("NOW" in t for t in body)
+    assert any(t.startswith("▌── part_000") for t in body) and any("def f(x):" in t for t in body)
+    assert any("more" in t and "↓" in t for t in body), "the list says what lies below it"
+    assert "↑" not in rows.get(2, ""), "nothing of the panel is cut off above"
+
+
+def test_the_results_tab_fits_its_height_and_reaches_every_entry():
+    """D903: at every size and every highlight the tab keeps to its rows, the highlighted entry and
+    its preview title are on them, and the objective comes first; the chart folds when the list needs
+    the room. Design rows open their own design."""
+    from flux_tui.panels import results_browse
+
+    for n in (3, 30):
+        snap = _parts_bus(n).snapshot()
+        order = results_browse(snap, None)[2]
+        for height in (20, 10, 40):
+            for focus in order:
+                for selected in (None, focus):
+                    lines, ids, _o, roles = results_browse(snap, focus, selected=selected, width=78, height=height)
+                    assert len(lines) <= height and len(ids) == len(lines) == len(roles), (n, height, focus)
+                    assert [i for i, ln in zip(ids, lines) if ln.startswith("▸")] == [focus], (n, height, focus)
+                    assert lines[0].startswith("standings ·") and (height < 20 or "OBJECTIVE" in lines[1])
+                    assert sum(ln.startswith("▌──") for ln in lines) == 1
+        tall = results_browse(snap, 0, width=78, height=40)[0]
+        assert any("the front on the confirm stage" in ln for ln in tall) == (n == 3), "the chart where it fits, folded where not"
+    snap = {"standings": {"standings": {"searching": True, "designs": [
+        {"name": "w2", "stage": "screen", "numbers": "120 MHz", "decision": True, "deliverable": "a", "knobs": "width=2"},
+        {"name": "w9", "stage": "screen", "numbers": "90 MHz", "deliverable": "b", "knobs": "width=9"},
+        {"name": "w3", "stage": "screen", "numbers": "100 MHz", "deliverable": "a", "knobs": "width=3"}]}},
+        "results": [], "measurements": []}
+    lines, ids, order, _r = results_browse(snap, None, width=78, height=20)
+    for i, ln in zip(ids, lines):
+        if i is not None and "MHz" in ln:
+            opened = results_browse(snap, i, selected=i, width=78, height=20)[0]
+            name = ln.split()[1] if ln.split()[0] == "◆" else ln.split()[0]
+            assert any(o.startswith(f"▌── {'◆ ' if '◆' in ln else ''}{name} on screen") for o in opened), (ln, opened)
+
+
 class _WideScreen(_FakeScreen):
     """Answers `get_wch` as a terminal does: a str per character, an int per function key, and
     curses.error on the timeout."""

@@ -387,13 +387,25 @@ def _tidy(lines: list[str]) -> list[str]:
 def standings_lines(st: dict[str, Any]) -> tuple[list[str], list[str | None]]:
     """The loop's live standings (D418l): where the campaign stands NOW -- proven
     parts, the best refused score per part, what is untried, how many judged."""
+    table = standings_table(st)
+    return [r[0] for r in table], [r[1] for r in table]
+
+
+def standings_table(st: dict[str, Any]) -> list[tuple[str, str | None, str, int | None]]:
+    """The standings as rows (line, role, kind, index) (D903): kind says what a row is -- "head",
+    "objective", "columns" (the objective area), "part" and "design" (openable; index into the
+    parts or the designs), "measured", "group", "chart" -- so the results tab lays them out by
+    what they are, not by parsing their text."""
     head = (f"standings · {st.get('at', '')} · step {st.get('step', 0)}/"
             f"{st.get('steps', '?')} · {st.get('judged', 0)} judged · ")
+    rows: list[tuple[str, str | None, str, int | None]] = []
+
+    def put(line: str, role: str | None, kind: str, index: int | None = None) -> None:
+        rows.append((line, role, kind, index))
+
     # A search pass stands on what the gate admitted, not on parts proven (D446).
-    lines = [head + (f"{st.get('gated', 0)} gated, {st.get('refused', 0)} refused"
-                     if st.get("searching")
-                     else f"{st.get('proven', 0)}/{st.get('parts_total', '?')} proven")]
-    roles: list[str | None] = ["dim"]
+    put(head + (f"{st.get('gated', 0)} gated, {st.get('refused', 0)} refused" if st.get("searching")
+                else f"{st.get('proven', 0)}/{st.get('parts_total', '?')} proven"), "dim", "head")
     try:
         from flux_profile import BEST_SO_FAR, PROVEN, STANDINGS, TRYING
     except Exception:  # noqa: BLE001
@@ -403,50 +415,44 @@ def standings_lines(st: dict[str, Any]) -> tuple[list[str], list[str | None]]:
     obj = st.get("objective") or {}
     for key, label in (("goal", "OBJECTIVE"), ("plan", "PLAN"), ("now", "NOW"), ("composed", "WHOLE")):
         if obj.get(key):
-            lines.append(f"  {label:<12} {obj[key]}")
-            roles.append("warn" if key == "now" else None)
+            put(f"  {label:<12} {obj[key]}", "warn" if key == "now" else None, "objective")
     if obj:
-        lines.append(f"  {'part':<12} {'status':<11} {'constraint and numbers'}")
-        roles.append("dim")
-    for part in st.get("parts", []):
+        put(f"  {'part':<12} {'status':<11} {'constraint and numbers'}", "dim", "columns")
+    for i, part in enumerate(st.get("parts", [])):
         state = part.get("state", "")
         nums = f"   {part['numbers']}" if part.get("numbers") else ""
         if state == PROVEN:
-            lines.append(f"  {part['part']:<12} {state:<11} {part.get('name', '')}{nums}")
+            line = f"  {part['part']:<12} {state:<11} {part.get('name', '')}{nums}"
         elif state == TRYING:
             score = (f"prototype at {part['prototype_score']:g} over"
                      if "prototype_score" in part else "no attempt measured yet")
             via = f"   via {part['via']}" if part.get("via") else ""
-            lines.append(f"  {part['part']:<12} {state:<11} {score}{via}{nums}")
+            line = f"  {part['part']:<12} {state:<11} {score}{via}{nums}"
         elif state == BEST_SO_FAR:
-            lines.append(f"  {part['part']:<12} {state}  score {part.get('score', 0):g}"
-                         f"   {part.get('name', '')}{nums}")
+            line = f"  {part['part']:<12} {state}  score {part.get('score', 0):g}   {part.get('name', '')}{nums}"
         else:
-            lines.append(f"  {part['part']:<12} {state or 'not yet tried'}{nums}")
-        roles.append(STANDINGS.get(state, "dim"))     # the loop's words, colored by one table (D443)
+            line = f"  {part['part']:<12} {state or 'not yet tried'}{nums}"
+        put(line, STANDINGS.get(state, "dim"), "part", i)     # the loop's words, colored by one table (D443)
     if st.get("measured"):
         noun = "design(s)" if st.get("searching") else "composed design(s)"
-        lines.append(f"  {'measured':<12} {st['measured']} {noun} on the chain")
-        roles.append(None)
+        put(f"  {'measured':<12} {st['measured']} {noun} on the chain", None, "measured")
     designs = st.get("designs") or []
     if designs:                                        # D573: a search pass stands on its designs
         groups = list(dict.fromkeys(d.get("deliverable") or "" for d in designs))
-        lines.append(f"  {'design':<26} {'stage':<9} numbers (top 3 of the frontier per deliverable, best first; ◆ the decision)")
-        roles.append("dim")
+        put(f"  {'design':<26} {'stage':<9} numbers (top 3 of the frontier per deliverable, best first; ◆ the decision)",
+            "dim", "group")
         for g in groups:
             if len(groups) > 1:
-                lines.append(f"  {g}:")
-                roles.append("dim")
-            for d in designs:
+                put(f"  {g}:", "dim", "group")
+            for j, d in enumerate(designs):
                 if (d.get("deliverable") or "") != g:
                     continue
                 mark = "◆ " if d.get("decision") else "  "
-                lines.append(f"  {mark}{d.get('name', '?'):<24} {d.get('stage', ''):<9} {d.get('numbers', '')}")
-                roles.append(STANDINGS.get(PROVEN, "dim") if d.get("decision") else None)
-    chart = front_lines(st.get("front") or [], st.get("axes") or [])
-    lines += chart
-    roles += [None] * len(chart)
-    return lines, roles
+                put(f"  {mark}{d.get('name', '?'):<24} {d.get('stage', ''):<9} {d.get('numbers', '')}",
+                    STANDINGS.get(PROVEN, "dim") if d.get("decision") else None, "design", j)
+    for line in front_lines(st.get("front") or [], st.get("axes") or []):
+        put(line, None, "chart")
+    return rows
 
 
 def front_lines(points: list[dict[str, Any]], axes: list[str], width: int = 44, height: int = 7) -> list[str]:
@@ -514,49 +520,67 @@ def result_sections(st: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+#: The fewest rows the results tab gives its preview or open entry: its title and two lines (D903).
+_MIN_DETAIL = 3
+
+
 def results_browse(snap: dict[str, Any], cursor: int | None = None, *,
                    selected: int | None = None, width: int = 96, list_rows: int = 8,
                    detail_rows: int | None = None, detail_scroll: int = 0,
-                   detail_hscroll: int = 0, clamp: dict | None = None) -> tuple[list[str], list[int | None], list[int], list[str | None]]:
+                   detail_hscroll: int = 0, clamp: dict | None = None,
+                   height: int | None = None) -> tuple[list[str], list[int | None], list[int], list[str | None]]:
     """The results tab (D487): the coloured standings table (D418l) with clickable part rows --
     a click or Enter on a part shows its artifacts (prototype, report, RTL, tests) below the
     table in place of the report and measurements; Esc closes.
-    Returns (lines, part-index-per-line, order, roles)."""
-    st = (snap.get("standings") or {}).get("standings") or {}
-    sections = result_sections(st)
-    # the run's report and measurements are one more browsable entry, navigated like the
-    # task tab (D498)
-    plain, pr = results_rows(snap)
-    head = standings_lines(st)[0] if st else []
-    report_lines = [ln for ln in plain if ln not in head and not (st and ln in standings_lines(st)[0])]
+
+    With `height` the tab fits it (D903): the objective area on top, then the parts, designs and
+    report as a list window that follows the highlight, the front chart when there is room (one
+    line when there is not), the preview or the open entry in the rest -- at least its title and
+    two lines. Returns (lines, part-index-per-line, order, roles)."""
+    prep = prepared_results(snap)
+    st, sections, table = prep["standings"], prep["sections"], prep["table"]
     landed = bool((snap.get("results") or []))
-    sections = sections + [{"title": "run report and measurements",
-                            "text": "\n".join(report_lines) or "(the report lands here when the run finishes)",
-                            "report": True}]
     n_parts = len(sections) - 1
-    lines: list[str] = []
-    ids: list[int | None] = []
-    roles: list[str | None] = []
     order = list(range(len(sections)))
     if selected is not None and selected not in order:
         selected = None
     focus = selected if selected is not None else cursor
-    if st:
-        tl, tr = standings_lines(st)
-        part_no = 0
-        for k, (ln, role) in enumerate(zip(tl, tr)):
-            if k == 0 or part_no >= n_parts or not ln.strip() or ln.lstrip().split()[0] in ("OBJECTIVE", "NOW", "WHOLE", "part", "measured"):
-                lines.append(ln[:width]); ids.append(None); roles.append(role)
-                continue
-            mark = "▸" if part_no == focus else " "
-            lines.append((mark + ln[1:])[:width]); ids.append(part_no); roles.append(role)
-            part_no += 1
+    n_part_rows = len(st.get("parts", []))
+    top = [(ln, role, None) for ln, role, kind, _i in table if kind in ("head", "objective", "columns")]
+    chart = [(ln, role, None) for ln, role, kind, _i in table if kind == "chart"]
+    entries: list[tuple[str, str | None, int | None]] = []
+    for ln, role, kind, i in table:
+        if kind in ("part", "design"):
+            sec = i if kind == "part" else n_part_rows + i       # sections: the parts, then the designs
+            entries.append((("▸" if sec == focus else " ") + ln[1:], role, sec))
+        elif kind in ("measured", "group"):
+            entries.append((ln, role, None))
     rep_no = n_parts
-    mark = "▸" if rep_no == focus else " "
     status = "landed" if landed else "not yet -- lands when the run finishes"
-    lines.append(f"{mark} {'report':<12} {status}"[:width]); ids.append(rep_no)
-    roles.append("ok" if landed else "dim")
-    lines.append(""); ids.append(None); roles.append(None)
+    entries.append((f"{'▸' if rep_no == focus else ' '} {'report':<12} {status}", "ok" if landed else "dim", rep_no))
+    if height is None:
+        shown = entries
+    else:
+        n = len(entries)
+        at = next((k for k, e in enumerate(entries) if e[2] is not None and e[2] == focus), n - 1)
+        least = min(n, 3)
+        top = top[:max(1, height - least - 1 - _MIN_DETAIL)]       # a tiny screen keeps the head first
+        rest = height - len(top) - 1                                 # less the blank above the details
+        want = max(_MIN_DETAIL, rest * 2 // 3 if selected is not None else rest // 3)
+        if chart and n + len(chart) + want > rest:                   # the chart folds before the list does
+            pts = len(st.get("front") or [])
+            chart = ([(f"  the front: {pts} point(s) -- its chart shows on a taller screen", "dim", None)]
+                     if n + 1 + want <= rest else [])
+        rows = min(n, max(least, rest - len(chart) - want))
+        lo, hi, up, down = _list_window(at, n, rows)
+        shown = ([(f"{'':>14}↑ {lo} more", "dim", None)] if up else []) + entries[lo:hi] + (
+            [(f"{'':>14}↓ {n - hi} more", "dim", None)] if down else [])
+        detail_rows = max(1, rest - rows - len(chart) - 1)          # less the entry's title
+    lines: list[str] = []
+    ids: list[int | None] = []
+    roles: list[str | None] = []
+    for ln, role, i in [*top, *shown, *chart, ("", None, None)]:
+        lines.append(ln[:width]); ids.append(i); roles.append(role)
     if selected is None:
         # BROWSING: a preview of the highlighted entry (the report when nothing is highlighted)
         sec = sections[focus] if focus is not None and focus in order else sections[rep_no]
@@ -583,16 +607,32 @@ def results_browse(snap: dict[str, Any], cursor: int | None = None, *,
     return lines, ids, order, roles
 
 
-def results_rows(snap: dict[str, Any]) -> tuple[list[str], list[str | None]]:
+def prepared_results(snap: dict[str, Any]) -> dict[str, Any]:
+    """What the results tab derives from the standings and the report: the standings, their table,
+    the openable sections (the parts, the designs, then the run's report and measurements)."""
+    st = (snap.get("standings") or {}).get("standings") or {}
+    table = standings_table(st) if st else []
+    plain, _pr = results_rows(snap, table)
+    # the run's report and measurements are one more browsable entry, navigated like the
+    # task tab (D498): what results_rows adds after the standings
+    report_lines = plain[len(table):] if st else plain
+    sections = result_sections(st) + [{"title": "run report and measurements",
+                                       "text": "\n".join(report_lines) or "(the report lands here when the run finishes)",
+                                       "report": True}]
+    return {"standings": st, "table": table, "sections": sections}
+
+
+def results_rows(snap: dict[str, Any], table: list | None = None) -> tuple[list[str], list[str | None]]:
     """The results tab's plain form (D418l): live standings first, the closing report when
-    it has landed, then the measurements table."""
+    it has landed, then the measurements table. `table`: the standings' rows when the caller
+    has them already."""
     lines: list[str] = []
     roles: list[str | None] = []
     st = (snap.get("standings") or {}).get("standings")
     if st:
-        l2, r2 = standings_lines(st)
-        lines += l2 + [""]
-        roles += r2 + [None]
+        table = table if table is not None else standings_table(st)
+        lines += [r[0] for r in table] + [""]
+        roles += [r[1] for r in table] + [None]
     report = _tidy(list(snap["results"]))
     if report:
         lines += report

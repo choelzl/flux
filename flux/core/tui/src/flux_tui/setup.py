@@ -15,7 +15,7 @@ opens the loop TUI.
 `SetupForm` is a pure state machine -- a key in, the form changed, maybe an action out -- so
 tests drive it without a terminal; `run_setup` is the thin curses shell around it.
 Keys: Tab / Shift-Tab (or Up / Down outside the prompt) move between fields; in the prompt,
-Enter is a new line; in the files field, Enter adds the typed path (Tab completes it) and
+Enter is a new line; in the files and skills fields, Enter adds the typed path (Tab completes it) and
 Delete removes the last file; Left / Right change a choice or a number; in Passes, digits type
 a cap (the first replaces, the next append, Backspace edits) and u (or Left from 1) is until
 stopped (D902); Space toggles a box;
@@ -101,7 +101,7 @@ class SetupForm:
         self.message = f"added {p}"
 
     def _complete(self) -> None:
-        """Tab in the files field: the typed path completed as far as it is unique."""
+        """Tab in a path field (files, skills): the typed path completed as far as it is unique."""
         hits = sorted(glob.glob(os.path.expanduser(self.path_input) + "*"))
         if len(hits) == 1:
             self.path_input = hits[0] + ("/" if os.path.isdir(hits[0]) else "")
@@ -147,7 +147,7 @@ class SetupForm:
         if key == BTAB:
             self._move(-1)
             return None
-        if key == TAB and f != "files":
+        if key == TAB and f not in ("files", "skills"):   # D903: both path fields complete on Tab
             self._move(1)
             return None
         if key == ESC:

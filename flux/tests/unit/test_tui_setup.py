@@ -97,6 +97,21 @@ def test_the_form_keeps_its_footer_and_its_focus_on_a_small_screen():
     assert "too small" in f.screen(30, 2)[0][1]
 
 
+def test_tab_completes_a_path_in_the_skills_field_as_in_files(tmp_path):
+    """D903, from an external review: Tab in Skills left the field instead of completing the path."""
+    skill = tmp_path / "my_unique_skill"
+    skill.mkdir()
+    (skill / "SKILL.md").write_text("x")
+    f = SetupForm(prompt="x", focus=FIELDS.index("skills"))
+    keys(f, str(tmp_path / "my_un"))
+    f.handle(9)
+    assert f.field == "skills" and f.path_input == str(skill) + "/"
+    f.handle(10)
+    assert f.skills == [str(skill) + "/"]
+    f.handle(9)                                    # nothing typed: Tab moves on
+    assert f.field == "author"
+
+
 def test_the_pass_cap_is_an_editable_number_and_until_stopped_a_choice():
     """D902, from an external review: each digit replaced the whole value, so typing 10 saved 0 --
     until stopped. Now the first digit replaces, the next append, Backspace edits, a leading 0 is

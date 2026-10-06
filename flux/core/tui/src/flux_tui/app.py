@@ -872,15 +872,12 @@ def _panel_lines(view: _View, panes: dict[str, _Pane], timing: _Timing, snap: di
             view.scroll = 0
         elif panel == "results":
             pane = panes["results"]
-            # D857: the preview gets the rows the table leaves -- measured, not guessed (a guess too
-            # small pushed the panel's top off even at 80x24)
-            probe, *_ = results_browse(snap, pane.cursor, selected=pane.selected, width=max(24, w - 2), detail_rows=1,
-                                       detail_scroll=0, detail_hscroll=0, clamp={})
-            detail_rows = max(1, view_h - (len(probe) - 1))
+            # D903: the tab fits the body -- the objective area, a list window that follows the
+            # highlight, the chart when there is room, the preview in the rest
             clamp = {}
             lines, res_ids, res_order, line_roles = results_browse(
-                snap, pane.cursor, selected=pane.selected, width=max(24, w - 2),
-                detail_rows=detail_rows, detail_scroll=pane.dscroll, detail_hscroll=pane.dhscroll, clamp=clamp)
+                snap, pane.cursor, selected=pane.selected, width=max(24, w - 2), height=view_h,
+                detail_scroll=pane.dscroll, detail_hscroll=pane.dhscroll, clamp=clamp)
             pane.clamp(clamp)
             pane.rendered(res_ids, res_order)
             view.hscroll = 0                         # the tab pans and scrolls its details itself
