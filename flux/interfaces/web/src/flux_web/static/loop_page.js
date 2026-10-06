@@ -37,7 +37,7 @@ async function loopPage(name, owner, path = "") {
   let askOpen = parts[0] === "ask";
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
-  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["problem", "Problem"], ["loop", "Variables and sharing"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
@@ -46,6 +46,7 @@ async function loopPage(name, owner, path = "") {
     history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${segs.length ? "/" + segs.join("/") : ""}`);
   }
   const tabBar = h("div", { class: "tabs", role: "tablist" }), subHolder = h("div", { class: "subrow" });
+  let results = null;                                 // D916: the Results tab's views, while it stays open
   let question = st.question || null;
   const log = logView(base, qs);
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
@@ -64,7 +65,7 @@ async function loopPage(name, owner, path = "") {
   function drawTabs() {
     drawCrumbs();
     tabBar.replaceChildren(...tabs.map(t => h("button", { role: "tab", class: t === tab ? "on" : "", "aria-selected": t === tab ? "true" : "false",
-      onclick: () => { tab = t; sub = ""; mode = ""; setUrl(); drawTabs(); drawBody(); } }, t)));
+      onclick: () => { tab = t; sub = ""; mode = ""; results = null; setUrl(); drawTabs(); drawBody(); } }, t)));
   }
   function drawHead() {
     const acts = [];
@@ -177,7 +178,7 @@ async function loopPage(name, owner, path = "") {
     return { el, fill };
   })();
 
-  const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; setUrl(); drawTabs(); drawBody(); };
+  const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; results = null; setUrl(); drawTabs(); drawBody(); };
   // D892: the page as its tabs (loop_*.js) read it, instead of this function's closure: `st` and `tab`
   // are getters, so a tab that awaited reads them as they are now, not as they were when it began
   const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, body, curSub, goTab, drawBody, refresh,
@@ -280,10 +281,16 @@ async function loopPage(name, owner, path = "") {
     } else if (tab === "Agents") {
       await agentsView(ctx);
     } else if (tab === "Results") {
-      body.replaceChildren(card(null, skeleton(7)));
-      const r = await api(`/apps/${enc(name)}/results${qs}`);
-      if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No results yet."))); return; }
-      body.replaceChildren(resultsView(ctx, r));
+      // D916: Results and Graphs, two views of one fetch -- switching keeps the selection and the
+      // graphs once built; the tab opened again reads the results afresh
+      if (!results) {
+        body.replaceChildren(card(null, skeleton(7)));
+        const r = await api(`/apps/${enc(name)}/results${qs}`);
+        if (tab !== "Results") return;
+        if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No results yet."))); return; }
+        results = resultsView(ctx, r);
+      }
+      body.replaceChildren(results.show(curSub()));
     } else if (tab === "Files" && !curSub()) {
       await files.filesView();
     } else if (tab === "Files" && curSub() === "workbench") {

@@ -163,7 +163,7 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, said ? h("strong", { class: "front-said" }, said)
       : h("strong", { class: "front-said" }, `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`),
-    h("span", { class: "muted" }, ` · ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"} · `),
+    h("span", { class: "muted" }, ` · ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"}${opts.legend === false ? "" : " · "}`),
     opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending) })), g);
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;

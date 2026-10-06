@@ -25,6 +25,31 @@ import traceback
 from pathlib import Path
 
 HOME = Path(os.environ.get("FLUX_E2E_HOME") or Path.home() / "snap" / "firefox" / "common" / "flux-e2e")
+
+def _design(name, group, stage, numbers, verdict, reasons=(), **more):
+    return {"name": name, "base": name, "key": "k-" + name, "part": "" if group == "whole" else group, "group": group,
+            "stages": {stage: numbers}, "shown": stage, "numbers": numbers, "meets": {}, "eligible": verdict == "accepted",
+            "pending": verdict == "pending", "reasons": list(reasons), "why": list(reasons), "verdict": verdict,
+            "decision": False, "closest": False, "rank": None, "first": f"2026-10-06T10:0{len(name) % 10}:00Z", "last": "2026-10-06T11:00:00Z", **more}
+
+
+#: D914-D916: a loop of parts as the results API says it -- a whole that meets the frequency floor and a
+#: smaller one that does not, decoders that all miss it, encoders measured at the screen stage only
+GRAPHS_RESULTS = {
+    "campaign": "stand-in", "total": 6, "feasible": True, "closest": None, "answer": None, "passes": [],
+    "objectives": "area_um2 (minimize), fmax_mhz >= 1000", "metrics": ["area_um2", "fmax_mhz"], "stages": ["screen", "confirm"],
+    "limits": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000, "stage": None}],
+    "objective_list": [{"metric": "area_um2", "direction": "minimize"}, {"metric": "fmax_mhz", "direction": "maximize", "goal": 1000}],
+    "counts": {"accepted": 2, "pending": 1, "failed": 3},
+    "designs": [
+        _design("w-good", "whole", "confirm", {"area_um2": 31, "fmax_mhz": 1200}, "accepted", decision=True),
+        _design("w-bad", "whole", "confirm", {"area_um2": 12.5, "fmax_mhz": 800}, "failed", ["fmax_mhz 800 is below 1000"]),
+        _design("dec-1", "decoder", "screen", {"area_um2": 1, "fmax_mhz": 900}, "failed", ["fmax_mhz 900 is below 1000"]),
+        _design("dec-22", "decoder", "screen", {"area_um2": 2, "fmax_mhz": 950}, "failed", ["fmax_mhz 950 is below 1000"]),
+        _design("enc-1", "encoder", "screen", {"area_um2": 10, "fmax_mhz": 1500}, "accepted"),
+        _design("enc-22", "encoder", "screen", {"area_um2": 8, "fmax_mhz": 1100}, "pending", ["fmax_mhz waits for confirm"]),
+    ]}
+
 PASSWORDS = {"ada": "ada the admin secret", "bob": "bob has a secret", "cy": "cy has a secret"}
 
 
@@ -763,17 +788,21 @@ def flows(r: Run) -> None:
         r.check("a leaf opens its work: output, input and every field as tabs", {"Output", "Input"} <= set(tabs), str(tabs))
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
-        # D849: the chart over time has one point per design, not one per measurement
-        b.js("const d = [...document.querySelectorAll('#main details')].find(x => x.querySelector('summary') && x.querySelector('summary').textContent.startsWith('Charts')); if (d) d.open = true; return 1")
+        # D916: Results and Graphs two views; the graphs built only when Graphs is first opened
+        subs = b.js("return [...document.querySelectorAll('#main .subtabs [role=tab], .subrow .subtabs [role=tab]')].map(x => x.textContent)")
+        r.check("Results has two views, Results and Graphs (D916)", subs == ["Results", "Graphs"], str(subs))
+        r.check("the graphs are not built while Results shows (D916)", b.js("return !document.querySelector('#main svg.chart') && !!document.querySelector('#main .decision-line')"))
+        r.button("Graphs", ".subrow .subtabs")
+        b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")
+        r.check("Graphs has its address (D916)", b.js("return location.hash") == "#/app/sw/results/graphs")
+        r.check("the decision line shows in Graphs too (D916)", b.js("return !!document.querySelector('#main .decision-line') && !document.querySelector('#main table.designs')"))
+        # D849: the chart by design has one point per design, not one per measurement
         got = json.loads(r.api("/apps/sw/results")["body"])
         metric = next(iter(got["designs"][0]["numbers"]))
         want = sum(1 for d in got["designs"] if metric in d["numbers"])
-        pts = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Improvement over time');"
+        pts = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Improvement by design');"
                      " const s = c && c.querySelector('svg.best-chart'); return s ? s.querySelectorAll('.pt').length : 0; })()", timeout=10, what="the chart's points")
-        r.check("improvement over time: one point per design", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
-        r.check("Results: the designs before the charts (D856)", b.js(
-            "const t = document.querySelector('#main table.designs'), c = document.querySelector('#main details.charts-box');"
-            " return !!t && !!c && !!(t.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && c.open"))
+        r.check("improvement by design: one point per design (D916: renamed)", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.page("#/app/sw", "document.querySelector('#main .card')", "Overview")
         card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent?.startsWith('The last pass'));"
                       " return c && [c.querySelector('.pass-said') ? c.querySelector('.pass-said').textContent : '', !!c.querySelector('details.pass-record:not([open])'),"
@@ -784,6 +813,84 @@ def flows(r: Run) -> None:
         r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
+
+    def graphs():
+        """D914-D916 on a loop of parts, its results stood in for in the page (the fetch answered with
+        GRAPHS_RESULTS): a design failing a requirement off its axes is never the best, no feasible front
+        where none qualifies, parts never pooled for a whole, each part's colour its own and the same
+        after a stage change. FLUX_E2E_SHOTS: Graphs at a desktop's width and at 390, light and dark."""
+        r.login("bob")
+        stub = ("const w = arguments[0] ? document.getElementById('phone').contentWindow : window, real = w.fetch.bind(w), body = arguments[1];"
+                " const said = (t) => Promise.resolve(new w.Response(t, {status: 200, headers: {'Content-Type': 'application/json'}}));"
+                " w.fetch = (u, o) => String(u).startsWith('/api/apps/sw/results') ? said(body)"
+                " : String(u).startsWith('/api/apps/sw/design?') ? said('{\"artifact\": null}') : real(u, o); return 1")
+        payload = json.dumps(GRAPHS_RESULTS)
+        r.page("#/", "document.querySelector('#main')", "the loops")
+        b.js(stub, False, payload)
+        b.go(f"{r.url}/#/app/sw/results/graphs")
+        b.wait("document.querySelector('#main svg.chart.pareto')", timeout=15, what="the stood-in graphs")
+        card = ("[...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === arguments[0])")
+        area = b.js(f"const c = {card}; const f = [...c.querySelectorAll('figure')].find(x => x.querySelector('figcaption strong').textContent === 'area_um2');"
+                    " return [f.querySelector('.best-said').textContent, f.querySelector('svg').getAttribute('aria-label')]", "Improvement by design")
+        r.check("a design failing a requirement off the axis is never the best (D914)", area[0] == "31", str(area))
+        front = b.js(f"const c = {card}; return [...c.querySelectorAll('.pt.on-front')].map(p => p.getAttribute('data-name'))", "Pareto front")
+        r.check("the feasible front is the whole's that meet every requirement (D914)", front == ["w-good"], str(front))
+        hollow = b.js("const p = document.querySelector('#main svg.chart.pareto .pt[data-name=\"w-bad\"]'); return [p.getAttribute('class'), p.querySelector('title').textContent]")
+        r.check("a miss is drawn, hollow, its reason in its details (D914)", "failed" in hollow[0] and "fmax_mhz 800 is below 1000" in hollow[1], str(hollow))
+        b.js("document.querySelector('#main svg.chart.pareto .pt[data-name=\"w-bad\"]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        said = b.wait("(document.querySelector('#main .graphs .detail-card h2') || {}).textContent", timeout=10, what="the point's design")
+        r.check("a plot point opens its design's detail in Graphs (D916)", said == "w-bad", said)
+        b.js("document.querySelector('#main .graphs').__e2e = 1; return 1")
+        r.button("Results", ".subrow .subtabs")
+        b.wait("document.querySelector('#main table.designs')", timeout=10)
+        r.check("back in Results the same design stays selected (D916)", b.js(
+            "return (document.querySelector('#main .split.results .detail-card h2') || {}).textContent === 'w-bad'"
+            " && (document.querySelector('#main table.designs tr.sel') || {}).innerText.includes('w-bad')"))
+        r.button("Graphs", ".subrow .subtabs")
+        b.wait("document.querySelector('#main svg.chart.pareto')", timeout=10)
+        r.check("the graphs kept, not built again, the detail with them (D916)", b.js("const g = document.querySelector('#main .graphs');"
+                " return g.__e2e === 1 && (g.querySelector('.detail-card h2') || {}).textContent === 'w-bad'"))
+
+        def colours():
+            return b.js("""const pick = (g) => { const p = document.querySelector(`#main svg.chart.pareto .pt:not(.on-front)[data-group="${g}"]`); return p ? getComputedStyle(p).stroke : null; };
+                const key = (g) => { const k = document.querySelector(`#main .graphs-ctl .key-item[data-group="${g}"] .pt`); return k ? getComputedStyle(k).fill : null; };
+                return { whole: pick('whole'), decoder: pick('decoder'), encoder: pick('encoder'), kwhole: key('whole'), kdecoder: key('decoder'), kencoder: key('encoder') };""")
+        before = colours()
+        r.check("each part its own colour, the legend's the same (D915)", len({before["whole"], before["decoder"], before["encoder"]}) == 3 and None not in before.values()
+                and (before["whole"], before["decoder"], before["encoder"]) == (before["kwhole"], before["kdecoder"], before["kencoder"]), str(before))
+        b.js(f"const s = {card}.querySelectorAll('select')[2]; s.value = 'screen'; s.dispatchEvent(new Event('change')); return 1", "Pareto front")
+        said = b.js(f"return {card}.querySelector('.front-said').textContent", "Pareto front")
+        r.check("no whole measured at a stage: said, the parts not pooled (D914)", "parts are not pooled" in said
+                and not b.js(f"return {card}.querySelector('.pt.on-front')", "Pareto front"), said)
+        after = colours()
+        r.check("the parts keep their colours across a stage change (D915)", (after["decoder"], after["encoder"]) == (before["decoder"], before["encoder"]), f"{before} {after}")
+        b.js("const c = [...document.querySelectorAll('#main .chips.scope button')].find(x => x.textContent === 'decoder'); c.click(); return 1")
+        said = b.js(f"return {card}.querySelector('.front-said').textContent", "Pareto front")
+        r.check("no feasible front when none qualifies (D914)", said == "No feasible design yet" and not b.js(
+            f"return {card}.querySelector('.pt.on-front, path.front')", "Pareto front"), said)
+        best = b.js(f"return [...{card}.querySelectorAll('figure')].map(f => [f.querySelector('.best-said').textContent, !!f.querySelector('path.best')])", "Improvement by design")
+        r.check("before a feasible design, no best line (D914)", all(x == ["No feasible design yet", False] for x in best), str(best))
+        r.clean("graphs")
+        shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
+        if not shots:
+            return
+        shots.mkdir(parents=True, exist_ok=True)
+        for width in (1240, 390):
+            for theme in ("light", "dark"):
+                b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                     "f.style.cssText = `width:${arguments[0]}px;height:860px;border:0`; f.src = '/#/'; document.body.append(f); return 1", width)
+                b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main') && d.readyState === 'complete'; })()", timeout=20)
+                b.js(stub, True, payload)
+                b.js("const w = document.getElementById('phone').contentWindow; w.document.documentElement.dataset.theme = arguments[0]; w.location.hash = '#/app/sw/results/graphs'; return 1", theme)
+                b.wait("document.getElementById('phone').contentDocument.querySelector('#main svg.chart.pareto')", timeout=20, what=f"Graphs at {width}")
+                for part, y in (("top", 0), ("charts", 700)):          # the decision, scope and legend; then the charts
+                    b.js("document.getElementById('phone').contentWindow.scrollTo(0, arguments[0]); return 1", y)
+                    time.sleep(0.6)
+                    png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
+                    (shots / f"graphs-{'desktop' if width > 1000 else str(width) + 'px'}-{theme}-{part}.png").write_bytes(base64.b64decode(png))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-graphs={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+    r.step("graphs", graphs)
 
     def watcher():
         r.login("cy")
@@ -1314,7 +1421,7 @@ def flows(r: Run) -> None:
     def phone():
         """At a phone's width nothing scrolls sideways (D754). D856: measured in a frame of exactly that
         width -- the browser's own window does not go below 500 pixels, so the check used to run at 500."""
-        pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
+        pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results", "#/app/sw/results/graphs",
                                       "#/app/sw/files", "#/app/sw/settings", "#/account")]
         pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/maintenance", "#/admin/audit", "#/admin/models")]
         who = None

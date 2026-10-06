@@ -1,9 +1,9 @@
-// Flux web: a loop's Results tab -- its designs, a design's detail, two compared, the charts
-// (D892: out of loopPage).
+// Flux web: a loop's Results tab -- its designs, a design's detail, two compared; its Graphs view, the
+// charts (D892: out of loopPage; D916: Results and Graphs two views).
 
 import { codeBlock } from "./highlight.js";
 import { ago, api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
-import { bestChart, designPoints, directionOf, groupList, groupStyles, paretoChart, scopesOf } from "./charts.js";
+import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -126,56 +126,89 @@ function resultsView(ctx, r) {
       h("span", { class: "grow" }), cmpBtn);
   }
   chips(); drawTable();
-  // the charts (D693): two metrics against each other, and each metric's best so far
+  // D916: two views of the same designs -- Results (the table, its filters, two compared, the selected
+  // design) and Graphs (the Pareto front, the improvement by design) -- the decision above both, the
+  // selected design's detail in whichever shows; the graphs built when Graphs is first shown, then kept
   const objectives = r.objective_list || r.limits || [];
   const nums = r.metrics.filter(m => r.designs.some(d => Object.values(d.stages).some(n => n[m] != null)));
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
     .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));
   const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
   let px = nums[1] || nums[0], py = nums[0], pst = "", tMetrics = new Set(nums.slice(0, 2)), tst = "";
+  let view = "results";
   const paretoBox = h("div", {}), timeBox = h("div", {});
-  const pickRow = (d) => {
+  const resultsDetail = h("div", {}, detail), graphsDetail = h("div", {});
+  const pickRow = (d) => {                              // a point, or the decision's name: its detail, its row selected
     const all = sorted(r.designs.filter(x => filter === "all" || x.verdict === filter));
     const at = all.indexOf(d);
     if (at >= pageN) { pageN = Math.ceil((at + 1) / PAGE) * PAGE; drawTable(); }
     const tr = [...table.querySelectorAll("tbody tr")][at];
-    if (tr) { tr.scrollIntoView({ block: "nearest" }); open(d, tr); } else open(d, h("tr"));   // filtered out: the detail alone
+    if (tr && view === "results") tr.scrollIntoView({ block: "nearest" });
+    open(d, tr || h("tr"));                             // filtered out: the detail alone
+    if (view === "graphs") detail.scrollIntoView({ block: "nearest" });
   };
   const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
   // D914: the best and the front are of one scope -- the whole, or a part -- never parts pooled
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? "whole" : "";
-  const scopeSel = () => groups.length ? h("label", {}, "scope ", sel(scopesOf(groups), scope, v => { scope = v; drawPareto(); drawTime(); })) : "";
+  const scopeBox = h("div", {});
+  function drawScope() {
+    scopeBox.replaceChildren(groups.length ? h("div", { class: "chips scope", role: "group", "aria-label": "Scope" }, h("span", { class: "muted" }, "Compare within"),
+      scopesOf(groups).map(([k, label]) => h("button", { class: `chip${scope === k ? " on" : ""}`, type: "button", "aria-pressed": scope === k ? "true" : "false",
+        onclick: () => { scope = k; drawScope(); drawPareto(); drawTime(); } }, label))) : "");
+  }
   function drawPareto() {
-    paretoBox.replaceChildren(h("div", { class: "chart-ctl" }, scopeSel(),
+    paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
       h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; drawPareto(); })),
       h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; drawPareto(); })),
       h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; drawPareto(); }))),
-      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope }));
+      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope, legend: false }));
   }
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
-    timeBox.replaceChildren(h("div", { class: "chart-ctl" }, scopeSel(),
+    timeBox.replaceChildren(h("div", { class: "chart-ctl" },
       h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
         onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); drawTime(); } }, m))),
       h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; drawTime(); }))),
-      tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m); return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope }); }))
+      tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m);
+        return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false }); }))
         : empty("Pick a metric to chart."));
   }
-  drawPareto(); drawTime();
-  let shut = false;
-  try { shut = localStorage.getItem("flux-charts") === "shut"; } catch (_) { /* a default */ }
-  const charts = nums.length ? h("details", { class: "charts-box", open: !shut, ontoggle: (e) => { try { localStorage.setItem("flux-charts", e.target.open ? "open" : "shut"); } catch (_) { /* per viewer */ } } },
-    h("summary", {}, "Charts: the Pareto front and the improvement over time"),
-    h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement over time", timeBox))) : "";
-  return h("div", {},
-    card(null, h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
-        r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
-      h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
-        h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report")))),
-    // D856: the decision and the designs first, the charts after (open, as before)
-    h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, detail, { cls: "detail-card" })),
-    charts);
+  let graphsEl = null;
+  function buildGraphs() {
+    if (!nums.length) return card(null, empty("No metric measured to chart."));
+    drawScope(); drawPareto(); drawTime();
+    return h("div", { class: "graphs" },
+      card(null, [scopeBox, h("p", { class: "muted small graphs-note" }, `Every measured design is drawn (${r.designs.length}); the table's filter does not apply. `,
+          "The best so far and the front count only designs that meet every requirement", groups.length ? ", within the scope" : "", "."),
+        legend(styles, { front: true, pending: r.designs.some(d => d.verdict === "pending") })], { cls: "graphs-ctl" }),
+      h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement by design", timeBox)),
+      card(null, graphsDetail, { cls: "detail-card" }));
+  }
+  // the decision, in a line, above both views (D900: none, when no design meets every requirement)
+  const dec = r.designs.find(d => d.decision), near = r.designs.find(d => d.closest);
+  const nameBtn = (d) => h("button", { class: "link mono strong", type: "button", onclick: () => pickRow(d) }, d.name);
+  const decisionLine = h("div", { class: "decision-line" }, dec
+    ? [h("span", { class: "pill ok" }, "★ decision"), nameBtn(dec), dec.part ? h("span", { class: "muted" }, `part ${dec.part}`) : "",
+      h("span", { class: "muted" }, `measured at ${dec.shown}`),
+      ...r.metrics.filter(m => dec.numbers[m] != null).slice(0, 4).map(m => h("span", { class: "mono small" }, `${m} ${fmt(dec.numbers[m])}`))]
+    : r.closest ? [h("strong", {}, "No feasible design yet"), h("span", { class: "muted" }, "· closest"), near ? nameBtn(near) : h("span", { class: "mono" }, r.closest.name),
+      (r.closest.reasons || []).length ? h("span", { class: "muted small" }, `not met: ${r.closest.reasons.join("; ")}`) : ""]
+    : h("span", { class: "muted" }, "No decision yet."));
+  const head = card(null, [h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
+      r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
+    h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
+      h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report"))), decisionLine]);
+  const resultsEl = h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, resultsDetail, { cls: "detail-card" }));
+  /** The view to show, "results" or "graphs": the decision and the detail move to it; the graphs are
+      built the first time (D916) and kept, as are the selection, the filter and the controls. */
+  function show(v) {
+    view = v === "graphs" ? "graphs" : "results";
+    if (view === "graphs" && !graphsEl) graphsEl = buildGraphs();
+    (view === "graphs" ? graphsDetail : resultsDetail).append(detail);
+    return h("div", {}, head, view === "graphs" ? graphsEl : resultsEl);
+  }
+  return { show, built: () => !!graphsEl };
 }
 
 export { resultsView };
