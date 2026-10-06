@@ -94,3 +94,57 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     flow = yaml.safe_load(again.read_text())["flow"]
     assert flow["generate"] == raw["flow"]["generate"] and flow["critique"] == raw["flow"]["critique"]
     assert load_task(str(again)).to_dict()["flow"] == v["normal"]["flow"]
+
+
+# D910: an untouched read-back keeps a document's meaning -- typed choices, a comma inside one,
+# an inline Workload IR, a `needs` of a catalog stage's own, a script path with a space
+_BASE = {"statement": "Make valid source with the smallest time.", "language": "python",
+         "flow": {"test": "{python} {home}/check.py {artifact}",
+                  "measure": {"bench": {"command": "{python} {home}/bench.py {artifact}", "metrics": ["time_ms"]}}},
+         "objectives": [{"metric": "time_ms", "direction": "minimize"}]}
+_WORKLOAD = {"id": "tiny", "ops": [{"id": "mm", "kind": "einsum", "expr": "b c, c k -> b k", "bounds": {"b": 2, "c": 8, "k": 16}}]}
+
+
+def _variant(name: str) -> dict:
+    d = json.loads(json.dumps(_BASE))
+    if name == "scalar_choices":
+        d["flow"]["orchestrate"] = {"policy": "sweep", "space": {"mode": ["01", "true", "fast,wide", 2, True, 0.5, 1e-07]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+    elif name == "inline_workload":
+        d.update(language="yaml", workload=_WORKLOAD, objectives=[{"metric": "latency_cycles", "direction": "minimize"}])
+        d["flow"]["measure"] = {"cost": {"evaluator": "zigzag", "metrics": ["latency_cycles", "energy_pj"]}}
+    elif name == "needs_override":
+        d["flow"]["measure"]["bench"]["needs"] = ["a-required-tool"]
+    elif name == "spaced_script":
+        d["flow"]["measure"]["bench"]["command"] = ["{python}", "{home}/my bench.py", "{artifact}"]
+    elif name == "params_placeholder":
+        d["params"] = {"n": 1}
+        d["flow"]["test"] = "{python} {home}/check.py {artifact} {params}"
+    return d
+
+
+@pytest.mark.parametrize("name", ["scalar_choices", "inline_workload", "needs_override", "spaced_script", "params_placeholder"])
+def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
+    src = tmp_path / "src" / name
+    src.mkdir(parents=True)
+    for f in ("check.py", "bench.py", "my bench.py", "gen.py"):
+        (src / f).write_text("print('time_ms=1')\n")
+    (src / "problem.yaml").write_text(yaml.safe_dump(_variant(name), sort_keys=False))
+    (tmp_path / "w").mkdir()
+    before, after, kept = _round(src / "problem.yaml", tmp_path / "w")
+    for key in COMPARED:
+        assert after.get(key) == before.get(key), (key, kept)
+    # a typed choice is the same value of the same type: "01" is not 1, "true" is not True
+    space = (before.get("space") or {}).get("mode")
+    if space:
+        assert [type(x) for x in after["space"]["mode"]] == [type(x) for x in space]
+
+
+def test_the_checklist_knows_the_loops_own_placeholders():
+    """D912: the crafter's placeholders are the loader's -- `{params}` is no "unknown placeholder"."""
+    from flux_loop.document import BUILTIN_SUBS
+
+    r = subprocess.run(["node", "-e", "process.stdout.write(JSON.stringify(require(process.argv[1]).BUILTIN_SUBS))",
+                        str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == list(BUILTIN_SUBS)

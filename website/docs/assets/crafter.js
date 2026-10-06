@@ -24,8 +24,9 @@
       ones the loop no longer takes as settings: analytical, simulation, records). */
   var FLOW_BOXES = ["validate", "orchestrate", "plan", "dse", "generate", "test", "critique", "calibrate",
                     "select", "feedback", "knowledge"];
+  /** flux_loop.document BUILTIN_SUBS, the same list (a test compares them, D912). */
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                      "prompt", "prompt_file", "point"];
+                      "prompt", "prompt_file", "point", "params", "history", "state", "parts"];
 
   function agentChoices(what) {
     return AGENTS.map(function (a) {
@@ -310,9 +311,13 @@
     return v;
   }
 
-  function fillText(text, t, row, auto) {
-    return String(text).replace(/\{([A-Za-z_]\w*)\}/g, function (m, name) {
-      return t.params && Object.prototype.hasOwnProperty.call(t.params, name) ? paramValue(t, name, (row.params || {})[name], auto) : m;
+  function fillText(text, t, row, auto, argv) {
+    return String(text).replace(/\{([A-Za-z_]\w*)\}/g, function (m, name, at, all) {
+      if (!(t.params && Object.prototype.hasOwnProperty.call(t.params, name))) return m;
+      var v = paramValue(t, name, (row.params || {})[name], auto);
+      // D910: in a command, a value that is a whole word stays one argument ("{home}/my bench.py")
+      var whole = argv && !/\S/.test(all.charAt(at - 1) || " ") && !/\S/.test(all.charAt(at + m.length) || " ");
+      return whole && name !== "command" && /[\s'"\\]/.test(v) ? shellWord(v) : v;
     }).trim();
   }
 
@@ -321,7 +326,7 @@
     var t = toolOf(row.tool, cat);
     if (!t) return String((row.params || {}).command || "").trim();
     if (t.run === undefined || t.run === null) return "";
-    return fillText(t.run, t, row, auto);
+    return fillText(t.run, t, row, auto, true);
   }
 
   /** A catalog stage without `run` says its stage shape instead (e.g. `{evaluator: zigzag}`):
@@ -437,14 +442,58 @@
   /** A value typed in a box: a number or true/false when it reads as one, else the text. */
   function typed(v) {
     v = String(v).trim();
-    if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    if (/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(v)) return Number(v);
     if (v === "true" || v === "false") return v === "true";
     return v;
   }
 
   function scalar(v, flow) {
+    if (typeof v === "number" && /e/.test(String(v)) && !/\./.test(String(v))) return String(v).replace("e", ".0e");   // YAML 1.1's float (D910)
     if (typeof v === "number" || typeof v === "boolean") return String(v);
     return q(v, flow);
+  }
+
+  /** D910: a setting's choices as typed in its box -- separated by commas, a "quoted" choice
+      kept as text (so "01", "true" and "fast,wide" stay strings), the rest read as typed. */
+  function choicesOf(text) {
+    var out = [], re = /\s*("(?:[^"\\]|\\.)*"|[^,]*)\s*(,|$)/g, m, src = String(text || "");
+    while ((m = re.exec(src))) {
+      var tok = m[1];
+      if (/^".*"$/.test(tok)) { try { out.push(JSON.parse(tok)); } catch (e) { out.push(tok); } }
+      else if (tok.trim()) out.push(typed(tok));
+      if (!m[2] || re.lastIndex >= src.length) break;
+    }
+    return out;
+  }
+  /** A choice as its box shows it: quoted when, typed bare, it would read back as another value. */
+  function choiceText(v) {
+    if (typeof v !== "string") return String(v);
+    return v === "" || typed(v) !== v || /[,"]/.test(v) || v !== v.trim() ? JSON.stringify(v) : v;
+  }
+
+  /** D910: a command split as `shlex.split` splits it (the loader's reading of a string). */
+  function shellSplit(cmd) {
+    var out = [], cur = null, s = String(cmd || ""), c, i, j;
+    for (i = 0; i < s.length; i++) {
+      c = s.charAt(i);
+      if (/\s/.test(c)) { if (cur !== null) { out.push(cur); cur = null; } continue; }
+      cur = cur || "";
+      if (c === "'") { j = s.indexOf("'", i + 1); if (j < 0) j = s.length; cur += s.slice(i + 1, j); i = j; }
+      else if (c === '"') {
+        for (i++; i < s.length && s.charAt(i) !== '"'; i++) {
+          if (s.charAt(i) === "\\" && /["\\$`]/.test(s.charAt(i + 1))) i++;
+          cur += s.charAt(i);
+        }
+      } else if (c === "\\" && i + 1 < s.length) cur += s.charAt(++i);
+      else cur += c;
+    }
+    if (cur !== null) out.push(cur);
+    return out;
+  }
+
+  /** The files beside the document a command names, `{home}/...` words (D912: one word each, spaces and all). */
+  function homeFiles(cmd) {
+    return shellSplit(cmd).map(function (w) { var m = /^\{home\}\/(.+)$/.exec(w); return m ? m[1] : null; }).filter(Boolean);
   }
 
   function list(text) {
@@ -504,7 +553,7 @@
   }
 
   function knobNames(state) {
-    return (state.space || []).filter(function (r) { return String(r.knob || "").trim() && list(r.choices).length; })
+    return (state.space || []).filter(function (r) { return String(r.knob || "").trim() && choicesOf(r.choices).length; })
       .map(function (r) { return r.knob.trim(); });
   }
 
@@ -536,7 +585,7 @@
       if (shape) { write = true; if ("needs" in shape) needs = []; }       // the shape says its own needs
       if (t && !custom && t.document) {
         var d = fillShape(t.document, t, st, auto);
-        for (var key in d) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
+        for (var key in d) if ((state.kept || []).indexOf(key) < 0) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
       }
       return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
                metrics: write ? rep : [], needs: needs, gates: gates, estimate: estimateOf(st),
@@ -635,11 +684,11 @@
 
     // dse: its policy or agent, the space it searches, where it starts
     var dv = boxesKept ? boxVal("dse") : toSurface("dse", boxVal("dse")), D = [];
-    var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && list(x.choices).length; });
+    var space = (state.space || []).filter(function (x) { return String(x.knob || "").trim() && choicesOf(x.choices).length; });
     if (!own("flow.dse.space")) { if (kf["flow.dse.space"] !== undefined) D.push("    space: " + inline(kf["flow.dse.space"], false)); }
     else if (space.length) {
       D.push("    space:");
-      space.forEach(function (x) { D.push("      " + q(x.knob.trim()) + ": " + flowSeq(list(x.choices).map(typed))); });
+      space.forEach(function (x) { D.push("      " + q(x.knob.trim()) + ": " + flowSeq(choicesOf(x.choices))); });
     }
     if (kf["flow.dse.seeds"] !== undefined) D.push("    seeds: " + inline(kf["flow.dse.seeds"], false));
     if (D.length) {
@@ -722,18 +771,38 @@
     return out;
   }
 
-  /** What is wrong or missing, as `{level: "error"|"warning"|"note", text}`, plain words. */
+  /** The files beside the document the state names (`{home}/...` words, knowledge files), in order (D912). */
+  function namedFiles(state, cat) {
+    var r = resolve(state, cat || CATALOG), files = [];
+    function add(f) { if (f && files.indexOf(f) < 0) files.push(f); }
+    function cmd(c) { homeFiles(c).forEach(add); }
+    r.checks.forEach(function (c) { cmd(c.run); });
+    r.stages.forEach(function (st) { if (!st.shape) cmd(st.command); if (st.estimate && st.estimate.command) cmd(st.estimate.command); });
+    if ((state.flow || {}).generate === "command") cmd(state.generateCommand);
+    for (var dkey in r.document) r.document[dkey].forEach(function (x) {
+      var m = /^\{home\}\/(.+)$/.exec(typeof x.value === "string" ? x.value : ""); if (m) add(m[1]);
+    });
+    list(state.knowledgeFiles).forEach(add);
+    return files;
+  }
+
+  /** The step of the web's wizard each part of the state is edited on (D912). */
+  var STEP_OF = { problem: 0, checks: 1, measurements: 2, objectives: 3, flow: 4, more: 5 };
+
+  /** What is wrong or missing, as `{level: "error"|"warning"|"note", text, step, field}`, plain
+      words; `step`: the wizard's step that fixes it, `field`: the box at fault (D912). */
   function check(state, cat) {
     cat = cat || CATALOG;
-    var msgs = [];
-    function error(t) { msgs.push({ level: "error", text: t }); }
-    function warn(t) { msgs.push({ level: "warning", text: t }); }
-    function note(t) { msgs.push({ level: "note", text: t }); }
+    var msgs = [], at = STEP_OF.problem;
+    function say(level, t, field) { var m = { level: level, text: t, step: at }; if (field) m.field = field; msgs.push(m); }
+    function error(t, field) { say("error", t, field); }
+    function warn(t) { say("warning", t); }
+    function note(t) { say("note", t); }
     var id = String(state.id || "").trim(), lang = language(state, true);
     var r = resolve(state, cat), flow = state.flow || {}, knobs = knobNames(state);
-    if (!id) error("Give the problem a name (letters, digits and _).");
-    else if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(id)) error("The name \"" + id + "\" should be a letter, then letters, digits or _.");
-    if (!String(state.statement || "").trim()) error("Say what you want made (the statement is empty).");
+    if (!id) error("Give the problem a name (letters, digits and _).", "id");
+    else if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(id)) error("The name \"" + id + "\" should be a letter, then letters, digits or _.", "id");
+    if (!String(state.statement || "").trim()) error("Say what you want made (the statement is empty).", "statement");
     var implied = impliedLanguage(state, cat);
     if (!lang && !implied) note("The language is not said and no chosen tool tells it: the design is a .txt file -- choose one if the checks need another kind.");
     if (!lang) lang = implied;                         // D832: what the loader will take
@@ -750,6 +819,7 @@
     }
 
     // the checks
+    at = STEP_OF.checks;
     var kept = state.kept || [];
     if (!r.checks.length && kept.indexOf("flow.test") < 0) error("Add a check: a design that fails it goes no further.");
     var seen = {};
@@ -777,6 +847,7 @@
     });
 
     // the measurements
+    at = STEP_OF.measurements;
     if (!r.stages.length && kept.indexOf("flow.measure") < 0) error("Add a measurement: designs are compared on what it reports.");
     seen = {};
     var all = reported(state, cat);
@@ -820,6 +891,7 @@
     }
 
     // the objective
+    at = STEP_OF.objectives;
     if (!r.objectives.length && kept.indexOf("objectives") < 0) error("Add an objective: which reported numbers matter, and how.");
     var metricsSeen = {}, balanced = 0;
     (state.objectives || []).forEach(function (o, i) {
@@ -839,6 +911,7 @@
     if (balanced === 1) warn("Balance needs two numbers or more: one alone is just maximise or minimise.");
 
     // the flow
+    at = STEP_OF.flow;
     FLOW_BOXES.forEach(function (b) {
       var v = flow[b];
       if (typeof v === "string" && v.indexOf("agent:") === 0 && DELEGABLE.indexOf(b) < 0 && b !== "generate" && b !== "knowledge" && b !== "digest") {
@@ -848,46 +921,44 @@
       }
     });
 
+    at = STEP_OF.more;
     (state.space || []).forEach(function (x) {
-      if (String(x.knob || "").trim() && !list(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
+      if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
     var searching = flow.dse && flow.dse !== "none";
+    if (searching && !knobs.length) error("A search needs settings to walk: add some under More > Settings to search.");
+    at = STEP_OF.flow;
     if (flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
-    if (searching && !knobs.length) error("A search needs settings to walk: add some under Advanced > Settings to search.");
     if (!searching && knobs.length) warn("The settings are only searched when \"Search the settings\" is on.");
     if (searching && flow.orchestrate && flow.orchestrate !== "default") warn("With a search, the search picks the next job; \"Pick the next job\" is left out.");
     if (flow.generate === "command" && !String(state.generateCommand || "").trim()) error("Say the command that writes each design.");
 
-    var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run]; });
+    var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run, STEP_OF.checks]; });
     r.stages.forEach(function (st) {
-      cmds.push(["measurement \"" + st.name + "\"", st.shape ? JSON.stringify(st.shape).replace(/[",:{}\[\]]/g, " ") : st.command]);
-      if (st.estimate && st.estimate.command) cmds.push(["the estimate of \"" + st.name + "\"", st.estimate.command]);
+      cmds.push(["measurement \"" + st.name + "\"", st.shape ? JSON.stringify(st.shape).replace(/[",:{}\[\]]/g, " ") : st.command, STEP_OF.measurements]);
+      if (st.estimate && st.estimate.command) cmds.push(["the estimate of \"" + st.name + "\"", st.estimate.command, STEP_OF.measurements]);
     });
-    if (flow.generate === "command") cmds.push(["the design script", state.generateCommand]);
+    if (flow.generate === "command") cmds.push(["the design script", state.generateCommand, STEP_OF.flow]);
+    var knobsSaid = false;
     cmds.forEach(function (c) {
+      at = c[2];
       placeholders(c[1]).forEach(function (p) {
+        if (knobs.indexOf(p) >= 0 || p === "point") knobsSaid = true;
         if (BUILTIN_SUBS.indexOf(p) < 0 && knobs.indexOf(p) < 0) error("In " + c[0] + ", {" + p + "} is neither a setting to search nor one of Flux's own.");
       });
     });
 
+    at = STEP_OF.more;
     ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers"].forEach(function (key) {
       var v = String((state.budget || {})[key] || "").trim();
       if (v && !/^\d+$/.test(v)) error("Budget \"" + key + "\" should be a whole number.");
     });
 
+    at = STEP_OF.flow;
     var agents = {};
     flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== "agent:custom") agents[flow[b].slice(6)] = 1; });
     if (Object.keys(agents).length) note("The coding agent " + Object.keys(agents).join(", ") + " must be installed where it runs.");
-    var files = {};
-    cmds.forEach(function (c) {
-      var re = /\{home\}\/([\w.\-\/]+)/g, m;
-      while ((m = re.exec(String(c[1] || "")))) files[m[1]] = 1;
-    });
-    for (var dkey in r.document) r.document[dkey].forEach(function (x) {
-      var m2 = /^\{home\}\/([\w.\-\/]+)$/.exec(String(x.value)); if (m2) files[m2[1]] = 1;
-    });
-    list(state.knowledgeFiles).forEach(function (f) { files[f] = 1; });
-    var fl = Object.keys(files);
+    var fl = namedFiles(state, cat);
     if (fl.length) note("Put these beside the document: " + fl.join(", ") + ".");
     return msgs;
   }
@@ -1120,9 +1191,11 @@
     // space: knob -> choices
     var sp = raw.space;
     if (sp && typeof sp === "object" && !Array.isArray(sp)) {
-      var plain = Object.keys(sp).every(function (k) { return Array.isArray(sp[k]); });
-      if (plain) s.space = Object.keys(sp).map(function (k) { return { knob: k, choices: sp[k].join(", ") }; });
-      else keep("space", "knobs that move with others (`when`)");
+      var plain = Object.keys(sp).every(function (k) {          // D910: plain values, each its type kept
+        return Array.isArray(sp[k]) && sp[k].every(function (v) { return ["string", "number", "boolean"].indexOf(typeof v) >= 0; });
+      });
+      if (plain) s.space = Object.keys(sp).map(function (k) { return { knob: k, choices: sp[k].map(choiceText).join(", ") }; });
+      else keep("space", "knobs that move with others (`when`), or choices that are not plain values");
     }
 
     // flow: each box as one of its choices
@@ -1190,6 +1263,12 @@
         // D880: a document that reads more numbers than its tool's entry reports keeps them all --
         // matched to the tool, the stage's other metrics were dropped on the way back
         if (m && (st.metrics || []).some(function (x) { return !(m.tool.metrics && x in m.tool.metrics); })) m = null;
+        // D910: likewise a `needs` of its own: matched to the tool, the requirement was dropped
+        if (m && said.needs !== undefined) {
+          var own = /^flux rtl\s/.test(fillRun({ tool: m.tool.id, params: m.params }, cat)) ? [] : (m.tool.needs || []);
+          var saidNeeds = Array.isArray(said.needs) ? said.needs : [said.needs];
+          if (JSON.stringify(saidNeeds) !== JSON.stringify(own)) m = null;
+        }
         if (m) row = { tool: m.tool.id, name: st.name, params: paramsOf(m.tool, m.params), metrics: "", needs: "", gates: [] };
         else row = { tool: "custom-stage", name: st.name, params: { command: argv.map(shellWord).join(" ") },
                      metrics: (st.metrics || []).join(", "), needs: (st.needs || []).join(", "), gates: [] };
@@ -1199,7 +1278,9 @@
         var p = {};
         for (var dk in ev.document || {}) {
           var mm = /^\{([A-Za-z_]\w*)\}$/.exec(String(ev.document[dk]));
-          if (mm && raw[dk] !== undefined) p[mm[1]] = shown(String(raw[dk]));
+          if (mm && typeof raw[dk] === "string") p[mm[1]] = shown(raw[dk]);
+          // D910: an inline value (a Workload IR mapping) is no file name: kept as written, never "[object Object]"
+          else if (mm && raw[dk] !== undefined && raw[dk] !== null) keep(dk, "an inline value, which the form names as a file");
         }
         row = { tool: ev.id, name: st.name, params: paramsOf(ev, p), metrics: "", needs: "", gates: [] };
       } else { stagesOk = false; return; }                         // measured by the world's own code
@@ -1262,7 +1343,8 @@
               CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
-              explain: explain, explainEstimate: explainEstimate };
+              explain: explain, explainEstimate: explainEstimate, choicesOf: choicesOf, choiceText: choiceText, shellSplit: shellSplit,
+              namedFiles: namedFiles, BUILTIN_SUBS: BUILTIN_SUBS, STEP_OF: STEP_OF };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof document === "undefined") return;
@@ -1872,7 +1954,7 @@
           field("Setting", function () { return r.knob; }, function (v) { r.knob = v; },
                 { compact: true, placeholder: "block", hint: "Its name; {name} in a command is the value tried" }),
           field("Its choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
-                { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas" }),
+                { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas; a \"quoted\" choice stays text (\"01\", \"a,b\")" }),
           h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "fc-small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
