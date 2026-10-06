@@ -143,7 +143,8 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
     // D924: three states apart -- installation, connection (how, from where; never a value), verification
     const panelOf = (a) => {
       const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
-      const ver = a.testing ? ["live", "testing…"] : VERIFIED[v.state] || VERIFIED.untested;
+      const ver = a.testing ? ["live", "testing…"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by the admin for everyone)"]   // D935
+        : VERIFIED[v.state] || VERIFIED.untested;
       const line = (dt, ...dd) => [h("dt", {}, dt), h("dd", {}, ...dd)];
       const loops = (a.loops || []).map(x => h("li", {}, h("span", { class: "mono" }, x.loop), " ",
         h("span", { class: `pill ${(VERIFIED[x.state] || VERIFIED.untested)[0]}` }, (VERIFIED[x.state] || VERIFIED.untested)[1]), " ",

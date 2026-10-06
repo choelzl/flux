@@ -578,7 +578,7 @@ async function adminAgents(body) {
     const creds = h("textarea", { id: `ag-${a.id}-creds`, rows: 1, class: "mono", placeholder: "its usual; e.g. .local/share/nga/auth.json", value: lines(a.login_files) });
     const ready = a.users.filter(u => u.state === "ready").map(u => u.user), failed = a.users.filter(u => u.state === "failed").map(u => u.user);
     const changed = a.users.filter(u => u.state === "changed since its test").map(u => u.user);
-    const c = a.connection || { mechanism: "none", said: "" };
+    const c = a.connection || { mechanism: "none", said: "" }, st = a.server_test || { state: "untested" };
     const body_ = () => ({ label: label.value, bin: bin.value, login: login.value, args: args.value, home: list(home), hosts: list(hosts), login_files: list(creds) });
     let first = JSON.stringify(body_());
     const mark = saveMark();
@@ -602,6 +602,18 @@ async function adminAgents(body) {
       h("dl", { class: "agent-states" }, h("dt", {}, "Connection"),
         h("dd", {}, h("span", { class: `pill ${c.mechanism === "none" ? "" : "ok"}` }, c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism),
           h("span", { class: "muted small" }, c.mechanism === "none" ? "no key or provider for every user: each logs in or sets a key on their Account" : c.said)),
+        // D935: the admin's Test of this configuration counts for every user who inherits it
+        ...(c.mechanism === "none" || !a.found ? [] : [h("dt", {}, "Verification"), h("dd", { class: "agent-server-test" },
+          h("span", { class: `pill ${(VERIFIED[st.state] || VERIFIED.untested)[0]}` }, (VERIFIED[st.state] || VERIFIED.untested)[1]),
+          h("span", { class: "muted small" }, !st.shared ? "each user's own login: each tests it on their Account"
+            : st.state === "ready" ? `for everyone without settings of their own · ${when(st.when)}` : "a passed Test counts for everyone without settings of their own"),
+          st.state === "failed" && st.said ? h("span", { class: "bad small" }, st.said) : "",
+          act("Test connection", async () => {
+            toast(`Testing ${a.label}'s server configuration: it is asked one short question…`, "info");
+            const got = await api(`/admin/agents/${a.id}/test`, { method: "POST" });
+            toast(got.ok ? `${a.label} is ready${got.shared ? " for everyone who inherits it" : ""}` : `${a.label} is not ready: ${((got.steps || []).find(x => !x.ok) || {}).said || "see its steps"}`, got.ok ? "ok" : "warn");
+            route();
+          }, { cls: "small", title: "Ask it one short question with the server's configuration -- no one's own settings" }))]),
         ...((a.conflicts || []).length || (a.unused || []).length ? [h("dt", {}, "Said"), h("dd", {}, h("ul", { class: "small hint-line agent-notes" },
           [...(a.conflicts || []), ...(a.unused || [])].map(x => h("li", {}, x))))] : [])),
       h("div", { class: "grid-2 set-fields" },

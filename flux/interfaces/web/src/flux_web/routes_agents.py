@@ -40,6 +40,26 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def agent_test_of(user: User, agent: str, loop: str | None = None) -> dict[str, Any]:
         return store.server_get(_test_key(user, agent, loop)) or {}
 
+    # D935: the admin's Test of the server's own configuration -- what a user with no settings of
+    # their own for the agent runs -- counts for everyone who inherits exactly that configuration
+    def _server_test_key(agent: str) -> str:
+        return f"agent-test-server:{agent}"
+
+    def server_test_of(agent: str) -> dict[str, Any]:
+        return store.server_get(_server_test_key(agent)) or {}
+
+    def as_server(user: User) -> User:
+        """`user`'s home, nobody's settings or variables: the server's configuration as a user
+        without their own gets it (D935; no user has id 0)."""
+        return User(0, user.name, "user", False)
+
+    def shared_config(eff: Any) -> bool:
+        """Whether a configuration is the same for everyone (D935): an endpoint or a credential the
+        server gives -- not each user's own login in their home, which one Test cannot speak for."""
+        from flux_loop.agent_env import CREDENTIALS
+
+        return bool(eff is not None and set(eff.fields) & {"endpoint", *CREDENTIALS})
+
     def context(user: User, loop: str | None = None) -> tuple[dict[str, str], dict[str, Any]]:
         """(the environment of `user`'s runs in `loop`, each agent's resolved configuration)."""
         views: dict[str, Any] = {}
@@ -65,9 +85,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         tests = [t for t in (agent_test_of(user, agent, loop) if loop else {}, agent_test_of(user, agent)) if t]
         if current is None and any(t.get("identity") for t in tests):
             current = effective(user, agent, loop)[2]
+        srv = server_test_of(agent)
+        if current is None and srv.get("ok") and srv.get("shared"):
+            current = effective(user, agent, loop)[2]
         same = [t for t in tests if not t.get("identity") or t["identity"] == current]
         if any(t.get("ok") for t in same):
             return {"state": "ready", "test": next(t for t in same if t.get("ok"))}
+        if srv.get("ok") and srv.get("shared") and srv.get("identity") and srv["identity"] == current \
+                and not (user and user.external):
+            return {"state": "ready", "test": srv, "by": "admin"}      # D935: the admin's Test, for everyone who inherits it
         if same:
             return {"state": "failed", "test": same[0]}
         if tests:
@@ -104,17 +130,20 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     testing: set[tuple[str, str]] = set()
     testing_lock = threading.Lock()
 
-    def run_agent_test(user: User, agent: str, why: str = "", loop: str | None = None) -> dict[str, Any]:
+    def run_agent_test(user: User, agent: str, why: str = "", loop: str | None = None, server: bool = False) -> dict[str, Any]:
         """`flux agent test <agent> --live`, sandboxed as the user's runs are: their home, their
         settings, the network rules. Its result is kept: a passed test enables the agent (D751).
         D923: `loop` -- in that loop's context (its variables); the result carries the identity of
-        the configuration it tested."""
+        the configuration it tested. D935: `server` -- an admin's Test of the server's own
+        configuration (no one's settings), kept for everyone who inherits it."""
         with testing_lock:
             testing.add((user.name, agent))
         try:
             home_ready(store, user)
-            c = context(user, loop)
-            base, ident = c[0], effective(user, agent, loop, c)[2]
+            who = as_server(user) if server else user
+            c = context(who, loop)
+            _mine, eff, ident = effective(who, agent, loop, c)
+            base = c[0]
             env = {**base, "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
                    "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
             sandbox_env(env, sandbox, {})
@@ -131,6 +160,12 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
             got["when"] = time.time()
             got["identity"], got["loop"] = ident, loop or ""
+            if server:
+                got["shared"], got["by"] = shared_config(eff), user.name
+                store.server_set(_server_test_key(agent), got)
+                store.audit(user.name, "agent test", f"{agent}, the server's configuration: {'ready' if got['ok'] else 'not ready'}"
+                            + ("" if got["shared"] else " (each user's own login: counts for nobody else)"))
+                return got
             store.server_set(_test_key(user, agent, loop), got)
             store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}{f' ({why})' if why else ''}")
             return got
@@ -207,7 +242,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def _state(user: User, agent: str, loop: str | None, ident: str) -> dict[str, Any]:
         v = verified(user, agent, loop, ident)
         t = v["test"]
-        return {"state": v["state"], "when": t.get("when"), "said": next((s["said"] for s in t.get("steps") or [] if not s.get("ok")), "")}
+        return {"state": v["state"], "when": t.get("when"), "said": next((s["said"] for s in t.get("steps") or [] if not s.get("ok")), ""),
+                "by": v.get("by", "")}
+
+    @app.post("/api/admin/agents/{agent}/test")
+    def test_server_agent(agent: str, a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D935: the admin tests the server's configuration of `agent` once, for everyone who has
+        no settings of their own for it."""
+        offered(agent)
+        return run_agent_test(a, agent, why="the server's configuration", server=True)
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
@@ -360,6 +403,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         server = store.server_settings(reveal=True)
         every = {"global": {n: x["value"] for n, x in store.env("global", reveal=True).items()}}
         word = {"ready": "ready", "failed": "failed", "changed": "changed since its test", "untested": "not tested"}
+        sctx = None
         for name, a in reg.items():
             prog, ver = seen[name]
             users = []
@@ -367,15 +411,25 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 t = agent_test_of(u, name)
                 v = verified(u, name, None, effective(u, name, None, envs[u.name])[2]) if u.name in envs and prog else \
                     {"state": "ready" if t.get("ok") else "failed" if t.get("when") else "untested", "test": t}
-                users.append({"user": u.name, "kind": u.role, "state": word[v["state"]], "when": v["test"].get("when")})
+                users.append({"user": u.name, "kind": u.role, "state": word[v["state"]], "when": v["test"].get("when"),
+                              "by": v.get("by", "")})
             # D924: the server's own connection for it -- what every user without settings of their own gets (no values)
             own, eff = run_settings(a, *agent_scopes(store, None, a, dict(os.environ), server, {}, None, every), tuple(reg))
             conn = connection(a.kind, eff.apply({**os.environ, **own}), eff, [])
+            # D935: the admin's Test of it, against the server's configuration as it is now
+            st = server_test_of(name)
+            if prog and st and sctx is None:
+                sctx = context(as_server(_a))
+            sident = effective(as_server(_a), name, None, sctx)[2] if prog and st else ""
+            stest = {"state": "untested" if not st else "changed" if st.get("identity") != sident
+                     else "ready" if st.get("ok") else "failed", "when": st.get("when"), "shared": shared_config(eff),
+                     "said": next((x["said"] for x in st.get("steps") or [] if not x.get("ok")), ""),
+                     "testing": (_a.name, name) in testing}
             out.append({"id": name, "kind": a.kind, "builtin": a.builtin, "label": a.label, "bin": a.bin, "login": a.login,
                         "login_default": KINDS[a.kind]["login"], "args": a.args, "home": a.home, "hosts": a.hosts,
                         "login_files": a.login_files, "found": prog, "version": ver, "users": users,
                         "connection": conn, "fields": {f: {"source": x["source"], "name": x["name"]} for f, x in eff.fields.items()},
-                        "conflicts": eff.conflicts, "unused": eff.unused})
+                        "conflicts": eff.conflicts, "unused": eff.unused, "server_test": stest})
         return {"agents": out, "kinds": [{"id": k, "label": v["label"]} for k, v in KINDS.items()]}
 
     @app.post("/api/admin/agents")
@@ -405,6 +459,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         for u in store.users():
             store.server_set(f"env:agent:{agent}:user:{u.id}", None)
             store.server_set(f"agent-test:{u.name}:{agent}", None)
+        store.server_set(_server_test_key(agent), None)            # D935
         cfg = store.server_get("agents") or {}
         cfg.pop(agent, None)
         store.server_set("agents", cfg or None)
