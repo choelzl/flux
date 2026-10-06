@@ -85,14 +85,21 @@ function resultsView(ctx, r) {
       return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })) * sortDir;
     });
   }
+  // D929: a header sorts through a real button (Tab, Enter) and says its order (aria-sort); the
+  // focus stays on it as the table is drawn again
+  let sortFocus = null;
   const th = (key, label, extra = {}, ...more) => h("th", { ...extra, class: `sortable ${extra.class || ""}${sortKey === key ? " sorted" : ""}`,
-    onclick: () => { if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; } drawTable(); } },
-    label, sortKey === key ? h("span", { class: "arrow" }, sortDir > 0 ? " ▲" : " ▼") : "", ...more);
+    "aria-sort": sortKey === key ? (sortDir > 0 ? "ascending" : "descending") : "none", "data-label": label },
+    h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, onclick: () => {
+      if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; }
+      sortFocus = key; drawTable();
+    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? " ▴" : " ▾") : "")), ...more);
   function drawTable() {
     const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
     const shown = all.slice(0, pageN);
     const boxes = new Map();
-    const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", checked: picked.some(p => keyOf(p) === keyOf(d)),
+    const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", "aria-label": `Compare ${d.name}`, checked: picked.some(p => keyOf(p) === keyOf(d)),
+      onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); box.click(); } },      // D929: Enter ticks it too
       onclick: (e) => {
         e.stopPropagation();
         if (box.checked) {
@@ -112,12 +119,15 @@ function resultsView(ctx, r) {
         th("when", "When"))),
       h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
         tick(d),
-        h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "", d.name, d.part ? h("div", { class: "muted small" }, d.part) : ""),
+        h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
+          h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`,          // D929: the keyboard opens it too
+            onclick: (e) => { e.stopPropagation(); open(d, tr); } }, d.name), d.part ? h("div", { class: "muted small" }, d.part) : ""),
         h("td", {}, verdictPill(d)),
         h("td", { class: "muted" }, d.shown),
         ...r.metrics.map(m => { const v = d.numbers[m]; const ok = d.meets[m];
           return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", {}, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
         h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; }))), more) : empty("No design matches."));
+    if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });

@@ -69,7 +69,8 @@ async function agentsView(ctx) {
     card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
         h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", { class: "num", title: "tool calls" }, "Tools"), h("th", {}, ""))),
       h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
-        h("td", {}, h("span", { class: "strong" }, t.agent || t.model || t.kind),
+        h("td", {}, h("button", { type: "button", class: "link strong open-turn", onclick: (e) => { e.stopPropagation(); pick(t, tr); } },   // D929: Tab, Enter
+            t.agent || t.model || t.kind),
           h("div", { class: "muted small" }, [t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed" : ""].filter(Boolean).join(" · "))),
         h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
         h("td", { class: "num mono muted" }, tokOf(t)), h("td", { class: "num mono muted" }, t.tool_calls != null ? String(t.tool_calls) : t.hops ? String(t.hops) : ""),

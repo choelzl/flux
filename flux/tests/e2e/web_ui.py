@@ -886,6 +886,77 @@ def flows(r: Run) -> None:
         r.api("/apps/slow", "DELETE")                               # not left for the steps after
     r.step("a killed run", killed_run)
 
+    def keyboard_journey():
+        """D929: Tab and Enter alone -- a Results header sorts (a button, aria-sort), a result opens its
+        design and source, two are ticked and compared; a Live branch opens and folds (a button,
+        aria-expanded), the focus kept through the redraw; an agent's turn opens from its row."""
+        r.login("bob")
+
+        def tab_to(cond, what, back=False, limit=400):
+            for _ in range(limit):
+                if back:
+                    b.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": [
+                        {"type": "keyDown", "value": b.SHIFT}, {"type": "keyDown", "value": b.TAB}, {"type": "keyUp", "value": b.TAB}, {"type": "keyUp", "value": b.SHIFT}]}]})
+                    b.cmd("WebDriver:ReleaseActions", {})
+                else:
+                    b.keys(b.TAB)
+                if b.js(f"const a = document.activeElement; return !!a && ({cond});"):
+                    return True
+            raise AssertionError(f"Tab never reached {what}")
+        r.page("#/app/sw/results", "document.querySelectorAll('#main table.designs tbody tr').length >= 2", "Results")
+        b.js("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); return 1")
+        metric = b.js("return document.querySelector('#main table.designs th button.th-sort[data-key]:not([data-key=name]):not([data-key=verdict]):not([data-key=stage])').dataset.key")
+        tab_to(f"a.matches('button.th-sort') && a.dataset.key === {json.dumps(metric)}", f"the {metric} header")
+        b.keys(b.ENTER)
+        got = b.js(f"""const a = document.activeElement; return [a.matches('button.th-sort') && a.dataset.key === {json.dumps(metric)},
+            a.closest('th').getAttribute('aria-sort'), document.querySelectorAll('#main table.designs th[aria-sort=none]').length > 0]""")
+        r.check("keyboard: Enter on a Results header sorts it, aria-sort said, the focus kept (D929)", got == [True, "descending", True], str(got))
+        tab_to("a.matches('button.open-design')", "a result's open button")
+        name = b.js("return document.activeElement.textContent")
+        b.keys(b.ENTER)
+        b.wait(f"(() => {{ const d = document.querySelector('#main .detail'); return d && d.querySelector('h2') && d.querySelector('h2').textContent === {json.dumps(name)}"
+               " && [...d.querySelectorAll('h3')].some(x => x.textContent === 'Design'); })()", timeout=15, what="the design opened, its source shown")
+        r.check("keyboard: Enter on a result opens its design and source (D929)", True)
+        for n in (1, 2):
+            tab_to("a.matches('#main table.designs tbody input[type=checkbox]') && !a.checked", f"compare box {n}")
+            b.keys(b.ENTER)
+        r.check("keyboard: Enter ticks two results to compare (D929)", b.js("return document.querySelectorAll('#main table.designs tbody input:checked').length") == 2)
+        tab_to("a.matches('button') && a.textContent === 'Compare 2/2'", "the Compare button", back=True)
+        b.keys(b.ENTER)
+        said = b.wait("document.querySelector('dialog.dlg[open]') && [...document.querySelectorAll('dialog.dlg[open] h3')].map(x => x.textContent).join('|')",
+                      timeout=15, what="the comparison")
+        r.check("keyboard: Enter on Compare shows the two compared, their source (D929)", said.startswith("Source"), said)
+        b.keys(b.ENTER)                                         # the dialog's Close has the focus
+        b.wait("!document.querySelector('dialog.dlg[open]')", timeout=5, what="the comparison closed by Enter")
+        # Live: a branch is a button that says whether it is open
+        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
+        r.page("#/app/sw/live", "document.querySelector('.tree button.node.branch[aria-expanded]')", "Live's tree")
+        b.js("document.activeElement && document.activeElement.blur(); return 1")
+        tab_to("a.matches('.tree button.node.branch[aria-expanded]')", "a branch of the tree")
+        key, was = b.js("return [document.activeElement.dataset.key, document.activeElement.getAttribute('aria-expanded')]")
+        b.keys(b.ENTER)
+        now = b.js("const a = document.activeElement; return [a.dataset.key, a.getAttribute('aria-expanded')]")
+        b.keys(b.ENTER)
+        back = b.js("const a = document.activeElement; return [a.dataset.key, a.getAttribute('aria-expanded')]")
+        r.check("keyboard: Enter opens and folds a Live branch, aria-expanded said, the focus kept (D929)",
+                now == [key, "true" if was == "false" else "false"] and back == [key, was], f"{key} {was} {now} {back}")
+        # Agents: a turn opens from its row's button (the sweep has no agent: its turns stood in for)
+        turn = json.dumps({"turns": [{"k": 1, "agent": "opencode", "kind": "agent", "ts": time.time() - 60, "seconds": 3, "ok": True, "prompt": "write it"}]})
+        b.js("const real = window.fetch.bind(window), body = arguments[0];"
+             " window.fetch = (u, o) => String(u).startsWith('/api/apps/sw/turns') ? Promise.resolve(new Response(body, {status: 200,"
+             " headers: {'Content-Type': 'application/json'}})) : real(u, o); return 1", turn)
+        r.page("#/app/sw/agents", "document.querySelector('#main button.open-turn')", "Agents, a turn stood in for")
+        b.js("document.activeElement && document.activeElement.blur(); return 1")
+        tab_to("a.matches('button.open-turn')", "a turn's button")
+        b.keys(b.ENTER)
+        b.wait("(document.querySelector('#main .detail h2') || {}).textContent === 'opencode'", timeout=15, what="the turn opened")
+        r.check("keyboard: Enter on a turn's button opens it (D929)", True)
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-keys={time.time()}#/"})   # a reload: the real fetch again
+        b.wait("document.querySelector('#main')", timeout=20)
+        b.js(WATCH)
+        r.clean("keyboard journey")
+    r.step("keyboard journey", keyboard_journey)
+
     def graphs():
         """D914-D916 on a loop of parts, its results stood in for in the page (the fetch answered with
         GRAPHS_RESULTS): a design failing a requirement off its axes is never the best, no feasible front

@@ -727,6 +727,10 @@ body:has(.composer) .toasts { bottom: 150px; }
 /* D739: the loop tree -- a start's branches (setup, passes or parts, the end) and the crafter's boxes as leaves */
 .tree .node.branch .nm { font-family: var(--sans, inherit); font-weight: 600; }
 .tree .node.branch { cursor: pointer; }
+/* D929: a branch is a button that looks like the tree's row */
+.tree button.node { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: inherit; line-height: inherit; color: inherit; text-align: left; min-height: 0; margin: 0; }
+.tree button.node:hover { background: var(--soft); }
+.tree .node:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tree .node.leaf { cursor: pointer; }
 .tree .node.leaf:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tree .node.leaf .nm { font-family: var(--sans, inherit); }

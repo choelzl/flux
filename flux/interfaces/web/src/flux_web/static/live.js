@@ -266,7 +266,7 @@ function liveTree(base, qs, onQuestion, stream) {
         const latest = it.tasks.reduce((a, x) => (x.t0 >= a.t0 ? x : a));
         const pick = () => { selected = focusOf(latest); selLeafKey = it.key; follow.checked = false; draw(); };
         return h("div", { class: "tnode" },
-          h("div", { class: `node leaf ${state} box-${it.box}${it === leafSel ? " sel" : ""}${q && itemMatches(it, q) ? " hit" : ""}`, tabindex: "0", role: "button",
+          h("div", { class: `node leaf ${state} box-${it.box}${it === leafSel ? " sel" : ""}${q && itemMatches(it, q) ? " hit" : ""}`, tabindex: "0", role: "button", "data-key": it.key,
               onclick: pick, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } },
             h("span", { class: "caret" }, ""),
             h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
@@ -282,7 +282,9 @@ function liveTree(base, qs, onQuestion, stream) {
       const nFailed = ts.filter(t => failedBelow(t)).length - nStopped;
       const ended = [nFailed ? `${nFailed} failed` : "", nStopped ? `${nStopped} stopped` : ""].filter(Boolean).join(" · ");
       return h("div", { class: "tnode" },
-        h("div", { class: `node branch ${state}`, onclick: () => { if (it.earlier) { loadAll(); return; } open.set(it.key, !opened); draw(); },
+        // D929: a branch is a button (Tab, Enter) that says whether it is open
+        h("button", { type: "button", class: `node branch ${state}`, "data-key": it.key, "aria-expanded": it.earlier ? null : String(!!opened),
+            onclick: () => { if (it.earlier) { loadAll(); return; } open.set(it.key, !opened); draw(); },
             title: it.earlier ? "Load every pass of this start" : null },
           h("span", { class: "caret" }, opened ? "▾" : "▸"),
           h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
@@ -293,7 +295,9 @@ function liveTree(base, qs, onQuestion, stream) {
         opened ? h("div", { class: "kids" }, it.kids.map(k => row(k, /^Pass /.test(it.title) ? it.why.split(" · ")[0] : ""))) : "");
     };
     // D918: the saved journal still coming, or read whole and the run not begun
+    const had = treeBox.contains(document.activeElement) ? document.activeElement.dataset.key : null;
     treeBox.replaceChildren(...(items.length ? items.map(row) : [empty(loaded ? "Waiting for new events…" : "Loading saved tasks…")]));
+    if (had) { const el = treeBox.querySelector(`[data-key="${CSS.escape(had)}"]`); if (el) el.focus({ preventScroll: true }); }   // D929: the redraw keeps the focus
   }
   /** The leaf the detail belongs to, when it has several tasks (D739): each a line to open. */
   function leafOf(n) {
