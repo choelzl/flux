@@ -50,7 +50,7 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-
 _DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
-         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS",
+         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS", "FLUX_SANDBOX_MOUNTS",   # D936: the host side
          # D847: an agent's own folder on this machine (the ChatGPT extension sets CODEX_HOME=~/.codex):
          # not mounted inside, where the agent's login is in the Flux home
          "CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR")
@@ -74,6 +74,47 @@ CA_VARS = ("SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_
 #: the system bundle, by distribution: Debian/Ubuntu/Arch, RHEL/Fedora, SUSE, Alpine
 BUNDLES = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/ca-bundle.pem",
            "/etc/ssl/cert.pem")
+
+
+#: D936: system paths an admin's mount never is, on the host nor inside (nor a folder holding one)
+MOUNT_SYSTEM = ("/proc", "/sys", "/dev", "/etc", "/boot", "/run")
+
+
+def _under(p: str, root: str) -> bool:
+    root = root.rstrip("/") or "/"
+    return p == root or p.startswith(root + "/") or root == "/"
+
+
+def admin_mounts() -> list[tuple[str, str, str]]:
+    """The loop's admin mounts (D936): `FLUX_SANDBOX_MOUNTS`, JSON [{host, inside, mode}], set by
+    `flux serve` from the loop's Advanced settings (a user's variables never name FLUX_SANDBOX_*)."""
+    try:
+        rows = json.loads(os.environ.get("FLUX_SANDBOX_MOUNTS") or "[]")
+    except ValueError:
+        return []
+    out = []
+    for r in rows if isinstance(rows, list) else ():
+        if isinstance(r, dict) and isinstance(r.get("host"), str) and isinstance(r.get("inside"), str):
+            out.append((r["host"], r["inside"], "rw" if r.get("mode") == "rw" else "ro"))
+    return out
+
+
+def admin_mount_args(taken: list[str]) -> tuple[list[str], list[str]]:
+    """(`-v host:inside:ro|rw` for each admin mount, what the log says): one whose path inside is
+    the sandbox's own (`taken`: its mounts, HOME, /tmp), a system path, or whose host path is gone
+    is left out, said (D936)."""
+    args, said = [], []
+    for host, inside, mode in admin_mounts():
+        inside_n = os.path.normpath(inside)
+        why = ("its host path is not there" if not os.path.isabs(host) or not os.path.exists(host) else
+               "its path inside is not absolute" if not os.path.isabs(inside) or ":" in inside or ":" in host else
+               "its path inside is the sandbox's own" if inside_n == "/" or any(_under(inside_n, t) or _under(t, inside_n) for t in (*MOUNT_SYSTEM, *taken) if t) else "")
+        if why:
+            said.append(f"{host} -> {inside} left out: {why}")
+            continue
+        args += ["-v", f"{host}:{inside_n}:{mode}"]
+        said.append(f"{host} -> {inside_n} ({'read-write' if mode == 'rw' else 'read-only'})")
+    return args, said
 
 
 def in_sandbox() -> bool:
@@ -420,6 +461,10 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         cmd += ["-v", f"{p}:{p}:ro"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}"]
+    extra, said = admin_mount_args([HOME_IN, "/tmp", str(_home()), *ro, *rw, *([proxy_dir] if proxy_dir else [])])
+    cmd += extra                                              # D936: the loop's admin mounts, after the sandbox's own
+    if said:
+        print(f"flux {command}: admin mounts: " + "; ".join(said), file=sys.stderr, flush=True)
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=HOME_IN, FLUX_SANDBOX_CLI=json.dumps(cli))
     env.update(agent_programs())                              # D804: the programs at the paths mounted

@@ -489,6 +489,7 @@ function advancedCard(e, save, saveLabel = "Save") {
   const said = [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
     ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
     ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : []),
+    ...(a.mounts || []).map(m => `${m.host} in it at ${m.inside} (${m.mode === "rw" ? "read-write" : "read-only"})`),   // D936
     a.parallel ? "parallel work allowed" : "one at a time"].join(" · ");
   if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, " (admin only)."));
   const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
@@ -496,12 +497,19 @@ function advancedCard(e, save, saveLabel = "Save") {
   const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
   const par = h("input", { type: "checkbox", checked: !!a.parallel, id: "adv-parallel" });
   const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
+  // D936: host folders in the sandbox, one per line: host path:path inside:ro|rw
+  const mounts = h("textarea", { id: "adv-mounts", rows: 2, class: "mono", placeholder: "/srv/datasets:/mnt/datasets:ro\n/srv/scratch:/mnt/scratch:rw",
+    value: (a.mounts || []).map(m => `${m.host}:${m.inside}:${m.mode}`).join("\n") });
+  const mountsOf = () => mounts.value.split("\n").map(x => x.trim()).filter(Boolean).map(x => {
+    const [host, inside, mode] = x.split(":").map(y => (y || "").trim());
+    return { host, inside: inside || "", mode: mode === "rw" ? "rw" : "ro" };
+  });
   // D833: saved as they change; turning the sandbox off asks first
   const mark = saveMark();
   const collect = () => ({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
     pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.checked,
-    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean) });
-  const go = autosave([mem, cpus, pids, tmp, par, hosts], () => save(collect()), mark);
+    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean), mounts: mountsOf() });
+  const go = autosave([mem, cpus, pids, tmp, par, hosts, mounts], () => save(collect()), mark);
   sb.addEventListener("change", async () => {
     if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) {
       sb.checked = true; return;
@@ -515,6 +523,7 @@ function advancedCard(e, save, saveLabel = "Save") {
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
     h("label", { class: "check" }, par, "Allow parallel work"),
     h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
+    h("label", { class: "stack" }, "Host folders in its sandbox, for its runs, Check and agent Tests (host path:path inside:ro or rw, one per line)", mounts),
     h("div", { class: "form-actions" }, h("span", { class: "muted small" }, saveLabel === "Save" ? "Changes save as you make them." : "Kept for the new loop as you make them."), mark)]);
 }
 

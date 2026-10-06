@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -123,6 +123,12 @@ class EnvVar(BaseModel):                  # D697
     secret: bool = False
 
 
+class Mount(BaseModel):                  # D936: a folder of the host in a loop's sandbox
+    host: str = Field(max_length=4096)
+    inside: str = Field(max_length=4096)
+    mode: Literal["ro", "rw"] = "ro"
+
+
 class Advanced(BaseModel):
     sandbox: bool = True
     memory: str | None = Field(default=None, max_length=16)
@@ -131,6 +137,7 @@ class Advanced(BaseModel):
     tmp_size: str | None = Field(default=None, max_length=16)
     allow: list[str] | None = None
     parallel: bool = False                  # D741: parallel work allowed; how much is the document's
+    mounts: list[Mount] | None = Field(default=None, max_length=16)
 
 
 class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's

@@ -82,10 +82,23 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         if body.pids is not None and not 64 <= body.pids <= 1_000_000:
             raise HTTPException(400, "pids: from 64 to 1000000")
         body.allow = _rules(body.allow or []) or None
-        got = {k: v for k, v in body.model_dump().items() if v not in (None, "") and not (k == "sandbox" and v is True)
+        got = {k: v for k, v in body.model_dump().items() if v not in (None, "", []) and not (k == "sandbox" and v is True)
                and not (k == "parallel" and v is False)}
+        if got.get("mounts"):
+            from .admin import cache_root
+            from .runs import check_mounts
+
+            try:                                                  # D936: refused before it is kept
+                got["mounts"] = check_mounts(got["mounts"], store.data, _d, cache_root())
+            except ValueError as exc:
+                raise HTTPException(400, f"mounts: {exc}") from exc
+        before = advanced(store, whose.name, name).get("mounts") or []
         store.server_set(f"adv:{whose.name}:{name}", got or None)
         store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
+        if before != (got.get("mounts") or []):
+            from .runs import mounts_said
+
+            store.audit(a.name, "sandbox mounts", f"{whose.name}/{name}: {mounts_said(got) or 'none'}")     # D936
         return {"advanced": got}
 
     # ---- sharing a loop (D701): watch sees its runs and outputs, edit also changes and runs it

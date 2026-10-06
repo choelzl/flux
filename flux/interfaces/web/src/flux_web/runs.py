@@ -231,7 +231,63 @@ def _net_said(allow: list[str]) -> str:
 ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memory limit (e.g. 16g)", "cpus": "CPUs (e.g. 8)",
             "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)",
             "allow": "hosts this loop may reach as well (D698)",
-            "parallel": "parallel work allowed: the document's workers and parts at once (off: one at a time, D741)"}
+            "parallel": "parallel work allowed: the document's workers and parts at once (off: one at a time, D741)",
+            "mounts": "host folders in the sandbox, read-only or read-write (D936)"}
+
+#: D936: what an admin mount never is -- on the host, nor inside the sandbox
+SYSTEM_PATHS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/run")
+#: the sandbox's own places inside (beside the loop's folders and the host's system mounts)
+SANDBOX_OWN = ("/tmp", "/home/flux", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/nix")
+
+
+def _inside(p: str, root: str) -> bool:
+    root = root.rstrip("/") or "/"
+    return p == root or root == "/" or p.startswith(root + "/")
+
+
+def check_mounts(rows: list[dict[str, Any]], data: Path, loop_dir: Path, caches: Path) -> list[dict[str, str]]:
+    """A loop's admin mounts (D936), each {host, inside, mode}, checked: the host path absolute and
+    there, never the server's data (every user's loops and homes), the loops' caches, the loop's
+    own folder, a system path, nor a folder holding one of these; the path inside absolute, never
+    the sandbox's own (the loop's folder, its out and workbench, HOME, /tmp, the system's). ValueError says why."""
+    out, seen = [], set()
+    home = os.path.realpath(os.path.expanduser("~"))
+    for r in rows:
+        host, inside, mode = str(r.get("host") or "").strip(), str(r.get("inside") or "").strip(), r.get("mode") or "ro"
+        if mode not in ("ro", "rw"):
+            raise ValueError(f"{host}: the mode is ro or rw")
+        if not host.startswith("/") or not inside.startswith("/"):
+            raise ValueError(f"{host or '(empty)'} -> {inside or '(empty)'}: both paths absolute")
+        if ":" in host or ":" in inside or "," in host or "," in inside:
+            raise ValueError(f"{host} -> {inside}: a path with ':' or ',' cannot be mounted")
+        if not os.path.exists(host):
+            raise ValueError(f"{host} is not there on this machine")
+        real = os.path.realpath(host)
+        for what, root in (("the server's data (every user's loops and homes)", os.path.realpath(data)),
+                           ("the loops' caches", os.path.realpath(caches)),
+                           ("this loop's own folder", os.path.realpath(loop_dir))):
+            if _inside(real, root) or _inside(root, real):
+                raise ValueError(f"{host} is {what}, or holds it: not mountable")
+        if real == "/" or any(_inside(real, s) for s in SYSTEM_PATHS):
+            raise ValueError(f"{host} is a system path: not mountable")
+        if real == home:
+            raise ValueError(f"{host} is the server account's home: not mountable")
+        n = os.path.normpath(inside)
+        own = (*SYSTEM_PATHS, *SANDBOX_OWN, str(loop_dir), os.path.realpath(loop_dir), home)
+        if n == "/" or any(_inside(n, o) or _inside(o, n) for o in own):
+            raise ValueError(f"{inside} is the sandbox's own (its system, HOME, /tmp or the loop's folder): mount elsewhere, e.g. /mnt/data")
+        if n in seen:
+            raise ValueError(f"{inside} is mounted twice")
+        seen.add(n)
+        out.append({"host": real, "inside": n, "mode": mode})
+    return out
+
+
+def mounts_said(adv: dict[str, Any]) -> str:
+    """The loop's admin mounts for its log (D936)."""
+    rows = adv.get("mounts") or []
+    return ("mounts: " + ", ".join(f"{m['host']} -> {m['inside']} ({'read-write' if m.get('mode') == 'rw' else 'read-only'})"
+                                   for m in rows)) if rows else ""
 
 
 def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
@@ -240,7 +296,8 @@ def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
 
 def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) -> None:
     """The sandbox as the server and the loop's advanced settings say (D697)."""
-    for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE"):
+    for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE",
+              "FLUX_SANDBOX_MOUNTS"):
         env.pop(k, None)
     if not server_sandbox:
         env["FLUX_SANDBOX"] = "0"                    # D704: a --no-sandbox server says so (the command's own default is on)
@@ -257,6 +314,8 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
                      ("tmp_size", "FLUX_SANDBOX_TMP_SIZE")):
         if adv.get(key) not in (None, ""):
             env[var] = str(adv[key])
+    if adv.get("mounts"):
+        env["FLUX_SANDBOX_MOUNTS"] = json.dumps(adv["mounts"])     # D936: the loop's admin mounts
 
 
 def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],
@@ -380,6 +439,8 @@ class RunManager:
             options = {**options, "host": True}
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else [])   # D720: not the network
+        if env.get("FLUX_SANDBOX_MOUNTS"):
+            said.append(mounts_said(adv))                       # D936: the admin's mounts, said in the run's log
         from .confine import append
 
         # D854: the start reserved atomically -- the loop not running nor starting, the user under

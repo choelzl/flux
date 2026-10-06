@@ -175,3 +175,22 @@ def test_the_docker_socket_is_not_reachable(tmp_path):
     rc, said = _run(tmp_path, "ls -la /var/run/docker.sock /run/docker.sock /run/podman/podman.sock 2>&1; echo DONE")
     assert "DONE" in said and "PWN" not in said
     assert not any("srw" in ln for ln in said.splitlines()), f"a container socket is visible: {said}"
+
+
+def test_an_admins_read_only_mount_refuses_a_write_and_a_read_write_one_takes_it(tmp_path):
+    """D936: a loop's admin mounts, as the web hands them (FLUX_SANDBOX_MOUNTS): read-only is read,
+    never written; read-write is written through to the host."""
+    import json
+
+    ro, rw = tmp_path / "datasets", tmp_path / "scratch"
+    ro.mkdir()
+    rw.mkdir()
+    (ro / "seen.txt").write_text("FROM-THE-HOST\n")
+    mounts = json.dumps([{"host": str(ro), "inside": "/mnt/datasets", "mode": "ro"},
+                         {"host": str(rw), "inside": "/mnt/scratch", "mode": "rw"}])
+    rc, said = _run(tmp_path, "cat /mnt/datasets/seen.txt; (echo X > /mnt/datasets/w.txt && echo RO-WROTE) 2>&1;"
+                              " echo Y > /mnt/scratch/w.txt && echo RW-WROTE; echo DONE",
+                    env={"FLUX_SANDBOX_MOUNTS": mounts})
+    assert "DONE" in said and "FROM-THE-HOST" in said, said
+    assert "RO-WROTE" not in said and not (ro / "w.txt").exists(), f"a read-only mount was written: {said}"
+    assert "RW-WROTE" in said and (rw / "w.txt").read_text() == "Y\n", said

@@ -146,7 +146,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             base = c[0]
             env = {**base, "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
                    "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
-            sandbox_env(env, sandbox, {})
+            from .runs import advanced
+
+            mounts = (advanced(store, user.name, loop).get("mounts") or None) if loop else None
+            sandbox_env(env, sandbox, {"mounts": mounts} if mounts else {})     # D936: a loop's Test sees its mounts
             machine_env(env, sandbox_config(store), {})
             flux = shutil.which("flux", path=env.get("PATH"))
             argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
