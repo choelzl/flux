@@ -3,7 +3,7 @@
 
 import { codeBlock } from "./highlight.js";
 import { ago, api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
-import { bestChart, designPoints, directionOf, groupList, paretoChart, scopesOf } from "./charts.js";
+import { bestChart, designPoints, directionOf, groupList, groupStyles, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -143,7 +143,7 @@ function resultsView(ctx, r) {
   };
   const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
   // D914: the best and the front are of one scope -- the whole, or a part -- never parts pooled
-  const groups = groupList(r.designs);
+  const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? "whole" : "";
   const scopeSel = () => groups.length ? h("label", {}, "scope ", sel(scopesOf(groups), scope, v => { scope = v; drawPareto(); drawTime(); })) : "";
   function drawPareto() {
@@ -151,7 +151,7 @@ function resultsView(ctx, r) {
       h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; drawPareto(); })),
       h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; drawPareto(); })),
       h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; drawPareto(); }))),
-      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { groups, scope }));
+      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope }));
   }
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
@@ -159,7 +159,7 @@ function resultsView(ctx, r) {
       h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
         onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); drawTime(); } }, m))),
       h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; drawTime(); }))),
-      tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m); return bestChart(designPoints(r.designs, o), o, r.passes, { groups, scope }); }))
+      tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m); return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope }); }))
         : empty("Pick a metric to chart."));
   }
   drawPareto(); drawTime();

@@ -769,7 +769,7 @@ def flows(r: Run) -> None:
         metric = next(iter(got["designs"][0]["numbers"]))
         want = sum(1 for d in got["designs"] if metric in d["numbers"])
         pts = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Improvement over time');"
-                     " const s = c && c.querySelector('svg'); return s ? s.querySelectorAll('circle.pt').length : 0; })()", timeout=10, what="the chart's points")
+                     " const s = c && c.querySelector('svg.best-chart'); return s ? s.querySelectorAll('.pt').length : 0; })()", timeout=10, what="the chart's points")
         r.check("improvement over time: one point per design", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.check("Results: the designs before the charts (D856)", b.js(
             "const t = document.querySelector('#main table.designs'), c = document.querySelector('#main details.charts-box');"

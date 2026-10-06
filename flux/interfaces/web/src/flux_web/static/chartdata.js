@@ -31,6 +31,17 @@ function groupList(designs) {
   return gs.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
+/** D915: each group's colour and shape, from the results' whole list of groups (groupList), so a
+    part keeps its colour whatever is plotted -- another stage, metric, filter or a refresh; past the
+    eight colours a group takes another shape. A design not of parts: no colour of its own (""). */
+const SHAPES = ["circle", "square", "triangle", "diamond"];
+function groupStyles(groups) {
+  const at = new Map(groups.map((g, i) => [g, i]));
+  const of = (g) => { const i = at.get(g || "");
+    return i == null ? { i: -1, color: "", shape: "circle" } : { i, color: `var(--g${i % 8})`, shape: SHAPES[Math.floor(i / 8) % SHAPES.length] }; };
+  return { groups, of };
+}
+
 /** D914: the scopes a design of parts is compared in -- the whole first, then each part; a design not
     of parts has one scope, every design (""). `groups`: the results' groups, whole first. */
 function scopesOf(groups) {
@@ -67,4 +78,4 @@ function frontier(pts, dx, dy) {
   return out;
 }
 
-export { bestSeries, designPoints, frontier, groupList, inScope, scopesOf, verdictOf };
+export { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, verdictOf };

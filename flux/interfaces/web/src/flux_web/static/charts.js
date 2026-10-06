@@ -1,7 +1,7 @@
 // Flux web: the charts and marks drawn as SVG (D889: split out of app.js).
 
 import { empty, h } from "./ui.js";
-import { bestSeries, designPoints, frontier, groupList, inScope, scopesOf, verdictOf } from "./chartdata.js";
+import { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, verdictOf } from "./chartdata.js";
 
 // ================================================================ charts (D692)
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -28,16 +28,33 @@ function bellIcon() {
     sv("path", { d: "M10 20.5a2 2 0 0 0 4 0", fill: "none", stroke: "currentColor", "stroke-width": 1.7, "stroke-linecap": "round" }));
 }
 const num4 = (v) => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
-/** D896: a design of parts, coloured by part -- the whole first, then its parts in order; one group
-    (or none) draws as before. Returns (group -> its colour class, the groups) . */
-function groupsOf(items) {
-  const gs = [...new Set(items.map(x => x.group || ""))];
-  if (gs.length < 2 && !gs.includes("whole")) return { cls: () => "", list: [] };
-  const list = gs.sort((a, b) => (a === "whole" ? -1 : b === "whole" ? 1 : a.localeCompare(b)));
-  return { cls: (g) => ` g${Math.min(list.indexOf(g || ""), 7)}`, list };
+/** D915: the charts' group colours -- `opts.styles` (groupStyles of the results' groups, built once
+    by the page) else the groups given, else those plotted. */
+const stylesOf = (opts, items) => opts.styles || groupStyles(opts.groups || groupList(items));
+/** A point as its group draws it (D915): its shape, its colour one property (`--gc`) that the fill,
+    the ring and the legend read; the verdict is its outline (hollow, dashed), never its colour. */
+function mark(st, x, y, r, attrs, ...kids) {
+  const a = { ...attrs, style: st.color ? `--gc: ${st.color}` : null };
+  if (st.shape === "square") return sv("rect", { x: x - r * 0.9, y: y - r * 0.9, width: r * 1.8, height: r * 1.8, ...a }, ...kids);
+  if (st.shape === "triangle") return sv("polygon", { points: `${x},${y - r * 1.2} ${x + r * 1.1},${y + r * 0.8} ${x - r * 1.1},${y + r * 0.8}`, ...a }, ...kids);
+  if (st.shape === "diamond") return sv("polygon", { points: `${x},${y - r * 1.25} ${x + r * 1.25},${y} ${x},${y + r * 1.25} ${x - r * 1.25},${y}`, ...a }, ...kids);
+  return sv("circle", { cx: x, cy: y, r, ...a }, ...kids);
 }
-function groupLegend(G) {
-  return G.list.length ? h("span", { class: "legend groups" }, G.list.map(g => [h("i", { class: "sw" + G.cls(g) }), `${g || "other"} `])) : "";
+/** The decision (D915): a ring around its point, the point keeping its group's colour and shape. */
+const ring = (x, y, r) => sv("circle", { cx: x, cy: y, r: r + 3.5, class: "ring" });
+/** The legend (D915): each group's colour and shape, then what the outlines say -- meets every
+    requirement (filled), misses one (hollow), waits for a later stage (dashed) -- the decision's ring
+    and, on the Pareto chart, the feasible front. Colour is never the only cue. */
+function legend(S, { front = false, pending = false } = {}) {
+  const key = (st, cls, extra = "") => sv("svg", { viewBox: "-6 -6 12 12", class: "chart key", "aria-hidden": "true" }, mark(st, 0, 0, 3.6, { class: `pt ${cls}` }), extra);
+  const plain = { color: "var(--muted)", shape: "circle" };
+  return h("span", { class: "legend groups" },
+    S.groups.map(g => h("span", { class: "key-item", "data-group": g }, key(S.of(g), "accepted"), g || "other")),
+    h("span", { class: "key-item" }, key(plain, "accepted"), "meets every requirement"),
+    h("span", { class: "key-item" }, key(plain, "failed"), "misses one"),
+    pending ? h("span", { class: "key-item" }, key(plain, "pending"), "waits for a later stage") : "",
+    h("span", { class: "key-item" }, key(plain, "accepted", ring(0, 0, 1.2)), "the decision"),
+    front ? h("span", { class: "key-item" }, sv("svg", { viewBox: "0 0 14 8", class: "chart key wide", "aria-hidden": "true" }, sv("path", { d: "M1,7L1,4L7,4L7,1L13,1", class: "front" })), "feasible front") : "");
 }
 /** A point's details (D914): which design, its piece, its standing and what it does not meet. */
 function pointTitle(p, lines) {
@@ -48,14 +65,14 @@ function pointTitle(p, lines) {
 /** One objective, design by design (D693, D849): every design measured (dots, in measurement order),
     the best feasible so far (a step line), its limit (dashed), the passes (faint ticks). D914: the best
     counts only designs that meet every requirement, of one scope -- the whole, or a part (`opts.scope`,
-    of `opts.groups`); the others are drawn, hollow when they miss one. `rows`: designPoints(). */
+    of `opts.styles`); the others are drawn, hollow when they miss one; `opts.legend` false: the page draws one. `rows`: designPoints(). */
 function bestChart(rows, obj, passes, opts = {}) {
   const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
   const pts = rows.filter(r => r.metrics[obj.metric] != null && (!obj.stage || obj.stage === "deepest" || r.stage === obj.stage))
     .map(r => ({ ...r, t: r.when, v: Number(r.metrics[obj.metric]), group: r.group || "" })).sort((a, b) => a.t - b.t);
-  const G = groupsOf(pts);
+  const S = stylesOf(opts, pts), groups = S.groups;
   if (!pts.length) return empty(`No ${obj.metric} measured${obj.stage ? " at " + obj.stage : ""} yet.`);
-  const groups = opts.groups || G.list, scope = groups.length ? (opts.scope || "whole") : "";
+  const scope = groups.length ? (opts.scope || "whole") : "";
   const counts = inScope(groups, scope), maxi = obj.direction !== "minimize";
   const { steps: bests, best } = bestSeries(pts, maxi, (p) => p.eligible && counts(p));
   const steps = pts.map((p, i) => ({ t: p.t, v: bests[i] }));
@@ -80,8 +97,9 @@ function bestChart(rows, obj, passes, opts = {}) {
     (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
     obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
       sv("text", { x: W - R, y: y(obj.goal) - 4, class: "tick limit-t", "text-anchor": "end" }, `${maxi ? "≥" : "≤"} ${num4(obj.goal)}`)] : "",
-    pts.map(p => sv("circle", { cx: p.x, cy: y(p.v), r: 3, class: `pt ${p.verdict}${counts(p) ? "" : " out"}${G.cls(p.group)}`, "data-name": p.name },
+    pts.map(p => mark(S.of(p.group), p.x, y(p.v), 3, { class: `pt ${p.verdict}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`, "data-name": p.name, "data-group": p.group },
       sv("title", {}, pointTitle(p, [`${obj.metric} ${num4(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])))),
+    pts.filter(p => p.decision).map(p => ring(p.x, y(p.v), 3)),
     path ? sv("path", { d: path, class: "best" }) : "",
     sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} design(s), in order`),
     sv("text", { x: L, y: H - 8, class: "tick" }, new Date(t0 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
@@ -89,7 +107,7 @@ function bestChart(rows, obj, passes, opts = {}) {
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `),
     said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best feasible so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
-    " ", groupLegend(G)), g);
+    opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending) })]), g);
 }
 /** Which way a metric is better (D693): the objective's direction, else the name's plain sense. */
 function directionOf(metric, objectives) {
@@ -108,8 +126,8 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     .filter(Boolean);
   if (!pts.length) return empty(`No design has both ${xm} and ${ym}${stage ? " at " + stage : ""}.`);
   const dx = directionOf(xm, objectives), dy = directionOf(ym, objectives);
-  const G = groupsOf(pts.map(p => p.d));
-  const groups = opts.groups || G.list, scope = groups.length ? (opts.scope || "whole") : "";
+  const S = stylesOf(opts, pts), groups = S.groups;
+  const scope = groups.length ? (opts.scope || "whole") : "";
   const counts = inScope(groups, scope), scoped = pts.filter(counts);
   const front = frontier(scoped.filter(p => p.eligible), dx, dy).sort((a, b) => a.x - b.x);
   const on = new Set(front);
@@ -134,19 +152,19 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
     front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
     pts.sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0)).map(p => {
-      const c = sv("circle", { cx: X(p.x), cy: Y(p.y), r: on.has(p) ? 4.5 : 3.2, "data-name": p.name,
-          class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}${G.cls(p.group)}` },
+      const r = on.has(p) ? 4.5 : 3.2;
+      const c = mark(S.of(p.group), X(p.x), Y(p.y), r, { "data-name": p.name, "data-group": p.group,
+          class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}` },
         sv("title", {}, pointTitle(p, [`${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])));
       if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
-      return c;
+      return p.decision ? [c, ring(X(p.x), Y(p.y), r)] : c;
     }),
     sv("text", { x: (W + L - R) / 2, y: H - 6, class: "tick", "text-anchor": "middle" }, `${xm} · ${dx === "minimize" ? "lower" : "higher"} is better`),
     sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, said ? h("strong", { class: "front-said" }, said)
       : h("strong", { class: "front-said" }, `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`),
     h("span", { class: "muted" }, ` · ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"} · `),
-    G.list.length ? [groupLegend(G), h("span", { class: "legend" }, h("i", { class: "sw decided" }), "the decision")]
-      : h("span", { class: "legend" }, h("i", { class: "sw accepted" }), "meets every requirement ", h("i", { class: "sw failed" }), "misses one ", h("i", { class: "sw decided" }), "the decision")), g);
+    opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending) })), g);
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;
     `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */
@@ -203,4 +221,4 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
   return fig;
 }
 
-export { bellIcon, bestChart, designPoints, directionOf, groupList, logo, num4, paretoChart, scopesOf, sv, timeChart };
+export { bellIcon, bestChart, designPoints, directionOf, groupList, groupStyles, legend, logo, num4, paretoChart, scopesOf, sv, timeChart };

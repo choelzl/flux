@@ -79,6 +79,21 @@ console.log(JSON.stringify([C.groupList([design('e', 'encoder', 1, 1, true), des
     assert got == [["whole", "decoder", "encoder", ""], [], ["whole"]]
 
 
+def test_a_group_keeps_its_colour(tmp_path):
+    """D915: the colour map is of the results' whole list of groups -- what one chart plots does not
+    shift it; past eight groups a colour comes back with another shape, never two groups the same."""
+    got = run(tmp_path, """
+const S = C.groupStyles(['whole', 'decoder', 'encoder']);
+const many = C.groupStyles(Array.from({ length: 20 }, (_, i) => 'p' + String(i).padStart(2, '0')));
+const looks = many.groups.map(g => { const s = many.of(g); return s.color + '/' + s.shape; });
+console.log(JSON.stringify({ dec: S.of('decoder'), enc: S.of('encoder'), whole: S.of('whole'), none: C.groupStyles([]).of(''),
+  distinct: new Set(looks).size, n: looks.length }));
+""")
+    assert got["whole"]["color"] == "var(--g0)" and got["dec"]["color"] == "var(--g1)" and got["enc"]["color"] == "var(--g2)"
+    assert got["none"]["color"] == ""
+    assert got["distinct"] == got["n"] == 20
+
+
 def test_the_front_is_exact_and_fast(tmp_path):
     """Against the pairwise definition on random points with ties, every direction; then 20,000 points."""
     got = run(tmp_path, """
