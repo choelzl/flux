@@ -9,7 +9,7 @@ from ..objective import Objectives
 from .library import library_folders, library_on
 
 if TYPE_CHECKING:  # pragma: no cover
-    from . import TaskSpec
+    from .spec import TaskSpec
     from .stages import Stage
 
 

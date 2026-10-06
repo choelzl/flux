@@ -22,7 +22,7 @@ Where things are:
 
 | module | what it holds |
 |---|---|
-| `document.py` | what a problem document says: `TaskSpec`, `load_task`, the keys, the placeholders, the `flow:` vocabulary, the world contract |
+| `document/` | what a problem document says: `TaskSpec` (`spec.py`), `load_task` (`load.py`), the keys, the placeholders (`commands.py`), the gate and stages, the `flow:` vocabulary (`flow.py`, `surface.py`, `layout.py`), `describe_flow` |
 | `task.py` | the problem that runs a document: `PromptProblem` (prompts, gate, stages, generators, the prototype stage's hooks) |
 | `loop.py` | the step loop: parts, batches, improvements, the chain of stages, the decision |
 | `passes.py` | pass after pass until stopped; exploring after a rest |

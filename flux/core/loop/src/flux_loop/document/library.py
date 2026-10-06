@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from . import TaskSpec
+    from .spec import TaskSpec
 
 
 def read_input(path: Path) -> str:
