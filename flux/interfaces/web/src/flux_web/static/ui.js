@@ -378,7 +378,7 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
       if (!cols[i].key) return;
       th.setAttribute("aria-sort", i === col ? (desc ? "descending" : "ascending") : "none");
       th.btn.classList.toggle("on", i === col);
-      th.arrow.textContent = i === col ? (desc ? " ▾" : " ▴") : "";
+      th.arrow.textContent = i === col ? (desc ? "▾" : "▴") : "";
     });
     colSel.value = String(col);
     dirBtn.textContent = desc ? "▾ Descending" : "▴ Ascending";

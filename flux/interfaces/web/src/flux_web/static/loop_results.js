@@ -93,7 +93,7 @@ function resultsView(ctx, r) {
     h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, onclick: () => {
       if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; }
       sortFocus = key; drawTable();
-    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? " ▴" : " ▾") : "")), ...more);
+    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : "")), ...more);
   function drawTable() {
     const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
     const shown = all.slice(0, pageN);

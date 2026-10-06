@@ -179,6 +179,34 @@ if (!window.__e2e) {
 return true;
 """
 
+# D938: every sortable header in #main (of a frame, by its id), each column sorted both ways: its
+# button and arrow inside their cell, no cell overflowing, no column's width changed by a sort
+SORT_FIT = """
+const d = arguments[0] ? document.getElementById(arguments[0]).contentDocument : document;
+const all = () => [...d.querySelectorAll('#main table')].filter(t => t.tHead && t.tHead.querySelector('button.th-sort') && t.tHead.getBoundingClientRect().height > 0);
+const bad = [], n = all().length;
+const widths = (i) => [...all()[i].tHead.querySelectorAll('th')].map(th => Math.round(th.getBoundingClientRect().width));
+const fits = (i, tag) => { for (const th of all()[i].tHead.querySelectorAll('th')) {
+  const b = th.querySelector('button.th-sort'); if (!b) continue;
+  const t = th.getBoundingClientRect(), r = b.getBoundingClientRect(), a = b.querySelector('.th-arrow').getBoundingClientRect(), nm = th.dataset.label;
+  if (r.left < t.left - 0.5 || r.right > t.right + 0.5) bad.push(`${tag}: ${nm}'s button outside its cell`);
+  if (a.width && (a.left < r.left - 0.5 || a.right > r.right + 0.5 || a.top < t.top || a.bottom > t.bottom)) bad.push(`${tag}: ${nm}'s arrow outside`);
+  if (th.scrollWidth > th.clientWidth + 1) bad.push(`${tag}: ${nm} overflows its cell`);
+  if (th.classList.contains('num') && Math.abs(r.right - (t.right - parseFloat(getComputedStyle(th).paddingRight))) > 1.5) bad.push(`${tag}: ${nm} not right-aligned`);
+} };
+for (let i = 0; i < n; i++) {
+  const w0 = widths(i); fits(i, 'first');
+  const labels = [...all()[i].tHead.querySelectorAll('th')].filter(th => th.querySelector('button.th-sort')).map(th => th.dataset.label);
+  for (const nm of labels) for (const k of [1, 2]) {
+    [...all()[i].tHead.querySelectorAll('th')].find(th => th.dataset.label === nm).querySelector('button.th-sort').click();
+    const w = widths(i);
+    if (w.some((x, j) => Math.abs(x - w0[j]) > 1)) bad.push(`${nm} sorted (${k}): widths ${w0} -> ${w}`);
+    fits(i, `${nm} sorted (${k})`);
+  }
+}
+return [n, bad.slice(0, 6)];
+"""
+
 
 class Run:
     def __init__(self) -> None:
@@ -312,6 +340,12 @@ class Run:
 
 def flows(r: Run) -> None:
     b = r.b
+
+    def sort_fit(where, frame=None):
+        """D938: the sortable tables shown fit their arrows; how many there were."""
+        n, bad = b.js(SORT_FIT, frame)
+        r.check(f"{where}: each sort's arrow inside its header, no column widened (D938)", n > 0 and not bad, f"{n} table(s): {bad}")
+        return n
     # a loop to upload: a sweep, no model needed
     subprocess.run(["flux", "example", "sweep", "sw", "--dir", str(r.files)], check=True, stdout=subprocess.DEVNULL)
 
@@ -840,6 +874,10 @@ def flows(r: Run) -> None:
         r.check("a leaf opens its work: output, input and every field as tabs", {"Output", "Input"} <= set(tabs), str(tabs))
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
+        sort_fit("Results")
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "results-sorted-desktop.png")
         # D916: Results and Graphs two views; the graphs built only when Graphs is first opened
         subs = b.js("return [...document.querySelectorAll('#main .subtabs [role=tab], .subrow .subtabs [role=tab]')].map(x => x.textContent)")
         r.check("Results has two views, Results and Graphs (D916)", subs == ["Results", "Graphs"], str(subs))
@@ -1647,6 +1685,7 @@ def flows(r: Run) -> None:
             r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops for a screenshot")
             time.sleep(0.5)
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "loops-desktop.png")
+        sort_fit("Loops")
         r.clean("sorted loops")
         # Admin › Loops: the same headers, its own remembered order
         r.login("ada")
@@ -1682,14 +1721,20 @@ def flows(r: Run) -> None:
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "admin-users-desktop.png")
         b.js(f"const i = {lim}; i.value = ''; i.dispatchEvent(new Event('change')); return 1")
         b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.textContent === 'saved'; })()", timeout=10, what="the limit cleared")
-        b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
-             "f.style.cssText = 'width:390px;height:800px;border:0'; f.src = '/#/admin/users'; document.body.append(f); return 1")
-        b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main table.list.users tbody tr'); })()", timeout=20, what="Users at 390")
-        got = b.js("const d = document.getElementById('phone').contentDocument, s = d.querySelector('#main .sort-strip'); return !!s && s.getBoundingClientRect().height > 0")
-        r.check("Admin › Users at 390px sorts by a visible menu (D926)", got)
-        if os.environ.get("FLUX_E2E_SHOTS"):
-            time.sleep(0.5)
-            (Path(os.environ["FLUX_E2E_SHOTS"]) / "admin-users-390px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+        sort_fit("Admin › Users")
+        for width in (700, 390, 320):
+            b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                 "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/#/admin/users'; document.body.append(f); return 1", width)
+            b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('#main table.list.users tbody tr'); })()", timeout=20, what=f"Users at {width}")
+            if width == 700:                                     # D938: a header still shown, "Tokens in → out" wrapped
+                sort_fit("Admin › Users at 700px", "phone")
+            else:
+                got = b.js("const d = document.getElementById('phone').contentDocument, s = d.querySelector('#main .sort-strip'), w = d.defaultView;"
+                           "return !!s && s.getBoundingClientRect().height > 0 && s.getBoundingClientRect().right <= w.innerWidth && d.documentElement.scrollWidth <= w.innerWidth + 1")
+                r.check(f"Admin › Users at {width}px sorts by a visible menu, inside the screen (D926, D938)", got)
+            if os.environ.get("FLUX_E2E_SHOTS"):
+                time.sleep(0.5)
+                (Path(os.environ["FLUX_E2E_SHOTS"]) / f"admin-users-{width}px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
         b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-sort={time.time()}#/"})
         b.wait("document.querySelector('#main')", timeout=20)
         r.clean("admin › users sorted")
@@ -1791,6 +1836,11 @@ def flows(r: Run) -> None:
         r.check("Insights: a column's header sorts it, again the other way (D859)", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
         b.js(sort, "Host")
         r.check("Insights: by host, A to Z first", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
+        sort_fit("Insights › Endpoints and network")
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "insights-sorted-desktop.png")
+        b.js(sort, "Host")
         b.js("const c = [...document.querySelectorAll('#insights-part .card')].find(c => c.querySelector('h2').textContent === 'Network refused');"
              " [...c.querySelectorAll('tbody tr')].find(t => t.cells[0].textContent === 'many.example:443').querySelector('button.bin').click(); return 1")
         r.dialog_button("Remove")
@@ -1799,7 +1849,7 @@ def flows(r: Run) -> None:
                timeout=10, what="the removed host gone from the page")   # its removal answered, the page drawn again
         left = [n["key"] for n in json.loads(r.api("/admin/insights?days=30")["body"])["network"]]
         r.check("Insights: a removed host leaves the list (D850)", "many.example:443" not in left and "few.example:443" in left, str(left))
-        b.js("localStorage.removeItem('flux-insights-net-sort'); return 1")
+        b.js("localStorage.removeItem('flux-insights-net-sort'); localStorage.removeItem('flux-insights-ep-sort'); return 1")
         r.page("#/admin/sandbox", "document.querySelector('#stderr-masks')", "Sandbox, with Hidden output (D896)")
         b.js("const t = document.querySelector('#stderr-masks'); t.value = 'stale arg0\\n/^ERROR rmcp/'; t.dispatchEvent(new Event('change')); return 1")
         b.wait("(document.querySelector('#stderr-masks').closest('.card').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the masks saved")
