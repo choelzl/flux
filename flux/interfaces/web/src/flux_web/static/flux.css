@@ -863,3 +863,15 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
   summary { padding-block: 8px; }
 }
+
+/* D885: Admin › Maintenance, a row a task */
+.mt-list { display: grid; gap: 0; }
+.mt-row { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--line); min-width: 0; }
+.mt-row:first-child { border-top: none; }
+.mt-row.off { opacity: .7; }
+.mt-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.mt-row p { margin: 0; }
+.mt-ctl { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+.mt-ctl label.stack { font-size: 12.5px; }
+.mt-ctl select { max-width: 100%; min-width: 0; }
+.mt-last { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; min-width: 0; overflow-wrap: anywhere; }

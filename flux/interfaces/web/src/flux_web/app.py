@@ -78,6 +78,16 @@ class DocSave(BaseModel):
     kept: list[str] = Field(default_factory=list)
 
 
+class MaintenanceSet(BaseModel):            # D885
+    on: bool | None = None
+    every_h: float | None = None
+    params: dict[str, Any] | None = None
+
+
+class MaintenanceRun(BaseModel):
+    loop: str | None = None                   # "user/name": one loop only
+
+
 class Clean(BaseModel):                   # D695: the admin's controls
     what: str
 
@@ -218,6 +228,22 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     history = History(store.path)                    # D699: the machine over time, in the server's database
     app.state.history = history
     app.state.sample = lambda: _sample()
+    from .maintenance import TASKS, Maintenance
+
+    def _all_loops() -> list[tuple[str, str, Path]]:
+        out = []
+        for u in store.users():
+            w = Workspace(store.data, u.name)
+            out += [(u.name, a["name"], w.root / a["name"]) for a in w.apps()]
+        return out
+
+    def _loop_live(user: str, app_name: str) -> bool:
+        u = store.user(name=user)
+        r = runs.latest(u, app_name) if u else None
+        return bool(r and runs.live(r))
+
+    maintenance = Maintenance(store, _loop_live, _all_loops)      # D885
+    app.state.maintenance = maintenance
 
     # ---- guards
     SLOW_S = float(os.environ.get("FLUX_SLOW_S", "0.5"))
@@ -645,12 +671,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
         from . import admin as adm
 
-        if sandbox:                                  # D768: a container no process runs any more, removed
-            try:
-                for c in adm.reap():
-                    store.audit("server", "container left behind, removed", f"{c['name']} ({c.get('app') or '?'}): {c['said']}")
-            except Exception:  # noqa: BLE001 -- the sample goes on
-                pass
+        try:                                         # D885: the scheduled clean-up, the containers' reaper (D768) among it
+            maintenance.tick()
+        except Exception:  # noqa: BLE001 -- the sample goes on
+            pass
 
         m = adm.machine({k: v for k, v in {"server data": str(store.data), "sandbox caches": str(adm.cache_root().parent),
                                                "sandbox storage": str(_local())}.items() if os.path.exists(v)})
@@ -742,6 +766,57 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise fail(exc) from exc
         store.audit(a.name, "clean cache", f"{key}: {body.what}, {freed} bytes")
         return {"freed": freed}
+
+    # ---- Admin › Maintenance (D885): scheduled clean-up, Gitea's cron tasks
+    @app.get("/api/admin/maintenance")
+    def get_maintenance(a: User = Depends(admin_of)) -> dict[str, Any]:
+        return {"tasks": maintenance.view(), "loops": [f"{u}/{n}" for u, n, _d in _all_loops()]}
+
+    @app.put("/api/admin/maintenance/{key}")
+    def put_maintenance(key: str, body: MaintenanceSet, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if key not in TASKS:
+            raise HTTPException(404, f"no task {key}")
+        try:
+            got = maintenance.set_config(key, body.on, body.every_h, body.params)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "maintenance settings", f"{TASKS[key].title}: {json.dumps(got)}")
+        return got
+
+    @app.post("/api/admin/maintenance/{key}/run")
+    def run_maintenance(key: str, body: MaintenanceRun, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if key not in TASKS:
+            raise HTTPException(404, f"no task {key}")
+        loop = tuple(body.loop.split("/", 1)) if body.loop else None
+        if loop is not None and len(loop) != 2:
+            raise HTTPException(400, "loop: user/name")
+        try:
+            return maintenance.run(key, by=a.name, loop=loop)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.get("/api/apps/{name}/maintenance")
+    def loop_maintenance(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The loop's own clean-up (D885): what its owner may run on it now."""
+        _w, whose = editor(user, owner, name)
+        tag = f"{whose.name}/{name}"
+        return {"tasks": [{"key": t["key"], "title": t["title"], "what": t["what"], "running": t["running"],
+                           "last": next((r for r in t["runs"] if r.get("loop") == tag), None)}
+                          for t in maintenance.view() if t["per_loop"]]}
+
+    @app.post("/api/apps/{name}/maintenance/{key}")
+    def run_loop_maintenance(name: str, key: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose = editor(user, owner, name)
+        if key not in TASKS or not TASKS[key].per_loop:
+            raise HTTPException(404, f"no task {key} for a loop")
+        try:
+            return maintenance.run(key, by=user.name, loop=(whose.name, name))
+        except ValueError as exc:
+            raise fail(exc) from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.post("/api/admin/notify")
     def admin_notify(body: NoticeIn, a: User = Depends(admin_of)) -> dict[str, Any]:

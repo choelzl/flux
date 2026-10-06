@@ -375,6 +375,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   `~/.cache` is the user's own); the files every home starts with for it; the hosts it needs on the
   allowlist; whom it is ready for (each user's Test); an added agent can be removed (its settings and variables,
   the server's and every user's, go with it).
+- **Maintenance (Admin › Maintenance, D885):** clean-up on a schedule, as Gitea's cron tasks -- each
+  task on or off, every so many minutes, hours or days, its settings, its last result and Run now.
+  Clean scratch (FLUX_TMPDIR's old, unused entries; off until turned on, as the folder is the
+  machine's), Reap containers (every minute), Clean idle caches, Disk alert (the admins are told
+  once when a disk runs low), Compact databases (checkpoint, optimise, vacuum), Condense run logs
+  (a log over a size keeps its recent part, the rest gzipped beside it), Prune server tables, and
+  Prune stale records (rows measured under other inputs, D853; reports, deletes when told; off).
+  The four that act on loops run over every loop or the one picked, and a loop's owner can run
+  them on it from its Settings. A running loop is never touched; every run is in the audit trail.
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist the container has no network; a proxy on the host forwards to allowed hosts

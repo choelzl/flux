@@ -1537,9 +1537,24 @@ async function loopPage(name, owner, path = "") {
         if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
         await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
       }, { cls: "danger" }))], { cls: "danger-card" }) : "";
+    // D885: the loop's own clean-up, for whoever may change it; what each did last on this loop
+    const mt = await api(`/apps/${enc(name)}/maintenance${qs}`).catch(() => null);
+    const mtCard = mt && mt.tasks.length ? card("Maintenance", [h("p", { class: "muted" }, st.running ? "Stop the loop first: a running loop is never touched." : "Run on this loop now; the admin's schedule runs them on every loop."),
+      h("div", { class: "mt-list" }, mt.tasks.map(t => {
+        const last = h("div", { class: "small" });
+        const said = (x) => last.replaceChildren(x ? h("span", { class: x.ok ? "" : "bad" }, ago(x.t), " · ", x.said) : "");
+        said(t.last);
+        const run = act("Run", async () => {
+          const got = await api(`/apps/${enc(name)}/maintenance/${t.key}${qs}`, { method: "POST" });
+          said(got); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
+        }, { cls: "small" });
+        run.disabled = !!st.running;
+        return h("div", { class: "mt-row" }, h("div", { class: "mt-head" }, h("strong", {}, t.title), run),
+          h("p", { class: "muted small" }, t.what), last);
+      }))]) : "";
     body.replaceChildren(varsCard, await sharingCard(name, isOwner), advancedCard(e, async (adv) => {
       await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
-    }), danger);
+    }), mtCard, danger);
   }
   /** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
       a list one item a line. */
@@ -2723,7 +2738,7 @@ async function reviseByAgent(body, name, owner) {
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", sandbox: "Sandbox", agents: "Agents and models", users: "Users" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users" };
 const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
@@ -2742,6 +2757,7 @@ async function adminPage(sub = "") {
   if (tab === "resources") return adminResources(body);
   if (tab === "users") return adminUsers(body);
   if (tab === "sandbox") return adminSandbox(body);
+  if (tab === "maintenance") return adminMaintenance(body);
   if (tab === "agents") return adminAgents(body);
   if (tab === "insights") {
     // D819: a sub-tab each, a box or two that go together, so nothing scrolls far; the last looked at kept
@@ -3064,6 +3080,50 @@ async function adminDocuments(body) {
       "Originals kept as ", h("code", {}, "<file>.orig"), "."),
     ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
     ...(r.loops.length ? rows : [empty("Nothing to migrate.")])]));
+}
+
+/** Maintenance (D885): the scheduled clean-up, a row a task -- on or off, how often, its settings,
+    what it last did, Run now (a loop's tasks over every loop, or the one picked). */
+const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
+const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
+  max_mb: "condense over (MB)", keep_mb: "keep recent (MB)", failures_days: "login failures (days)",
+  notices_days: "notifications (days)", audit_days: "audit trail (days, 0 keeps all)", delete: "delete them (not only report)" };
+async function adminMaintenance(body) {
+  const r = await api("/admin/maintenance");
+  const row = (t) => {
+    const mark = saveMark();
+    const on = h("input", { type: "checkbox", checked: t.on, "aria-label": `${t.title} on` });
+    const [unit, mult] = t.every_h >= 24 && t.every_h % 24 === 0 ? EVERY_UNITS[2] : t.every_h >= 1 ? EVERY_UNITS[1] : EVERY_UNITS[0];
+    const n = h("input", { type: "number", min: 1, step: 1, value: Math.round(t.every_h / mult), style: "width:70px", "aria-label": "every" });
+    const u = h("select", { "aria-label": "unit" }, EVERY_UNITS.map(([k]) => h("option", { value: k, selected: k === unit }, k)));
+    const params = Object.entries(t.params).map(([k, v]) => {
+      const f = typeof v === "boolean" ? h("input", { type: "checkbox", checked: v })
+        : h("input", { type: typeof v === "number" ? "number" : "text", min: 0, value: v, style: typeof v === "number" ? "width:90px" : "" });
+      f.dataset.k = k;
+      return h("label", { class: typeof v === "boolean" ? "check" : "stack" }, typeof v === "boolean" ? [f, PARAM_LABEL[k] || k] : [PARAM_LABEL[k] || k, f]);
+    });
+    const fields = params.map(l => l.querySelector("input"));
+    autosave([on, n, u, ...fields], () => api(`/admin/maintenance/${t.key}`, { method: "PUT", body: {
+      on: on.checked, every_h: Math.max(1, Number(n.value) || 1) * EVERY_UNITS.find(([k]) => k === u.value)[1],
+      params: Object.fromEntries(fields.map(f => [f.dataset.k, f.type === "checkbox" ? f.checked : f.type === "number" ? Number(f.value) : f.value])) } }), mark);
+    const pick = t.per_loop ? h("select", { "aria-label": "which loops" }, h("option", { value: "" }, "every loop"),
+      ...r.loops.map(l => h("option", { value: l }, l))) : null;
+    const last = h("div", { class: "small" });
+    const said = (x) => last.replaceChildren(x ? h("span", { class: x.ok ? "" : "bad" }, ago(x.t), x.loop ? ` · ${x.loop}` : "", " · ", x.said) : h("span", { class: "muted" }, "not run yet"));
+    said(t.last);
+    const run = act("Run now", async () => {
+      const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: pick && pick.value ? pick.value : null } });
+      said(got); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
+    }, { cls: "small" });
+    const nextSaid = t.on && t.next ? h("span", { class: "muted small" }, t.next <= Date.now() / 1000 + 60 ? "next: within the minute" : ["next: ", h("time", { title: when(t.next) }, when(t.next))]) : "";
+    return h("div", { class: "mt-row" + (t.on ? "" : " off") },
+      h("div", { class: "mt-head" }, h("label", { class: "check" }, on, h("strong", {}, t.title)), mark),
+      h("p", { class: "muted small" }, t.what),
+      h("div", { class: "mt-ctl" }, h("span", { class: "small" }, "every"), n, u, ...params, pick || "", run),
+      h("div", { class: "mt-last" }, last, nextSaid));
+  };
+  body.replaceChildren(card("Maintenance", [h("p", { class: "muted" }, "Clean-up on a schedule. A running loop is never touched. Every run is in the audit trail."),
+    h("div", { class: "mt-list" }, r.tasks.map(row))]));
 }
 
 /** What every sandbox gets (D698): the network, PATH directories, what every home starts with (D744). */

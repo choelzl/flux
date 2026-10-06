@@ -1121,7 +1121,7 @@ def flows(r: Run) -> None:
         width -- the browser's own window does not go below 500 pixels, so the check used to run at 500."""
         pages = [("bob", h) for h in ("#/", "#/configure", "#/app/sw", "#/app/sw/live", "#/app/sw/live/log", "#/app/sw/results",
                                       "#/app/sw/files", "#/app/sw/settings", "#/account")]
-        pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/audit", "#/admin/models")]
+        pages += [("ada", h) for h in ("#/admin", "#/admin/insights", "#/admin/users", "#/admin/sandbox", "#/admin/maintenance", "#/admin/audit", "#/admin/models")]
         who = None
         for user, h in pages:
             if user != who:
@@ -1150,7 +1150,7 @@ def flows(r: Run) -> None:
         """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
         out = Path(os.environ["FLUX_E2E_SHOTS"])
         out.mkdir(parents=True, exist_ok=True)
-        pages = [("ada", "#/admin"), ("ada", "#/admin/agents"), ("ada", "#/admin/agents?OpenCode"), ("ada", "#/admin/resources"), ("ada", "#/admin/sandbox"),
+        pages = [("ada", "#/admin"), ("ada", "#/admin/agents"), ("ada", "#/admin/agents?OpenCode"), ("ada", "#/admin/resources"), ("ada", "#/admin/sandbox"), ("ada", "#/admin/maintenance"),
                  ("ada", "#/admin/users"), ("bob", "#/account"), ("bob", "#/app/sw"), ("bob", "#/app/sw/settings")]
         who = None
         for user, h in pages:
