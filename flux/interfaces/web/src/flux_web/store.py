@@ -55,7 +55,7 @@ GROUPS: dict[str, dict[str, Any]] = {
               "prices": ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),
               "secret": ("FLUX_REMOTE_API_KEY",),
               "hint": "Any OpenAI-compatible endpoint: hosted, OpenRouter, a local Ollama's /v1."},
-    "agent": {"label": "The agent by default", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
+    "agent": {"label": "Default agent", "tab": "Flux", "endpoint": "FLUX_DEFAULT_AGENT", "public": ("FLUX_DEFAULT_AGENT",), "secret": (),
               "hint": "Writes problems and answers questions unless chosen: an agent's name, or model."},
 }
 PUBLIC_SETTINGS = tuple(k for g in GROUPS.values() for k in g["public"])

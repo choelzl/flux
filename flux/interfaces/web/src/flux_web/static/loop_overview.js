@@ -32,9 +32,9 @@ function lastPass(ctx, r) {
     : c.closest ? ["No feasible design yet; the closest is ", h("strong", {}, String(c.closest)), (c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""]
     : "No decision.")
     : p.conclusion ? String(p.conclusion) : "";
-  return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
+  return card(`Last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
     said ? h("p", { class: "pass-said" }, said) : "",
-    c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "The record"),
+    c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "Record"),
       h("pre", { class: "val small conclusion" }, conclusionText(c))) : "",
     h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
 }
@@ -50,7 +50,7 @@ function topDesigns(ctx, r, n) {
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])].filter(m => top.some(d => d.numbers[m] != null)).slice(0, 4);
-  return h("div", { class: "blk" }, h("h3", {}, `The best ${top.length}`),
+  return h("div", { class: "blk" }, h("h3", {}, `Best ${top.length}`),
     h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num" }, m)))),
       h("tbody", {}, top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, d.name, d.verdict === "failed" ? h("span", { class: "pill bad small" }, "failed")
@@ -62,7 +62,7 @@ function topDesigns(ctx, r, n) {
     does not meet; it is what the next pass can refine, not the answer. */
 function closestCard(ctx, r) {
   const c = r.closest;
-  return card("The decision", [
+  return card("Decision", [
     h("p", { class: "decision-head" }, h("strong", {}, "No feasible design yet"), h("span", { class: "pill warn" }, "no design meets every requirement")),
     h("div", { class: "decision-head" }, h("small", { class: "muted" }, "Closest candidate "), h("span", { class: "mono strong" }, c.name),
       h("span", { class: "muted" }, `measured at ${c.shown}`)),
@@ -86,7 +86,7 @@ async function overview(ctx) {
   const objs = (r.objective_list || []).slice(0, 2);
   const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
     h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
-  const decisionCard = dec ? card("The decision", [
+  const decisionCard = dec ? card("Decision", [
       h("div", { class: "decision-head" }, h("span", { class: "mono strong" }, dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
         h("span", { class: "muted" }, `measured at ${dec.shown}`)),
       // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
@@ -100,7 +100,7 @@ async function overview(ctx) {
       topDesigns(ctx, r, 3)],
       { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
     : r.closest ? closestCard(ctx, r)
-    : card("The decision", [empty(designs.length ? "No decision yet." : "No design measured yet."),
+    : card("Decision", [empty(designs.length ? "No decision yet." : "No design measured yet."),
         topDesigns(ctx, r, 3)]);
   const st = ctx.st;                                // D892: the state as it is now, after the wait
   const q0 = st.question;
@@ -117,9 +117,9 @@ async function overview(ctx) {
       stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
     // D757: a failed start says why, in its log's own words, where the loop is opened
     st.failed && (st.error || []).length ? h("section", { class: "card why-failed", role: "alert" }, h("div", { class: "card-head" }, h("h2", {}, "Why it stopped"),
-      h("button", { class: "small", onclick: () => goTab("Live", "log") }, "The log")),
+      h("button", { class: "small", onclick: () => goTab("Live", "log") }, "Log")),
       h("pre", { class: "why-lines" }, st.error.join("\n"))) : "",
-    q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"),
+    q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "Agent asks"),
       h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
     h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
       // D755: a card with nothing in it is not drawn -- a quiet loop's Overview is its decision and charts

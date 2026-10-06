@@ -404,7 +404,7 @@ function authoringCard(name, st, { onStop } = {}) {
     : st.ok ? h("span", { class: "pill ok" }, "done") : h("span", { class: "pill bad" }, "failed");
   const diff = !running && st.revise && st.before && st.after && st.before !== st.after ? h("details", { class: "blk", open: true },
     h("summary", {}, `What it changed in ${st.revise}`), diffView(lineDiff(st.before, st.after))) : "";
-  return card(`The agent ${st.revise ? "revising" : "writing"} the problem`, [
+  return card(`Agent ${st.revise ? "revising" : "writing"} the problem`, [
     h("div", { class: "row" }, head, h("span", { class: "muted" }, `${st.author} · by ${st.by} · started `, ago(st.started),
       st.ended ? [" · ended ", ago(st.ended)] : "")),
     st.prompt ? h("details", {}, h("summary", { class: "muted" }, "What it was asked"), h("pre", { class: "val small" }, st.prompt)) : "",

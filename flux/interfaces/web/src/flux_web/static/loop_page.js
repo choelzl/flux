@@ -134,7 +134,7 @@ async function loopPage(name, owner, path = "") {
       bannerFor = key;
       bannerLeft = h("span", { class: "muted" });
       const ans = h("textarea", { rows: 3, placeholder: "Your answer" });
-      banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "The agent asks"), bannerLeft),
+      banner.replaceChildren(h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "Agent asks"), bannerLeft),
         h("pre", { class: "question" }, question.question), mine ? [ans,
         h("div", { class: "form-actions" }, act("Answer", async () => { if (ans.value.trim()) await sendNote(ans.value.trim()); }, { cls: "primary" }))] : ""));
     }
@@ -164,7 +164,7 @@ async function loopPage(name, owner, path = "") {
       el.classList.toggle("asking", !!open);
       if (open) {
         const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
-        ask.replaceChildren(h("strong", {}, "The agent asks"), h("span", { class: "muted" }, left ? ` · ${dur(left)} left` : " · timed out"),
+        ask.replaceChildren(h("strong", {}, "Agent asks"), h("span", { class: "muted" }, left ? ` · ${dur(left)} left` : " · timed out"),
           h("pre", { class: "question" }, question.question));
         ta.placeholder = "Your answer to the agent (Enter sends)"; sendBtn.textContent = "Answer";
       } else {
@@ -195,9 +195,9 @@ async function loopPage(name, owner, path = "") {
     const liveTimes = h("input", { type: "checkbox", checked: log.times.checked });
     liveTimes.addEventListener("change", () => { log.times.checked = liveTimes.checked; log.times.dispatchEvent(new Event("change")); });
     log.onTimes(() => { liveTimes.checked = log.times.checked; });
-    const el = card("The log", box, { cls: "livelog-card", actions: [h("label", { class: "check small" }, onlyBad, "problems only"),
+    const el = card("Log", box, { cls: "livelog-card", actions: [h("label", { class: "check small" }, onlyBad, "problems only"),
       h("label", { class: "check small" }, liveTimes, "times"),
-      h("button", { class: "small", type: "button", onclick: () => goTab("Live", "log") }, "The whole log")] });
+      h("button", { class: "small", type: "button", onclick: () => goTab("Live", "log") }, "Full log")] });
     return { el, fill };
   })();
 

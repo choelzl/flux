@@ -311,8 +311,8 @@ function liveTree(base, qs, onQuestion, stream) {
   const stepAt = () => { const k = runs.indexOf(visitOf(selected)); return k < 0 ? runs.length - 1 : k; };
   const stepBtn = (label, title, to) => h("button", { type: "button", class: "small", title, "aria-label": title, onclick: () => goStep(to()) }, label);
   const stepBar = h("div", { class: "step-bar" },
-    stepBtn("⏮", "The first step", () => 0), stepBtn("◀", "The step before", () => stepAt() - 1),
-    stepRange, stepBtn("▶", "The step after", () => stepAt() + 1), stepBtn("⏭", "The newest step", () => runs.length - 1), stepSaid);
+    stepBtn("⏮", "First step", () => 0), stepBtn("◀", "Previous step", () => stepAt() - 1),
+    stepRange, stepBtn("▶", "Next step", () => stepAt() + 1), stepBtn("⏭", "Newest step", () => runs.length - 1), stepSaid);
   stepRange.addEventListener("input", () => goStep(Number(stepRange.value)));
   stepBar.addEventListener("keydown", (e) => {
     if (e.target === stepRange) return;
@@ -494,7 +494,7 @@ function liveTree(base, qs, onQuestion, stream) {
       stream("thinking", "Thinking", thinking, "think"),
       tools.length ? h("section", { class: "astream" }, h("h3", {}, `Commands (${tools.length >= 8 ? "the last 8" : tools.length})`),
         h("ol", { class: "acmds" }, tools.map(t => { const m = /^(\d+)\.\s*(.*)$/.exec(t); return h("li", { value: m ? m[1] : null }, h("code", {}, m ? m[2] : t)); }))) : "",
-      stream("result", "The last command's output", f["last tool output"]),
+      stream("result", "Last command's output", f["last tool output"]),
       stream("reply", "Its words", f["reply (live tail)"], "reply"),
       stream("stderr", "stderr", f.stderr, "err"),
       !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing yet." : "No output.") : "");

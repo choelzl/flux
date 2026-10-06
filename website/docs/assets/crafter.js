@@ -2009,7 +2009,7 @@
 
     // D826: steps instead of one long form -- a step bar, one step at a time, Back and Next; the
     // document, its checklist and the save on the last step (and Save on every step when editing)
-    var STEPS = ["The problem", "Checks", "Measurements", "Objectives", "Who does each step", "More", "Review and save"];
+    var STEPS = ["Problem", "Checks", "Measurements", "Objectives", "Who does each step", "More", "Review and save"];
     // D828: what each step is for, in a line -- in place of the long form's numbered titles
     var STEP_SAYS = [
       "What the loop designs, in your words, and what every design must respect.",
@@ -2239,7 +2239,7 @@
     parts.saveBtn = saveBtn;
     parts.summary = h("dl", { class: "fc-summary" });
     // D913: Review reads top down -- where it stands and what to fix, what it runs, then the document folded
-    var yamlBox = h("details", { class: "fc-yaml-fold" }, [h("summary", {}, [h("strong", { text: "The document" }), " ", parts.file]),
+    var yamlBox = h("details", { class: "fc-yaml-fold" }, [h("summary", {}, [h("strong", { text: "Document" }), " ", parts.file]),
       h("pre", { class: "fc-yaml" }, [parts.code])]);
     if (!opts.save) yamlBox.open = true;             // the docs' page: the document is what one takes away
     var out = parts.out = h("div", { class: "fc-output" }, [

@@ -34,7 +34,7 @@ function resultsView(ctx, r) {
       stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
         h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
         h("tbody", {}, stages.map(([st, m]) => h("tr", {}, h("td", {}, st), ...metrics.map(k => h("td", { class: "mono num" }, fmt(m[k])))))))) : "",
-      full.artifact ? h("div", { class: "blk" }, h("h3", {}, "The design"), codeBlock(full.artifact, "")) : "");
+      full.artifact ? h("div", { class: "blk" }, h("h3", {}, "Design"), codeBlock(full.artifact, "")) : "");
   }
   const table = h("div", {});
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
@@ -69,7 +69,7 @@ function resultsView(ctx, r) {
       h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "stage"), h("th", {}, "metric"),
           h("th", { class: "num" }, "A ", verdictPill(a)), h("th", { class: "num" }, "B ", verdictPill(b)), h("th", { class: "num" }, "B − A"))),
         h("tbody", {}, rows.map(row => h("tr", {}, h("td", { class: "muted" }, row.st), h("td", {}, row.m), cell(row.va), cell(row.vb), delta(row))))),
-      h("h3", {}, "The source", ops ? h("span", { class: "muted" }, changed ? ` · ${changed} line(s) differ` : " · the same") : ""),
+      h("h3", {}, "Source", ops ? h("span", { class: "muted" }, changed ? ` · ${changed} line(s) differ` : " · the same") : ""),
       ops ? (changed ? diffView(ops) : empty("The two sources are the same.")) : empty("A source is missing.")),
       [["Close", null, "primary"]]);
   }
@@ -197,7 +197,7 @@ function resultsView(ctx, r) {
     : h("span", { class: "muted" }, "No decision yet."));
   const head = card(null, [h("div", { class: "results-head" }, h("div", {}, h("h2", {}, "Objective"), h("p", { class: "muted" }, r.objectives,
       r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
-    h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "The answer (JSON)") : "",
+    h("div", { class: "actions" }, r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "Answer (JSON)") : "",
       h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report"))), decisionLine]);
   const resultsEl = h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, resultsDetail, { cls: "detail-card" }));
   /** The view to show, "results" or "graphs": the decision and the detail move to it; the graphs are

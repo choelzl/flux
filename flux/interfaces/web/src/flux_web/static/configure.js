@@ -135,7 +135,7 @@ async function cloneDialog(name, owner) {
   const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
   const wb = h("input", { type: "checkbox", id: "clone-wb" });
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, h("div", { class: "stack" },
-    h("label", { class: "stack" }, "The new loop's name", to),
+    h("label", { class: "stack" }, "New loop name", to),
     h("label", { class: "check" }, wb, "with its workbench (the agents' notes and tools)"),
     h("p", { class: "muted small" }, "Copies the problem, not its runs.")),
     [["Cancel", null], ["Clone", () => ({ to: to.value.trim(), workbench: wb.checked }), "primary"]]);
@@ -354,7 +354,7 @@ async function directEdit(body, name) {
     refused.replaceChildren(v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "");
     return v.error || "";
   }
-  body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "The document", fileIn)),
+  body.replaceChildren(card(null, [h("div", { class: "row" }, h("label", { class: "stack" }, "Document", fileIn)),
     refused, ed.el, h("div", { class: "form-actions" }, save)]), panel.el);
   if (doc) loaderSays();
   setTimeout(panel.draw, 200);

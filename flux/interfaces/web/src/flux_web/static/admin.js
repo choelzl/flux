@@ -102,7 +102,7 @@ async function adminAudit(body, ok = () => true) {
       h("td", { class: "mono muted" }, x.detail))) : [h("tr", {}, h("td", { colspan: 4 }, empty("Nothing matches.")))]));
   };
   what.onchange = who.onchange = draw; find.oninput = draw; draw();
-  body.replaceChildren(card("The audit trail", [h("div", { class: "toolbar" }, what, who, find, count),
+  body.replaceChildren(card("Audit trail", [h("div", { class: "toolbar" }, what, who, find, count),
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
 }
 
@@ -162,7 +162,7 @@ async function adminResources(body) {
   async function load() { r = await api("/admin/resources"); draw(); }
   function draw() {
     const m = r.machine, mem = m.memory || {};
-    const machineCard = card("The machine", h("div", { class: "stats five" },
+    const machineCard = card("Machine", h("div", { class: "stats five" },
       h("div", { class: "stat" }, h("small", {}, "CPUs"), h("div", { class: "big" }, String(m.cpus))),
       h("div", { class: "stat" }, h("small", {}, "Load (1 · 5 · 15 min)"), h("div", { class: "big" }, (m.load || []).map(x => x.toFixed(1)).join(" · ")),
         meter((m.load || [0])[0] / m.cpus), h("div", { class: "muted" }, `${Math.round((m.load || [0])[0] / m.cpus * 100)}% of the CPUs`)),
@@ -239,9 +239,9 @@ async function adminResources(body) {
         timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
         timeChart(ss, disks.map(k => ({ label: k, get: (s) => (s.disks || {})[k] })), { title: "Disks", top: 1, fmt: pct }),
-        timeChart(ss, [{ label: "CPU", get: (s) => s.cpu }], { title: "The containers' CPU (100% = one core)",
+        timeChart(ss, [{ label: "CPU", get: (s) => s.cpu }], { title: "Containers' CPU (100% = one core)",
           top: Math.max(100, ...ss.map(s => s.cpu || 0)) * 1.05, fmt: (v) => `${Math.round(v)}%` }),
-        timeChart(ss, [{ label: "memory", get: (s) => s.cmem }], { title: "The containers' memory", fmt: (v) => bytes(Math.round(v)) }),
+        timeChart(ss, [{ label: "memory", get: (s) => s.cmem }], { title: "Containers' memory", fmt: (v) => bytes(Math.round(v)) }),
         timeChart(ss, [{ label: "loops", get: (s) => s.loops }, { label: "containers", get: (s) => s.containers }],
           { title: "Running", top: 2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2), fmt: (v) => String(Math.round(v)) })));
   }
@@ -261,7 +261,7 @@ async function adminApplications(body) {
     toast(refresh ? `${a.name}: its files taken again` : `${a.name} is one of your loops`, "ok");
     location.hash = `#/app/${enc(a.name)}`;
   };
-  body.replaceChildren(card(`The applications folder`, [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root)),
+  body.replaceChildren(card("Applications folder", [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root)),
     h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Application", "What it asks", "Size", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
       h("tbody", {}, r.applications.map(a => h("tr", {},
         h("td", {}, h("strong", {}, a.name), h("div", { class: "mono muted small" }, a.document)),
@@ -496,7 +496,7 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
           h("td", { class: "num" }, String(v.turns.reduce((s, x) => s + x, 0))), h("td", { class: "num mono" }, fmtTok(v.tokens.reduce((s, x) => s + x, 0))),
           h("td", { class: "num mono" }, `$${v.cost.reduce((s, x) => s + x, 0).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))))));
       fill(...[Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
-        u.top.length ? [h("h3", {}, "The loops that used most"), h("table", { class: "list compact" },
+        u.top.length ? [h("h3", {}, "Highest usage loops"), h("table", { class: "list compact" },
           h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
           h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
             h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))))] : ""]

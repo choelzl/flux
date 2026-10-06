@@ -58,7 +58,7 @@ async function agentsView(ctx) {
         ? [full.error ? h("div", { class: "blk" }, h("h3", {}, "error"), proseBlock(String(full.error))) : "",
            conversation(full.steps, { key: `turn${t.k}` }),
            full.stderr ? h("details", { class: "blk" }, h("summary", {}, "stderr"), proseBlock(String(full.stderr))) : "",
-           full.prompt ? h("details", { class: "blk" }, h("summary", {}, `The prompt (${String(full.prompt).length.toLocaleString()} characters)`), proseBlock(String(full.prompt))) : ""]
+           full.prompt ? h("details", { class: "blk" }, h("summary", {}, `Prompt (${String(full.prompt).length.toLocaleString()} characters)`), proseBlock(String(full.prompt))) : ""]
         : [...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
            ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : [])]));
   };

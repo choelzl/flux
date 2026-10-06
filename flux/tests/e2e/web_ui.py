@@ -362,7 +362,7 @@ def flows(r: Run) -> None:
         r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.fc-checks .fc-error') && !!document.querySelector('.fc-checks .fc-todo')"))
         r.check("no command-line next steps", "Next steps" not in r.text())
         steps = b.js("return [...document.querySelectorAll('.fc-stepbar button')].map(x => x.textContent.replace(/^\\d+/, ''))")
-        r.check("the configurator is steps, not one long form (D826)", steps == ["The problem", "Checks", "Measurements", "Objectives",
+        r.check("the configurator is steps, not one long form (D826)", steps == ["Problem", "Checks", "Measurements", "Objectives",
                 "Who does each step", "More", "Review and save"], str(steps))
         r.check("one step at a time: the document is the last step's", b.js("return document.querySelector('.fc-output').hidden") is True)
         b.js("[...document.querySelectorAll('.fc-stepnav button')].find(x => x.textContent.startsWith('Next')).click(); return 1")
@@ -812,11 +812,16 @@ def flows(r: Run) -> None:
                      " const s = c && c.querySelector('svg.best-chart'); return s ? s.querySelectorAll('.pt').length : 0; })()", timeout=10, what="the chart's points")
         r.check("improvement by design: one point per design (D916: renamed)", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.page("#/app/sw", "document.querySelector('#main .card')", "Overview")
-        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent?.startsWith('The last pass'));"
+        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent?.startsWith('Last pass'));"
                       " return c && [c.querySelector('.pass-said') ? c.querySelector('.pass-said').textContent : '', !!c.querySelector('details.pass-record:not([open])'),"
                       " c.innerText.includes('INFERENCE')]; })()", timeout=20, what="the last pass card")
         r.check("Overview: the last pass says its decision in words, its record folded (D856)", card[0] and card[1] and not card[2], str(card))
+        heads = b.js("return [...document.querySelectorAll('#main h2, #main h3, #main summary')].map(x => x.textContent.trim())")
+        r.check("Overview: concise headings -- Decision, Last pass, Record; none begins with 'The ' (D927)", "Decision" in heads
+                and any(x.startswith("Last pass (") for x in heads) and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
         r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
+        b.wait("[...document.querySelectorAll('#main .livelog-card h2')].some(x => x.textContent === 'Log')", timeout=15, what="the Log card")
+        r.check("Live: the Log card and its Full log button (D927)", b.js("return [...document.querySelectorAll('#main .livelog-card button')].some(x => x.textContent === 'Full log')"))
         b.wait("document.querySelector('.pill.stream').hidden", timeout=15, what="the connection pill hidden once connected")
         r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
@@ -1518,7 +1523,7 @@ def flows(r: Run) -> None:
         r.page("#/app/broken", "document.querySelector('.page-head')", "the failed loop")
         why = b.wait("document.querySelector('.why-failed') && document.querySelector('.why-failed').innerText", timeout=20, what="why it stopped")
         r.check("a failed start says why on its Overview", "no-such-checker" in why and "sandbox" not in why, why[:300])
-        b.js("[...document.querySelectorAll('.why-failed button')].find(x => x.textContent === 'The log').click(); return 1")
+        b.js("[...document.querySelectorAll('.why-failed button')].find(x => x.textContent === 'Log').click(); return 1")
         b.wait("location.hash.endsWith('/live/log')", timeout=10, what="the log, from Why it stopped")
         r.check("Why it stopped opens the log", True)
         # around: a setting refused says why
