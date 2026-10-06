@@ -51,7 +51,7 @@ def test_a_run_gets_the_servers_models_unless_its_user_names_their_own(server, m
     assert r.status_code == 200 and r.json()["values"]["FLUX_REMOTE_API_KEY"] == "set", "a key is never sent back"
     assert "server-key" not in ada.get("/api/admin/settings").text and "server-key" not in bob.get("/api/settings").text
     seen = bob.get("/api/settings").json()
-    assert seen["server"]["FLUX_REMOTE_MODEL"] == "qwen" and [g["id"] for g in seen["groups"]] == ["model", "agent", "opencode", "claude", "codex"]
+    assert seen["inherited"]["FLUX_REMOTE_MODEL"] is True and "qwen" not in bob.get("/api/settings").text and [g["id"] for g in seen["groups"]] == ["model", "agent", "opencode", "claude", "codex"]
     assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_BASE_URL": "not a url"}}, headers=H).status_code == 400
     assert ada.put("/api/admin/settings", json={"values": {"ANTHROPIC_API_KEY": "x"}}, headers=H).status_code == 400, \
         "an agent's key is its own setting (or a variable)"
@@ -122,7 +122,7 @@ def test_each_agent_has_its_own_settings_and_variables_and_an_added_one_its_kind
     assert bob.put("/api/env", json={"name": "SHARED_KEY", "value": "everyone"}, headers=H).status_code == 200
     seen = bob.get("/api/settings").json()
     assert [x["name"] for x in seen["agent_env"]["nga"]["mine"]] == ["ANTHROPIC_API_KEY", "OPENCODE_CONFIG_CONTENT"]
-    assert seen["agent_env"]["nga"]["server"] == [{"name": "NGA_REGION", "value": "eu", "secret": False}]
+    assert seen["agent_env"]["nga"]["server"] == [{"name": "NGA_REGION", "secret": False, "origin": "server"}], "D925: no value"
     assert "for-nga" not in bob.get("/api/settings").text and "corp-key" not in bob.get("/api/settings").text
     env = run_env(store, store.user(name="bob"))
     nga = own(env, "nga")

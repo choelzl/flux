@@ -450,9 +450,12 @@ function binButton(what, title, said, remove) {
         "stroke-width": 1.3, "stroke-linecap": "round", "stroke-linejoin": "round" })));
 }
 function envTable(rows, shadowed = new Set()) {
-  return h("table", { class: "list compact env" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Value"), h("th", {}, "From"))),
+  const mixed = rows.some(x => x.origin !== "server");
+  return h("table", { class: "list compact env" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Value"), h("th", {}, mixed ? "From" : ""))),
+    // D925: a server-origin row says From Server, never its value; Overridden a badge of its own
     h("tbody", {}, rows.map(x => h("tr", { class: shadowed.has(x.name) ? "shadowed" : "" }, h("td", { class: "mono" }, x.name),
-      h("td", { class: "mono" }, x.secret ? h("span", { class: "muted" }, "secret · set") : x.value), h("td", { class: "muted" }, x.from, shadowed.has(x.name) ? " · overridden" : "")))));
+      h("td", { class: "mono" }, x.origin === "server" ? h("span", { class: "muted" }, "From Server") : x.secret ? h("span", { class: "muted" }, "secret · set") : x.value),
+      h("td", { class: "muted" }, x.origin === "server" ? "" : x.from, shadowed.has(x.name) ? h("span", { class: "pill small warn" }, "Overridden") : "")))));
 }
 function envEditor(rows, save, scope) {
   const quiet = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" };     // D820: no password manager here

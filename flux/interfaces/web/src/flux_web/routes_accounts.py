@@ -137,20 +137,71 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def _keys_of(groups: list[dict[str, Any]]) -> dict[str, list[str]]:
         return {"public": [k for g in groups for k in g["public"]], "secret": [k for g in groups for k in g["secret"]]}
 
+    def _inherited_list(scope: str) -> list[dict[str, Any]]:
+        """D925: a scope's variables as a user is shown the server's -- each name, secret or not, its
+        origin; never its value (the run gets it, the page says From Server)."""
+        return [{"name": k, "secret": v["secret"], "origin": "server"} for k, v in sorted(store.env(scope).items())]
+
+    ctx.inherited_list = _inherited_list
+
+    def _from_server(user: User, agents: dict[str, Any]) -> dict[str, bool]:
+        """D925: each setting a user's runs would take from the server -- its settings or its own
+        environment -- while the user names no endpoint of their own in that group (the page gates
+        on that as it changes): explicit origin, no value. An agent's fields by the core resolver
+        over the server's scopes alone (D922)."""
+        import os
+
+        from flux_loop.agent_env import aliases
+
+        from .agents import run_settings
+        from .runs import agent_scopes
+        from .store import GROUPS
+
+        if user.external:                                  # D734: nothing of the server's
+            return {}
+        server = store.server_settings(reveal=True)
+        machine = dict(os.environ)
+        out: dict[str, bool] = {}
+        model_keys = {"FLUX_REMOTE_API_KEY": ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")}
+        for g in GROUPS.values():
+            for k in (*g["public"], *g["secret"]):
+                if server.get(k) or any(machine.get(x) for x in model_keys.get(k, (k,))):
+                    out[k] = True
+        mine = store.settings(user)
+        flux = {} if mine.get("FLUX_REMOTE_BASE_URL") else {k: server.get(k) or machine.get(k, "") for k in GROUPS["model"]["public"]
+                                                              + GROUPS["model"]["secret"]}
+        every = {"global": {n: x["value"] for n, x in store.env("global", reveal=True).items()}}
+        for a in agents.values():
+            _own, eff = run_settings(a, *agent_scopes(store, None, a, machine, server, {}, flux, every))
+            names = aliases(a.name, a.kind)
+            for f in eff.fields:
+                k = names.get("key" if f == "auth" else f)
+                if k and f != "token":                     # D748: a login's token is only ever the user's own
+                    out[k] = True
+            if server.get(a.timeout()):
+                out[a.timeout()] = True
+            pin, pout = a.prices()
+            for k, fk in ((pin, "FLUX_REMOTE_PRICE_IN"), (pout, "FLUX_REMOTE_PRICE_OUT")):
+                if server.get(k) or (a.name == "opencode" and "endpoint" in eff.fields and eff.fields["endpoint"]["source"] == "Flux's model"
+                                     and (server.get(fk) or machine.get(fk))):
+                    out[k] = True
+        return out
+
     @app.get("/api/settings")
     def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
-        """The user's model settings, and the server's they fall back to (D696): a server key is
-        only said to be set, never shown. Each agent's variables, the user's and the server's (D807)."""
+        """The user's model settings, and which of them their runs take from the server (D696, D925):
+        only that -- `inherited` -- and `overridden` where their own value displaces one; never a
+        server value. Each agent's variables, the user's and the server's names (D807)."""
         from .agents import visible
 
         agents = visible(store)
         groups = _groups(agents)
-        # D734: an external user's runs fall back to nothing of the server's: no server value is offered
-        server = {} if user.external else store.server_settings()
-        env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _env_list(f"agent:{n}")}
+        inherited = _from_server(user, agents)
+        values = store.settings(user)
+        env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _inherited_list(f"agent:{n}")}
                for n in agents}
-        return {"values": store.settings(user), "server": server, "groups": groups, **_keys_of(groups),
-                "agent_env": env, "external": user.external}
+        return {"values": values, "inherited": inherited, "overridden": {k: True for k in inherited if values.get(k)},
+                "groups": groups, **_keys_of(groups), "agent_env": env, "external": user.external}
 
     @app.get("/api/admin/settings")
     def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -192,8 +243,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/env")
     def my_env(user: User = Depends(user_of)) -> dict[str, Any]:
-        """The user's variables, and the server's they come after (names only for a secret)."""
-        return {"mine": _env_list(f"user:{user.id}"), "server": [] if user.external else _env_list("global")}   # D734
+        """The user's variables, and the server's they come after (names only, D925)."""
+        return {"mine": _env_list(f"user:{user.id}"), "server": [] if user.external else _inherited_list("global")}   # D734; D925: names, From Server
 
     @app.put("/api/env")
     def put_my_env(body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:

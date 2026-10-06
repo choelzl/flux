@@ -657,20 +657,32 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const secret = new Set(st.secret);
   const labels = Object.assign({}, SETTING_LABELS, ...st.groups.map(g => g.labels || {}));
   const priceKeys = new Set(st.groups.flatMap(g => g.prices || []));
+  // D925: `server` -- which settings the user's runs take from the server (origin only, never a value); inherited
+  // while the group names no endpoint of the user's own, as the field says now
+  const groupOf = Object.fromEntries(st.groups.flatMap(g => [...g.public, ...g.secret].map(k => [k, g])));
+  const ownEndpoint = (k) => { const g = groupOf[k]; if (!g || g.endpoint === k) return false;
+    return !!(inputs[g.endpoint] ? inputs[g.endpoint].value.trim() : st.values[g.endpoint]); };
+  const inherited = (k) => !!(server && server[k]) && !ownEndpoint(k);
+  const badges = {};
+  const redraw = (k) => { const g = groupOf[k]; if (g && g.endpoint === k)            // D925: an own endpoint: none of the server's
+    for (const x of [...g.public, ...g.secret]) if (x !== k && inputs[x] && inputs[x].redraw) inputs[x].redraw(); };
   const field = (k) => {
-    const fall = server ? server[k] : null, sec = secret.has(k), price = priceKeys.has(k);
-    const holder = (cur) => sec ? (cur ? "set · type to replace" : fall ? "the server's key" : "not set")
-      : price ? (fall ? `the admin's: $${fall}` : "not priced") : (fall ? `the server's: ${fall}` : "not set");
+    const sec = secret.has(k), price = priceKeys.has(k);
+    const holder = (cur) => sec ? (cur ? "set · type to replace" : inherited(k) ? "From Server" : "Not set")
+      : price ? (inherited(k) ? "From Server" : "not priced") : (inherited(k) ? "From Server" : "Not set");
     // D820: a key is a secret of the server's, not a login: no password manager fills it, nor the field before it
     inputs[k] = h("input", { type: sec ? "password" : "text", autocomplete: sec ? "new-password" : "off", name: `flux-setting-${k}`,
       "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other", value: sec ? "" : (st.values[k] || ""),
       placeholder: holder(st.values[k]), ...(price ? { inputmode: "decimal", class: "price" } : {}) });
     const mark = saveMark(), clearBox = h("span", {});
-    const drawClear = () => clearBox.replaceChildren(st.values[k] ? act("Clear", async () => {
-      await save({ [k]: null }); st.values[k] = ""; inputs[k].value = ""; inputs[k].placeholder = holder(""); drawClear();
+    // D925: Overridden -- a value of one's own where the server's would apply -- a badge of its own
+    const badge = badges[k] = h("span", { class: "pill small warn set-overridden" }, "Overridden");
+    const drawClear = () => { clearBox.replaceChildren(st.values[k] ? act("Clear", async () => {
+      await save({ [k]: null }); st.values[k] = ""; inputs[k].value = ""; inputs[k].placeholder = holder(""); drawClear(); redraw(k);
       mark.className = "save-mark small ok"; mark.textContent = "cleared";
-    }, { cls: "small" }) : "");
+    }, { cls: "small" }) : ""); badge.style.display = server && server[k] && st.values[k] ? "" : "none"; };
     drawClear();
+    inputs[k].redraw = () => { inputs[k].placeholder = holder(sec ? st.values[k] : ""); badge.style.display = server && server[k] && st.values[k] ? "" : "none"; };
     // D833: saved as it changes; a key once typed and left (never shown back)
     autosave(inputs[k], async () => {
       const v = inputs[k].value.trim();
@@ -679,10 +691,11 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
       await save({ [k]: v || null });
       st.values[k] = sec ? "set" : v;
       if (sec) { inputs[k].value = ""; inputs[k].placeholder = holder("set"); }
-      drawClear();
+      drawClear(); redraw(k);
     }, mark, { typing: !sec });
     Object.assign(inputs[k], { id: `set-${scope}-${k}`, title: k });          // D846: the variable's name, on hover
-    return { label: labels[k] || k, cell: h("span", { class: "inline" }, inputs[k], clearBox, mark) };
+    if (server && groupOf[k] && groupOf[k].endpoint === k) inputs[k].addEventListener("input", () => redraw(k));
+    return { label: labels[k] || k, cell: h("span", { class: "inline" }, inputs[k], badge, clearBox, mark) };
   };
   // D896: a field as the agent's own are -- its label above it, two to a row
   const row = (k) => { const f = field(k);

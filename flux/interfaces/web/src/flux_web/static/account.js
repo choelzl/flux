@@ -70,8 +70,8 @@ async function accountPage() {
     // model; the variables every agent of yours gets
     card("My agents and models", [
       h("p", { class: "muted" }, st.external ? "Your own settings only. Keys are encrypted and never shown."
-        : "Empty: the server's (grey). Your own endpoint uses only your values. Keys are encrypted and never shown."),
-      ...settingsForm(st, { server: st.server, save, scope: "me", panels: logins.panels,
+        : "Empty: From Server where a field says so. Your own endpoint uses only your values. Keys are encrypted and never shown."),
+      ...settingsForm(st, { server: st.inherited || {}, save, scope: "me", panels: logins.panels,
         extraTabs: [{ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent of yours"),
           h("p", { class: "muted small" }, "Every run and agent of yours gets these; a loop's own win."),
           envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
@@ -139,6 +139,7 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
       toast(got.ok ? `${a.label} is ready${loop ? ` for ${loop}` : " for your loops"}` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
       await drawList();
     };
+    const FIELD_WORD = { endpoint: "endpoint", key: "key", auth: "token", token: "login token", model: "model" };
     // D924: three states apart -- installation, connection (how, from where; never a value), verification
     const panelOf = (a) => {
       const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
@@ -151,7 +152,10 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
         h("dl", { class: "agent-states" },
           ...line("Installation", h("span", { class: `pill ${a.program ? "ok" : "bad"}` }, a.program ? "installed" : "missing")),
           ...line("Connection", h("span", { class: `pill ${c.mechanism === "none" ? "" : "ok"}` }, MECHANISM[c.mechanism] || c.mechanism),
-            h("span", { class: "muted small" }, c.said)),
+            h("span", { class: "muted small" }, c.said),
+            // D922: where each of its settings comes from, as its runs resolve them -- the source, never the value
+            Object.keys(a.fields || {}).length ? h("span", { class: "muted small agent-sources" }, Object.entries(a.fields)
+              .map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")) : ""),
           ...line("Verification", h("span", { class: `pill ${ver[0]}`, title: v.when ? `tested ${when(v.when)}` : "" }, ver[1]),
             v.state === "ready" && v.when ? h("span", { class: "muted small" }, when(v.when)) : "",
             v.state === "failed" && v.said ? h("span", { class: "bad small" }, v.said) : "",

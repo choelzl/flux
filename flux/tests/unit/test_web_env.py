@@ -45,7 +45,8 @@ def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
                 "FLUX_CLAUDE_ENV", "FLUX_AGENTS", "FLUX_SHARED_VARS", "FLUX_CLAUDE_API_KEY", "FLUX_REMOTE_MODEL", "1X", "A-B"):
         assert bob.put("/api/apps/x/env", json={"name": bad, "value": "0"}, headers=H).status_code == 400, bad
     seen = bob.get("/api/apps/x/env").json()
-    assert {x["name"]: x["value"] for x in seen["server"]} == {"HF_TOKEN": "set", "LEVEL": "server"}, "a secret is never sent back"
+    assert seen["server"] == [{"name": "HF_TOKEN", "secret": True, "origin": "server"}, {"name": "LEVEL", "secret": False, "origin": "server"}], \
+        "D925: the server's names and their origin, never a value"
     assert "hf-secret" not in bob.get("/api/env").text and "hf-secret" not in ada.get("/api/admin/env").text
     bob_u = store.user(name="bob")
     env = run_env(store, bob_u, "x")

@@ -1157,11 +1157,25 @@ def flows(r: Run) -> None:
         r.login("bob")
         r.page("#/account", "document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN')", "bob's model settings")
         got = b.js("const i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN'); return [i.disabled, i.placeholder]")
-        r.check("a user's price waits for their own endpoint, the admin's shown", got == [True, "the admin's: $0.4"], str(got))
+        r.check("a user's price waits for their own endpoint, From Server shown (D925)", got == [True, "From Server"], str(got))
+        r.check("no inherited value anywhere in the page, its fields or their attributes (D925)",
+                b.js("return !document.querySelector('#main').outerHTML.includes('0.4')"))
         got = b.js("const e = document.querySelector('#set-me-FLUX_REMOTE_BASE_URL'), i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN');"
-                   "e.value = 'https://mine.example/v1'; e.dispatchEvent(new Event('input')); const on = !i.disabled;"
-                   "e.value = ''; e.dispatchEvent(new Event('input')); return [on, i.disabled]")
-        r.check("and opens once they name one", got == [True, True], str(got))
+                   "e.value = 'https://mine.example/v1'; e.dispatchEvent(new Event('input')); const on = [!i.disabled, i.placeholder];"
+                   "e.value = ''; e.dispatchEvent(new Event('input')); return [on, i.disabled, i.placeholder]")
+        r.check("and opens once they name one -- then the server's is not theirs: not From Server (D925)",
+                got == [[True, "not priced"], True, "From Server"], str(got))
+        r.login("ada")                                     # D925: a server model and variable, as bob is shown them
+        r.api("/admin/env", "PUT", {"name": "E2E_SHARED", "value": "server-literal-e2e"})
+        r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_MODEL": "server-model-e2e"}})
+        r.login("bob")
+        r.page("#/account", "document.querySelector('#set-me-FLUX_CODEX_MODEL')", "bob's model settings")
+        got = b.js("const m = document.querySelector('#main').outerHTML; return [document.querySelector('#set-me-FLUX_CODEX_MODEL').placeholder,"
+                   " m.includes('server-model-e2e'), m.includes('server-literal-e2e'), [...document.querySelectorAll('table.env td')].some(t => t.textContent === 'From Server')]")
+        r.check("inherited model and variables say From Server, their values nowhere in the page (D925)", got == ["From Server", False, False, True], str(got))
+        r.login("ada")
+        r.api("/admin/env", "PUT", {"name": "E2E_SHARED", "value": None})
+        r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_MODEL": None}})
         r.login("ada")
         r.api("/admin/settings", "PUT", {"values": {"FLUX_REMOTE_PRICE_IN": None}})
         r.clean("agent tabs and variables")

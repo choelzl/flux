@@ -117,6 +117,29 @@ def test_opencode_accepts_a_provider_key_it_will_forward(tmp_path, monkeypatch):
     assert not got["ok"], "another kind's key, not given to it: not its connection"
 
 
+def test_inherited_settings_are_said_by_origin_never_by_value(server, monkeypatch):
+    """D925 (A9): what a user's runs take from the server -- its settings, its own environment -- is
+    sent as origin alone; the server's timeout counts, the machine's does not (D893); a login token
+    never; Overridden where the user's own displaces one."""
+    c, store = server
+    ian = store.user(name="ian")
+    monkeypatch.setenv("FLUX_CODEX_MODEL", "synthetic-machine-model")
+    monkeypatch.setenv("FLUX_CLAUDE_TIMEOUT_S", "999")
+    store.set_server_setting("FLUX_CODEX_TIMEOUT_S", "321")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://server.invalid/v1")          # the machine's native endpoint: its model goes with it
+    store.set_env("global", "SHARED", "synthetic-server-variable")
+    store.set_setting(ian, "FLUX_CODEX_BASE_URL", "https://mine.invalid/v1")
+    got = c.get("/api/settings")
+    seen = got.json()
+    assert seen["inherited"].get("FLUX_CODEX_MODEL") and seen["inherited"].get("FLUX_CODEX_TIMEOUT_S")
+    assert not seen["inherited"].get("FLUX_CLAUDE_TIMEOUT_S"), "the machine's time limit is not a web run's"
+    assert seen["overridden"] == {"FLUX_CODEX_BASE_URL": True}
+    assert "server" not in seen and "synthetic-machine-model" not in got.text and "server.invalid" not in got.text and "321" not in got.text
+    env = c.get("/api/env").json()
+    assert env["server"] == [{"name": "SHARED", "secret": False, "origin": "server"}]
+    assert "synthetic-server-variable" not in c.get("/api/apps/x/env").text
+
+
 def test_the_authoring_picker_says_installed_and_whether_its_connection_was_tested(server):
     """D924 (A6): /api/agents offers an installed agent with its verification -- untested, then failed --
     so the picker says so before a draft is spent; it is not disabled for it."""

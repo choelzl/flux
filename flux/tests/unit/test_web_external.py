@@ -160,8 +160,9 @@ def test_every_user_logs_in_and_the_server_is_not_offered_to_an_external_one(tmp
     lg = eve.get("/api/logins").json()
     assert [a["id"] for a in lg["agents"]] == ["opencode", "claude", "codex"]
     assert {a["id"]: a["command"] for a in lg["agents"]}["codex"] == "codex login --device-auth", "the admin's command"
-    assert "FLUX_REMOTE_MODEL" not in eve.get("/api/settings").json()["server"]
-    assert ian.get("/api/settings").json()["server"]["FLUX_REMOTE_MODEL"] == "server-model"
+    assert "FLUX_REMOTE_MODEL" not in eve.get("/api/settings").json()["inherited"]
+    assert ian.get("/api/settings").json()["inherited"]["FLUX_REMOTE_MODEL"] is True and "server-model" not in ian.get("/api/settings").text, \
+        "D925: From Server, by origin -- never the value"
     assert eve.put("/api/settings", json={"values": {"FLUX_CODEX_LOGIN": "x"}}, headers=H).status_code == 400, "the admin's only"
 
 

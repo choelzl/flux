@@ -241,7 +241,7 @@ def test_an_added_agent_runs_as_its_kind_with_its_own_set(tmp_path, monkeypatch)
 
     prog = tmp_path / "nga-bin"
     prog.write_text(f"#!{sys.executable}\nimport json, os, sys\n"
-                    f"json.dump({{'env': dict(os.environ), 'argv': sys.argv}}, open({str(tmp_path / 'nga.json')!r}, 'w'))\n")
+                    f"json.dump({{'env': dict(os.environ), 'argv': sys.argv}}, open({str(tmp_path / 'nga')!r} + ('.version' if '--version' in sys.argv else '') + '.json', 'w'))\n")
     prog.chmod(0o755)
     monkeypatch.setenv("FLUX_AGENTS", json.dumps({"nga": "opencode", "BAD": "opencode", "x": "cursor"}))
     monkeypatch.setenv("FLUX_NGA_BIN", str(prog))

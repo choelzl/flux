@@ -61,7 +61,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """A loop's variables, with the user's and the server's under them, and its advanced settings."""
         _w, whose, _d, _run = loop_of(name, user, owner)
         return {"loop": _env_list(f"loop:{whose.name}:{name}"), "user": _env_list(f"user:{whose.id}"),
-                "server": [] if whose.external else _env_list("global"),       # D734: not under an external owner's runs
+                "server": [] if whose.external else ctx.inherited_list("global"),   # D734, D925: names only
                 "advanced": advanced(store, whose.name, name), "advanced_said": ADVANCED,
                 "sandboxed_server": sandbox, "can_advance": user.admin}
 
