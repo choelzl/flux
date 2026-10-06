@@ -13,6 +13,11 @@ build failure, not a score, so "best so far" is always a design that compiles.
 What a document cannot say in prose or numbers is a command beside it -- a search, a check,
 a stage, a composition (D798-D803); `needs:` names a stage's tools on PATH, else it is
 skipped; `params:` reach any command as `{params}`. The record is named by the id.
+
+The class's methods by concern are mixins beside it (D891): `task_prototype` (the prototype, its
+cost and spelling), `task_measure` (objectives, stages, measuring, cache keys and versions),
+`task_knowledge` (the library and digests), `task_draft` (who drafts, the coding agent's turns) and
+`task_parts` (parts, sub-loops, composition); here are the prompts, the gate, build and judge.
 """
 
 from __future__ import annotations
@@ -464,6 +469,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
     def judge(self, built: Any, cand: Candidate, subgoal: str | None, state: LoopState) -> Verdict:
         fails, text = self.fast_check(built, cand, subgoal, state)
         return Verdict(fails == 0, float(fails), text if fails else "", {"failures": fails})
+
 
 # ------------------------------------------------------------------ the report
 def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str]:
