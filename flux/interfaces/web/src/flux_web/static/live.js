@@ -1,7 +1,7 @@
 // Flux web: a loop's log and its live task tree (D889: split out of app.js).
 
 import { crafterCatalog, setCrafterCatalog } from "./state.js";
-import { NARROW, dur, empty, followStream, h, skeleton, streamPill } from "./ui.js";
+import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
@@ -9,7 +9,7 @@ import { conversation, markdown } from "./loops.js";
 /** D816: a log line's stamp with its day -- "Oct 05 14:03:22" -- so a run of several days reads. */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const logAt = (at) => `${MONTHS[Number(at.slice(5, 7)) - 1] || at.slice(5, 7)} ${at.slice(8, 10)} ${at.slice(11, 19)}`;
-function logView(base, qs) {
+function logView(base, qs, stream) {
   const lines = []; let partial = "", seen = 0;
   const listeners = [];                                   // D697: the Live tab's log follows the same stream
   const MAX = 200000, WRAPPED = 3000;                     // D699: lines kept; with wrap on, the last drawn
@@ -143,24 +143,20 @@ function logView(base, qs) {
   const earlier = h("span", { class: "log-earlier small", hidden: true });
   bar.append(earlier, pill.el);
   const TAIL = 2 << 20;
-  const url = (all) => `${base}/log${qs}${qs ? "&" : "?"}tail=${all ? 0 : TAIL}`;
-  let es;
-  const open = (all) => {
-    es = followStream(url(all), "log", add, pill.set, (sk) => {
-      earlier.hidden = false;
-      earlier.replaceChildren(`${(sk.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `,
-        h("button", { type: "button", class: "small", onclick: () => { es.close(); lines.length = 0; shown = []; partial = ""; seen = 0;
-          starts.length = 0; earlier.hidden = true; drawStarts(); render(); open(true); } }, "Load all"));
-    });
-  };
-  open(false);
-  return { el: h("div", {}, bar, box), close: () => es.close(), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
+  // D917: the log is a part of the loop's one stream
+  stream.on("log", { onData: add, onState: pill.set, onSkipped: (sk) => {
+    earlier.hidden = false;
+    earlier.replaceChildren(`${(sk.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `,
+      h("button", { type: "button", class: "small", onclick: () => { lines.length = 0; shown = []; partial = ""; seen = 0;
+        starts.length = 0; earlier.hidden = true; drawStarts(); render(); stream.restart("log", { tail: 0 }); } }, "Load all"));
+  } }, { tail: TAIL });
+  return { el: h("div", {}, bar, box), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
            problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
 
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
-function liveTree(base, qs, onQuestion) {
+function liveTree(base, qs, onQuestion, stream) {
   const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
   let loadAll = () => {};                           // D759: the passes a window left out
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
@@ -583,15 +579,14 @@ function liveTree(base, qs, onQuestion) {
   const pill = streamPill();
   // D759: a day-long run's tree opens on its last 30 passes; "Earlier" loads the rest
   const WINDOW = 30;
-  let es = followStream(`${base}/events${qs}${qs ? "&" : "?"}window=${WINDOW}`, "events", onEvent, pill.set);
-  // D761: what runs now -- its live fields, the standings -- from live.json, whole each time it changes
-  const liveEs = new EventSource(`${base}/live${qs}`);
+  // D917: the journal and the live state are parts of the loop's one stream
   let lastLive = null;
-  liveEs.addEventListener("live", (m) => { try { lastLive = JSON.parse(m.data); LT.applyLive(mdl, lastLive); dirty = true; } catch (_) {} });
+  stream.on("events", { onData: onEvent, onState: (st) => { pill.set(st); if (lastLive) LT.applyLive(mdl, lastLive); } }, { window: WINDOW });
+  // D761: what runs now -- its live fields, the standings -- from live.json, whole each time it changes
+  stream.on("live", { onData: (doc) => { lastLive = doc; LT.applyLive(mdl, lastLive); dirty = true; } });
   loadAll = () => {
-    es.close();
     LT.apply(mdl, { ev: "hello" }); open.clear(); selected = null; selLeafKey = null; dirty = true;
-    es = followStream(`${base}/events${qs}`, "events", onEvent, (st) => { pill.set(st); if (lastLive) LT.applyLive(mdl, lastLive); });
+    stream.restart("events", { window: 0 });
   };
   const tick = setInterval(() => { if (dirty || [...nodes.values()].some(running)) draw(); }, 1000);
   const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
@@ -599,7 +594,7 @@ function liveTree(base, qs, onQuestion) {
     h("label", { class: "check" }, follow, "follow the running task"),
     collapseLbl, search, pill.el);
   setMode(mode);
-  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => { es.close(); liveEs.close(); clearInterval(tick); } };
+  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => clearInterval(tick) };
 }
 
 export { liveTree, logView };

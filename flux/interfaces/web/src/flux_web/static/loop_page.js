@@ -2,7 +2,7 @@
 // drawer, the refresh; each tab's drawing in its own module (D892: out of loops.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, pageShow, skeleton, statePill, toast } from "./ui.js";
+import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, statePill, toast } from "./ui.js";
 import { liveTree, logView } from "./live.js";
 import { configureInto } from "./configure.js";
 import { agentSelect, binButton, lastSaid, markdown, startLoop, stopLoop } from "./loops.js";
@@ -48,9 +48,13 @@ async function loopPage(name, owner, path = "") {
   const tabBar = h("div", { class: "tabs", role: "tablist" }), subHolder = h("div", { class: "subrow" });
   let results = null;                                 // D916: the Results tab's views, while it stays open
   let question = st.question || null;
-  const log = logView(base, qs);
-  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); });
-  cleanup.push(() => { live.close(); log.close(); });
+  // D917: the log, the journal and the live state over one stream, open only while a view shows them
+  const stream = loopStream(base, qs);
+  const log = logView(base, qs, stream);
+  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); }, stream);
+  // D917: a poll's request, let go when the page is left
+  const leaving = new AbortController();
+  cleanup.push(() => { live.close(); stream.close(); leaving.abort(); });
 
   const crumbBar = h("div", {});
   const leaveBtn = () => act("Leave", async () => {           // D702: a shared loop, left by its guest
@@ -92,7 +96,18 @@ async function loopPage(name, owner, path = "") {
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
   }
-  async function refresh() { const was = st.running; st = await api(`${base.slice(4)}/state${qs}`); drawHead(); drawBanner(); if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody(); }
+  // D917: the 5 s poll sends no state request while one is out; only the latest asked is drawn
+  let refreshing = null, asked = 0;
+  async function refresh() {
+    const mine = ++asked, was = st.running;
+    const p = refreshing = api(`${base.slice(4)}/state${qs}`, { signal: leaving.signal });
+    let got;
+    try { got = await p; } finally { if (refreshing === p) refreshing = null; }
+    if (mine !== asked || show.stale()) return;
+    st = got;
+    question = st.question || null;                       // the state says whether the agent still asks
+    drawHead(); drawBanner(); if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody();
+  }
   // notes and the agent's question
   const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
   const noteList = h("div", { class: "notes" });
@@ -247,6 +262,10 @@ async function loopPage(name, owner, path = "") {
   }
   async function drawBody() {
     drawBanner(); drawSubs();
+    // D917: the stream carries what the view shows -- Tasks: the journal, the live state and the
+    // log's card; the Log: the log; any other tab: nothing (each part resumes where it was)
+    const ran = st.running || st.last_active;
+    stream.want(tab !== "Live" ? [] : curSub() === "log" ? ["log"] : !curSub() && ran ? ["events", "live", "log"] : []);
     if (tab === "Settings") {
       if (curSub() === "problem") { configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder }); return; }
       return settingsView(ctx);
@@ -299,13 +318,16 @@ async function loopPage(name, owner, path = "") {
   }
   let beat = 0, busy = false;
   const tick = setInterval(async () => {
+    if (document.hidden || refreshing) return;            // D917: a hidden tab asks nothing (it catches up when shown); one at a time
     await refresh().catch(() => {});
     // the Overview and the Timeline follow a running loop (D693, D696): once a minute
     if (++beat % 12 === 0 && (tab === "Overview" || (tab === "Live" && curSub() === "timeline")) && st.running && !document.hidden && !busy) {   // every minute (D696)
       busy = true; try { await (tab === "Overview" ? overview(ctx) : timelineView()); } catch (_) { /* the next beat */ } finally { busy = false; }
     }
   }, 5000);
-  cleanup.push(() => clearInterval(tick));
+  const shown = () => { if (!document.hidden) refresh().catch(() => {}); };
+  document.addEventListener("visibilitychange", shown);
+  cleanup.push(() => { clearInterval(tick); document.removeEventListener("visibilitychange", shown); });
   setPageRefresh(() => refresh());
   drawHead(); drawTabs(); drawBanner(); drawBody();
   show(crumbBar, header, banner, tabBar, subHolder, body, askFab, drawer);

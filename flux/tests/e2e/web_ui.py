@@ -1041,6 +1041,38 @@ def flows(r: Run) -> None:
         r.clean("passes at once")
     r.step("passes at once", passes_at_once)
 
+    def live_tabs():
+        """D917: four Live windows of two loops -- one stream each, not three -- leave the server
+        reachable from the first: its /api/me and its Results answer at once."""
+        r.login("bob")
+        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
+        first = b.cmd("WebDriver:GetWindowHandle", {})
+        first = first.get("value", first) if isinstance(first, dict) else first
+        r.page("#/app/fromex/live", "document.querySelector('.tree .node')", "Live, the first window")
+        others = []
+        try:
+            for h in ("#/app/sw/live", "#/app/fromex/live/log", "#/app/sw/live"):
+                win = b.cmd("WebDriver:NewWindow", {"type": "window"})["handle"]
+                others.append(win)
+                b.cmd("WebDriver:SwitchToWindow", {"handle": win})
+                b.go(f"{r.url}/{h}")
+                b.wait("document.querySelector('.tree .node, .logview')", timeout=30, what=f"{h} in another window")
+            b.cmd("WebDriver:SwitchToWindow", {"handle": first})
+            ms = b.ajs("""const done = arguments[0], t = performance.now();
+                fetch('/api/me').then(() => done(performance.now() - t), () => done(-1)); setTimeout(() => done(-2), 8000);""")
+            r.check("four Live windows: /api/me answers at once", 0 <= ms < 2000, f"{ms} ms")
+            t0 = time.time()
+            r.button("Results", ".tabs")
+            b.wait("!document.querySelector('#main .skeleton') && location.hash.endsWith('/results')", timeout=8, what="Results beside four Live windows")
+            r.check("four Live windows: Results opens", time.time() - t0 < 5, f"{time.time() - t0:.1f}s")
+        finally:
+            for win in others:
+                b.cmd("WebDriver:SwitchToWindow", {"handle": win})
+                b.cmd("WebDriver:CloseWindow", {})
+            b.cmd("WebDriver:SwitchToWindow", {"handle": first})
+        r.clean("live tabs")
+    r.step("live tabs", live_tabs)
+
     def decision_and_best():
         """D809: a loop's decision is its record's latest pass's (no need for the run to end), and the
         best are ranked by the objectives' own rule; the Overview shows both."""

@@ -35,8 +35,14 @@ function notify(text, kind, href) {
   drawBell();
 }
 /** Every 10 s: a loop that stopped (finished, failed, stopped) or whose agent asks. */
+let polling = false, pollBeat = 0;
 async function pollLoops() {
-  if (!me) return;
+  if (!me || polling) return;                       // D917: one at a time -- a slow answer is not asked again
+  if (document.hidden && pollBeat++ % 3) return;    // a hidden tab: every 30 s, still in time for a desktop notice
+  polling = true;
+  try { await pollOnce(); } finally { polling = false; }
+}
+async function pollOnce() {
   bellFor(me.name);
   let loops;
   try { loops = await api("/loops"); } catch (_) { return; }

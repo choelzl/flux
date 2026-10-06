@@ -35,14 +35,14 @@ async function withOwner(owner, fn) {
 }
 /** A server call's answer, checked (D907): the session that ended, the server out of reach and an
     error said as for any call -- for a caller that reads the body itself (a file, its headers). */
-async function request(path, { method = "GET", body, form } = {}) {
+async function request(path, { method = "GET", body, form, signal } = {}) {
   path = owned(path);
-  const opt = { method, headers: { "X-Flux": "1" }, credentials: "same-origin" };
+  const opt = { method, headers: { "X-Flux": "1" }, credentials: "same-origin", signal };
   if (form) opt.body = form;
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
   let r;
   try { r = await fetch("/api" + path, opt); }
-  catch (x) { offline(true); throw new Error("The server cannot be reached."); }
+  catch (x) { if (x.name === "AbortError") throw x; offline(true); throw new Error("The server cannot be reached."); }   // D917: a call let go is no outage
   offline(false);
   if (r.status === 401 && path !== "/login") {
     // D757: a session that ended (logged out elsewhere, expired) is said, not a silent jump to the login
@@ -94,6 +94,64 @@ function followStream(url, event, onData, onState, onSkipped) {
   };
   open();
   return { close: () => { closed = true; clearTimeout(timer); if (es) es.close(); } };
+}
+/** D917: a loop's journal, live state and log over ONE server-sent stream (/stream): three per Live
+    page took half of the six connections a browser keeps to a server on HTTP/1, and a second Live
+    tab left none for an ordinary request. Each part is its view's (`on`); the stream is open only
+    while a part is wanted (`want`, the view shown) and the page is visible, and reopens with each
+    part's cursor -- nothing missed, nothing twice. `restart`: a part from its beginning ("Load all"). */
+function loopStream(base, qs) {
+  const subs = {}, cur = { events: "", log: "" }, opt = { window: 0, tail: 0 };
+  let wanted = [], es = null, parts = "", closed = false, wait = 1000, timer = null;
+  const say = (st) => { for (const k of parts.split(",")) if (subs[k] && subs[k].onState) subs[k].onState(st); };
+  const url = () => {
+    const p = new URLSearchParams(qs.replace(/^\?/, ""));
+    p.set("parts", parts);
+    for (const k of ["events", "log"]) if (cur[k]) p.set(k, cur[k]);
+    if (opt.window) p.set("window", opt.window);
+    if (opt.tail) p.set("tail", opt.tail);
+    return `${base}/stream?${p}`;
+  };
+  const took = (m) => {                                    // each part's cursor, as delivered up to this message
+    for (const piece of (m.lastEventId || "").split(",")) { const i = piece.indexOf(":"); if (i > 0) cur[piece.slice(0, i)] = piece.slice(i + 1); }
+  };
+  function connect() {
+    const mine = es = new EventSource(url());
+    for (const kind of ["events", "log"]) {
+      mine.addEventListener(kind, (m) => {
+        took(m);
+        const d = JSON.parse(m.data), f = subs[kind] && subs[kind].onData;
+        if (f) { if (Array.isArray(d)) d.forEach(f); else f(d); }       // D855: a journal slice comes whole
+      });
+    }
+    mine.addEventListener("live", (m) => { let d; try { d = JSON.parse(m.data); } catch (_) { return; } if (subs.live) subs.live.onData(d); });
+    mine.addEventListener("skipped", (m) => { if (subs.log && subs.log.onSkipped) subs.log.onSkipped(JSON.parse(m.data)); });   // D759: what a tail left out
+    mine.addEventListener("ready", () => { if (subs.events && subs.events.onReady) subs.events.onReady(); });
+    mine.onopen = () => { wait = 1000; say("live"); };
+    mine.onerror = () => {
+      if (es !== mine) return;
+      say("reconnecting");
+      if (mine.readyState === EventSource.CLOSED) {       // given up (a proxy's page, a restarted server): again, with the cursors
+        mine.close(); es = null;
+        timer = setTimeout(() => { timer = null; if (!es && parts) connect(); }, wait); wait = Math.min(wait * 2, 30000);
+      }
+    };
+  }
+  function sync() {
+    const now = closed || document.hidden ? "" : wanted.filter(k => subs[k]).sort().join(",");
+    if (now === parts && (es || timer || !now)) return;
+    clearTimeout(timer); timer = null;
+    if (es) { es.close(); es = null; }
+    parts = now;
+    if (parts) connect();
+  }
+  document.addEventListener("visibilitychange", sync);
+  return {
+    on(kind, handlers, o = {}) { subs[kind] = handlers; Object.assign(opt, o); },
+    want(kinds) { wanted = kinds; sync(); },
+    restart(kind, o = {}) { cur[kind] = ""; Object.assign(opt, o); parts = ""; if (es) { es.close(); es = null; } sync(); },
+    close() { closed = true; document.removeEventListener("visibilitychange", sync); sync(); },
+  };
 }
 function streamPill() {
   // D856: said only while the page is not connected -- a green "live" beside an idle loop read as running
@@ -276,5 +334,5 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0) {
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
 export { NARROW, act, ago, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
-  enc, fmtTok, followStream, h, head, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
+  enc, fmtTok, followStream, h, head, loopStream, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };
