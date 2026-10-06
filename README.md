@@ -31,7 +31,7 @@ it tried. Website: <https://choelzl.github.io/flux/>.
    .venv/bin/flux task run primes --passes 6    # a pass a point
    ```
 
-Extras: `pip install -e "./flux[bankmap]"` (z3), `[nlu]` (scipy), `[zigzag]`, `[all]`.
+Extras: `pip install -e "./flux[web]"` (`flux serve`: FastAPI, uvicorn, cryptography), `[bankmap]` (z3), `[zigzag]`, `[all]`.
 
 ### Full install (Verilator, Yosys, OpenROAD, ChampSim)
 

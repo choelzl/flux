@@ -49,8 +49,8 @@ def server(tmp_path, monkeypatch):
     return app, c, tmp_path
 
 
-def _wait(c, name):
-    for _ in range(100):
+def _wait(c, name, limit_s=10.0):
+    for _ in range(int(limit_s * 10)):
         st = c.get(f"/api/apps/{name}/author").json()
         if not st.get("running"):
             return st
@@ -78,11 +78,13 @@ def test_an_agent_writes_a_new_loops_problem_from_a_description_and_files(server
 def test_an_agent_revises_a_problem_keeping_its_name_and_says_what_changed(server, monkeypatch):
     _app, c, tmp = server
     c.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: as it was\n"))], headers=H)
-    monkeypatch.setenv("FAKE_SLEEP", "1.0")
+    # the agent must still be writing when the two requests below arrive: under a loaded parallel
+    # run they took 8 s, and a 1 s agent had finished (the test flaked) -- 15 s is margin, not a wait
+    monkeypatch.setenv("FAKE_SLEEP", "15")
     assert c.post("/api/apps/x/author", data={"prompt": "say it better", "author": "opencode"}, headers=H).status_code == 200
     assert c.post("/api/apps/x/start", json={"passes": 1}, headers=H).status_code == 409, "not while an agent writes"
     assert c.post("/api/apps/x/author", data={"prompt": "again", "author": "opencode"}, headers=H).status_code == 409
-    st = _wait(c, "x")
+    st = _wait(c, "x", limit_s=90)
     loop = tmp / "data/users/bob/apps/x"
     assert st["ok"] and st["document"] == "x.problem.yaml" and not (loop / "problem.yaml").exists(), "the loop keeps its document's name"
     assert "revised by the agent" in (loop / "x.problem.yaml").read_text()

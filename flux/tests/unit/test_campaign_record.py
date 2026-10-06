@@ -101,7 +101,8 @@ def test_the_stack_is_part_of_the_recorded_identity(tmp_path):
 
 def test_an_unwritable_database_costs_the_record_not_the_run(tmp_path):
     """An unwritable record does not stop the study."""
-    unwritable = tmp_path / "nope" / "deeper" / "run.db"      # parent does not exist
+    (tmp_path / "nope").write_text("a file, not a folder")    # D931 makes a missing folder; one under a file cannot be
+    unwritable = tmp_path / "nope" / "deeper" / "run.db"
     said = []
     rec = Recorder(str(unwritable), OBJECTIVE, said.append)
     rec.phase("stage1")

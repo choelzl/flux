@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
@@ -71,6 +72,10 @@ class Records:
 
             digest = hashlib.sha256(
                 json.dumps(objective, sort_keys=True).encode()).hexdigest()
+            if db and db != ":memory:" and not db.startswith("file:"):
+                # D931: a record asked for in a folder not made yet is made there, not dropped after one
+                # log line -- the run's evidence is the point of naming it
+                Path(db).expanduser().parent.mkdir(parents=True, exist_ok=True)
             self.store = CampaignStore(db)
             self.campaign_id, created = self.store.start_campaign(objective, digest, campaign_id=name or None)
             self.resumed = not created

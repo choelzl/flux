@@ -1,7 +1,11 @@
 """The compute tool: a reply may ask the harness to run a small numpy snippet.
 
-Sandboxed: an isolated interpreter, numpy and the pure standard library only, time and memory
-limits, capped output."""
+An isolated interpreter, numpy and the pure standard library only, time and memory limits, capped
+output. The import and name screen is VALIDATION, not a security boundary (D932): it keeps a
+snippet to what the tool is for, but numpy's submodules reach native code, and an external review
+read a harmless file outside the working folder through them. What contains a snippet is what
+contains the whole run -- Flux's sandbox container (D680, D851) -- so a run that must not reach a
+file must not be run outside it (`--no-sandbox`, a host run)."""
 
 from __future__ import annotations
 
@@ -18,7 +22,8 @@ _COMPUTE_FORBIDDEN_NAMES = {"open", "exec", "eval", "compile", "__import__", "gl
                             "locals", "getattr", "setattr", "delattr", "input",
                             "breakpoint", "vars", "memoryview"}
 #: No files, in or out (D480): nothing may persist between turns (e.g. a saved reference
-#: loaded by a later prototype) except the text the loop carries.
+#: loaded by a later prototype) except the text the loop carries -- by convention, screened here;
+#: not enforced against a determined snippet (D932: the container is the boundary).
 _COMPUTE_FORBIDDEN_ATTRS = {"load", "save", "savez", "savez_compressed", "loadtxt", "savetxt",
                             "fromfile", "tofile", "genfromtxt", "memmap", "frombuffer", "dump",
                             "dumps", "loads"}
