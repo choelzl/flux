@@ -15,19 +15,21 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import routes_accounts
 from .models import (
-    Login, NewUser, UserChange, DocText, FileText, RunOptions, Stop, NoteIn, DocSave, MaintenanceSet, MaintenanceRun,
-    Clean, Paused, Limit, NoticeIn, ForgetIn, MasksIn, StopAll, AskIn, LoginInput, ShareIn, EnvVar, Advanced,
-    AgentConfig, AgentNew, EmptyIn, CloneIn, MigrateIn, SandboxConfig, Settings,
+    DocText, FileText, RunOptions, Stop, NoteIn, DocSave, MaintenanceSet, MaintenanceRun, Clean, Paused, Limit,
+    NoticeIn, ForgetIn, MasksIn, StopAll, AskIn, LoginInput, ShareIn, EnvVar, Advanced, AgentConfig, AgentNew,
+    EmptyIn, CloneIn, MigrateIn, SandboxConfig,
 )
 from .runs import ADVANCED, HOST_RULE, RunManager, advanced, home_ready, sandbox_config, login_path, loop_files, machine_env, run_env, sandbox_env
-from .store import SESSION_DAYS, Store, User
+from .store import Store, User
 from .workspace import Workspace, WorkspaceError
 
 COOKIE = "flux_session"
@@ -155,137 +157,105 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def fail(exc: Exception) -> HTTPException:
         return HTTPException(400, str(exc))
 
-    # ---- accounts
-    @app.post("/api/login")
-    def login(body: Login, response: Response, request: Request) -> dict[str, Any]:
-        # D702: the address a failure counts against -- behind the TLS proxy (--secure-cookie), its forward
-        address = (request.headers.get("x-forwarded-for", "").split(",")[0].strip() if secure_cookie else "") \
-            or (request.client.host if request.client else "")
-        token = store.login(body.name, body.password, address)
-        if token is None:
-            store.audit(body.name.strip(), "login refused")
-            time.sleep(0.5)
-            raise HTTPException(401, "wrong name or password (five failures from one place lock the name there for ten minutes)")
-        response.set_cookie(COOKIE, token, httponly=True, samesite="strict", secure=secure_cookie,
-                            max_age=SESSION_DAYS * 86400, path="/")
-        u = store.user(name=body.name)
-        store.audit(u.name, "login")
-        return {"name": u.name, "role": u.role}
-
-    @app.post("/api/logout")
-    def logout(request: Request, response: Response) -> dict[str, str]:
-        if request.cookies.get(COOKIE):
-            store.logout(request.cookies[COOKIE])
-        response.delete_cookie(COOKIE, path="/")
-        return {"ok": "logged out"}
-
-    @app.get("/api/me")
-    def me(user: User = Depends(user_of)) -> dict[str, Any]:
-        return {"name": user.name, "role": user.role}
-
-    @app.get("/api/users")
-    def users(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        return [{"name": u.name, "role": u.role, "disabled": u.disabled, "pending": store.pending(u.name)} for u in store.users()]
-
-    @app.post("/api/users")
-    def add_user(body: NewUser, a: User = Depends(admin_of)) -> dict[str, Any]:
-        """A user (D818: with no password, an invitation to set it -- the link's token, for the admin to send)."""
+    # ---- shared by the route groups (D888): the loop a call names, the variables' lists, the host
+    # rules, the stderr masks, a loop in a line -- the groups' routes are in routes_*.py
+    def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
+        """(workspace, whose, the application's folder, its latest start or None); `edit`: a change."""
+        w, whose = editor(user, owner, name) if edit else reader(user, owner, name)
         try:
-            u = store.add_user(body.name, body.password, body.role)
-        except ValueError as exc:
-            raise fail(exc) from exc
-        store.audit(a.name, "add user", body.name)
-        if body.password is not None:
-            return {"ok": u.name}
-        token, kind = store.invite(u.name)
-        store.audit(a.name, "invite user", u.name)
-        return {"ok": u.name, "token": token, "kind": kind}
-
-    @app.post("/api/users/{name}/link")
-    def user_link(name: str, a: User = Depends(admin_of)) -> dict[str, Any]:
-        """A new link for the user (D818): an invitation while their password is not set, else a reset;
-        the earlier one stops working. Their password stays as it is until the link is used."""
-        try:
-            token, kind = store.invite(name)
-        except ValueError as exc:
+            d = w.app(name)
+        except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
-        store.audit(a.name, "invite user" if kind == "invite" else "password reset link", name)
-        return {"token": token, "kind": kind}
+        return w, whose, d, runs.latest(whose, name)
 
-    @app.get("/api/invite/{token}")
-    def invite_info(token: str) -> dict[str, Any]:
-        """For everyone (D818): whose link it is and what for, while it opens."""
-        got = store.invite_of(token)
-        if got is None:
-            raise HTTPException(404, "this link has been used or has expired: ask an admin for a new one")
-        return got
+    def _env_list(scope: str) -> list[dict[str, Any]]:
+        return [{"name": k, **v} for k, v in sorted(store.env(scope).items())]
 
-    @app.post("/api/invite/{token}")
-    def invite_use(token: str, body: FileText, response: Response) -> dict[str, Any]:
-        """The password set from a link (D818), the user logged in, every other session of theirs ended."""
+    def _set_env(scope: str, body: EnvVar, who: User, what: str) -> list[dict[str, Any]]:
         try:
-            u, session = store.use_invite(token, body.text)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        response.set_cookie(COOKIE, session, httponly=True, samesite="strict", secure=secure_cookie,
-                            max_age=SESSION_DAYS * 86400, path="/")
-        store.audit(u.name, "password set from a link")
-        return {"name": u.name, "role": u.role}
-
-    @app.patch("/api/users/{name}")
-    def change_user(name: str, body: UserChange, a: User = Depends(admin_of)) -> dict[str, str]:
-        if store.user(name=name) is None:
-            raise HTTPException(404, "no such user")
-        if name == a.name and (body.disabled or (body.role and body.role != "admin")):
-            raise HTTPException(400, "an admin does not disable or demote themselves")
-        try:
-            store.set_user(name, password=body.password, disabled=body.disabled, role=body.role)
+            store.set_env(scope, body.name, body.value, body.secret)
         except ValueError as exc:
             raise fail(exc) from exc
-        store.audit(a.name, "change user", f"{name}: " + ", ".join(k for k, v in body.model_dump().items() if v is not None))
-        return {"ok": name}
+        store.audit(who.name, "variable" if body.value is not None else "variable removed", f"{what}: {body.name}")
+        return _env_list(scope)
 
-    @app.post("/api/password")
-    def own_password(body: FileText, user: User = Depends(user_of)) -> dict[str, str]:
+    def _rules(items: list[str]) -> list[str]:
+        out = []
+        for x in items:
+            x = str(x).strip()
+            if not x:
+                continue
+            if not re.fullmatch(HOST_RULE, x) and x != "localhost":
+                raise HTTPException(400, f"{x!r}: a host, *.domain, an IP or a CIDR")
+            out.append(x)
+        return list(dict.fromkeys(out))
+
+    def _masks() -> Any:
+        from .masks import Masks
+
+        return Masks(store.server_get("stderr_masks") or [])
+
+    def _since(designs: list[dict[str, Any]], started: Any) -> int:
+        """The designs first measured since the loop's latest start (D837)."""
+        from datetime import datetime
+
+        def at(s: Any) -> float:
+            try:
+                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                return 0.0
+
         try:
-            store.set_user(user.name, password=body.text)
-        except ValueError as exc:
-            raise fail(exc) from exc
-        store.audit(user.name, "change password")
-        return {"ok": "changed"}
+            t0 = float(started)
+        except (TypeError, ValueError):
+            return 0
+        return sum(1 for d in designs if at(d.get("first")) >= t0)
 
-    def _groups(agents: dict[str, Any]) -> list[dict[str, Any]]:
-        """Flux's own settings, then a group per agent offered (D807: its kind's endpoint, model
-        and key, each its own) -- a tab each (D817: no other providers' tab)."""
-        from .agents import KINDS
-        from .store import GROUPS
+    def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
+        """A loop in a line (D693): designs measured, accepted, and the decision's value on the
+        first objective."""
+        from .results import designs
 
-        def static(k: str, g: dict[str, Any]) -> dict[str, Any]:
-            return {"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
-                    "endpoint": g["endpoint"], "hint": g.get("hint", ""), "prices": list(g.get("prices", ()))}
+        run = runs.latest(whose, name)
+        if not run or not os.path.exists(run["db"]):
+            return {"designs": 0, "accepted": 0}
+        from .results import decision_doc
 
-        per = [{"id": a.name, "label": f"{a.label} ({a.kind})" if not a.builtin else a.label, "tab": a.label,
-                "public": list(a.keys()["public"]), "secret": list(a.keys()["secret"]), "endpoint": a.keys()["public"][0],
-                "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name, "prices": list(a.prices())} for a in agents.values()]
-        return [*(static(k, g) for k, g in GROUPS.items()), *per]
+        try:
+            decision = decision_doc(run["db"], loop_files(w.app(name))["answer"], runs.campaign(run)[0])   # D809: the latest pass's
+        except WorkspaceError:
+            decision = None
+        try:
+            got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
+        except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
+            return {"designs": 0, "accepted": 0}
+        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"],
+                               "this_run": _since(got["designs"], run.get("started"))}
+        dec = next((d for d in got["designs"] if d["decision"]), None)
+        if dec is not None:
+            lim = got["limits"][0] if got["limits"] else None
+            metric = lim["metric"] if lim else (got["metrics"][0] if got["metrics"] else None)
+            if metric and metric in dec["numbers"]:
+                out["best"] = {"design": dec["name"], "metric": metric, "value": dec["numbers"][metric],
+                               "meets": dec["meets"].get(metric)}
+        return out
 
-    def _keys_of(groups: list[dict[str, Any]]) -> dict[str, list[str]]:
-        return {"public": [k for g in groups for k in g["public"]], "secret": [k for g in groups for k in g["secret"]]}
+    def _stages(w: Workspace, name: str) -> list[dict[str, Any]]:
+        """The document's stages (order, cutoffs) as the loader reads them; [] when it refuses."""
+        from .configure import views
 
-    @app.get("/api/settings")
-    def get_settings(user: User = Depends(user_of)) -> dict[str, Any]:
-        """The user's model settings, and the server's they fall back to (D696): a server key is
-        only said to be set, never shown. Each agent's variables, the user's and the server's (D807)."""
-        from .agents import visible
+        try:
+            normal = views(w.path(name, w.meta(name).get("document") or ""))["normal"] or {}
+        except Exception:  # noqa: BLE001 -- the record's own order then, no cutoffs
+            return []
+        measure = (normal.get("flow") or {}).get("measure") or {}          # D775: a map, name -> command or settings
+        return [{"name": n, **(v if isinstance(v, dict) else {})} for n, v in measure.items()]
 
-        agents = visible(store)
-        groups = _groups(agents)
-        # D734: an external user's runs fall back to nothing of the server's: no server value is offered
-        server = {} if user.external else store.server_settings()
-        env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _env_list(f"agent:{n}")}
-               for n in agents}
-        return {"values": store.settings(user), "server": server, "groups": groups, **_keys_of(groups),
-                "agent_env": env, "external": user.external}
+    ctx = SimpleNamespace(store=store, runs=runs, sandbox=sandbox, secure_cookie=secure_cookie, cookie=COOKIE, authoring=authoring,
+                          asks=asks, history=history, maintenance=maintenance, user_of=user_of, admin_of=admin_of, ws=ws,
+                          access=access, reader=reader, editor=editor, fail=fail, loop_of=loop_of, env_list=_env_list,
+                          set_env=_set_env, rules=_rules, masks=_masks, summary=_summary, stages=_stages)
+    routes_accounts.register(app, ctx)
 
     # ---- every user's agent logins (D734, D747: internal users too, since each has a home of their own)
     from .agents import KINDS, check_new, found, registry, version, visible
@@ -449,35 +419,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     def login_stop(user: User = Depends(user_of)) -> dict[str, str]:
         logins.stop(user.name)
         return {"ok": "stopping"}
-
-    @app.get("/api/admin/settings")
-    def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
-        from .agents import visible
-
-        agents = visible(store)
-        groups = _groups(agents)
-        return {"values": store.server_settings(), "groups": groups, **_keys_of(groups),
-                "agent_env": {n: _env_list(f"agent:{n}") for n in agents}}
-
-    @app.put("/api/admin/settings")
-    def put_server_settings(body: Settings, a: User = Depends(admin_of)) -> dict[str, Any]:
-        try:
-            for k, v in body.values.items():
-                store.set_server_setting(k, v)
-        except ValueError as exc:
-            raise fail(exc) from exc
-        store.audit(a.name, "server settings", ", ".join(sorted(body.values)))
-        return {"values": store.server_settings()}
-
-    @app.put("/api/settings")
-    def put_settings(body: Settings, user: User = Depends(user_of)) -> dict[str, Any]:
-        try:
-            for k, v in body.values.items():
-                store.set_setting(user, k, v)
-        except ValueError as exc:
-            raise fail(exc) from exc
-        store.audit(user.name, "settings", ", ".join(sorted(body.values)))
-        return {"values": store.settings(user)}
 
     @app.get("/api/admin/apps")
     def all_apps(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
@@ -701,35 +642,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(a.name, "running limit", f"{uname}: {body.max_running if body.max_running is not None else 'the default'}")
         return {"max_running": body.max_running}
 
-    # ---- environment variables (D697): the server's (admins), a user's, a loop's
-    def _env_list(scope: str) -> list[dict[str, Any]]:
-        return [{"name": k, **v} for k, v in sorted(store.env(scope).items())]
-
-    def _set_env(scope: str, body: EnvVar, who: User, what: str) -> list[dict[str, Any]]:
-        try:
-            store.set_env(scope, body.name, body.value, body.secret)
-        except ValueError as exc:
-            raise fail(exc) from exc
-        store.audit(who.name, "variable" if body.value is not None else "variable removed", f"{what}: {body.name}")
-        return _env_list(scope)
-
-    @app.get("/api/admin/env")
-    def global_env(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        return _env_list("global")
-
-    @app.put("/api/admin/env")
-    def put_global_env(body: EnvVar, a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        return _set_env("global", body, a, "the server")
-
-    @app.get("/api/env")
-    def my_env(user: User = Depends(user_of)) -> dict[str, Any]:
-        """The user's variables, and the server's they come after (names only for a secret)."""
-        return {"mine": _env_list(f"user:{user.id}"), "server": [] if user.external else _env_list("global")}   # D734
-
-    @app.put("/api/env")
-    def put_my_env(body: EnvVar, user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        return _set_env(f"user:{user.id}", body, user, user.name)
-
     @app.get("/api/apps/{name}/env")
     def loop_env(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """A loop's variables, with the user's and the server's under them, and its advanced settings."""
@@ -761,17 +673,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.server_set(f"adv:{whose.name}:{name}", got or None)
         store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
         return {"advanced": got}
-
-    def _rules(items: list[str]) -> list[str]:
-        out = []
-        for x in items:
-            x = str(x).strip()
-            if not x:
-                continue
-            if not re.fullmatch(HOST_RULE, x) and x != "localhost":
-                raise HTTPException(400, f"{x!r}: a host, *.domain, an IP or a CIDR")
-            out.append(x)
-        return list(dict.fromkeys(out))
 
     # ---- Admin › Agents (D756, D807): every agent -- the three built-in ones and those added, each a
     # kind -- its program, login, arguments, the files every home starts with for it, the hosts it
@@ -974,51 +875,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         w = ws(user)
         out = [{**a, **runs.state(user, a["name"]), "summary": _summary(w, user, a["name"])} for a in w.apps()]
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
-        return out
-
-    def _since(designs: list[dict[str, Any]], started: Any) -> int:
-        """The designs first measured since the loop's latest start (D837)."""
-        from datetime import datetime
-
-        def at(s: Any) -> float:
-            try:
-                return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
-            except ValueError:
-                return 0.0
-
-        try:
-            t0 = float(started)
-        except (TypeError, ValueError):
-            return 0
-        return sum(1 for d in designs if at(d.get("first")) >= t0)
-
-    def _summary(w: Workspace, whose: User, name: str) -> dict[str, Any]:
-        """A loop in a line (D693): designs measured, accepted, and the decision's value on the
-        first objective."""
-        from .results import designs
-
-        run = runs.latest(whose, name)
-        if not run or not os.path.exists(run["db"]):
-            return {"designs": 0, "accepted": 0}
-        from .results import decision_doc
-
-        try:
-            decision = decision_doc(run["db"], loop_files(w.app(name))["answer"], runs.campaign(run)[0])   # D809: the latest pass's
-        except WorkspaceError:
-            decision = None
-        try:
-            got = designs(run["db"], _stages(w, name), decision, stale_s=30)      # D774: a running loop's line, every 30 s
-        except Exception:  # noqa: BLE001 -- a record the list cannot read: the state alone
-            return {"designs": 0, "accepted": 0}
-        out: dict[str, Any] = {"designs": len(got["designs"]), "accepted": got["counts"]["accepted"],
-                               "this_run": _since(got["designs"], run.get("started"))}
-        dec = next((d for d in got["designs"] if d["decision"]), None)
-        if dec is not None:
-            lim = got["limits"][0] if got["limits"] else None
-            metric = lim["metric"] if lim else (got["metrics"][0] if got["metrics"] else None)
-            if metric and metric in dec["numbers"]:
-                out["best"] = {"design": dec["name"], "metric": metric, "value": dec["numbers"][metric],
-                               "meets": dec["meets"].get(metric)}
         return out
 
     @app.post("/api/apps")
@@ -1539,15 +1395,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "options": meta.get("last_options"), "paused": store.server_get("paused")}
 
     # ---- the loop: running or not; a start resumes it from its record (D689)
-    def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
-        """(workspace, whose, the application's folder, its latest start or None); `edit`: a change."""
-        w, whose = editor(user, owner, name) if edit else reader(user, owner, name)
-        try:
-            d = w.app(name)
-        except WorkspaceError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        return w, whose, d, runs.latest(whose, name)
-
     @app.get("/api/apps/{name}/state")
     def loop_state(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         _w, whose, _d, _run = loop_of(name, user, owner)
@@ -1563,11 +1410,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             if o is not None and (Workspace(store.data, owner).root / app_name).is_dir():
                 out.append({**runs.state(o, app_name), "owner": owner})
         return out
-
-    @app.get("/api/notices")
-    def notices(user: User = Depends(user_of)) -> list[dict[str, Any]]:
-        """What happened for this user since they last looked (D702): a loop shared, unshared, left."""
-        return store.take_notices(user.name)
 
     @app.post("/api/apps/{name}/start")
     def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
@@ -1958,11 +1800,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         store.audit(a.name, "insights: removed", f"{body.kind} {body.key}")
         return {"ok": True}
 
-    def _masks() -> Any:
-        from .masks import Masks
-
-        return Masks(store.server_get("stderr_masks") or [])
-
     @app.get("/api/admin/masks")
     def get_masks(_a: User = Depends(admin_of)) -> dict[str, Any]:
         return {"masks": store.server_get("stderr_masks") or []}
@@ -2029,17 +1866,6 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                 "rows_total": len(rep.rows),
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
                 "agent_turns": len(rep.agent_turns), "answer": answer, "decided_by": decided_by, **listed}
-
-    def _stages(w: Workspace, name: str) -> list[dict[str, Any]]:
-        """The document's stages (order, cutoffs) as the loader reads them; [] when it refuses."""
-        from .configure import views
-
-        try:
-            normal = views(w.path(name, w.meta(name).get("document") or ""))["normal"] or {}
-        except Exception:  # noqa: BLE001 -- the record's own order then, no cutoffs
-            return []
-        measure = (normal.get("flow") or {}).get("measure") or {}          # D775: a map, name -> command or settings
-        return [{"name": n, **(v if isinstance(v, dict) else {})} for n, v in measure.items()]
 
     @app.get("/api/apps/{name}/design")
     def design(name: str, design: str, part: str = "", key: str = "", owner: str | None = None,
