@@ -48,11 +48,13 @@ function diffView(ops, context = 3) {
 /** The files that go with a loop's document (D696): scripts, golden models, specs. For a loop
     that exists, its own files, edited in place; for a new one, files kept here until it is
     created. Each file the document names as `{home}/…` and nobody has is said to be missing. */
-function filesPanel(name, yamlOf) {
-  const staged = new Map();                                   // a new loop: path -> {text} | {file}
+function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw = null } = {}) {
+  // a new loop: path -> {text} | {file}, the creation draft's own (D912: kept across the modes)
   const box = h("div", { class: "files-panel" });
   const into = h("input", { placeholder: "folder (optional)", class: "narrow-in" });
-  const named = () => [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
+  // D912: the configurator says the files its commands name (one word each, spaces and all); a document as text, by pattern
+  const named = () => namedOf ? namedOf() : [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
+  let have = name ? null : new Set();                         // the files there, once listed
   async function list() {
     if (!name) return [...staged.entries()].map(([path, x]) => ({ path, size: x.text != null ? x.text.length : x.file.size, staged: true }));
     return (await api(`/apps/${enc(name)}/inputs`)).filter(f => !f.document && !f.ignored);   // D703: .gitignore followed
@@ -94,8 +96,9 @@ function filesPanel(name, yamlOf) {
   const fold = h("details", { class: "card files-card files-fold" }, h("summary", {}, h("strong", {}, "Files that go with it"), count), box);
   async function draw() {
     const files = await list().catch(() => []);
-    const have = new Set(files.map(f => f.path));
+    have = new Set(files.map(f => f.path));
     const missing = named().filter(p => !have.has(p));
+    if (onDraw) onDraw(missing);
     count.textContent = ` · ${files.length} file(s)` + (missing.length ? ` · ${missing.length} named and missing` : "");
     if (files.length || missing.length) fold.open = true;
     box.replaceChildren(
@@ -111,6 +114,11 @@ function filesPanel(name, yamlOf) {
   const watch = () => { clearTimeout(t); t = setTimeout(draw, 600); };
   draw();
   return { el: fold, watch, draw,
+    /** D912: which of `paths` the loop lacks; null until its files are listed. */
+    missing(paths) {
+      if (!name) have = new Set(staged.keys());
+      return have ? { missing: paths.filter(p => !have.has(p)) } : null;
+    },
     async upload(appName) {                                  // a new loop: its files, once it exists
       if (!staged.size) return 0;
       return sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })));
@@ -168,32 +176,55 @@ async function configurePage(name, owner, mode = "configurator") {
 
 /** The ways to make or change a problem (D704), as tabs, into `host`: New loop's page, and a
     loop's Settings › Problem (D713). `base`: the address the modes extend. */
+/** D912: the one creation draft -- the name, the statement and the rest of the configurator's state,
+    the step it was on, the files staged with it -- kept across the modes (Configurator, Agent, ...)
+    and a detour to another page, until the loop is created or the draft discarded. */
+let DRAFT = null;
+function newDraft() { return { state: null, staged: new Map(), step: 0 }; }
+function draftUsed(d) {
+  const s = d && d.state;
+  return !!(d && (d.staged.size || (s && (String(s.id || "").trim() || String(s.statement || "").trim() || (s.checks || []).length || (s.stages || []).length))));
+}
+
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
   const modes = isNew ? ["empty", "configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
   if (!modes.includes(mode)) mode = "configurator";
-  const body = h("div", {}), tabBar = h("div", { class: small ? "subtabs" : "tabs", role: "tablist" });
+  const draft = isNew ? (DRAFT = DRAFT || newDraft()) : null;
+  const body = h("div", {}), tabBar = h("div", { class: (small ? "subtabs" : "tabs") + " config-modes", role: "tablist" });
+  const keptLine = h("div", { class: "draft-line muted small" });
   function drawTabs() {
     tabBar.replaceChildren(...modes.map(k => h("button", { role: "tab", type: "button", class: k === mode ? "on" : "", "aria-selected": k === mode ? "true" : "false",
       onclick: () => { mode = k; history.replaceState(null, "", base + (k === "configurator" ? "" : "/" + k)); drawTabs(); draw(); } }, CONFIG_MODES[k])));
+    drawKept();
+  }
+  function drawKept() {                                   // D912: the draft is said, and discarded only when asked
+    if (!draft || !draftUsed(draft)) { keptLine.replaceChildren(); return; }
+    const s = draft.state || {};
+    keptLine.replaceChildren(`Draft kept across the ways: ${String(s.id || "").trim() || "unnamed"}`,
+      draft.staged.size ? ` · ${draft.staged.size} file(s) staged` : "", " · ",
+      h("button", { type: "button", class: "link", onclick: async () => {
+        if (!await confirmDialog("Discard the draft?", "Its name, statement, checks, measurements and staged files go.", { ok: "Discard", danger: true })) return;
+        Object.assign(draft, newDraft()); draw(); drawKept();
+      } }, "Discard the draft"));
   }
   async function draw() {
     body.replaceChildren(card(null, skeleton(6)));
     try {
-      if (mode === "configurator") await crafterView(body, name, owner);
+      if (mode === "configurator") await crafterView(body, name, owner, draft, drawKept);
       else if (mode === "upload") body.replaceChildren(uploadForm());
       else if (mode === "edit") await directEdit(body, name);
       else if (mode === "clone") await cloneForm(body);
       else if (mode === "empty") emptyForm(body);
-      else await (isNew ? newByAgent(body) : reviseByAgent(body, name, owner));
+      else await (isNew ? newByAgent(body, draft, drawKept) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }
-  if (barHost) { barHost.append(tabBar); host.replaceChildren(body); } else host.replaceChildren(tabBar, body);
+  if (barHost) { barHost.append(tabBar); host.replaceChildren(keptLine, body); } else host.replaceChildren(tabBar, keptLine, body);
   drawTabs(); draw();
 }
 
 /** The configurator (D686): the crafter, the loop's files beside it. */
-async function crafterView(body, name, owner) {
+async function crafterView(body, name, owner, draft = null, onDraft = null) {
   const C = window.FluxCrafter;
   if (!C) { body.replaceChildren(card(null, empty("The configurator's script did not load."))); return; }
   if (!crafterCatalog) {
@@ -211,13 +242,14 @@ async function crafterView(body, name, owner) {
       return;
     }
     const got = C.fromDoc(v.raw, v.normal || v.raw);
-    const panel = filesPanel(name, yamlOf);
-    body.replaceChildren(h("p", { class: "muted" }, h("span", { class: "mono" }, v.document), " · saving drops its comments",
+    let crafter = null;
+    const panel = filesPanel(name, yamlOf, { namedOf: () => C.namedFiles(got.state), onDraw: () => crafter && crafter.refresh() });
+    body.replaceChildren(h("p", { class: "muted small doc-line" }, h("span", { class: "mono" }, v.document), " · saving drops its comments",
         got.kept.length ? "; what the form does not edit is kept as written" : ""),
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
       host, panel.el);
-    host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
-    C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
+    crafter = C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
+      onChange: panel.watch, files: (paths) => panel.missing(paths),
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
@@ -229,23 +261,30 @@ async function crafterView(body, name, owner) {
     setTimeout(panel.draw, 300);
     return;
   }
-  const panel = filesPanel(null, yamlOf);
+  draft = draft || newDraft();
+  draft.state = draft.state || C.base();
+  let crafter = null;
+  const panel = filesPanel(null, yamlOf, { staged: draft.staged, namedOf: () => C.namedFiles(draft.state),
+    onDraw: () => { if (crafter) crafter.refresh(); if (onDraft) onDraft(); } });
   let adv = null;                                           // D697: an admin's advanced settings, applied once it exists
   const advBox = me.role === "admin" ? advancedCard({ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
     can_advance: true, sandboxed_server: true }, async (a) => { adv = a; }, "Keep for the new loop") : "";
   body.replaceChildren(host, panel.el, advBox);
-  host.addEventListener("input", panel.watch); host.addEventListener("change", panel.watch);
   setTimeout(panel.draw, 300);
   // D719: one name -- the form's, the problem's id and the loop's; the checklist calm until used;
   // no command-line next steps; who does each step folded, its defaults being usually right
-  C.mount(host, false, { saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
+  crafter = C.mount(host, false, { state: draft.state, step: draft.step, touched: draftUsed(draft), onStep: (i) => { draft.step = i; },
+    onChange: () => { panel.watch(); if (onDraft) onDraft(); }, files: (paths) => panel.missing(paths),
+    saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
     nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits and _: the loop's name and its problem's id",
     save: async (yaml, state) => {
       const name = String(state.id || "").trim();
-      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error("Give the loop a name first (1. What do you want? › Loop name): a letter, then letters, digits or _.");
+      // D912: said beside the button pressed, the name's box focused
+      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw Object.assign(new Error("Give the loop a name first (The problem › Loop name): a letter, then letters, digits or _."), { field: "id" });
       await api("/apps/from-text", { method: "POST", body: { name, filename: "problem.yaml", text: yaml } });
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
+      if (DRAFT === draft) DRAFT = null;                    // made: the draft is the loop now
       toast(`${name} created${n ? ` with ${n} file(s)` : ""}`, "ok");
       setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);
       return "Created.";
@@ -301,16 +340,30 @@ async function directEdit(body, name) {
 }
 
 /** A new loop whose problem an agent writes (D704): a name, what it should do, the files to read. */
-async function newByAgent(body) {
+async function newByAgent(body, draft = null, onDraft = null) {
   const name = h("input", { placeholder: "my_adder", style: "width:100%", id: "ag-name" });
   const ask = h("textarea", { rows: 6, id: "ag-ask", placeholder: "What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." });
   const who = await agentSelect("ag-who");
-  const files = attachBox();
+  // D912: the one draft -- its name and statement are what the agent is told, its staged files what it reads
+  let files;
+  if (draft) {
+    draft.state = draft.state || window.FluxCrafter.base();
+    name.value = draft.state.id || ""; ask.value = draft.state.statement || "";
+    name.addEventListener("input", () => { draft.state.id = name.value; if (onDraft) onDraft(); });
+    ask.addEventListener("input", () => { draft.state.statement = ask.value; if (onDraft) onDraft(); });
+    const items = [...draft.staged].map(([path, x]) => ({ path, src: x, file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) }));
+    files = attachBox({ items, onChange: () => {
+      draft.staged.clear();
+      for (const g of items) draft.staged.set(g.path, g.src || { file: g.file });
+      if (onDraft) onDraft();
+    } });
+  } else files = attachBox();
   const go = act("Write the problem", async () => {
     if (!name.value.trim()) { toast("Name the loop.", "warn"); name.focus(); return; }
     if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
     const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
     const r = await api("/apps/new-by-agent", { method: "POST", form: fd });
+    if (draft && DRAFT === draft) DRAFT = null;          // D912: the agent writes the loop the draft was
     toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
   }, { cls: "primary" });
   body.replaceChildren(card(null, [

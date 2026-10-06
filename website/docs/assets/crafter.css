@@ -222,4 +222,12 @@
 /* D828: a step's line of what it is for */
 .fc-step-says { color: var(--fc-muted); margin: 0 0 .8em !important; }
 .fc-step.fc-step-last { min-height: 0; }
+/* D912: a visited step with something to fix; the save's status beside its button; where it stands */
+.fc-stepbar li.fc-bad .fc-num { border-color: var(--fc-error); color: var(--fc-error); }
+.fc-status { font-size: .9em; color: var(--fc-muted); }
+.fc-status:empty { display: none; }
+.fc-status.fc-ok { color: var(--fc-ok); }
+.fc-status.fc-err { color: var(--fc-error); font-weight: 600; }
+.fc-ready strong { font-weight: 600; }
+.flux-crafter [aria-invalid="true"] { border-color: var(--fc-error); }
 .fc-step-last .fc-output { border: 0; padding: 0; }

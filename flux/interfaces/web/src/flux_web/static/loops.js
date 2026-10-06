@@ -352,13 +352,18 @@ async function agentSelect(id) {
     a.label + (a.available ? "" : ` (${a.why})`))));
 }
 /** Files for an agent to read (D704): dropped or chosen, listed, removable. */
-function attachBox() {
-  let got = [];
+/** `items`: a list of {file, path} the caller keeps (D912: a creation draft's staged files), told by `onChange`. */
+function attachBox({ items = [], onChange = null } = {}) {
+  const got = items;
   const listEl = h("ul", { class: "files flist" });
-  const draw = () => listEl.replaceChildren(...got.map((g, i) => h("li", {}, h("span", { class: "mono" }, g.path), h("small", { class: "muted" }, bytes(g.file.size)),
-    h("button", { class: "link danger-link", type: "button", onclick: () => { got.splice(i, 1); draw(); } }, "×"))));
+  const draw = (moved) => {
+    listEl.replaceChildren(...got.map((g, i) => h("li", {}, h("span", { class: "mono" }, g.path), h("small", { class: "muted" }, bytes(g.file.size)),
+      h("button", { class: "link danger-link", type: "button", onclick: () => { got.splice(i, 1); draw(true); } }, "×"))));
+    if (moved !== false && onChange) onChange(got);
+  };
   const pickIn = h("input", { type: "file", multiple: true, onchange: (e) => { got.push(...[...e.target.files].map(f => ({ file: f, path: f.name }))); e.target.value = ""; draw(); } });
   const dz = dropZone("Drop a spec, a reference model, tests, papers: the agent reads them", (g) => { got.push(...g); draw(); });
+  draw(false);
   return { el: h("div", { class: "attach" }, dz, h("label", { class: "stack" }, "or choose files", pickIn), listEl),
     form(fd) { for (const g of got) fd.append("files", g.file, g.path); }, count: () => got.length };
 }

@@ -1393,13 +1393,15 @@
     var stepped = opts.stepped !== false;              // D826: steps unless a page asks for the whole form
     var state = opts.state || base();
     var openBox = null, openNode = null;
-    var parts = {};
+    var parts = { step: opts.step || 0, touched: !!opts.touched, visited: {} };
+    parts.visited[parts.step] = true;
 
     function changed(structural) {
       parts.touched = true;
       if (structural) renderForm();
       renderDiagram();
       renderOutput();
+      if (opts.onChange) opts.onChange(state, !!structural);    // D912: every edit, a button's too (the files panel follows)
     }
 
     // -- inputs bound to a path of the state
@@ -1419,10 +1421,11 @@
         input = h(opts.area ? "textarea" : "input", { type: opts.area ? null : "text", placeholder: opts.placeholder || "",
                                                         "aria-label": label, rows: opts.area ? (opts.rows || 3) : null });
         input.value = get() || "";
-        input.addEventListener("input", function () { set(input.value); changed(false); });
+        input.addEventListener("input", function () { input.removeAttribute("aria-invalid"); set(input.value); changed(false); });
       }
       // compact: the hint is the input's tooltip, not a line of its own
       if (opts.compact && opts.hint) input.setAttribute("title", opts.hint);
+      if (opts.key) input.setAttribute("data-fc-field", opts.key);     // D912: a save's error focuses its box
       return h("label", { class: "fc-field" + (opts.wide ? " fc-wide" : "") + (opts.narrow ? " fc-narrow" : "") + (opts.grow ? " fc-grow" : "") },
                [h("span", { class: "fc-label", text: label }), input, opts.hint && !opts.compact ? h("small", { text: opts.hint }) : null]);
     }
@@ -1633,13 +1636,13 @@
       var what = titled("1. What do you want?", [], [
         h("div", { class: "fc-line" }, [
           field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
-                { compact: true, placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits and _" }),
+                { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits and _" }),
           field("Language", function () { return state.language; }, function (v) { state.language = v; },
                 { compact: true, options: langs, structural: true, hint: "Optional: the language the designs are written in, when the checks' tools do not tell it" }),
           state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
           ]),
         field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
-              function (v) { state.statement = v; }, { area: true, rows: 3, wide: true }),
+              function (v) { state.statement = v; }, { area: true, rows: 3, wide: true, key: "statement" }),
         h("div", { class: "fc-line" }, [
           field("Rules every design must follow (optional)", function () { return state.contract; },
                 function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
@@ -2025,10 +2028,11 @@
         return;
       }
       var step = parts.step || 0;
-      var bar = h("ol", { class: "fc-stepbar", role: "tablist" }, STEPS.map(function (t, i) {
-        return h("li", { class: (i === step ? "fc-on" : "") + (i < step ? " fc-done" : "") }, [h("button", { type: "button", role: "tab",
+      parts.stepItems = STEPS.map(function (t, i) {
+        return h("li", { class: i === step ? "fc-on" : "" }, [h("button", { type: "button", role: "tab",
           "aria-selected": i === step ? "true" : "false", on: { click: function () { go(i); } } }, [h("span", { class: "fc-num", text: String(i + 1) }), t])]);
-      }));
+      });
+      var bar = h("ol", { class: "fc-stepbar", role: "tablist" }, parts.stepItems);
       var body;
       if (step <= 3) {
         var kids = Array.prototype.slice.call(renderLevel1().childNodes), n = kids.length;
@@ -2038,12 +2042,15 @@
       } else if (step === 5) {
         parts.advancedOpen = true; body = [renderLevel3()];
       } else {
-        body = [h("p", { class: "fc-hint", text: opts.save ? "The document as the steps say it, what is left to do, and the save." :
-          "The document as the steps say it, and what is left to do. Copy or download it." })];
+        body = [h("p", { class: "fc-hint", text: opts.save ? "What is left to do first, then what it runs, then the document and the save." :
+          "What is left to do, what it runs, and the document. Copy or download it." })];
       }
       var back = step > 0 ? button("Back", function () { go(step - 1); }) : null;
       var next = step < STEPS.length - 1 ? button("Next: " + STEPS[step + 1], function () { go(step + 1); }, "fc-primary") : null;
-      var nav = h("div", { class: "fc-stepnav" }, [back, h("span", { class: "fc-grow" }), opts.save && step < STEPS.length - 1 ? button(opts.saveLabel || "Save", function () { parts.saveBtn.click(); }) : null, next]);
+      // D912: the save's status beside the button pressed, said aloud, on every step
+      parts.navStatus = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
+      parts.navSave = opts.save && step < STEPS.length - 1 ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }) : null;
+      var nav = h("div", { class: "fc-stepnav" }, [back, h("span", { class: "fc-grow" }), parts.navStatus, parts.navSave, next]);
       body.forEach(function (el) {                       // the long form's titles: the step bar says them
         if (!el.querySelectorAll) return;
         var t = el.querySelector("h3");
@@ -2060,13 +2067,78 @@
       parts.form.appendChild(bar);
       parts.form.appendChild(h("div", { class: "fc-step" + (last ? " fc-step-last" : "") }, body));
       parts.form.appendChild(nav);
+      showStatus();
       if (step === 4) setTimeout(renderDiagram, 0);
     }
     function go(i) {
+      parts.visited[parts.step || 0] = true;
       parts.step = Math.max(0, Math.min(STEPS.length - 1, i));
+      parts.visited[parts.step] = true;
+      if (opts.onStep) opts.onStep(parts.step);
       renderForm();
       renderOutput();
       if (parts.form.scrollIntoView && parts.form.getBoundingClientRect && parts.form.getBoundingClientRect().top < 0) parts.form.scrollIntoView();
+    }
+
+    /** D912: a step is green when it was visited and nothing on it is to fix, red when something is. */
+    function markSteps(msgs) {
+      (parts.stepItems || []).forEach(function (li, i) {
+        var bad = msgs.some(function (m) { return m.level === "error" && m.step === i; });
+        var seen = parts.visited[i] && i !== parts.step && i < STEPS.length - 1;
+        li.classList.toggle("fc-done", !!(seen && !bad));
+        li.classList.toggle("fc-bad", !!(seen && bad && !(opts.calmChecks && !parts.touched)));
+      });
+    }
+
+    /** D912: the save's state, pending, done or failed -- beside both save buttons. */
+    function showStatus() {
+      var st = parts.status || { kind: "", text: "" };
+      [parts.navStatus, parts.saved].forEach(function (el) {
+        if (!el) return;
+        el.textContent = st.text;
+        el.className = "fc-status" + (st.kind ? " fc-" + st.kind : "");
+      });
+      [parts.navSave, parts.saveBtn].forEach(function (b) { if (b) b.disabled = st.kind === "pending"; });
+    }
+
+    /** Save (or create): one at a time; an error says itself beside `btn` and focuses its box. */
+    function save(btn) {
+      if (!opts.save || (parts.status && parts.status.kind === "pending")) return;
+      parts.status = { kind: "pending", text: "Saving…" };
+      showStatus();
+      Promise.resolve().then(function () { return opts.save(buildYaml(state), state); }).then(function (said) {
+        parts.status = { kind: "ok", text: said || "Saved." };
+        showStatus();
+      }, function (e) {
+        parts.status = { kind: "err", text: (e && e.message) || String(e) };
+        var key = e && e.field;
+        if (key && stepped) {
+          var at = key === "id" || key === "statement" ? STEP_OF.problem : null;
+          if (at !== null && at !== parts.step) go(at);
+        }
+        showStatus();
+        var box = key && parts.form.querySelector('[data-fc-field="' + key + '"]');
+        if (box) { box.setAttribute("aria-invalid", "true"); box.focus(); }
+        else if (btn && btn.isConnected) btn.focus();
+      });
+    }
+
+    /** D912: where the draft stands -- the document, its files, the check, a start -- apart. */
+    function readiness(msgs) {
+      var errors = msgs.filter(function (m) { return m.level === "error"; }).length;
+      var calm = opts.calmChecks && !parts.touched;
+      var rows = [[errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? errors + " thing(s) to do, below" : "complete"]];
+      var named = namedFiles(state), files = opts.files ? opts.files(named) : null;
+      if (files) {
+        var missing = files.missing || [];
+        rows.push([missing.length ? "error" : "ok", "Files", missing.length ? "missing " + missing.join(", ") + " (Files that go with it)"
+          : named.length ? "all " + named.length + " named file(s) present" : "none named"]);
+      } else if (named.length) rows.push(["note", "Files", "put " + named.join(", ") + " beside the document"]);
+      if (opts.save) {
+        rows.push(["note", "Checked", opts.checked || "not yet: once saved, Check runs it where it will run"]);
+        rows.push(["note", "Ready to run", "after a Check passes"]);
+      }
+      return rows;
     }
 
     function renderOutput() {
@@ -2076,11 +2148,37 @@
       parts.code.textContent = yaml;
       parts.file.textContent = file;
       var msgs = check(state);
+      markSteps(msgs);
+      parts.ready.innerHTML = "";
+      readiness(msgs).forEach(function (r) {
+        parts.ready.appendChild(h("li", { class: "fc-" + r[0] }, [h("strong", { text: r[1] + ": " }), r[2]]));
+      });
       parts.checks.innerHTML = "";
-      if (!msgs.some(function (m) { return m.level !== "note"; })) parts.checks.appendChild(h("li", { class: "fc-ok", text: "Looks complete." }));
       var calm = opts.calmChecks && !parts.touched;   // nothing typed yet: what is left to do, not errors
       msgs.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text })); });
+      renderSummary();
       if (parts.next) parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
+    }
+
+    /** D913: what runs, in words -- the checks, the measurements, the goal, who works, the budget. */
+    function renderSummary() {
+      if (!parts.summary) return;
+      var r = resolve(state), rows = [];
+      rows.push(["Checks", r.checks.length ? r.checks.map(function (c) { return c.name; }).join(" → ") : "none yet"]);
+      rows.push(["Measurements", r.stages.length ? r.stages.map(function (s) { return s.name; }).join(" → ") : "none yet"]);
+      var words = describeObjectives(r.objectives);
+      rows.push(["Goal", words.length ? words[0] : "none yet"]);
+      var who = FLOW_BOXES.concat(["digest", "lessons"]).filter(function (b) { return BOXES[b] && !isFixed(b); }).map(function (b) {
+        var c = choiceOf(b, state.flow[b]), half = halfOf(state, b);
+        return half === "off" && b !== "generate" ? null : BOXES[b].title + ": " + (b === "generate" && paramOnly(state) ? "not run (settings only)" : c ? c.label : state.flow[b]);
+      }).filter(Boolean);
+      rows.push(["Who works", who.join("; ")]);
+      var bu = state.budget || {}, said = Object.keys(bu).filter(function (k) { return String(bu[k] || "").trim(); });
+      rows.push(["Budget", said.length ? said.map(function (k) { return k + " " + bu[k]; }).join(", ") : "the defaults"]);
+      var kn = knobNames(state);
+      if (kn.length) rows.push(["Settings searched", kn.join(", ")]);
+      parts.summary.innerHTML = "";
+      rows.forEach(function (x) { parts.summary.appendChild(h("div", {}, [h("dt", { text: x[0] }), h("dd", { text: x[1] })])); });
     }
 
     function copy() {
@@ -2115,20 +2213,18 @@
     parts.code = h("code", {});
     parts.file = h("span", { class: "fc-file" });
     parts.checks = h("ul", { class: "fc-checks" });
+    parts.ready = h("ul", { class: "fc-checks fc-ready" });            // D912: document, files, check, start -- apart
     parts.next = opts.nextSteps === false ? null : h("code", {});
     parts.copyBtn = button("Copy", copy, opts.save ? "" : "fc-primary");
-    parts.saved = h("span", { class: "fc-hint" });
-    var saveBtn = opts.save ? button(opts.saveLabel || "Save", function () {
-      parts.saved.textContent = "Saving...";
-      Promise.resolve(opts.save(buildYaml(state), state)).then(function (said) { parts.saved.textContent = said || "Saved."; },
-        function (e) { parts.saved.textContent = (e && e.message) || String(e); });
-    }, "fc-primary") : null;
+    parts.saved = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
+    var saveBtn = opts.save ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "fc-primary") : null;
     var keptNotes = (opts.notes || []).length ? [h("h4", { text: "Kept as written" }),
       h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))] : [];
     parts.saveBtn = saveBtn;
     var out = parts.out = h("div", { class: "fc-output" }, [
       h("div", { class: "fc-output-head" }, [parts.file, saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
       h("pre", { class: "fc-yaml" }, [parts.code]),
+      h("h4", { text: "Where it stands" }), parts.ready,
       h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat(opts.nextSteps === false ? [] : [
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
@@ -2151,6 +2247,8 @@
     renderForm();
     renderDiagram();
     renderOutput();
+    // D912: the page asks again where it stands (its files changed), and reads the state it edits
+    return { state: state, refresh: renderOutput, step: function () { return parts.step; } };
   }
 
   var SCRIPT_SRC = document.currentScript && document.currentScript.src;

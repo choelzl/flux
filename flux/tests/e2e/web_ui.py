@@ -342,6 +342,54 @@ def flows(r: Run) -> None:
         r.check("nor a way to make a loop from an example", r.api("/apps/from-example", "POST", {"name": "x", "kind": "sweep"})["status"] in (404, 405))
     r.step("new loop tabs", new_loop_tabs)
 
+    def draft_across_modes():
+        """D912: one creation draft across the ways -- the name, the statement and a staged file survive
+        Configurator -> Agent -> Configurator; a measurement added names its script in the files at once;
+        Review says a missing file apart from the document; a save refused on step 1 says so beside its
+        button and focuses the name."""
+        setv = ("const [css, v] = arguments; const el = document.querySelector(css); el.value = v;"
+                " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
+        click = "const [css, t] = arguments; [...document.querySelectorAll(css)].find(x => x.textContent.trim().startsWith(t)).click(); return 1"
+        r.page("#/configure", "document.querySelector('.flux-crafter .fc-stepbar')", "the configurator")
+        b.js(click, ".fc-stepbar button", "1")             # the draft keeps its step: the last test left it on 5
+        b.js(setv, ".flux-crafter [data-fc-field=id]", "drafty")
+        b.js(setv, ".flux-crafter [data-fc-field=statement]", "an adder that is small")
+        b.js(setv, ".flux-crafter select[aria-label=Language]", "python")
+        b.js(click, ".files-panel button", "New file")
+        b.wait("document.querySelector('dialog.dlg[open] .file-edit textarea')", what="the new file's editor")
+        b.js(setv, "dialog.dlg[open] .file-edit input", "check.py")
+        b.js(setv, "dialog.dlg[open] .file-edit textarea", "print('0 failing')")
+        r.dialog_button("Save")
+        b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file")
+        b.js(click, ".fc-stepbar button", "3")
+        b.js(click, ".fc-step button", "+ Add a measurement")
+        named = b.wait("(document.querySelector('.files-panel .callout.bad') || {}).textContent", timeout=10, what="the measurement's script named")
+        r.check("a measurement added names its script in the files at once (D912)", "bench.py" in named, named)
+        b.js(click, ".fc-stepbar button", "7")
+        ready = b.wait("(document.querySelector('.fc-ready') || {}).innerText", timeout=10, what="where it stands")
+        r.check("Review says a missing file apart, no 'complete' over it (D912)", "missing bench.py" in ready and "Looks complete" not in r.text(), ready)
+        r.button("Agent", "#main .tabs")
+        b.wait("document.querySelector('#ag-name')", what="the agent form")
+        got = b.js("return [document.querySelector('#ag-name').value, document.querySelector('#ag-ask').value, document.querySelector('#main .attach').innerText]")
+        r.check("the agent is told the draft's name, statement and files (D912)", got[0] == "drafty" and got[1] == "an adder that is small" and "check.py" in got[2], str(got))
+        r.button("Configurator", "#main .tabs")
+        b.wait("document.querySelector('.flux-crafter [data-fc-field=id]') || document.querySelector('.flux-crafter .fc-step')", what="the configurator again")
+        b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file, still")
+        r.check("back in the configurator: the draft and its staged file are kept (D912)",
+                b.js("return document.querySelector('.fc-yaml code').textContent.includes('an adder that is small')") and "drafty" in b.js("return document.querySelector('.draft-line').textContent"))
+        b.js(click, ".fc-stepbar button", "1")
+        b.js(setv, ".flux-crafter [data-fc-field=id]", "")
+        b.js(click, ".fc-stepnav button", "Create the loop")
+        said = b.wait("(document.querySelector('.fc-stepnav .fc-status.fc-err') || {}).textContent", timeout=10, what="the refusal beside the button")
+        r.check("a create refused on step 1 says why beside its button, the name focused (D912)",
+                "name" in said and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
+                and b.js("return !!document.querySelector('.fc-stepnav .fc-status.fc-err').offsetParent"), said)
+        b.js(click, ".draft-line button", "Discard the draft")
+        r.dialog_button("Discard")
+        b.wait("!document.querySelector('.draft-line button')", timeout=10, what="the draft discarded")
+        r.clean("draft across modes")
+    r.step("draft across modes", draft_across_modes)
+
     def upload():
         r.page("#/configure/upload", "document.querySelector('#up-name')", "the Upload tab")
         b.type("#up-name", "sw")
