@@ -215,6 +215,29 @@ def test_the_results_tab_fits_its_height_and_reaches_every_entry():
             assert any(o.startswith(f"▌── {'◆ ' if '◆' in ln else ''}{name} on screen") for o in opened), (ln, opened)
 
 
+def test_the_results_tab_prepares_its_standings_once_per_change(monkeypatch):
+    """D904, from an external review: the standings were made again for every report line and the
+    tab laid out twice a frame -- 150 ms a frame at 300 parts. They are made once per change of what
+    the tab shows; frames in between, and log lines, reuse them; a new standing or line is seen."""
+    from flux_tui import panels
+
+    made = []
+    real = panels.standings_table
+    monkeypatch.setattr(panels, "standings_table", lambda st: made.append(1) or real(st))
+    bus = _parts_bus(300)
+    keys = [ord("r"), ord("3"), -1, -1, curses.KEY_UP, curses.KEY_UP, -1]
+    scr = _FrameScreen(keys + [ord("q")], size=(24, 80))
+    bus.log("a log line changes the snapshot, not the results")
+    _main(scr, bus, _Feedback(), "t", "", False, lambda: None, {}, lambda: 1)
+    assert len(made) == 1, f"one standings table for {len(keys)} frames, not {len(made)}"
+    first = bus.snapshot()["results_rev"]
+    bus.result("THE NEW LINE")
+    assert bus.snapshot()["results_rev"] != first and bus.snapshot()["results_rev"] != _parts_bus(300).snapshot()["results_rev"]
+    scr = _FrameScreen([ord("r"), ord("3"), 10, curses.KEY_NPAGE, curses.KEY_NPAGE, curses.KEY_NPAGE, ord("q")], size=(24, 80))
+    _main(scr, bus, _Feedback(), "t", "", False, lambda: None, {}, lambda: 1)   # the report entry, opened, at its end
+    assert len(made) == 2 and any("THE NEW LINE" in t for _y, _x, t in scr.drawn)
+
+
 class _WideScreen(_FakeScreen):
     """Answers `get_wch` as a terminal does: a str per character, an int per function key, and
     curses.error on the timeout."""

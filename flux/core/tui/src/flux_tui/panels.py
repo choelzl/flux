@@ -536,7 +536,29 @@ def results_browse(snap: dict[str, Any], cursor: int | None = None, *,
     With `height` the tab fits it (D903): the objective area on top, then the parts, designs and
     report as a list window that follows the highlight, the front chart when there is room (one
     line when there is not), the preview or the open entry in the rest -- at least its title and
-    two lines. Returns (lines, part-index-per-line, order, roles)."""
+    two lines. Returns (lines, part-index-per-line, order, roles). The same snapshot revision
+    and view reuse the last layout (D904)."""
+    rev = snap.get("results_rev")
+    key = (rev, cursor, selected, width, list_rows, detail_rows, detail_scroll, detail_hscroll, height)
+    if rev is not None and _PREPARED.get("layout", (None,))[0] == key:
+        out, clamped = _PREPARED["layout"][1]
+        if clamp is not None:
+            clamp.update(clamped)
+        return tuple(list(x) for x in out)                       # type: ignore[return-value]
+    clamped: dict = {}
+    out = _results_layout(snap, cursor, selected=selected, width=width, detail_rows=detail_rows,
+                          detail_scroll=detail_scroll, detail_hscroll=detail_hscroll, clamp=clamped, height=height)
+    if rev is not None:
+        _PREPARED["layout"] = (key, (out, dict(clamped)))
+    if clamp is not None:
+        clamp.update(clamped)
+    return tuple(list(x) for x in out)                           # type: ignore[return-value]
+
+
+def _results_layout(snap: dict[str, Any], cursor: int | None, *, selected: int | None, width: int,
+                    detail_rows: int | None, detail_scroll: int, detail_hscroll: int, clamp: dict,
+                    height: int | None) -> tuple[list[str], list[int | None], list[int], list[str | None]]:
+    """results_browse's layout, made fresh."""
     prep = prepared_results(snap)
     st, sections, table = prep["standings"], prep["sections"], prep["table"]
     landed = bool((snap.get("results") or []))
@@ -607,9 +629,17 @@ def results_browse(snap: dict[str, Any], cursor: int | None = None, *,
     return lines, ids, order, roles
 
 
+#: The results tab's last prepared content and layout, by the bus's results revision (D904).
+_PREPARED: dict[str, tuple] = {}
+
+
 def prepared_results(snap: dict[str, Any]) -> dict[str, Any]:
     """What the results tab derives from the standings and the report: the standings, their table,
-    the openable sections (the parts, the designs, then the run's report and measurements)."""
+    the openable sections (the parts, the designs, then the run's report and measurements). Made
+    once per results revision of the bus (D904) -- a frame between changes reuses it."""
+    rev = snap.get("results_rev")
+    if rev is not None and _PREPARED.get("content", (None,))[0] == rev:
+        return _PREPARED["content"][1]
     st = (snap.get("standings") or {}).get("standings") or {}
     table = standings_table(st) if st else []
     plain, _pr = results_rows(snap, table)
@@ -619,7 +649,10 @@ def prepared_results(snap: dict[str, Any]) -> dict[str, Any]:
     sections = result_sections(st) + [{"title": "run report and measurements",
                                        "text": "\n".join(report_lines) or "(the report lands here when the run finishes)",
                                        "report": True}]
-    return {"standings": st, "table": table, "sections": sections}
+    prep = {"standings": st, "table": table, "sections": sections}
+    if rev is not None:
+        _PREPARED["content"] = (rev, prep)
+    return prep
 
 
 def results_rows(snap: dict[str, Any], table: list | None = None) -> tuple[list[str], list[str | None]]:

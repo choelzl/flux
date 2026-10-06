@@ -9,6 +9,7 @@ bus never blocks the loop: rendering is the TUI's problem (docs/decisions.md D39
 
 from __future__ import annotations
 
+import itertools
 import threading
 import time
 from collections import deque
@@ -18,6 +19,8 @@ from typing import Any
 
 #: what the details pane keeps of one task's output (D544): an 80,000-token reply whole
 _OUTPUT_CHARS = 200_000
+
+_BUSES = itertools.count()             # D904: each bus its own name in a revision
 
 
 def _bounded(values: dict[str, Any] | None, cap: int) -> dict[str, Any]:
@@ -56,6 +59,10 @@ class EventBus:
         self.finished_at: float | None = None
         self.at_rest = False                      # D506: the last run said every ladder is spent
         self.error: str | None = None
+        # D904: what the results tab shows (standings, report, measurements) changed; the tab's
+        # prepared content is reused until it does
+        self._bus_no = next(_BUSES)
+        self._results_rev = 0
 
     # ---- loop side (any thread) ----
     def log(self, line: str) -> None:
@@ -71,6 +78,7 @@ class EventBus:
         """The loop's live standings: the latest payload per key (results tab)."""
         with self._lock:
             self.standings[key] = dict(payload)
+            self._results_rev += 1
 
     def task_start(self, name: str, *, kind: str = "tool", why: str = "",
                    params: dict[str, Any] | None = None) -> int:
@@ -157,10 +165,12 @@ class EventBus:
     def measure(self, row: dict[str, Any]) -> None:
         with self._lock:
             self.measurements.append(dict(row))
+            self._results_rev += 1
 
     def result(self, line: str) -> None:
         with self._lock:
             self.results.append(str(line))
+            self._results_rev += 1
 
     def done(self, error: str | None = None) -> None:
         with self._lock:
@@ -215,6 +225,7 @@ class EventBus:
                 "finished_at": self.finished_at,
                 "at_rest": self.at_rest,
                 "error": self.error,
+                "results_rev": (self._bus_no, self._results_rev),   # D904
             }
 
 
