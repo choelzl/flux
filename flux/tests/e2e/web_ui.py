@@ -133,7 +133,7 @@ class Browser:
         self.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": acts}]})
         self.cmd("WebDriver:ReleaseActions", {})
 
-    TAB, ENTER, SHIFT = "", "", ""
+    TAB, ENTER, SHIFT, ESCAPE = "", "", "", ""
 
     def attach(self, css, path):
         self.cmd("WebDriver:ElementSendKeys", {"id": self.find(css), "text": str(path)})
@@ -493,6 +493,8 @@ def flows(r: Run) -> None:
         b.click("#show-ignored")
         b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
         r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
+        r.check("an ignored one is greyed, no pill (D937)", b.js("const l = [...document.querySelectorAll('.files-card li.ignored')].find(l => l.innerText.includes('scratch.tmp'));"
+                "return !l.querySelector('.pill') && !l.innerText.includes('ignored') && getComputedStyle(l.querySelector('a')).opacity < 0.9"))
         r.check("a dotfile counts as ignored (D836)", not any(n.startswith(".gitignore") for n in names)
                 and b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('.gitignore'))"))
         b.click("#show-ignored")
@@ -507,9 +509,10 @@ def flows(r: Run) -> None:
 
     def file_manager():
         """D908: Files as a file manager -- the selected item's kind and size, an Actions menu on its head
-        and on each row: rename, move, delete (a folder said whole), an unsaved edit resolved first, the
-        document's rename unavailable with why; D907: a file gone since the list said with a retry. Then
-        the same at 390 pixels, in a frame of that width."""
+        (D937: only there, none on the rows; the keyboard opens it and reaches its actions): rename, move,
+        delete (a folder said whole), an unsaved edit resolved first, the document's rename unavailable
+        with why; D907: a file gone since the list said with a retry. Then the same at 390 pixels, in a
+        frame of that width."""
         menu = ("const [scope, label] = arguments; const d = document.querySelector(scope); d.open = true; d.dispatchEvent(new Event('toggle'));"
                 "return 1")
         pick = ("const [scope, label] = arguments; const b = [...document.querySelectorAll(scope + ' .menu-list button')].find(x => x.textContent === label);"
@@ -553,17 +556,31 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('.viewer-head .path-crumbs').innerText.includes('archive')", what="the moved file selected")
         r.check("moved into a new folder", exists("archive/2026/ma%20note.md") and not exists("fm/ma%20note.md"))
         r.check("the list shows the new folder", b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('archive/'))", what="archive/ listed"))
-        # a row's menu: the document's rename is not offered, with why; a folder deleted whole
-        b.js("const li = [...document.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent.endsWith('problem.yaml'));"
-             "li.querySelector('.row-menu').open = true; return 1")
-        why = b.wait("(() => { const li = [...document.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent.endsWith('problem.yaml'));"
-                     "const btn = [...li.querySelectorAll('.menu-list button')].find(x => x.textContent === 'Rename…'); return btn && btn.disabled && btn.title; })()", what="the document's menu")
+        # D937: no menu on a row -- the selected item's head has the actions
+        r.check("no Actions menu on the list's rows (D937)", b.js("return document.querySelectorAll('ul.files li details, ul.files li .actions-menu').length") == 0)
+        # the document selected: its rename is not offered, with why
+        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.wait("document.querySelector('.viewer-head .path-crumbs') && document.querySelector('.viewer-head .path-crumbs').innerText.endsWith('problem.yaml')"
+               " && document.querySelector('.viewer-head .actions-menu')", what="the document selected")
+        b.js(menu, ".viewer-head .actions-menu")
+        why = b.wait("(() => { const btn = [...document.querySelectorAll('.viewer-head .menu-list button')].find(x => x.textContent === 'Rename…');"
+                     "return btn && btn.disabled && btn.title; })()", what="the document's menu")
         r.check("the document's Rename is unavailable, with why", "document" in why, why)
         b.js("document.body.click(); return 1")
-        b.js("const li = [...document.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent === '▸archive/');"
-             "li.querySelector('.row-menu').open = true; return 1")
-        b.wait("(() => { const li = [...document.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent === '▸archive/');"
-               "const btn = [...li.querySelectorAll('.menu-list button')].find(x => x.textContent === 'Delete…'); if (!btn || btn.disabled) return false; btn.click(); return true; })()", what="Delete on archive/")
+        # a folder deleted whole, from its head
+        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent === '▸archive/').click(); return 1")
+        b.wait("document.querySelector('.viewer-head .path-crumbs') && document.querySelector('.viewer-head .path-crumbs').innerText.endsWith('archive')"
+               " && document.querySelector('.viewer-head .actions-menu')", what="archive/ selected")
+        # the keyboard: focus on Actions, Enter opens it, its first possible action has the focus, Escape gives it back
+        b.js("document.querySelector('.viewer-head .actions-menu summary').focus(); return 1")
+        b.keys(b.ENTER)
+        got = b.wait("document.querySelector('.viewer-head .actions-menu').open && document.activeElement.closest('.menu-list') && document.activeElement.textContent", what="the menu opened by Enter")
+        r.check("Enter on Actions opens it, its first possible action focused (D937)", got == "Rename…", got)
+        b.keys(b.ESCAPE)
+        r.check("Escape closes it, the focus back on Actions", b.wait("!document.querySelector('.viewer-head .actions-menu').open"
+                " && document.activeElement === document.querySelector('.viewer-head .actions-menu summary')", what="Escape"))
+        b.js(menu, ".viewer-head .actions-menu")
+        r.check("Delete on archive/", b.js(pick, ".viewer-head .actions-menu", "Delete…") == "ok")
         said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText.includes('file(s)') && document.querySelector('dialog.dlg[open]').innerText", what="the delete dialog")
         r.check("deleting a folder says everything in it goes", "everything in it" in said and "1 file(s), 1 folder(s)" in said, said[:200])
         r.dialog_button("Delete the folder")
@@ -578,7 +595,7 @@ def flows(r: Run) -> None:
         r.check("a file gone since the list is said with Retry, not as a binary", "could not be opened" in said and "Retry" in said and "binary" not in said, said[:160])
         b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return 1")
         r.clean("file manager")
-        # at 390 pixels: the row menu inside the screen; rename, move and delete there too
+        # at 390 pixels: the selected item's menu inside the screen; rename, move and delete there too
         r.api("/apps/sw/file?path=phone.txt", "PUT", {"text": "p\n"})
         b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?before-phone={time.time()}#/"})   # a reload: the loop page's streams closed
         b.wait("document.querySelector('#main')", timeout=20)
@@ -587,8 +604,10 @@ def flows(r: Run) -> None:
         doc = "document.getElementById('phone').contentDocument"
         b.wait(f"(() => {{ const d = {doc}; return d && [...d.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('phone.txt')); }})()", timeout=20, what="Files at 390")
         row = f"[...{doc}.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent.endsWith(arguments[0]))"
-        open_row = f"const li = {row}; li.querySelector('.row-menu').open = true; return 1"
-        click_item = (f"const li = {row}; const b = [...li.querySelectorAll('.menu-list button')].find(x => x.textContent === arguments[1]);"
+        head = f"{doc}.querySelector('.viewer-head')"
+        open_row = (f"const li = {row}; li.querySelector('a').click(); return 1")                  # D937: selected, its head's menu
+        open_menu = f"const m = {head}.querySelector('.actions-menu'); m.open = true; return 1"
+        click_item = (f"const b = [...{head}.querySelectorAll('.menu-list button')].find(x => x.textContent === arguments[1]);"
                       "if (!b || b.disabled) return false; b.click(); return true")
         dlg = f"{doc}.querySelector('dialog.dlg[open]')"
         fill_p = f"const i = {dlg}.querySelector('input'); i.value = arguments[0]; i.dispatchEvent(new Event('input')); return 1"
@@ -598,13 +617,16 @@ def flows(r: Run) -> None:
                                                                 ("pocket/", "Delete…", None, "Delete the folder"))):
             b.wait(f"!!{row}".replace("arguments[0]", f"'{target}'"), what=f"{target} listed at 390")
             b.js(open_row, target)
-            b.wait(f"(() => {{ const li = {row}; return li && [...li.querySelectorAll('.menu-list button')].some(x => x.textContent === arguments[1] && !x.disabled); }})()".replace("arguments[1]", f"'{label}'").replace("arguments[0]", f"'{target}'"),
-                   what=f"{label} at 390")
+            b.wait(f"(() => {{ const c = {head} && {head}.querySelector('.path-crumbs'); return c && c.innerText.endsWith('{target.rstrip('/')}') && {head}.querySelector('.actions-menu'); }})()",
+                   what=f"{target} selected at 390")
+            b.js(open_menu)
+            b.wait(f"[...{head}.querySelectorAll('.menu-list button')].some(x => x.textContent === '{label}' && !x.disabled)", what=f"{label} at 390")
             if step == 0:
-                over = b.js(f"const w = document.getElementById('phone').contentWindow; const m = {row}.querySelector('.menu-list').getBoundingClientRect();"
-                            "return [Math.round(m.left), Math.round(m.right), w.innerWidth, w.document.documentElement.scrollWidth]", target)
-                r.check("at 390px the row's menu stays on the screen", over[0] >= 0 and over[1] <= over[2] and over[3] <= over[2] + 1, str(over))
-            r.check(f"at 390px: {label} from the row's menu", b.js(click_item, target, label))
+                r.check("at 390px no row has a menu (D937)", b.js(f"return {doc}.querySelectorAll('ul.files li details').length") == 0)
+                over = b.js(f"const w = document.getElementById('phone').contentWindow; const m = {head}.querySelector('.menu-list').getBoundingClientRect();"
+                            "return [Math.round(m.left), Math.round(m.right), w.innerWidth, w.document.documentElement.scrollWidth]")
+                r.check("at 390px the selected item's menu stays on the screen", over[0] >= 0 and over[1] <= over[2] and over[3] <= over[2] + 1, str(over))
+            r.check(f"at 390px: {label} from the selected item's menu", b.js(click_item, target, label))
             b.wait(f"{dlg}", what=f"the {label} dialog at 390")
             if value is not None:
                 b.js(fill_p, value)

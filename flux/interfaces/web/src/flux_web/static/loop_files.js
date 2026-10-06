@@ -1,6 +1,6 @@
 // Flux web: a loop's Files tab -- its files, a viewer and editor, adding files; the agents'
 // workbench (D892: out of loopPage). D908: a file manager -- the selected item's path, kind, size
-// and time, and an Actions menu (Rename, Move, Delete), also on each row.
+// and time, and an Actions menu (Rename, Move, Delete) on its head (D937: not on each row).
 
 import { codeEditor, langOf } from "./highlight.js";
 import { act, ago, api, bytes, card, dialog, empty, enc, h, request, skeleton, toast } from "./ui.js";
@@ -8,7 +8,13 @@ import { dropZone, progressDialog, sendFiles } from "./loops.js";
 
 // D908: an open Actions menu closes on a click elsewhere or Escape
 document.addEventListener("click", (e) => document.querySelectorAll("details.actions-menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; }));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll("details.actions-menu[open]").forEach(d => { d.open = false; }); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll("details.actions-menu[open]").forEach(d => {
+    const back = d.contains(document.activeElement);       // D937: the keyboard's place kept -- back on the menu's button
+    d.open = false; if (back) d.querySelector("summary").focus();
+  });
+});
 
 const parentOf = (p) => String(p || "").split("/").slice(0, -1).join("/");
 const baseOf = (p) => String(p || "").split("/").pop();
@@ -89,26 +95,19 @@ function filesTab(ctx) {
     if (!head) return;
     try { head.replaceWith(metaLine(await api(itemUrl(path)))); } catch (_) { /* kept as it was */ }
   }
-  /** Rename, Move and Delete (D908): on the selected item's head, and on each row (the row's
-      item read when its menu opens); what is not possible here is shown disabled, with why. */
-  function actionsMenu(path, it = null, row = false) {
-    const list = h("div", { class: "menu-list", role: "menu" });
-    const fill = (x) => {
-      const btn = (label, fn, ok) => h("button", { type: "button", role: "menuitem", disabled: ok ? null : true, title: ok ? null : x.why,
-        onclick: async (e) => { e.preventDefault(); menu.open = false; await fn(x); } }, label);
-      list.replaceChildren(btn("Rename…", renameItem, x.can.rename), btn("Move…", moveItem, x.can.move),
-        btn("Delete…", deleteItem, x.can.delete), x.why ? h("p", { class: "muted small why" }, `Not here: ${x.why}.`) : "");
-    };
-    const menu = h("details", { class: "actions-menu" + (row ? " row-menu" : "") },
-      h("summary", { class: "btn small", "aria-label": `Actions for ${path || name}`, title: "Rename, move or delete" }, row ? "⋯" : "Actions ▾"), list);
-    if (it) fill(it);
-    else {
-      list.append(h("span", { class: "muted small" }, "…"));
-      menu.addEventListener("toggle", async () => {
-        if (!menu.open || menu.dataset.read) return;
-        try { fill(await api(itemUrl(path))); menu.dataset.read = "1"; } catch (x) { list.replaceChildren(h("span", { class: "muted small" }, x.message)); }
-      });
-    }
+  /** Rename, Move and Delete (D908) on the selected item's head -- D937: the only place, no menu on
+      each row; what is not possible here is shown disabled, with why. Opened from the keyboard
+      (Enter or Space on Actions), its first possible action takes the focus. */
+  function actionsMenu(path, it) {
+    const btn = (label, fn, ok) => h("button", { type: "button", role: "menuitem", disabled: ok ? null : true, title: ok ? null : it.why,
+      onclick: async (e) => { e.preventDefault(); menu.open = false; await fn(it); } }, label);
+    const list = h("div", { class: "menu-list", role: "menu" }, btn("Rename…", renameItem, it.can.rename), btn("Move…", moveItem, it.can.move),
+      btn("Delete…", deleteItem, it.can.delete), it.why ? h("p", { class: "muted small why" }, `Not here: ${it.why}.`) : "");
+    const summary = h("summary", { class: "btn small", "aria-label": `Actions for ${path || name}`, title: "Rename, move or delete" }, "Actions ▾");
+    const menu = h("details", { class: "actions-menu" }, summary, list);
+    menu.addEventListener("toggle", () => {
+      if (menu.open && document.activeElement === summary) { const b = list.querySelector("button:not([disabled])"); if (b) b.focus(); }
+    });
     return menu;
   }
   /** A name or a folder asked for, the path it makes shown as it is typed. */
@@ -221,11 +220,12 @@ function filesTab(ctx) {
     // D829: a loop's own parts stand out: its documents and the folders Flux keeps
     const own = (f) => !f.path.includes("/") && (f.dir ? ["out", "runs", "workbench", "library"].includes(f.path)
       : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml"));
-    // D908: a link says it is one (never followed here); each row has the Actions menu too
-    return h("ul", { class: "files" }, list.map(f => h("li", { class: (f.ignored ? "ignored" : "") + (own(f) ? " own" : "") + (f.link ? " link" : "") },
+    // D908: a link says it is one (never followed here). D937: a row is its name and size -- the
+    // actions are the selected item's (its head); an ignored one greyed, no pill
+    return h("ul", { class: "files" }, list.map(f => h("li", { class: (f.ignored ? "ignored" : "") + (own(f) ? " own" : "") + (f.link ? " link" : ""),
+      title: f.ignored ? "ignored (.gitignore, or a name starting with .)" : null },
       h("a", { href: "javascript:void 0", title: f.path, onclick: () => openFile(f.path, f.dir) }, h("span", { class: "ic" }, f.dir ? "▸" : f.link ? "↪" : "·"), f.path.split("/").pop() + (f.dir ? "/" : "")),
-      f.ignored ? h("span", { class: "pill small" }, "ignored") : "", f.dir || f.link ? "" : h("small", { class: "muted" }, size(f.size)),
-      mine ? actionsMenu(f.path, null, true) : "")));
+      f.dir || f.link ? "" : h("small", { class: "muted" }, size(f.size)))));
   }
   function adder() {
     const addFiles = h("input", { type: "file", multiple: true });

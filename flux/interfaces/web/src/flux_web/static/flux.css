@@ -614,7 +614,7 @@ dialog.dlg .toasts { position: fixed; }
 .astream.err .astream-body { color: var(--bad); }
 ol.acmds { margin: 0; padding-left: 28px; display: grid; gap: 3px; max-height: 220px; overflow: auto; }
 ol.acmds code { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-ul.files li.ignored a { opacity: .55; }
+ul.files li.ignored a, ul.files li.ignored small { opacity: .55; }
 .ignored-toggle { font-size: 12.5px; color: var(--muted); }
 
 /* D704 */
@@ -827,7 +827,7 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
 .viewer-head > .path-crumbs { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }
 
 /* D908: Files as a file manager -- the selected item's kind, size and time under its path; one
-   Actions menu (Rename, Move, Delete) on its head and on each row, opening over the content */
+   Actions menu (Rename, Move, Delete) on its head (D937: not on each row), opening over the content */
 .viewer-head > .item-meta { flex: 1 1 100%; order: 3; overflow-wrap: anywhere; }
 .viewer-head > .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .actions-menu { position: relative; display: inline-block; }
@@ -841,9 +841,7 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
 .actions-menu .menu-list button[disabled] { color: var(--muted); cursor: not-allowed; }
 .actions-menu .menu-list .why { margin: 4px 10px 6px; white-space: normal; }
 ul.files li { align-items: center; }
-ul.files li > .row-menu { flex-shrink: 0; }
 ul.files li > a { margin-right: auto; }
-.row-menu > summary.btn.small { padding: 0 8px; min-height: 26px; line-height: 1; }
 .path-preview { overflow-wrap: anywhere; }
 
 /* D835: a price is a short number */
