@@ -46,7 +46,7 @@ def _publish_mentor(problem: Problem, state: LoopState) -> None:
             if concl:
                 sections.append({"title": "record: conclusions",
                                  "text": "\n".join(
-                                     f"* {c.get('decision', '?')} ({c.get('decided_by', '')})"
+                                     f"* {c.get('decision') or 'no decision'} ({c.get('decided_by', '')})"
                                      for c in concl)})
         except Exception:  # noqa: BLE001
             pass

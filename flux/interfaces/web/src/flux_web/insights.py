@@ -12,6 +12,8 @@ import time
 from typing import Any
 from urllib.parse import urlsplit
 
+from .runs import OK_RC
+
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 
 __all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day"]
@@ -25,7 +27,7 @@ def failures(store: Any, runs: Any, since: float) -> dict[str, Any]:
     agents' Tests that failed (D751), per user."""
     starts = []
     for r in store.runs():
-        if r.get("ended") and r["ended"] >= since and r.get("rc") not in (0, None, 130):
+        if r.get("ended") and r["ended"] >= since and r.get("rc") not in OK_RC:
             starts.append({"user": r["user"], "app": r["app"], "when": r["ended"], "rc": r["rc"], "why": [w.strip() for w in runs.failure(r)]})
     tests = []
     for u in store.users():

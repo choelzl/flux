@@ -317,18 +317,22 @@ def _run_child(problem: Problem, state: LoopState, sub: SubLoop, todo: list) -> 
     state.refused.extend((f"{sub.name}: {name}", why) for name, why in child.refused)
     if sub.name in todo:
         todo.remove(sub.name)
-    if child.decision is None:
+    # D900: a child with no design meeting its own requirements yet gives its closest as the part --
+    # the parent's whole is what must qualify (D895), and a part to compose keeps the parent going
+    got = child.decision or child.closest
+    if got is None:
         say(f"  sub-loop {sub.name} decided nothing")
         return
-    state.admitted[sub.name] = child.decision.candidate
-    say(f"  ADMITTED {sub.name}: {child.decision.name} ({child.decided_by})")
+    state.admitted[sub.name] = got.candidate
+    say(f"  ADMITTED {sub.name}: {got.name} ({child.decided_by})" + ("" if child.decision is not None else
+        "; no design of it meets its requirements yet, so its closest stands as the part"))
     if state.records is not None:
         try:
             state.records.remember("subloop", {
                 "name": sub.name, "problem": sub.problem.name,
-                "statement": sub.statement, "decision": child.decision.name,
-                "decided_by": child.decided_by, "stage": child.decision.stage,
-                "metrics": dict(child.decision.metrics),
+                "statement": sub.statement, "decision": got.name,
+                "decided_by": child.decided_by, "stage": got.stage,
+                "metrics": dict(got.metrics),
                 "campaign": getattr(getattr(sub.problem, "_records", None), "campaign_id", "")})
         except Exception:  # noqa: BLE001
             pass
@@ -1287,11 +1291,43 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     with _phase("frontier", why=f"{len(pool)} on {reached}"):
         front = list(problem.frontier(pool, state))
     with _phase("decide", why=f"{len(pool)} in the pool") as out:
-        pick, decided_by = problem.decide(pool, state)
+        # D900: the shortfall ranking over the whole pool is the standing design -- what the search
+        # and the next pass's direction build on -- while the decision is only a design meeting
+        # every requirement with its evidence (D899); none does: no decision, the closest apart
+        standing, ranked_by = problem.decide(pool, state)
+        feasible, judged = _feasible(problem, state, pool, stages)
+        if len(feasible) == len(pool):
+            pick, decided_by = standing, ranked_by
+        elif feasible:
+            pick, decided_by = problem.decide(feasible, state)
+        else:
+            pick, decided_by = None, "no feasible design yet"
         if pick is not None:
-            pick, decided_by = _select(problem, state, pool, pick, decided_by)
+            pick, decided_by = _select(problem, state, feasible, pick, decided_by)
+        closest = standing if pick is None else None
+        unmet = list(judged[closest.candidate.key()].reasons) if closest is not None and closest.candidate.key() in judged else []
+        if closest is not None:
+            decided_by = f"no feasible design yet; the closest, {closest.name}: " + ("; ".join(unmet) or ranked_by)
         out["decision"] = pick.name if pick is not None else None        # D742: the tree's leaf says it
         out["decided by"] = decided_by
+    if closest is not None:
+        _note_once(state, f"no design meets every requirement yet; the closest, {closest.name}, does not: "
+                          + ("; ".join(unmet) or ranked_by))
+        if state.records is not None:
+            try:
+                # the problem's own words about its nearest design stay (a balanced pick, a study's notes),
+                # under no decision
+                own = dict(problem.conclusion(closest, decided_by) or {})
+            except Exception:  # noqa: BLE001
+                own = {}
+            try:
+                state.records.conclude({**own, "decision_key": None,
+                                        "decision": None, "no_decision": "no feasible design yet", "decided_by": decided_by,
+                                        "closest": closest.name, "closest_key": closest.candidate.key(), "unmet": unmet,
+                                        "closest_metrics": dict(closest.metrics), "stage": closest.stage,
+                                        "standing": closest.name, "standing_key": closest.candidate.key()})
+            except Exception:  # noqa: BLE001
+                pass
     if pick is not None:
         state.lessons.append(f"[{pick.stage}] decision {pick.name}: "
                              + ", ".join(f"{k}={v:g}" for k, v in pick.metrics.items())
@@ -1306,13 +1342,44 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
                 state.not_established.append(f"the critic objects to the decision: {c.why[:300]}")
         if state.records is not None:
             try:
-                state.records.conclude(problem.conclusion(pick, decided_by))
+                state.records.conclude({**problem.conclusion(pick, decided_by),       # D900: and the standing design
+                                        "standing": standing.name if standing is not None else pick.name,
+                                        "standing_key": (standing or pick).candidate.key()})
             except Exception:  # noqa: BLE001
                 pass
     confirmed = on_stage[reached] if reached != stages[0] else []
     if state.depth == 0:
         ops.pass_ended(at_rest=state.stopped.startswith("at rest"))
-    return _result(problem, state, pick, decided_by, front, confirmed)
+    got = _result(problem, state, pick, decided_by, front, confirmed)
+    return dataclasses.replace(got, closest=closest, unmet=unmet) if closest is not None else got
+
+
+def _feasible(problem: Problem, state: LoopState, pool: list[Scored], stages: list[str]
+              ) -> tuple[list[Scored], dict[str, Any]]:
+    """The designs of the pool that meet every requirement with its evidence (D899, D900), and each
+    design's reading by its key. A limit is judged on its own stage's numbers -- the design's, from
+    every stage the pass or the record measured it on; a limit a later stage must judge is pending,
+    not met. No limit: the whole pool."""
+    from .eligibility import eligibility
+    from .objective import Objectives
+
+    try:
+        objs = problem.objectives()
+        if not objs or (not objs.limits and all(o.keep is None for o in objs)):
+            return list(pool), {}
+        objs = Objectives(o.resolved(pool) for o in objs)
+    except Exception:  # noqa: BLE001 -- objectives that cannot be read: the problem's own decide stands
+        return list(pool), {}
+    numbers: dict[str, dict[str, dict[str, float]]] = {}
+    for st, rows in (state.on_stage or {}).items():
+        for s in rows:
+            numbers.setdefault(s.candidate.key(), {})[st] = dict(s.metrics)
+    judged = {}
+    for p in pool:
+        mine = numbers.setdefault(p.candidate.key(), {})
+        mine.setdefault(p.stage, dict(p.metrics))
+        judged[p.candidate.key()] = eligibility(objs, mine, stages, stopped=bool(state.request.screen_only))
+    return [p for p in pool if judged[p.candidate.key()].eligible], judged
 
 
 def _survivors(problem: Problem, state: LoopState, stage: str, scored: list[Scored]

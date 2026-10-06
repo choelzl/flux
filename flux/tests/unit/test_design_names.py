@@ -41,8 +41,8 @@ def test_a_later_start_numbers_on_from_the_record(tmp_path):
 
 
 def test_the_decision_is_the_design_it_names_among_those_a_name_was_given_to():
-    old = {"base": "p#1", "key": content_key({"artifact": "old"}), "stages": {"long": {"speedup": 1.028}}, "last": "2026-10-01", "decision": False}
-    new = {"base": "p#1", "key": content_key({"artifact": "new"}), "stages": {"long": {"speedup": 1.031}}, "last": "2026-10-04", "decision": False}
+    old = {"base": "p#1", "key": content_key({"artifact": "old"}), "stages": {"long": {"speedup": 1.028}}, "last": "2026-10-01", "decision": False, "eligible": True}
+    new = {"base": "p#1", "key": content_key({"artifact": "new"}), "stages": {"long": {"speedup": 1.031}}, "last": "2026-10-04", "decision": False, "eligible": True}
     _decided([old, new], {"name": "p#1", "key": old["key"], "metrics": {}})
     assert old["decision"] and not new["decision"], "by its key"
     old["decision"] = False

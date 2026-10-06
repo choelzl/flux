@@ -23,7 +23,11 @@ from typing import Any
 
 from .store import Store, User
 
-__all__ = ["RunManager", "loop_files", "run_env"]
+__all__ = ["OK_RC", "RunManager", "loop_files", "run_env"]
+
+#: the exit statuses of a start that did not fail: 0 a qualifying answer, 3 designs but none qualifying yet
+#: (D900), 130 stopped; None, no status known
+OK_RC = (0, 3, None, 130)
 
 #: The server's own model keys: never in the run of a user who brought their own endpoint.
 _SERVER_KEYS = ("FLUX_REMOTE_API_KEY", "FLUX_REMOTE_API_KEY_FILE", "OPENROUTER_API_KEY")
@@ -462,7 +466,7 @@ class RunManager:
         running = self.live(run)
         info.update(running=running, since=run["started"] if running else None,
                     last_active=(time.time() if running else (run.get("ended") or run["started"])),
-                    failed=(not running and run.get("rc") not in (0, None, 130)), stopped=(not running and run.get("rc") == 130),
+                    failed=(not running and run.get("rc") not in OK_RC), stopped=(not running and run.get("rc") == 130),
                     options=json.loads(run.get("options") or "{}"))
         if info["failed"]:
             info["error"] = self.failure(run)              # D757: why, in the run's own words

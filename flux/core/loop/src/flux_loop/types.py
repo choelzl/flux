@@ -367,6 +367,10 @@ class LoopResult:
     explorable: bool = True
     #: D802: each sub-loop's own result, by name (a parent of sub-loops that composes no whole)
     children: dict[str, Any] = field(default_factory=dict)
+    #: D900: no design meets every requirement (`decision` None): the nearest one by the shortfall
+    #: ranking, and what it does not meet -- reported apart from the decision, never as it
+    closest: Scored | None = None
+    unmet: list[str] = field(default_factory=list)
 
     @property
     def cut_short(self) -> bool:

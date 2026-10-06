@@ -2,7 +2,7 @@
 design a pass. With nothing left to draft -- a design stands -- the pass asks which direction the
 next one takes: REFINE the standing design (its numbers in hand, its ladder's next step) or EXPLORE
 (a new design that beats it, D839). The orchestrator answers when it can (a model or a coding
-agent, `orchestrate:`); else the rules: refine while the decision moves, explore once it has stood
+agent, `orchestrate:`); else the rules: refine while the standing design moves (D900: decided or not), explore once it has stood
 for `budget.explore_after` passes, then alternate, so a stalled campaign tries both.
 """
 
@@ -16,13 +16,15 @@ CHOICES = ("refine", "explore")
 
 
 def stood(state: Any) -> int:
-    """How many passes in a row, the latest first, decided the same design: 0 without a record."""
+    """How many passes in a row, the latest first, kept the same standing design: 0 without a record.
+    D900: the standing design is the shortfall ranking's pick, decided or not -- a campaign with no
+    feasible design yet still stalls or moves; a conclusion from before it names its decision."""
     rows = []
     try:
         rows = state.records.conclusions(limit=50) if state.records is not None else []
     except Exception:  # noqa: BLE001 -- no record: nothing has stood
         rows = []
-    ids = [(r.get("decision_key") or r.get("decision")) for r in rows if r.get("decision")]
+    ids = [x for r in rows if (x := r.get("standing_key") or r.get("standing") or r.get("decision_key") or r.get("decision"))]
     n = 0
     for x in ids[1:]:
         if x != ids[0]:
@@ -39,7 +41,7 @@ def choose(problem: Any, state: Any, standing: Any, said: str) -> tuple[str, str
     ask = getattr(orch, "direction", None)
     if callable(ask):
         lines = [f"The standing design: {standing.name}. {said}",
-                 f"The decision has stood for {n} pass(es)." if n else "The last pass moved the decision.",
+                 f"The standing design has stood for {n} pass(es)." if n else "The last pass moved the standing design.",
                  "refine: hand it back with its numbers to be improved -- its next step, a small change that measures.",
                  "explore: ask for a NEW design that beats it -- another structure or algorithm, a risk.",
                  "Pick the direction of the next design."]

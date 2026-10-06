@@ -185,7 +185,11 @@ def build_parser() -> argparse.ArgumentParser:
     mig_p.add_argument("folder", help="The problem's folder.")
     mig_p.add_argument("--write", action="store_true", help="Write them (each only when it loads; the original kept as <file>.orig).")
     mig_p.set_defaults(func=_cmd_task_migrate)
-    run_p = task_sub.add_parser("run", help="Run a task document through the loop.")
+    run_p = task_sub.add_parser(
+        "run", help="Run a task document through the loop.",
+        epilog="Exit status (D900): 0 a design meets every requirement (the decision, its artifact written); 3 correct "
+               "designs were measured but none meets every requirement yet (no decision; the closest is reported, "
+               "no artifact written); 1 no design was measured, or the run could not start; 130 interrupted.")
     run_p.add_argument("file", help="The problem's folder, or one of its documents (problem.yaml, NAME.problem.yaml).")
     run_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, beside the document's own (repeatable).")
     run_p.add_argument("--db", default=None, help="Campaign record (default: <document dir>/out/<task id>.db).")

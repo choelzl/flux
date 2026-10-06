@@ -66,11 +66,15 @@ def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) 
     """The loop's decision (D809): the record's latest pass's -- each pass writes its conclusion,
     so a loop that runs for days has one from its first pass on -- unless the run's answer
     (`runs/answer.json`, written when a run ends) is newer. `campaign`: the run's own (a record may
-    hold a parent's and its sub-loops')."""
+    hold a parent's and its sub-loops').
+
+    D900: a pass that found no design meeting every requirement concludes with no decision; its
+    conclusion stands over an older answer, and names the closest design apart (`closest`), with what
+    it does not meet -- `{"name": None, "closest": {"name", "key", "unmet"}}`."""
     import sqlite3
     from datetime import datetime
 
-    name, when, said = None, 0.0, {}
+    name, when, said, row = None, 0.0, {}, None
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         try:
@@ -91,17 +95,23 @@ def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) 
     if answer_path is not None:
         try:
             st = os.stat(answer_path)
-            if name is None or st.st_mtime > when:
+            if row is None or st.st_mtime > when:
                 from .confine import open_read
 
                 with open_read(answer_path, os.path.dirname(os.path.dirname(os.path.abspath(answer_path))), text=True) as fh:
                     ans = json.loads(fh.read())          # D852: runs/ is the run's to write
                 dec = ans.get("decision") if isinstance(ans.get("decision"), dict) else {}
+                near = ans.get("closest") if isinstance(ans.get("closest"), dict) else {}
                 if dec.get("name"):
                     name, said = dec["name"], {**dec, "decision_key": dec.get("key")}
+                elif near.get("name"):
+                    name, said = None, {"closest": near["name"], "closest_key": near.get("key"), "unmet": near.get("unmet") or []}
         except (OSError, ValueError):
             pass
     if not name:
+        if said.get("closest"):
+            return {"name": None, "key": None, "metrics": {},
+                    "closest": {"name": str(said["closest"]), "key": said.get("closest_key"), "unmet": list(said.get("unmet") or [])}}
         return None
     metrics = {k: v for k, v in (said.get("metrics") or said).items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
     return {"name": str(name), "key": said.get("decision_key"), "metrics": metrics}
@@ -167,12 +177,32 @@ def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10
         pool.remove(pick)
 
 
-def _decided(out: list[dict[str, Any]], decision: Any) -> None:
+def _decided(out: list[dict[str, Any]], decision: Any) -> dict[str, Any] | None:
     """Mark the decided design (D840): by name and what it is when the record says it; else, of the
-    designs with that name, the one whose numbers are the conclusion's; else the latest."""
+    designs with that name, the one whose numbers are the conclusion's; else the latest.
+
+    D900: only an eligible design is the decision. A design a conclusion from before named that does
+    not meet every requirement, or a conclusion with no decision, leaves no design marked; the closest
+    is returned instead -- the one the conclusion names, else that old decision, else the best ranked
+    -- and marked `closest`."""
     if not decision:
-        return
+        return None                                             # no pass ended yet: nothing decided, nothing closest
     doc = decision if isinstance(decision, dict) else {"name": decision}
+    picked = _find(out, doc) if doc.get("name") else None
+    if picked is not None and picked["eligible"]:
+        picked["decision"] = True
+        return None
+    near = _find(out, doc["closest"]) if isinstance(doc.get("closest"), dict) else None
+    near = near or picked or min((d for d in out if d["rank"] is not None), key=lambda d: d["rank"], default=None)
+    if near is None:
+        return None
+    near["closest"] = True
+    return {"name": near["name"], "key": near["key"], "part": near["part"], "numbers": dict(near["numbers"]),
+            "shown": near["shown"], "reasons": list(near["reasons"]) or list(near["why"])}
+
+
+def _find(out: list[dict[str, Any]], doc: dict[str, Any]) -> dict[str, Any] | None:
+    """The design a conclusion names, by name and what it is (D840)."""
     same = [d for d in out if d["base"] == doc.get("name")]
     if doc.get("key"):
         same = [d for d in same if d["key"] == doc["key"]] or same
@@ -183,8 +213,7 @@ def _decided(out: list[dict[str, Any]], decision: Any) -> None:
                        for nums in d["stages"].values())
 
         same = [d for d in same if fits(d)] or same
-    if same:
-        max(same, key=lambda d: d["last"] or "")["decision"] = True
+    return max(same, key=lambda d: d["last"] or "") if same else None
 
 
 def _cutoffs(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -316,9 +345,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         d["why"] = misses + list(judged.reasons)
         d["meets"] = meets
         d["decision"] = False
+        d["closest"] = False
         d["rank"] = None
         out.append(d)
-    _decided(out, decision)
     names: dict[tuple[str, str], int] = {}
     for d in out:
         names[(d["part"], d["base"])] = names.get((d["part"], d["base"]), 0) + 1
@@ -326,14 +355,15 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         if names[(d["part"], d["base"])] > 1:
             d["name"] = f"{d['base']}·{d['key'][:6]}"
     _rank(out, order, db)
+    closest = _decided(out, decision)                           # D900: after the ranking, its best is the closest
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
-    out.sort(key=lambda d: not d["decision"])                   # the decided design on top
+    out.sort(key=lambda d: not (d["decision"] or d["closest"]))  # the decided design (or the closest) on top
     metrics: list[str] = []
     for m in [o.metric for o in objectives] + [c["metric"] for c in cutoffs] + [m for d in out for m in d["numbers"]]:
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
-    return {"designs": out[:limit], "total": len(out),
+    return {"designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
             "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
 

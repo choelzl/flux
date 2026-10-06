@@ -102,3 +102,42 @@ def test_the_decision_is_the_records_latest_pass_and_the_best_are_ranked_by_the_
     os.utime(ans, None)
     assert decision_of(db, ans) == "fast", "a run's answer newer than the record's last pass"
     assert decision_of(str(tmp_path / "none.db"), tmp_path / "missing.json") is None
+
+
+def test_no_feasible_design_shows_no_decision_and_the_closest(tmp_path):
+    """D900: a pass with no design meeting every requirement concludes with no decision and names its
+    closest; a conclusion from before that named a design missing a limit marks no decision either --
+    its design is the closest. An eligible decision is marked as before."""
+    db = _record(tmp_path)
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.conclude({"decision": None, "no_decision": "no feasible design yet", "closest": "slow",
+                  "unmet": ["fmax_mhz 800 is below the limit 1000 (confirm)"]})
+    rec.close("paused")
+    from flux_web.results import decision_doc
+
+    doc = decision_doc(db)
+    assert doc["name"] is None and doc["closest"]["name"] == "slow"
+    got = designs(db, STAGES, doc)
+    assert got["feasible"] is False and not any(d["decision"] for d in got["designs"])
+    assert got["closest"]["name"] == "slow" and got["closest"]["reasons"] == ["fmax_mhz 800 is below the limit 1000 (confirm)"]
+    assert got["designs"][0]["name"] == "slow" and got["designs"][0]["closest"]
+    old = designs(db, STAGES, decision="slow")                 # a pass before D900 decided on it
+    assert old["feasible"] is False and old["closest"]["name"] == "slow"
+    good = designs(db, STAGES, decision="fast")
+    assert good["feasible"] is True and good["closest"] is None
+
+
+def test_a_conclusion_with_no_decision_stands_over_an_older_answer(tmp_path):
+    import os
+    import time
+
+    from flux_web.results import decision_of
+
+    db = _record(tmp_path)
+    ans = tmp_path / "answer.json"
+    ans.write_text('{"decision": {"name": "fast"}}')
+    os.utime(ans, (time.time() - 3600, time.time() - 3600))
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.conclude({"decision": None, "closest": "slow"})
+    rec.close("paused")
+    assert decision_of(db, ans) is None, "the stale answer's decision is not shown"

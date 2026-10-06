@@ -71,7 +71,8 @@ def _pass(db, a, b):
 def test_the_report_reads_the_vector_from_the_record_and_draws_the_passes(tmp_path):
     db = str(tmp_path / "pair.db")
     out1 = _pass(db, 2, 3)
-    assert out1.decision is not None and out1.decision.metrics["value"] == 5.0
+    # D900: 5 misses the 10 asked for -- no decision; the closest is reported apart
+    assert out1.decision is None and out1.closest.metrics["value"] == 5.0 and out1.unmet == ["value 5 is below the limit 10 (screen)"]
     out2 = _pass(db, 4, 7)                       # the second pass: a better whole (11 >= the goal)
     assert out2.decision.metrics["value"] == 11.0
     rep = load(db)

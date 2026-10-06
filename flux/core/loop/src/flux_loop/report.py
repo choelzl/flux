@@ -444,7 +444,7 @@ def render(rep: Report) -> str:
         if len(rep.passes) > 40:
             sections.append(f"<tr><td colspan=99 class=note>{len(rep.passes) - 40} earlier pass(es) not shown</td></tr>")
         for when, con in shown:
-            sections.append(f"<tr><td>{_day(when)}</td><td>{html.escape(str(con.get('decision') or ''))[:60]}</td>"
+            sections.append(f"<tr><td>{_day(when)}</td><td>{html.escape(str(con.get('decision') or ('none; closest ' + str(con['closest']) if con.get('closest') else '')))[:60]}</td>"
                             f"<td>{html.escape(str(con.get('decided_by') or ''))[:60]}</td>"
                             + "".join(f"<td>{con.get(o.metric, '') if con.get(o.metric) is None or not isinstance(con.get(o.metric), float) else format(con.get(o.metric), '.4g')}</td>" for o in objs)
                             + "</tr>")

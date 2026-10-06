@@ -106,8 +106,10 @@ def test_the_interconnect_mapping_document_runs_screen_only(tmp_path):
         pytest.skip("the interconnect mapping study's tools are not on PATH")
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "i.db"), "--screen-only",
              "--replies", str(_replies(tmp_path, ["{}"])))
-    assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
-    assert "DECISION" in r.stdout
+    # D900: its slack limit is judged on the synth stage, which a screen-only run never reaches: no decision,
+    # the closest reported, exit 3
+    assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-3000:]
+    assert "NO FEASIBLE DESIGN YET" in r.stdout and "CLOSEST" in r.stdout and "worst_slack_ps not measured (synth)" in r.stdout
 
 
 @pytest.mark.heavy
@@ -122,8 +124,9 @@ def test_the_macarray_document_screens_one_pe_end_to_end(tmp_path):
     if not _tools_ok(doc):
         pytest.skip("verilator/yosys/openroad are not on PATH")
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "m.db"), "--screen-only", timeout=1200)
-    assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
-    assert "DECISION behavioral-tree-pipeline=0" in r.stdout and "model: none needed" in r.stdout
+    # D900: screened only, the clock limit (judged placed, on confirm) is not measured: the closest, exit 3
+    assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-3000:]
+    assert "CLOSEST behavioral-tree-pipeline=0" in r.stdout and "model: none needed" in r.stdout
 
 
 @pytest.mark.heavy
@@ -138,8 +141,8 @@ def test_the_prefetcher_document_runs_when_its_simulator_and_traces_are_there(tm
     if not any((tmp_path / "traces").glob("*.gz")) or not _tools_ok(doc):
         pytest.skip("ChampSim or the traces are not on this machine")
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "p.db"), "--screen-only", "--passes", "1", timeout=3600)
-    assert r.returncode in (0, 1), r.stdout[-3000:] + r.stderr[-3000:]
-    assert "DECISION" in r.stdout and "geomean_speedup" in r.stdout, r.stdout[-3000:]
+    assert r.returncode in (0, 1, 3), r.stdout[-3000:] + r.stderr[-3000:]
+    assert ("DECISION" in r.stdout or "CLOSEST" in r.stdout) and "geomean_speedup" in r.stdout, r.stdout[-3000:]
 
 
 @pytest.mark.heavy
@@ -152,8 +155,10 @@ def test_the_mul8_example_runs_with_no_code_of_its_own(tmp_path):
               "  wire signed [15:0] t;\n  assign t = a * w;\n  assign p = t;\nendmodule\n")
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "m.db"), "--screen-only", "--steps", "1",
              "--replies", str(_replies(tmp_path, [module])), "--out", str(tmp_path / "mul8.sv"), timeout=900)
-    assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-2000:]
-    assert "ADMITTED mul8" in r.stdout and "DECISION mul8#1" in r.stdout and (tmp_path / "mul8.sv").read_text().strip() == module.strip()
+    # D900: screened only, its 1600 MHz limit (judged on confirm) is not measured: the closest, no artifact, exit 3
+    assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-2000:]
+    assert "ADMITTED mul8" in r.stdout and "CLOSEST mul8#1" in r.stdout and "fmax_mhz not measured (confirm)" in r.stdout
+    assert not (tmp_path / "mul8.sv").exists()
 
 
 @pytest.mark.heavy
@@ -165,9 +170,9 @@ def test_the_adder16_dse_runs_with_no_world(tmp_path):
     # one pass: a sweep with no model waits once every point is measured (D593), so cap it
     r = flux("task", "run", str(doc), "--db", str(tmp_path / "a.db"), "--screen-only", "--passes", "1",
              "--out", str(tmp_path / "adder16.v"), timeout=900)
-    assert r.returncode in (0, 1), r.stdout[-3000:] + r.stderr[-2000:]
-    assert "sweep: 6 point(s) of 6" in r.stdout and "DECISION" in r.stdout, r.stdout[-3000:]
-    assert "module adder16" in (tmp_path / "adder16.v").read_text()
+    # D900: screened only, its fmax limit (judged on confirm) is not measured: the closest, exit 3
+    assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-2000:]
+    assert "sweep: 6 point(s) of 6" in r.stdout and "CLOSEST" in r.stdout, r.stdout[-3000:]
 
 
 @pytest.mark.heavy

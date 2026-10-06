@@ -536,11 +536,14 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         target = Path(args.out or task.out_dir() / f"{task.id}{task.extension}")
         target.write_text(out.decision.candidate.artifact)
         print(f"\nartifact written to {target}")
+    elif getattr(out, "closest", None) is not None:
+        print(f"\nno feasible design yet: no artifact written; the closest is {out.closest.name} (exit 3)")
     if getattr(args, "json", None):
         Path(args.json).write_text(json.dumps(_answer(task, db, out, problem, target), indent=2, default=str))
         print(f"answer written to {args.json}")
     _mark_outputs(task, out, problem, target, getattr(args, "json", None))
-    return 0 if out.decision is not None else 1
+    # D900: 0 a qualifying answer; 3 correct designs measured, none meets every requirement yet; 1 none measured
+    return 0 if out.decision is not None else 3 if getattr(out, "closest", None) is not None else 1
 
 
 def _mark_outputs(task, out, problem, target: Any, answer: str | None) -> None:
@@ -552,8 +555,11 @@ def _mark_outputs(task, out, problem, target: Any, answer: str | None) -> None:
     head = next((i for i, ln in enumerate(lines) if ln.strip().startswith("WHAT THIS RUN ESTABLISHED")), None)
     established = [ln.strip() for ln in lines[head + 1:] if ln.strip()][:20] if head is not None else []
     dec = out.decision
+    near = getattr(out, "closest", None)
     mark("outputs", stopped=out.stopped, decided_by=out.decided_by,
          decision=({"name": dec.candidate.name, "stage": dec.stage, "metrics": dec.metrics} if dec is not None else None),
+         closest=({"name": near.candidate.name, "stage": near.stage, "metrics": near.metrics, "unmet": list(out.unmet)}
+                  if near is not None else None),
          front=len(out.frontier), refused=len(out.refused), lessons=list(out.lessons)[-12:], established=established,
          not_established=list(out.not_established)[:12], design=str(target) if target else None, answer=answer)
 
@@ -570,6 +576,9 @@ def _answer(task, db: str, out, problem, artifact: Any) -> dict[str, Any]:
     answer: dict[str, Any] = {
         "task": task.id, "record": db, "stopped": out.stopped, "decided_by": out.decided_by,
         "decision": row(out.decision) if out.decision is not None else None,
+        # D900: a qualifying answer, or (decision null) the nearest correct design and what it does not meet
+        "feasible": out.decision is not None,
+        "closest": ({**row(out.closest), "unmet": list(out.unmet)} if getattr(out, "closest", None) is not None else None),
         "artifact": str(artifact) if artifact else None,
         "frontier": [row(sc) for sc in out.frontier],
         "refused": [{"name": n, "why": why} for n, why in out.refused],

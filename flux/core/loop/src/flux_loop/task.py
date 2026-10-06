@@ -489,6 +489,12 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
             else:
                 metrics = ", ".join(f"{k}={v:g}" for k, v in cd.metrics.items())
                 lines.append(f"    {name:<12} {cd.name} [{cd.stage}; {child.decided_by}]" + (f": {metrics}" if metrics else ""))
+    elif getattr(out, "closest", None) is not None:            # D900: a correct design, no qualifying answer
+        c = out.closest
+        metrics = ", ".join(f"{k}={v:g}" for k, v in c.metrics.items())
+        lines.append("  NO FEASIBLE DESIGN YET -- no design meets every requirement")
+        lines.append(f"  CLOSEST {c.name} [{c.stage}]" + (f": {metrics}" if metrics else "")
+                     + (f"; not met: {'; '.join(out.unmet)}" if out.unmet else ""))
     else:
         lines.append("  NO CANDIDATE SURVIVED -- see NOT ESTABLISHED below")
     pool = out.confirmed or out.frontier

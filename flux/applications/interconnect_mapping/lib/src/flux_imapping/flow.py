@@ -460,9 +460,12 @@ def conclude(scored: list[Scored], front: list[Scored],
 def _balanced_pick(c: dict) -> str | None:
     """An earlier run's balanced pick: its decision (D878), or the study's own knee in a record
     from before it had none."""
+    lat = c.get("holdout_latency")
+    said = f" ({lat:.2f} cy)" if isinstance(lat, (int, float)) else ""
     if c.get("decision"):
-        lat = c.get("holdout_latency")
-        return f"an earlier run's balanced pick: {c['decision']}" + (f" ({lat:.2f} cy)" if isinstance(lat, (int, float)) else "")
+        return f"an earlier run's balanced pick: {c['decision']}" + said
+    if c.get("closest"):                                # D900: none met every limit; its nearest, not a decision
+        return f"an earlier run's balanced pick, short of a limit: {c['closest']}" + said
     bal = (c.get("conclusion") or {}).get("balanced_pick") or {}
     return (f"an earlier run's balanced pick: {bal['pair']} ({bal.get('latency', 0):.2f} cy)"
             if bal.get("pair") else None)

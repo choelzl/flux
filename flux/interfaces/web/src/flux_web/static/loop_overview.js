@@ -27,7 +27,10 @@ function lastPass(ctx, r) {
   const took = (r.designs || []).filter(d => { const t = Date.parse(d.first || "") / 1000; return t > prev && t <= p.when; }).length;   // D849
   // D856: what the pass decided, in words, first; the record's own fields behind a fold
   const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
-  const said = c ? (c.decision ? [h("strong", {}, String(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""] : "No decision.")
+  // D900: a pass with no design meeting every requirement says so, and names its closest
+  const said = c ? (c.decision ? [h("strong", {}, String(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""]
+    : c.closest ? ["No feasible design yet; the closest is ", h("strong", {}, String(c.closest)), (c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""]
+    : "No decision.")
     : p.conclusion ? String(p.conclusion) : "";
   return card(`The last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
     said ? h("p", { class: "pass-said" }, said) : "",
@@ -50,9 +53,27 @@ function topDesigns(ctx, r, n) {
   return h("div", { class: "blk" }, h("h3", {}, `The best ${top.length}`),
     h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num" }, m)))),
       h("tbody", {}, top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
-        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, d.name, d.verdict === "failed" ? h("span", { class: "pill bad small" }, "failed") : ""),
+        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, d.name, d.verdict === "failed" ? h("span", { class: "pill bad small" }, "failed")
+          : d.verdict === "pending" ? h("span", { class: "pill warn small" }, "pending") : ""),
         h("td", { class: "muted" }, d.shown),
         ...ms.map(m => { const ok = d.meets[m]; return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}` }, d.numbers[m] == null ? "" : num4(d.numbers[m])); }))))));
+}
+/** No design meets every requirement (D900): no decision -- the closest design, apart, with what it
+    does not meet; it is what the next pass can refine, not the answer. */
+function closestCard(ctx, r) {
+  const c = r.closest;
+  return card("The decision", [
+    h("p", { class: "decision-head" }, h("strong", {}, "No feasible design yet"), h("span", { class: "pill warn" }, "no design meets every requirement")),
+    h("div", { class: "decision-head" }, h("small", { class: "muted" }, "Closest candidate "), h("span", { class: "mono strong" }, c.name),
+      h("span", { class: "muted" }, `measured at ${c.shown}`)),
+    h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => c.numbers[m] != null).slice(0, 6).map(m => {
+      const lim = (r.limits || []).find(l => l.metric === m);
+      return h("div", { class: "num-cell" }, h("small", {}, m), h("div", { class: "big mono" }, num4(c.numbers[m])),
+        lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
+    })),
+    c.reasons.length ? h("ul", { class: "misses" }, c.reasons.map(w => h("li", {}, w))) : "",
+    topDesigns(ctx, r, 3)],
+    { actions: [h("button", { class: "small", onclick: () => ctx.goTab("Results") }, "All results")] });
 }
 /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
     per objective, the latest notes and the agents' newest workbench entries. */
@@ -77,6 +98,7 @@ async function overview(ctx) {
       dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
       topDesigns(ctx, r, 3)],
       { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
+    : r.closest ? closestCard(ctx, r)
     : card("The decision", [empty(designs.length ? "No decision yet." : "No design measured yet."),
         topDesigns(ctx, r, 3)]);
   const st = ctx.st;                                // D892: the state as it is now, after the wait
@@ -86,7 +108,7 @@ async function overview(ctx) {
     h("div", { class: "stats five ov-stats" },
       stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
         st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
-      stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
+      stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
       stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
       use ? stat("Models and agents", `${use.total.turns} turn(s)`, [dur(use.total.seconds) || "0s",
         use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",

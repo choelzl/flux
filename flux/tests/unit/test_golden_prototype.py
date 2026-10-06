@@ -105,14 +105,15 @@ def test_the_prototype_is_proven_then_transcribed(tmp_path, monkeypatch):
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db"), screen_only=True),
                    proposer=model, log=said.append)
-    assert out.decision is not None, said[-20:]
+    # D900: screened only, the confirm-stage clock limit is not measured: the transcribed design is the closest
+    assert out.decision is None and out.closest is not None, said[-20:]
     assert "PROTOTYPE FIRST" in model.prompts[0] and "design(a, b)" in model.prompts[0]
     assert "There is no prototype yet" in model.prompts[0] and "edits" not in model.schemas[0]["properties"]
     assert "def golden(a: int, b: int)" in model.prompts[0], "the golden model is the prototype's specification"
     assert "vectors wrong" in model.prompts[1], "the repair carries the failing vectors"
     # the verified prototype is spelled by the loop, so the model's third reply (a module) is never asked for (D611)
-    assert len(model.prompts) == 2 and "spelled" in out.decision.candidate.name
-    assert "flux py2sv" in out.decision.candidate.artifact
+    assert len(model.prompts) == 2 and "spelled" in out.closest.candidate.name
+    assert "flux py2sv" in out.closest.candidate.artifact
 
 
 def test_a_turn_that_ran_nothing_is_not_told_it_made_things_worse():
