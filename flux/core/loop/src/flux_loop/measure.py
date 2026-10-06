@@ -12,7 +12,30 @@ from .types import Candidate, LoopState, Scored
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
 
-__all__ = ["cached_measure", "measure_many", "measure_pool"]
+__all__ = ["cached_measure", "measure_many", "measure_pool", "measured_ok", "measurement_key"]
+
+
+def measurement_key(problem: Problem, state: LoopState, cand: Candidate, stage: str) -> str:
+    """The one key a measurement is cached, looked up and worked ahead under (D897): the problem,
+    the stage and `problem.cache_key` -- never the candidate's own key, which a problem's measuring
+    context (its clock, its command's inputs) extends."""
+    return f"{problem.name}/{stage}/{problem.cache_key(cand, stage, state)}"
+
+
+def measured_ok(m: Any) -> bool:
+    """A successful measurement (D897): numbers, no `error`. Only these are cached, recorded with
+    metrics and scored; anything else is refused with its reason."""
+    return isinstance(m, dict) and bool(m) and "error" not in m
+
+
+def _keep(cache: Any, key: str, m: Any) -> None:
+    """A successful measurement into the cache, whichever path took it (D897)."""
+    if cache is not None and measured_ok(m):
+        try:
+            cache.put(key, m)
+        except Exception:  # noqa: BLE001
+            pass
+
 
 def cache_lookup(problem: Problem, state: LoopState, cand: Candidate, stage: str) -> dict[str, Any] | None:
     """What the loop's cache holds for this candidate on this stage, or None (D525: a worker
@@ -21,7 +44,7 @@ def cache_lookup(problem: Problem, state: LoopState, cand: Candidate, stage: str
     if cache is None:
         return None
     try:
-        key = f"{problem.name}/{stage}/{problem.cache_key(cand, stage, state)}"
+        key = measurement_key(problem, state, cand, stage)
         return cache.get(key) if cache.holds(key) else None
     except Exception:  # noqa: BLE001
         return None
@@ -37,8 +60,9 @@ def cached_measure(problem: Problem, state: LoopState, cand: Candidate, stage: s
     here, on the caller's thread, and nothing is measured again.
 
     A failed measurement is returned and not stored (D436): a tool that crashed once, or a
-    stage that could not run, must not become a permanent answer for that candidate."""
-    key = f"{problem.name}/{stage}/{problem.cache_key(cand, stage, state)}"
+    stage that could not run, must not become a permanent answer for that candidate. Numbers
+    taken ahead or by a worker go into the cache like a miss measured here (D897)."""
+    key = measurement_key(problem, state, cand, stage)
     cache = state.cache
     hit = False
     got = None
@@ -51,20 +75,17 @@ def cached_measure(problem: Problem, state: LoopState, cand: Candidate, stage: s
             cache = None
     seconds = 0.0
     if not hit and measured is None and getattr(state, "ahead", None) is not None:
-        measured = state.ahead.take(cand, stage)                 # D563: taken while the model thought
+        measured = state.ahead.take(key)                         # D563: taken while the model thought
     if not hit and measured is not None:
         got = measured
+        _keep(cache, key, got)                                   # D897: as a miss measured here
     elif not hit:
         state.tool_runs += 1
         t0 = time.monotonic()
         got = problem.measure(cand, stage, state)
         seconds = round(time.monotonic() - t0, 3)
-        if cache is not None and isinstance(got, dict) and got and "error" not in got:
-            try:
-                cache.put(key, got)
-            except Exception:  # noqa: BLE001
-                pass
-    if record and isinstance(got, dict) and got and "error" not in got:
+        _keep(cache, key, got)
+    if record and measured_ok(got):
         # On the campaign record, cache hit or not (D506): a reload reads the record, so a part
         # measured alone must be there. Only when asked: through `measure_batch` the caller
         # records, and the row would land twice.
@@ -80,7 +101,7 @@ def measure_pool(problem: Problem, state: LoopState, cands: list[Candidate], sta
     or whatever the problem returned."""
     from .pool import run_parallel, workers
 
-    keys = [f"{problem.name}/{stage}/{problem.cache_key(c, stage, state)}" for c in cands]
+    keys = [measurement_key(problem, state, c, stage) for c in cands]
     got: list[Any] = [None] * len(cands)
     cache = state.cache
     todo: list[int] = []
@@ -101,11 +122,7 @@ def measure_pool(problem: Problem, state: LoopState, cands: list[Candidate], sta
             got[i] = {"error": f"{type(exc).__name__}: {exc!s:.200}"}
             continue
         got[i] = m
-        if cache is not None and isinstance(m, dict) and m and "error" not in m:
-            try:
-                cache.put(keys[i], m)
-            except Exception:  # noqa: BLE001
-                pass
+        _keep(cache, keys[i], m)
     return got
 
 
@@ -142,7 +159,7 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     evaluator = problem.evaluator_name(stage)
     out: list[Scored] = []
     for cand, m in zip(cands, got):
-        if not isinstance(m, dict) or not m or "error" in m:
+        if not measured_ok(m):
             why = str(m.get("error")) if isinstance(m, dict) and m.get("error") else "could not measure"
             state.refused.append((cand.name, f"{stage}: {why}"[:300]))
             if state.records is not None:
@@ -271,16 +288,21 @@ class Ahead:
         from concurrent.futures import ThreadPoolExecutor
 
         self.pool = ThreadPoolExecutor(max_workers=max(1, int(n)), thread_name_prefix="flux-ahead")
-        self.futures: dict[tuple[str, str], Any] = {}
+        self.futures: dict[str, Any] = {}
         self.started = 0
 
     def start(self, problem: Problem, state: LoopState, cand: Candidate, stage: str) -> bool:
-        key = (stage, cand.key())
-        if key in self.futures or not stage:
+        if not stage:
+            return False
+        try:
+            key = measurement_key(problem, state, cand, stage)   # D897: the cache's own key
+        except Exception:  # noqa: BLE001 -- a key that cannot be made: measured in line
+            return False
+        if key in self.futures:
             return False
         cache = state.cache
         try:
-            if cache is not None and cache.holds(f"{problem.name}/{stage}/{cand.key()}"):
+            if cache is not None and cache.holds(key):
                 return False                                      # known already: nothing to work ahead on
         except Exception:  # noqa: BLE001
             pass
@@ -297,10 +319,10 @@ class Ahead:
         self.started += 1
         return True
 
-    def take(self, cand: Candidate, stage: str) -> dict[str, Any] | None:
-        """The numbers measured ahead for this candidate on this stage, waiting for them when
-        they are still being taken; None when none were started."""
-        fut = self.futures.pop((stage, cand.key()), None)
+    def take(self, key: str) -> dict[str, Any] | None:
+        """The numbers measured ahead under this measurement key (`measurement_key`), waiting for
+        them when they are still being taken; None when none were started."""
+        fut = self.futures.pop(key, None)
         if fut is None:
             return None
         try:

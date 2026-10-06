@@ -9,7 +9,7 @@ import time
 from flux_llm import ScriptedProposer
 from flux_loop import Candidate, LoopRequest, LoopState, Problem, Verdict, run_loop
 from flux_loop.ladder import measure_alone
-from flux_loop.measure import Ahead, cached_measure
+from flux_loop.measure import Ahead, cached_measure, measurement_key
 
 
 class Parts(Problem):
@@ -85,7 +85,7 @@ def test_the_numbers_taken_ahead_are_used_once_and_never_measured_twice():
     assert state.ahead.start(prob, state, cand, "screen") and not state.ahead.start(prob, state, cand, "screen")
     got = cached_measure(prob, state, cand, "screen")
     assert got == {"fmax_mhz": 104.0} and len(prob.measured) == 1 and prob.measured[0][2].startswith("flux-ahead")
-    assert state.ahead.take(cand, "screen") is None                                  # taken once
+    assert state.ahead.take(measurement_key(prob, state, cand, "screen")) is None     # taken once
     m = measure_alone(prob, cand, state)
     assert m == {"fmax_mhz": 104.0} and len(prob.measured) == 2, "no stash left: measured in line, on this thread"
     assert not prob.measured[1][2].startswith("flux-ahead")

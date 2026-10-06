@@ -125,7 +125,7 @@ def test_an_evaluator_stage_reads_the_workload_beside_the_document(tmp_path):
     class Fake:
         def evaluate(self, cand, _budget, _metrics):
             seen.append((cand.workload, cand.arch))
-            return SimpleNamespace(metrics={"latency_cycles": SimpleNamespace(value=7.0)})
+            return SimpleNamespace(metrics={"latency_cycles": SimpleNamespace(value=7.0)}, validity=SimpleNamespace(ok=True, violations=()))
 
     register_evaluator("fake-d663", Fake, replace=True)
     (tmp_path / "w.yaml").write_text("id: w\nops: []\n")

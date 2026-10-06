@@ -14,6 +14,8 @@ arch = yaml.safe_load(open(sys.argv[1]))
 workload = yaml.safe_load(open(sys.argv[2]))
 result = make_evaluator("zigzag").evaluate(Candidate(workload=workload, arch=arch), Budget(),
                                            frozenset({"latency_cycles", "energy_pj"}))
+if not result.validity.ok:                  # D897: an invalid mapping measured nothing; the stage refuses it
+    sys.exit("not valid: " + "; ".join(f"{v.kind} {v.detail}".strip() for v in result.validity.violations))
 levels = {h["level"]: h["attrs"] for h in arch["hierarchy"]}
 macs = 1
 for n in levels["pe_array"]["dims"].values():

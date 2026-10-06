@@ -183,10 +183,15 @@ class MeasureMixin:
         if spec.command:
             subs = self._subs(cand, None, state)
             run = self._run(spec.command, subs, spec.timeout_s, f"stage {stage}")
+            if not run.ok:
+                # D897: a command that failed measured nothing, whatever it printed before it failed
+                tail = ((run.stderr or "").strip() or (run.stdout or "").strip())[-160:]
+                state.say(f"  stage {stage}: the command exited {run.returncode}; its numbers are not taken")
+                return {"error": f"the command exited {run.returncode}" + (f": {tail}" if tail else "")}
             got = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))
             if not got:
                 state.say(f"  stage {stage}: no metric matched in the output")
-                return None
+                return {"error": "no metric matched in the output"}
             return got
         try:
             from flux_evaluator_abi import Budget, Candidate as AbiCandidate, make_evaluator
@@ -196,11 +201,16 @@ class MeasureMixin:
             workload = self._workload()
             result = ev.evaluate(AbiCandidate(workload=workload, arch=arch), Budget(),
                                  frozenset(spec.metrics) if spec.metrics else frozenset())
-            return {k: float(v.value) for k, v in result.metrics.items()
-                    if not spec.metrics or k in spec.metrics}
         except Exception as exc:  # noqa: BLE001
             state.say(f"  stage {stage} ({spec.evaluator}) could not measure: {exc!s:.120}")
-            return None
+            return {"error": f"{spec.evaluator} could not measure: {exc!s:.200}"}
+        if not result.validity.ok:
+            # D897: the evaluator's independent checker refused the design: its numbers are not evidence
+            said = "; ".join(f"{v.kind}{': ' + v.detail if v.detail else ''}" for v in result.validity.violations)
+            state.say(f"  stage {stage} ({spec.evaluator}): not valid ({said or 'no reason given'}); its numbers are not taken")
+            return {"error": f"{spec.evaluator} found the design not valid: {said or 'no reason given'}"[:300]}
+        return {k: float(v.value) for k, v in result.metrics.items()
+                if not spec.metrics or k in spec.metrics}
 
     def estimated(self, cands: list[Candidate], stage: str, state: LoopState
                   ) -> list[tuple[dict[str, float] | None, str]]:
@@ -224,13 +234,15 @@ class MeasureMixin:
         else:
             for i in todo:
                 run = self._run(est.command or (), self._subs(cands[i], None, state), spec.timeout_s, f"estimate {stage}")
-                got[i] = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or "")) or None
+                got[i] = (_metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or "")) or None) if run.ok else None   # D897
         rules = self._estimate_rules(spec, state, rows or measured_rows(state, stage))
         return [(g, failing(g, rules, est.margin) if g else "") for g in got]
 
     def _cached(self, cand: Candidate, stage: str, state: LoopState) -> bool:
+        from .measure import measurement_key
+
         try:
-            return state.cache is not None and state.cache.holds(f"{self.name}/{stage}/{self.cache_key(cand, stage, state)}")
+            return state.cache is not None and state.cache.holds(measurement_key(self, state, cand, stage))
         except Exception:  # noqa: BLE001
             return False
 
