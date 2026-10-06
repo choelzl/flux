@@ -107,8 +107,10 @@ class PrototypeMixin:
                 state.say(f"  shrink {subgoal or self.task.id}: {why0.split(';')[0]} -> goal <= {target:,.0f} "
                           f"(before any RTL is spelled)")
                 request = state.request
-                state.request = dataclasses.replace(request, prototype_attempts=int(request.prototype_shrink_attempts),
-                                                    prototype_attempts_max=int(request.prototype_shrink_attempts))
+                n = int(request.prototype_shrink_attempts)
+                na = min(n, int(request.prototype_agent_attempts))          # D933: an agent's turns are minutes
+                state.request = dataclasses.replace(request, prototype_attempts=n, prototype_attempts_max=n,
+                                                    prototype_agent_attempts=na, prototype_agent_attempts_max=na)
                 try:
                     code, _why = _prototype_stage(self, subgoal, state, None, method="cheaper")
                     if code is None:

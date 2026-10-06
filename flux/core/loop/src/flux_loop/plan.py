@@ -28,6 +28,9 @@ BUDGETS: dict[str, tuple[type, float, float]] = {
     "prototype_attempts": (int, 1, 200),
     "prototype_patience": (int, 0, 50),
     "prototype_attempts_max": (int, 1, 400),
+    "prototype_agent_attempts": (int, 1, 200),     # D933
+    "prototype_agent_patience": (int, 0, 50),
+    "prototype_agent_attempts_max": (int, 1, 400),
     "explore_every": (int, 1, 50),
     "regress_after": (int, 1, 20),
     "max_tolerance": (int, 1, 20),

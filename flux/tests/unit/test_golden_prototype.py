@@ -416,6 +416,35 @@ def test_the_prototype_agent_is_resumed_until_its_prototype_passes(tmp_path, mon
     assert any("prototype" in m and "resumed session ses_p1" in m for m in said), said
 
 
+def test_a_coding_agent_writing_the_prototype_gets_an_agent_sized_budget(tmp_path, monkeypatch):
+    """D933: an agent's turn takes minutes, so its prototype pass is 8/+2/20, not a model's
+    30/+8/90; the document sets it with `prototype_agent_*`, and the log says which budget."""
+    from flux_loop import PromptProblem, request_for, run_loop
+    from flux_loop.prototype import prototype_budget
+    from flux_loop.types import LoopRequest
+
+    assert prototype_budget(LoopRequest(), True)[:3] == (8, 2, 20)
+    assert prototype_budget(LoopRequest(), False)[:3] == (30, 8, 90)
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    _sq_doc(tmp_path, passes=1, prototype_agent_attempts=3, prototype_agent_attempts_max=3)
+    doc = tmp_path / "p" / "sq" / "problem.yaml"
+    d = yaml.safe_load(doc.read_text())
+    fake = tmp_path / "agent.py"
+    fake.write_text(RESUMING.replace("sys.argv[4], 4", "sys.argv[4], 3"))      # never right
+    d.setdefault("flow", {})["generate"] = {"by": {
+        "command": ["{python}", str(fake), "first", "{prompt_file}", "{artifact}"],
+        "resume": ["{python}", str(fake), "resume", "{session}", "{answer}", "{artifact}"], "output": "opencode"}}
+    doc.write_text(yaml.safe_dump(d, sort_keys=False))
+    task = load_task(doc)
+    said: list[str] = []
+    run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
+             log=said.append)
+    stages = [m for m in said if "agent-sized (a coding agent writes it) budget -- 3 attempts, +2 per new best, at most 3" in m]
+    assert stages, said
+    turns = (tmp_path / "turns.txt").read_text().splitlines()
+    assert len(turns) == 3 * len(stages), (turns, stages)        # each prototype stage: 3 turns, not 30
+
+
 def test_a_clocked_golden_keeps_the_prototype_and_moves_the_transpiler_version(tmp_path):
     """D864: a golden with CLOCK and LATENCY is a pipeline the spelling cuts, so the prototype
     stays; its clocking is part of the transpiler's version, so a LATENCY changed re-spells every

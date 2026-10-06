@@ -399,6 +399,17 @@ def _unrun(last_err: str, note: str) -> str:
             + (f"\nTHE LAST MEASURED ATTEMPT (an earlier turn) said:\n{base}" if base else ""))
 
 
+def prototype_budget(req: Any, by_agent: bool) -> tuple[int, int, int, str]:
+    """(attempts, patience, cap, which) for a prototype pass (D933): a model's turns take
+    seconds (`prototype_attempts` 30/+8/90); a coding agent's take minutes, so it gets
+    `prototype_agent_attempts` / `_patience` / `_attempts_max` (8/+2/20)."""
+    pre = "prototype_agent_" if by_agent else "prototype_"
+    budget = max(1, int(getattr(req, pre + "attempts")))
+    cap = max(budget, int(getattr(req, pre + "attempts_max") or budget))
+    patience = max(0, int(getattr(req, "prototype_agent_patience" if by_agent else "prototype_patience") or 0))
+    return budget, patience, cap, ("agent-sized (a coding agent writes it)" if by_agent else "model-sized")
+
+
 def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
                      human: str | None, method: str = "") -> tuple[str | None, str]:
     """(verified prototype code, "") or (None, why). Design once, then edit the
@@ -454,11 +465,10 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         state.say(f"  prototype {tag}: resuming from the best on record ({sc:g} over)")
     # The budget grows while the pass improves (D506): every new best grants
     # `prototype_patience` more attempts, up to `prototype_attempts_max`.
-    budget = max(1, req.prototype_attempts)
-    cap = max(budget, int(req.prototype_attempts_max or budget))
-    patience = max(0, int(req.prototype_patience or 0))
     # D618: a coding agent may write the prototype; the loop runs its check (D673)
     agent = problem.prototype_agent() if callable(getattr(problem, "prototype_agent", None)) else None
+    budget, patience, cap, sized = prototype_budget(req, agent is not None)
+    state.say(f"  prototype {tag}: {sized} budget -- {budget} attempts, +{patience} per new best, at most {cap}")
     attempt = -1
     while attempt + 1 < budget:
         attempt += 1

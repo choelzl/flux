@@ -114,10 +114,16 @@ Say only what is yours; the rest is inferred.
   - `prototype_table_max` (64): the largest module-level table, for coefficients only.
     `prototype_cost_max` (2,000, about 650 um2 on ASAP7; -1 for none): a prototype costing
     more is made cheaper first and never synthesised while over it.
+  - Prototype budget: a model's turns take seconds, so a pass gets `prototype_attempts` (30),
+    `prototype_patience` (+8 per new best) up to `prototype_attempts_max` (90). When a coding agent
+    writes the prototype (`generate: {by: <agent>}`), its turns take minutes and the pass gets
+    `prototype_agent_attempts` (8), `prototype_agent_patience` (+2) up to
+    `prototype_agent_attempts_max` (20) instead. The log says which budget a pass uses (D933).
 - Advanced `budget` knobs, rarely needed: agent, ahead, budget_s, compact,
   compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_after, explore_every,
   hop_share, knowledge_share, max_depth, max_tolerance, parallel_parts, patch_context_lines,
-  patching, plan_file, prototype_attempts, prototype_attempts_max, prototype_patience,
+  patching, plan_file, prototype_agent_attempts, prototype_agent_attempts_max, prototype_agent_patience,
+  prototype_attempts, prototype_attempts_max, prototype_patience,
   prototype_shrink_attempts, prototype_unmeasured_stop, regenerate, regress_after,
   revert_after, screen_only, structured, tool_hops, tool_result_chars, tools.
 - Advanced keys: `parts` (pieces of one artifact: their names in order, `[decoder, datapath]`,

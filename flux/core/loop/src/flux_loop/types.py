@@ -185,6 +185,10 @@ class LoopRequest:
                                          # 0 = the default (2,000), negative = no ceiling
     prototype_patience: int = 8     # attempts granted after each new best, past the budget (D506)
     prototype_attempts_max: int = 90   # the most a pass may grow to
+    # D933: a coding agent's turn takes minutes, not seconds -- its own, smaller budget
+    prototype_agent_attempts: int = 8
+    prototype_agent_patience: int = 2
+    prototype_agent_attempts_max: int = 20
     compute_timeout_s: float = 10.0
     tools: bool = True              # the model calls tools inside a turn (compute, check, ...); needs a server with tool calls
     tool_hops: int = 6              # rounds of calls a turn may make before it must answer
