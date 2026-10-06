@@ -2145,8 +2145,11 @@
           : named.length ? "all " + named.length + " named file(s) present" : "none named"]);
       } else if (named.length) rows.push(["note", "Files", "put " + named.join(", ") + " beside the document"]);
       if (opts.save) {
-        rows.push(["note", "Checked", opts.checked || "not yet: once saved, Check runs it where it will run"]);
-        rows.push(["note", "Ready to run", "after a Check passes"]);
+        // D913b: the loop's own check result, as the start dialog reads it -- [kind, words], or null while unknown
+        var ck = (typeof opts.checked === "function" ? opts.checked() : opts.checked) || ["note", "not checked yet: once saved, Check runs it where it will run"];
+        rows.push([ck[0], "Checked", ck[1]]);
+        var go = !errors && !(files && (files.missing || []).length) && ck[0] === "ok";
+        rows.push([go ? "ok" : "note", "Ready to run", go ? "yes: Start it" : ck[0] === "error" ? "not until the check passes" : "after a Check passes"]);
       }
       return rows;
     }

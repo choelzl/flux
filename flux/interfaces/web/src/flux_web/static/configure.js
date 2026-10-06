@@ -3,7 +3,7 @@
 
 import { codeEditor, langOf } from "./highlight.js";
 import { cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
-import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast } from "./ui.js";
+import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm } from "./loops.js";
 
 // ================================================================ the configurator (D686)
@@ -257,16 +257,20 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
       v.error ? h("p", { class: "callout bad" }, "The loader refuses the document as it stands: " + v.error) : "",
       host, panel.el);
     crafter = C.mount(host, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
-      onChange: panel.watch, files: (paths) => panel.missing(paths),
+      onChange: panel.watch, files: (paths) => panel.missing(paths), checked: () => checkedOf(pre),
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
         if (p.before === p.after) { toast("Nothing changes: the document already says this.", "info"); return "No change."; }
         if (!await confirmDiff(p.document, p.before, p.after)) return "Not saved.";
         const r = await api(`/apps/${enc(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
-        toast(r.ok, r.error ? "warn" : "ok"); panel.draw(); return r.ok;
+        toast(r.ok, r.error ? "warn" : "ok"); panel.draw(); readCheck(); return r.ok;
       } });
     setTimeout(panel.draw, 300);
+    // D913b: Review's "Checked" is the loop's own check on its inputs as they are, as the start dialog reads it
+    var pre = null;
+    function readCheck() { api(`/apps/${enc(name)}/preflight`).then(p => { pre = p; crafter.refresh(); }, () => {}); }
+    readCheck();
     return;
   }
   draft = draft || newDraft();
@@ -283,6 +287,7 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
   // no command-line next steps; who does each step folded, its defaults being usually right
   crafter = C.mount(host, false, { state: draft.state, step: draft.step, touched: draftUsed(draft), onStep: (i) => { draft.step = i; },
     onChange: () => { panel.watch(); if (onDraft) onDraft(); }, files: (paths) => panel.missing(paths),
+    checked: () => ["note", "not checked yet: once created, Check runs it where it will run"],
     saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
     nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits and _: the loop's name and its problem's id",
     save: async (yaml, state) => {
@@ -297,6 +302,14 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
       setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);
       return "Created.";
     } });
+}
+
+/** D913b: the preflight's check as Review's line -- [kind, words]; null while it is read. */
+function checkedOf(pre) {
+  if (!pre) return ["note", "reading the loop's last check…"];
+  if (pre.checked && pre.ok === true) return ["ok", `passed on the saved files as they are (${when(pre.when)})`];
+  if (pre.checked && pre.ok === false) return ["error", `failed on the saved files as they are (${when(pre.when)}): Check shows why`];
+  return ["note", pre.when ? `not on the files as they are now (the last check: ${when(pre.when)}); Check runs it` : "not checked yet: Check runs it where it will run"];
 }
 
 /** The changes of a save, shown before it writes (D693): true to write. */

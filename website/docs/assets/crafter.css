@@ -257,5 +257,10 @@
   .fc-stepnav .fc-next-what { display: none; }
   .fc-stepnav .fc-save.fc-primary { grid-column: 2 / -1; }
   .fc-summary > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  /* D913b: a label wraps, never cut short; a field takes the row (a narrow one, half), so a choice reads whole */
+  .fc-label { white-space: normal; overflow: visible; }
+  .fc-line > .fc-field, .fc-line > .fc-field.fc-grow, .fc-gate > .fc-field { flex: 1 1 100%; }
+  .fc-line > .fc-field.fc-narrow, .fc-gate > .fc-field.fc-narrow { flex: 1 1 40%; }
+  .fc-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .fc-step-last .fc-output { border: 0; padding: 0; }

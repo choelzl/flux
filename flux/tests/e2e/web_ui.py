@@ -1349,6 +1349,8 @@ def flows(r: Run) -> None:
         shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
         if shots:
             shots.mkdir(parents=True, exist_ok=True)
+        pre = json.loads(r.api("/apps/sw/preflight")["body"])            # D913b: Review says the loop's own check
+        expect = ("Checked: passed" if pre["ok"] else "Checked: failed") if pre["checked"] else "Checked: not "
         for h in ("#/configure", "#/app/sw/settings/problem"):
             for width in (390, 320):
                 b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
@@ -1371,6 +1373,13 @@ def flows(r: Run) -> None:
                                 d.documentElement.scrollWidth, w.innerWidth, !!d.querySelector('.fc-stepbar') && d.querySelector('.fc-stepbar').offsetParent === null];""", step)
                     ok = got[0] == f"Step {step + 1} of 7" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: the step and its first field on the first screen", ok, str(got))
+                    cut = b.js("""const d = document.getElementById('phone').contentDocument;
+                        return [...d.querySelectorAll('.fc-step .fc-label')].filter(l => l.offsetParent && l.scrollWidth > l.clientWidth + 1).map(l => l.textContent)""")
+                    r.check(f"phone wizard {h} at {width}px, step {step + 1}: no label cut short (D913b)", not cut, str(cut))
+                    if step == 6 and h != "#/configure":
+                        said = b.wait("(() => { const t = (document.getElementById('phone').contentDocument.querySelector('.fc-ready') || {}).innerText || '';"
+                                      " return !t.includes('reading the loop') && t; })()", timeout=10, what="the loop's check on Review")
+                        r.check(f"Review's Checked line is the loop's own check at {width}px (D913b)", expect in said, f"{pre} {said}")
                     if shots and width == 390:
                         el = b.find("#phone")
                         png = b.cmd("WebDriver:TakeScreenshot", {"id": el, "full": False})["value"]
