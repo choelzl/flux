@@ -129,11 +129,22 @@ class Browser:
 
     def keys(self, *ks):
         """Real key presses to what has the focus (D929): TAB and ENTER below, or any character."""
+        self.window_focus()
         acts = [a for k in ks for a in ({"type": "keyDown", "value": k}, {"type": "keyUp", "value": k})]
         self.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": acts}]})
         self.cmd("WebDriver:ReleaseActions", {})
 
-    TAB, ENTER, SHIFT, ESCAPE = "", "", "", ""
+    def window_focus(self):
+        """The browser window focused, as a keyboard's user has it (D929): a window that lost the focus
+        (seen with the whole suite running) still moves the focus on Tab, yet takes no Enter as a click."""
+        if self.js("return document.hasFocus()"):
+            return
+        h = self.cmd("WebDriver:GetWindowHandle", {})
+        self.cmd("WebDriver:SwitchToWindow", {"handle": h.get("value", h) if isinstance(h, dict) else h, "focus": True})
+        self.js("window.focus(); return 1")
+        self.wait("document.hasFocus()", timeout=10, what="the window focused")
+
+    TAB, ENTER, SHIFT, ESCAPE = "\ue004", "\ue007", "\ue008", "\ue00c"
 
     def attach(self, css, path):
         self.cmd("WebDriver:ElementSendKeys", {"id": self.find(css), "text": str(path)})
@@ -953,11 +964,40 @@ def flows(r: Run) -> None:
 
         b.wait("[...document.querySelectorAll('.tree .node.leaf.running .nm')].some(x => x.textContent === 'Measure')", timeout=90,
                what="the minute-long bench under way")
-        os.killpg(int(run["pid"]), signal.SIGKILL)                 # no orderly end: the journal is cut short
+        pg = int(run["pid"])                                       # the run's own session: its group is the run
+
+        def benching():                                            # bench.py asleep in the run's process group
+            for d in Path("/proc").iterdir():
+                try:
+                    if d.name.isdigit() and os.getpgid(int(d.name)) == pg and b"bench.py" in (d / "cmdline").read_bytes():
+                        return True
+                except (OSError, ProcessLookupError):
+                    continue
+            return False
+        end = time.time() + 60
+        while time.time() < end and not benching():
+            time.sleep(0.2)
+        r.check("the run is mid-measurement, its bench asleep", benching())
+        os.killpg(pg, signal.SIGKILL)                              # no orderly end: the journal is cut short
+        end = time.time() + 60
+        while time.time() < end and Store(r.data).run(run["id"]).get("rc") is None:     # the server's own record of the end
+            time.sleep(0.5)
+        row = Store(r.data).run(run["id"])
+        r.check("the server records the kill: an end and a non-zero exit", row.get("ended") and row.get("rc") not in (None, 0), str(row)[:200])
         end = time.time() + 30
-        while time.time() < end and (st := json.loads(r.api("/apps/slow/state")["body"])).get("running"):
+        while time.time() < end and not (st := json.loads(r.api("/apps/slow/state")["body"])).get("failed"):
             time.sleep(0.5)
         r.check("the killed run is over, not in order", not st.get("running") and st.get("failed"), str(st)[:200])
+        # its "failed" notice is this step's own: taken here (or, when the page took it first, its toast
+        # discounted) -- not an error of this page or a later one
+        end = time.time() + 20
+        while time.time() < end:
+            if any("slow" in (n.get("text") or "") for n in json.loads(r.api("/notices")["body"]) or []):
+                break
+            if b.js("return ((window.__e2e || {}).bad || []).some(t => t.includes('slow'))"):
+                break
+            time.sleep(0.5)
+        b.js("if (window.__e2e) window.__e2e.bad = window.__e2e.bad.filter(t => !t.includes('slow')); return 1")
         b.wait("!document.querySelector('.page-head .pill.live') && !document.querySelector('.tree .node.running')", timeout=40, what="the run seen over, nothing running")
         rows = b.js("""return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).map(n => [n.querySelector('.nm').textContent,
             !!n.parentNode.querySelector(':scope > .kids'), (n.querySelector('.ended-n') || {}).textContent || '', n.querySelector('.st').textContent])""")
@@ -973,11 +1013,6 @@ def flows(r: Run) -> None:
         r.clean("a killed run")
         r.page("#/", "document.querySelector('#main')", "the loops")
         r.api("/apps/slow", "DELETE")                               # not left for the steps after
-        # its "failed" notice is this step's: taken here, not shown on a later page as an error
-        for _ in range(20):
-            if any("slow" in (n.get("text") or "") for n in json.loads(r.api("/notices")["body"]) or []):
-                break
-            time.sleep(0.5)
     r.step("a killed run", killed_run)
 
     def keyboard_journey():
@@ -989,6 +1024,7 @@ def flows(r: Run) -> None:
         def tab_to(cond, what, back=False, limit=400):
             for _ in range(limit):
                 if back:
+                    b.window_focus()
                     b.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": [
                         {"type": "keyDown", "value": b.SHIFT}, {"type": "keyDown", "value": b.TAB}, {"type": "keyUp", "value": b.TAB}, {"type": "keyUp", "value": b.SHIFT}]}]})
                     b.cmd("WebDriver:ReleaseActions", {})
@@ -1029,16 +1065,12 @@ def flows(r: Run) -> None:
             b.keys(b.ENTER)
         r.check("keyboard: Enter ticks two results to compare (D929)", b.js("return document.querySelectorAll('#main table.designs tbody input:checked').length") == 2)
         tab_to("a.matches('button') && a.textContent === 'Compare 2/2'", "the Compare button", back=True)
+        # D929: Enter on Compare, the keyboard only, never a click -- the window focused first (keys())
         b.js("window.__clicked = false; document.activeElement.addEventListener('click', () => { window.__clicked = true; }, {once: true}); return 1")
         b.keys(b.ENTER)
-        try:
-            b.wait("window.__clicked", timeout=3, what="the click")
-        except AssertionError:
-            # the whole suite at once: Firefox now and then takes an Enter -- keydown, keypress and keyup
-            # on the button, none prevented -- without its click; never seen alone. Once more, then.
-            b.keys(b.ENTER)
+        b.wait("window.__clicked", timeout=10, what="Compare clicked by its Enter -- " + str(b.js("return [document.activeElement.textContent, document.hasFocus()]")))
         said = b.wait("document.querySelector('dialog.dlg[open]') && [...document.querySelectorAll('dialog.dlg[open] h3')].map(x => x.textContent).join('|')",
-                      timeout=45, what="the comparison")
+                      timeout=45, what="the comparison, Compare clicked by its Enter")
         r.check("keyboard: Enter on Compare shows the two compared, their source (D929)", said.startswith("Source"), said)
         b.keys(b.ENTER)                                         # the dialog's Close has the focus
         b.wait("!document.querySelector('dialog.dlg[open]')", timeout=5, what="the comparison closed by Enter")
