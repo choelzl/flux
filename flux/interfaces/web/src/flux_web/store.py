@@ -624,6 +624,18 @@ class Store:
                 out.append((owner, app, perm))
         return out
 
+    def last_activity(self) -> dict[str, float]:
+        """Each user's last activity (D942): their latest login, audited action, or run start or end."""
+        out: dict[str, float] = {}
+        with self._db() as db:
+            rows = [*db.execute("SELECT u.name, MAX(s.created) FROM sessions s JOIN users u ON u.id = s.user_id GROUP BY u.name"),
+                    *db.execute("SELECT user, MAX(t) FROM audit WHERE user IS NOT NULL GROUP BY user"),
+                    *db.execute("SELECT u.name, MAX(COALESCE(r.ended, r.started)) FROM runs r JOIN users u ON u.id = r.user_id GROUP BY u.name")]
+        for name, t in rows:
+            if name and t:
+                out[name] = max(out.get(name, 0.0), float(t))
+        return out
+
     # ---- audit
     def audit(self, user: str | None, action: str, detail: str = "") -> None:
         with self._db() as db:

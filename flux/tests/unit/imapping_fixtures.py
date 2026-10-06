@@ -56,7 +56,9 @@ def run_study(*, db: str = "", feedback: Any = None, screen_only: bool = True, r
     from flux_loop import request_for, run_loop
 
     prob = imapping_problem(**params)
-    db = db or str(Path(prob.task.home) / "out" / "study.db")
+    # a record of the test's own (D931 makes a missing folder: the application's out/ in the repo would
+    # gather every test run's record, and a later run would resume an earlier one's notes)
+    db = db or str(Path(tempfile.mkdtemp(prefix="flux-imapping-")) / "study.db")
     outs = []
     for _ in range(runs):
         out = run_loop(prob, request_for(prob.task, db=db, screen_only=screen_only), feedback=feedback,
@@ -87,7 +89,8 @@ def run_study(*, db: str = "", feedback: Any = None, screen_only: bool = True, r
     front = pareto_front(scored)
     return Study(scored=scored, front=front, certificates=certificates(front, ask, mem),
                  refused=[why for out in outs for _n, why in out.refused],
-                 notes=[n for out in outs for n in out.notes], lessons=list(last.lessons), problem=prob)
+                 # each pass recalls the notes from the record (D931): each said once
+                 notes=list(dict.fromkeys(n for out in outs for n in out.notes)), lessons=list(last.lessons), problem=prob)
 
 
 def identity(prob, db: str = "") -> dict[str, Any]:

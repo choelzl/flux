@@ -681,7 +681,9 @@ async function adminUsers(body) {
     { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
     { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
     { label: "Tokens in → out", key: u => { const x = useOf(u.name); return x.counted ? [x.tokens_in, x.tokens_out] : null; }, num: true },
-    { label: "Cost", key: u => useOf(u.name).cost_usd || null, num: true }, { label: "" }];
+    { label: "Cost", key: u => useOf(u.name).cost_usd || null, num: true },
+    { label: "Last active", key: u => u.last_active || null, num: true, title: "Their latest login, action or run" },   // D942
+    { label: "" }];
   const table = sortableTable("flux-sort-users", cols, users, u => { const x = useOf(u.name); return h("tr", { "data-user": u.name },
         h("td", { class: "strong" }, u.name, u.pending ? h("span", { class: "pill live small", title: "Invited: their password is not set yet" }, "invited") : ""),
         h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
@@ -693,6 +695,7 @@ async function adminUsers(body) {
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
         h("td", { class: "num mono" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
+        h("td", { class: "num" }, u.last_active ? ago(u.last_active) : h("span", { class: "muted" }, "never")),
         h("td", { class: "right" }, h("div", { class: "actions end" },
           act(u.disabled ? "Enable" : "Disable", async () => {
             if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;

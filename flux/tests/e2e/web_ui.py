@@ -884,6 +884,11 @@ def flows(r: Run) -> None:
         r.clean("a killed run")
         r.page("#/", "document.querySelector('#main')", "the loops")
         r.api("/apps/slow", "DELETE")                               # not left for the steps after
+        # its "failed" notice is this step's: taken here, not shown on a later page as an error
+        for _ in range(20):
+            if any("slow" in (n.get("text") or "") for n in json.loads(r.api("/notices")["body"]) or []):
+                break
+            time.sleep(0.5)
     r.step("a killed run", killed_run)
 
     def keyboard_journey():
@@ -904,6 +909,17 @@ def flows(r: Run) -> None:
                 if b.js(f"const a = document.activeElement; return !!a && ({cond});"):
                     return True
             raise AssertionError(f"Tab never reached {what}")
+        # two designs to compare, whatever the steps before left: one pass more each until there are
+        for _ in range(4):
+            if len(json.loads(r.api("/apps/sw/results")["body"]).get("designs") or []) >= 2:
+                break
+            asked = time.time()
+            r.api("/apps/sw/start", "POST", {"passes": 1, "screen_only": False})
+            for _ in range(240):
+                st = json.loads(r.api("/apps/sw/state")["body"])
+                if not st.get("running") and (st.get("last_active") or 0) >= asked:
+                    break
+                time.sleep(0.5)
         r.page("#/app/sw/results", "document.querySelectorAll('#main table.designs tbody tr').length >= 2", "Results")
         b.js("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0);"
              " for (const k of ['keydown', 'keyup']) document.addEventListener(k, e => { if (e.key === 'Shift') window.__shift = k === 'keydown'; }, true); return 1")

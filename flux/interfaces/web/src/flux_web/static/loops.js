@@ -356,7 +356,8 @@ async function agentSelect(id) {
   const first = list.find(a => a.available && a.default) || list.find(a => a.available);
   // D924: an installed agent says whether its connection was verified -- not disabled for it (the start's gate
   // says so too), and tested from here, the draft kept
-  const said = { ready: "", untested: "installed · connection untested", failed: "installed · connection failed", changed: "installed · changed since test" };
+  // D942: only found agents are listed, so "installed" said nothing -- the connection's state alone
+  const said = { ready: "", untested: "connection untested", failed: "connection failed", changed: "changed since test" };
   const sel = h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
     a.label + (a.available ? (said[a.verified] ? ` (${said[a.verified]})` : "") : ` (${a.why})`))));
   const status = h("span", { class: "agent-pick-said small" });

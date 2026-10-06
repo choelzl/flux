@@ -50,7 +50,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/users")
     def users(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
-        return [{"name": u.name, "role": u.role, "disabled": u.disabled, "pending": store.pending(u.name)} for u in store.users()]
+        seen = store.last_activity()                     # D942: a column to sort by
+        return [{"name": u.name, "role": u.role, "disabled": u.disabled, "pending": store.pending(u.name),
+                 "last_active": seen.get(u.name)} for u in store.users()]
 
     @app.post("/api/users")
     def add_user(body: NewUser, a: User = Depends(admin_of)) -> dict[str, Any]:

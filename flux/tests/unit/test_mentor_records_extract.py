@@ -64,6 +64,7 @@ def test_records_round_trip_results_and_conclusions(tmp_path):
 
 
 def test_records_swallow_unwritable_logbooks(tmp_path):
+    (tmp_path / "nodir").write_text("a file")                # D931 makes a missing folder; not one under a file
     r = Records(str(tmp_path / "nodir" / "x" / "r.db"), objective={"s": 1})
     r.trial({"a": 1}, "k", stage="analytic", strategy="s", metrics={"m": 1.0})
     r.conclude({"c": 1})
