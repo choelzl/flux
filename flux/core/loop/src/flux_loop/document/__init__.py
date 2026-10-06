@@ -28,7 +28,7 @@ from .gate import BUILD_FAILED, Check, Gate, DEFAULT_COUNT_RE, _gate  # noqa: F4
 from .stages import Stage  # noqa: F401
 from .space import point_doc, _point_name, _write_point  # noqa: F401
 from .flow import FLOW_BOXES  # noqa: F401
-from .library import read_input, LIBRARY_FOLDER, library_folders, own_library, library_on  # noqa: F401
+from .library import confined, read_input, LIBRARY_FOLDER, library_folders, own_library, library_on  # noqa: F401
 from .describe import describe_orchestrate, describe_stage, describe_flow  # noqa: F401
 from .spec import Part, TaskSpec, resolve, _rig_for, _leaf  # noqa: F401
 from .load import ManyDocuments, documents_in, alt_name, record_name, loadable, load_task, task_in, request_for  # noqa: F401

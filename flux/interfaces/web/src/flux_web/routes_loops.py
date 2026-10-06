@@ -497,14 +497,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """Whether a document, not yet saved, loads (D757): what Direct edit says before it writes."""
         import yaml
 
-        from flux_loop.document import task_in
+        from flux_loop.document import confined, task_in
 
         d = editor(user, owner, name)[0].app(name)
         try:
             raw = yaml.safe_load(body.text)
             if not isinstance(raw, dict):
                 return {"ok": False, "error": "the document is not a mapping of keys (statement:, flow:, ...)"}
-            task_in(raw, d)
+            with confined(d):                                 # D905: nothing read outside the loop
+                task_in(raw, d)
         except yaml.YAMLError as exc:
             return {"ok": False, "error": f"not YAML: {' '.join(str(exc).split())[:300]}"}
         except Exception as exc:  # noqa: BLE001 -- what the loader says is what the user reads
@@ -565,8 +566,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         try:                                       # D751: the agents it hands work to, tested by its owner (D769)
             from flux_loop import load_task
             from flux_loop.agent_check import agents_used
+            from flux_loop.document import confined
 
-            needs = agents_used(load_task(str(d / meta["document"])))
+            with confined(d):                              # D905: the host reads nothing outside the loop
+                needs = agents_used(load_task(str(d / meta["document"])))
         except Exception:  # noqa: BLE001 -- a document the run itself will refuse, saying why
             needs = []
             from flux_loop.migrate import migrate_loop

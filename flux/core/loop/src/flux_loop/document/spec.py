@@ -17,7 +17,7 @@ from .flow import _flow
 from .gate import Gate, _gate, _gate_doc
 from .keys import DOCUMENT_FILE, DOCUMENT_KEYS, EXTENSIONS, TaskError, _INHERITED, _INTERNAL_KEYS, _LIFTED_KEYS
 from .layout import _layout
-from .library import read_input
+from .library import inside, read_input
 from .space import _dse_policies, _knob_doc, _seeds, _space
 from .stages import _stage
 from .surface import _lift
@@ -229,6 +229,7 @@ class TaskSpec:
             text = str(knowledge.get("text") or "")
             if sheet:
                 path = Path(sheet) if Path(sheet).is_absolute() or base is None else Path(base) / sheet
+                path = inside(path, f"knowledge.sheet {sheet!r}")          # D905: a web preview reads the loop's own
                 if not path.exists():
                     raise TaskError(f"knowledge.sheet {sheet!r} is not a file"
                                     + (f" beside {base}" if base is not None else ""))
@@ -238,6 +239,7 @@ class TaskSpec:
                 raise TaskError("knowledge.files is a list of paths (read beside the document)")
             for f in files:                  # D586: the documents a prompt came with -- specs, code, papers, tests
                 path = Path(f) if Path(f).is_absolute() or base is None else Path(base) / f
+                path = inside(path, f"knowledge.files: {f!r}")
                 if not path.is_file():
                     raise TaskError(f"knowledge.files: {f!r} is not a file" + (f" beside {base}" if base is not None else ""))
                 body = read_input(path)
@@ -402,7 +404,7 @@ def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
 
     if base is None:
         raise TaskError(f"subtasks: {rel!r} is a folder beside the document; an inline document has none")
-    home = (Path(base) / rel).resolve()
+    home = inside((Path(base) / rel).resolve(), f"subtasks: {rel!r}")     # D905
     path = home / DOCUMENT_FILE
     if not path.is_file():
         raise TaskError(f"subtasks: no {DOCUMENT_FILE} in {rel!r}")

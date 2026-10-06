@@ -13,9 +13,11 @@ import yaml
 KEPT_HEADER = "# Kept as written: the configurator does not edit these (D686).\n"
 
 
-def views(path: Path) -> dict[str, Any]:
+def views(path: Path, root: Path | None = None) -> dict[str, Any]:
     """{raw, normal, error}: `normal` is None when the loader refuses the document; `raw` is None
-    too when it is not YAML (or JSON) at all -- said as the loader says it, never raised (D710)."""
+    too when it is not YAML (or JSON) at all -- said as the loader says it, never raised (D710).
+    The loader reads nothing outside `root` (the loop; the document's folder by default, D905):
+    a knowledge file outside it is the loader's error, not the server's file in the preview."""
     text = path.read_text()
     try:
         raw = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
@@ -25,8 +27,10 @@ def views(path: Path) -> dict[str, Any]:
         raise ValueError("the document is not a mapping of keys")
     try:
         from flux_loop import load_task
+        from flux_loop.document import confined
 
-        normal, error = load_task(str(path)).to_dict(), ""
+        with confined(root or path.parent):
+            normal, error = load_task(str(path)).to_dict(), ""
     except Exception as exc:  # noqa: BLE001 -- the configurator shows why and reads what it can
         normal, error = None, str(exc)
     return {"raw": raw, "normal": normal, "error": error}

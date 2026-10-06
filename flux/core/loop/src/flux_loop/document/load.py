@@ -9,6 +9,7 @@ from typing import Any
 
 from ..types import LoopRequest
 from .keys import ALT_SUFFIXES, DOCUMENT_FILE, TaskError
+from .library import CONFINE
 from .spec import TaskSpec
 
 
@@ -116,7 +117,10 @@ def _parent_listing(path: Path) -> TaskSpec | None:
     folder = (path if path.is_dir() else path.parent).resolve()
     if not (folder / DOCUMENT_FILE).is_file():
         return None
+    root = CONFINE.get()
     for anc in list(folder.parents)[:3]:
+        if root is not None and anc != root and root not in anc.parents:
+            break                                          # D905: a confined load reads no parent outside
         doc_path = anc / DOCUMENT_FILE
         if not doc_path.is_file():
             continue

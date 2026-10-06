@@ -273,10 +273,12 @@ class Workspace:
     def documents(self, name: str) -> list[dict[str, Any]]:
         """The loop's problems (D787): its problem.yaml and each NAME.problem.yaml, with whether
         each loads and the record its runs keep."""
-        from flux_loop.document import loadable, record_name
+        from flux_loop.document import confined, loadable, record_name
 
         d = self.app(name)
-        return [{"path": p.name, "record": record_name(p), "ok": not err, "error": err[:400]} for p, err in loadable(d)]
+        with confined(d):                                  # D905: the server reads nothing outside the loop
+            said = loadable(d)
+        return [{"path": p.name, "record": record_name(p), "ok": not err, "error": err[:400]} for p, err in said]
 
     def delete(self, name: str) -> None:
         shutil.rmtree(self.app(name))
@@ -288,6 +290,16 @@ class Workspace:
         if p != d and d not in p.parents:
             raise WorkspaceError(f"{rel!r} is outside the application")
         return p
+
+    def entry(self, name: str, rel: str) -> Path:
+        """`rel` as a directory entry, for changing it (D905): its folder resolved and inside the
+        application, its own name not followed -- a link is the link, never what it points to."""
+        rel = safe_rel(rel)
+        head, _, leaf = rel.rpartition("/")
+        parent = self.path(name, head) if head else self.app(name).resolve()
+        if not parent.is_dir():
+            raise WorkspaceError(f"no folder {head!r}")
+        return parent / leaf
 
     def files(self, name: str, sub: str = "", show_ignored: bool = False) -> list[dict[str, Any]]:
         """A folder of the loop as the Files tab lists it (D703): what its `.gitignore` files ignore
@@ -384,15 +396,16 @@ class Workspace:
         return out
 
     def remove(self, name: str, rel: str) -> None:
-        """One of the loop's own files deleted; never its document, nor what its runs write."""
-        p = self.path(name, rel)
+        """One of the loop's own files deleted; never its document, nor what its runs write. A link
+        is deleted as the link (D905): what it points to stays."""
+        p = self.entry(name, rel)
         root = self.app(name).resolve()
         parts = p.relative_to(root).parts
         if not parts or parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json":
             raise WorkspaceError(f"{rel!r} is not one of the loop's own files")
         if str(p.relative_to(root)) == self.meta(name).get("document"):
             raise WorkspaceError("the document itself cannot be deleted here")
-        if not p.is_file():
+        if not (p.is_symlink() or p.is_file()):
             raise WorkspaceError(f"no file {rel!r}")
         p.unlink()
         d = p.parent

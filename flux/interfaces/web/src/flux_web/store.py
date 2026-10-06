@@ -506,6 +506,30 @@ class Store:
             else:
                 db.execute("INSERT OR REPLACE INTO server VALUES (?, ?)", (key, json.dumps(value)))
 
+    def server_update(self, key: str, change: Any) -> Any:
+        """`change(value)` -> new value (None deletes), read and written in one transaction (D905):
+        two requests changing different entries of one map both keep theirs. Returns the new value."""
+        import json
+
+        con = self._db()
+        try:
+            con.isolation_level = None
+            con.execute("BEGIN IMMEDIATE")                # the write lock first: no one reads the old map between
+            row = con.execute("SELECT value FROM server WHERE key = ?", (key,)).fetchone()
+            value = change(json.loads(row["value"]) if row else None)
+            if value is None:
+                con.execute("DELETE FROM server WHERE key = ?", (key,))
+            else:
+                con.execute("INSERT OR REPLACE INTO server VALUES (?, ?)", (key, json.dumps(value)))
+            con.execute("COMMIT")
+        except BaseException:
+            if con.in_transaction:
+                con.execute("ROLLBACK")
+            raise
+        finally:
+            con.close()
+        return value
+
     # ---- environment variables of runs (D697): the server's, a user's, a loop's
     def env(self, scope: str, reveal: bool = False) -> dict[str, dict[str, Any]]:
         """{name: {value, secret}} of a scope ("global", "user:<id>", "loop:<user>:<app>"); a
@@ -523,14 +547,20 @@ class Store:
         name = check_env_name(name, agent=scope.startswith("agent:"))
         if name in sum(self._keys(), ()):
             raise ValueError(f"{name} is an agent's setting: set it on its tab under Models")
-        got = self.server_get(f"env:{scope}") or {}
-        if value is None:
-            got.pop(name, None)
-        else:
-            if len(value) > 20000:
-                raise ValueError("a value of at most 20000 characters")
-            got[name] = {"value": self._fernet().encrypt(value.encode()).decode() if secret else value, "secret": bool(secret)}
-        self.server_set(f"env:{scope}", got or None)
+        if value is not None and len(value) > 20000:
+            raise ValueError("a value of at most 20000 characters")
+        entry = None if value is None else {"value": self._fernet().encrypt(value.encode()).decode() if secret else value,
+                                            "secret": bool(secret)}
+
+        def change(got: Any) -> Any:
+            got = dict(got or {})
+            if entry is None:
+                got.pop(name, None)
+            else:
+                got[name] = entry
+            return got or None
+
+        self.server_update(f"env:{scope}", change)       # D905: two saves at once both kept
 
     # ---- a loop shared with other users (D701): "watch" sees its runs and outputs, "edit" also
     #      changes and runs it
@@ -540,25 +570,30 @@ class Store:
     def set_share(self, owner: str, app: str, user: str, perm: str | None) -> dict[str, str]:
         if perm not in (None, "watch", "edit"):
             raise ValueError("a share is watch or edit")
-        got = self.shares(owner, app)
-        if perm is None:
-            got.pop(user, None)
-        else:
-            got[user] = perm
-        self.server_set(f"share:{owner}:{app}", got or None)
-        return got
+        def change(got: Any) -> Any:
+            got = dict(got or {})
+            if perm is None:
+                got.pop(user, None)
+            else:
+                got[user] = perm
+            return got or None
+
+        return dict(self.server_update(f"share:{owner}:{app}", change) or {})     # D905: one transaction
 
     # ---- notices for a user (D702): told at their next look, then gone
     def notify(self, user: str, text: str, href: str = "", kind: str = "info") -> None:
-        got = list(self.server_get(f"notices:{user}") or [])
-        got.append({"text": text, "href": href, "kind": kind, "t": time.time()})
-        self.server_set(f"notices:{user}", got[-50:])
+        said = {"text": text, "href": href, "kind": kind, "t": time.time()}
+        self.server_update(f"notices:{user}", lambda got: [*(got or []), said][-50:])    # D905: none lost
 
     def take_notices(self, user: str) -> list[dict[str, Any]]:
-        got = list(self.server_get(f"notices:{user}") or [])
-        if got:
-            self.server_set(f"notices:{user}", None)
-        return got
+        taken: list[dict[str, Any]] = []
+
+        def change(got: Any) -> None:
+            taken.extend(got or [])
+            return None
+
+        self.server_update(f"notices:{user}", change)    # D905: one taken while another is added is not lost
+        return taken
 
     def shared_with(self, user: str) -> list[tuple[str, str, str]]:
         """(owner, app, permission) of every loop shared with `user`."""

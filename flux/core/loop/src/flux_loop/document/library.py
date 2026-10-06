@@ -2,12 +2,45 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 import shutil
+from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
+
+from .keys import TaskError
 
 if TYPE_CHECKING:  # pragma: no cover
     from .spec import TaskSpec
+
+
+#: D905: the folder a document's reads stay in when the reader is not its trusted owner (the web
+#: server previewing a loop): a knowledge file, a sub-loop's document, a parent listing outside it
+#: -- by `..` or by a link -- is refused rather than read. None (the CLI): read where it says.
+CONFINE: ContextVar[Path | None] = ContextVar("flux_document_confine", default=None)
+
+
+@contextlib.contextmanager
+def confined(root: str | os.PathLike | None) -> Iterator[None]:
+    """Documents loaded inside this block read nothing outside `root` (D905)."""
+    token = CONFINE.set(Path(os.path.realpath(root)) if root is not None else None)
+    try:
+        yield
+    finally:
+        CONFINE.reset(token)
+
+
+def inside(path: str | os.PathLike, what: str) -> Path:
+    """`path`, when a confined load may read it (D905): with every link followed, inside the
+    confining folder; else a TaskError naming `what`."""
+    root = CONFINE.get()
+    if root is None:
+        return Path(path)
+    real = Path(os.path.realpath(path))
+    if real != root and root not in real.parents:
+        raise TaskError(f"{what} is outside the loop's folder: not read here (D905)")
+    return real
 
 
 def read_input(path: Path) -> str:

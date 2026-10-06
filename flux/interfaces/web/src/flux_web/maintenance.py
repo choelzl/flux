@@ -93,16 +93,19 @@ class Maintenance:
                     raise ValueError(f"{k}: a number, 0 or more")
             elif not isinstance(v, str):
                 raise ValueError(f"{k}: text")
-        all_ = dict(self.store.server_get("maintenance") or {})
-        cur = dict(all_.get(key) or {})
-        if on is not None:
-            cur["on"] = on
-        if every_h is not None:
-            cur["every_h"] = every_h
-        if params:
-            cur["params"] = {**(cur.get("params") or {}), **params}
-        all_[key] = cur
-        self.store.server_set("maintenance", all_)
+        def change(all_: Any) -> Any:
+            all_ = dict(all_ or {})
+            cur = dict(all_.get(key) or {})
+            if on is not None:
+                cur["on"] = on
+            if every_h is not None:
+                cur["every_h"] = every_h
+            if params:
+                cur["params"] = {**(cur.get("params") or {}), **params}
+            all_[key] = cur
+            return all_
+
+        self.store.server_update("maintenance", change)             # D905: two tasks set at once both kept
         return self.config(key)
 
     def history(self, key: str) -> list[dict[str, Any]]:
@@ -290,11 +293,15 @@ class Maintenance:
                 if float(p["audit_days"]) > 0 else 0
         notes = 0
         for u in self.store.users():
-            got = list(self.store.server_get(f"notices:{u.name}") or [])
-            kept = [x for x in got if now - float(x.get("t") or now) < float(p["notices_days"]) * DAY]
-            if len(kept) != len(got):
-                notes += len(got) - len(kept)
-                self.store.server_set(f"notices:{u.name}", kept or None)
+            gone = [0]
+
+            def prune(got: Any, gone: list[int] = gone) -> Any:
+                kept = [x for x in got or [] if now - float(x.get("t") or now) < float(p["notices_days"]) * DAY]
+                gone[0] = len(got or []) - len(kept)
+                return kept or None
+
+            self.store.server_update(f"notices:{u.name}", prune)     # D905: a notice added meanwhile is kept
+            notes += gone[0]
         return (f"{s} session(s), {i} invitation(s), {f} login failure(s), {notes} notification(s), {a} audit line(s) removed",
                 bool(s or i or f or notes or a))
 
@@ -342,7 +349,10 @@ def stale_rows(app_dir: Path) -> dict[Path, list[int]]:
     doc = app_dir / str(meta.get("document") or "problem.yaml")
     if not doc.is_file():
         return {}
-    problem = PromptProblem(load_task(str(doc)))
+    from flux_loop.document import confined
+
+    with confined(app_dir):                            # D905: the server reads nothing outside the loop
+        problem = PromptProblem(load_task(str(doc)))
     stages = set(problem.stages() or [])
     state = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None)
     out: dict[Path, list[int]] = {}
