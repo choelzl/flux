@@ -2,7 +2,7 @@
 VCD trace), a functionally wrong one (diagnosed failure), and a broken one (CompileError with
 Verilator stderr).
 
-Requires Verilator (`nix develop .#default`).
+Requires Verilator (`nix develop`).
 """
 
 from __future__ import annotations

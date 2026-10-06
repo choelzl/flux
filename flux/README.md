@@ -120,10 +120,11 @@ test run never disturbs a live campaign.
 `zigzag-dse` (not on PyPI). The local `flux-*` packages are not built: the
 shell's `PYTHONPATH` points at each package's `src/`, an editable install without a virtual
 environment. `evaluator/timeloop` needs a `docker` daemon at run time and pulls its image on
-first use; `nix develop .#timeloop` gives a local Timeloop instead (`FLUX_TIMELOOP_LOCAL=1`).
+first use; `FLUX_TIMELOOP_LOCAL=1` uses the shell's own Timeloop instead (linux).
 
-The default shell has the Python environment, Verilator, Yosys with the slang front end,
-OpenROAD and ChampSim; `.#timeloop` is
-separate. The loop writes scratch files under `FLUX_TMPDIR` and traces (prompts, replies,
+`nix develop` is one shell, the one `flux serve` runs every task from: the Python environment,
+Verilator, Yosys with the slang front end, Icarus, ChampSim, SystemC and, on linux, OpenROAD,
+Timeloop + Accelergy and ICSC; nixchip's hook exports `<TOOL>_HOME`, `_BIN`, `_LIB` and
+`_INCLUDE` for each nixchip tool in it. The loop writes scratch files under `FLUX_TMPDIR` and traces (prompts, replies,
 checked prototypes) under `FLUX_TRACE_ROOT` (default `$TMPDIR/flux-traces`), one directory
 per campaign.

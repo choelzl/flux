@@ -115,7 +115,7 @@ TRANSLATE_TIMEOUT_S = 300.0
 
 
 def icsc() -> Path | None:
-    """Intel's SystemC compiler: `ICSC_HOME` (nixchip's `icsc`, set by `nix develop .#systemc`)."""
+    """Intel's SystemC compiler: `ICSC_HOME` (nixchip's `icsc`, set by `nix develop`)."""
     home = os.environ.get("ICSC_HOME")
     return Path(home) if home and Path(home, "include", "sc_tool", "SCTool.h").is_file() else None
 
@@ -135,7 +135,7 @@ def translate(code: str, module: str, g: Any, timeout_s: float = TRANSLATE_TIMEO
     ports are not the golden PORTS (names, directions, widths)."""
     home = icsc()
     if home is None:
-        return "", "ICSC is not here (no ICSC_HOME): run in `nix develop .#systemc`"
+        return "", "ICSC is not here (no ICSC_HOME): run in `nix develop` (linux)"
     ports = [p for p in g.ports if p["dir"] == "in"] + [p for p in g.ports if p["dir"] == "out"]
     sig = "\n".join(f"  sc_signal<sc_uint<{p['bits']}>> {p['name']};" for p in ports)
     bind = " ".join(f"dut.{p['name']}({p['name']});" for p in ports)

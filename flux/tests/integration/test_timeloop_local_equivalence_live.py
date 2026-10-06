@@ -3,7 +3,7 @@
 A misassembled Timeloop can report correct cycles and fabricate energy from a dummy plug-in
 (D133), so energy is the discriminating half and its estimators are checked too.
 
-Runs only in `nix develop .#timeloop`; skips elsewhere.
+Runs only in `nix develop` (linux); skips elsewhere.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from flux_evaluator_timeloop.adapter import local_timeloop_available
 
 pytestmark = pytest.mark.skipif(
     not local_timeloop_available(),
-    reason="needs a hermetic Timeloop: `nix develop .#timeloop`",
+    reason="needs a hermetic Timeloop: `nix develop` (linux)",
 )
 
 _ROOT = Path(__file__).resolve().parents[2]

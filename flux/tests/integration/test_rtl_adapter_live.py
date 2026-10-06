@@ -1,5 +1,5 @@
 """Runs the hand-written mac_array.sv through Verilator end to end via the Flux Evaluator ABI.
-Requires `verilator` on `PATH` (the `nix develop .#default` shell).
+Requires `verilator` on `PATH` (the `nix develop` shell).
 
 The same (workload, architecture) pair as the ZigZag and Timeloop tests: 1554 cycles (ZigZag,
 analytic), 512 (Timeloop, analytic), 529 simulated here (~3% drain/startup overhead).

@@ -56,7 +56,7 @@ def test_every_vector_is_checked_against_the_golden_model(tmp_path):
     assert "no `SC_MODULE(add4)`" in cap.check("int x;", None, None).why
 
 
-@pytest.mark.skipif(icsc() is None, reason="no ICSC_HOME: run in `nix develop .#systemc`")
+@pytest.mark.skipif(icsc() is None, reason="no ICSC_HOME: run in `nix develop` (linux)")
 def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     """D636: the verified SC_MODULE becomes SystemVerilog by ICSC, not by the model; the SV
     has the golden ports and passes `flux rtl test` on every vector."""

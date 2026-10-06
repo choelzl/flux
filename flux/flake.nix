@@ -1,8 +1,9 @@
 {
   description = ''
-    Flux dev environment. No venv, no pip install step: `nix develop` alone works. Shells:
-      - `default`: Python, the EDA tools (OpenROAD on linux) and prebuilt simulators the adapters need.
-      - `timeloop` (linux): hermetic Timeloop v4 + Accelergy.
+    Flux dev environment. No venv, no pip install step: `nix develop` alone works. One shell:
+      Python, the EDA tools and prebuilt simulators the adapters need, and on linux OpenROAD,
+      the hermetic Timeloop v4 + Accelergy and ICSC (SystemC -> SV) -- `flux serve` runs every
+      task, so every task's tools are in the one shell it is started from.
 
     Almost everything third-party comes prebuilt from nixchip — the DSE Python stack
     (zigzag-dse), Timeloop/Accelergy, Pythia/ChampSim and the EDA tools (Verilator,
@@ -91,7 +92,22 @@
             ps.httpx
             ps.cryptography       # users' model keys, encrypted at rest (Fernet)
           ];
-          pythonEnv = pkgs.python3.withPackages basePythonPackages;
+          # Timeloop/Accelergy's Python half, linux-only like the timeloop binary itself
+          pythonEnv = pkgs.python3.withPackages (ps: basePythonPackages ps
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+              chipPkgs.timeloopfe chipPkgs.accelergy
+              chipPkgs.accelergy-library-plug-in chipPkgs.accelergy-cacti-plug-in
+            ]);
+
+          # The nixchip tools the shell carries; nixchip's hook exports <NAME>_{HOME,BIN,LIB,
+          # INCLUDE} for each. Only these, not all of pkgs.nixchip: the hook's paths are the
+          # shell's inputs, so the whole set would build every nixchip tool on entry, the
+          # cryptominisat that cannot build in the sandbox among them (see the description).
+          chipTools = {
+            inherit (chipPkgs) verilator sv-lang yosys iverilog pythia;
+          } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            inherit (chipPkgs) openroad yosys-slang timeloop icsc;
+          };
 
           # manylinux wheels (numpy, onnx, ...) dlopen libstdc++/zlib at import time;
           # nixpkgs' Python doesn't put them on the default linker path.
@@ -161,43 +177,22 @@
             echo "  flux --help              # the flux-cli console script (wrapper, see flake.nix)"
           '';
         in
-        # Timeloop is linux-only; its shell exists only on linux.
-        pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          timeloop = pkgs.mkShell {
-            name = "flux-dev-timeloop";
-            packages = [
-              (pkgs.python3.withPackages (ps: basePythonPackages ps ++ [
-                chipPkgs.timeloopfe chipPkgs.accelergy
-                chipPkgs.accelergy-library-plug-in chipPkgs.accelergy-cacti-plug-in
-              ]))
-              chipPkgs.timeloop pkgs.docker-client
-            ];
-            LD_LIBRARY_PATH = nativeLibPath;
-            shellHook = ''
-              echo "flux dev shell (timeloop: hermetic Timeloop v4 + Accelergy, no Docker)"
-              echo "  FLUX_TIMELOOP_LOCAL=1   # opt in; the adapter defaults to Docker regardless"
-            '' + shellHook;
-          };
-        }
-        // (let
+        {
           default = pkgs.mkShell {
-            name = "flux-dev-full";
+            name = "flux-dev";
             packages = [
               pythonEnv pkgs.docker-client
               pkgs.ruff        # the lint CI runs: `ruff check` (pyflakes rules; honours noqa)
-              chipPkgs.verilator chipPkgs.sv-lang chipPkgs.yosys
-              chipPkgs.iverilog  # Icarus Verilog: event-driven simulation beside Verilator
-              # CMU-SAFARI/Pythia: ChampSim, with its source tree under
-              # $out/share/pythia so `flux champsim build` can rebuild it.
-              chipPkgs.pythia
               pkgs.systemc     # a SystemC prototype's testbench links it (D635)
               pkgs.hyperfine   # `flux prog time` (D661)
               pkgs.tini        # PID 1 of the run's sandbox: reaps the tools' processes, forwards signals (D680)
               pkgs.ripgrep     # `rg`: the coding agents search with it first (Codex) -- in the sandbox via the PATH (D848)
             ]
-            # Physical design (OpenROAD, yosys-slang), linux-only.
+            # Verilator, Yosys, Icarus, sv-lang; CMU-SAFARI/Pythia: ChampSim, with its source
+            # tree under $out/share/pythia so `flux champsim build` can rebuild it; on linux
+            # OpenROAD + yosys-slang, Timeloop v4, ICSC (SystemC -> SystemVerilog, D645, D656)
+            ++ builtins.attrValues chipTools
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
-              chipPkgs.openroad chipPkgs.yosys-slang
               pkgs.valgrind    # `flux prog count`: cachegrind (D661)
             ];
             LD_LIBRARY_PATH = nativeLibPath;
@@ -206,20 +201,11 @@
             # than hard-coded so the flow falls back to the built-in reader when absent.
             YOSYS_SLANG_PLUGIN = pkgs.lib.optionalString pkgs.stdenv.isLinux
               "${chipPkgs.yosys-slang}/share/yosys/plugins/slang.so";
-            shellHook = ''
-              echo "flux dev shell: python + Verilator/Yosys/OpenROAD, Pythia/ChampSim, SystemC"
-              echo "  .#systemc adds ICSC (SystemC -> SV); .#timeloop is separate"
+            shellHook = nixchip.lib.mkNixchipVarsHook chipTools + "\n" + ''
+              echo "flux dev shell: python + Verilator/Yosys/OpenROAD, Pythia/ChampSim, SystemC/ICSC, Timeloop"
+              echo "  FLUX_TIMELOOP_LOCAL=1   # the hermetic Timeloop; the adapter defaults to Docker regardless"
             '' + shellHook;
           };
-        in
-        { inherit default; }
-        # the default shell plus nixchip's ICSC (SystemC -> SystemVerilog, D645, D656)
-        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          systemc = default.overrideAttrs (old: {
-            name = "flux-dev-systemc";
-            nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ chipPkgs.icsc ];
-            ICSC_HOME = "${chipPkgs.icsc}";
-          });
-        }));
+        });
     };
 }

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("verilator") is None, reason="verilator not on PATH (needs .#default dev shell)"
+    shutil.which("verilator") is None, reason="verilator not on PATH (needs the `nix develop` shell)"
 )
 
 

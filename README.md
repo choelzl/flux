@@ -82,8 +82,8 @@ To set them once for this machine, put the same lines (without `export`) in
 - **RTL from a golden model.** You give a Python function that computes the right answer; a
   model writes the Verilog; Verilator tests every design against your function.
 - **Prototypes first.** For numeric designs the model writes the algorithm in Python or SystemC,
-  checked on every input in seconds; Flux then writes the RTL (SystemC through ICSC, in
-  `nix develop .#systemc`).
+  checked on every input in seconds; Flux then writes the RTL (SystemC through ICSC, in the
+  `nix develop` shell on linux).
 - **Design-space sweeps and searches.** List the knobs; pick `sweep`, `montecarlo`, `gradient`,
   `anneal`, `genetic`, `pareto`, `llm` (a model picks the points) or a coding agent.
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer

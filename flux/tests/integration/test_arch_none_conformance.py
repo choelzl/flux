@@ -3,7 +3,7 @@
 `arch=None` means "use the evaluator's default architecture". Every backend honours it or refuses
 with `NotExpressibleError`, never fails another way or substitutes an architecture silently.
 
-The backends that honour it run their real tool, so this needs `nix develop .#default` and
+The backends that honour it run their real tool, so this needs `nix develop` and
 Docker. Registry-driven, so a new backend is covered.
 """
 

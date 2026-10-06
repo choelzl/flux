@@ -127,7 +127,7 @@ TOOLS: list[dict[str, Any]] = [
      "metrics": _m("latency_cycles", "energy_pj"), "needs": [], "languages": ["yaml"], "kinds": ["zigzag"]},
     {"id": "timeloop-eval", "role": "stage", "title": "Cycles, energy and area (Timeloop)",
      "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. "
-             "Run in the .#timeloop shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper "
+             "Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper "
              "on PATH the stage is skipped.",
      "stage": {"evaluator": "timeloop", "needs": ["timeloop-mapper"]}, "document": {"workload": "{workload}"},
      "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},

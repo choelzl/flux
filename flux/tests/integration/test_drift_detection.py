@@ -4,7 +4,7 @@
 RTL-sim reference value and the residual captured against it. This re-runs the evaluator and fails
 if the residual moved by more than the pinned `tolerance`. A nightly job just runs this file.
 
-Requires `docker` (Timeloop) and `verilator` (RTL): run under `nix develop .#default`.
+Requires `docker` (Timeloop) and `verilator` (RTL): run under `nix develop`.
 """
 
 from __future__ import annotations

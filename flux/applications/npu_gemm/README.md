@@ -49,4 +49,4 @@ mapping at all and 1 KB is the floor. The space is 1, 2, 4 and 8 KB around it; t
 - **A bigger space:** `flow: {orchestrate: gradient}` or a list of phases, or `llm` to let a model
   propose points ([docs/cookbook.md](../../../docs/cookbook.md)).
 - **Another cost model:** `make_evaluator("timeloop")` in `measure.py` (it needs Docker, or
-  `nix develop .#timeloop`).
+  `nix develop` with `FLUX_TIMELOOP_LOCAL=1`).

@@ -240,9 +240,9 @@ jobs:
 
   timeloop-hermetic:
     name: hermetic timeloop equivalence (nightly)
-    # Its own job because it needs its own shell. The nightly sweep above runs every integration
-    # file under the default shell, where `test_timeloop_local_equivalence_live.py` skips itself —
-    # and a skipped file exits 0, so drift in the from-source Timeloop build would read as a pass.
+    # Its own job for its skip assertion: the nightly sweep above runs every integration file
+    # too, but a skipped file exits 0 there, so a shell whose Timeloop went missing, or drift in
+    # the from-source Timeloop build, would read as a pass.
     # That is precisely the "an unknown reads as a pass" failure D129 records.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -255,12 +255,12 @@ jobs:
         with:
           key-suffix: timeloop
 
-      - name: Build the hermetic Timeloop shell
+      - name: Build the dev shell (hermetic Timeloop included)
         working-directory: flux
         # Internal cap below the job timeout (D247).
         run: |
-          if ! timeout 4200 nix develop .#timeloop --command true; then
-            echo "::error::timeloop shell build hit the 70-min cap — partial store is cached; re-run to resume"
+          if ! timeout 4200 nix develop --command true; then
+            echo "::error::dev shell build hit the 70-min cap — partial store is cached; re-run to resume"
             exit 1
           fi
           df -h /
@@ -271,7 +271,7 @@ jobs:
           # `| tee` makes the pipeline's status tee's, not pytest's — the exact mistake D199
           # records, where every command in a loop reported rc=0 regardless of what happened.
           set -o pipefail
-          nix develop .#timeloop --command python3 -m pytest \
+          nix develop --command python3 -m pytest \
             tests/integration/test_timeloop_local_equivalence_live.py -q --tb=short -rs \
             | tee "$RUNNER_TEMP/timeloop-equivalence.txt"
           # A skip here means the shell did not provide what it promises — a build failure wearing
@@ -292,7 +292,7 @@ jobs:
         # exit code is the whole signal.
         run: |
           set -o pipefail
-          FLUX_TIMELOOP_LOCAL=1 nix develop .#timeloop --command python3 -m pytest \
+          FLUX_TIMELOOP_LOCAL=1 nix develop --command python3 -m pytest \
             tests/integration/test_timeloop_adapter_live.py \
             tests/integration/test_timeloop_architecture_translation_live.py \
             tests/integration/test_timeloop_mapping_translation_live.py \

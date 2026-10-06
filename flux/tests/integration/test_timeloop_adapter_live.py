@@ -1,6 +1,6 @@
 """Runs Timeloop+Accelergy end to end through the Flux Evaluator ABI.
 
-Either runner works (D206): a `docker` daemon, or the hermetic build from `nix develop .#timeloop`
+Either runner works (D206): a `docker` daemon, or the hermetic build from `nix develop` (linux)
 with `FLUX_TIMELOOP_LOCAL=1`. The pinned numbers hold on both. Slow (a full mapper search).
 """
 

@@ -2,7 +2,7 @@
 `mac_array.sv` is the reference (`reference_source="rtl_sim"`) for ZigZag's and Timeloop's
 `latency_cycles`, over the widths X=4,8,16 that test_calibration_live.py uses.
 
-Requires `docker` and `verilator` (`nix develop .#default`).
+Requires `docker` and `verilator` (`nix develop`).
 """
 
 from __future__ import annotations

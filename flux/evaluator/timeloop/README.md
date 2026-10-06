@@ -43,8 +43,8 @@ its bundled `timeloopfe` Python front-end.
 
 **Docker by default, hermetic Nix on request** (docs/decisions.md D204/D205/D206): the painful
 dependency was real — Timeloop links `barvinok`, which nixpkgs does not package
-— but it was a packaging problem, not an adapter rewrite. `nix develop
-.#timeloop` now provides Timeloop v4, `timeloopfe` and Accelergy's real estimation plug-ins, and
+— but it was a packaging problem, not an adapter rewrite. `nix develop`
+(linux) now provides Timeloop v4, `timeloopfe` and Accelergy's real estimation plug-ins, and
 that path reproduces this repo's pinned Docker energy numbers exactly
 (`tests/integration/test_timeloop_local_equivalence_live.py`).
 
@@ -102,7 +102,7 @@ tensor roles against — a multi-op workload declaring either raises `NotExpress
 same per-op tensor-role-resolution scope explicit Mapping IR already has.
 
 Package: `flux-evaluator-timeloop` (on `PYTHONPATH` under `nix develop`). At runtime it
-needs either a working `docker` on `PATH` (the default) or the hermetic stack from `nix develop
-.#timeloop` — neither is a Python dependency.
+needs either a working `docker` on `PATH` (the default) or the hermetic stack from `nix develop`
+(linux) — neither is a Python dependency.
 
 See [docs/evaluator-abi.md](../../../docs/evaluator-abi.md) ("adapters, not forks").
