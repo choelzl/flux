@@ -87,7 +87,7 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
                        input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
-    assert out["flow"]["generate"] == "agent:opencode" and out["flow"]["critique"] == "agent:custom"
+    assert out["flow"]["generate"] == "agent:opencode" and out["flow"]["critique"] == "agent:*"
     assert not any("flow" in k for k in out["kept"]), out["kept"]
     again = home / "again.problem.yaml"
     again.write_text(merged(out["yaml"], v["raw"], out["kept"]))
@@ -217,3 +217,18 @@ def test_the_crafters_docs_tokens_are_the_apps():
     assert {"--ink", "--muted", "--line", "--panel", "--bg", "--soft", "--accent", "--accent-ink", "--ok", "--bad", "--warn"} <= set(docs_light) & set(docs_dark)
     for app, docs in ((app_light, docs_light), (app_dark, docs_dark)):
         assert {k: v for k, v in docs.items() if k in app} == {k: app[k] for k in docs if k in app}
+
+
+def test_an_added_agent_called_custom_is_one_choice_however_often_the_agents_are_set():
+    """D946: the configurator's marker for an agent with its own settings was "agent:custom", spared
+    when the choices were rebuilt -- an agent added as `custom` came back once more on every visit."""
+    js = r"""
+const c = require(process.argv[1]);
+for (let i = 0; i < 5; i++) c.setAgents([{name: "custom", label: "Custom"}, {name: "nga", label: "NGA"}]);
+process.stdout.write(JSON.stringify(Object.fromEntries(Object.entries(c.BOXES).map(([b, x]) =>
+  [b, (x.choices || []).filter(o => String(o.value).startsWith("agent:")).map(o => o.value)]))));
+"""
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    agents = {b: v for b, v in json.loads(r.stdout).items() if v}
+    assert agents and all(v == ["agent:opencode", "agent:claude", "agent:codex", "agent:custom", "agent:nga"] for v in agents.values()), agents

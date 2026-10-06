@@ -28,6 +28,9 @@
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
                       "prompt", "prompt_file", "point", "params", "history", "state", "parts"];
 
+  /** D728: a box whose agent has its own settings, as written (agentRaw) -- "*" is no agent's name, so
+      an added agent may be called anything, "custom" too (D946). */
+  var INLINE_AGENT = "agent:*";
   /** D934: an added agent's label (the server's), by name. */
   var AGENT_LABELS = {};
   function agentChoices(what) {
@@ -50,7 +53,7 @@
     Object.keys(BOXES).forEach(function (b) {
       var cs = BOXES[b].choices || [], at = -1, hint;
       var kept = cs.filter(function (c, i) {
-        var mine = typeof c.value === "string" && c.value.indexOf("agent:") === 0 && c.value !== "agent:custom";
+        var mine = typeof c.value === "string" && c.value.indexOf("agent:") === 0;
         if (mine && at < 0) { at = i; hint = c.hint; }
         return !mine;
       });
@@ -1013,7 +1016,7 @@
 
     at = STEP_OF.flow;
     var agents = {};
-    flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== "agent:custom") agents[flow[b].slice(6)] = 1; });
+    flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== INLINE_AGENT) agents[flow[b].slice(6)] = 1; });
     if (Object.keys(agents).length) note("The coding agent " + Object.keys(agents).join(", ") + " must be installed where it runs.");
     var fl = namedFiles(state, cat);
     if (fl.length) { note("Put these beside the document: " + fl.join(", ") + "."); msgs[msgs.length - 1].files = fl; }
@@ -1273,7 +1276,7 @@
       if (v && typeof v === "object" && v.agent && typeof v.agent === "object") {      // D728: its own settings, kept as written
         var pre = typeof v.agent.preset === "string" && choiceOf(box, "agent:" + v.agent.preset) ? v.agent.preset : null;
         if (!pre && DELEGABLE.indexOf(box) < 0 && box !== "generate") { flowOk = false; return; }
-        s.flow[box] = "agent:" + (pre || "custom");
+        s.flow[box] = pre ? "agent:" + pre : INLINE_AGENT;
         (s.agentRaw = s.agentRaw || {})[box] = v;
         return;
       }
