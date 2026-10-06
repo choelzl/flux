@@ -8,7 +8,8 @@
 import { cleanup, me, navSeq, pageOwner, pageRefresh, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
 import { ago, api, appHref, card, h, show, toast } from "./ui.js";
 import { bellIcon, logo } from "./charts.js";
-import { appsPage, loopPage, newPage } from "./loops.js";
+import { appsPage, newPage } from "./loops.js";
+import { loopPage } from "./loop_page.js";
 import { configurePage } from "./configure.js";
 import { adminPage } from "./admin.js";
 import { accountPage, invitePage, loginPage } from "./account.js";
