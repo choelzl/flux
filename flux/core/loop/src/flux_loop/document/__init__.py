@@ -22,9 +22,8 @@ import shutil
 import sys
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, Iterable, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
-from ..estimate import KINDS as ESTIMATE_KINDS, Estimator
 from ..objective import Objectives
 from ..types import LoopRequest
 
@@ -32,153 +31,18 @@ if TYPE_CHECKING:  # pragma: no cover
     from ..objective import Objective
     from ..roles import Roles
 
+from .keys import TaskError, DOCUMENT_KEYS, _LIFTED_KEYS, _INTERNAL_KEYS, _INHERITED, EXTENSIONS, DOCUMENT_FILE, ALT_SUFFIXES  # noqa: F401
+from .commands import BUILTIN_SUBS, RTL_METRICS, RTL_STAT_METRICS, rtl_tools_kind, _flux_rtl_tools, _digest_of, _inferred_language, _command, _check_placeholders, _knob_subs, _substitute  # noqa: F401
+from .gate import BUILD_FAILED, Check, Gate, DEFAULT_COUNT_RE, _gate, _gate_doc  # noqa: F401
+from .stages import Stage, _stage  # noqa: F401
 
 __all__ = ["BUILD_FAILED", "BUILTIN_SUBS", "Check", "DOCUMENT_KEYS", "FLOW_BOXES", "Gate", "Part", "Stage", "TaskError", "TaskSpec", "describe_flow", "load_task", "read_input", "request_for", "resolve"]
-
-
-#: `{name}` in a command: the loop's own (`BUILTIN_SUBS`) or a knob of `space:` (D581);
-#: a name neither is stays as written (a script's own braces are its business)
-_PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
-_PLACEHOLDER_ANY = re.compile(r"\{(\w+)\}")      # D879: any knob a command says, in a script too
-BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                "prompt", "prompt_file", "point", "params", "history", "state", "parts")
-
-
-class TaskError(ValueError):
-    """The document is not a task: the message names the field and what it should be."""
 
 
 @dataclass(frozen=True)
 class Part:
     name: str
     statement: str = ""
-
-
-
-
-#: what `flux rtl measure` prints (D628): a stage running it need not list them
-RTL_METRICS = ("fmax_mhz", "area_um2", "power_w", "cell_count")
-RTL_STAT_METRICS = ("area_um2", "cell_count")      # `--stage stat`: nothing timed (D662)
-
-
-def rtl_tools_kind(cmd: Iterable[str] | None) -> str:
-    """"test", "proto", "measure" for a `flux rtl ...` command, else ""."""
-    toks = list(cmd or ())
-    try:
-        at = toks.index("rtl")
-    except ValueError:
-        return ""
-    if at == 0 or "flux" not in " ".join(toks[:at]) or at + 1 >= len(toks):
-        return ""
-    return toks[at + 1]
-
-
-def _flux_rtl_tools(cmd: Iterable[str]) -> list[str]:
-    """The tools a `flux rtl lint|test|measure` or `flux prog count|size` command runs (D600): they
-    may be missing outside the Nix dev shell, and the command itself is Python, so `task check`
-    must name them."""
-    toks = list(cmd)
-    at = next((i for i, t in enumerate(toks) if t in ("rtl", "prog")), None)
-    if not at or "flux" not in " ".join(toks[:at]):
-        return []
-    sub = toks[at + 1] if at + 1 < len(toks) else ""
-    if toks[at] == "prog":                # D661: `time` falls back to a Python loop without hyperfine
-        return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
-    if sub in ("test", "lint"):
-        return ["verilator"]
-    if sub == "measure":
-        if _stage_of(toks) == "stat":
-            return ["yosys"]              # D662: Yosys alone, nothing timed
-        return ["yosys", "openroad"]      # synthesis too: its timing is OpenROAD's OpenSTA
-    return []
-
-
-def _stage_of(toks: list[str]) -> str:
-    """A `flux rtl measure` command's `--stage` (synth when it says none)."""
-    for i, t in enumerate(toks):
-        if t == "--stage" and i + 1 < len(toks):
-            return toks[i + 1]
-        if t.startswith("--stage="):
-            return t.split("=", 1)[1]
-    return "synth"
-
-#: D594: a gate test's exit code for "the candidate did not build" (nothing was tested).
-BUILD_FAILED = 3
-
-
-def _digest_of(text: str | None) -> str:
-    import hashlib
-
-    return hashlib.sha256((text or "").encode()).hexdigest()
-
-@dataclass(frozen=True)
-class Check:
-    """One named check of a gate (D652): a command whose failures are counted by `count_re`
-    (one integer group), `fail_re` (one match per failure) or, with neither matching, its exit
-    code. Exit 3 means the candidate did not build; `builds` (the old `build:` key) makes any
-    non-zero exit mean that."""
-
-    name: str
-    run: tuple[str, ...]
-    count_re: str | None = None
-    fail_re: str | None = None
-    timeout_s: float = 120.0
-    builds: bool = False
-
-    @property
-    def rule(self) -> str:
-        """The pass rule in words, for `flux task check`."""
-        if self.builds:
-            return "passes when it exits 0; otherwise the candidate did not build"
-        how = (f"`{self.count_re}` reads 0" if self.count_re
-               else f"no line matches `{self.fail_re}`" if self.fail_re else "it exits 0")
-        return f"passes when {how}; exit 3 = did not build"
-
-
-class Gate(tuple):
-    """How a candidate is checked (D652): its checks, run in order, cheapest first. The first
-    that reports failures refuses the design; the checks after it do not run."""
-
-    def named(self, name: str) -> Check | None:
-        return next((c for c in self if c.name == name), None)
-
-    @property
-    def timeout_s(self) -> float:
-        return max((c.timeout_s for c in self), default=120.0)
-
-    def line(self) -> str:
-        """The checks as one shell line, for a prompt or an agent's brief."""
-        return " && ".join(" ".join(c.run) for c in self)
-
-
-@dataclass(frozen=True)
-class Stage:
-    """One costed measurement: a command whose output carries the metrics (`metrics_re`,
-    one float group each), or an evaluator named in the ABI registry applied to the
-    artifact read as an architecture document.
-
-    `cutoff` is what is worth the next stage (D454): one of `{"metric": m, "at": x}` (a floor),
-    `{"metric": m, "below": x}` (a budget) or `{"metric": m, "within": f}` (a band around this
-    run's best, `f` a fraction), or a list of them, all of which a design must pass, in order
-    (D657). Without one, only the last stage's results decide.
-
-    `estimate` (D665, off by default) predicts the stage's metrics before its tool runs; a design
-    whose estimate fails the cutoff or an objective's limit by more than its margin is skipped."""
-
-    name: str
-    command: tuple[str, ...] | None = None
-    metrics_re: dict[str, str] = field(default_factory=dict)
-    evaluator: str | None = None
-    metrics: tuple[str, ...] = ()
-    timeout_s: float = 600.0
-    cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = field(default_factory=dict)   # one gate, or several
-    needs: tuple[str, ...] = ()          # tools on PATH the stage wants; absent, the stage is skipped (D519)
-    estimate: Estimator | None = None    # the pre-gate before the tool (D665)
-
-    @property
-    def cutoffs(self) -> tuple[dict[str, Any], ...]:
-        """The stage's gates in order: the single-dict form is one."""
-        return (self.cutoff,) if isinstance(self.cutoff, dict) else tuple(self.cutoff)
 
 
 @dataclass(frozen=True)
@@ -525,170 +389,6 @@ def read_input(path: Path) -> str:
         return f"({path.name}: {path.stat().st_size} bytes of binary, not text)"
 
 
-def _inferred_language(gate: Any, stages: Any) -> str | None:
-    """The language a document need not say (D832): the one the tools its checks and stages name
-    take -- `flux rtl ...` is SystemVerilog, a ChampSim build C++ -- from the tool catalog's
-    `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
-    when nothing decides."""
-    from ..toolbox import TOOLS
-
-    hdl = {"systemverilog", "verilog"}
-
-    def said(argv: Any) -> str:
-        toks = list(argv or ())
-        if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_cli.main"]:
-            toks = ["flux", *toks[5:]]
-        return " ".join(toks)
-
-    cmds = [said(c.run) for c in (gate or ())] + [said(st.command) for st in (stages or ()) if st.command]
-    found: set[str] | None = None
-    for cmd in cmds:
-        for t in TOOLS:
-            head = str(t.get("run") or "").split("{")[0].strip()
-            langs = set(t.get("languages") or ())
-            if len(head.split()) < 2 or not langs or not cmd.startswith(head):
-                continue                                   # `{python} {script}`, `{command}`: no word on it
-            if len(langs) == 1 or langs <= hdl:
-                found = langs if found is None else (found & langs or found)
-    if not found:
-        return None
-    return "systemverilog" if found <= hdl and "systemverilog" in found else (next(iter(found)) if len(found) == 1 else None)
-
-
-def _command(raw: Any, what: str) -> tuple[str, ...] | None:
-    """A command the document says (D580): argv tokens as a list, or one string split like
-    a shell would. A command whose head is `flux` runs this flux (`{python} -m
-    flux_cli.main`), so a document reads `flux rtl test {artifact} ...` and needs no
-    wrapper on PATH. `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}` and
-    `{home}` are substituted at run time."""
-    if raw is None:
-        return None
-    if isinstance(raw, str):
-        import shlex
-
-        toks = shlex.split(raw)
-    elif isinstance(raw, list) and raw and all(isinstance(t, str) for t in raw):
-        toks = list(raw)
-    else:
-        raise TaskError(f"{what} must be a command: a non-empty list of strings, or one string")
-    if not toks:
-        raise TaskError(f"{what} is empty")
-    if toks[0] == "flux":
-        # warnings off (D589): runpy and numpy warnings in a refusal mislead the model
-        toks = ["{python}", "-W", "ignore", "-m", "flux_cli.main", *toks[1:]]
-    return tuple(toks)
-
-
-def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generator: dict[str, Any],
-                        space: dict[str, list]) -> None:
-    """Every `{name}` a command token says (not a `-c` script) must be the loop's or a knob of
-    `space:`; otherwise it is a typo that would reach the tool as text (D581)."""
-    known = set(BUILTIN_SUBS) | set(space)
-    cmds: list[tuple[str, Iterable[str]]] = []
-    if gate is not None:
-        cmds += [(f"gate {c.name}", c.run) for c in gate]
-    cmds += [(f"stage {r.name}", r.command or ()) for r in stages]
-    cmds += [(f"estimate {r.name}", r.estimate.command) for r in stages if r.estimate and r.estimate.command]
-    if generator.get("command"):
-        cmds.append(("generator", generator["command"]))
-    said: set[str] = set()
-    for what, cmd in cmds:
-        for tok in cmd:
-            said |= set(_PLACEHOLDER_ANY.findall(tok))
-            if any(c.isspace() for c in tok):
-                continue
-            for m in _PLACEHOLDER.finditer(tok):
-                if m.group(1) not in known:
-                    raise TaskError(f"{what} says {{{m.group(1)}}}, which is neither a knob of `flow.dse.space` "
-                                    f"({', '.join(space) or 'none'}) nor the loop's ({', '.join(BUILTIN_SUBS)})")
-    if space and "agent" in generator and not (said & set(space)) and "{point}" not in str(cmds):
-        # D879: a point becomes a design only through a command that says its knobs; with none, every
-        # point was an empty artifact the gate refused, pass after pass (an agent spells no sweep point)
-        raise TaskError(f"flow.dse.space knobs ({', '.join(space)}) are said by no command: a search's points "
-                        "become designs through `flow.generate: {command: ... {" + next(iter(space)) + "} ...}` "
-                        "(or a measure command that takes them); a coding agent does not spell a point")
-
-
-def _knob_subs(knobs: dict[str, Any]) -> dict[str, str]:
-    """A candidate's knobs as `{knob}` substitutions (D581): the scalar ones."""
-    return {k: str(v) for k, v in (knobs or {}).items() if isinstance(v, (str, int, float, bool))}
-
-
-#: D628: what `flux rtl test`, `flux rtl proto` and the templates' checkers print; a gate that
-#: prints no such line is judged by its exit code
-DEFAULT_COUNT_RE = r"(\d+) failing"
-
-
-_GATE_HELP = ("`flow.test` is a command (one check, `test`), or a map from each check's name to its command "
-              "or `{run, count_re?, fail_re?, timeout_s?}`, run in order -- a check named `build` refuses on any "
-              "non-zero exit; `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}`, `{home}` are substituted; "
-              "a `flux ...` head runs this flux")
-_CHECK_KEYS = ("run", "count_re", "fail_re", "timeout_s")
-
-
-def _patterns(doc: dict[str, Any], what: str) -> tuple[str | None, str | None]:
-    for key in ("count_re", "fail_re"):
-        pat = doc.get(key)
-        if pat is not None:
-            try:
-                re.compile(pat)
-            except re.error as exc:
-                raise TaskError(f"{what}.{key} is not a regex: {exc}") from exc
-    return doc.get("count_re") or (None if doc.get("fail_re") else DEFAULT_COUNT_RE), doc.get("fail_re")
-
-
-def _gate(doc: Any) -> Gate:
-    """`flow.test` (D652, D789): a map by name like `flow.measure`, the checks in the order
-    written -- each a command or `{run, count_re, fail_re, timeout_s}`. A command alone is one
-    check named `test`; a check named `build` refuses on any non-zero exit (did not build)."""
-    if isinstance(doc, (str, list)):
-        doc = {"test": doc}
-    if not isinstance(doc, dict) or not doc:
-        raise TaskError(_GATE_HELP)
-    loose = sorted(k for k in doc if k in _CHECK_KEYS)
-    if loose:
-        raise TaskError(f"flow.test: {', '.join(loose)} is a check's setting, said under its name "
-                        f"(test: {{run: ..., {loose[0]}: ...}}); flow.test is a map of checks by name")
-    checks = []
-    for name, c in doc.items():
-        name, where = str(name), f"flow.test.{name}"
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
-            raise TaskError(f"{where}: a check's name is letters, digits, _ and -")
-        if isinstance(c, (str, list)):
-            c = {"run": c}
-        if not isinstance(c, dict):
-            raise TaskError(f"{where}: a command, or {{run, count_re, fail_re, timeout_s}}")
-        if "name" in c:
-            raise TaskError(f"{where}: a check's name is its key")
-        bad = sorted(set(c) - set(_CHECK_KEYS))
-        if bad:
-            raise TaskError(f"{where}: keys {bad} are not a check's; known: {', '.join(_CHECK_KEYS)}")
-        if not c.get("run"):
-            raise TaskError(f"{where} needs `run`: its command")
-        count_re, fail_re = _patterns(c, where) if name != "build" or c.get("count_re") or c.get("fail_re") else (None, None)
-        checks.append(Check(name, _command(c["run"], f"{where}.run"), count_re, fail_re,
-                            float(c.get("timeout_s") or 120.0), builds=name == "build"))
-    return Gate(checks)
-
-
-def _gate_doc(gate: Gate) -> Any:
-    """The gate as a document says it (D789): a map by name; a bare command when it is all."""
-    out: dict[str, Any] = {}
-    for c in gate:
-        settings = {**({"count_re": c.count_re} if c.count_re and c.count_re != DEFAULT_COUNT_RE else {}),
-                    **({"fail_re": c.fail_re} if c.fail_re else {}),
-                    **({"timeout_s": c.timeout_s} if c.timeout_s != 120.0 else {})}
-        out[c.name] = {"run": list(c.run), **settings} if settings else list(c.run)
-    return out
-
-
-#: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
-#: deliberately absent: a child that inherited it would divide again, forever.
-_INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
-              "params", "workload", "budget", "space", "ladder",
-              "flow")
-
-
 def _knob_doc(knob: str, values: list, when: dict | None, found: tuple | None) -> Any:
     """A knob as a document says it: its choices, `when` it moves, and the files it also takes (D798)."""
     if found is None and not when:
@@ -916,117 +616,6 @@ def _leaf(task_id: str) -> str:
     return task_id.rsplit("/", 1)[-1]
 
 
-def _stage(i: int, doc: Any) -> Stage:
-    if not isinstance(doc, dict) or not isinstance(doc.get("name"), str) or not doc["name"]:
-        raise TaskError(f"flow.measure: stage {i + 1} needs a name")
-    at = f"flow.measure.{doc['name']}"                 # D775: a stage is said by its name
-    cmd, ev = doc.get("command"), doc.get("evaluator")
-    if cmd and ev:
-        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`, not both")
-    if not cmd and not ev:
-        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`")
-    needs = doc.get("needs")
-    if needs is not None and (not isinstance(needs, list) or not all(isinstance(t, str) for t in needs)):
-        raise TaskError(f"{at}.needs is a list of tool names")
-    needs = list(needs or [])
-    cmd = _command(cmd, f"{at}.command")
-    rtl_tools = _flux_rtl_tools(cmd) if cmd else []
-    for tool in rtl_tools if "needs" not in doc else ():    # D628: `flux rtl measure` says what it runs
-        needs.append(tool)
-    metrics = tuple(doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
-                                           else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS))
-    if not all(isinstance(m, str) for m in metrics):
-        raise TaskError(f"{at}.metrics is a list of metric names")
-    metrics_re = dict(doc.get("metrics_re") or {})
-    if cmd and not metrics_re and metrics:
-        # `name=value` tokens (as `flux rtl measure` prints) need only the `metrics:` names
-        # (D580); a token starts a line or follows whitespace, so `area_um2` never reads `xarea_um2`
-        metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=([-+0-9.eE]+)" for m in metrics}
-    for m, pat in metrics_re.items():
-        try:
-            if re.compile(pat).groups < 1:
-                raise TaskError(f"{at}.metrics_re[{m!r}] needs one capturing group")
-        except re.error as exc:
-            raise TaskError(f"{at}.metrics_re[{m!r}] is not a regex: {exc}") from exc
-    if cmd and not metrics_re:
-        raise TaskError(f"{at}: a command stage needs `metrics` (names the command "
-                        "prints as `name=value` lines) or `metrics_re` (a regex per metric)")
-    raw = doc.get("cutoff") or {}
-    if isinstance(raw, dict):
-        cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = dict(raw)
-        named = [(f"{at}.cutoff", cutoff)] if cutoff else []
-    elif isinstance(raw, list) and all(isinstance(c, dict) for c in raw):
-        cutoff = tuple(dict(c) for c in raw)        # several gates, all must pass (D657)
-        named = [(f"{at}.cutoff[{j}]", c) for j, c in enumerate(cutoff)]
-    else:
-        raise TaskError(f"{at}.cutoff is one condition {{metric, at|below|within}} or a list of them")
-    for where, rule in named:
-        if not isinstance(rule.get("metric"), str):
-            raise TaskError(f"{where} needs a `metric` naming one this stage measures")
-        rules = [k for k in ("at", "below", "within") if k in rule]
-        if len(rules) != 1:
-            raise TaskError(
-                f"{where} needs exactly one of `at` (a floor), `below` (a budget) or "
-                f"`within` (a fraction of this run's best), got {sorted(rule)}")
-        if not isinstance(rule[rules[0]], (int, float)) or isinstance(rule[rules[0]], bool):
-            raise TaskError(f"{where}.{rules[0]} must be a number")
-        if rules[0] == "within" and not 0 < float(rule["within"]) <= 1:
-            raise TaskError(f"{where}.within must be a fraction in (0, 1]")
-    return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
-                evaluator=ev, metrics=metrics or tuple(metrics_re),
-                timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs),
-                estimate=_estimator(at, doc.get("estimate")))
-
-
-def _estimator(at: str, raw: Any) -> Estimator | None:
-    """`flow.measure.<stage>.estimate` (D665): `{kind: surrogate|command|model, margin: 0.05, command: ...}`,
-    `command` for kind command only."""
-    if raw is None:
-        return None
-    where = f"{at}.estimate"
-    if not isinstance(raw, dict):
-        raise TaskError(f"{where} is {{kind: {'|'.join(ESTIMATE_KINDS)}, margin: 0.05}}")
-    bad = sorted(set(raw) - {"kind", "margin", "command"})
-    if bad:
-        raise TaskError(f"{where} keys {bad} are not known; known: kind, margin, command")
-    kind = raw.get("kind")
-    if kind not in ESTIMATE_KINDS:
-        raise TaskError(f"{where}.kind is one of {', '.join(ESTIMATE_KINDS)}, not {kind!r}")
-    margin = raw.get("margin", 0.05)
-    if isinstance(margin, bool) or not isinstance(margin, (int, float)) or margin < 0:
-        raise TaskError(f"{where}.margin is a number >= 0 (a fraction of the threshold), not {margin!r}")
-    if (kind == "command") != ("command" in raw):
-        raise TaskError(f"{where}.command is said for kind command, and only then")
-    cmd = _command(raw["command"], f"{where}.command") if kind == "command" else None
-    return Estimator(kind, float(margin), cmd)
-
-
-#: Every top-level key a problem document may say; any other is refused with the nearest
-#: real key (D590).
-DOCUMENT_KEYS = frozenset({
-    "statement", "contract", "language", "parts",
-    "flow", "subtasks", "max_subtasks", "objectives",
-    "budget", "params", "workload", "ladder",
-    "skills"})
-#: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
-_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
-
-#: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
-_INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})
-
-#: the file extension a language's candidates are written with (D628); another language `x`
-#: writes `.x`
-EXTENSIONS = {"systemverilog": ".sv", "verilog": ".v", "vhdl": ".vhd", "python": ".py", "text": ".txt",
-              "yaml": ".yaml", "json": ".json", "c": ".c", "cpp": ".cpp", "c++": ".cpp", "cuda": ".cu", "opencl": ".cl", "rust": ".rs",
-              "markdown": ".md", "shell": ".sh", "bash": ".sh", "chisel": ".scala", "scala": ".scala"}
-
-
-#: D786: a problem is a folder; its document is this file in it, and the folder's name is its id.
-DOCUMENT_FILE = "problem.yaml"
-#: D787: beside it, `NAME.problem.yaml` -- another problem of the same loop, its record `<id>.NAME`.
-ALT_SUFFIXES = (".problem.yaml", ".problem.yml")
-
-
 class ManyDocuments(TaskError):
     """A folder holding several problems that load: the caller names one (D787)."""
 
@@ -1164,10 +753,6 @@ def request_for(task: TaskSpec, **overrides: Any) -> LoopRequest:
     if isinstance(knobs.get("prototype"), str):
         knobs["prototype"] = True             # `prototype: systemc` names the language; the stage is on
     return LoopRequest(**knobs, params=params)
-
-
-def _substitute(cmd: Iterable[str], subs: dict[str, str]) -> list[str]:
-    return [_PLACEHOLDER.sub(lambda m: subs.get(m.group(1), m.group(0)), tok) for tok in cmd]
 
 
 #: The folders of the documents loaded in this process (D602). A module a document names that
