@@ -177,47 +177,6 @@ class CalibrationStore:
         ]
         return [dict(zip(columns, row)) for row in rows]
 
-    def record_attempt(
-        self,
-        *,
-        workload_hash: str,
-        arch_hash: str | None,
-        evaluator: str,
-        reference_source: str,
-        yielded_records: int,
-    ) -> int:
-        """Note that ground truth was bought for this candidate from this reference (D114),
-        whether or not it yielded a comparable metric; `yielded_records` says which.
-        """
-        cursor = self._conn.execute(
-            "INSERT INTO calibration_attempts "
-            "(workload_hash, arch_hash, evaluator, reference_source, yielded_records, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (workload_hash, arch_hash, evaluator, reference_source, yielded_records, _now()),
-        )
-        self._conn.commit()
-        assert cursor.lastrowid is not None
-        return cursor.lastrowid
-
-    def has_attempt(
-        self,
-        evaluator: str,
-        workload_hash: str,
-        arch_hash: str | None,
-        reference_source: str | None = None,
-    ) -> bool:
-        """Has ground truth already been bought for this exact candidate? With
-        `reference_source`, asks about that reference only.
-        """
-        sql = (
-            "SELECT 1 FROM calibration_attempts WHERE evaluator = ? AND workload_hash = ? "
-            "AND (arch_hash = ? OR (arch_hash IS NULL AND ? IS NULL))"
-        )
-        params: list[Any] = [evaluator, workload_hash, arch_hash, arch_hash]
-        if reference_source is not None:
-            sql += " AND reference_source = ?"
-            params.append(reference_source)
-        return self._conn.execute(sql + " LIMIT 1", params).fetchone() is not None
 
     def exact_match_caveat(
         self, evaluator: str, metric: str, workload_hash: str, arch_hash: str | None

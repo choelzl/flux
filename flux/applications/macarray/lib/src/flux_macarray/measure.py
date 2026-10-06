@@ -11,7 +11,6 @@ Each measurement is a separate single-threaded process, so candidates run in a t
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 from .objective import Score
@@ -19,12 +18,6 @@ from .rtl import Design
 
 SCREEN, CONFIRM = "synthesis", "placement"
 
-
-def _identity(design: Design, stage: str, clock_period_ps: float) -> str:
-    """Source, stage and clock, plus the flow's mapping mode (`abc=full`, `map=delay`) so rows
-    cached under another flow do not match."""
-    digest = hashlib.sha256(design.all_sources.encode()).hexdigest()[:16]
-    return f"{design.module_name}@{digest}|{stage}|{clock_period_ps:.0f}ps|map=delay|abc=full"
 
 
 def measure_one(design: Design, *, stage: str, clock_period_ps: float,

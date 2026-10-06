@@ -238,20 +238,6 @@ class CampaignStore:
         self._append_event(campaign_id, kind, detail)
         self._conn.commit()
 
-    def candidate_count(self, *, phase: str | None = None, status: str | None = None,
-                        strategy_kind_like: str | None = None) -> int:
-        """Distinct candidate keys over every campaign in this store, filtered."""
-        clauses, params = ["1=1"], []
-        if phase is not None:
-            clauses.append("phase = ?"); params.append(phase)
-        if status is not None:
-            clauses.append("status = ?"); params.append(status)
-        if strategy_kind_like is not None:
-            clauses.append("strategy_kind LIKE ?"); params.append(strategy_kind_like)
-        row = self._conn.execute(
-            f"SELECT COUNT(DISTINCT candidate_key) FROM trials WHERE {' AND '.join(clauses)}",
-            params).fetchone()
-        return int(row[0]) if row else 0
 
     def events(self, campaign_id: str) -> list[dict[str, Any]]:
         rows = self._conn.execute(
@@ -411,16 +397,6 @@ class CampaignStore:
         ).fetchall()
         return {r[0] for r in rows}
 
-    def visited_keys_all(self) -> set[str]:
-        """Candidate keys across every campaign in this store.
-
-        For a generative strategy, which pays a model call per proposal, proposing something a
-        sibling campaign already measured is waste (D300); per-campaign keys suit a grid.
-        """
-        rows = self._conn.execute(
-            "SELECT DISTINCT candidate_key FROM trials WHERE status != 'interrupted'"
-        ).fetchall()
-        return {r[0] for r in rows}
 
     # -- derived ledger ----------------------------------------------------------------------
 

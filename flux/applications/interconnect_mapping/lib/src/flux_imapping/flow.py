@@ -456,14 +456,6 @@ def conclude(scored: list[Scored], front: list[Scored],
 
 # ---------------------------------------------------------------- the conclusion on record
 
-def conclude_dict_safe(scored: list[Scored]) -> dict[str, Any]:
-    """The conclusion over what is scored so far, never raising -- it feeds the
-    record, and the record must not fail the run."""
-    try:
-        return conclude(scored, pareto_front(scored))
-    except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc)}
-
 
 def _balanced_pick(c: dict) -> str | None:
     """An earlier run's balanced pick: its decision (D878), or the study's own knee in a record

@@ -62,13 +62,6 @@ class Port:
             )
         return self.dims[0]
 
-    @property
-    def element_count(self) -> int:
-        n = 1
-        for d in self.dims or ():
-            n *= d
-        return n
-
 
 @dataclass(frozen=True)
 class TestVector:
