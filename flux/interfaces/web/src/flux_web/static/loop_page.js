@@ -52,6 +52,8 @@ async function loopPage(name, owner, path = "") {
   const stream = loopStream(base, qs);
   const log = logView(base, qs, stream);
   const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); }, stream);
+  const runEnd = () => live.ended(st.running ? null : st.last_active || null);      // D928: a run over settles what its journal left open
+  runEnd();
   // D917: a poll's request, let go when the page is left
   const leaving = new AbortController();
   cleanup.push(() => { live.close(); stream.close(); leaving.abort(); });
@@ -106,6 +108,7 @@ async function loopPage(name, owner, path = "") {
     if (mine !== asked || show.stale()) return;
     st = got;
     question = st.question || null;                       // the state says whether the agent still asks
+    runEnd();
     drawHead(); drawBanner(); if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody();
   }
   // notes and the agent's question

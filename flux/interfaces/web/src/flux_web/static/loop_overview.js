@@ -36,7 +36,7 @@ function lastPass(ctx, r) {
     said ? h("p", { class: "pass-said" }, said) : "",
     c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "Record"),
       h("pre", { class: "val small conclusion" }, conclusionText(c))) : "",
-    h("div", { class: "form-actions" }, h("button", { class: "small", onclick: () => goTab("Timeline") }, "Where its time went"))]);
+    h("div", { class: "form-actions" }, h("button", { class: "small", type: "button", onclick: () => goTab("Live", "timeline") }, "Where its time went"))]);
 }
 /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
     first, the deepest stage reached, then each objective without a limit in turn. */

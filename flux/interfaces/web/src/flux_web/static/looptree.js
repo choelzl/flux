@@ -14,7 +14,7 @@
   /** One event of the journal into the model; "hello" (a new start) begins it afresh. Returns
       what the page may want to know besides: {reset} or {question}. */
   function apply(m, e) {
-    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.before = 0; m.cut = false; return { reset: true }; }
+    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
     if (e.ev === "window") { m.before = Number(e.before) || 0; m.cut = !!e.cut; return {}; }   // D759: passes left out before the window
     if (e.ev === "start") {
       var n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, fields: {}, kids: [], parent: null };
@@ -25,7 +25,7 @@
     else if (e.ev === "end") {
       var d = m.nodes.get(e.id);
       if (d) {
-        d.t1 = e.t; d.seconds = e.seconds; d.output = e.output;
+        d.t1 = e.t; d.seconds = e.seconds; d.output = e.output; d.interrupted = false;   // D928: its own end, not a settled one
         // D757: a tool that exited with an error failed, though its step went on
         d.failed = e.failed || (String(d.name).indexOf("tool:") === 0 && e.output && e.output.exit != null && e.output.exit !== 0);
       }
@@ -47,6 +47,20 @@
     Object.keys(pub).forEach(function (k) { m.standings.set(k, pub[k]); });
   }
 
+  /** D928: the run ended (its process gone, `t` its end) while the journal -- cut short by a kill or
+      a crash -- still has tasks begun and never ended: each is interrupted, a failure, at the run's
+      end (or the last event seen, when that end is before it). `t` null: the run goes on -- what was
+      settled here is running again, as its journal says. Neither is done on Stop asked for alone. */
+  function settle(m, t) {
+    var last = 0;
+    m.nodes.forEach(function (n) { last = Math.max(last, n.t0 || 0, n.t1 || 0); });
+    m.nodes.forEach(function (n) {
+      if (t != null && n.t1 == null) {
+        n.t1 = t >= n.t0 ? t : Math.max(n.t0, last); n.seconds = n.t1 - n.t0; n.failed = true; n.interrupted = true;
+      } else if (t == null && n.interrupted) { n.t1 = null; n.seconds = undefined; n.failed = false; n.interrupted = false; }
+    });
+    m.settled = t != null;
+  }
   var running = function (n) { return n.t1 == null; };
   function failedBelow(n) { return n.failed || n.kids.some(failedBelow); }
   var within = function (v, n) { for (var p = n; p; p = p.parent) if (p === v) return true; return false; };
@@ -138,7 +152,7 @@
   }
   function branch(key, title, why, kids) { return { key: key, title: title, why: why, kids: kids }; }
 
-  function endLeaves(marks) {
+  function endLeaves(marks, settled) {
     var last = function (name) { for (var i = marks.length - 1; i >= 0; i--) if (marks[i].name === name) return marks[i]; return null; };
     var ended = last("ended"), outs = last("outputs"), waiting = last("waiting"), lastPass = last("pass");
     var at = function (m) { return m && (!lastPass || m.t >= lastPass.t); };
@@ -147,7 +161,7 @@
       leaves.push({ leaf: true, box: "end", title: title, key: "end/" + key,
         tasks: [{ id: "end:" + key, name: title, why: why, params: {}, fields: {}, output: output, kids: [], parent: null, t0: t, t1: live ? null : t, seconds: 0, pseudo: true }] });
     };
-    if (at(waiting) && !ended) pseudo("waiting", "Waiting", waiting.why || "for a note or a stop", {}, waiting.t, true);
+    if (at(waiting) && !ended && !settled) pseudo("waiting", "Waiting", waiting.why || "for a note or a stop", {}, waiting.t, true);
     if (ended) pseudo("why", "Reason", ended.why || "", { why: ended.why }, ended.t);
     if (outs) {
       var d = outs.decision;
@@ -246,7 +260,7 @@
       out.unshift(earlier);
     }
     out.forEach(function (it) { if (it.why == null) it.why = ""; });
-    var end = endLeaves(marks);
+    var end = endLeaves(marks, m.settled);
     var dec = end.filter(function (l) { return l.title === "Decision"; })[0];
     if (end.length) out.push(branch("end", "End", ((dec || end[0]).tasks[0].why || "").split(" · ")[0], end));
     return out;
@@ -285,7 +299,7 @@
   var itemTasks = function (it) { return it.leaf ? it.tasks : it.kids.reduce(function (a, k) { return a.concat(itemTasks(k)); }, []); };
   var itemHas = function (it, n) { return !!n && itemTasks(it).some(function (v) { return within(v, n); }); };
 
-  var api = { LOOP_MARKS: LOOP_MARKS, model: model, apply: apply, applyLive: applyLive, build: build, leafLine: leafLine, boxName: boxName, boxOf: boxOf,
+  var api = { LOOP_MARKS: LOOP_MARKS, model: model, apply: apply, applyLive: applyLive, settle: settle, build: build, leafLine: leafLine, boxName: boxName, boxOf: boxOf,
     focusOf: focusOf, visitOf: visitOf, running: running, failedBelow: failedBelow, within: within, subtree: subtree,
     itemTasks: itemTasks, itemHas: itemHas };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

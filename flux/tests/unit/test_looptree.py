@@ -184,3 +184,32 @@ def test_the_papers_digest_is_a_leaf_of_the_setup():
     setup = branch(t, "Setup")                              # the first pass's Setup is the run's
     assert titles(setup["kids"]) == ["Reading", "Digest"], t
     assert next(k for k in setup["kids"] if k["leaf"] == "Digest")["line"] == "2 new by opencode · 3 paper(s) digested"
+
+
+def test_a_journal_cut_short_is_settled_interrupted_once_the_run_ended():
+    """D928: a run killed before its tasks ended leaves them begun in the journal; once the page knows the
+    run is over they are interrupted (failed, at its end) -- and running again should the run go on."""
+    ev = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1})},
+          {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "DSE: batch", "why": "", "params": {}},
+          {"t": 3, "ev": "start", "id": 2, "parent": 1, "name": "tool:python3", "why": "generate x=1", "params": {}},
+          {"t": 4, "ev": "end", "id": 2, "name": "", "seconds": 1, "failed": False, "output": {}},
+          {"t": 5, "ev": "start", "id": 3, "parent": 1, "name": "tool:python3", "why": "generate x=2", "params": {}}]
+    js = r"""
+const LT = require(process.argv[1]); const m = LT.model();
+for (const l of require("fs").readFileSync(0, "utf8").split("\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
+const look = () => [...m.nodes.values()].map(n => [n.id, LT.running(n), !!n.failed, !!n.interrupted, n.t1 ?? null]);
+const out = [look()];
+LT.settle(m, 9); out.push(look());
+LT.settle(m, null); out.push(look());
+LT.settle(m, 1); out.push(look());                      // an end before them (a start's time): the last event seen
+LT.apply(m, { t: 7, ev: "end", id: 3, seconds: 2, failed: false, output: {} }); out.push(look());
+process.stdout.write(JSON.stringify(out));
+"""
+    r = subprocess.run(["node", "-e", js, str(LOOPTREE)], input="".join(json.dumps(e) + "\n" for e in ev),
+                       capture_output=True, text=True, timeout=60)
+    before, ended, again, early, real = json.loads(r.stdout)
+    assert before == [[1, True, False, False, None], [2, False, False, False, 4], [3, True, False, False, None]]
+    assert ended == [[1, False, True, True, 9], [2, False, False, False, 4], [3, False, True, True, 9]]
+    assert again == before, "the run goes on: what was settled runs again"
+    assert early == [[1, False, True, True, 5], [2, False, False, False, 4], [3, False, True, True, 5]]
+    assert real[2] == [3, False, False, False, 7], "its own end replaces the settled one"

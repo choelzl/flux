@@ -819,6 +819,13 @@ def flows(r: Run) -> None:
         heads = b.js("return [...document.querySelectorAll('#main h2, #main h3, #main summary')].map(x => x.textContent.trim())")
         r.check("Overview: concise headings -- Decision, Last pass, Record; none begins with 'The ' (D927)", "Decision" in heads
                 and any(x.startswith("Last pass (") for x in heads) and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
+        # D928 (W3): the button itself, clicked -- Live › Timeline, not an Overview left in place
+        b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent === 'Where its time went').id = 'e2e-where'; return 1")
+        b.click("#e2e-where")
+        b.wait("location.hash.endsWith('/live/timeline') && !document.querySelector('#main .skeleton')", timeout=20, what="the Timeline")
+        got = b.js("return [document.querySelector('.tabs [aria-selected=true]').textContent, (document.querySelector('.subtabs [aria-selected=true]') || {}).textContent,"
+                   " !!document.querySelector('#e2e-where')]")
+        r.check("'Where its time went' opens Live › Timeline (D928)", got == ["Live", "Timeline", False], str(got))
         r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
         b.wait("[...document.querySelectorAll('#main .livelog-card h2')].some(x => x.textContent === 'Log')", timeout=15, what="the Log card")
         r.check("Live: the Log card and its Full log button (D927)", b.js("return [...document.querySelectorAll('#main .livelog-card button')].some(x => x.textContent === 'Full log')"))
@@ -826,6 +833,58 @@ def flows(r: Run) -> None:
         r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
+
+    def killed_run():
+        """D928 (W8): "collapse finished" keeps open only the work running now; a run killed outright
+        leaves its journal with tasks begun and never ended -- once the run is over they are
+        interrupted, not running, every branch folds (the selected one too), and a folded branch says
+        how many of its tasks failed or stopped."""
+        import signal
+
+        from flux_cli.commands import example_files
+        from flux_web.store import Store
+
+        r.login("bob")
+        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
+        # a sweep whose bench takes a while: a measurement is under way when the run is killed
+        files = [[rel, "import time; time.sleep(60)\n" + text if rel.endswith("bench.py") else text] for rel, text in example_files("slow", "sweep")]
+        made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'slow');
+            for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
+            fetch('/api/apps', {method: 'POST', headers: {'X-Flux': '1'}, body: f}).then(async r => done({status: r.status, body: await r.text()}));""", files)
+        r.check("a slow loop uploaded", made["status"] == 200, str(made)[:200])
+        t0 = time.time()
+        r.check("the slow loop started", r.api("/apps/slow/start", "POST", {"passes": 1})["status"] == 200)
+        r.page("#/app/slow/live", "document.querySelector('.tree-card .seg')", "Live of the running loop")
+        b.wait("document.querySelector('.tree .node.leaf.running')", timeout=90, what="a task running")
+        got = b.js("return [...document.querySelectorAll('.tree .node.branch.running')].map(n => !!n.parentNode.querySelector(':scope > .kids'))")
+        r.check("collapse finished: a branch with work running stays open (D928)", got and all(got), str(got))
+        st = Store(r.data)
+        run = max((x for x in st.runs(st.user(name="bob"), "slow") if x.get("pid")), key=lambda x: x["started"])
+        r.check("the run is this start's, still running", run["started"] >= t0 - 1 and not run.get("ended"), str(run)[:200])
+
+        b.wait("[...document.querySelectorAll('.tree .node.leaf.running .nm')].some(x => x.textContent === 'Measure')", timeout=90,
+               what="the minute-long bench under way")
+        os.killpg(int(run["pid"]), signal.SIGKILL)                 # no orderly end: the journal is cut short
+        end = time.time() + 30
+        while time.time() < end and (st := json.loads(r.api("/apps/slow/state")["body"])).get("running"):
+            time.sleep(0.5)
+        r.check("the killed run is over, not in order", not st.get("running") and st.get("failed"), str(st)[:200])
+        b.wait("!document.querySelector('.page-head .pill.live') && !document.querySelector('.tree .node.running')", timeout=40, what="the run seen over, nothing running")
+        rows = b.js("""return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).map(n => [n.querySelector('.nm').textContent,
+            !!n.parentNode.querySelector(':scope > .kids'), (n.querySelector('.ended-n') || {}).textContent || '', n.querySelector('.st').textContent])""")
+        r.check("a killed run's tasks are interrupted, every branch folded (D928)", rows and not any(x[1] for x in rows), str(rows))
+        r.check("a folded branch says what stopped, its failed icon kept (D928)", any("stopped" in x[2] and x[3] == "✗" for x in rows), str(rows))
+        r.check("the selected task's branch folds too; its detail stays (D928)", b.js("return !!document.querySelector('.detail .detail-head')"))
+        tick = "[...document.querySelectorAll('.tree-card label.check')].find(l => l.textContent.includes('collapse finished')).querySelector('input')"
+        b.js(f"{tick}.click(); return 1")
+        opened = b.js("return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).every(n => !!n.parentNode.querySelector(':scope > .kids'))")
+        b.js(f"{tick}.click(); return 1")
+        folded = b.js("return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).every(n => !n.parentNode.querySelector(':scope > .kids'))")
+        r.check("collapse finished off opens every branch, on folds them all again (D928)", opened and folded, f"{opened} {folded}")
+        r.clean("a killed run")
+        r.page("#/", "document.querySelector('#main')", "the loops")
+        r.api("/apps/slow", "DELETE")                               # not left for the steps after
+    r.step("a killed run", killed_run)
 
     def graphs():
         """D914-D916 on a loop of parts, its results stood in for in the page (the fetch answered with

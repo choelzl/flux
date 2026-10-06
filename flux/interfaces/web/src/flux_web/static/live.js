@@ -219,7 +219,7 @@ function liveTree(base, qs, onQuestion, stream) {
   const within = LT.within, itemTasks = LT.itemTasks, itemHas = LT.itemHas;
   const loopTree = () => LT.build(mdl);
   const boxName = (it) => LT.boxName(it, window.FluxCrafter && window.FluxCrafter.boxTitle);
-  const itemRunning = (it) => itemTasks(it).some(running);
+  const itemRunning = (it) => itemTasks(it).some(t => LT.subtree([t]).some(running));   // D928: a task below still running counts
   const itemFailed = (it) => itemTasks(it).some(failedBelow);
   function itemMatches(it, q) {
     if (it.title.toLowerCase().includes(q)) return true;
@@ -232,8 +232,10 @@ function liveTree(base, qs, onQuestion, stream) {
     return it.leaf && ts.length > 1 ? ts.reduce((a, t) => a + (t.t1 == null ? now - t.t0 : t.seconds || 0), 0) : t1 - t0;
   }
   let shownItems = [];
+  let endedAt = null;                                // D928: the run's end, once its process is gone (the page's state)
   function draw() {
     const now = Date.now() / 1000;
+    if (endedAt != null || mdl.settled) LT.settle(mdl, endedAt);     // a journal cut short: its open tasks interrupted
     const anyRunning = [...nodes.values()].some(running);           // D856: nothing runs, nothing to follow
     follow.disabled = !anyRunning;
     follow.closest("label")?.classList.toggle("muted", !anyRunning);
@@ -272,7 +274,13 @@ function liveTree(base, qs, onQuestion, stream) {
             (() => { const line = leafLine(it).split(" · ").filter(x => x && x !== known).join(" · "); return line ? h("span", { class: "why" }, line) : ""; })(),
             latest.pseudo ? "" : h("span", { class: "dur" }, dur(took))));
       }
-      const opened = q ? true : open.has(it.key) ? open.get(it.key) : (!collapse.checked || live || bad || itemHas(it, selected));
+      // D928: "collapse finished" folds every branch that ended -- done, failed, stopped, the selected one
+      // too (its detail stays); only work running now, a search or the user's own choice opens one
+      const opened = q ? true : open.has(it.key) ? open.get(it.key) : (!collapse.checked || live);
+      const ts = !opened && !live ? itemTasks(it) : [];
+      const nStopped = ts.filter(t => LT.subtree([t]).some(x => x.interrupted)).length;
+      const nFailed = ts.filter(t => failedBelow(t)).length - nStopped;
+      const ended = [nFailed ? `${nFailed} failed` : "", nStopped ? `${nStopped} stopped` : ""].filter(Boolean).join(" · ");
       return h("div", { class: "tnode" },
         h("div", { class: `node branch ${state}`, onclick: () => { if (it.earlier) { loadAll(); return; } open.set(it.key, !opened); draw(); },
             title: it.earlier ? "Load every pass of this start" : null },
@@ -280,6 +288,7 @@ function liveTree(base, qs, onQuestion, stream) {
           h("span", { class: "st" }, live ? "●" : bad ? "✗" : "✓"),
           h("span", { class: "nm" }, it.title), it.why ? h("span", { class: "why" }, it.why) : "",
           !opened && !it.earlier ? h("span", { class: "kidsn" }, String(it.kids.length)) : "",
+          ended ? h("span", { class: "why bad ended-n" }, ended) : "",
           it.key === "end" || it.earlier ? "" : h("span", { class: "dur" }, dur(took))),
         opened ? h("div", { class: "kids" }, it.kids.map(k => row(k, /^Pass /.test(it.title) ? it.why.split(" · ")[0] : ""))) : "");
     };
@@ -568,7 +577,7 @@ function liveTree(base, qs, onQuestion, stream) {
     })();
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
-        n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.failed ? "failed" : "done"),
+        n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done"),   // D928
         n.pseudo ? "" : h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
@@ -604,7 +613,9 @@ function liveTree(base, qs, onQuestion, stream) {
     h("label", { class: "check" }, follow, "follow the running task"),
     collapseLbl, search, pill.el);
   setMode(mode);
-  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, close: () => clearInterval(tick) };
+  /** D928: the page's word on the run -- `t` its end once it no longer runs, null while it runs. */
+  const ended = (t) => { if ((t ?? null) !== endedAt) { endedAt = t ?? null; dirty = true; } };
+  return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, ended, close: () => clearInterval(tick) };
 }
 
 export { liveTree, logView };
