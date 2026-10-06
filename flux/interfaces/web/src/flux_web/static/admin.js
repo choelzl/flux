@@ -71,7 +71,7 @@ async function adminAudit(body, ok = () => true) {
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
       "edit", "upload", "add files", "delete file", "move file", "delete app", "asked about a loop", "clone loop", "empty loop",
       "document migrated"]],
-    ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings"]],
+    ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
     ["Agents", ["agent added", "agent removed", "agent settings", "agent login", "agent test"]],
     // D885: the scheduled clean-up and its settings are the server's
     ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
