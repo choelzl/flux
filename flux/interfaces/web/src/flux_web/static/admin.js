@@ -39,11 +39,13 @@ async function adminPage(sub = "") {
     let cur = sub === "audit" ? "audit" : (() => { try { return localStorage.getItem("flux-insights-part"); } catch (_) { return null; } })();
     if (!PARTS.some(([k]) => k === cur)) cur = "failures";
     const bar = h("div", { class: "subtabs", role: "tablist" }), part = h("div", { id: "insights-part" });
+    let shown = 0;                                     // D920: each sub-tab drawn is numbered; a late answer for another draws nothing
     const draw = async () => {
+      const my = ++shown, ok = () => my === shown && !show.stale();
       bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
         onclick: () => { cur = k; try { localStorage.setItem("flux-insights-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
       part.replaceChildren(skeleton(6));
-      if (cur === "audit") await adminAudit(part); else await adminInsights(part, cur);
+      if (cur === "audit") await adminAudit(part, ok); else await adminInsights(part, cur, ok);
     };
     body.replaceChildren(bar, part);
     await draw();
@@ -53,8 +55,9 @@ async function adminPage(sub = "") {
 }
 
 /** The audit trail (D708, D723), under Insights (D816): what happened, by whom, narrowed by both. */
-async function adminAudit(body) {
+async function adminAudit(body, ok = () => true) {
   const audit = await api("/audit");
+  if (!ok()) return;                                       // D920: another sub-tab chosen meanwhile
   // D708: the hosts a loop's sandbox refused are here too, once per host and run.
   // D723: narrowed by what happened and by whom, each a list of what the trail holds
   const NOONE = "\u0000";                                   // an entry without a user (the server's own)
@@ -411,92 +414,130 @@ async function adminSandbox(body) {
 
 /** Admin › Insights (D766): what went wrong, what was used, how the endpoints and agents did,
     what the network refused, where the disk goes -- over the last days. */
-async function adminInsights(body, part = "failures") {   // D819: one part of them: failures, usage, endpoints
-  let days = 7;
-  try { days = Number(localStorage.getItem("flux-insights-days")) || 7; } catch (_) {}
-  const pick = h("select", { "aria-label": "Over the last", onchange: () => { try { localStorage.setItem("flux-insights-days", pick.value); } catch (_) {} adminInsights(body, part); } },
-    [[1, "day"], [7, "7 days"], [30, "30 days"]].map(([v, t]) => h("option", { value: v, selected: v === days }, t)));
-  body.replaceChildren(skeleton(8));
-  const r = await api(`/admin/insights?days=${days}`);
+// D920: the period Insights counts over, kept here in memory; the browser only remembers it
+let insightsDays = null;
+const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
+async function adminInsights(body, part = "failures", ok = () => true) {   // D819: one part of them: failures, usage, endpoints
+  if (insightsDays == null) { try { insightsDays = Number(localStorage.getItem("flux-insights-days")) || 7; } catch (_) { insightsDays = 7; } }
+  if (!PERIODS.some(([v]) => v === insightsDays)) insightsDays = 7;
+  const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
+  if (!TITLE[part]) part = "failures";
+  // D920 (W17): the period on the right of the part's first card, beside the title it counts for;
+  // the card and its control stay while only its content loads, or says it failed, with a Retry
+  const pick = h("select", { id: "insights-range", "aria-label": "Over the last" }, PERIODS.map(([v, t]) => h("option", { value: v, selected: v === insightsDays }, t)));
+  pick.addEventListener("change", () => { insightsDays = Number(pick.value); try { localStorage.setItem("flux-insights-days", pick.value); } catch (_) { /* remembered when it can be */ } load(); });
+  const box = h("div", {}, skeleton(6)), more = h("div", {});
   const ago2 = (t) => t ? ago(t) : "—";
   const loopLink = (u, a) => h("a", { href: `#/u/${enc(u)}/app/${enc(a)}` }, `${u}/${a}`);
-  const spark = (xs, label) => {                       // a bar per day, to its row's own scale
-    const max = Math.max(...xs, 0) || 1, w = 6, gap = 2;
-    return h("span", { class: "spark", title: label, "aria-label": label },
-      ...xs.map(x => h("i", { class: x > 0 ? "" : "z", style: `height:${x > 0 ? Math.max(2, Math.round(16 * x / max)) : 1}px;width:${w}px;margin-right:${gap}px` })));
-  };
-  const f = r.failures;
-  const failCard = card("Failures", [
-    f.starts.length ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Loop"), h("th", {}, "Why"))),
-      h("tbody", {}, f.starts.slice(0, 20).map(s => h("tr", {}, h("td", { class: "muted" }, ago2(s.when)), h("td", {}, loopLink(s.user, s.app)),
-        h("td", { class: "mono small why-cell" }, (s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`)))))
-      : h("p", { class: "muted" }, "No start failed."),
-    f.tests.length ? [h("h3", {}, "Agent Tests that failed"), h("table", { class: "list compact" },
-      h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Agent"), h("th", {}, "Step"), h("th", {}, "Why"), h("th", {}, "When"))),
-      h("tbody", {}, f.tests.map(t => h("tr", {}, h("td", {}, t.user), h("td", {}, t.agent), h("td", {}, t.step), h("td", { class: "small" }, t.why), h("td", { class: "muted" }, ago2(t.when))))))] : ""]);
-  const u = r.usage;
-  const rowsOf = (by) => Object.entries(by).sort((a, b) => b[1].tokens.reduce((s, x) => s + x, 0) - a[1].tokens.reduce((s, x) => s + x, 0));
-  const usageTable = (by, head) => h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, head), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", {}, `Tokens a day (${u.days[0]} – ${u.days[u.days.length - 1]})`))),
-    h("tbody", {}, rowsOf(by).map(([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
-      h("td", { class: "num" }, String(v.turns.reduce((s, x) => s + x, 0))), h("td", { class: "num mono" }, fmtTok(v.tokens.reduce((s, x) => s + x, 0))),
-      h("td", { class: "num mono" }, `$${v.cost.reduce((s, x) => s + x, 0).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens a day`))))));
-  const usageCard = card("Usage", [Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
-    u.top.length ? [h("h3", {}, "The loops that used most"), h("table", { class: "list compact" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
-      h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
-        h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))))] : ""]
-    : h("p", { class: "muted" }, "No model or agent turn in this time."),
-    // D841: turns recorded before a price was set, priced once at today's prices
-    h("div", { class: "row end" }, act("Price past turns…", async () => {
-      if (!await confirmDialog("Price past turns?", "Every turn recorded without a price set is priced at today's prices "
-        + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
-        + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
-      const got = await api("/admin/reprice", { method: "POST" });
-      toast(`${got.turns} turn(s) in ${got.loops} loop(s) priced: $${got.usd.toFixed(2)}`
-        + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
-      route();
-    }, { cls: "small" }))]);
-  // D850: each list in the order asked (kept in this browser), each row removable
-  const forget = (kind, key, what) => binButton("row", `Remove ${what}?`, "It leaves this list until it is used again.", async () => {
-    await api("/admin/insights/forget", { method: "POST", body: { kind, key } }); route(); });
-  // D859: a column's header sorts it -- a click, again for the other way; kept in this browser
-  const epCols = [
-    { label: "Which", key: e => `${e.kind} ${e.where}`, asc: true },
-    { label: "Turns", key: e => e.turns, num: true },
-    { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true },
-    { label: "Median", key: e => e.p50, num: true },
-    { label: "Slow (95%)", key: e => e.p95, num: true },
-    { label: "Last used", key: e => e.last },
-    { label: "Last failure", key: e => e.last_error_at || 0 },
-    { label: "" }];
-  const epRow = e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
-    h("td", { class: "num" }, String(e.turns)),
-    h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
-    h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
-    h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
-    h("td", { class: "right" }, forget("endpoint", e.key, e.where)));
-  const netCols = [
-    { label: "Host", key: n => `${n.host}:${n.port}`, asc: true },
-    { label: "Times", key: n => n.count, num: true },
-    { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true },
-    { label: "Last", key: n => n.last },
-    { label: "" }];
-  const netRow = n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
-    h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
-    h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)));
-  const epCard = card("Endpoints and agents", r.endpoints.length ? sortableTable("flux-insights-ep-sort", epCols, r.endpoints, epRow, 2)
-    : h("p", { class: "muted" }, "No turn in this time."));
-  const netCard = card("Network refused", r.network.length ? sortableTable("flux-insights-net-sort", netCols, r.network, netRow, 1)
-    : h("p", { class: "muted" }, "Nothing refused."));
-  const maxDisk = Math.max(...r.disk.map(d => d.total), 1);
-  const diskCard = card("Disk by user", h("table", { class: "list compact" },
-    h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
-    h("tbody", {}, r.disk.map(d => h("tr", {}, h("td", { class: "strong" }, d.user), h("td", { class: "num mono" }, bytes(d.home)),
-      h("td", { class: "num mono" }, `${bytes(d.loops)} (${d.count})`), h("td", {}, d.largest ? [loopLink(d.user, d.largest.app), " ", h("span", { class: "muted mono small" }, bytes(d.largest.size))] : "—"),
-      h("td", { class: "num mono strong" }, bytes(d.total)), h("td", { class: "meter-cell" }, meter(d.total / maxDisk)))))));
-  const parts = { failures: [failCard], usage: [usageCard, diskCard], endpoints: [epCard, netCard] };
-  body.replaceChildren(h("div", { class: "toolbar" }, h("span", { class: "muted" }, "Over the last"), pick), ...(parts[part] || parts.failures));
+  body.replaceChildren(card(TITLE[part], box, { actions: [h("div", { class: "range-pick" }, h("label", { for: "insights-range" }, "Over the last"), pick)] }),
+    more, part === "usage" ? diskCard() : "");
+  let seq = 0;
+  await load();
+  /** D920: the disk as it is now -- not historical, so no period; when it was measured said. */
+  function diskCard() {
+    const dbox = h("div", {}, skeleton(4)), at = h("span", { class: "muted small" });
+    const fill = async () => {
+      let d;
+      try { d = await api("/admin/insights/disk"); }
+      catch (x) { if (ok() && x.message !== "log in") dbox.replaceChildren(empty(`The disk could not be measured: ${x.message}`, act("Retry", fill, { cls: "small" }))); return; }
+      if (!ok()) return;
+      at.replaceChildren("measured ", ago(d.at));
+      const maxDisk = Math.max(...d.disk.map(x => x.total), 1);
+      dbox.replaceChildren(h("table", { class: "list compact" },
+        h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
+        h("tbody", {}, d.disk.map(x => h("tr", {}, h("td", { class: "strong" }, x.user), h("td", { class: "num mono" }, bytes(x.home)),
+          h("td", { class: "num mono" }, `${bytes(x.loops)} (${x.count})`), h("td", {}, x.largest ? [loopLink(x.user, x.largest.app), " ", h("span", { class: "muted mono small" }, bytes(x.largest.size))] : "—"),
+          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk)))))));
+    };
+    fill();
+    return card("Current disk usage", dbox, { actions: [at] });
+  }
+  async function load() {
+    const my = ++seq, mine = () => my === seq && ok();       // D920: only the latest period's answer, on the sub-tab still shown
+    box.replaceChildren(skeleton(6));
+    let r;
+    try { r = await api(`/admin/insights?days=${insightsDays}&part=${part}`); }
+    catch (x) { if (mine() && x.message !== "log in") box.replaceChildren(empty(`Insights could not be read: ${x.message}`, act("Retry", load, { cls: "small" }))); return; }
+    if (!mine()) return;
+    const said = h("p", { class: "muted small range-said" }, `${when(r.range.start)} – ${when(r.range.end)}`);
+    const fill = (...kids) => box.replaceChildren(h("div", {}, said, ...kids));   // h() flattens what replaceChildren would not
+    const spark = (xs, label) => {                       // a bar per bucket, to its row's own scale
+      const max = Math.max(...xs, 0) || 1, w = 6, gap = 2;
+      return h("span", { class: "spark", title: label, "aria-label": label },
+        ...xs.map(x => h("i", { class: x > 0 ? "" : "z", style: `height:${x > 0 ? Math.max(2, Math.round(16 * x / max)) : 1}px;width:${w}px;margin-right:${gap}px` })));
+    };
+    if (part === "failures") {
+      const f = r.failures;
+      fill(
+        f.starts.length ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Loop"), h("th", {}, "Why"))),
+          h("tbody", {}, f.starts.slice(0, 20).map(s => h("tr", {}, h("td", { class: "muted" }, ago2(s.when)), h("td", {}, loopLink(s.user, s.app)),
+            h("td", { class: "mono small why-cell" }, (s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`)))))
+          : h("p", { class: "muted" }, "No start failed."),
+        // D920: the store keeps each agent's latest Test, so this is its latest status -- failed, and set in the period
+        f.tests.length ? [h("h3", {}, "Agent Tests whose latest run failed"), h("table", { class: "list compact" },
+          h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Agent"), h("th", {}, "Step"), h("th", {}, "Why"), h("th", {}, "When"))),
+          h("tbody", {}, f.tests.map(t => h("tr", {}, h("td", {}, t.user), h("td", {}, t.agent), h("td", {}, t.step), h("td", { class: "small" }, t.why), h("td", { class: "muted" }, ago2(t.when))))))] : "");
+      return;
+    }
+    if (part === "usage") {
+      const u = r.usage, per = u.bucket === "hour" ? "an hour" : "a day";
+      const rowsOf = (by) => Object.entries(by).sort((a, b) => b[1].tokens.reduce((s, x) => s + x, 0) - a[1].tokens.reduce((s, x) => s + x, 0));
+      const usageTable = (by, head) => h("table", { class: "list compact" },
+        h("thead", {}, h("tr", {}, h("th", {}, head), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", {}, `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)`))),
+        h("tbody", {}, rowsOf(by).map(([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
+          h("td", { class: "num" }, String(v.turns.reduce((s, x) => s + x, 0))), h("td", { class: "num mono" }, fmtTok(v.tokens.reduce((s, x) => s + x, 0))),
+          h("td", { class: "num mono" }, `$${v.cost.reduce((s, x) => s + x, 0).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))))));
+      fill(...[Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
+        u.top.length ? [h("h3", {}, "The loops that used most"), h("table", { class: "list compact" },
+          h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
+          h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
+            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))))] : ""]
+        : h("p", { class: "muted" }, "No model or agent turn in this time."),
+        // D841: turns recorded before a price was set, priced once at today's prices
+        h("div", { class: "row end" }, act("Price past turns…", async () => {
+          if (!await confirmDialog("Price past turns?", "Every turn recorded without a price set is priced at today's prices "
+            + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
+            + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
+          const got = await api("/admin/reprice", { method: "POST" });
+          toast(`${got.turns} turn(s) in ${got.loops} loop(s) priced: $${got.usd.toFixed(2)}`
+            + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
+          route();
+        }, { cls: "small" }))]);
+      return;
+    }
+    // D850: each list in the order asked (kept in this browser), each row removable
+    const forget = (kind, key, what) => binButton("row", `Remove ${what}?`, "It leaves this list until it is used again.", async () => {
+      await api("/admin/insights/forget", { method: "POST", body: { kind, key } }); route(); });
+    // D859: a column's header sorts it -- a click, again for the other way; kept in this browser
+    const epCols = [
+      { label: "Which", key: e => `${e.kind} ${e.where}`, asc: true },
+      { label: "Turns", key: e => e.turns, num: true },
+      { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true },
+      { label: "Median", key: e => e.p50, num: true },
+      { label: "Slow (95%)", key: e => e.p95, num: true },
+      { label: "Last used", key: e => e.last },
+      { label: "Last failure", key: e => e.last_error_at || 0 },
+      { label: "" }];
+    const epRow = e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
+      h("td", { class: "num" }, String(e.turns)),
+      h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
+      h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
+      h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
+      h("td", { class: "right" }, forget("endpoint", e.key, e.where)));
+    const netCols = [
+      { label: "Host", key: n => `${n.host}:${n.port}`, asc: true },
+      { label: "Times", key: n => n.count, num: true },
+      { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true },
+      { label: "Last", key: n => n.last },
+      { label: "" }];
+    const netRow = n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
+      h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
+      h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)));
+    fill(r.endpoints.length ? sortableTable("flux-insights-ep-sort", epCols, r.endpoints, epRow, 2)
+      : h("p", { class: "muted" }, "No turn in this time."));
+    more.replaceChildren(card("Network refused", r.network.length ? sortableTable("flux-insights-net-sort", netCols, r.network, netRow, 1)
+      : h("p", { class: "muted" }, "Nothing refused in this time.")));
+  }
 }
 
 /** Admin › Agents and models (D756, D807, D814): one tab per tool -- Flux's own model and the agent by

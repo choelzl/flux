@@ -65,6 +65,11 @@ main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 80px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
         box-shadow: var(--shadow); min-width: 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+/* D920: "Over the last [period]" on the right of its card's title; the label and its list stay together when the head wraps */
+.card-head:has(.range-pick) { flex-wrap: wrap; }
+.range-pick { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted); }
+.range-pick select { min-height: 36px; }
+.range-said { margin: 0 0 10px; }
 .grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .grid-app { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }

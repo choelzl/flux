@@ -16,18 +16,27 @@ from .runs import OK_RC
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 
-__all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day"]
+__all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day", "window"]
 
 DAY = 86400.0
 _TURNS: dict[str, tuple[tuple[int, float], list[tuple]]] = {}
 
 
-def failures(store: Any, runs: Any, since: float) -> dict[str, Any]:
-    """Starts that failed since `since`, newest first, each with why (its log's words, D757); the
-    agents' Tests that failed (D751), per user."""
+def window(days: float, now: float | None = None) -> tuple[float, float]:
+    """D920: "over the last" as one interval, captured once -- the last `days` × 24 h up to now,
+    rolling as every historical panel's; each is cut by it before it is counted."""
+    end = now if now is not None else time.time()
+    return end - days * DAY, end
+
+
+def failures(store: Any, runs: Any, since: float, until: float | None = None) -> dict[str, Any]:
+    """Starts that failed since `since` (D920: and until `until`), newest first, each with why (its
+    log's words, D757); the agents' Tests whose latest status, failed, was set in that time (D751),
+    per user -- the store keeps each one's latest, not every failure."""
+    until = until if until is not None else float("inf")
     starts = []
     for r in store.runs():
-        if r.get("ended") and r["ended"] >= since and r.get("rc") not in OK_RC:
+        if r.get("ended") and since <= r["ended"] <= until and r.get("rc") not in OK_RC:
             starts.append({"user": r["user"], "app": r["app"], "when": r["ended"], "rc": r["rc"], "why": [w.strip() for w in runs.failure(r)]})
     tests = []
     for u in store.users():
@@ -35,7 +44,7 @@ def failures(store: Any, runs: Any, since: float) -> dict[str, Any]:
 
         for agent in registry(store):
             t = store.server_get(f"agent-test:{u.name}:{agent}") or {}
-            if t.get("when") and not t.get("ok"):
+            if t.get("when") and not t.get("ok") and since <= float(t["when"]) <= until:
                 bad = next((s for s in t.get("steps") or [] if not s.get("ok")), {})
                 tests.append({"user": u.name, "agent": agent, "when": t["when"], "step": bad.get("step", ""), "why": bad.get("said", "")})
     return {"starts": starts[:100], "tests": sorted(tests, key=lambda x: -x["when"])}
@@ -122,19 +131,23 @@ def token_rate(rows: list[tuple], hours: float = 24, points: int = 180, now: flo
 
 
 def usage_by_day(rows: list[tuple], days: int = 14, now: float | None = None) -> dict[str, Any]:
-    """Turns, tokens and cost per day (the last `days`), per user and per agent or model; the
-    loops that cost most in that time."""
-    now = now or time.time()
-    first = int(now // DAY) - days + 1
-    labels = [time.strftime("%m-%d", time.gmtime((first + i) * DAY)) for i in range(days)]
-    blank = lambda: {"turns": [0] * days, "tokens": [0.0] * days, "cost": [0.0] * days}   # noqa: E731
+    """Turns, tokens and cost over the last `days` × 24 h up to `now` (D920: the interval, not UTC
+    calendar days -- a turn outside it, or after `now`, is not counted), per user and per agent or
+    model; the loops that cost most in that time. Bucketed for the sparklines only, back from `now`:
+    an hour each over one day, else a day each; the totals are the rows' whatever the buckets."""
+    start, now = window(days, now)
+    hourly = days <= 1
+    size = 3600.0 if hourly else DAY
+    n = int(round((now - start) / size))
+    labels = [time.strftime("%H:%M" if hourly else "%m-%d", time.gmtime(start + (i + 1) * size)) for i in range(n)]
+    blank = lambda: {"turns": [0] * n, "tokens": [0.0] * n, "cost": [0.0] * n}   # noqa: E731
     by_user: dict[str, dict] = {}
     by_who: dict[str, dict] = {}
     loops: dict[tuple[str, str], dict[str, float]] = {}
     for user, app, ts, _kind, who, _where, _ok, secs, tin, tout, cost, _err in rows:
-        d = int(ts // DAY) - first
-        if not 0 <= d < days:
+        if not start <= ts <= now:
             continue
+        d = min(n - 1, int((ts - start) // size))
         for into in (by_user.setdefault(user, blank()), by_who.setdefault(who, blank())):
             into["turns"][d] += 1
             into["tokens"][d] += tin + tout
@@ -145,7 +158,7 @@ def usage_by_day(rows: list[tuple], days: int = 14, now: float | None = None) ->
         lp["cost"] += cost
         lp["seconds"] += secs
     top = sorted(({"user": u, "app": a, **v} for (u, a), v in loops.items()), key=lambda x: (-x["cost"], -x["tokens"]))[:10]
-    return {"days": labels, "users": by_user, "agents": by_who, "top": top}
+    return {"days": labels, "bucket": "hour" if hourly else "day", "users": by_user, "agents": by_who, "top": top}
 
 
 def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
@@ -169,10 +182,11 @@ def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None =
     return sorted(out, key=lambda e: (-e["rate"], -e["turns"]))
 
 
-def network(path: str, since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
-    """The hosts the sandboxes refused since `since`: how often, by which loops, when last;
-    `forgot` (D850): `host:port` -> when the admin removed it."""
+def network(path: str, since: float, forgot: dict[str, float] | None = None, until: float | None = None) -> list[dict[str, Any]]:
+    """The hosts the sandboxes refused since `since` (D920: and until `until`): how often, by which
+    loops, when last; `forgot` (D850): `host:port` -> when the admin removed it."""
     forgot = forgot or {}
+    until = until if until is not None else float("inf")
     by: dict[tuple[str, int], dict[str, Any]] = {}
     try:
         fh = open(path, "rb")
@@ -184,7 +198,7 @@ def network(path: str, since: float, forgot: dict[str, float] | None = None) -> 
                 e = json.loads(raw)
             except ValueError:
                 continue
-            if float(e.get("t") or 0) < since:
+            if not since <= float(e.get("t") or 0) <= until:
                 continue
             k = (str(e.get("host") or "?"), int(e.get("port") or 0))
             if float(e.get("t") or 0) <= forgot.get(f"{k[0]}:{k[1]}", 0.0):

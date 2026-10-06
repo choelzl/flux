@@ -383,20 +383,50 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return {"done": done, "migrated": sum(d["status"] == "migrated" for x in done for d in x["documents"])}
 
     @app.get("/api/admin/insights")
-    def admin_insights(days: int = 7, a: User = Depends(admin_of)) -> dict[str, Any]:
-        """Admin › Insights (D766): failures, usage by day, endpoints, network refusals, disk."""
+    def admin_insights(days: int = 7, part: str = "", _a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Admin › Insights (D766): failures, usage, endpoints, network refusals. D920: `days` is ONE
+        interval -- the last days × 24 h up to now, captured once -- that cuts every historical panel
+        before it is counted, said back as `range`; `part` (failures, usage, endpoints): that one's
+        only. The disk is current, not historical: /insights/disk, never measured for a range."""
         from . import insights as ins
 
         days = max(1, min(int(days), 60))
-        since = time.time() - days * ins.DAY
-        rows = ins.turns(store, runs)
-        res = resources(a)
+        since, until = ins.window(days)
+        want = {part} if part in ("failures", "usage", "endpoints") else {"failures", "usage", "endpoints"}
         forgot = store.server_get("insights_forgot") or {}
         hide = _masks()
-        return {"days": days, "failures": hide.fields(ins.failures(store, runs, since)), "usage": ins.usage_by_day(rows, max(days, 7)),
-                "endpoints": hide.fields(ins.endpoints(rows, since, forgot.get("endpoint"))),
-                "network": ins.network(str(store.refusals_file), since, forgot.get("network")),
-                "disk": ins.disk(store, res["loops"])}
+        out: dict[str, Any] = {"days": days, "range": {"start": since, "end": until, "timezone": "UTC"}}
+        rows = [r for r in ins.turns(store, runs) if since <= r[2] <= until] if want & {"usage", "endpoints"} else []
+        if "failures" in want:
+            out["failures"] = hide.fields(ins.failures(store, runs, since, until))
+        if "usage" in want:
+            out["usage"] = ins.usage_by_day(rows, days, until)
+        if "endpoints" in want:
+            out["endpoints"] = hide.fields(ins.endpoints(rows, since, forgot.get("endpoint")))
+            out["network"] = ins.network(str(store.refusals_file), since, forgot.get("network"), until)
+        return out
+
+    @app.get("/api/admin/insights/disk")
+    def insights_disk(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        """D920: the disk as it is now, by user -- each loop's sizes (kept a minute, D695), none of
+        Resources' containers or caches -- and when it was measured: the oldest size it adds up."""
+        from . import admin as adm
+        from . import insights as ins
+
+        loops, paths = [], []
+        for u in store.users():
+            w = Workspace(store.data, u.name)
+            paths.append(store.data / "users" / u.name / "home")
+            for a in w.apps():
+                try:
+                    d = w.app(a["name"])
+                    loops.append({"user": u.name, "app": a["name"], **adm.loop_disk(d, u.name, a["name"])})
+                    paths.append(d)
+                except WorkspaceError:
+                    continue
+        disk = ins.disk(store, loops)
+        seen = [adm._SIZES[str(p)][0] for p in paths if str(p) in adm._SIZES]
+        return {"disk": disk, "at": min(seen) if seen else time.time()}
 
     @app.post("/api/admin/insights/forget")
     def insights_forget(body: ForgetIn, a: User = Depends(admin_of)) -> dict[str, Any]:

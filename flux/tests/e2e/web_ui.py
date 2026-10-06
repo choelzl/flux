@@ -1424,15 +1424,16 @@ def flows(r: Run) -> None:
         first = {"Failures": "Failures", "Usage and disk": "Usage", "Endpoints and network": "Endpoints and agents"}
         for label in ("Failures", "Usage and disk", "Endpoints and network"):      # D819: a sub-tab each
             r.button(label, "#main .subtabs")
-            b.wait(f"[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === '{first[label]}')", timeout=20, what=label)
+            b.wait(f"[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === '{first[label]}')"
+                   " && !document.querySelector('#insights-part .skeleton')", timeout=20, what=label)   # D920: the disk measured apart
             got = b.js("const o = {}; for (const c of document.querySelectorAll('#insights-part .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
             per[label] = sorted(got)
             cards.update(got)
-        r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage and disk": ["Disk by user", "Usage"],
+        r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage and disk": ["Current disk usage", "Usage"],
                 "Endpoints and network": ["Endpoints and agents", "Network refused"]}, str(per))
         r.check("Insights: the failed start with why it stopped", "bob/broken" in cards.get("Failures", "") and "not on PATH" in cards.get("Failures", ""),
                 cards.get("Failures", "")[:300])
-        r.check("Insights: the disk by user, each user", all(u in cards.get("Disk by user", "") for u in ("ada", "bob")), cards.get("Disk by user", "")[:300])
+        r.check("Insights: the current disk usage, each user", all(u in cards.get("Current disk usage", "") for u in ("ada", "bob")), cards.get("Current disk usage", "")[:300])
         b.js("const s = document.querySelector('#main select[aria-label=\"Over the last\"]'); s.value = '30'; s.dispatchEvent(new Event('change')); return 1")
         b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
                "&& document.querySelectorAll('#insights-part .card').length >= 2", timeout=15, what="30 days")
