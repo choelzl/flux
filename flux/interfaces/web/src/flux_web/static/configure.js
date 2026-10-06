@@ -239,6 +239,8 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
     setCrafterCatalog(await fetch("/crafter-assets/tools.json").then(r => r.json()).catch(() => []));
     C.setCatalog(crafterCatalog);
   }
+  // D934: the server's agents in every box's agent choices -- an admin-added one by name, with its label
+  if (C.setAgents) await api("/agents").then(list => C.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
   const host = h("div", { class: "flux-crafter" });
   const yamlOf = () => { const c = host.querySelector(".fc-yaml code"); return c ? c.textContent : ""; };
   if (name) {                                           // an existing loop, read back

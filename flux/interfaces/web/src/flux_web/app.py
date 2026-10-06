@@ -72,7 +72,12 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             if request.headers.get("x-flux") != "1":
                 return JSONResponse({"detail": "missing the X-Flux header"}, status_code=403)
         t0 = time.monotonic()
-        resp = await call_next(request)
+        from flux_loop.agent import added_agents
+
+        from .agents import added_kinds
+
+        with added_agents(lambda: added_kinds(store)):    # D934: a document may name an added agent
+            resp = await call_next(request)
         took = time.monotonic() - t0                      # D774: a slow answer is said in the server's log
         if took > SLOW_S:
             print(f"flux serve: slow: {request.method} {request.url.path} {took:.2f} s", file=sys.stderr, flush=True)

@@ -180,6 +180,12 @@ def visible(store: Any) -> dict[str, Agent]:
     return {n: a for n, a in registry(store).items() if found(a, store)}
 
 
+def added_kinds(store: Any) -> dict[str, str]:
+    """The agents an admin added that users are offered, {name: kind} -- what a run's
+    `FLUX_AGENTS` says, for the server's own loads of a document too (D934)."""
+    return {n: a.kind for n, a in visible(store).items() if not a.builtin}
+
+
 def setting_keys(store: Any) -> dict[str, tuple[str, ...]]:
     """Every agent's settings' names, public and secret."""
     agents = registry(store).values()

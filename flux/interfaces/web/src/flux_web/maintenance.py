@@ -386,7 +386,12 @@ class Maintenance:
         per = []
         for u, a, d in idle:
             try:
-                rows = stale_rows(d)
+                from flux_loop.agent import added_agents
+
+                from .agents import added_kinds
+
+                with added_agents(lambda: added_kinds(self.store)):     # D934: its added agents known
+                    rows = stale_rows(d)
             except Exception as exc:  # noqa: BLE001 -- a loop whose document does not load: said, the rest go on
                 per.append(f"{u}/{a}: not read ({exc!s:.80})")
                 continue

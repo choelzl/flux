@@ -37,6 +37,8 @@ agents' folder of tools and notes, D677; "" without one); in a `resume` command 
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import json
 import os
@@ -46,12 +48,12 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 #: Codex features a loop never uses (D848), off by config -- a Codex that lacks one ignores it
 _CODEX_OFF = ("-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.in_app_browser=false")
 
-__all__ = ["AgentSpec", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
+__all__ = ["AgentSpec", "added_agents", "agent_kinds", "DECIDE", "SESSIONS", "Exchange", "PRESETS", "Turn", "agent_brief", "agent_spec", "converse", "missing_agent", "question_in", "run_turn"]
 
 #: The agents this repository knows how to call headless: the first turn, the turn that
 #: resumes its session with an answer, and how its output says the session and its words.
@@ -94,16 +96,39 @@ OUTPUTS = ("text", "opencode", "claude", "codex")
 AGENT_NAME = r"[a-z][a-z0-9_]{0,23}"
 
 
+#: D934: the agents a server added, for its own loads of a document (check, save, preview):
+#: a callable giving {name: kind}, set per request -- never os.environ, which every request shares
+_ADDED: contextvars.ContextVar[Callable[[], dict[str, str]] | None] = contextvars.ContextVar("flux_added_agents", default=None)
+
+
+@contextlib.contextmanager
+def added_agents(kinds: Callable[[], dict[str, str]] | dict[str, str] | None) -> Iterator[None]:
+    """Within it, `agent_kinds()` also knows these added agents ({name: kind}, or a callable
+    asked when a document names an agent) -- in this context only (D934)."""
+    token = _ADDED.set(kinds if callable(kinds) or kinds is None else (lambda k=dict(kinds): k))
+    try:
+        yield
+    finally:
+        _ADDED.reset(token)
+
+
 def agent_kinds(env: dict[str, str] | None = None) -> dict[str, str]:
     """Each agent's name -> its kind, the preset it runs as (D807): the presets themselves, and
     the agents a server adds (`FLUX_AGENTS`, {name: kind}) -- an OpenCode of a company's own is an
-    `opencode` under another name, its program `FLUX_<NAME>_BIN`, its settings its own."""
+    `opencode` under another name, its program `FLUX_<NAME>_BIN`, its settings its own. With no
+    `env`, also the agents of `added_agents` (the server's own loads, D934)."""
+    ctx = _ADDED.get() if env is None else None
     env = os.environ if env is None else env
     out = {p: p for p in PRESETS}
     try:
         extra = json.loads(env.get("FLUX_AGENTS") or "{}")
     except ValueError:
         extra = {}
+    if ctx is not None and isinstance(extra, dict):
+        try:
+            extra = {**(ctx() or {}), **extra}
+        except Exception:  # noqa: BLE001 -- a registry that cannot be read adds nothing
+            pass
     for name, kind in (extra.items() if isinstance(extra, dict) else ()):
         if isinstance(name, str) and kind in PRESETS and re.fullmatch(AGENT_NAME, name):
             out.setdefault(name, kind)

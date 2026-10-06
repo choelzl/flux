@@ -1351,6 +1351,12 @@ def flows(r: Run) -> None:
         r.check("a user sets their own for one agent, over the server's", [x["name"] for x in mine["mine"]] == ["CORP_USER"]
                 and [x["name"] for x in mine["server"]] == ["CORP_REGION"], str(mine))
         r.clean("agent tabs and variables")
+        # D934: the configurator's agent choices offer the added agent by name, with its label
+        r.page("#/configure", "document.querySelector('.flux-crafter .fc-form')", "the configurator")
+        got = b.wait("(window.FluxCrafter.BOXES.generate.choices.find(c => c.value === 'agent:corp') || {}).label",
+                     timeout=20, what="corp among generate's choices")
+        r.check("the configurator offers an added agent by name, with its label (D934)", "Corp Codex" in str(got) and "corp" in str(got), str(got))
+        r.clean("the configurator's agents")
         # D835: the admin prices Flux's model; a user's price field waits for an endpoint of their own
         r.login("ada")
         r.page("#/admin/models", "document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN')", "the model settings")

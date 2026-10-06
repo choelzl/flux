@@ -28,10 +28,36 @@
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
                       "prompt", "prompt_file", "point", "params", "history", "state", "parts"];
 
+  /** D934: an added agent's label (the server's), by name. */
+  var AGENT_LABELS = {};
   function agentChoices(what) {
     return AGENTS.map(function (a) {
-      return { value: "agent:" + a, half: "agent", label: "Coding agent: " + a, hint: what };
+      return { value: "agent:" + a, half: "agent", label: "Coding agent: " + (AGENT_LABELS[a] ? AGENT_LABELS[a] + " (" + a + ")" : a), hint: what };
     });
+  }
+  /** D934: the server's agents ([{name, label}], the built-in three and those an admin added):
+      every box's agent choices, and the names a document's `by:` may give, become these. */
+  function setAgents(list) {
+    var names = ["opencode", "claude", "codex"];
+    AGENT_LABELS = {};
+    (Array.isArray(list) ? list : []).forEach(function (a) {
+      if (!a || typeof a.name !== "string" || names.indexOf(a.name) >= 0) return;
+      names.push(a.name);
+      if (a.label && a.label !== a.name) AGENT_LABELS[a.name] = String(a.label);
+    });
+    AGENTS.length = 0; Array.prototype.push.apply(AGENTS, names);
+    PRESETS.length = 0; Array.prototype.push.apply(PRESETS, names);
+    Object.keys(BOXES).forEach(function (b) {
+      var cs = BOXES[b].choices || [], at = -1, hint;
+      var kept = cs.filter(function (c, i) {
+        var mine = typeof c.value === "string" && c.value.indexOf("agent:") === 0 && c.value !== "agent:custom";
+        if (mine && at < 0) { at = i; hint = c.hint; }
+        return !mine;
+      });
+      if (at < 0) return;
+      BOXES[b].choices = kept.slice(0, at).concat(agentChoices(hint), kept.slice(at));
+    });
+    return AGENTS;
   }
 
   /** Each box of the drawing: a plain line, its choices (the first is the default, never
@@ -1353,7 +1379,7 @@
              parts: "Parts" }[id] || (BOXES[id] || {}).title || id;
   }
 
-  var api = { boxTitle: boxTitle, buildYaml: buildYaml, check: check, fromDoc: fromDoc, argvOf: argvOf, resolve: resolve, setCatalog: setCatalog, toolOf: toolOf,
+  var api = { boxTitle: boxTitle, buildYaml: buildYaml, check: check, fromDoc: fromDoc, argvOf: argvOf, resolve: resolve, setCatalog: setCatalog, setAgents: setAgents, toolOf: toolOf,
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
