@@ -528,6 +528,24 @@ def flows(r: Run) -> None:
         b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
         said = b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .item-meta').innerText", what="the file")
         r.check("a file selected says its kind and its bytes", said.startswith("file · 7 B"), said)
+        if os.environ.get("FLUX_E2E_SHOTS"):                     # D937: rows without menus (the ignored greyed), the head's Actions
+            Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+            b.click("#show-ignored")
+            b.wait("document.querySelector('.files-card li.ignored') && document.querySelector('.viewer .editor textarea')", what="the ignored shown")
+            b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('.viewer ul.files li a')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
+            b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
+            b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .actions-menu')", what="the file again")
+            b.js("const d = document.querySelector('.viewer-head .actions-menu'); d.open = true; return 1")
+            time.sleep(0.3)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "files-desktop.png")
+            b.js("document.querySelector('.viewer-head .actions-menu').open = false; return 1")
+            b.click("#show-ignored")
+            b.wait("!document.querySelector('.files-card li.ignored')", what="the ignored hidden")
+            b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('.viewer ul.files li a')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
+            b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
+            b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .actions-menu')", what="the file again")
         # an unsaved edit: Cancel keeps it, Discard lets the rename go on
         b.js("const t = document.querySelector('.viewer .editor textarea'); t.value = 'edited\\n'; t.dispatchEvent(new Event('input')); return 1")
         b.js(menu, ".viewer-head .actions-menu")
@@ -626,6 +644,10 @@ def flows(r: Run) -> None:
                 over = b.js(f"const w = document.getElementById('phone').contentWindow; const m = {head}.querySelector('.menu-list').getBoundingClientRect();"
                             "return [Math.round(m.left), Math.round(m.right), w.innerWidth, w.document.documentElement.scrollWidth]")
                 r.check("at 390px the selected item's menu stays on the screen", over[0] >= 0 and over[1] <= over[2] and over[3] <= over[2] + 1, str(over))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.js(f"{doc}.querySelector('.files-card').scrollIntoView(); {doc}.defaultView.scrollBy(0, {doc}.querySelector('.files-card').getBoundingClientRect().height - 300); return 1")
+                    time.sleep(0.3)
+                    (Path(os.environ["FLUX_E2E_SHOTS"]) / "files-390px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
             r.check(f"at 390px: {label} from the selected item's menu", b.js(click_item, target, label))
             b.wait(f"{dlg}", what=f"the {label} dialog at 390")
             if value is not None:
