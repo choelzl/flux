@@ -174,6 +174,15 @@ def agent_spec(spec: Any) -> AgentSpec:
     kinds = agent_kinds()
     if preset not in kinds:
         raise ValueError(f"agent {preset!r} is not an agent here; agents: {', '.join(kinds)}; or give `command: [...]`")
+    if not spec.get("timeout_s"):
+        # D893: the document did not say: the agent's own setting (the server's or the user's, in
+        # FLUX_<NAME>_TIMEOUT_S), else the default
+        try:
+            limit = float(os.environ.get(f"FLUX_{preset.upper()}_TIMEOUT_S") or 0)
+        except ValueError:
+            limit = 0.0
+        if limit > 0:
+            common["timeout_s"] = limit
     kind = kinds[preset]
     p = PRESETS[kind]
     # the executable alone may differ per machine (an installed name, a path): the document's

@@ -65,7 +65,12 @@ class Agent:
     def keys(self) -> dict[str, tuple[str, ...]]:
         """Its settings' names: endpoint and model public, the key (and a Claude login's token) secret."""
         secret = (f"FLUX_{self.up}_API_KEY", *((f"FLUX_{self.up}_OAUTH_TOKEN",) if self.kind == "claude" else ()))
-        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL", *self.prices()), "secret": secret}
+        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL", self.timeout(), *self.prices()), "secret": secret}
+
+    def timeout(self) -> str:
+        """Its turn's time limit's name (D893): seconds, the server's or a user's own; a document's
+        `timeout_s` wins over both."""
+        return f"FLUX_{self.up}_TIMEOUT_S"
 
     def prices(self) -> tuple[str, str]:
         """Its prices' names (D835): USD per million tokens in and out."""
@@ -74,8 +79,8 @@ class Agent:
     def labels(self) -> dict[str, str]:
         k = self.keys()
         pin, pout = self.prices()
-        out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", k["secret"][0]: "Key",
-               pin: "Price in", pout: "Price out"}
+        out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", self.timeout(): "Seconds per turn",
+               k["secret"][0]: "Key", pin: "Price in", pout: "Price out"}
         if self.kind == "claude":
             out[k["secret"][1]] = "Login token (its login saves it)"
         return out
@@ -191,6 +196,18 @@ def run_prices(agent: Agent, server: dict[str, str], mine: dict[str, str], flux:
     if agent.name == "opencode" and not vals.get(agent.keys()["public"][0]) and not (vals.get(pin) or vals.get(pout)):
         vals = {pin: flux.get("FLUX_REMOTE_PRICE_IN", ""), pout: flux.get("FLUX_REMOTE_PRICE_OUT", "")}
     return {n: vals[n] for n in (pin, pout) if vals.get(n)}
+
+
+def run_timeout(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> str:
+    """`FLUX_<NAME>_TIMEOUT_S` as a run gets it (D893): the user's own, else the server's, whoever's
+    endpoint the agent uses -- a time limit is not the endpoint's. "" when neither is a number over 0."""
+    for v in (mine.get(agent.timeout()), server.get(agent.timeout())):
+        try:
+            if v and float(v) > 0:
+                return str(float(v)).removesuffix(".0")
+        except ValueError:
+            continue
+    return ""
 
 
 def run_settings(agent: Agent, server: dict[str, str], mine: dict[str, str], flux: dict[str, str],

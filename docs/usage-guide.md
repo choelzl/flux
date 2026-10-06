@@ -375,6 +375,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   `~/.cache` is the user's own); the files every home starts with for it; the hosts it needs on the
   allowlist; whom it is ready for (each user's Test); an added agent can be removed (its settings and variables,
   the server's and every user's, go with it).
+  **Seconds per turn** (D893): each agent's time limit, set here for everyone and on a user's Account for
+  their own runs (theirs wins, whatever endpoint they use); a document's `timeout_s` wins over both
+  (`generate: {by: codex, timeout_s: 3600}`); unset everywhere, 1800. A document names an added agent as it
+  names a built-in one, in any box: `generate: nga`, `orchestrate: nga`, `generate: {by: nga, timeout_s: 7200}`,
+  `knowledge: {digest: nga}`. The server tells its runs which agents it added (`FLUX_AGENTS`), so such a
+  document loads in the web; `flux task run` on the command line needs `FLUX_AGENTS='{"nga": "opencode"}'`
+  and `FLUX_NGA_BIN` set.
 - **Maintenance (Admin › Maintenance, D885):** clean-up on a schedule, as Gitea's cron tasks -- each
   task on or off, every so many minutes, hours or days, its settings, its last result and Run now.
   Clean scratch (FLUX_TMPDIR's old, unused entries; off until turned on, as the folder is the

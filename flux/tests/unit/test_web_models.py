@@ -272,3 +272,32 @@ def test_a_missing_rate_is_unknown_not_free(server, tmp_path, monkeypatch):
     assert reprice(store, runs)["turns"] == 0, "a rate missing: not priced"
     ada.put("/api/admin/settings", json={"values": {"FLUX_REMOTE_PRICE_OUT": "2"}}, headers=H)
     assert reprice(store, runs) == {"turns": 1, "usd": 3.0, "loops": 1, "skipped": []}, "priced once both are known"
+
+
+def test_an_agents_time_limit_is_set_on_the_web_and_a_document_still_wins(server, monkeypatch):
+    """D893: an agent's seconds per turn -- the admin's for everyone, a user's own over it, whoever's
+    endpoint -- reach the run as FLUX_<NAME>_TIMEOUT_S; the loop takes it when the document says none."""
+    from flux_loop.agent import agent_spec
+
+    for k in ("FLUX_CODEX_TIMEOUT_S", "FLUX_CLAUDE_TIMEOUT_S"):
+        monkeypatch.delenv(k, raising=False)
+    app, store = server
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_TIMEOUT_S": "soon"}}, headers=H).status_code == 400
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_TIMEOUT_S": "0"}}, headers=H).status_code == 400
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_TIMEOUT_S": "3600", "FLUX_CLAUDE_TIMEOUT_S": "900"}},
+                   headers=H).status_code == 200
+    groups = {g["id"]: g for g in bob.get("/api/settings").json()["groups"]}
+    assert "FLUX_CODEX_TIMEOUT_S" in groups["codex"]["public"] and groups["codex"]["labels"]["FLUX_CODEX_TIMEOUT_S"] == "Seconds per turn"
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_CODEX_TIMEOUT_S"] == "3600" and env["FLUX_CLAUDE_TIMEOUT_S"] == "900"
+    # his own, with an endpoint of his own too: his limit; the admin's still where he set none
+    bob.put("/api/settings", json={"values": {"FLUX_CODEX_TIMEOUT_S": "7200", "FLUX_CLAUDE_BASE_URL": "https://c.example"}}, headers=H)
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_CODEX_TIMEOUT_S"] == "7200" and env["FLUX_CLAUDE_TIMEOUT_S"] == "900", "a limit is not the endpoint's"
+    assert bob.put("/api/env", json={"name": "FLUX_CODEX_TIMEOUT_S", "value": "1"}, headers=H).status_code == 400, "a setting, not a variable"
+    monkeypatch.setenv("FLUX_CODEX_TIMEOUT_S", "7200")
+    assert agent_spec("codex").timeout_s == 7200.0
+    assert agent_spec({"preset": "codex", "timeout_s": 600}).timeout_s == 600.0, "the document wins"
+    monkeypatch.delenv("FLUX_CODEX_TIMEOUT_S")
+    assert agent_spec("codex").timeout_s == 1800.0

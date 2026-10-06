@@ -64,7 +64,7 @@ SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 #: Names a run's variables never take (D697): the sandbox and the loop's own plumbing, the
 #: process's basics, and the model settings (set under Models).
 _RESERVED_ENV = re.compile(r"(FLUX_SANDBOX.*|FLUX_CONFIG|FLUX_FEEDBACK_INBOX|FLUX_RUN_LOG|FLUX_TRACE_ROOT|FLUX_SANDBOXED|"
-                           r"FLUX_LLM_REMOTE|FLUX_[A-Z0-9_]+_PRICE_IN|FLUX_[A-Z0-9_]+_PRICE_OUT|FLUX_[A-Z0-9_]+_ARGS|FLUX_[A-Z0-9_]+_BIN|FLUX_[A-Z0-9_]+_ENV|FLUX_[A-Z0-9_]+_LOGIN_FILES|"
+                           r"FLUX_LLM_REMOTE|FLUX_[A-Z0-9_]+_PRICE_IN|FLUX_[A-Z0-9_]+_PRICE_OUT|FLUX_[A-Z0-9_]+_TIMEOUT_S|FLUX_[A-Z0-9_]+_ARGS|FLUX_[A-Z0-9_]+_BIN|FLUX_[A-Z0-9_]+_ENV|FLUX_[A-Z0-9_]+_LOGIN_FILES|"
                            r"FLUX_AGENTS|FLUX_SHARED_VARS|FLUX_AGENT_API_KEY|OPENCODE_CONFIG_CONTENT|PATH|HOME|PWD|USER|SHELL|"
                            r"TMPDIR|TMP|TEMP|LD_.*|PYTHON.*|XDG_.*|NIX_.*)")
 
@@ -410,6 +410,13 @@ class Store:
                 ok = False
             if not ok:
                 raise ValueError(f"{key}: a price is USD per million tokens, a number such as 0.5")
+        if key.endswith("_TIMEOUT_S"):                               # D893: an agent's turn, Flux's request
+            try:
+                ok = float(value) > 0
+            except ValueError:
+                ok = False
+            if not ok:
+                raise ValueError(f"{key}: seconds, a number over 0 such as 3600")
         if key == "FLUX_DEFAULT_AGENT":
             from .agents import registry
 

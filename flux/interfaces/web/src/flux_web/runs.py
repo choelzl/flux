@@ -259,7 +259,7 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
     variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
     then the user's -- in `FLUX_<NAME>_ENV`, which only that agent is given; an added agent's kind
     in `FLUX_AGENTS`."""
-    from .agents import found, run_prices, run_settings, visible
+    from .agents import found, run_prices, run_settings, run_timeout, visible
 
     added: dict[str, str] = {}
     for a in visible(store).values():
@@ -279,6 +279,10 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
         for k, v in run_prices(a, server, mine, flux).items():
             env[k] = v
             names.append(k)
+        env.pop(a.timeout(), None)                               # D893: the web's time limit, not the machine's
+        if run_timeout(a, server, mine):
+            env[a.timeout()] = run_timeout(a, server, mine)
+            names.append(a.timeout())
         if own:
             env[f"FLUX_{a.up}_ENV"] = json.dumps(own)
             names.append(f"FLUX_{a.up}_ENV")
