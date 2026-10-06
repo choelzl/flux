@@ -111,6 +111,12 @@ class ShareIn(BaseModel):                 # D701
     perm: str | None = None
 
 
+class MoveIn(BaseModel):                  # D908: a rename or a move, of a file or a folder
+    path: str
+    to: str
+    revision: str | None = None
+
+
 class EnvVar(BaseModel):                  # D697
     name: str
     value: str | None = None

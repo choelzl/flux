@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import threading
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -58,6 +59,51 @@ def own_files(root: Path, skip: tuple[str, ...] = ("__pycache__", ".git")) -> li
 
 class WorkspaceError(ValueError):
     pass
+
+
+class Protected(WorkspaceError):
+    """A path the Files tab may not rename, move or delete, with why (D908)."""
+
+
+class Changed(WorkspaceError):
+    """An item changed since the page read it (D908): 409, never overwritten silently."""
+
+
+#: D908: why what runs write is not renamed, moved or deleted in the Files tab
+PROTECTED_WHY = {"out": "out/ is the loop's record of its runs: Settings › Maintenance cleans it",
+                 "runs": "runs/ is the loop's log, answers and notes: Settings › Maintenance cleans it",
+                 "workbench": "workbench/ is the agents' own notes and tools: they keep it"}
+
+
+def revision(st: os.stat_result) -> str:
+    """An item as it is now (D908): when it changed and its size -- a save or a move naming an
+    older one is refused, not applied over another tab's or an agent's change."""
+    return f"{st.st_mtime_ns:x}.{st.st_size:x}"
+
+
+def _rename_noreplace(src: Path, dst: Path) -> None:
+    """`src` renamed to `dst` only when nothing is at `dst` (D908): renameat2(RENAME_NOREPLACE) as
+    one step where the kernel has it; else a check and a rename under one lock (FileExistsError)."""
+    import ctypes
+    import errno
+
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        fn = libc.renameat2
+    except (OSError, AttributeError):
+        fn = None
+    if fn is not None:
+        if fn(-100, os.fsencode(src), -100, os.fsencode(dst), 1) == 0:      # AT_FDCWD, RENAME_NOREPLACE
+            return
+        err = ctypes.get_errno()
+        if err == errno.EEXIST:
+            raise FileExistsError(errno.EEXIST, "exists", str(dst))
+        if err not in (errno.ENOSYS, errno.EINVAL):
+            raise OSError(err, os.strerror(err), str(src))
+    with _ROOM:
+        if os.path.lexists(dst):
+            raise FileExistsError(errno.EEXIST, "exists", str(dst))
+        os.rename(src, dst)
 
 
 class Exists(WorkspaceError):
@@ -391,7 +437,7 @@ class Workspace:
             if ignored and not show_ignored:
                 continue
             st = p.lstat()
-            out.append({"path": rel, "dir": is_dir, "size": st.st_size, "mtime": st.st_mtime, "ignored": ignored})
+            out.append({"path": rel, "dir": is_dir, "link": p.is_symlink(), "size": st.st_size, "mtime": st.st_mtime, "ignored": ignored})
         return out
 
     def workbench(self, name: str) -> list[dict[str, Any]]:
@@ -434,8 +480,6 @@ class Workspace:
         runs/, the workbench) -- a change here is what a check before starting looks for."""
         import hashlib
 
-        import stat
-
         root = self.app(name).resolve()
         h = hashlib.sha256()
         for rel, p, st in own_files(root, skip=("__pycache__",)):
@@ -467,23 +511,145 @@ class Workspace:
             out.append({"path": rel, "size": st.st_size, "document": rel == doc, "ignored": ignored})
         return out
 
-    def remove(self, name: str, rel: str) -> None:
-        """One of the loop's own files deleted; never its document, nor what its runs write. A link
-        is deleted as the link (D905): what it points to stays."""
+    # ---- the Files tab as a file manager (D908): what an item is, its folder's size, rename and
+    #      move as one no-clobber step, deletion of a file, a link or a folder said whole
+    def protected(self, name: str, rel: str) -> str:
+        """Why `rel` (where it is in the loop, links resolved) may not be renamed, moved or deleted
+        here; '' when it may (D908)."""
+        parts = [x for x in rel.strip("/").split("/") if x]
+        if not parts:
+            return "the loop's own folder: delete the loop under Settings"
+        if parts[0] in RUN_DIRS:
+            return PROTECTED_WHY[parts[0]]
+        if parts == [".flux-app.json"]:
+            return "the server's own record of this loop"
+        if parts[0] in (".author-work", ".attachments"):
+            return "an agent's work in progress: it goes when the agent is done"
+        if ".git" in parts:
+            return "a repository's own folder"
+        if parts[-1].endswith(".part-upload"):
+            return "an upload under way"
+        if "/".join(parts) == self.meta(name).get("document"):
+            return "the loop's document: the loop runs it under this name"
+        return ""
+
+    def _where(self, name: str, rel: str) -> tuple[Path, str]:
+        """(the entry, where it is in the loop): its folder resolved, its own name not followed."""
         p = self.entry(name, rel)
+        return p, str(p.relative_to(self.app(name).resolve())) if p != self.app(name).resolve() else ""
+
+    def item(self, name: str, rel: str = "") -> dict[str, Any]:
+        """What an item is (D908): its kind (file, folder, link -- a link never followed), a file's
+        bytes, when it changed, its revision (a change since is a conflict), and why it is
+        protected, if it is. A folder's size is `folder_size`, asked for, not computed here."""
         root = self.app(name).resolve()
-        parts = p.relative_to(root).parts
-        if not parts or parts[0] in ("out", "runs", "workbench") or p.name == ".flux-app.json":
-            raise WorkspaceError(f"{rel!r} is not one of the loop's own files")
-        if str(p.relative_to(root)) == self.meta(name).get("document"):
-            raise WorkspaceError("the document itself cannot be deleted here")
-        if not (p.is_symlink() or p.is_file()):
+        p, where = self._where(name, rel) if rel.strip("/") else (root, "")
+        try:
+            st = os.lstat(p)
+        except OSError as exc:
+            raise WorkspaceError(f"no file or folder {rel!r}") from exc
+        kind = "link" if stat.S_ISLNK(st.st_mode) else "folder" if stat.S_ISDIR(st.st_mode) else "file"
+        out = {"path": where, "name": p.name if where else name, "kind": kind, "size": st.st_size if kind == "file" else None,
+               "mtime": st.st_mtime, "revision": revision(st), "protected": self.protected(name, where)}
+        if kind == "link":
+            out["target"] = os.readlink(p)
+        return out
+
+    def folder_size(self, name: str, rel: str = "", limit: int = 200_000, seconds: float = 3.0) -> dict[str, Any]:
+        """A folder's contents in all (D908): bytes of its files, its files, folders and links -- the
+        hidden and ignored ones too; a link counted, never followed. At most `limit` entries or
+        `seconds`: past that, `partial`, what was counted so far."""
+        import time
+
+        root = self.app(name).resolve()
+        top = self._where(name, rel)[0] if rel.strip("/") else root
+        if top.is_symlink() or not top.is_dir():
+            raise WorkspaceError(f"{rel!r} is not a folder")
+        got = {"bytes": 0, "files": 0, "folders": 0, "links": 0, "partial": False}
+        stack, seen, t0 = [top], 0, time.monotonic()
+        while stack:
+            try:
+                with os.scandir(stack.pop()) as it:
+                    for e in it:
+                        seen += 1
+                        if seen > limit or time.monotonic() - t0 > seconds:
+                            got["partial"] = True
+                            return got
+                        if e.is_symlink():
+                            got["links"] += 1
+                        elif e.is_dir(follow_symlinks=False):
+                            got["folders"] += 1
+                            stack.append(Path(e.path))
+                        else:
+                            got["files"] += 1
+                            got["bytes"] += e.stat(follow_symlinks=False).st_size
+            except OSError:
+                continue
+        return got
+
+    def move(self, name: str, src: str, dst: str, rev: str | None = None) -> dict[str, Any]:
+        """`src` renamed or moved to `dst` in the same loop, a folder with everything in it (D908):
+        never onto an item already there (no-clobber, Exists), never a folder into itself, never
+        a protected item or into a protected folder; a link moved as the link. With `rev`, the
+        item must be as it was then. Returns the new path and the folders that changed."""
+        src, dst = safe_rel(src), safe_rel(dst)
+        s, where = self._where(name, src)
+        if not os.path.lexists(s):
+            raise WorkspaceError(f"no file or folder {src!r}")
+        self._unprotected(name, where)
+        root = self.app(name).resolve()
+        head, _, leaf = dst.rpartition("/")
+        folder = self.path(name, head) if head else root          # resolved, inside the loop; made if new
+        if folder.exists() and not folder.is_dir():
+            raise WorkspaceError(f"{head!r} is a file, not a folder")
+        folder_rel = str(folder.relative_to(root)) if folder != root else ""
+        if folder_rel:
+            self._unprotected(name, folder_rel, "into ")
+        d, to = folder / leaf, f"{folder_rel}/{leaf}".lstrip("/")
+        self._unprotected(name, to, "to ")
+        if to == where:
+            raise WorkspaceError("it is already there")
+        if s.is_dir() and not s.is_symlink() and (to + "/").startswith(where + "/"):
+            raise WorkspaceError("a folder cannot move into itself")
+        self._check_rev(s, rev, src)
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            _rename_noreplace(s, d)
+        except FileExistsError as exc:
+            raise Exists(f"{to!r} exists: choose another name (nothing is replaced)") from exc
+        return {"path": to, "parents": sorted({where.rpartition("/")[0], to.rpartition("/")[0]})}
+
+    def remove(self, name: str, rel: str, recursive: bool = False, rev: str | None = None) -> dict[str, Any]:
+        """A file, a link or a folder of the loop deleted; never its document, nor what its runs
+        write. A link is deleted as the link (D905): what it points to stays. A folder only with
+        `recursive` (D908: everything in it, said before), and only when nothing in it is
+        protected; its parent folders stay, even empty. With `rev`, the item must be as it was."""
+        p, where = self._where(name, rel)
+        self._unprotected(name, where)
+        if not os.path.lexists(p):
             raise WorkspaceError(f"no file {rel!r}")
-        p.unlink()
-        d = p.parent
-        while d != root and not any(d.iterdir()):
-            d.rmdir()
-            d = d.parent
+        self._check_rev(p, rev, rel)
+        if p.is_symlink() or not p.is_dir():
+            kind = "link" if p.is_symlink() else "file"
+            p.unlink()
+            return {"path": where, "kind": kind}
+        if not recursive:
+            raise WorkspaceError(f"{rel!r} is a folder: deleting it deletes everything in it -- say so (recursive)")
+        held = [r for r, _p, _st in own_files(p, skip=()) if self.protected(name, f"{where}/{r}")][:5]
+        if held:
+            raise WorkspaceError(f"{rel!r} holds what may not be deleted here ({', '.join(held)}): nothing was deleted")
+        shutil.rmtree(p)                                   # links inside are removed as links, never followed
+        return {"path": where, "kind": "folder"}
+
+    def _unprotected(self, name: str, where: str, how: str = "") -> None:
+        why = self.protected(name, where)
+        if why:
+            raise Protected(f"not {how}{where or 'the loop'}: {why}")
+
+    @staticmethod
+    def _check_rev(p: Path, rev: str | None, rel: str) -> None:
+        if rev and revision(os.lstat(p)) != rev:
+            raise Changed(f"{rel!r} changed since you opened it (another tab, or an agent): look again first")
 
     def read(self, name: str, rel: str) -> tuple[bytes, bool, int]:
         """(its first TEXT_MAX bytes, whether it is text, its whole size) of a file (D907: a preview

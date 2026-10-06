@@ -105,7 +105,7 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
     box.replaceChildren(
       files.length ? h("ul", { class: "files flist" }, files.map(f => h("li", {},
         h("a", { href: "javascript:void 0", onclick: () => open(f) }, h("span", { class: "ic" }, "·"), f.path),
-        h("small", { class: "muted" }, f.size < 1024 ? `${f.size} B` : `${(f.size / 1024).toFixed(1)} KB`, f.staged ? " · with the new loop" : ""),
+        h("small", { class: "muted" }, bytes(f.size), f.staged ? " · with the new loop" : ""),
         h("button", { class: "link danger-link", title: `Delete ${f.path}`, onclick: () => remove(f) }, "×")))) : h("p", { class: "muted" }, "No files."),
       missing.length ? h("div", { class: "callout bad" }, h("strong", {}, "The document names these, and the loop does not have them: "),
         missing.map((p, i) => [i ? ", " : "", h("a", { href: "javascript:void 0", title: "Write it here", onclick: () => editor(p, "") }, p)])) : "",

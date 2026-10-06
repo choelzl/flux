@@ -148,7 +148,7 @@ function logView(base, qs) {
   const open = (all) => {
     es = followStream(url(all), "log", add, pill.set, (sk) => {
       earlier.hidden = false;
-      earlier.replaceChildren(`${(sk.bytes / 1048576).toFixed(1)} MB of earlier lines not loaded · `,
+      earlier.replaceChildren(`${(sk.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `,
         h("button", { type: "button", class: "small", onclick: () => { es.close(); lines.length = 0; shown = []; partial = ""; seen = 0;
           starts.length = 0; earlier.hidden = true; drawStarts(); render(); open(true); } }, "Load all"));
     });

@@ -248,8 +248,9 @@ async function createFromText(name, filename, text) {
   }
 }
 
-/** Sizes as people read them (moved from the admin pages, D889: the uploads use it too). */
-const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
+/** Sizes as people read them (moved from the admin pages, D889: the uploads use it too); D908:
+    powers of 1024 named as such -- KiB, MiB, GiB -- everywhere a size is shown. */
+const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(2)} GiB`;
 /** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
     keyboard reaches it too) and `aria-sort`; the same header again turns the order round. A column's
     first order is descending (most, newest) unless it says `asc`. Kept per table in this browser. */

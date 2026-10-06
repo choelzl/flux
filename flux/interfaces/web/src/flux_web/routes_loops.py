@@ -19,11 +19,11 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import StreamingResponse
 
 from .models import (
-    DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn,
+    DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn, MoveIn,
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env
 from .store import User
-from .workspace import Exists, Workspace, WorkspaceError
+from .workspace import Changed, Exists, Workspace, WorkspaceError
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -429,8 +429,12 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 "Content-Disposition": f"attachment; filename=\"{ascii_leaf}\"; filename*=UTF-8''{quote(leaf)}",
                 "Content-Length": str(size)})
         cut = size > len(data)
+        try:
+            rev = w.item(name, path)["revision"]                  # D908: a save names what it read
+        except WorkspaceError:
+            rev = ""
         return Response(data, media_type="text/plain; charset=utf-8",
-                        headers={"X-Flux-Size": str(size), **({"X-Flux-Truncated": "1"} if cut else {})})
+                        headers={"X-Flux-Size": str(size), "X-Flux-Revision": rev, **({"X-Flux-Truncated": "1"} if cut else {})})
 
     @app.get("/api/apps/{name}/inputs")
     def list_inputs(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
@@ -441,23 +445,67 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except WorkspaceError as exc:
             raise HTTPException(404, str(exc)) from exc
 
-    @app.delete("/api/apps/{name}/file")
-    def delete_file(name: str, path: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+    def _mutation_failed(exc: WorkspaceError) -> HTTPException:
+        """D908: a name taken or an item changed since it was read is a conflict; the rest refused."""
+        return HTTPException(409, str(exc)) if isinstance(exc, (Exists, Changed)) else fail(exc)
+
+    @app.get("/api/apps/{name}/item")
+    def file_item(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """What a file, folder or link is (D908), with what this user may do with it and why not."""
+        w, _whose, perm = access(user, owner, name)
         try:
-            editor(user, owner, name)[0].remove(name, path)
+            got = w.item(name, path)
+        except WorkspaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        why = "you may watch this loop, not change it" if perm == "watch" else got["protected"]
+        return {**got, "can": {k: not why for k in ("rename", "move", "delete")}, "why": why}
+
+    @app.get("/api/apps/{name}/item/size")
+    def file_item_size(name: str, path: str = "", owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A folder's contents in all (D908): asked for when it is selected, bounded, never on a list."""
+        try:
+            return reader(user, owner, name)[0].folder_size(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "delete file", f"{name}/{path}")
-        return {"ok": f"{path} deleted"}
+
+    @app.post("/api/apps/{name}/move")
+    def move_item(name: str, body: MoveIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """A rename or a move in the loop (D908): one no-clobber step, a folder with its contents."""
+        w, whose = editor(user, owner, name)
+        try:
+            got = w.move(name, body.path, body.to, body.revision)
+        except WorkspaceError as exc:
+            raise _mutation_failed(exc) from exc
+        store.audit(user.name, "move file", f"{whose.name}/{name}: {body.path} -> {got['path']}")
+        return {"ok": f"{body.path} is now {got['path']}", **got}
+
+    @app.delete("/api/apps/{name}/file")
+    def delete_file(name: str, path: str, recursive: bool = False, revision: str | None = None, owner: str | None = None,
+                    user: User = Depends(user_of)) -> dict[str, str]:
+        """A file or a link deleted (a link as the link, D905); a folder with `recursive` (D908)."""
+        try:
+            got = editor(user, owner, name)[0].remove(name, path, recursive=recursive, rev=revision)
+        except WorkspaceError as exc:
+            raise _mutation_failed(exc) from exc
+        store.audit(user.name, "delete file", f"{name}/{path}" + ("" if got["kind"] == "file" else f" (a {got['kind']})"))
+        return {"ok": f"{path} deleted", **got}
 
     @app.put("/api/apps/{name}/file")
-    def put_file(name: str, path: str, body: FileText, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+    def put_file(name: str, path: str, body: FileText, revision: str | None = None, owner: str | None = None,
+                 user: User = Depends(user_of)) -> dict[str, str]:
+        """A file written whole; with `revision`, only over the file as it was read (D908)."""
+        w = editor(user, owner, name)[0]
         try:
-            editor(user, owner, name)[0].write(name, path, body.text)
+            if revision:
+                w._check_rev(w.entry(name, path), revision, path)
+            w.write(name, path, body.text)
+            rev = w.item(name, path)["revision"]
+        except FileNotFoundError as exc:
+            raise HTTPException(409, f"{path!r} is gone since you opened it") from exc
         except WorkspaceError as exc:
-            raise fail(exc) from exc
+            raise _mutation_failed(exc) from exc
         store.audit(user.name, "edit", f"{name}/{path}")
-        return {"ok": path}
+        return {"ok": path, "revision": rev}
 
     @app.post("/api/apps/{name}/check")
     def check(name: str, owner: str | None = None, document: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

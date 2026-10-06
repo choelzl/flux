@@ -816,6 +816,26 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
 .viewer-head { flex-wrap: wrap; gap: 6px 12px; }
 .viewer-head > .path-crumbs { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }
 
+/* D908: Files as a file manager -- the selected item's kind, size and time under its path; one
+   Actions menu (Rename, Move, Delete) on its head and on each row, opening over the content */
+.viewer-head > .item-meta { flex: 1 1 100%; order: 3; overflow-wrap: anywhere; }
+.viewer-head > .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions-menu { position: relative; display: inline-block; }
+.actions-menu > summary { list-style: none; cursor: pointer; user-select: none; }
+.actions-menu > summary::-webkit-details-marker { display: none; }
+.actions-menu .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 170px;
+  max-width: min(300px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 22px rgba(0, 0, 0, .14); }
+.actions-menu .menu-list button { text-align: left; border: 0; background: none; padding: 8px 10px; min-height: 36px; border-radius: 6px; }
+.actions-menu .menu-list button:hover:not([disabled]), .actions-menu .menu-list button:focus-visible { background: var(--soft); }
+.actions-menu .menu-list button[disabled] { color: var(--muted); cursor: not-allowed; }
+.actions-menu .menu-list .why { margin: 4px 10px 6px; white-space: normal; }
+ul.files li { align-items: center; }
+ul.files li > .row-menu { flex-shrink: 0; }
+ul.files li > a { margin-right: auto; }
+.row-menu > summary.btn.small { padding: 0 8px; min-height: 26px; line-height: 1; }
+.path-preview { overflow-wrap: anywhere; }
+
 /* D835: a price is a short number */
 .set-row input.price { max-width: 9em; }
 
