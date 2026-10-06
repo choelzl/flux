@@ -183,5 +183,5 @@ def test_a_corporate_builds_login_file_says_its_user_is_logged_in(server, tmp_pa
     assert env["FLUX_OPENCODE_LOGIN_FILES"] == ".local/share/nga/auth.json"
     env = {k: v for k, v in env.items() if k != "OPENCODE_CONFIG_CONTENT"}
     got = check_agent("opencode", env={**env, "HOME": str(home), "FLUX_OPENCODE_BIN": str(fake)})
-    login = next(s for s in got["steps"] if s["step"] == "login")
+    login = next(s for s in got["steps"] if s["step"] == "connection")          # D923: how it connects
     assert login["ok"] and "nga/auth.json" in login["said"]

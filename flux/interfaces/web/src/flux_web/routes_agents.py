@@ -34,16 +34,63 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     logins = Logins()
 
     # ---- is an agent ready for a user (D751): tested from Account, a loop needs it passed
-    def agent_test_of(user: User, agent: str) -> dict[str, Any]:
-        return store.server_get(f"agent-test:{user.name}:{agent}") or {}
+    def _test_key(user: User, agent: str, loop: str | None = None) -> str:
+        return f"agent-test:{user.name}:{agent}" + (f":loop:{loop}" if loop else "")
 
-    def agents_gate(user: User, agents: list[str]) -> None:
+    def agent_test_of(user: User, agent: str, loop: str | None = None) -> dict[str, Any]:
+        return store.server_get(_test_key(user, agent, loop)) or {}
+
+    def context(user: User, loop: str | None = None) -> tuple[dict[str, str], dict[str, Any]]:
+        """(the environment of `user`'s runs in `loop`, each agent's resolved configuration)."""
+        views: dict[str, Any] = {}
+        return run_env(store, user, loop, views), views
+
+    def effective(user: User, agent: str, loop: str | None = None, ctx_: tuple[dict[str, str], dict[str, Any]] | None = None) -> tuple[dict[str, str], Any, str]:
+        """D923: what agent `agent`'s turn gets for `user` (in `loop`) -- (its environment, the
+        resolved configuration with each field's scope, its identity: what a Test of it tested)."""
+        from flux_loop.agent import agent_config
+        from flux_loop.agent_env import identity
+
+        a = registry(store)[agent]
+        prog = found(a, store)
+        env, views = ctx_ or context(user, loop)
+        mine, eff = agent_config(agent, a.kind, env, prog)
+        eff = views.get(agent) or eff
+        return mine, eff, identity(eff, prog) if eff is not None else ""
+
+    def verified(user: User, agent: str, loop: str | None = None, current: str | None = None) -> dict[str, Any]:
+        """D923: the Test that counts for `agent` here -- the account's or the loop's, of the
+        configuration as it is now: {"state": ready | changed | failed | untested, "test": its result}.
+        A result kept before identities were (no `identity`) counts as it was."""
+        tests = [t for t in (agent_test_of(user, agent, loop) if loop else {}, agent_test_of(user, agent)) if t]
+        if current is None and any(t.get("identity") for t in tests):
+            current = effective(user, agent, loop)[2]
+        same = [t for t in tests if not t.get("identity") or t["identity"] == current]
+        if any(t.get("ok") for t in same):
+            return {"state": "ready", "test": next(t for t in same if t.get("ok"))}
+        if same:
+            return {"state": "failed", "test": same[0]}
+        if tests:
+            return {"state": "changed", "test": tests[0]}
+        return {"state": "untested", "test": {}}
+
+    def agents_gate(user: User, agents: list[str], loop: str | None = None) -> None:
         """A start, an authoring agent or an ask refused while an agent it needs has not passed
-        its test for the loop's owner, whose logins it runs on (D769) -- before a turn is spent (D751)."""
+        its test for the loop's owner, whose logins it runs on (D769) -- before a turn is spent (D751).
+        D923: of the configuration the loop runs it with -- a loop-only key passes with a Test in the loop's context."""
         reg = registry(store)
-        bad = [reg[a].label for a in agents if a in reg and not agent_test_of(user, a).get("ok")]
+        why = {"changed": "its configuration changed since its Test", "failed": "its Test failed", "untested": "not tested yet"}
+        bad, reasons = [], []
+        for a in agents:
+            if a in reg:
+                v = verified(user, a, loop)
+                if v["state"] != "ready":
+                    bad.append(reg[a].label)
+                    reasons.append(why[v["state"]])
         if bad:
-            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet: {user.name}'s Account › My agents and models, the agent's tab: log in and Test")
+            raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet ({'; '.join(dict.fromkeys(reasons))}): "
+                                     f"{user.name}'s Account › My agents and models, the agent's tab: Test connection"
+                                     + (f" (for the loop {loop} when it has variables of its own)" if loop else ""))
 
     def author_agent(author: Any) -> list[str]:
         name = author.get("preset") if isinstance(author, dict) else author
@@ -57,14 +104,18 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     testing: set[tuple[str, str]] = set()
     testing_lock = threading.Lock()
 
-    def run_agent_test(user: User, agent: str, why: str = "") -> dict[str, Any]:
+    def run_agent_test(user: User, agent: str, why: str = "", loop: str | None = None) -> dict[str, Any]:
         """`flux agent test <agent> --live`, sandboxed as the user's runs are: their home, their
-        settings, the network rules. Its result is kept: a passed test enables the agent (D751)."""
+        settings, the network rules. Its result is kept: a passed test enables the agent (D751).
+        D923: `loop` -- in that loop's context (its variables); the result carries the identity of
+        the configuration it tested."""
         with testing_lock:
             testing.add((user.name, agent))
         try:
             home_ready(store, user)
-            env = {**run_env(store, user), "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
+            c = context(user, loop)
+            base, ident = c[0], effective(user, agent, loop, c)[2]
+            env = {**base, "FLUX_SANDBOX_APP": f"{user.name}.agent-test", "PYTHONUNBUFFERED": "1",
                    "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
             sandbox_env(env, sandbox, {})
             machine_env(env, sandbox_config(store), {})
@@ -79,7 +130,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             except subprocess.TimeoutExpired:
                 got = {"agent": agent, "ok": False, "steps": [{"step": "run", "ok": False, "said": "no answer within 420 s"}]}
             got["when"] = time.time()
-            store.server_set(f"agent-test:{user.name}:{agent}", got)
+            got["identity"], got["loop"] = ident, loop or ""
+            store.server_set(_test_key(user, agent, loop), got)
             store.audit(user.name, "agent test", f"{agent}: {'ready' if got['ok'] else 'not ready'}{f' ({why})' if why else ''}")
             return got
         finally:
@@ -131,23 +183,67 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, f"{agent} is not an agent offered here; agents: {', '.join(visible(store))}")
         return a
 
+    def _own_loop(user: User, loop: str | None) -> str | None:
+        """D923: a Test in a loop's context is of one's own loop -- whose logins and variables it runs on."""
+        if not loop:
+            return None
+        _w, whose, _d, _r = ctx.loop_of(loop, user)
+        if whose.name != user.name:
+            raise HTTPException(403, f"{loop} is {whose.name}'s: its agents are tested by {whose.name}")
+        return loop
+
     @app.post("/api/agents/{agent}/test")
-    def test_agent(agent: str, user: User = Depends(user_of)) -> dict[str, Any]:
+    def test_agent(agent: str, loop: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         offered(agent)
-        return run_agent_test(user, agent)
+        return run_agent_test(user, agent, loop=_own_loop(user, loop))
+
+    def _loops_with_vars(user: User) -> list[str]:
+        """The user's loops that have variables of their own (D923): their agents may run otherwise."""
+        prefix = f"env:loop:{user.name}:"
+        with store._db() as db:
+            rows = db.execute("SELECT key FROM server WHERE key LIKE ?", (prefix + "%",)).fetchall()
+        return sorted(r["key"][len(prefix):] for r in rows if r["key"].startswith(prefix))
+
+    def _state(user: User, agent: str, loop: str | None, ident: str) -> dict[str, Any]:
+        v = verified(user, agent, loop, ident)
+        t = v["test"]
+        return {"state": v["state"], "when": t.get("when"), "said": next((s["said"] for s in t.get("steps") or [] if not s.get("ok")), "")}
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:
-        """The agents offered here (D807: their program found), each logged in or not, tested or not."""
+        """The agents offered here (D807: their program found), each logged in or not, tested or not.
+        D924: three states apart -- installation (its program), connection (how it connects, from
+        where: never a value), verification (untested, ready, failed, changed since its Test) -- and
+        the user's loops whose own variables make it run otherwise (D923)."""
+        from flux_loop.agent_check import LOGIN_FILES, connection
+
         agents = visible(store)
-        have = logged_in(store.home_of(user), agents)
+        home = store.home_of(user)
+        have = logged_in(home, agents)
         mine = store.settings(user)
         for n, a in agents.items():                       # D748: a printed token, kept
             have[n] = have[n] or bool(mine.get(f"FLUX_{a.up}_OAUTH_TOKEN"))
-        return {"external": user.external, "agents": [{"id": n, "label": a.label, "kind": a.kind, "logged_in": have[n],
-                                                       "tested": agent_test_of(user, n), "testing": (user.name, n) in testing,
-                                                       "command": " ".join(a.login_command())} for n, a in agents.items()],
-                "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
+        base = context(user)
+        loops = {lp: context(user, lp) for lp in _loops_with_vars(user)}
+        out = []
+        for n, a in agents.items():
+            env, eff, ident = effective(user, n, None, base)
+            files = [f for f in (*LOGIN_FILES[a.kind], *a.login_files) if (home / f).is_file() and (home / f).stat().st_size > 0]
+            conn = connection(a.kind, env, eff, files)
+            if not files and mine.get(f"FLUX_{a.up}_OAUTH_TOKEN") and conn["mechanism"] != "key":
+                conn = {**conn, "mechanism": "login", "said": "its login's token (kept)"}
+            fields = {f: {"source": x["source"], "name": x["name"]} for f, x in (eff.fields.items() if eff else ())}
+            others = []
+            for lp, lenv in loops.items():
+                li = effective(user, n, lp, lenv)[2]
+                if li != ident:
+                    others.append({"loop": lp, **_state(user, n, lp, li)})
+            out.append({"id": n, "label": a.label, "kind": a.kind, "logged_in": have[n], "program": found(a, store),
+                        "connection": conn, "fields": fields, "conflicts": eff.conflicts if eff else [],
+                        "unused": eff.unused if eff else [], "verified": _state(user, n, None, ident), "loops": others,
+                        "tested": agent_test_of(user, n), "testing": (user.name, n) in testing,
+                        "command": " ".join(a.login_command())})
+        return {"external": user.external, "agents": out, "session": {k: v for k, v in logins.state(user.name).items() if k != "text"}}
 
     @app.post("/api/logins/{agent}")
     def start_login(agent: str, user: User = Depends(user_of)) -> dict[str, str]:
@@ -229,17 +325,34 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         reg = registry(store)
         with ThreadPoolExecutor(max_workers=max(1, len(reg))) as pool:       # each asked at once
             seen = dict(zip(reg, pool.map(lambda a: (lambda f: (f, version(f)))(found(a, store)), reg.values())))
+        import os
+
+        from flux_loop.agent_check import connection
+
+        from .agents import run_settings
+        from .runs import agent_scopes
+
         out = []
+        envs = {u.name: context(u) for u in store.users() if not u.disabled}
+        server = store.server_settings(reveal=True)
+        every = {"global": {n: x["value"] for n, x in store.env("global", reveal=True).items()}}
+        word = {"ready": "ready", "failed": "failed", "changed": "changed since its test", "untested": "not tested"}
         for name, a in reg.items():
             prog, ver = seen[name]
             users = []
             for u in store.users():
                 t = agent_test_of(u, name)
-                users.append({"user": u.name, "kind": u.role, "state": "ready" if t.get("ok") else "failed" if t.get("when") else "not tested",
-                              "when": t.get("when")})
+                v = verified(u, name, None, effective(u, name, None, envs[u.name])[2]) if u.name in envs and prog else \
+                    {"state": "ready" if t.get("ok") else "failed" if t.get("when") else "untested", "test": t}
+                users.append({"user": u.name, "kind": u.role, "state": word[v["state"]], "when": v["test"].get("when")})
+            # D924: the server's own connection for it -- what every user without settings of their own gets (no values)
+            own, eff = run_settings(a, *agent_scopes(store, None, a, dict(os.environ), server, {}, None, every), tuple(reg))
+            conn = connection(a.kind, eff.apply({**os.environ, **own}), eff, [])
             out.append({"id": name, "kind": a.kind, "builtin": a.builtin, "label": a.label, "bin": a.bin, "login": a.login,
                         "login_default": KINDS[a.kind]["login"], "args": a.args, "home": a.home, "hosts": a.hosts,
-                        "login_files": a.login_files, "found": prog, "version": ver, "users": users})
+                        "login_files": a.login_files, "found": prog, "version": ver, "users": users,
+                        "connection": conn, "fields": {f: {"source": x["source"], "name": x["name"]} for f, x in eff.fields.items()},
+                        "conflicts": eff.conflicts, "unused": eff.unused})
         return {"agents": out, "kinds": [{"id": k, "label": v["label"]} for k, v in KINDS.items()]}
 
     @app.post("/api/admin/agents")

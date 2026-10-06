@@ -60,7 +60,7 @@ HOME_SEED = (".config/opencode",
              ".local/share/opencode/request-utils", ".local/share/opencode/images", ".local/state/opencode/kv2.json")
 
 
-def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
+def run_env(store: Store, user: User, app: str | None = None, views: dict[str, Any] | None = None) -> dict[str, str]:
     """The environment of a user's run or check (D684, D696): the server's, then the model
     settings the admin set for the server, then the user's own. A run never reads the server's
     flux.env itself (FLUX_CONFIG): the server loaded it once. Per group (Flux's model, each agent's
@@ -106,7 +106,7 @@ def run_env(store: Store, user: User, app: str | None = None) -> dict[str, str]:
     # their names pass into the sandbox whatever they look like, and to every agent (D807)
     scopes = {s: {n: x["value"] for n, x in store.env(s, reveal=True).items()}
               for s in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else []))}
-    _agents(store, user, env, server, mine, web, names, scopes)
+    _agents(store, user, env, server, mine, web, names, scopes, views)
     shared: list[str] = []
     for vals in scopes.values():
         for name, value in vals.items():
@@ -258,7 +258,7 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
 
 
 def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],
-            flux: dict[str, str], names: list[str], scopes: dict[str, dict[str, str]] | None = None) -> None:
+            flux: dict[str, str], names: list[str], scopes: dict[str, dict[str, str]] | None = None, views: dict[str, Any] | None = None) -> None:
     """Each agent the server offers, as its runs get it (D807): its program (its folder on PATH, so
     the sandbox mounts it, D705), the admin's arguments and login files (D756, D760), and its own
     variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
@@ -283,7 +283,9 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
                 env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
         if not a.builtin:
             added[a.name] = a.kind
-        own, _eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, flux, scopes), tuple(every))
+        own, eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, flux, scopes), tuple(every))
+        if views is not None:
+            views[a.name] = eff                                  # D923: the resolved configuration, its sources (no values shown)
         for k in a.prices():                                     # D835: the web's prices, not the machine's
             env.pop(k, None)
         for k, v in run_prices(a, server, mine, flux).items():

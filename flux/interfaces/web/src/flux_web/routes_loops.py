@@ -198,7 +198,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     # ---- a problem written or revised by an agent (D704)
     def _author_env(whose: User, name: str, by: User | None = None, author: Any = None) -> dict[str, str]:
-        agents_gate(whose, author_agent(author))                            # D751, D769: the owner's agents
+        agents_gate(whose, author_agent(author), name)                      # D751, D769: the owner's agents; D923: in this loop
         home_ready(store, whose)
         env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}", "PYTHONUNBUFFERED": "1"}
         adv = advanced(store, whose.name, name)
@@ -646,7 +646,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 raise HTTPException(409, f"{meta['document']} is of an earlier form ({len(older[0]['said'])} change(s) to make"
                                          + (", and some need a person" if older[0]["manual"] else "")
                                          + "): an admin migrates it in Admin › Loops › Migrate old documents")
-        agents_gate(whose, needs)
+        agents_gate(whose, needs, name)                # D923: of the configuration this loop runs it with
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             from flux_loop.document import record_name
 

@@ -74,6 +74,48 @@ def agents_used(task: Any) -> list[str]:
     return found
 
 
+#: D923: an OpenCode forwards a provider's key it is given on purpose (its own set, or a variable for
+#: every agent): a name of this form, not Flux's own.
+_PROVIDER_KEY = re.compile(r"(?!FLUX_)[A-Z][A-Z0-9_]*_API_KEY|FLUX_AGENT_API_KEY")
+
+
+def connection(kind: str, env: dict[str, str], eff: Any = None, files: list[str] | None = None) -> dict[str, Any]:
+    """How the agent connects, as its turn's environment `env` says (D924) -- {"mechanism": key |
+    provider | login | endpoint | none, "said", "source", "names"}; never a value."""
+    from .agent_env import NATIVE
+
+    src = {}
+    for f, x in (eff.fields.items() if eff is not None else ()):    # a field's source, by its spelling and its native name
+        src[x["name"]] = src[NATIVE.get(kind, {}).get(f) or x["name"]] = x["source"]
+    if eff is not None and kind == "opencode" and "key" in eff.fields:
+        src["FLUX_AGENT_API_KEY"] = eff.fields["key"]["source"]
+    if kind == "opencode":
+        keys = sorted(k for k in env if _PROVIDER_KEY.fullmatch(k) and env.get(k))
+        try:
+            oc = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+        except ValueError:
+            oc = {}
+        provider = isinstance(oc, dict) and bool(oc.get("provider") or oc.get("model"))
+    else:
+        keys = [k for k in (*LOGIN_KEYS[kind], *(("ANTHROPIC_AUTH_TOKEN",) if kind == "claude" else ())) if env.get(k)]
+        provider = False
+    sources = sorted({src.get(k, "the environment") for k in keys})
+    also = f"; logged in too ({', '.join(files)})" if files else ""
+    if provider:
+        return {"mechanism": "provider", "names": ["OPENCODE_CONFIG_CONTENT", *keys], "source": ", ".join(sources) or "its settings",
+                "said": "a provider in its configuration" + (f" with a key ({', '.join(keys)})" if keys else "") + also}
+    if keys:
+        return {"mechanism": "key", "names": keys, "source": ", ".join(sources),
+                "said": f"an API key ({', '.join(keys)}, from {', '.join(sources)})" + also}
+    if files:
+        return {"mechanism": "login", "names": list(files), "source": "its login", "said": f"logged in ({', '.join(files)})"}
+    base = {"claude": "ANTHROPIC_BASE_URL", "codex": "OPENAI_BASE_URL"}.get(kind)
+    if base and env.get(base):
+        return {"mechanism": "endpoint", "names": [base], "source": src.get(base, "the environment"),
+                "said": f"an endpoint without a key ({base}, from {src.get(base, 'the environment')})"}
+    return {"mechanism": "none", "names": [], "source": "", "said": "no key, provider configuration or login detected"}
+
+
 def _program(name: str, env: dict[str, str], kind: str = "") -> str:
     exe = os.path.expanduser(env.get(f"FLUX_{name.upper()}_BIN") or kind or name)
     return exe if "/" in exe and Path(exe).exists() else (shutil.which(exe, path=env.get("PATH")) or "")
@@ -115,19 +157,23 @@ def check_agent(name: str, *, live: bool = False, env: dict[str, str] | None = N
     home = Path(env.get("HOME") or Path.home())
     known = [*LOGIN_FILES[kind], *[f.strip() for f in env.get(f"FLUX_{name.upper()}_LOGIN_FILES", "").split(",") if f.strip()]]
     files = [p for p in known if (home / p).is_file() and (home / p).stat().st_size > 0]   # D760: a build of its own keeps its own
-    try:                                                     # D807: its own set's keys too
-        own = json.loads(env.get(f"FLUX_{name.upper()}_ENV") or "{}")
-    except ValueError:
-        own = {}
-    mine = {**env, **(own if isinstance(own, dict) else {})}
-    keys = [k for k in LOGIN_KEYS[kind] if mine.get(k)]
-    if not step("login", bool(files or keys),
-                (f"logged in ({', '.join(files)})" if files else f"a key in the settings ({', '.join(keys)})") if files or keys
-                else "not logged in: Account › My agents and models (its tab), or a key in the settings"):
+    # D923: one effective environment -- what the turn gets -- for the detection, the status and the answer
+    from .agent import agent_config
+
+    mine, eff = agent_config(name, kind, env, exe)
+    conn = connection(kind, mine, eff, files)
+    out["connection"] = conn
+    if eff is not None:
+        from .agent_env import identity
+
+        out["identity"] = identity(eff, exe)
+    # D924: nothing detected is not "cannot work" (a wrapper, a provider of its own): a live Test asks anyway
+    if not step("connection", conn["mechanism"] != "none" or live,
+                conn["said"] + ("; asking it anyway" if conn["mechanism"] == "none" and live else "")):
         return done()
     if kind in STATUS:
         try:
-            r = subprocess.run([exe, *STATUS[kind]], capture_output=True, text=True, timeout=60, env=env, stdin=subprocess.DEVNULL)
+            r = subprocess.run([exe, *STATUS[kind]], capture_output=True, text=True, timeout=60, env=mine, stdin=subprocess.DEVNULL)
             said = " ".join(re.sub(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m", "", r.stdout + r.stderr).split())[:300]
             # OpenCode's list is informative only: a provider Flux configures is not in it
             if not step("status", r.returncode == 0 or kind == "opencode", said or f"exit {r.returncode}"):
