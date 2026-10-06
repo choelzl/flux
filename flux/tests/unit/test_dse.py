@@ -132,7 +132,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
            "statement": "a grid",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
            "flow": {"orchestrate": {"montecarlo": {"samples": 4, "seed": 1}, "space": {"x": [1, 2, 3], "y": ["a", "b"]}},
-                    "test": {"test": ["true"]}}}
+                    "test": {"test": ["true", "{point}"]}}}
     task = TaskSpec.from_dict(doc)
     assert task.space == {"x": [1, 2, 3], "y": ["a", "b"]}
     prob = PromptProblem(task)
@@ -178,7 +178,7 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
     doc = {"id": "g",
            "statement": "g",
            "objectives": [{"metric": "cost", "direction": "minimize"}],
-           "flow": {"orchestrate": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true"]}}}
+           "flow": {"orchestrate": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true", "{point}"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
     assert any(line.startswith("dse: model {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
@@ -313,7 +313,7 @@ def test_the_document_says_phases_and_a_typo_in_one_is_a_load_error():
            "objectives": [{"metric": "cost", "direction": "minimize"}],
            "flow": {"orchestrate": {"policy": [{"name": "a", "wave": 2}, {"policy": "llm", "knobs": ["x"], "rounds": 1}, "control"],
                             "space": {"x": [1, 2, 3]}},
-                    "test": {"test": ["true"]}}}
+                    "test": {"test": ["true", "{point}"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert prob.roles().orchestrator.name == "phases" and len(prob.roles().orchestrator.phases) == 3
     with pytest.raises(TaskError, match=r"flow.dse\[0\]: gradient: wavee is not one of its fields"):

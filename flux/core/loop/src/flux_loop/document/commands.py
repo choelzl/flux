@@ -149,12 +149,15 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
                 if m.group(1) not in known:
                     raise TaskError(f"{what} says {{{m.group(1)}}}, which is neither a knob of `flow.dse.space` "
                                     f"({', '.join(space) or 'none'}) nor the loop's ({', '.join(BUILTIN_SUBS)})")
-    if space and "agent" in generator and not (said & set(space)) and "{point}" not in str(cmds):
+    if space and not generator.get("command") and "catalog" not in generator and not (said & set(space)) \
+            and "{point}" not in str(cmds):
         # D879: a point becomes a design only through a command that says its knobs; with none, every
-        # point was an empty artifact the gate refused, pass after pass (an agent spells no sweep point)
+        # point was an empty artifact the gate refused, pass after pass (an agent spells no sweep point).
+        # D911: a model neither -- the search instantiates a point through the command alone
+        who = "a coding agent" if "agent" in generator else "a model"
         raise TaskError(f"flow.dse.space knobs ({', '.join(space)}) are said by no command: a search's points "
                         "become designs through `flow.generate: {command: ... {" + next(iter(space)) + "} ...}` "
-                        "(or a measure command that takes them); a coding agent does not spell a point")
+                        f"(or a measure command that takes them); {who} does not spell a point")
 
 
 def _knob_subs(knobs: dict[str, Any]) -> dict[str, str]:

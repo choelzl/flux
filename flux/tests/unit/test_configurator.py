@@ -140,6 +140,42 @@ def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
         assert [type(x) for x in after["space"]["mode"]] == [type(x) for x in space]
 
 
+SEARCH_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const out = {};
+for (const [name, gen, cmd, test] of [["model", "model", "", "{python} {home}/check.py {artifact}"],
+                                      ["agent", "agent:codex", "", "{python} {home}/check.py {artifact}"],
+                                      ["script", "command", "{python} {home}/gen.py {artifact} {x}", "{python} {home}/check.py {artifact}"],
+                                      ["tune", "model", "", "{python} {home}/check.py {artifact} {x}"]]) {
+  const s = c.base();
+  Object.assign(s, {id: "s", statement: "a sweep", language: "python", generateCommand: cmd, space: [{knob: "x", choices: "1, 2"}]});
+  s.flow.dse = "sweep"; s.flow.generate = gen;
+  s.checks = [{type: "custom", tool: "custom-check", name: "test", params: {command: test}, count_re: "", timeout: ""}];
+  s.stages = [{tool: "custom-stage", name: "bench", params: {command: "{python} {home}/bench.py {artifact}"}, metrics: "t", needs: "", gates: []}];
+  s.objectives = [c.newObjective("t", "min")];
+  out[name] = {half: c.halfOf(s, "generate"), checks: c.check(s)};
+}
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def test_a_search_draws_and_checks_only_the_generator_that_runs():
+    """D911: Flux makes a search's point into a design through `flow.generate: {command}` alone, so
+    the configurator neither draws a model or an agent there nor lets the search go unsaid."""
+    r = subprocess.run(["node", "-e", SEARCH_JS, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    for name in ("model", "agent"):
+        assert out[name]["half"] == "off"
+        assert any(m["level"] == "error" and "only through a script" in m["text"] and m["step"] == 4 for m in out[name]["checks"]), out[name]
+    assert out["script"]["half"] == "rules" and not [m for m in out["script"]["checks"] if m["level"] == "error"]
+    tune = out["tune"]
+    assert tune["half"] == "off" and not [m for m in tune["checks"] if m["level"] == "error"]
+    assert any("parameter-only search" in m["text"] for m in tune["checks"])
+
+
 def test_the_checklist_knows_the_loops_own_placeholders():
     """D912: the crafter's placeholders are the loader's -- `{params}` is no "unknown placeholder"."""
     from flux_loop.document import BUILTIN_SUBS

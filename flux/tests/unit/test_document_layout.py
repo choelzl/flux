@@ -16,7 +16,7 @@ APPS = Path(__file__).resolve().parents[2] / "applications"
 NEW = {"id": "t", "statement": "x", "language": "python",
        "objectives": [{"metric": "t", "direction": "minimize"}],
        "budget": {"steps": 2},
-       "flow": {"test": {"test": ["true"]},
+       "flow": {"test": {"test": ["true", "{point}"]},          # D911: a command says the search's point
                 "measure": {"screen": {"command": "echo t=1", "metrics": ["t"]},
                             "confirm": {"command": ["echo", "t=2"], "metrics": ["t"], "timeout_s": 900}},
                 "orchestrate": {"policy": "sweep", "space": {"n": [1, 2]}, "seeds": [{"n": 2}]},

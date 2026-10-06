@@ -22,6 +22,15 @@ def test_a_space_with_an_agent_generator_is_refused(tmp_path):
         TaskSpec.from_dict(_doc(generate="codex"), base=tmp_path)
 
 
+@pytest.mark.parametrize("generate", [None, "model"])
+def test_a_space_with_a_model_generator_is_refused(generate, tmp_path):
+    """D911: the model is never asked for a search's point either -- a sweep with "a model writes
+    it" ran zero model calls, every point an empty artifact the gate refused."""
+    doc = _doc(generate=generate) if generate else _doc()
+    with pytest.raises(TaskError, match=r"knobs \(arch\) are said by no command.*a model does not spell a point"):
+        TaskSpec.from_dict(doc, base=tmp_path)
+
+
 def test_a_command_saying_a_knob_makes_the_points(tmp_path):
     TaskSpec.from_dict(_doc(generate={"command": "gen {artifact} {arch}"}), base=tmp_path)
     TaskSpec.from_dict(_doc(measure={"screen": {"command": "tool --arch {arch} {artifact}", "metrics": ["t"]}}), base=tmp_path)   # a tune

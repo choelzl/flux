@@ -157,10 +157,19 @@
     return null;
   }
 
+  /** D911: a search whose points no script writes -- the settings alone are each candidate, and
+      "Make a design" (a model, a coding agent) never runs: Flux instantiates a point only through
+      `flow.generate: {command}`. */
+  function paramOnly(state) {
+    var f = (state && state.flow) || {};
+    return !!(f.dse && f.dse !== "none" && f.generate !== "command");
+  }
+
   /** The half a box is in for this state (for the drawing's colour). */
   function halfOf(state, box) {
     var v = (state.flow || {})[box];
     if (box === "orchestrate" && state.flow && state.flow.dse && state.flow.dse !== "none") return "off";
+    if (box === "generate" && paramOnly(state)) return "off";                    // D911: not run in a search
     if (!BOXES[box] || isFixed(box)) return "fixed";
     var c = choiceOf(box, v);
     if (!c && typeof v === "string" && v.indexOf("agent:") === 0) return "agent";          // a custom agent (D728)
@@ -947,6 +956,14 @@
         if (BUILTIN_SUBS.indexOf(p) < 0 && knobs.indexOf(p) < 0) error("In " + c[0] + ", {" + p + "} is neither a setting to search nor one of Flux's own.");
       });
     });
+    // D911: a search's point becomes a design only through a script (Flux runs the generate command
+    // once per point); a model or a coding agent is never asked, so the drawing does not say one
+    at = STEP_OF.flow;
+    if (searching && knobs.length && flow.generate !== "command") {
+      if (!knobsSaid) error("A search's settings become designs only through a script: in \"Make a design\" choose \"My script writes it\" and say {" +
+                            knobs[0] + "} in it, or use {" + knobs[0] + "} in a check or a measurement. A model or a coding agent is not asked for a search's points.");
+      else note("A parameter-only search: each point's settings reach your commands as {" + knobs[0] + "}; no design is written, \"Make a design\" does not run.");
+    }
 
     at = STEP_OF.more;
     ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers"].forEach(function (key) {
@@ -1804,6 +1821,7 @@
       if (name === "orchestrate" && state.flow.orchestrate === "default" && !(state.flow.dse && state.flow.dse !== "none")) {
         text = hasParts() ? "model picks the part" : "default: one design";
       }
+      if (name === "generate" && paramOnly(state)) text = "not run: settings only";        // D911
       if (readonly && (name === "test" || name === "measure")) return name === "test" ? "your checks" : "your measurements";
       var names = stepNames(name);
       max = max || 24;
@@ -1844,6 +1862,10 @@
       var raw = state.agentRaw && state.agentRaw[openBox];
       if (raw) p.appendChild(h("p", { class: "fc-hint fc-now", text: "A coding agent with its own settings, kept as written: " + JSON.stringify(raw.agent) +
         ". Choosing another replaces them." }));
+      if (openBox === "generate" && paramOnly(state)) {               // D911: what a search runs
+        p.appendChild(h("p", { class: "fc-hint fc-now", text: "A search is on: only a script turns a point's settings into a design. " +
+          "With a model or a coding agent here, nothing writes a design -- the settings alone reach your commands (a parameter-only search)." }));
+      }
       if (openBox === "orchestrate" && state.flow.dse !== "none") {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
       } else if (box.choices.length === 1) {

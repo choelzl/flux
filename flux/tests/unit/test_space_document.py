@@ -120,7 +120,8 @@ def test_a_component_groups_its_knobs_and_an_optional_one_is_switched_on_or_off(
 
     task = TaskSpec.from_dict(_doc(space={"core": {"size": [1, 2, 4]}, "extra": {"optional": True, "degree": [1, 2, 4]},
                                           "bare": {"optional": True}},
-                                   seeds=[{"core": {"size": 2}, "extra": {"degree": 4}}], stages=[]))
+                                   seeds=[{"core": {"size": 2}, "extra": {"degree": 4}}], stages=[],
+                                   flow={"generate": {"command": ["render", "{artifact}", "{point}"]}}))   # D911: a point is made by a command
     assert list(task.space) == ["core.size", "extra.on", "extra.degree", "bare.on"]
     assert task.space["extra.on"] == [False, True] and task.when["extra.degree"] == {"extra.on": [True]}
     seed = PromptProblem(task).seeds(None)[0]
