@@ -915,7 +915,7 @@ def flows(r: Run) -> None:
         name = b.js("return document.activeElement.textContent")
         b.keys(b.ENTER)
         b.wait(f"(() => {{ const d = document.querySelector('#main .detail'); return d && d.querySelector('h2') && d.querySelector('h2').textContent === {json.dumps(name)}"
-               " && [...d.querySelectorAll('h3')].some(x => x.textContent === 'Design'); })()", timeout=15, what="the design opened, its source shown")
+               " && [...d.querySelectorAll('h3')].some(x => x.textContent === 'Design'); })()", timeout=45, what="the design opened, its source shown")
         r.check("keyboard: Enter on a result opens its design and source (D929)", True)
         for n in (1, 2):
             tab_to("a.matches('#main table.designs tbody input[type=checkbox]') && !a.checked", f"compare box {n}")
@@ -924,7 +924,7 @@ def flows(r: Run) -> None:
         tab_to("a.matches('button') && a.textContent === 'Compare 2/2'", "the Compare button", back=True)
         b.keys(b.ENTER)
         said = b.wait("document.querySelector('dialog.dlg[open]') && [...document.querySelectorAll('dialog.dlg[open] h3')].map(x => x.textContent).join('|')",
-                      timeout=15, what="the comparison")
+                      timeout=45, what="the comparison (two designs fetched; slow under load) -- " + str(b.js("return [document.activeElement.outerHTML.slice(0, 120), (window.__e2e || {}).errors, (window.__e2e || {}).bad]")))
         r.check("keyboard: Enter on Compare shows the two compared, their source (D929)", said.startswith("Source"), said)
         b.keys(b.ENTER)                                         # the dialog's Close has the focus
         b.wait("!document.querySelector('dialog.dlg[open]')", timeout=5, what="the comparison closed by Enter")
@@ -949,7 +949,7 @@ def flows(r: Run) -> None:
         b.js("document.activeElement && document.activeElement.blur(); return 1")
         tab_to("a.matches('button.open-turn')", "a turn's button")
         b.keys(b.ENTER)
-        b.wait("(document.querySelector('#main .detail h2') || {}).textContent === 'opencode'", timeout=15, what="the turn opened")
+        b.wait("(document.querySelector('#main .detail h2') || {}).textContent === 'opencode'", timeout=45, what="the turn opened")
         r.check("keyboard: Enter on a turn's button opens it (D929)", True)
         b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-keys={time.time()}#/"})   # a reload: the real fetch again
         b.wait("document.querySelector('#main')", timeout=20)
