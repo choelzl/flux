@@ -3,15 +3,14 @@ accepted or failed by the loop's limits, with its measurements.
 
 A design is a result once a stage measured it; a draft sent to repair or refused by the gate is
 not. Its numbers are each stage's latest; `shown` is the deepest stage measured, in the
-document's order. It is **accepted** when its numbers meet every limit that applies to them:
-
-- each stage's cutoffs (the gates of a measurement: `at` a floor, `below` a ceiling, `within` a
-  share of the best design measured at that stage), on that stage's numbers;
-- each objective with a limit, on its stage's numbers when the design reached that stage (an
-  objective without a stage: the deepest measured).
-
-Otherwise it is **failed**, and each limit it misses is said. The decided design is the loop's
-latest answer's."""
+document's order. Each objective's limit is read as the loop reads it (D899,
+`flux_loop.eligibility`): on the numbers of the stage it names (no stage: the deepest measured).
+A design is **accepted** (`eligible`) when it meets every limit; **pending** while a limit waits for
+a later stage it has not reached; else **failed** -- a limit missed, or a required number not
+measured at the stage that judges it. `reasons` says each one, short; `why` adds the stages'
+cutoffs it missed (`at` a floor, `below` a ceiling, `within` a share of the best measured there),
+which prune what climbs but are not requirements (D900). The decided design is the loop's latest
+answer's."""
 
 from __future__ import annotations
 
@@ -26,9 +25,9 @@ __all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "desig
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
 
-def _objective_limits(db: str) -> list[dict[str, Any]]:
-    """The objectives with a limit, from the record's latest `decided:objectives` -- read alone
-    (D774), not with the whole record."""
+def _objective_limits(db: str) -> Any:
+    """The objectives, from the record's latest campaign's latest `decided:objectives` -- read alone
+    (D774), not with the whole record -- or None. Their limits are what a design must meet (D899)."""
     import sqlite3
 
     try:
@@ -42,12 +41,10 @@ def _objective_limits(db: str) -> list[dict[str, Any]]:
         finally:
             con.close()
         if row is None:
-            return []
-        objectives = Objectives.from_doc((json.loads(row[0]) or {}).get("objectives") or [])
+            return None
+        return Objectives.from_doc((json.loads(row[0]) or {}).get("objectives") or [])
     except Exception:  # noqa: BLE001 -- a record without an objective: numbers without verdicts
-        return []
-    return [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage}
-            for o in objectives if o.goal is not None]
+        return None
 
 
 def content_key(c: dict[str, Any]) -> str:
@@ -262,9 +259,14 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     finally:
         store.close()
     order = {st.get("name"): i for i, st in enumerate(stages)}
-    objectives = _objective_limits(db)
+    from flux_loop.eligibility import eligibility, judging_stage
+    from flux_loop.objective import Objectives
+
+    vector = _objective_limits(db) or Objectives()
+    objectives = [o for o in vector if o.goal is not None]
     cutoffs = _cutoffs(stages)
-    directions = {o["metric"]: o["direction"] for o in objectives}
+    chain = [st.get("name") for st in stages] or sorted({s for d in by.values() for s in d["stages"]})
+    directions = {o.metric: o.direction for o in vector}
     best: dict[tuple[str, str], float] = {}                       # (stage, metric) -> the best measured, for `within`
     for c in cutoffs:
         if "within" in c:
@@ -298,20 +300,20 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 misses.append(f"{said} (the {c['stage']} cutoff)")
             if c["stage"] == shown:
                 meets[c["metric"]] = meets.get(c["metric"], True) and ok
+        # D899: the objectives' limits by the loop's own reading -- a limit's stage judges it; a
+        # required number missing there is "not measured", one a later stage will judge is pending.
+        # A cutoff prunes what climbs (a design it cut is measured no deeper); it is not a requirement.
+        judged = eligibility(vector, d["stages"], chain, stopped=bool(misses))
+        measured = sorted(d["stages"], key=lambda s: order.get(s, -1))
         for o in objectives:
-            # an objective of a stage judges the designs measured there; else the deepest measured
-            st = o["stage"] if o["stage"] and o["stage"] not in ("deepest", "last") else shown
-            v = d["stages"].get(st, {}).get(o["metric"])
-            if v is None:
-                continue
-            ok = v >= o["goal"] if o["direction"] == "maximize" else v <= o["goal"]
-            if not ok:
-                misses.append(f"{o['metric']} {v:g} {'is below' if o['direction'] == 'maximize' else 'is above'} the limit "
-                              f"{o['goal']:g} ({st})")
-            if st == shown:
-                meets[o["metric"]] = meets.get(o["metric"], True) and ok
-        d["verdict"] = "failed" if misses else "accepted"
-        d["why"] = misses
+            st = judging_stage(o, measured, chain)
+            v = d["stages"].get(st or "", {}).get(o.metric)
+            if st == shown and v is not None:
+                ok = v >= o.goal if o.direction == "maximize" else v <= o.goal
+                meets[o.metric] = meets.get(o.metric, True) and ok
+        d["eligible"], d["pending"], d["reasons"] = judged.eligible, judged.pending, list(judged.reasons)
+        d["verdict"] = "accepted" if judged.eligible else "pending" if judged.pending else "failed"
+        d["why"] = misses + list(judged.reasons)
         d["meets"] = meets
         d["decision"] = False
         d["rank"] = None
@@ -327,11 +329,12 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not d["decision"])                   # the decided design on top
     metrics: list[str] = []
-    for m in [o["metric"] for o in objectives] + [c["metric"] for c in cutoffs] + [m for d in out for m in d["numbers"]]:
+    for m in [o.metric for o in objectives] + [c["metric"] for c in cutoffs] + [m for d in out for m in d["numbers"]]:
         if m not in metrics:
             metrics.append(m)
-    limits = [{"metric": o["metric"], "direction": o["direction"], "goal": o["goal"]} for o in objectives]
-    return {"designs": out[:limit], "total": len(out), "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "failed")},
+    limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
+    return {"designs": out[:limit], "total": len(out),
+            "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
             "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
 
 

@@ -32,14 +32,16 @@ def test_measured_designs_accepted_or_failed_by_the_limits(tmp_path):
     got = designs(_record(tmp_path), STAGES, decision="fast")
     by = {d["name"]: d for d in got["designs"]}
     assert set(by) == {"fast", "slow", "tiny"}, "a draft the gate refused is not a result"
-    assert got["counts"] == {"accepted": 1, "failed": 2}
+    assert got["counts"] == {"accepted": 1, "pending": 0, "failed": 2}
     fast, slow, tiny = by["fast"], by["slow"], by["tiny"]
     assert fast["verdict"] == "accepted" and fast["decision"] and got["designs"][0]["name"] == "fast"
     assert fast["shown"] == "confirm" and fast["numbers"]["fmax_mhz"] == 1200.0 and fast["meets"]["fmax_mhz"] is True
     assert slow["verdict"] == "failed" and slow["why"] == ["fmax_mhz 800 is below the limit 1000 (confirm)"]
     assert slow["meets"]["fmax_mhz"] is False
     assert tiny["verdict"] == "failed" and tiny["shown"] == "screen"
-    assert tiny["why"] == ["fmax_mhz 700 is below 900 (the screen cutoff)"], tiny["why"]
+    assert tiny["why"] == ["fmax_mhz 700 is below 900 (the screen cutoff)", "fmax_mhz not measured (confirm)"], tiny["why"]
+    assert (fast["eligible"], fast["pending"], fast["reasons"]) == (True, False, [])
+    assert (tiny["eligible"], tiny["pending"]) == (False, False), "cut at the screen: it never reaches the stage that judges"
     assert got["metrics"][:2] == ["fmax_mhz", "area_um2"] and got["limits"][0]["goal"] == 1000
 
 

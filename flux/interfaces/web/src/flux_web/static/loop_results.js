@@ -16,7 +16,9 @@ function resultsView(ctx, r) {
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
   const unit = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
   const limitOf = (m) => r.limits.find(l => l.metric === m);
-  const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted") : h("span", { class: "pill bad" }, "failed");
+  // D899: accepted only when it meets every requirement; pending while a later stage must judge one
+  const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
+    : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending") : h("span", { class: "pill bad" }, "failed");
   const detail = h("div", { class: "detail" }, empty("Select a design."));
   async function open(d, tr) {
     if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
@@ -28,7 +30,7 @@ function resultsView(ctx, r) {
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, d.name), verdictPill(d), d.decision ? h("span", { class: "pill ok" }, "★ decision") : "",
         d.part ? h("span", { class: "muted" }, `part ${d.part}`) : ""),
-      d.why.length ? h("div", { class: "blk" }, h("h3", {}, "Limits it misses"), h("ul", { class: "misses" }, d.why.map(w => h("li", {}, w)))) : "",
+      d.why.length ? h("div", { class: "blk" }, h("h3", {}, d.verdict === "pending" ? "Waiting for" : "Not met"), h("ul", { class: "misses" }, d.why.map(w => h("li", {}, w)))) : "",
       stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
         h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
         h("tbody", {}, stages.map(([st, m]) => h("tr", {}, h("td", {}, st), ...metrics.map(k => h("td", { class: "mono num" }, fmt(m[k])))))))) : "",
@@ -120,7 +122,7 @@ function resultsView(ctx, r) {
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });
   function chips() {
-    chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), chip("failed", `Failed ${r.counts.failed}`),
+    chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
       h("span", { class: "grow" }), cmpBtn);
   }
   chips(); drawTable();
