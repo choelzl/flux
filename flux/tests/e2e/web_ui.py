@@ -1459,6 +1459,8 @@ def flows(r: Run) -> None:
              " [...c.querySelectorAll('tbody tr')].find(t => t.cells[0].textContent === 'many.example:443').querySelector('button.bin').click(); return 1")
         r.dialog_button("Remove")
         b.wait("!document.querySelector('dialog.dlg[open]')", timeout=10)
+        b.wait("![...document.querySelectorAll('#insights-part tbody tr')].some(t => t.cells[0].textContent === 'many.example:443')",
+               timeout=10, what="the removed host gone from the page")   # its removal answered, the page drawn again
         left = [n["key"] for n in json.loads(r.api("/admin/insights?days=30")["body"])["network"]]
         r.check("Insights: a removed host leaves the list (D850)", "many.example:443" not in left and "few.example:443" in left, str(left))
         b.js("localStorage.removeItem('flux-insights-net-sort'); return 1")
