@@ -1208,6 +1208,53 @@ def flows(r: Run) -> None:
             r.clean(f"phone {h}")
     r.step("phone", phone)
 
+    def phone_wizard():
+        """D913: on a phone the wizard's step and its first field are on the first screen -- a step menu
+        in place of the step bar, the ways a menu -- at 390 and 320 pixels, every step, nothing wider
+        than the screen. FLUX_E2E_SHOTS: each step at 390 to that folder."""
+        r.login("bob")
+        shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
+        if shots:
+            shots.mkdir(parents=True, exist_ok=True)
+        for h in ("#/configure", "#/app/sw/settings/problem"):
+            for width in (390, 320):
+                b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                     "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/' + arguments[1]; document.body.append(f); return 1", width, h)
+                b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stephead select'); })()",
+                       timeout=20, what=f"the wizard of {h} at {width}")
+                for step in range(7):
+                    first = ("[...document.getElementById('phone').contentDocument.querySelectorAll('.fc-step input, .fc-step select, .fc-step textarea,"
+                             " .fc-step button, .fc-step summary, .fc-step svg .fc-box')].find(e => e.getBoundingClientRect().height > 0)")
+                    b.js("""const [step] = arguments, w = document.getElementById('phone').contentWindow, d = w.document;
+                        const m = d.querySelector('.fc-stephead select'); m.value = String(step); m.dispatchEvent(new Event('change'));
+                        w.scrollTo(0, 0); return 1""", step)
+                    b.wait(f"document.getElementById('phone').contentDocument.querySelector('.fc-stepof').textContent === 'Step {step + 1} of 7' && {first}",
+                           timeout=10, what=f"step {step + 1}")
+                    got = b.js(f"""const w = document.getElementById('phone').contentWindow, d = w.document;
+                        const head = d.querySelector('.fc-stephead').getBoundingClientRect();
+                        const first = {first};""" + """
+                        const f = first ? first.getBoundingClientRect() : null;
+                        return [d.querySelector('.fc-stepof').textContent, Math.round(head.bottom), f ? Math.round(f.bottom) : -1,
+                                d.documentElement.scrollWidth, w.innerWidth, !!d.querySelector('.fc-stepbar') && d.querySelector('.fc-stepbar').offsetParent === null];""", step)
+                    ok = got[0] == f"Step {step + 1} of 7" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
+                    r.check(f"phone wizard {h} at {width}px, step {step + 1}: the step and its first field on the first screen", ok, str(got))
+                    if shots and width == 390:
+                        el = b.find("#phone")
+                        png = b.cmd("WebDriver:TakeScreenshot", {"id": el, "full": False})["value"]
+                        (shots / f"wizard-{'new' if h == '#/configure' else 'loop'}-step{step + 1}-390px.png").write_bytes(base64.b64decode(png))
+        if shots:                                       # and Review on a desktop, its new order (D913)
+            b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                 "f.style.cssText = 'width:1240px;height:880px;border:0'; f.src = '/#/app/sw/settings/problem'; document.body.append(f); return 1")
+            b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stepbar button'); })()", timeout=20)
+            b.js("[...document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepbar button')].pop().click(); return 1")
+            time.sleep(0.5)
+            png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
+            (shots / "wizard-loop-review-desktop.png").write_bytes(base64.b64decode(png))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("phone wizard")
+    r.step("phone wizard", phone_wizard)
+
     def screens():
         """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
         out = Path(os.environ["FLUX_E2E_SHOTS"])

@@ -169,8 +169,10 @@ async function configurePage(name, owner, mode = "configurator") {
   const host = h("div", {});
   const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
+  const hd = head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub);
+  hd.classList.add("configure-head");                     // D913: on a phone, its line of ways is the menu's
   show(isNew ? crumbs(["Loops", "#/"], ["New loop", null]) : crumbs(["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]),
-    head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub), host);
+    hd, host);
   configureInto(host, name, owner, mode, isNew ? "#/configure" : `${appHref(owner, name)}/settings/problem`);
 }
 
@@ -193,9 +195,14 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
   const draft = isNew ? (DRAFT = DRAFT || newDraft()) : null;
   const body = h("div", {}), tabBar = h("div", { class: (small ? "subtabs" : "tabs") + " config-modes", role: "tablist" });
   const keptLine = h("div", { class: "draft-line muted small" });
+  // D913: on a phone, the ways are one compact menu, not a wrapped row of tabs
+  const modeMenu = h("select", { class: "mode-menu", "aria-label": isNew ? "How to make it" : "How to change it" });
+  modeMenu.addEventListener("change", () => pick(modeMenu.value));
+  function pick(k) { mode = k; history.replaceState(null, "", base + (k === "configurator" ? "" : "/" + k)); drawTabs(); draw(); }
   function drawTabs() {
     tabBar.replaceChildren(...modes.map(k => h("button", { role: "tab", type: "button", class: k === mode ? "on" : "", "aria-selected": k === mode ? "true" : "false",
-      onclick: () => { mode = k; history.replaceState(null, "", base + (k === "configurator" ? "" : "/" + k)); drawTabs(); draw(); } }, CONFIG_MODES[k])));
+      onclick: () => pick(k) }, CONFIG_MODES[k])));
+    modeMenu.replaceChildren(...modes.map(k => { const o = h("option", { value: k }, CONFIG_MODES[k]); o.selected = k === mode; return o; }));
     drawKept();
   }
   function drawKept() {                                   // D912: the draft is said, and discarded only when asked
@@ -219,7 +226,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
       else await (isNew ? newByAgent(body, draft, drawKept) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }
-  if (barHost) { barHost.append(tabBar); host.replaceChildren(keptLine, body); } else host.replaceChildren(tabBar, keptLine, body);
+  if (barHost) { barHost.append(tabBar, modeMenu); host.replaceChildren(keptLine, body); } else host.replaceChildren(tabBar, modeMenu, keptLine, body);
   drawTabs(); draw();
 }
 

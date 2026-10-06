@@ -230,4 +230,32 @@
 .fc-status.fc-err { color: var(--fc-error); font-weight: 600; }
 .fc-ready strong { font-weight: 600; }
 .flux-crafter [aria-invalid="true"] { border-color: var(--fc-error); }
+/* D913: Review top down -- where it stands, to do, what it runs, the document folded last */
+.fc-output-head .fc-grow { flex: 1; }
+.fc-summary { margin: 0; display: grid; gap: 2px; }
+.fc-summary > div { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 8px; }
+.fc-summary dt { color: var(--fc-muted); }
+.fc-summary dd { margin: 0; overflow-wrap: anywhere; }
+.fc-yaml-fold { margin-top: .8em; }
+.fc-yaml-fold > summary { cursor: pointer; }
+.fc-yaml-fold .fc-file { margin-right: 0; }
+/* D913: the step's name and a menu of the steps, on a phone, in place of the bar */
+.fc-stephead { display: none; }
+@media (max-width: 640px) {
+  .fc-stepbar { display: none; }
+  .fc-stephead { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+  .fc-stepof { font-weight: 600; white-space: nowrap; }
+  .flux-crafter select.fc-stepmenu { flex: 1; min-width: 0; width: auto; font-weight: 600; }
+  .fc-step-says { font-size: .9em; margin: 0 0 .5em !important; }
+  .fc-step { min-height: 0; }
+  /* one bar, three places: Back, the save, Next -- the status above them, beside the save */
+  .fc-stepnav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .fc-stepnav.fc-nosave { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fc-stepnav .fc-grow { display: none; }
+  .fc-stepnav .fc-status { grid-column: 1 / -1; grid-row: 1; }
+  .fc-stepnav .fc-btn { margin: 0; width: 100%; white-space: normal; line-height: 1.2; min-height: 2.6em; }
+  .fc-stepnav .fc-next-what { display: none; }
+  .fc-stepnav .fc-save.fc-primary { grid-column: 2 / -1; }
+  .fc-summary > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
 .fc-step-last .fc-output { border: 0; padding: 0; }

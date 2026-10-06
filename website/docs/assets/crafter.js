@@ -976,7 +976,7 @@
     flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== "agent:custom") agents[flow[b].slice(6)] = 1; });
     if (Object.keys(agents).length) note("The coding agent " + Object.keys(agents).join(", ") + " must be installed where it runs.");
     var fl = namedFiles(state, cat);
-    if (fl.length) note("Put these beside the document: " + fl.join(", ") + ".");
+    if (fl.length) { note("Put these beside the document: " + fl.join(", ") + "."); msgs[msgs.length - 1].files = fl; }
     return msgs;
   }
 
@@ -2045,12 +2045,21 @@
         body = [h("p", { class: "fc-hint", text: opts.save ? "What is left to do first, then what it runs, then the document and the save." :
           "What is left to do, what it runs, and the document. Copy or download it." })];
       }
-      var back = step > 0 ? button("Back", function () { go(step - 1); }) : null;
-      var next = step < STEPS.length - 1 ? button("Next: " + STEPS[step + 1], function () { go(step + 1); }, "fc-primary") : null;
-      // D912: the save's status beside the button pressed, said aloud, on every step
+      // D913: on a phone, "Step 1 of 7" and a menu of the steps in place of the bar
+      var menu = h("select", { "aria-label": "Step", class: "fc-stepmenu" }, STEPS.map(function (t, i) {
+        var o = h("option", { value: String(i), text: t }); if (i === step) o.selected = true; return o;
+      }));
+      menu.addEventListener("change", function () { go(Number(menu.value)); });
+      var stephead = h("div", { class: "fc-stephead" }, [h("span", { class: "fc-stepof", text: "Step " + (step + 1) + " of " + STEPS.length }), menu]);
+      var back = step > 0 ? button("Back", function () { go(step - 1); }, "fc-back") : h("span", { class: "fc-back" });
+      var next = step < STEPS.length - 1 ? h("button", { type: "button", class: "fc-btn fc-primary fc-next", on: { click: function () { go(step + 1); } } },
+                                             ["Next", h("span", { class: "fc-next-what", text: ": " + STEPS[step + 1] })]) : null;
+      // D912: the save's status beside the button pressed, said aloud, on every step; D913: one bar,
+      // Back, the save, Next -- the save the primary action on the last step
       parts.navStatus = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
-      parts.navSave = opts.save && step < STEPS.length - 1 ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }) : null;
-      var nav = h("div", { class: "fc-stepnav" }, [back, h("span", { class: "fc-grow" }), parts.navStatus, parts.navSave, next]);
+      var last0 = step === STEPS.length - 1;
+      parts.navSave = opts.save ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }, "fc-save" + (last0 ? " fc-primary" : "")) : null;
+      var nav = h("div", { class: "fc-stepnav" + (opts.save ? "" : " fc-nosave") }, [back, h("span", { class: "fc-grow" }), parts.navStatus, parts.navSave, next]);
       body.forEach(function (el) {                       // the long form's titles: the step bar says them
         if (!el.querySelectorAll) return;
         var t = el.querySelector("h3");
@@ -2065,6 +2074,7 @@
         else if (parts.bodyEl && parts.out.parentNode !== parts.bodyEl) parts.bodyEl.appendChild(parts.out);
       }
       parts.form.appendChild(bar);
+      parts.form.appendChild(stephead);
       parts.form.appendChild(h("div", { class: "fc-step" + (last ? " fc-step-last" : "") }, body));
       parts.form.appendChild(nav);
       showStatus();
@@ -2154,8 +2164,10 @@
         parts.ready.appendChild(h("li", { class: "fc-" + r[0] }, [h("strong", { text: r[1] + ": " }), r[2]]));
       });
       parts.checks.innerHTML = "";
+      var todo = msgs.filter(function (m) { return !m.files; });      // the files: in Where it stands
+      if (!todo.length) parts.checks.appendChild(h("li", { class: "fc-ok", text: "Nothing left to do in the document." }));
       var calm = opts.calmChecks && !parts.touched;   // nothing typed yet: what is left to do, not errors
-      msgs.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text })); });
+      todo.forEach(function (m) { parts.checks.appendChild(h("li", { class: "fc-" + (calm && m.level !== "note" ? "todo" : m.level), text: m.text })); });
       renderSummary();
       if (parts.next) parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
     }
@@ -2217,15 +2229,21 @@
     parts.next = opts.nextSteps === false ? null : h("code", {});
     parts.copyBtn = button("Copy", copy, opts.save ? "" : "fc-primary");
     parts.saved = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
-    var saveBtn = opts.save ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "fc-primary") : null;
+    // stepped, the save is the step bar's (D913); the whole form keeps its own beside the document
+    var saveBtn = opts.save && !stepped ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "fc-primary") : null;
     var keptNotes = (opts.notes || []).length ? [h("h4", { text: "Kept as written" }),
       h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))] : [];
     parts.saveBtn = saveBtn;
+    parts.summary = h("dl", { class: "fc-summary" });
+    // D913: Review reads top down -- where it stands and what to fix, what it runs, then the document folded
+    var yamlBox = h("details", { class: "fc-yaml-fold" }, [h("summary", {}, [h("strong", { text: "The document" }), " ", parts.file]),
+      h("pre", { class: "fc-yaml" }, [parts.code])]);
+    if (!opts.save) yamlBox.open = true;             // the docs' page: the document is what one takes away
     var out = parts.out = h("div", { class: "fc-output" }, [
-      h("div", { class: "fc-output-head" }, [parts.file, saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
-      h("pre", { class: "fc-yaml" }, [parts.code]),
+      h("div", { class: "fc-output-head" }, [h("span", { class: "fc-grow" }), saveBtn, parts.copyBtn, button("Download", download), parts.saved]),
       h("h4", { text: "Where it stands" }), parts.ready,
-      h("h4", { text: "Checklist" }), parts.checks].concat(keptNotes).concat(opts.nextSteps === false ? [] : [
+      h("h4", { text: "To do" }), parts.checks,
+      h("h4", { text: "What it runs" }), parts.summary].concat(keptNotes).concat([yamlBox]).concat(opts.nextSteps === false ? [] : [
       h("h4", { text: "Next steps" }),
       h("p", { class: "fc-hint", text: "Save the file with the files it names, then:" }),
       h("pre", {}, [parts.next])]));

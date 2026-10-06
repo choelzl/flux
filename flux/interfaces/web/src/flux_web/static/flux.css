@@ -277,6 +277,21 @@ dialog.dlg h2 { font-size: 16px; margin-bottom: 8px; }
 /* D828: the configurator at the app's own size, not the docs site's */
 .flux-crafter { font-size: 14px; }
 .flux-crafter input, .flux-crafter select, .flux-crafter textarea { font-size: 14px; }
+/* D912, D913: the creation draft's line; the ways to make a problem, a menu on a phone */
+.draft-line:empty { display: none; }
+.draft-line { margin: -6px 0 10px; }
+select.mode-menu { display: none; }
+@media (max-width: 640px) {
+  .tabs.config-modes, .subtabs.config-modes { display: none; }
+  select.mode-menu { display: block; width: 100%; margin: 0 0 10px; font-weight: 600; }
+  .subrow { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  .subrow select.mode-menu { width: auto; flex: 1 1 7em; min-width: 0; }
+  .subrow .subtabs button { padding: 4px 8px; }
+  .subrow .subtabs { margin-bottom: 10px; }
+  .configure-head .sub { display: none; }        /* the menu of ways says them */
+  .flux-crafter { padding: 10px; }
+  .doc-line { margin: 0 0 6px; }
+}
 details.files-fold > summary { cursor: pointer; padding: 2px 0; }
 details.files-fold[open] > summary { margin-bottom: 10px; }
 
