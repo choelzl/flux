@@ -898,13 +898,15 @@ def flows(r: Run) -> None:
                     b.cmd("WebDriver:PerformActions", {"actions": [{"type": "key", "id": "kb", "actions": [
                         {"type": "keyDown", "value": b.SHIFT}, {"type": "keyDown", "value": b.TAB}, {"type": "keyUp", "value": b.TAB}, {"type": "keyUp", "value": b.SHIFT}]}]})
                     b.cmd("WebDriver:ReleaseActions", {})
+                    b.wait("!window.__shift", timeout=5, what="Shift let go")   # an Enter with Shift held is no button's click
                 else:
                     b.keys(b.TAB)
                 if b.js(f"const a = document.activeElement; return !!a && ({cond});"):
                     return True
             raise AssertionError(f"Tab never reached {what}")
         r.page("#/app/sw/results", "document.querySelectorAll('#main table.designs tbody tr').length >= 2", "Results")
-        b.js("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); return 1")
+        b.js("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0);"
+             " for (const k of ['keydown', 'keyup']) document.addEventListener(k, e => { if (e.key === 'Shift') window.__shift = k === 'keydown'; }, true); return 1")
         metric = b.js("return document.querySelector('#main table.designs th button.th-sort[data-key]:not([data-key=name]):not([data-key=verdict]):not([data-key=stage])').dataset.key")
         tab_to(f"a.matches('button.th-sort') && a.dataset.key === {json.dumps(metric)}", f"the {metric} header")
         b.keys(b.ENTER)
@@ -922,9 +924,16 @@ def flows(r: Run) -> None:
             b.keys(b.ENTER)
         r.check("keyboard: Enter ticks two results to compare (D929)", b.js("return document.querySelectorAll('#main table.designs tbody input:checked').length") == 2)
         tab_to("a.matches('button') && a.textContent === 'Compare 2/2'", "the Compare button", back=True)
+        b.js("window.__clicked = false; document.activeElement.addEventListener('click', () => { window.__clicked = true; }, {once: true}); return 1")
         b.keys(b.ENTER)
+        try:
+            b.wait("window.__clicked", timeout=3, what="the click")
+        except AssertionError:
+            # the whole suite at once: Firefox now and then takes an Enter -- keydown, keypress and keyup
+            # on the button, none prevented -- without its click; never seen alone. Once more, then.
+            b.keys(b.ENTER)
         said = b.wait("document.querySelector('dialog.dlg[open]') && [...document.querySelectorAll('dialog.dlg[open] h3')].map(x => x.textContent).join('|')",
-                      timeout=45, what="the comparison (two designs fetched; slow under load) -- " + str(b.js("return [document.activeElement.outerHTML.slice(0, 120), (window.__e2e || {}).errors, (window.__e2e || {}).bad]")))
+                      timeout=45, what="the comparison")
         r.check("keyboard: Enter on Compare shows the two compared, their source (D929)", said.startswith("Source"), said)
         b.keys(b.ENTER)                                         # the dialog's Close has the focus
         b.wait("!document.querySelector('dialog.dlg[open]')", timeout=5, what="the comparison closed by Enter")
