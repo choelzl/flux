@@ -216,27 +216,61 @@ function appHref(user, app) {
   return user && me && user !== me.name ? `#/u/${enc(user)}/app/${enc(app)}` : `#/app/${enc(app)}`;
 }
 /** A button whose async action disables it while it runs, and says a failure as a notice. */
-/** D833: a field that saves as it changes -- a moment after typing stops, or on leaving it -- with a
-    mark beside it: saving, saved, or why the server refused it. `run()` saves; saves never overlap. */
-function saveMark() { return h("span", { class: "save-mark small", "aria-live": "polite" }); }
+/** D833: a field that saves as it changes -- a moment after typing stops, or on leaving it.
+    D939: no "saved" said in words -- a green check at the end of the field just saved, fading out;
+    saving a small spinner in the mark; a refusal the server's words in red in the mark, kept. The
+    mark (aria-live) says "saved" or the error to a screen reader; its `data-state` (saving, saved,
+    error) is what a test waits for. `run()` saves; saves never overlap. */
+function saveMark() { return h("span", { class: "save-mark small", role: "status", "aria-live": "polite" }); }
+/** D939: the check, over the field's right end (a text field), in a text area's corner, beside a box,
+    a number or a menu, on the top right corner of a field too narrow to hold it beside its text;
+    fixed over the page (a dialog's own layer when in one), it moves nothing. */
+function savedCheck(el) {
+  if (!el || !el.isConnected || !el.getBoundingClientRect().width) return;
+  const host = el.closest("dialog[open]") || document.body;
+  const beside = el.tagName === "SELECT" || ["checkbox", "radio", "number"].includes(el.type);
+  const c = h("span", { class: "save-check", "aria-hidden": "true" });
+  const place = () => {
+    const r = el.getBoundingClientRect(), s = 16;
+    const corner = !beside && el.tagName !== "TEXTAREA" && r.width < 120;
+    c.style.left = `${beside ? r.right + 4 : corner ? r.right - s + 6 : r.right - s - 6}px`;
+    c.style.top = `${el.tagName === "TEXTAREA" ? r.bottom - s - 6 : corner ? r.top - 7 : r.top + (r.height - s) / 2}px`;
+  };
+  place(); host.append(c);
+  addEventListener("scroll", place, true);
+  setTimeout(() => { removeEventListener("scroll", place, true); c.remove(); }, 1600);
+}
+/** The mark says it saved (or "cleared"), and the field `el` shows the check (D939). */
+function markSaved(mark, el, said = "saved") {
+  clearTimeout(mark.clear);
+  mark.className = "save-mark small ok"; mark.dataset.state = "saved";
+  mark.replaceChildren(h("span", { class: "sr-only" }, said));
+  mark.clear = setTimeout(() => { if (mark.dataset.state === "saved") mark.replaceChildren(); }, 1500);   // said again next time
+  savedCheck(el);
+}
 function autosave(fields, run, mark, { delay = 900, typing = true } = {}) {
-  let t = null, chain = Promise.resolve(), clear = null;
-  const go = () => {
+  const all = [].concat(fields);
+  let t = null, chain = Promise.resolve(), last = null;
+  const go = (el) => {
     clearTimeout(t);
+    const field = el instanceof Element ? el : last || all.find(f => f === document.activeElement) || null;
     chain = chain.then(async () => {
-      clearTimeout(clear);
-      mark.className = "save-mark small"; mark.textContent = "saving…";
+      clearTimeout(mark.clear);
+      mark.className = "save-mark small saving"; mark.dataset.state = "saving";
+      mark.replaceChildren(h("span", { class: "spin", "aria-hidden": "true" }));
       try {
         await run();
-        mark.classList.add("ok"); mark.textContent = "saved";
-        clear = setTimeout(() => { if (mark.textContent === "saved") mark.textContent = ""; }, 2500);
-      } catch (x) { mark.classList.add("bad"); mark.textContent = x.message === "log in" ? "" : x.message; }
+        markSaved(mark, field);
+      } catch (x) {
+        mark.className = "save-mark small bad"; mark.dataset.state = "error";
+        mark.textContent = x.message === "log in" ? "" : x.message;               // a refusal stays said
+      }
     });
     return chain;
   };
-  for (const el of [].concat(fields)) {
-    if (typing) el.addEventListener("input", () => { clearTimeout(t); t = setTimeout(go, delay); });
-    el.addEventListener("change", go);
+  for (const el of all) {
+    if (typing) el.addEventListener("input", () => { last = el; clearTimeout(t); t = setTimeout(() => go(el), delay); });
+    el.addEventListener("change", () => { last = el; go(el); });
   }
   return go;
 }
@@ -394,5 +428,5 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
 export { NARROW, act, ago, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
-  enc, fmtTok, followStream, h, head, loopStream, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
+  enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };

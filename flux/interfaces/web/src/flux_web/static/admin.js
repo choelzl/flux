@@ -1,7 +1,7 @@
 // Flux web: the admin's pages and the model settings form (D889: split out of app.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, pageShow, saveMark, skeleton, sortableTable, toast, when } from "./ui.js";
+import { act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when } from "./ui.js";
 import { timeChart } from "./charts.js";
 import { binButton, envEditor, envTable, loopsBrowser, stopLoop } from "./loops.js";
 import { route } from "./app.js";
@@ -348,7 +348,7 @@ async function adminMaintenance(body) {
       ...fields.map(f => h("label", { class: f.type === "checkbox" ? "check" : "stack" },
         f.type === "checkbox" ? [f, PARAM_LABEL[f.dataset.k] || f.dataset.k] : [PARAM_LABEL[f.dataset.k] || f.dataset.k, f])),
       once ? h("div", { class: "stack" }, h("span", { class: "muted small" }, "Once, on one loop"), once) : "",
-      h("p", { class: "muted small" }, "Changes save as you make them. ", mark)), [["Close", false]]);
+      mark), [["Close", false]]);                                               // D939: no "save as you" said
     adminMaintenance(body);
   };
   const rowOf = (t) => h("tr", { class: t.on ? "" : "off" },
@@ -414,7 +414,7 @@ async function adminSandbox(body) {
     card("Homes", [h("p", { class: "muted" }, "Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. ",
         "Each user logs their agents in on their Account page; no one's login is shared."),
       h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
-    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, "Changes save as you make them; they apply from each loop's next start."), sbMark));
+    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, "These apply from each loop's next start."), sbMark));   // D939
   // D833: saved as they change
   autosave([mode, allow, endpoints, paths, loginP, seed], () => api("/admin/sandbox", { method: "PUT", body: { network: mode.value,
     allow: list(allow), endpoints: endpoints.checked, path: list(paths), login_path: loginP.checked, home_seed: list(seed) } }), sbMark);
@@ -765,7 +765,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     const badge = badges[k] = h("span", { class: "pill small warn set-overridden" }, "Overridden");
     const drawClear = () => { clearBox.replaceChildren(st.values[k] ? act("Clear", async () => {
       await save({ [k]: null }); st.values[k] = ""; inputs[k].value = ""; inputs[k].placeholder = holder(""); drawClear(); redraw(k);
-      mark.className = "save-mark small ok"; mark.textContent = "cleared";
+      markSaved(mark, inputs[k], "cleared");                                   // D939
     }, { cls: "small" }) : ""); badge.style.display = server && server[k] && st.values[k] ? "" : "none"; };
     drawClear();
     inputs[k].redraw = () => { inputs[k].placeholder = holder(sec ? st.values[k] : ""); badge.style.display = server && server[k] && st.values[k] ? "" : "none"; };
@@ -840,11 +840,9 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     }));
     for (const x of groups) x.el.hidden = (x.g.tab || x.g.label) !== cur;
     for (const x of extras) x.holder.hidden = x.tab !== cur;
-    actions.hidden = extras.some(x => x.tab === cur && x.noSave);
   };
-  const actions = h("p", { class: "muted small autosave-said" }, "Changes save as you make them.");   // D833
   draw();
-  return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el), extras.map(x => x.holder)), actions];
+  return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el), extras.map(x => x.holder))];   // D939: no "save as you" said
 }
 
 /** D818: the link an admin sends -- shown with a copy button; it is never shown again. */

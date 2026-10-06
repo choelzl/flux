@@ -816,8 +816,19 @@ details.agent-more > summary { cursor: pointer; }
 ul.files li.own > a { font-weight: 600; }   /* D829 */
 
 /* D833: a field's save, said beside it */
-.save-mark { color: var(--muted); min-width: 4em; font-size: 12px; }
+.save-mark { color: var(--muted); font-size: 12px; display: inline-flex; align-items: center; min-width: 14px; min-height: 1em; }
 .save-mark.ok { color: var(--ok); } .save-mark.bad { color: var(--bad); }
+/* D939: saving a small spinner; saved a green check at the end of the field, fading out */
+.save-mark .spin { width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid currentColor;
+  border-right-color: transparent; opacity: .6; animation: save-spin .8s linear infinite; }
+@keyframes save-spin { to { transform: rotate(360deg); } }
+.save-check { position: fixed; z-index: 50; width: 16px; height: 16px; border-radius: 50%; pointer-events: none;
+  background: var(--ok); animation: save-check 1.5s ease-out forwards; }
+.save-check::after { content: ""; position: absolute; left: 5.5px; top: 2.5px; width: 4px; height: 8px; box-sizing: content-box;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+@keyframes save-check { 0% { opacity: 0; transform: scale(.6); } 12% { opacity: 1; transform: none; } 65% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .save-check { animation: none; } .save-mark .spin { animation: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* D834: a long file name wraps inside its row and the viewer's head, never past them */
 ul.files li > a { min-width: 0; overflow-wrap: anywhere; }

@@ -1442,8 +1442,23 @@ def flows(r: Run) -> None:
         # D835: the admin prices Flux's model; a user's price field waits for an endpoint of their own
         r.login("ada")
         r.page("#/admin/models", "document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN')", "the model settings")
+        box = "document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').getBoundingClientRect()"
+        b.js("document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').scrollIntoView({block: 'center'}); return 1")
         b.js("const i = document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN'); i.value = '0.4'; i.dispatchEvent(new Event('change')); return 1")
-        b.wait("(document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').closest('.stack').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the price saved")
+        # D939: a green check at the field's end, no "saved" in words, nothing moved; said to a screen reader; gone after a
+        # moment -- read the moment it is saved (a loaded machine's next call may come after the check is gone)
+        got = b.wait(f"""(() => {{ const r = {box}, c = document.querySelector('.save-check'), m = document.querySelector('#set-server-FLUX_REMOTE_PRICE_IN').closest('.stack').querySelector('.save-mark');
+            if (!m || m.dataset.state !== 'saved') return false; if (!c) return [false]; const k = c.getBoundingClientRect();
+            return [k.left >= r.left + r.width / 2 - 10 && k.right <= r.right + 8 && k.top >= r.top - 8 && k.bottom <= r.bottom + 8,   // at its end, on it
+                    [...m.childNodes].filter(n => !(n.classList && n.classList.contains('sr-only'))).map(n => n.textContent).join('').trim(), m.textContent, m.getAttribute('aria-live'),
+                    [r.left, r.top, r.width, r.height].map(Math.round)]; }})()""", timeout=10, what="the price saved")
+        r.check("a field saved shows a check at its end, not the word (D939)", bool(got) and got[0] and got[1] == "" and got[2] == "saved" and got[3] == "polite", str(got))
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "autosave-check.png")
+        r.check("the check fades and goes (D939)", b.wait("!document.querySelector('.save-check')", timeout=5, what="the check gone"))
+        after = b.js(f"const r = {box}; return [r.left, r.top, r.width, r.height].map(Math.round)")
+        r.check("the check moved nothing (D939)", len(got or []) > 4 and got[4] == after, f"{got} {after}")
         r.check("the admin sets a price, saved as it changes", json.loads(r.api("/admin/settings")["body"])["values"].get("FLUX_REMOTE_PRICE_IN") == "0.4")
         r.login("bob")
         r.page("#/account", "document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN')", "bob's model settings")
@@ -1710,7 +1725,7 @@ def flows(r: Run) -> None:
         b.js(f"{uhead}.click(); return 1", "User")
         got = b.js(f"const i = {lim}; return [{users}, i.__mine === 1, i.value, document.activeElement === i]")
         r.check("sorting Users keeps the edit being made, its field and the focus (D926)", got[0] == before[::-1] and got[1:] == [True, "7", True], f"{before} {got}")
-        saved = b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.textContent === 'saved'; })()", timeout=10, what="the limit saved")
+        saved = b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.dataset.state === 'saved'; })()", timeout=10, what="the limit saved")
         ctl = json.loads(r.api("/admin/controls")["body"])
         r.check("the pending save went through after the sort (D926)", bool(saved) and (ctl.get("limits") or {}).get("bob") == 7, str(ctl.get("limits")))
         b.js(f"{uhead}.click(); return 1", "Running limit")
@@ -1720,7 +1735,7 @@ def flows(r: Run) -> None:
             time.sleep(0.5)
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "admin-users-desktop.png")
         b.js(f"const i = {lim}; i.value = ''; i.dispatchEvent(new Event('change')); return 1")
-        b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.textContent === 'saved'; })()", timeout=10, what="the limit cleared")
+        b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.dataset.state === 'saved'; })()", timeout=10, what="the limit cleared")
         sort_fit("Admin › Users")
         for width in (700, 390, 320):
             b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
@@ -1784,7 +1799,7 @@ def flows(r: Run) -> None:
         said = b.wait("(document.querySelector('#main .save-mark.bad') || {}).textContent", timeout=10, what="the refusal")
         r.check("a refused setting says what it takes, beside it", "16g" in said, said)
         b.js("const m = document.querySelector('#adv-memory'); m.value = '8g'; m.dispatchEvent(new Event('change')); return 1")
-        b.wait("(document.querySelector('#main .save-mark.ok') || {}).textContent === 'saved'", timeout=10, what="the fixed value saved")
+        b.wait("(document.querySelector('#main .save-mark.ok') || {dataset: {}}).dataset.state === 'saved'", timeout=10, what="the fixed value saved")
         r.page("#/u/bob/app/broken/settings/loop", "document.querySelector('#adv-memory')", "Advanced, again")
         r.check("a setting saves as it changes, no Save to press (D833)", b.js("return document.querySelector('#adv-memory').value") == "8g")
         b.js("window.__e2e.bad.splice(0); return 1")
@@ -1851,8 +1866,16 @@ def flows(r: Run) -> None:
         r.check("Insights: a removed host leaves the list (D850)", "many.example:443" not in left and "few.example:443" in left, str(left))
         b.js("localStorage.removeItem('flux-insights-net-sort'); localStorage.removeItem('flux-insights-ep-sort'); return 1")
         r.page("#/admin/sandbox", "document.querySelector('#stderr-masks')", "Sandbox, with Hidden output (D896)")
+        b.js("document.querySelector('#stderr-masks').scrollIntoView({block: 'center'}); return 1")
         b.js("const t = document.querySelector('#stderr-masks'); t.value = 'stale arg0\\n/^ERROR rmcp/'; t.dispatchEvent(new Event('change')); return 1")
-        b.wait("(document.querySelector('#stderr-masks').closest('.card').querySelector('.save-mark') || {}).textContent === 'saved'", timeout=10, what="the masks saved")
+        got = b.wait("(() => { const t = document.querySelector('#stderr-masks'), m = t.closest('.card').querySelector('.save-mark'), c = document.querySelector('.save-check');"
+                     "if (!m || m.dataset.state !== 'saved') return false; if (!c) return 'no check';"
+                     "const r = t.getBoundingClientRect(), k = c.getBoundingClientRect();"
+                     "return k.left >= r.right - 40 && k.right <= r.right && k.bottom <= r.bottom && k.top >= r.bottom - 40 ? 'in its corner' : [r.right, r.bottom, k.left, k.top].join(' '); })()",
+                     timeout=10, what="the masks saved")
+        r.check("a text area saved shows the check in its corner (D939)", got == "in its corner", str(got))
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "autosave-check-textarea.png")
         r.check("the admin's stderr masks save as they change (D850)",
                 json.loads(r.api("/admin/masks")["body"])["masks"] == ["stale arg0", "/^ERROR rmcp/"])
         r.api("/admin/masks", "PUT", {"masks": []})
