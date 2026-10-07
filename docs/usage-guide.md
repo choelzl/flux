@@ -322,10 +322,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Show one start or all. It can follow (it pauses when
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
-    (a tool, an agent, a model call) is a bar in the lane of its kind: agent, model, gate, a
-    stage, generation, re-verify, knowledge, the loop's own work. Per kind (D772): calls, the average
+    (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:
+    Setup, Plan, Search, Design, Check, Measure, Choose or Critic. Builds and tests belong to Check;
+    measurement stages share Measure. Task names remain in the tooltips. One reserved colour
+    highlights agent activity within each category, including tools run under an agent.
+    Per category (D772): calls, the average
     and the longest call, the total (the wall clock its calls held, side by side counted once) and its
-    share of the wall clock; summed time and how many ran at once only where calls ran side by side.
+    share of the wall clock; the share bar stacks work without an agent and work with an agent,
+    labelled **total% (agent%)**. Both percentages use the start's wall clock, and agent time is
+    included in the total. Summed time and how many ran at once appear only where calls ran side by side.
     Choose a start and a pass. It redraws once a minute while the loop runs.
   - **Agent turns:** each prompt, reply and tool call, with its model and tool version, tokens,
     tool calls, session, exit and folder. Above them, what the

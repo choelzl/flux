@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import types
 
+import pytest
+
 from flux_web.results import thin
 from flux_web.timeline import kind_of, timeline
 from flux_web.usage import usage
@@ -45,17 +47,17 @@ def test_the_timeline_counts_parallel_work_once_and_splits_the_starts(tmp_path):
     t = timeline(str(p), now=20.0)
     assert t["start"] == 1 and len(t["starts"]) == 2
     kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["agent"]["busy"] == 10 and kinds["agent"]["count"] == 1
-    assert kinds["build"]["busy"] == 10, "historical generation: build phases are builds, assisted by an agent"
-    scr = kinds["stage screen"]
+    assert kinds["check"]["busy"] == 14 and kinds["check"]["agent_busy"] == 10
+    assert kinds["check"]["agent_share"] == 10 / 19, "agent activity is part of the category, with the same wall-clock denominator"
+    scr = kinds["measure"]
     assert scr["count"] == 2 and scr["summed"] == 9 and scr["busy"] == 5, "two tools side by side: busy once, summed twice"
-    assert scr["mean"] == 4.5 and scr["longest"] == 5 and kinds["agent"]["mean"] == 10, "D772: a call's average and the longest"
+    assert scr["mean"] == 4.5 and scr["longest"] == 5 and kinds["check"]["longest"] == 10, "D772: a call's average and the longest"
     assert t["passes"] == [1, 16]
-    gate = next(b for b in t["bars"] if b["kind"] == "gate")
+    gate = next(b for b in t["bars"] if b["name"] == "test: gate")
     assert gate["running"] and gate["t1"] == 20.0, "a phase not ended in a live start runs to now"
-    assert any(b["failed"] for b in t["bars"] if b["kind"] == "stage screen")
-    assert timeline(str(p), 0)["bars"][0]["kind"] == "propose", "the first start keeps its planning work"
-    assert kind_of("llm: generating (model)") == "model" and kind_of("records: re-verify *") == "re-verify"
+    assert any(b["failed"] for b in t["bars"] if b["kind"] == "measure")
+    assert timeline(str(p), 0)["bars"][0]["kind"] == "setup", "the first start keeps its setup work"
+    assert "agent" not in kinds and "model" not in kinds
 
 
 def test_agent_activity_overlaps_work_without_swallowing_builds_or_tests(tmp_path):
@@ -75,25 +77,83 @@ def test_agent_activity_overlaps_work_without_swallowing_builds_or_tests(tmp_pat
     _journal(p, sorted(rows, key=lambda r: r["t"]))
     t = timeline(str(p), now=30, running=False)
     kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["agent"]["busy"] == 26 and kinds["agent"]["count"] == 2
-    assert kinds["generation"]["busy"] == 14
-    assert kinds["build"]["busy"] == kinds["test"]["busy"] == 3
-    assert kinds["knowledge"]["busy"] == 10
-    assert sum(k["busy"] for k in t["kinds"] if k["kind"] != "agent") == t["wall"]
-    assert [(b["t0"], b["t1"]) for b in t["bars"] if b["kind"] == "agent"] == [(1, 19), (21, 29)]
-    assert not any(b["kind"] == "generation" and b["t0"] < 12 and b["t1"] > 9 for b in t["bars"])
+    assert set(kinds) == {"design", "check", "setup"}
+    assert kinds["design"]["busy"] == 14 and kinds["design"]["agent_busy"] == 12
+    assert kinds["check"]["busy"] == kinds["check"]["agent_busy"] == 6
+    assert kinds["setup"]["busy"] == 10 and kinds["setup"]["agent_busy"] == 8
+    assert sum(k["busy"] for k in t["kinds"]) == t["wall"]
+    assert sum(k["agent_busy"] for k in t["kinds"]) == 26
+    assert sum(b["t1"] - b["t0"] for b in t["bars"] if b["agent"]) == 26
+    assert not any(b["kind"] == "design" and b["t0"] < 12 and b["t1"] > 9 for b in t["bars"])
 
 
-def test_existing_agent_journal_separates_generation_build_and_test():
+def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
     from pathlib import Path
 
     p = Path(__file__).parent / "fixtures/looptree/agent.jsonl"
     t = timeline(str(p), running=False)
     kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["agent"]["busy"] > 9
-    assert kinds["generation"]["busy"] >= kinds["agent"]["busy"]
-    assert kinds["build"]["busy"] > 12 and kinds["test"]["busy"] > 12
-    assert not any(b["kind"] == "generation" and b["name"] == "tool:python3" for b in t["bars"])
+    assert kinds["design"]["agent_busy"] > 9
+    assert kinds["design"]["busy"] >= kinds["design"]["agent_busy"]
+    assert kinds["check"]["busy"] > 24
+    assert not any(b["kind"] == "design" and b["name"] == "tool:python3" for b in t["bars"])
+    assert not {"agent", "model", "build", "test", "generation"} & kinds.keys()
+
+
+@pytest.mark.parametrize(("name", "kind"), [
+    ("gate: tools", "setup"), ("gate: the problem", "setup"), ("propose: decompose", "setup"),
+    ("knowledge: digest papers", "setup"), ("records: re-verify *", "setup"), ("feedback: notes", "setup"),
+    ("plan: route", "plan"), ("dse: small variations", "search"),
+    ("generation: x", "design"), ("generate: prototype", "design"), ("repair: x", "design"), ("evaluation", "design"),
+    ("generation: build x", "check"), ("build: x", "check"), ("test: gate", "check"), ("gate: x", "check"),
+    ("simulation: screen x", "measure"), ("simulation: confirm x", "measure"), ("calibrate: screen", "measure"),
+    ("propose: finalists", "choose"), ("orchestrate: x", "choose"), ("decide: x", "choose"),
+    ("critique: decision", "critic"), ("critique: part", "critic"),
+    ("agent: claude", None), ("llm: generating (model)", None), ("model: deciding", None),
+])
+def test_timeline_categories_do_not_include_subtask_names(name, kind):
+    assert kind_of(name) == kind
+
+
+def test_agent_time_unions_nested_and_parallel_calls_and_ignores_unrelated_work(tmp_path):
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello"}]
+    for ident, parent, name, a, b in [
+        (1, None, "generation: x", 0, 20), (2, 1, "agent: claude", 2, 10),
+        (3, 2, "agent: opencode", 3, 7),
+        (4, None, "generation: y", 0, 20), (5, 4, "agent: claude", 5, 12),
+        (6, None, "test: unrelated", 0, 20), (7, 6, "llm: checking", 1, 19),
+    ]:
+        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
+                     {"t": b, "ev": "end", "id": ident}])
+    _journal(p, sorted(rows, key=lambda r: r["t"]))
+    t = timeline(str(p), now=20, running=False)
+    kinds = {k["kind"]: k for k in t["kinds"]}
+    design = kinds["design"]
+    assert design["busy"] == 20 and design["summed"] == 40
+    assert design["agent_busy"] == 10 and design["agent_share"] == 0.5
+    assert kinds["check"]["agent_busy"] == 0
+    assert not any(b["agent"] for b in t["bars"] if b["kind"] == "check")
+    assert timeline(str(p), now=20, running=False, limit=1)["kinds"] == t["kinds"], "stats include even the bars omitted from the chart"
+
+
+def test_agent_and_model_subtasks_inherit_work_but_tool_intent_can_change_it(tmp_path):
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello"}]
+    for ident, parent, name, why, a, b in [
+        (1, None, "decide: finalists", "", 0, 10), (2, 1, "agent: claude", "", 1, 9),
+        (3, 2, "llm: reasoning", "", 2, 3), (4, 2, "tool:python", "test a finalist", 4, 6),
+        (5, 2, "tool:yosys", "stage confirm a finalist", 6, 8),
+    ]:
+        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name, "why": why},
+                     {"t": b, "ev": "end", "id": ident}])
+    _journal(p, sorted(rows, key=lambda r: r["t"]))
+    t = timeline(str(p), now=10, running=False)
+    kinds = {k["kind"]: k for k in t["kinds"]}
+    assert kinds["choose"]["busy"] == 6 and kinds["choose"]["agent_busy"] == 4
+    assert kinds["check"]["busy"] == kinds["check"]["agent_busy"] == 2
+    assert kinds["measure"]["busy"] == kinds["measure"]["agent_busy"] == 2
+    assert next(b for b in t["bars"] if b["phase"] == 3)["kind"] == "choose"
 
 
 def test_usage_adds_the_agents_and_the_models_tokens(tmp_path):

@@ -934,6 +934,61 @@ def flows(r: Run) -> None:
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
 
+    def timeline_categories():
+        """Broad work lanes and agent portions, using the real journal aggregation in a deterministic page fixture."""
+        from flux_web.timeline import timeline
+
+        r.login("bob")
+        journal = r.data / "timeline-fixture.jsonl"
+        rows = [{"t": 0, "ev": "hello"}]
+        for ident, parent, name, a, z in [
+            (1, None, "gate: tools", 0, 10), (2, None, "generation: prototype", 10, 60),
+            (3, 2, "agent: claude", 20, 50), (4, 3, "test: prototype", 30, 40),
+            (5, None, "simulation: screen", 60, 80), (6, 5, "agent: opencode", 65, 75),
+            (7, None, "decide: finalists", 80, 100),
+            (8, None, "propose: decompose", 0, 0), (9, None, "propose: decompose", 60, 60),
+        ]:
+            rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
+                         {"t": z, "ev": "end", "id": ident}])
+        journal.write_text("".join(json.dumps(e) + "\n" for e in sorted(rows, key=lambda e: e["t"])))
+        payload = timeline(str(journal), now=100, running=False)
+        b.js("window.__timelineRealFetch = window.fetch.bind(window); window.__timelineFixture = arguments[0];"
+             " window.fetch = (u, o) => String(u).startsWith('/api/apps/sw/timeline')"
+             " ? Promise.resolve(new Response(JSON.stringify(window.__timelineFixture), {status: 200, headers: {'Content-Type': 'application/json'}}))"
+             " : window.__timelineRealFetch(u, o); return 1", payload)
+        try:
+            r.page("#/app/sw/live/timeline", "document.querySelector('#main svg.gantt')", "the category timeline")
+            lanes = b.js("return [...document.querySelectorAll('svg.gantt text[text-anchor=end]')].filter(t => !t.textContent.startsWith('+')).map(t => t.textContent)")
+            r.check("Timeline uses broad work lanes, with no agent or stage row", lanes == ["Setup", "Design", "Check", "Measure", "Choose"], str(lanes))
+            shares = b.js("return Object.fromEntries([...document.querySelectorAll('table.kinds tbody tr')].map(r => [r.cells[0].textContent, r.querySelector('.share span').textContent]))")
+            expected = {"Setup": "10% (0.0%)", "Design": "40% (20%)", "Check": "10% (10%)", "Measure": "20% (10%)", "Choose": "20% (0.0%)"}
+            r.check("Timeline shares say total% (agent%), with agent time included", shares == expected, str(shares))
+            geometry = b.js("return [...document.querySelectorAll('table.kinds tbody tr')].map(r => { const w = e => e.getBoundingClientRect().width;"
+                            " const track = r.querySelector('.share-track'); return [r.cells[0].textContent,"
+                            " Math.round(100*w(r.querySelector('.share-bar'))/w(track)), Math.round(100*w(r.querySelector('.agent-time'))/w(track))]; })")
+            expected_geometry = [[k["kind"].capitalize(), round(100*k["share"]), round(100*k["agent_share"])] for k in payload["kinds"]]
+            r.check("Timeline stacked bar widths match total and agent wall-clock shares", geometry == expected_geometry, str(geometry))
+            colours = b.js("return [...document.querySelectorAll('svg.gantt .agent-time, .share .agent-time, .tl-legend .sw')].map(e => getComputedStyle(e).fill === 'none'"
+                           " || e.tagName.toLowerCase() !== 'rect' ? getComputedStyle(e).backgroundColor : getComputedStyle(e).fill)")
+            r.check("Timeline reserves one colour for agents across lanes, shares and legend", len(set(colours)) == 1, str(colours))
+            highlights = b.js("return [...document.querySelectorAll('svg.gantt .agent-time')].map(e => [e.getAttribute('fill'), Number(e.getAttribute('width'))])")
+            r.check("Timeline highlights agent work inside Design, Check and Measure", len(highlights) == 4, str(highlights))
+            b.js("const s = document.querySelectorAll('.tl-head select')[1]; s.value = '0'; s.dispatchEvent(new Event('change')); return 1")
+            lanes = b.js("return [...document.querySelectorAll('svg.gantt text[text-anchor=end]')].filter(t => !t.textContent.startsWith('+')).map(t => t.textContent)")
+            # At the pass boundary the next phase's first instant is visible, as in the other timeline bars.
+            r.check("Timeline pass selection keeps broad lanes and the start's summary", "Design" in lanes and "Check" in lanes and "Choose" not in lanes
+                    and b.js("return document.querySelector('table.kinds').textContent.includes('40% (20%)')"), str(lanes))
+            b.js("window.__timelineFixture.kinds.reverse(); return 1")
+            r.page("#/app/sw/live/log", "document.querySelector('#main')", "the log")
+            r.page("#/app/sw/live/timeline", "document.querySelector('#main svg.gantt')", "the reordered timeline")
+            changed = b.js("return [...document.querySelectorAll('svg.gantt .agent-time')].map(e => e.getAttribute('fill'))")
+            r.check("Timeline agent colour stays the same after categories reorder", set(changed) == {highlights[0][0]}, str(changed))
+            r.clean("category timeline")
+        finally:
+            b.js("window.fetch = window.__timelineRealFetch; delete window.__timelineRealFetch; delete window.__timelineFixture; return 1")
+            r.page("#/app/sw", "document.querySelector('.page-head')", "the loop after the timeline")
+    r.step("timeline categories", timeline_categories)
+
     def killed_run():
         """D928 (W8): "collapse finished" keeps open only the work running now; a run killed outright
         leaves its journal with tasks begun and never ended -- once the run is over they are

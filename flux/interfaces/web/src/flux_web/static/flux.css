@@ -419,10 +419,14 @@ dialog.dlg:has(pre.diff) { width: min(900px, calc(100vw - 32px)); }
 @media (max-width: 1100px) { .stats.five { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .tl-head { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
 svg.gantt .tick { font-size: 12px; }
-table.kinds .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
-.share { display: flex; align-items: center; gap: 8px; min-width: 120px; }
-.share .share-bar { height: 8px; border-radius: 4px; min-width: 2px; opacity: .85; }
-.share span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+table.kinds .sw, .tl-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+.tl-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.share { display: flex; align-items: center; gap: 8px; }
+.share-track { flex: 0 0 140px; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.share .share-bar { display: flex; height: 100%; border-radius: 4px; overflow: hidden; }
+.share-bar > div { min-width: 0; }
+.share span { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+svg.gantt .agent-time { pointer-events: none; }
 svg.gantt .bar { opacity: .88; }
 svg.gantt .bar:hover { opacity: 1; stroke: var(--ink); stroke-width: 1; }
 svg.gantt .bar.failed { stroke: var(--bad); stroke-width: 1.5; }
