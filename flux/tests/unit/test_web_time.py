@@ -45,7 +45,8 @@ def test_the_timeline_counts_parallel_work_once_and_splits_the_starts(tmp_path):
     t = timeline(str(p), now=20.0)
     assert t["start"] == 1 and len(t["starts"]) == 2
     kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["agent"]["busy"] == 10 and kinds["agent"]["count"] == 1, "the agent under the generation is the agent's"
+    assert kinds["agent"]["busy"] == 10 and kinds["agent"]["count"] == 1
+    assert kinds["build"]["busy"] == 10, "historical generation: build phases are builds, assisted by an agent"
     scr = kinds["stage screen"]
     assert scr["count"] == 2 and scr["summed"] == 9 and scr["busy"] == 5, "two tools side by side: busy once, summed twice"
     assert scr["mean"] == 4.5 and scr["longest"] == 5 and kinds["agent"]["mean"] == 10, "D772: a call's average and the longest"
@@ -53,8 +54,46 @@ def test_the_timeline_counts_parallel_work_once_and_splits_the_starts(tmp_path):
     gate = next(b for b in t["bars"] if b["kind"] == "gate")
     assert gate["running"] and gate["t1"] == 20.0, "a phase not ended in a live start runs to now"
     assert any(b["failed"] for b in t["bars"] if b["kind"] == "stage screen")
-    assert timeline(str(p), 0)["bars"][0]["kind"] == "loop", "the first start, the loop's own work"
+    assert timeline(str(p), 0)["bars"][0]["kind"] == "propose", "the first start keeps its planning work"
     assert kind_of("llm: generating (model)") == "model" and kind_of("records: re-verify *") == "re-verify"
+
+
+def test_agent_activity_overlaps_work_without_swallowing_builds_or_tests(tmp_path):
+    p = tmp_path / "events.jsonl"
+    rows = [{"t": 0, "ev": "hello", "pid": 1}]
+    phases = [
+        (1, None, "generate: prototype", 0, 20),
+        (2, 1, "agent: claude", 1, 19),
+        (3, 2, "build: prototype", 5, 8),
+        (4, 2, "test: prototype", 9, 12),
+        (5, None, "knowledge: prepare", 20, 30),
+        (6, 5, "agent: claude", 21, 29),
+    ]
+    for ident, parent, name, a, b in phases:
+        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
+                     {"t": b, "ev": "end", "id": ident, "name": name}])
+    _journal(p, sorted(rows, key=lambda r: r["t"]))
+    t = timeline(str(p), now=30, running=False)
+    kinds = {k["kind"]: k for k in t["kinds"]}
+    assert kinds["agent"]["busy"] == 26 and kinds["agent"]["count"] == 2
+    assert kinds["generation"]["busy"] == 14
+    assert kinds["build"]["busy"] == kinds["test"]["busy"] == 3
+    assert kinds["knowledge"]["busy"] == 10
+    assert sum(k["busy"] for k in t["kinds"] if k["kind"] != "agent") == t["wall"]
+    assert [(b["t0"], b["t1"]) for b in t["bars"] if b["kind"] == "agent"] == [(1, 19), (21, 29)]
+    assert not any(b["kind"] == "generation" and b["t0"] < 12 and b["t1"] > 9 for b in t["bars"])
+
+
+def test_existing_agent_journal_separates_generation_build_and_test():
+    from pathlib import Path
+
+    p = Path(__file__).parent / "fixtures/looptree/agent.jsonl"
+    t = timeline(str(p), running=False)
+    kinds = {k["kind"]: k for k in t["kinds"]}
+    assert kinds["agent"]["busy"] > 9
+    assert kinds["generation"]["busy"] >= kinds["agent"]["busy"]
+    assert kinds["build"]["busy"] > 12 and kinds["test"]["busy"] > 12
+    assert not any(b["kind"] == "generation" and b["name"] == "tool:python3" for b in t["bars"])
 
 
 def test_usage_adds_the_agents_and_the_models_tokens(tmp_path):

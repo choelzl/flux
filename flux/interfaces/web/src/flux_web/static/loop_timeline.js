@@ -46,7 +46,8 @@ function timelineTab(ctx) {
       let a = t.t0, b = t.t1;
       if (tlPass !== "") { const i = Number(tlPass); a = t.passes[i]; b = t.passes[i + 1] || t.t1; }
       const bars = t.bars.filter(x => x.t1 >= a && x.t0 <= b);
-      const lanes = t.kinds.map(k => k.kind).filter(k => bars.some(x => x.kind === k));
+      const lanes = [...t.kinds.filter(k => k.kind !== "agent"), ...t.kinds.filter(k => k.kind === "agent")]
+        .map(k => k.kind).filter(k => bars.some(x => x.kind === k));
       const W = 1200, L = 120, R = 12, T = 8, lane = 30, B = 26, H = T + lanes.length * lane + B, span = Math.max(b - a, 1e-6);
       const X = (v) => L + (W - L - R) * (Math.min(Math.max(v, a), b) - a) / span;
       const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => a + f * span);
@@ -65,7 +66,7 @@ function timelineTab(ctx) {
     body.replaceChildren(
       card(null, h("div", { class: "tl-head" }, startSel, passSel,
         h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${t.bars.length} phase(s) · ${t.passes.length} pass(es)`))),
-      card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed: a pass begins.")]),
+      card("Phases over time", [chartBox, h("p", { class: "muted small" }, "Dashed: a pass begins. Agent activity overlaps the work it assists; their shares are counted separately.")]),
       card("Where the time goes", [kindsTable]));
   }
   return timelineView;

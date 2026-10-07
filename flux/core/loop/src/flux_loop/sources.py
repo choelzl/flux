@@ -162,7 +162,7 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
                 say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
                 continue
         try:
-            with _phase(f"generation: build {cand.name}", why=source.name):
+            with _phase(f"build: {cand.name}", why=source.name):
                 built = problem.build(cand, subgoal, state)
         except BuildError as exc:
             failure, prior = str(exc), cand

@@ -1,10 +1,10 @@
 """Where a loop's time goes (D694), from its journal (`events.jsonl`): each start of the loop is
 one process (a `hello` line), each phase a bar from its start to its end.
 
-Every phase that has no child phase (the work itself: a tool, an agent, a model call) is put in
-the kind of work of its nearest ancestor, itself first -- an agent, a model call, a check of
-the gate, a stage's measurement, a generation, a record re-verified, the knowledge prepared,
-or the loop's own bookkeeping. Per kind: how
+Work is assigned to its nearest named phase, excluding time spent in child phases.
+Agent calls have a separate activity track that overlaps their work: writing code counts
+as generation and agent activity, while building or testing counts as that work.
+Per kind: how
 many calls, their average and longest, the busy time (the union of their bars: what the wall
 clock saw, parallel work counted once) and its share of the wall clock, and the summed time
 (above the busy time only when calls ran side by side, D772). Passes start where a `propose: decompose` phase starts at the top."""
@@ -36,9 +36,13 @@ def kind_of(name: str) -> str | None:
         return "model"
     if head == "simulation":
         return f"stage {rest.split()[0]}" if rest else "stage"
-    if head in ("test", "gate"):
+    if head == "gate" or head == "test" and rest == "gate":
         return "gate"
-    if head == "generation":
+    if head == "test":
+        return "test"
+    if head == "build" or head == "generation" and rest.startswith("build "):
+        return "build"
+    if head in ("generation", "generate"):
         return "generation"
     if head == "probe":
         return "probe"
@@ -46,6 +50,8 @@ def kind_of(name: str) -> str | None:
         return "re-verify"
     if head == "knowledge":
         return "knowledge"
+    if head in ("propose", "plan", "critique", "orchestrate", "decide", "calibrate"):
+        return head
     return None
 
 
@@ -134,6 +140,8 @@ def _kind_in(tb: dict[str, Any], p: dict[str, Any]) -> str:
         q, got = p, None
         while q is not None and got is None:
             got = kind_of(q["name"])
+            if got == "agent":
+                got = None                             # who is working is separate from what they do
             q = tb["ph"].get(q["parent"])
         got = tb["kind"][p["id"]] = got or "loop"
     return got
@@ -163,26 +171,45 @@ def timeline(path: str, start: int | None = None, *, limit: int = 4000, now: flo
     if not alive and done in _RESULTS:
         return {**_RESULTS[done], "starts": said}
     bars = []
+    ends = {p["id"]: p["t1"] if p["t1"] is not None else (now if alive else last_t) for p in ph.values()}
+    children: dict[Any, list[dict[str, Any]]] = {}
     for p in ph.values():
-        if p["kids"]:
-            continue
-        t1 = p["t1"] if p["t1"] is not None else (now if alive else last_t)
-        bars.append({"name": p["name"], "why": p["why"], "kind": _kind_in(tb, p), "t0": p["t0"], "t1": t1,
-                     "running": p["t1"] is None and alive, "failed": p["failed"]})
+        children.setdefault(p["parent"], []).append(p)
+    for p in ph.values():
+        t1 = ends[p["id"]]
+        base = {"name": p["name"], "why": p["why"], "phase": p["id"], "failed": p["failed"]}
+        if kind_of(p["name"]) == "agent":
+            bars.append({**base, "kind": "agent", "t0": p["t0"], "t1": t1,
+                         "running": p["t1"] is None and alive})
+        # Keep the parent's own work before, between and after its children, but never
+        # count a nested build/test as generation. Parallel children are subtracted once.
+        cursor = p["t0"]
+        spans = []
+        for child in sorted(children.get(p["id"], []), key=lambda c: c["t0"]):
+            a, b = max(p["t0"], child["t0"]), min(t1, ends[child["id"]])
+            if a > cursor:
+                spans.append((cursor, a))
+            cursor = max(cursor, b)
+        if cursor < t1 or not p["kids"]:
+            spans.append((cursor, t1))
+        for a, b in spans:
+            bars.append({**base, "kind": _kind_in(tb, p), "t0": a, "t1": b,
+                         "running": p["t1"] is None and alive and b == t1})
     bars.sort(key=lambda b: b["t0"])
     t0 = tb["t0"] if tb["t0"] is not None else now
     t_end = now if alive else last_t
     kinds: dict[str, dict[str, Any]] = {}
     for b in bars:
-        k = kinds.setdefault(b["kind"], {"kind": b["kind"], "count": 0, "summed": 0.0, "longest": 0.0, "spans": []})
-        k["count"] += 1
+        k = kinds.setdefault(b["kind"], {"kind": b["kind"], "summed": 0.0, "calls": {}, "spans": []})
         k["summed"] += b["t1"] - b["t0"]
-        k["longest"] = max(k["longest"], b["t1"] - b["t0"])
+        k["calls"][b["phase"]] = k["calls"].get(b["phase"], 0.0) + b["t1"] - b["t0"]
         k["spans"].append((b["t0"], b["t1"]))
     wall = max(t_end - t0, 1e-9)
     table = []
     for k in kinds.values():
         busy = _union(k.pop("spans"))
+        calls = k.pop("calls")
+        k.update(count=len(calls), longest=max(calls.values(), default=0.0))
         table.append({**k, "busy": busy, "share": busy / wall, "summed": k["summed"], "mean": k["summed"] / max(k["count"], 1)})
     table.sort(key=lambda k: -k["busy"])
     passes = [p["t0"] for p in ph.values() if p["parent"] is None and p["name"].startswith("propose: decompose")]
