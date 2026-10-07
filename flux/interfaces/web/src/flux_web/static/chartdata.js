@@ -78,4 +78,18 @@ function frontier(pts, dx, dy) {
   return out;
 }
 
-export { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, verdictOf };
+/** Keep missing measurements and recorded sampling outages empty in time charts. */
+function timeSegments(samples, get) {
+  const segments = [];
+  let segment = null;
+  for (const sample of samples) {
+    const value = get(sample);
+    if (sample.gap_before || value == null || !Number.isFinite(value)) segment = null;
+    if (value == null || !Number.isFinite(value)) continue;
+    if (!segment) { segment = []; segments.push(segment); }
+    segment.push(sample);
+  }
+  return segments;
+}
+
+export { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf };

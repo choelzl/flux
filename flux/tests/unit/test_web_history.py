@@ -14,6 +14,19 @@ from flux_web.store import Store
 H = {"X-Flux": "1"}
 
 
+def test_outages_survive_thinning_without_averaging_across_them(tmp_path):
+    hist = History(tmp_path / "h.db")
+    now = time.time()
+    for offset, load in [(-3600, 1), (-3540, 1), (-3480, 1), (-600, 9), (-540, 9), (-480, 9)]:
+        hist.add({"load1": load}, t=now + offset)
+    raw = hist.read(points=100)
+    assert [s["t"] for s in raw if s.get("gap_before")] == [now - 600]
+    # A single nominal bucket straddles the outage and must split into two.
+    thinned = hist.read(points=1)
+    assert [s["load1"] for s in thinned] == [1, 9]
+    assert thinned[1]["gap_before"] and thinned[1]["start_t"] == now - 600
+
+
 def test_samples_are_kept_a_week_and_thinned_with_their_bursts(tmp_path):
     hist = History(tmp_path / "h.db")
     now = time.time()

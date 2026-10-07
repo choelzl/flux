@@ -33,6 +33,16 @@ const design = (name, group, area, freq, eligible, extra = {}) => ({ name, key: 
 """
 
 
+def test_time_series_break_at_outages_and_missing_measurements(tmp_path):
+    got = run(tmp_path, """
+const samples = [{t: 0, v: 1}, {t: 60, v: 2}, {t: 3600, v: 8, gap_before: true},
+  {t: 3660, v: 9}, {t: 3720, v: null}, {t: 3780, v: 3}];
+console.log(JSON.stringify({segments: C.timeSegments(samples, s => s.v).map(ps => ps.map(s => s.t)),
+  empty: C.timeSegments(samples, s => null)}));
+""")
+    assert got == {"segments": [[0, 60], [3600, 3660], [3780]], "empty": []}
+
+
 def test_points_carry_identity_and_eligibility(tmp_path):
     got = run(tmp_path, DESIGNS + """
 const ds = [design('a', 'whole', 31, 1200, true), design('bb', 'whole', 12.5, 800, false), design('ccc', 'whole', NaN, 900, true)];

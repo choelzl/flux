@@ -36,31 +36,44 @@ class History:
             c.execute("DELETE FROM samples WHERE t < ?", (time.time() - KEEP_S,))     # a week back from now
 
     def read(self, hours: float = 24, points: int = 360) -> list[dict[str, Any]]:
-        """The samples of the last `hours`, at most `points`: each bucket's mean, and its maximum
-        of the load and CPU, so a burst stays visible."""
+        """Thin the last `hours` to `points` buckets, splitting at sampling outages.
+        Keep each bucket's mean and maximum load/CPU; outage splits may add points."""
         since = time.time() - hours * 3600
         with self._con() as c:
             rows = c.execute("SELECT t, data FROM samples WHERE t >= ? ORDER BY t", (since,)).fetchall()
         got = [{"t": t, **json.loads(d)} for t, d in rows]
+        for previous, current in zip(got, got[1:]):
+            if current["t"] - previous["t"] > 180:
+                current["gap_before"] = True
         if len(got) <= points:
             return got
         size = len(got) / points
         out = []
         for i in range(points):
             chunk = got[int(i * size):int((i + 1) * size)] or [got[min(len(got) - 1, int(i * size))]]
-            m: dict[str, Any] = {"t": chunk[-1]["t"]}
-            for k, v in chunk[-1].items():
-                if k == "t":
-                    continue
-                if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    vals = [c[k] for c in chunk if isinstance(c.get(k), (int, float))]
-                    m[k] = max(vals) if k in ("load1", "cpu") else sum(vals) / len(vals)
-                elif isinstance(v, dict):
-                    m[k] = {kk: sum(c.get(k, {}).get(kk, 0) for c in chunk) / len(chunk) for kk in v}
-                else:
-                    m[k] = v
-            out.append(m)
+            # Never average across an outage, even when it falls inside a thinning bucket.
+            starts = [0] + [j for j in range(1, len(chunk)) if chunk[j].get("gap_before")]
+            for start, end in zip(starts, starts[1:] + [len(chunk)]):
+                out.append(self._mean(chunk[start:end]))
         return out
+
+    @staticmethod
+    def _mean(chunk: list[dict[str, Any]]) -> dict[str, Any]:
+        m: dict[str, Any] = {"t": chunk[-1]["t"]}
+        if chunk[0].get("gap_before"):
+            m["gap_before"] = True
+            m["start_t"] = chunk[0]["t"]
+        for k, v in chunk[-1].items():
+            if k in ("t", "gap_before", "start_t"):
+                continue
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                vals = [c[k] for c in chunk if isinstance(c.get(k), (int, float))]
+                m[k] = max(vals) if k in ("load1", "cpu") else sum(vals) / len(vals)
+            elif isinstance(v, dict):
+                m[k] = {kk: sum(c.get(k, {}).get(kk, 0) for c in chunk) / len(chunk) for kk in v}
+            else:
+                m[k] = v
+        return m
 
     def start(self, sample: Callable[[], dict[str, Any]], every_s: float = 60.0) -> None:
         """Sample now, then every `every_s` seconds, on a daemon thread; a failed sample is skipped."""

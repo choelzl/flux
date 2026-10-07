@@ -128,3 +128,37 @@ Timeloop + Accelergy and ICSC; nixchip's hook exports `<TOOL>_HOME`, `_BIN`, `_L
 `_INCLUDE` for each nixchip tool in it. The loop writes scratch files under `FLUX_TMPDIR` and traces (prompts, replies,
 checked prototypes) under `FLUX_TRACE_ROOT` (default `$TMPDIR/flux-traces`), one directory
 per campaign.
+
+### Run the web server as a Linux user service
+
+The service starts `flux serve` through a fresh `nix develop` on every launch, including
+crash recovery and update restarts. Create an account first in the same data directory:
+
+```bash
+cd flux
+nix develop --accept-flake-config --command flux user add admin --admin
+python3 scripts/install-service.py -- --host 127.0.0.1 --port 8765
+systemctl --user daemon-reload
+systemctl --user enable --now flux.service flux-update.path
+journalctl --user -u flux.service -f
+```
+
+Pass additional `flux serve` options after `--`, including `--data` if needed (use the
+same `--data` when creating the account). Optional service environment settings go in
+`~/.config/flux/service.env`, one `NAME=value` per line. The service does not inherit your
+interactive shell; give agent executables absolute paths through `FLUX_<AGENT>_BIN` or
+set `PATH` there. Nix refreshes the library and Python environment itself.
+
+The update watcher restarts a running server after Git commits, pulls, and checkouts,
+or edits to `flake.nix` / `flake.lock`. Ordinary uncommitted Python edits require
+`systemctl --user restart flux.service`. The watcher does not fetch updates, change the
+lock file, or restart a manually stopped server. Updating Nix dependencies can take time
+to build or download; follow the journal for progress. Server restarts disconnect live
+requests and can interrupt running tasks, so update between runs.
+
+For startup at boot and operation after logout, enable user lingering once with
+`loginctl enable-linger "$USER"` (your system may require administrator authorization).
+To stop both the server and automatic restarts, run
+`systemctl --user disable --now flux-update.path flux.service`.
+Re-run the installer and `systemctl --user daemon-reload` after moving the checkout or
+changing server arguments, then restart the service.

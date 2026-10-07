@@ -1,7 +1,7 @@
 // Flux web: the charts and marks drawn as SVG (D889: split out of app.js).
 
 import { empty, h } from "./ui.js";
-import { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, verdictOf } from "./chartdata.js";
+import { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf } from "./chartdata.js";
 
 // ================================================================ charts (D692)
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -187,10 +187,11 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
         sv("text", { x: L - 5, y: Y(hi * f) + 4, class: "tick", "text-anchor": "end" }, fmt(hi * f))]),
       ref != null ? [sv("line", { x1: L, x2: W - R, y1: Y(ref), y2: Y(ref), class: "limit" }), sv("text", { x: W - R, y: Y(ref) - 3, class: "tick limit-t", "text-anchor": "end" }, refLabel)] : "",
       series.map((se, i) => {
-        const p = pts.filter(s => se.get(s) != null);
-        const d = p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
-        return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
-          sv("path", { d, class: `ln s${i}` })];
+        return timeSegments(samples, se.get).map(p => {
+          const d = p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
+          return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
+            sv("path", { d, class: `ln s${i}` })];
+        });
       }),
       sv("text", { x: L, y: H - 5, class: "tick" }, stamp(t0)), sv("text", { x: W - R, y: H - 5, class: "tick", "text-anchor": "end" }, stamp(t1)),
       guide, dots);
@@ -204,6 +205,7 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
     const x = (e.clientX - box.left) * W / box.width;
     if (x < L - 4 || x > W - R + 4) { hide(); return; }
     const t = t0 + (Math.min(Math.max(x, L), W - R) - L) / (W - L - R) * Math.max(1, t1 - t0);
+    if (samples.some((s, i) => i > 0 && s.gap_before && t > samples[i - 1].t && t < (s.start_t ?? s.t))) { hide(); return; }
     let s = pts[0];
     for (const p of pts) if (Math.abs(p.t - t) < Math.abs(s.t - t)) s = p;
     const gx = X(s.t);
