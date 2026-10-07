@@ -659,7 +659,7 @@ def flows(r: Run) -> None:
             for (const e of [{ev: 'hello', t: now - 50}, {ev: 'mark', name: 'pass', why: '{"n":1}', t: now - 49},
               {ev: 'start', id: 1, name: 'generation: prototype', t: now - 48},
               {ev: 'start', id: 2, parent: 1, name: 'agent: claude', t: now - 47, params: {prompt: text('prompt')}},
-              {ev: 'update', id: 2, fields: {steps, 'steps total': steps.length}},
+              {ev: 'update', id: 2, fields: {steps, 'steps total': steps.length, stderr: 'DEBUG: testing error handling'}},
               {ev: 'start', id: 3, name: 'tool: sibling', t: now - 46, params: {command: 'compile'}}]) listeners.events.onData(e);
             for (let i = 10; i < 100; i++) {
               const t = now - 40 + i/10;
@@ -673,6 +673,8 @@ def flows(r: Run) -> None:
             requestAnimationFrame(() => requestAnimationFrame(() => { tree.draw(); done(true); }));
           }).catch(e => done(String(e)));""")
         try:
+            r.check("running agent diagnostics are visible without failure coloring", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.textContent.includes('DEBUG') && !el.closest('.err')"))
+            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}}}); f.tree.draw(); return 1")
             b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-step').forEach(el => el.open = true); return 1")
             b.wait("(() => { const d = window.__scrollFixture.tree.detail; return [...d.querySelectorAll('details.cv-step')].every(el => el.open) && d.scrollHeight > d.clientHeight + 500; })()", what="opened thinking and tool output")
             positions = b.js("""const f = window.__scrollFixture;
@@ -732,6 +734,7 @@ def flows(r: Run) -> None:
               f.tree.draw(); return 1;""")
             r.check("a different task does not inherit the previous task's scroll", b.js("return window.__scrollFixture.tree.detail.dataset.task === '3' && window.__scrollFixture.tree.detail.scrollTop === 0"))
             b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: f.text('stdout'), stderr: f.text('stderr')}}}); f.tree.draw(); return 1")
+            r.check("running tool stderr is visible without failure coloring", b.js("return !window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]').closest('.err')"))
             b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stdout]').scrollTop = 155; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = 245; f.tree.draw(); return 1")
             r.check("standalone tool stdout and stderr keep separate positions", b.js("const d = window.__scrollFixture.tree.detail; return d.querySelector('[data-k=stdout]').scrollTop === 155 && d.querySelector('[data-k=stderr]').scrollTop === 245"))
             b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = f.tree.detail.querySelector('[data-k=stderr]').scrollHeight; f.tree.draw(); return 1")
@@ -741,6 +744,20 @@ def flows(r: Run) -> None:
               f.tree.draw(); return 1;""")
             r.check("completion keeps stdout where it was being read", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=stdout]').scrollTop") == 155)
             r.check("following stderr includes the final completed output", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.scrollTop + el.clientHeight >= el.scrollHeight - 2"))
+            r.check("exit-0 tool with stderr is done and has no failure coloring", b.js("const d = window.__scrollFixture.tree.detail; return !!d.querySelector('.pill.ok') && !d.querySelector('[data-k=stderr]').closest('.err')"))
+            b.js("""const f = window.__scrollFixture, t = Date.now()/1000;
+              f.listeners.events.onData({ev: 'start', id: 101, name: 'tool: failed script', t});
+              f.listeners.events.onData({ev: 'end', id: 101, t: t + 0.1, seconds: 0.1,
+                failed: false, output: {exit: 1, stderr: 'script failed'}}); f.tree.draw(); return 1;""")
+            r.check("nonzero tool exit keeps the failed badge and stderr coloring", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '101' && !!d.querySelector('.pill.bad') && !!d.querySelector('[data-k=stderr]').closest('.err')"))
+            b.js("""const f = window.__scrollFixture, t = Date.now()/1000;
+              f.listeners.events.onData({ev: 'start', id: 102, name: 'agent: diagnostic', t});
+              f.listeners.live.onData({updates: {102: {stderr: 'DEBUG: testing error handling'}}}); f.tree.draw(); return 1;""")
+            r.check("agent without conversation steps also keeps diagnostics neutral", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '102' && !d.querySelector('[data-k=stderr]').closest('.err')"))
+            b.js("""const f = window.__scrollFixture;
+              f.listeners.events.onData({ev: 'end', id: 102, t: Date.now()/1000 + 0.2, seconds: 0.1,
+                failed: false, output: {exit: 0, stderr: 'DEBUG: testing error handling'}}); f.tree.draw(); return 1;""")
+            r.check("completed exit-0 agent keeps its stderr neutral", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '102' && !!d.querySelector('.pill.ok') && !d.querySelector('[data-k=stderr]').closest('.err')"))
             r.clean("live scroll")
         finally:
             b.js("window.__scrollFixture?.tree.close(); delete window.__scrollFixture; return 1")

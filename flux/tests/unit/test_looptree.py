@@ -139,12 +139,14 @@ def test_a_new_start_begins_the_tree_afresh_and_a_question_is_handed_on():
     assert got["tree"] == [] and got["questions"] == [{"q": "which width?"}]
 
 
-def test_a_tool_that_exits_with_an_error_fails_its_leaf():
-    """D757: a generator that broke shows as failed, though the step around it went on."""
+@pytest.mark.parametrize("exit_status, failed", [(0, False), (1, True), ("timed out", True)])
+def test_a_tools_exit_status_decides_whether_its_leaf_failed(exit_status, failed):
+    """Debug stderr does not fail an exit-0 tool; nonzero exits and timeouts fail its branch."""
     ev = [{"t": 0, "ev": "hello", "pid": 1}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1, "explore": 0})},
           {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "DSE: batch", "why": "", "params": {}},
           {"t": 3, "ev": "start", "id": 2, "parent": 1, "name": "tool:python3", "why": "generate x=1", "params": {}},
-          {"t": 4, "ev": "end", "id": 2, "name": "", "seconds": 0.1, "failed": False, "output": {"exit": 1}},
+          {"t": 4, "ev": "end", "id": 2, "name": "", "seconds": 0.1, "failed": False,
+           "output": {"exit": exit_status, "stderr": "DEBUG: testing error handling\n"}},
           {"t": 5, "ev": "end", "id": 1, "name": "", "seconds": 1, "failed": False, "output": {}}]
     js = r"""
 const LT = require(process.argv[1]); const m = LT.model();
@@ -153,7 +155,7 @@ process.stdout.write(JSON.stringify(LT.build(m).map(b => b.kids.map(k => [k.titl
 """
     r = subprocess.run(["node", "-e", js, str(LOOPTREE)], input="".join(json.dumps(e) + "\n" for e in ev),
                        capture_output=True, text=True, timeout=60)
-    assert json.loads(r.stdout) == [[["Search", True], ["Design", True]]], r.stdout + r.stderr
+    assert json.loads(r.stdout) == [[["Search", failed], ["Design", failed]]], r.stdout + r.stderr
 
 
 def test_a_resumed_pass_folds_its_rechecks_into_its_setup_before_its_design():

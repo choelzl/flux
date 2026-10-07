@@ -493,6 +493,7 @@ function liveTree(base, qs, onQuestion, stream) {
       when read upward and follows its end otherwise. */
   function agentView(n, now) {
     const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) };
+    const stderrClass = n.failed || (f.exit != null && f.exit !== 0) ? "err" : "";
     const facts = [["model", f.agent], ["status", f.status], ["output", f.output], ["rate limit", f["rate limit"]],
       ["exit", f.exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)]].filter(([, v]) => v != null && v !== "");
     const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
@@ -513,7 +514,7 @@ function liveTree(base, qs, onQuestion, stream) {
         said,
         h("h3", { class: "cv-title" }, "What it did"),
         conversation(ends ? steps.slice(0, -1) : steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: running(n) }),
-        stream("stderr", "stderr", f.stderr, "err"));
+        stream("stderr", "stderr", f.stderr, stderrClass));
     }
     return h("div", { class: "agent-view" },
       h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
@@ -522,7 +523,7 @@ function liveTree(base, qs, onQuestion, stream) {
         h("ol", { class: "acmds" }, tools.map(t => { const m = /^(\d+)\.\s*(.*)$/.exec(t); return h("li", { value: m ? m[1] : null }, h("code", {}, m ? m[2] : t)); }))) : "",
       stream("result", "Last command's output", f["last tool output"]),
       stream("reply", "Its words", f["reply (live tail)"], "reply"),
-      stream("stderr", "stderr", f.stderr, "err"),
+      stream("stderr", "stderr", f.stderr, stderrClass),
       !thinking && !tools.length && !f["reply (live tail)"] ? h("p", { class: "muted" }, running(n) ? "Nothing yet." : "No output.") : "");
   }
   /** A tool at work (D709): its command, folder and exit, and the ends of its stdout and
@@ -539,7 +540,7 @@ function liveTree(base, qs, onQuestion, stream) {
       h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? " bad" : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
       p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono", "data-k": "command" }, p.command)) : "",
       stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
-      stream("stderr", running(n) ? "stderr, so far" : "stderr", err, "err"),
+      stream("stderr", running(n) ? "stderr, so far" : "stderr", err, n.failed ? "err" : ""),
       !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "No output recorded.") : "");
   }
   let detailTab = "";
