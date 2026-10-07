@@ -35,6 +35,7 @@ const stylesOf = (opts, items) => opts.styles || groupStyles(opts.groups || grou
     the ring and the legend read; the verdict is its outline (hollow, dashed), never its colour. */
 function mark(st, x, y, r, attrs, ...kids) {
   const a = { ...attrs, style: st.color ? `--gc: ${st.color}` : null };
+  if (st.shape === "hexagon") return sv("polygon", { points: `${x - r * 1.2},${y} ${x - r * .6},${y - r} ${x + r * .6},${y - r} ${x + r * 1.2},${y} ${x + r * .6},${y + r} ${x - r * .6},${y + r}`, ...a }, ...kids);
   if (st.shape === "square") return sv("rect", { x: x - r * 0.9, y: y - r * 0.9, width: r * 1.8, height: r * 1.8, ...a }, ...kids);
   if (st.shape === "triangle") return sv("polygon", { points: `${x},${y - r * 1.2} ${x + r * 1.1},${y + r * 0.8} ${x - r * 1.1},${y + r * 0.8}`, ...a }, ...kids);
   if (st.shape === "diamond") return sv("polygon", { points: `${x},${y - r * 1.25} ${x + r * 1.25},${y} ${x},${y + r * 1.25} ${x - r * 1.25},${y}`, ...a }, ...kids);
@@ -45,11 +46,12 @@ const ring = (x, y, r) => sv("circle", { cx: x, cy: y, r: r + 3.5, class: "ring"
 /** The legend (D915): each group's colour and shape, then what the outlines say -- meets every
     requirement (filled), misses one (hollow), waits for a later stage (dashed) -- the decision's ring
     and, on the Pareto chart, the feasible front. Colour is never the only cue. */
-function legend(S, { front = false, pending = false } = {}) {
+function legend(S, { front = false, pending = false, baseline = false } = {}) {
   const key = (st, cls, extra = "") => sv("svg", { viewBox: "-6 -6 12 12", class: "chart key", "aria-hidden": "true" }, mark(st, 0, 0, 3.6, { class: `pt ${cls}` }), extra);
   const plain = { color: "var(--muted)", shape: "circle" };
   return h("span", { class: "legend groups" },
     S.groups.map(g => h("span", { class: "key-item", "data-group": g }, key(S.of(g), "accepted"), g || "other")),
+    baseline ? h("span", { class: "key-item", "data-baseline": "true" }, key({ ...plain, shape: "hexagon" }, "accepted baseline"), "Baseline (pass 0)") : "",
     h("span", { class: "key-item" }, key(plain, "accepted"), "meets every requirement"),
     h("span", { class: "key-item" }, key(plain, "failed"), "misses one"),
     pending ? h("span", { class: "key-item" }, key(plain, "pending"), "waits for a later stage") : "",
@@ -59,7 +61,7 @@ function legend(S, { front = false, pending = false } = {}) {
 /** A point's details (D914): which design, its piece, its standing and what it does not meet. */
 function pointTitle(p, lines) {
   const piece = p.group === "whole" ? " (whole)" : p.group ? ` (${p.group})` : "";
-  return [`${p.name}${piece} · ${p.verdict === "accepted" ? "meets every requirement" : p.verdict}${p.decision ? " · the decision" : ""}`,
+  return [`${p.name}${piece}${p.baseline ? " · Baseline (pass 0)" : ""} · ${p.verdict === "accepted" ? "meets every requirement" : p.verdict}${p.decision ? " · the decision" : ""}`,
     ...lines, ...(p.verdict !== "accepted" ? p.reasons.map(w => (p.verdict === "pending" ? "waits: " : "not met: ") + w) : [])].join("\n");
 }
 /** One objective, design by design (D693, D849): every design measured (dots, in measurement order),
@@ -97,7 +99,7 @@ function bestChart(rows, obj, passes, opts = {}) {
     (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
     obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
       sv("text", { x: W - R, y: y(obj.goal) - 4, class: "tick limit-t", "text-anchor": "end" }, `${maxi ? "≥" : "≤"} ${num4(obj.goal)}`)] : "",
-    pts.map(p => mark(S.of(p.group), p.x, y(p.v), 3, { class: `pt ${p.verdict}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`, "data-name": p.name, "data-group": p.group },
+    pts.map(p => mark({ ...S.of(p.group), ...(p.baseline ? { shape: "hexagon" } : {}) }, p.x, y(p.v), p.baseline ? 4 : 3, { class: `pt ${p.verdict}${p.baseline ? " baseline" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`, "data-name": p.name, "data-group": p.group },
       sv("title", {}, pointTitle(p, [`${obj.metric} ${num4(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])))),
     pts.filter(p => p.decision).map(p => ring(p.x, y(p.v), 3)),
     path ? sv("path", { d: path, class: "best" }) : "",
@@ -107,7 +109,7 @@ function bestChart(rows, obj, passes, opts = {}) {
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `),
     said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best feasible so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
-    opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending) })]), g);
+    opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending), baseline: pts.some(p => p.baseline) })]), g);
 }
 /** Which way a metric is better (D693): the objective's direction, else the name's plain sense. */
 function directionOf(metric, objectives) {
@@ -122,7 +124,7 @@ function directionOf(metric, objectives) {
 function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
   const W = 560, H = 300, L = 62, R = 14, T = 14, B = 34;
   const pts = designs.map(d => { const n = stage ? d.stages[stage] : d.numbers, x = n ? Number(n[xm] ?? NaN) : NaN, y = n ? Number(n[ym] ?? NaN) : NaN;
-    return isFinite(x) && isFinite(y) ? { d, ...verdictOf(d), name: d.name, group: d.group || "", decision: !!d.decision, x, y } : null; })
+    return isFinite(x) && isFinite(y) ? { d, ...verdictOf(d), name: d.name, group: d.group || "", baseline: !!d.baseline, decision: !!d.decision, x, y } : null; })
     .filter(Boolean);
   if (!pts.length) return empty(`No design has both ${xm} and ${ym}${stage ? " at " + stage : ""}.`);
   const dx = directionOf(xm, objectives), dy = directionOf(ym, objectives);
@@ -152,9 +154,9 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
     front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
     pts.sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0)).map(p => {
-      const r = on.has(p) ? 4.5 : 3.2;
-      const c = mark(S.of(p.group), X(p.x), Y(p.y), r, { "data-name": p.name, "data-group": p.group,
-          class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}` },
+      const r = on.has(p) ? 4.5 : p.baseline ? 4 : 3.2;
+      const c = mark({ ...S.of(p.group), ...(p.baseline ? { shape: "hexagon" } : {}) }, X(p.x), Y(p.y), r, { "data-name": p.name, "data-group": p.group,
+          class: `pt ${p.verdict}${p.baseline ? " baseline" : ""}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}` },
         sv("title", {}, pointTitle(p, [`${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])));
       if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
       return p.decision ? [c, ring(X(p.x), Y(p.y), r)] : c;
@@ -164,7 +166,7 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
   return h("figure", { class: "chart-box" }, h("figcaption", {}, said ? h("strong", { class: "front-said" }, said)
       : h("strong", { class: "front-said" }, `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`),
     h("span", { class: "muted" }, ` · ${pts.length} design(s)${stage ? " at " + stage : ", each at its deepest stage"}${opts.legend === false ? "" : " · "}`),
-    opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending) })), g);
+    opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending), baseline: pts.some(p => p.baseline) })), g);
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;
     `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */

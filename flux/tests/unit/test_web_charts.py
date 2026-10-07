@@ -54,6 +54,14 @@ console.log(JSON.stringify(C.designPoints(ds, { metric: 'area_um2', stage: 'conf
     assert not b["eligible"] and b["verdict"] == "failed" and b["reasons"] == ["fmax_mhz 800 is below 1000"]
 
 
+def test_baseline_is_retained_on_points_at_any_stage(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const ds = [design('initial', '', 31, 1200, true, { baseline: true }), design('new', '', 30, 1300, true)];
+console.log(JSON.stringify(['confirm', 'deepest'].map(stage => C.designPoints(ds, { metric: 'area_um2', stage }).map(p => p.baseline))));
+""")
+    assert got == [[True, False], [True, False]]
+
+
 def test_a_design_failing_another_requirement_is_never_the_best(tmp_path):
     """The review's case (W12): accepted area 31 against failed area 12.5 (frequency below its floor)."""
     got = run(tmp_path, DESIGNS + """

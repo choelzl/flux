@@ -1001,6 +1001,7 @@ svg.chart .pt { fill: var(--gc, var(--accent)); fill-opacity: .8; stroke: var(--
 svg.chart .pt.failed, svg.chart .pt.pending { fill: var(--panel); fill-opacity: 1; stroke-width: 1.6; }
 svg.chart .pt.pending { stroke-dasharray: 2 1.5; }
 svg.chart .pt.on-front { stroke: var(--ink); stroke-width: 1.3; fill-opacity: 1; }
+svg.chart .pt.baseline { stroke-width: 2; }
 svg.chart .pt.out { opacity: .35; }
 svg.chart .pt:hover { stroke-width: 2.4; }
 svg.chart .ring { fill: none; stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }

@@ -10,6 +10,18 @@ from flux_web.results import designs
 STAGES = [{"name": "screen", "cutoff": {"metric": "fmax_mhz", "at": 900}}, {"name": "confirm"}]
 
 
+def test_baseline_measurements_are_identified_for_graphs(tmp_path):
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    for name, baseline in (("initial", True), ("improved", False)):
+        rec.trial({"name": name, "artifact": name, "meta": {"baseline": baseline}}, f"{name}@screen",
+                  stage="screen", strategy="loop", metrics={"area_um2": 30.0}, evaluator="screen")
+    rec.close("paused")
+    rows = {d["name"]: d for d in designs(db, [{"name": "screen"}])["designs"]}
+    assert rows["initial"]["baseline"] is True
+    assert rows["improved"]["baseline"] is False
+
+
 def _record(tmp_path):
     db = str(tmp_path / "r.db")
     rec = Records(db, objective={"study": "t"}, name="t")

@@ -197,7 +197,7 @@ function resultsView(ctx, r) {
     return h("div", { class: "graphs" },
       card(null, [scopeBox, h("p", { class: "muted small graphs-note" }, `Every measured design is drawn (${r.designs.length}); the table's filter does not apply. `,
           "The best so far and the front count only designs that meet every requirement", groups.length ? ", within the scope" : "", "."),
-        legend(styles, { front: true, pending: r.designs.some(d => d.verdict === "pending") })], { cls: "graphs-ctl" }),
+        legend(styles, { front: true, pending: r.designs.some(d => d.verdict === "pending"), baseline: r.designs.some(d => d.baseline) })], { cls: "graphs-ctl" }),
       h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement by design", timeBox)),
       card(null, graphsDetail, { cls: "detail-card" }));
   }

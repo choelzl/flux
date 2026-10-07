@@ -419,7 +419,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         return 2
     if problem.roles().named():
         print("roles: " + ", ".join(f"{r}={n}" for r, n in sorted(problem.roles().named().items())))
-    missing = problem.tools_missing()
+    missing = problem.baseline_tools_missing() if task.baseline is not None else problem.tools_missing()
     if missing:
         print(f"{', '.join(missing)} not on PATH; `flux task check` lists what the task needs")
         return 1
@@ -456,6 +456,9 @@ def cmd_task_run(args: argparse.Namespace) -> int:
 
         proposer: Any = ScriptedProposer(json.loads(Path(args.replies).read_text()))
         model_name = "scripted replies"
+    elif request.baseline_only:
+        proposer = None
+        model_name = "baseline (no model or agent)"
     else:
         from flux_llm import OpenAIChatProposer
 
@@ -465,7 +468,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
             from flux_llm import set_think_override
 
             set_think_override(True)
-    if not args.replies:
+    if not args.replies and not request.baseline:
         from flux_loop.task import model_use
 
         needs = model_use(task)
@@ -477,7 +480,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
             print(f"warning: {down}; the steps that ask a model will be skipped")
     from flux_loop.author import write_golden
 
-    fault = write_golden(task, proposer, say=print)            # a golden the document names but lacks
+    fault = None if request.baseline else write_golden(task, proposer, say=print)  # baseline never authors inputs
     if fault:
         print(f"no golden model to test against: {fault}")
         return 1
@@ -499,13 +502,43 @@ def cmd_task_run(args: argparse.Namespace) -> int:
               f"\n  record: {db}\n  traces: {trace_root()}")
 
     no_feedback = task.flow.get("feedback") == "none"     # the document declined the channel
+    from threading import Lock
+
+    generation_ready = not request.baseline
+    generation_lock = Lock()
+
+    def _prepare_generation():
+        nonlocal generation_ready
+        from flux_loop.task import model_use
+
+        if not generation_ready:
+            missing = problem.tools_missing()
+            if missing:
+                raise RuntimeError(f"cannot start generation: {', '.join(missing)} not on PATH")
+            needs = model_use(task)
+            down = proposer.preflight() if needs and not args.replies else ""
+            if down and needs != "its world may ask one":
+                raise RuntimeError(f"cannot start generation: {down}")
+            if down:
+                print(f"warning: {down}; the steps that ask a model will be skipped")
+            fault = write_golden(task, proposer, say=print)
+            if fault:
+                raise RuntimeError(f"no golden model to test against: {fault}")
+            problem.__dict__.pop("_golden_cap", None)
+            generation_ready = True
+
+    def _one_pass(req, feed):
+        if not req.baseline:
+            with generation_lock:
+                _prepare_generation()
+        return run_loop(problem, req, proposer=proposer, feedback=feed, log=print)
 
     def _passes(fb=None):
         """Run passes until stopped (`flux stop`, Ctrl-C, q) or the `--passes` / `budget.passes`
         cap; a pass at rest is followed by one that explores (D593)."""
         from flux_loop.passes import run_passes
 
-        return run_passes(lambda req, feed: run_loop(problem, req, proposer=proposer, feedback=feed, log=print),
+        return run_passes(_one_pass,
                           request, passes=passes, feedback=fb, proposer=proposer, notes=not no_feedback)
 
     def _print(out) -> None:
@@ -532,7 +565,7 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         return 130
     _print(out)
     target = None
-    if out.decision is not None:
+    if out.decision is not None and not out.decision.candidate.meta.get("baseline_workspace"):
         target = Path(args.out or task.out_dir() / f"{task.id}{task.extension}")
         target.write_text(out.decision.candidate.artifact)
         print(f"\nartifact written to {target}")
@@ -542,6 +575,8 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         Path(args.json).write_text(json.dumps(_answer(task, db, out, problem, target), indent=2, default=str))
         print(f"answer written to {args.json}")
     _mark_outputs(task, out, problem, target, getattr(args, "json", None))
+    if request.baseline_only:
+        return 1 if out.stopped == "baseline failed" else 0
     # D900: 0 a qualifying answer; 3 correct designs measured, none meets every requirement yet; 1 none measured
     return 0 if out.decision is not None else 3 if getattr(out, "closest", None) is not None else 1
 

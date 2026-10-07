@@ -130,6 +130,32 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         base = first(self.task.space)
         return [{**base, **p} for p in self.task.seeds]
 
+    def baseline_candidate(self, state: LoopState) -> Candidate:
+        """Pass 0's unchanged source, a preparation command, or the project as it is."""
+        from .dse import first
+
+        config = self.task.baseline or {}
+        point = {**first(self.task.space), **(self.task.seeds[0] if self.task.seeds else {})}
+        cand = Candidate(f"{self.task.id}#baseline", knobs=point,
+                         meta={"baseline": True, "composed": [p.name for p in self.task.parts]})
+        artifact, workspace = "", True
+        if "file" in config:
+            path = Path(config["file"].replace("{home}", self.task.home or "."))
+            path = path if path.is_absolute() else Path(self.task.home or ".") / path
+            artifact, workspace = path.read_text(), False
+        elif "command" in config:
+            subs = self._subs(cand, None, state)
+            path = Path(subs["artifact"])
+            path.unlink(missing_ok=True)
+            run = self._run(tuple(config["command"]), {**subs, "failure": "", "attempt": "1"},
+                            config.get("timeout_s", 600), "baseline")
+            if not run.ok:
+                text = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:]
+                raise BuildError(text or f"baseline command exited {run.returncode}")
+            if path.is_file():
+                artifact, workspace = path.read_text(), False
+        return cand.with_artifact(artifact, baseline_workspace=workspace)
+
     def instantiate(self, points: list[dict[str, Any]], state: LoopState) -> list[Candidate]:
         """With a `space:` and a generator command, run the command once per point with its knobs
         as `{knob}`; the file written at `{artifact}` is the candidate (D581). Without a command,
@@ -247,16 +273,21 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
 
     def tools_missing(self) -> list[str]:
         missing = self._tools_missing()
-        if self.task.generator.get("agent"):
+        if self.task.generator.get("agent") and not (self.task.baseline or {}).get("only"):
             from .agent import missing_agent
 
             missing = list(missing) + [t for t in missing_agent(self.task.generator["agent"]) if t not in missing]
         return missing
 
-    def _tools_missing(self) -> list[str]:
+    def baseline_tools_missing(self) -> list[str]:
+        return self._tools_missing(baseline=True)
+
+    def _tools_missing(self, *, baseline: bool = False) -> list[str]:
         missing: list[str] = []
         declared = {f"stage {r.name}" for r in self.task.stages if r.needs}   # skipped, not missing
         for _label, cmd in self.task.commands():
+            if (baseline or (self.task.baseline or {}).get("only")) and (_label == "generator" or _label.startswith("estimate ")):
+                continue
             head = _substitute(cmd[:1], {"python": sys.executable, "home": self.task.home or "."})[0]
             if head in ("{artifact}", "{workdir}", "{name}", "{part}"):
                 continue
@@ -532,6 +563,8 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
 def model_use(task: "TaskSpec") -> str:
     """Why this document needs a model, or "" when it does not (D608), so a banner names a
     model only when one is used."""
+    if (task.baseline or {}).get("only"):
+        return ""
     flow = dict(task.flow or {})
     gen = dict(task.generator or {})
     reasons = []

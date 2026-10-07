@@ -472,6 +472,7 @@
       id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
+      baseline: { mode: "off", source: "project", file: "", command: "", timeout: "" },
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
       space: [], partsMode: "none", parts: "",
     };
@@ -698,6 +699,17 @@
               "#     flux task run " + id + "            # until stopped; --passes N for N\n\n";
     out += prose("statement", String(state.statement || "").trim() || "(say what you want made)");
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
+    var basepass = state.baseline || {};
+    if (own("baseline") && basepass.mode && basepass.mode !== "off") {
+      var config = {};
+      if (basepass.source === "file") config.file = String(basepass.file || "").trim();
+      if (basepass.source === "command") {
+        config.command = String(basepass.command || "").trim();
+        if (String(basepass.timeout || "").trim()) config.timeout_s = typed(basepass.timeout);
+      }
+      if (basepass.mode === "only") config.only = true;
+      out += "\nbaseline: " + (Object.keys(config).length ? inline(config, false) : "true") + "\n";
+    }
     if (language(state, true)) out += "language: " + q(language(state, true)) + "\n";
 
     if (!own("parts")) { /* kept */ }
@@ -837,6 +849,11 @@
     r.checks.forEach(function (c) { cmd(c.run); });
     r.stages.forEach(function (st) { if (!st.shape) cmd(st.command); if (st.estimate && st.estimate.command) cmd(st.estimate.command); });
     if ((state.flow || {}).generate === "command") cmd(state.generateCommand);
+    var bp = state.baseline || {};
+    if (bp.mode && bp.mode !== "off") {
+      if (bp.source === "command") cmd(bp.command);
+      if (bp.source === "file") add(String(bp.file || "").trim().replace(/^\{home\}\//, ""));
+    }
     for (var dkey in r.document) r.document[dkey].forEach(function (x) {
       var m = /^\{home\}\/(.+)$/.exec(typeof x.value === "string" ? x.value : ""); if (m) add(m[1]);
     });
@@ -994,6 +1011,12 @@
     });
 
     at = STEP_OF.more;
+    var bp = state.baseline || {};
+    if (bp.mode && bp.mode !== "off") {
+      if (bp.source === "file" && !String(bp.file || "").trim()) error("Say the unchanged baseline design's file.", "baseline-file");
+      if (bp.source === "command" && !String(bp.command || "").trim()) error("Say the baseline command.", "baseline-command");
+      if (bp.source === "command" && bp.timeout && !(isFinite(Number(bp.timeout)) && Number(bp.timeout) > 0)) error("The baseline timeout must be a positive number.");
+    }
     (state.space || []).forEach(function (x) {
       if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
@@ -1012,6 +1035,7 @@
       if (st.estimate && st.estimate.command) cmds.push(["the estimate of \"" + st.name + "\"", st.estimate.command, STEP_OF.measurements]);
     });
     if (flow.generate === "command") cmds.push(["the design script", state.generateCommand, STEP_OF.flow]);
+    if (bp.mode && bp.mode !== "off" && bp.source === "command") cmds.push(["the baseline command", bp.command, STEP_OF.more]);
     var knobsSaid = false;
     cmds.forEach(function (c) {
       at = c[2];
@@ -1055,7 +1079,7 @@
   var CHECK_TIMEOUT = 120, STAGE_TIMEOUT = 600;
   var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
-                    "objectives", "budget"];
+                    "objectives", "budget", "baseline"];
   var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype", "exploration_quota"];
 
   function argvOf(run) {
@@ -1256,6 +1280,15 @@
     s.id = String(raw.id || normal.id || "");
     s.statement = String(raw.statement || normal.statement || "").trim();
     s.contract = String(raw.contract || "").trim();
+    var bp = raw.baseline;
+    if (bp === true) s.baseline.mode = "before";
+    else if (bp && typeof bp === "object" && !Array.isArray(bp) &&
+             Object.keys(bp).every(function (k) { return ["file", "command", "only", "timeout_s"].indexOf(k) >= 0; })) {
+      s.baseline.mode = bp.only ? "only" : "before";
+      if (bp.file !== undefined) { s.baseline.source = "file"; s.baseline.file = String(bp.file); }
+      if (bp.command !== undefined) { s.baseline.source = "command"; s.baseline.command = argvOf(bp.command).map(shellWord).join(" "); }
+      if (bp.timeout_s !== undefined) s.baseline.timeout = String(bp.timeout_s);
+    } else if (bp !== undefined && bp !== null && bp !== false) keep("baseline", "custom baseline settings");
     var lang = String(raw.language || normal.language || "");
     if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
     else if (lang) { s.language = "other"; s.languageOther = lang; }
@@ -2039,6 +2072,23 @@
 
     function renderLevel3() {
       var b = state.budget;
+      var bp = state.baseline || (state.baseline = { mode: "off", source: "project" });
+      var baseline = sub("Baseline / pass 0", "check and measure before any agent edits or repairs", [
+        field("Baseline pass", function () { return bp.mode; }, function (v) { bp.mode = v; },
+          { key: "baseline-mode", structural: true, disabled: (state.kept || []).indexOf("baseline") >= 0,
+            options: [["off", "Off (default)"], ["before", "Pass 0, then normal passes"], ["only", "Pass 0 only: check tools and measure"]],
+            hint: "Runs before parallel passes only when no baseline is recorded or its inputs, settings or tools changed. Unchanged restarts reuse its results. Pass 0 does not use the normal pass budget; new measurements bypass caches and estimators." }),
+        bp.mode !== "off" ? field("Baseline source", function () { return bp.source; }, function (v) { bp.source = v; },
+          { key: "baseline-source", structural: true, options: [["project", "Current project: run checks and measurements as written"],
+            ["file", "Existing design file (unchanged)"], ["command", "A baseline preparation command"]],
+            hint: "Current project uses your scripts as written. Select a file when scripts expect a design in {artifact}." }) : null,
+        bp.mode !== "off" && bp.source === "file" ? field("Baseline design file", function () { return bp.file; }, function (v) { bp.file = v; },
+          { key: "baseline-file", placeholder: "baseline.py", hint: "Relative to the loop folder. Flux checks and measures a copy, leaving the original untouched." }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field("Baseline command", function () { return bp.command; }, function (v) { bp.command = v; },
+          { key: "baseline-command", placeholder: "{python} {home}/baseline.py {artifact}",
+            hint: "Runs once with the usual placeholders and first seed or default knob values. May write {artifact}, or prepare the project for your scripts." }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field("Baseline command timeout (seconds)", function () { return bp.timeout; }, function (v) { bp.timeout = v; },
+          { placeholder: "600" }) : null]);
       function num(label, key, dflt, hint) {
         return field(label, function () { return b[key]; }, function (v) { b[key] = v; },
                      { compact: true, placeholder: dflt, hint: hint + " (budget." + key + "; empty: " + dflt + ")" });
@@ -2077,10 +2127,10 @@
                                            { compact: true, grow: true, placeholder: "decoder, datapath", hint: "Part names, separated by commas" }) : null])]);
 
       // closed until asked for, or until something in it is in use
-      var inUse = !!(searching || state.space.length || hasParts());
+      var inUse = !!(searching || state.space.length || hasParts() || bp.mode !== "off");
       if (inUse && !parts.advancedUsed) parts.advancedOpen = true;
       parts.advancedUsed = inUse;
-      var body = h("div", { class: "fc-advanced-body" }, [sub("Budget", "empty = the loop's default, shown greyed", [budget]), space, split]);
+      var body = h("div", { class: "fc-advanced-body" }, [baseline, sub("Budget", "empty = the loop's default, shown greyed", [budget]), space, split]);
       body.hidden = !parts.advancedOpen;
       var toggle = h("button", { type: "button", class: "fc-toggle", "aria-expanded": parts.advancedOpen ? "true" : "false", on: { click: function () {
         parts.advancedOpen = !parts.advancedOpen;
@@ -2297,6 +2347,9 @@
       if (said.length) rows.push(["Budget", said.map(function (k) { return k + " " + bu[k]; }).join(", ")]);
       var kn = knobNames(state);
       if (kn.length) rows.push(["Searches", kn.join(", ")]);
+      var bp = state.baseline || {};
+      if (bp.mode && bp.mode !== "off") rows.push(["Baseline", "pass 0" + (bp.mode === "only" ? " only" : ", then normal passes") + ": " +
+        (bp.source === "file" ? bp.file : bp.source === "command" ? bp.command : "current project")]);
       parts.summary.innerHTML = "";
       rows.forEach(function (x) { parts.summary.appendChild(h("div", {}, [h("dt", { text: x[0] }), h("dd", { text: x[1] })])); });
     }

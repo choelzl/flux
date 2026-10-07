@@ -33,7 +33,7 @@ def _prompt_sha(state: LoopState) -> str | None:
 
 def _record_trial(state: LoopState, cand: Candidate | None, subgoal: str | None,
                   verdict: Verdict | None, *, admitted: bool = False,
-                  error: str | None = None) -> None:
+                  error: str | None = None, gate_passed: bool = False) -> None:
     if state.records is None:
         return
     doc = (cand.to_record() if cand else {"name": subgoal or "?", "artifact": ""})
@@ -57,7 +57,7 @@ def _record_trial(state: LoopState, cand: Candidate | None, subgoal: str | None,
             stage=StageNames.ADMIT if admitted else StageNames.GATE,
             strategy="loop",
             metrics=({"score": float(verdict.score)} if verdict is not None else None),
-            error=(None if admitted else (error or (verdict.why[:REASON_CHARS] if verdict else "refused"))),
+            error=(None if admitted or gate_passed else (error or (verdict.why[:REASON_CHARS] if verdict else "refused"))),
             wall_s=(verdict.seconds if verdict is not None else 0.0),
             analytic=False, evaluator=f"{state.request.params.get('evaluator', 'loop')}@gate")
     except Exception:  # noqa: BLE001
@@ -133,6 +133,8 @@ def history(problem: Problem, state: LoopState) -> list[Scored]:
                 if t.stage not in stages or t.result is None:
                     continue
                 cand = Candidate.from_record(dict(t.candidate or {}))
+                if cand.meta.get("baseline_workspace"):
+                    continue  # project measurements have no reproducible candidate to resume
                 if not fresh(problem, cand, t.stage, state):
                     continue                             # D853: numbers of other inputs are not today's
                 latest[(cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
@@ -160,6 +162,8 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
             if t.stage not in stages or t.result is None:
                 continue
             cand = Candidate.from_record(dict(t.candidate or {}))
+            if cand.meta.get("baseline_workspace"):
+                continue
             k = (cand.name, cand.key(), t.stage)
             # D853: a row stands only for what measured it; a stale row stays on the record, out of
             # the search, and its design is measured again

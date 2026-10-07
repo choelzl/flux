@@ -330,6 +330,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 composed = [x for x in ((c.get("meta") or {}).get("composed") or ()) if x != "*"]
                 group = "whole" if composed else (part or (name.split("#", 1)[0] if "#" in name else ""))
                 d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "group": group,
+                                                     "baseline": bool((c.get("meta") or {}).get("baseline")),
                                                      "stages": {}, "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]

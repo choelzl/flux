@@ -74,7 +74,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
                       started=time.monotonic(), depth=depth)
     state.__dict__["workbench"] = str(getattr(getattr(problem, "task", None), "workbench", "") or "")   # D677: every box agent's
     with _phase("gate: tools", why="refuse loudly before spending anything") as out:
-        missing = problem.tools_missing()
+        missing = (getattr(problem, "baseline_tools_missing", problem.tools_missing)()
+                   if request.baseline else problem.tools_missing())
         out["verdict"] = ("MISSING: " + ", ".join(missing)) if missing else "every tool the problem names is on PATH"
         out["problem"] = f"{problem.name}: {type(problem).__name__}"
     if missing:
@@ -87,7 +88,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         out["request"] = _describe_request(request)
     if wrong:
         raise RuntimeError("this problem cannot be answered as posed: " + "; ".join(wrong))
-    if getattr(getattr(problem, "task", None), "flow", {}).get("validate") not in (None, "rules"):
+    if not request.baseline and getattr(getattr(problem, "task", None), "flow", {}).get("validate") not in (None, "rules"):
         # D556: the box's model half -- advisory, said and kept, never a gate
         with _phase("validate: the model reads the document", why="objections before a step is spent") as out:
             objections = list(problem.objections(state) or [])
@@ -133,7 +134,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         # D510: the traces of this pass under a name the record can point at
         state.workdir = trace_dir(getattr(state.records, "campaign_id", None), problem.name)
         if state.depth == 0 and getattr(state.records, "campaign_id", None):
-            run_dir = ops.register(state.records.campaign_id, state.workdir, db=state.request.db)     # D513: `flux status/stop` see this run
+            run_dir = ops.register(state.records.campaign_id, state.workdir, db=state.request.db,
+                                   baseline=request.baseline)     # D513: `flux status/stop` see this run
             from .journal import attach
 
             attach(run_dir)                  # D683: the live task tree, for `flux serve`
@@ -149,6 +151,10 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     # the plan the pass follows (applied before anything is divided)
     if not state.workdir:
         state.workdir = trace_dir(None, problem.name)
+    if request.baseline:
+        from .baseline import run_baseline
+
+        return run_baseline(problem, state)
     _rig_agent(problem, state)
     # Both kinds of work are asked for before anything is reloaded (D457): a problem may have
     # batches, parts, or both. Only parts carry memory to re-verify, so the record is read
@@ -1225,7 +1231,7 @@ def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_b
     there is no choice or the agent falls back."""
     from .boxes import agent_of, box_turn
 
-    agent = agent_of(getattr(getattr(problem, "task", None), "flow", None) or {}, "select")
+    agent = None if state.request.baseline else agent_of(getattr(getattr(problem, "task", None), "flow", None) or {}, "select")
     objs = list(problem.objectives() or [])
     if agent is None or not objs:
         return pick, decided_by
@@ -1351,7 +1357,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
             except Exception:  # noqa: BLE001
                 pass
     confirmed = on_stage[reached] if reached != stages[0] else []
-    if state.depth == 0:
+    if state.depth == 0 and not request.baseline:
         ops.pass_ended(at_rest=state.stopped.startswith("at rest"))
     got = _result(problem, state, pick, decided_by, front, confirmed)
     return dataclasses.replace(got, closest=closest, unmet=unmet) if closest is not None else got

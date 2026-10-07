@@ -67,6 +67,7 @@ class TaskSpec:
     knowledge: str = ""
     joiner: str = "\n\n"                 # how admitted parts compose, in `parts` order (D792: fixed)
     budget: dict[str, Any] = field(default_factory=dict)      # LoopRequest overrides
+    baseline: dict[str, Any] | None = None  # None: off; {}: check/measure the project as it is
     params: dict[str, Any] = field(default_factory=dict)      # the problem's own settings
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
     #: policy searches.
@@ -264,7 +265,35 @@ class TaskSpec:
                 budget["calibrate"] = False
             if "sheet" in (flow.get("knowledge") or ()) and not sheet:
                 raise TaskError("flow.knowledge names `sheet` but no `sheet:` file")
-        known = {f.name for f in fields(LoopRequest)} - {"db", "params"}
+        baseline = doc.get("baseline")
+        if baseline is None or baseline is False:
+            baseline = None
+        elif baseline is True:
+            baseline = {}
+        elif isinstance(baseline, dict):
+            baseline = dict(baseline)
+            if set(baseline) - {"file", "command", "timeout_s", "only"} or {"file", "command"} <= set(baseline):
+                raise TaskError("baseline takes file OR command, optional timeout_s and only; true checks the project as it is")
+            if "file" in baseline:
+                if not isinstance(baseline["file"], str) or not baseline["file"].strip():
+                    raise TaskError("baseline.file must be a non-empty file path")
+                if base is not None:
+                    inside(Path(base) / baseline["file"].replace("{home}", str(Path(base))), "baseline.file")
+            if "command" in baseline:
+                try:
+                    baseline["command"] = list(_command(baseline["command"], "baseline.command") or ())
+                except ValueError as exc:
+                    raise TaskError(f"baseline.command: {exc}") from exc
+                if not baseline["command"]:
+                    raise TaskError("baseline.command must be a non-empty command")
+            if "only" in baseline and not isinstance(baseline["only"], bool):
+                raise TaskError("baseline.only must be true or false")
+            if "timeout_s" in baseline and (isinstance(baseline["timeout_s"], bool)
+                    or not isinstance(baseline["timeout_s"], (int, float)) or not 0 < baseline["timeout_s"] < float("inf")):
+                raise TaskError("baseline.timeout_s must be a finite positive number")
+        else:
+            raise TaskError("baseline is true, false, or a mapping with file or command")
+        known = {f.name for f in fields(LoopRequest)} - {"db", "params", "baseline", "baseline_only"}
         bad = sorted(set(budget) - known)
         if bad:
             raise TaskError(f"budget keys {bad} are not loop knobs; known: {sorted(known)}")
@@ -277,7 +306,7 @@ class TaskSpec:
         inferred = None if said_language else _inferred_language(gate, stages)      # D832: from the tools named
         language = str(said_language or inferred or "text")
         ext = EXTENSIONS.get(language.lower(), "." + language.lower().replace(" ", ""))
-        _check_placeholders(gate, stages, generator, space)
+        _check_placeholders(gate, stages, generator, space, baseline)
         skills_raw = doc.get("skills") or []
         if isinstance(skills_raw, str):
             skills_raw = [skills_raw]
@@ -300,7 +329,7 @@ class TaskSpec:
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
-            budget=budget, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
+            budget=budget, baseline=baseline, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
             workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
             record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
@@ -332,6 +361,7 @@ class TaskSpec:
             "objectives": [o.to_doc() for o in self.objectives],
             "knowledge": self.knowledge,
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: _knob_doc(k, v, self.when.get(k), self.space_from.get(k)) for k, v in self.space.items()},
+            **({"baseline": dict(self.baseline) or True} if self.baseline is not None else {}),
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
             **({"workload": self.workload} if self.workload is not None else {}),
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
@@ -357,12 +387,14 @@ class TaskSpec:
     def commands(self) -> list[tuple[str, tuple[str, ...]]]:
         out: list[tuple[str, tuple[str, ...]]] = []
         out += [(f"gate {c.name}", c.run) for c in self.gate]
-        if self.generator.get("command"):
+        if self.baseline and self.baseline.get("command"):
+            out.append(("baseline", tuple(self.baseline["command"])))
+        if self.generator.get("command") and not (self.baseline or {}).get("only"):
             out.append(("generator", tuple(self.generator["command"])))
         for r in self.stages:
             if r.command:
                 out.append((f"stage {r.name}", r.command))
-            if r.estimate and r.estimate.command:
+            if r.estimate and r.estimate.command and not (self.baseline or {}).get("only"):
                 out.append((f"estimate {r.name}", r.estimate.command))
         return out
 

@@ -11,7 +11,7 @@ function designPoints(designs, obj) {
     const stage = want || d.shown, v = Number(((d.stages || {})[stage] || {})[obj.metric] ?? NaN);
     const t = Date.parse(d.first || d.last || "") / 1000;
     return !isFinite(v) || !isFinite(t) ? null : { when: t, stage, name: d.name, key: d.key || "", part: d.part || "", group: d.group || "",
-      ...verdictOf(d), decision: !!d.decision, design: d, metrics: { [obj.metric]: v } };
+      ...verdictOf(d), baseline: !!d.baseline, decision: !!d.decision, design: d, metrics: { [obj.metric]: v } };
   }).filter(Boolean);
 }
 

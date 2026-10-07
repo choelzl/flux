@@ -128,7 +128,7 @@ def _command(raw: Any, what: str) -> tuple[str, ...] | None:
 
 
 def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generator: dict[str, Any],
-                        space: dict[str, list]) -> None:
+                        space: dict[str, list], baseline: dict[str, Any] | None = None) -> None:
     """Every `{name}` a command token says (not a `-c` script) must be the loop's or a knob of
     `space:`; otherwise it is a typo that would reach the tool as text (D581)."""
     known = set(BUILTIN_SUBS) | set(space)
@@ -139,6 +139,8 @@ def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generato
     cmds += [(f"estimate {r.name}", r.estimate.command) for r in stages if r.estimate and r.estimate.command]
     if generator.get("command"):
         cmds.append(("generator", generator["command"]))
+    if baseline and baseline.get("command"):
+        cmds.append(("baseline.command", baseline["command"]))
     said: set[str] = set()
     for what, cmd in cmds:
         for tok in cmd:

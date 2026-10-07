@@ -149,7 +149,8 @@ def task_in(doc: dict[str, Any], home: Path, alt: str = "") -> TaskSpec:
 def request_for(task: TaskSpec, **overrides: Any) -> LoopRequest:
     """The loop's knobs for this task: the document's `budget`, then the caller's."""
     params = {"task": task.id, **task.params, **(overrides.pop("params", None) or {})}
-    knobs = {**task.budget, **overrides}
+    knobs = {"baseline": task.baseline is not None, "baseline_only": bool((task.baseline or {}).get("only")),
+             **task.budget, **overrides}
     if isinstance(knobs.get("prototype"), str):
         knobs["prototype"] = True             # `prototype: systemc` names the language; the stage is on
     return LoopRequest(**knobs, params=params)

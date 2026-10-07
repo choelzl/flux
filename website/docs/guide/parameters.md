@@ -193,6 +193,49 @@ The `bin` and `args` options adjust a preset; put those arguments directly in `c
 custom agent. Keep executable paths and credentials in the machine or web settings when they
 should not travel with the document.
 
+## Baseline / pass 0
+
+The optional top-level `baseline` setting runs checks and real measurements before pass 1
+and before any parallel passes, only if no baseline is recorded or its inputs, configuration,
+or tools have changed. Unchanged restarts reuse the recorded outcome, including failures,
+without running the preparation command, checks, or measurements again. It defaults to off. In the configurator, open
+**Extra → Baseline / pass 0** to choose when it runs and its source.
+
+```yaml
+baseline: true                 # current project: run the existing scripts as written
+# Or use an unchanged design file:
+# baseline: {file: baseline.py}
+# Or prepare the baseline with a command, using the normal command placeholders:
+# baseline: {command: "{python} {home}/baseline.py {artifact}", timeout_s: 600}
+```
+
+A file is relative to the loop folder and is copied into the pass's working directory for
+`{artifact}`; the original is left untouched. A command runs once with the first seed's knob
+values, or the defaults (first choices), and may write `{artifact}` or prepare the project for
+your scripts. With no file or command, scripts run as written; `{artifact}` is an empty
+placeholder file, so use project paths such as `{home}/src` when measuring the current project.
+
+Pass 0 calls no model or coding agent, authors no golden model, and performs no repairs.
+Measurements bypass caches, estimators, and search cutoffs to exercise every available stage;
+a failing check stops measurement, and a failing measurement stops later stages. Failures and
+numbers remain in the run's logs and record. Normal passes continue afterward, and pass 0 does
+not count toward `budget.passes` or `--passes`. Baseline source files can become starting designs;
+project-only measurements provide no source artifact to resume as a candidate.
+
+The fingerprint covers source files and data, parameters, the baseline file (including one outside
+the loop folder), the loop document, tool builds, and package/build environment paths and flags.
+Generated `out/`, `runs/`, and `workbench/`
+folders, caches, and the library do not trigger a rerun. Reuse requires a persistent loop record;
+without one, each invocation runs pass 0. Older records without a fingerprint run it once to
+establish one. If inputs change during pass 0, the next start runs it again for those new inputs.
+Graphs draw baseline measurements as larger hexagons with a bold outline and a
+**Baseline (pass 0)** legend entry; their group color and requirement status still apply.
+
+For a tool check or baseline measurement without optimization, set `only: true`, for example
+`baseline: {only: true}` or `baseline: {file: baseline.py, only: true}`. This explicitly ends the
+run after pass 0 and needs no model or generation agent. A command's timeout defaults to 600
+seconds; each check and measurement retains its own timeout.
+
 ## Budget
 
 ### Run length, repairs, and concurrency

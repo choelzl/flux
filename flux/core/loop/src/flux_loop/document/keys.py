@@ -20,7 +20,7 @@ DOCUMENT_KEYS = frozenset({
     "statement", "contract", "language", "parts",
     "flow", "subtasks", "max_subtasks", "objectives",
     "budget", "params", "workload", "ladder",
-    "skills"})
+    "skills", "baseline"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
 

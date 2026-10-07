@@ -67,6 +67,25 @@ def test_a_template_is_editable_whole(kind, tmp_path):
     assert kept == [], kept
 
 
+@pytest.mark.parametrize("baseline", [True, False, {"only": True}, {"file": "check.py"},
+                                    {"file": "check.py", "only": True},
+                                    {"command": "{python} {home}/check.py {artifact}", "timeout_s": 12},
+                                    {"command": ["{python}", "{home}/check.py", "{artifact}"], "only": True}])
+def test_baseline_settings_are_editable_and_round_trip(baseline, tmp_path):
+    src = REPO / "flux/interfaces/cli/src/flux_cli/examples/python"
+    home = tmp_path / "baseline"
+    shutil.copytree(src, home)
+    doc = home / "problem.yaml"
+    raw = yaml.safe_load(doc.read_text())
+    raw["baseline"] = baseline
+    doc.write_text(yaml.safe_dump(raw, sort_keys=False))
+    round_dir = tmp_path / "round"
+    round_dir.mkdir()
+    before, after, kept = _round(doc, round_dir)
+    assert "baseline" not in kept
+    assert before.get("baseline") == after.get("baseline")
+
+
 def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     """D728: `generate: {by: opencode, bin, args}` and a custom-command critic were not
     the configurator's choices, so the whole flow fell back to its defaults ("a model") and was

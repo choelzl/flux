@@ -192,6 +192,8 @@ def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage
     each estimate made (by candidate id) for its row. A skipped one is refused and recorded with
     the estimate that skipped it, never measured."""
     try:
+        if state.request.baseline:
+            return cands, {}  # exercise real tools, including model-estimated stages
         judged = list(problem.estimated(cands, stage, state))
     except Exception as exc:  # noqa: BLE001 -- an estimator that fails skips nothing
         state.say(f"  estimate {stage}: did not run ({exc!s:.100}); the tool runs on every design")

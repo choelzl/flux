@@ -69,7 +69,7 @@ async function stopLoop(name, now, owner) {
   toast(r.ok, now ? "warn" : "info");
 }
 function lastSaid(st) {
-  if (st.running) return ["running since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""];
+  if (st.running) return ["running since ", ago(st.since), st.baseline ? " · baseline pass 0" : st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""];
   return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
 }
 

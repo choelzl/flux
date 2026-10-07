@@ -41,7 +41,8 @@ def run_dir(campaign_id: str, db: str | None = None) -> str:
     return os.path.join(trace_root(), (campaign_id or "")[:12] or "no-record")
 
 
-def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, db: str | None = None) -> str:
+def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, db: str | None = None,
+             baseline: bool = False) -> str:
     """This process as the campaign's runner. `FLUX_RUN_LOG` (set by `flux run`) is the log
     the registration names for `flux attach`. With the record (`db`), a pointer beside it names
     the run directory. Returns the run directory."""
@@ -63,7 +64,7 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
            "container": os.environ.get("FLUX_SANDBOX_NAME") or None,   # D680: its pid is the container's
            "container_cli": json.loads(os.environ.get("FLUX_SANDBOX_CLI") or "null"),   # D682: how to reach it
            "passes": int(mine.get("passes") or 0), "last_pass_ended": mine.get("last_pass_ended"),
-           "campaign": campaign_id}
+           "campaign": campaign_id, "baseline": baseline}
     _write(os.path.join(d, "run.json"), doc)
     if db and db != ":memory:":
         try:

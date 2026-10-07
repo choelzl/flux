@@ -171,6 +171,23 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
     n = rests = 0
     together = False
     with carrying() as run_mark:
+        if getattr(request, "baseline", False):
+            from flux_profile import tagged
+
+            mark("pass", n=0, baseline=True)
+            say("\n── pass 0: baseline, no agent edits or repairs ──")
+            with tagged(**{"pass": 0}):
+                out = run(dataclasses.replace(request, explore=0, steps=0), feedback)
+            if getattr(request, "baseline_only", False):
+                mark("ended", why="baseline pass done")
+                return out
+            asked_stop = ops.stop_requested()
+            if asked_stop:
+                ops.clear_stop()
+                mark("ended", why=f"stopped: {asked_stop}")
+                return out
+            request = dataclasses.replace(request, baseline=False, baseline_only=False)
+            say("\n── pass 1 ──")
         while True:
             k = min(width, cap - n) if cap else width
             if k <= 1:

@@ -43,7 +43,7 @@ GRAPHS_RESULTS = {
     "objective_list": [{"metric": "area_um2", "direction": "minimize"}, {"metric": "fmax_mhz", "direction": "maximize", "goal": 1000}],
     "counts": {"accepted": 2, "pending": 1, "failed": 3},
     "designs": [
-        _design("w-good", "whole", "confirm", {"area_um2": 31, "fmax_mhz": 1200}, "accepted", decision=True),
+        _design("w-good", "whole", "confirm", {"area_um2": 31, "fmax_mhz": 1200}, "accepted", decision=True, baseline=True),
         _design("w-bad", "whole", "confirm", {"area_um2": 12.5, "fmax_mhz": 800}, "failed", ["fmax_mhz 800 is below 1000"]),
         _design("dec-1", "decoder", "screen", {"area_um2": 1, "fmax_mhz": 900}, "failed", ["fmax_mhz 900 is below 1000"]),
         _design("dec-22", "decoder", "screen", {"area_um2": 2, "fmax_mhz": 950}, "failed", ["fmax_mhz 950 is below 1000"]),
@@ -477,6 +477,48 @@ def flows(r: Run) -> None:
             r.check(f"DSE {value} survives reloading the configurator", b.js("return document.querySelector('[data-fc-field=dse]').value") == value)
         r.clean("DSE settings")
     r.step("dse setting", dse_setting)
+
+    def baseline_setting():
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "baseline_setting"})
+        r.check("create a loop for baseline settings", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/baseline_setting"
+        (root / "baseline.py").write_text("answer = 42\n")
+        path = root / "problem.yaml"
+        raw = yaml.safe_load(path.read_text())
+        raw["flow"] = {"test": {"check": "true"}}
+        path.write_text(yaml.safe_dump(raw, sort_keys=False))
+
+        def extra():
+            r.page("#/app/baseline_setting/settings/problem", "document.querySelector('.fc-stepbar')", "the baseline configurator")
+            b.click(".fc-stepbar button[data-step=extra]")
+            b.wait("document.querySelector('[data-fc-field=baseline-mode]')", what="the baseline setting")
+
+        def setv(key, value):
+            b.js("const el = document.querySelector('[data-fc-field=' + arguments[0] + ']'); el.value = arguments[1];"
+                 " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input')); return 1", key, value)
+
+        extra()
+        r.check("baseline is off by default in Extra", b.js("return document.querySelector('[data-fc-field=baseline-mode]').value") == "off")
+        for source, mode in (("project", "before"), ("file", "only"), ("command", "before")):
+            setv("baseline-mode", mode)
+            setv("baseline-source", source)
+            expected = True if source == "project" else {"file": "baseline.py", "only": True} if source == "file" else {"command": "{python} {home}/baseline.py {artifact}"}
+            if source == "file":
+                setv("baseline-file", "baseline.py")
+            if source == "command":
+                setv("baseline-command", expected["command"])
+            r.button("Save to problem.yaml", ".fc-stepnav")
+            r.dialog_button("Save")
+            b.wait("!document.querySelector('.fc-status.fc-pending') && document.querySelector('.fc-status.fc-ok')", timeout=20, what="baseline saved")
+            saved = json.loads(r.api("/apps/baseline_setting/document")["body"])
+            r.check(f"baseline {source} is saved as a valid setting", saved["raw"]["baseline"] == expected and saved["normal"] is not None, str(saved))
+            extra()
+            got = b.js("return ['baseline-mode', 'baseline-source'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)")
+            r.check(f"baseline {source} survives reloading the configurator", got == [mode, source], str(got))
+        r.clean("baseline settings")
+    r.step("baseline setting", baseline_setting)
 
     def draft_across_modes():
         """D912: one creation draft across the ways -- the name, the statement and a staged file survive
@@ -1692,6 +1734,9 @@ def flows(r: Run) -> None:
         b.js(stub, False, payload)
         b.go(f"{r.url}/#/app/sw/results/graphs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=15, what="the stood-in graphs")
+        baseline = b.js("return [...document.querySelectorAll('#main svg.pareto .pt.baseline, #main svg.best-chart .pt.baseline')].map(p => [p.tagName, p.getAttribute('data-name'), p.querySelector('title').textContent])")
+        r.check("baseline uses a distinct hexagon on both graphs", len(baseline) == 3 and all(p[0] == "polygon" and p[1] == "w-good" and "Baseline (pass 0)" in p[2] for p in baseline), str(baseline))
+        r.check("baseline has a shared graph legend", b.js("return (document.querySelector('#main .graphs-ctl [data-baseline]') || {}).textContent === 'Baseline (pass 0)'"))
         card = ("[...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === arguments[0])")
         area = b.js(f"const c = {card}; const f = [...c.querySelectorAll('figure')].find(x => x.querySelector('figcaption strong').textContent === 'area_um2');"
                     " return [f.querySelector('.best-said').textContent, f.querySelector('svg').getAttribute('aria-label')]", "Improvement by design")

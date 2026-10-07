@@ -162,6 +162,8 @@ class LoopRequest:
     db: str = ""
     steps: int = 24                 # work items per pass: parts, sub-tasks, batches (D457)
     passes: int = 0                 # passes the document caps the run at; 0 = until stopped (D593)
+    baseline: bool = False          # pass 0: check and measure without generation or repairs
+    baseline_only: bool = False     # explicitly run only pass 0
     explore: int = 0                # consecutive at-rest passes before this one; > 0 = send every
                                     # admitted design back to the generator
     repair_attempts: int = 12       # inner-loop attempts per generation

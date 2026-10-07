@@ -182,7 +182,7 @@
   /** The tree of this start (D739): [{key, title, why, kids}] branches, leaves {leaf, box, title, tasks, key}. */
   function build(m) {
     var marks = m.marks, passMarks = marks.filter(function (x) { return x.name === "pass"; });
-    var passAt = function (t) { var k = 1; passMarks.forEach(function (x) { if (x.t <= t + 1e-3) k = Number(x.n) || k; }); return k; };
+    var passAt = function (t) { var k = 1; passMarks.forEach(function (x) { if (x.t <= t + 1e-3 && x.n != null && isFinite(Number(x.n))) k = Number(x.n); }); return k; };
     var visits = [];
     m.nodes.forEach(function (n) { var b = boxOf(n); if (b && !(n.parent && boxOf(n.parent) === b)) visits.push(n); });
     visits.sort(function (a, b) { return a.t0 - b.t0 || a.id - b.id; });

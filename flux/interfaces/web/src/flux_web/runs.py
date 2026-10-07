@@ -595,7 +595,7 @@ class RunManager:
             st = ops.status(cid, run["db"])
             if st.get("started") and abs(float(st["started"]) - float(run["started"])) < 300:   # this start's registration
                 info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
-                            container=st.get("container"))
+                            container=st.get("container"), baseline=bool(st.get("baseline")))
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
         info["question"] = self.open_question(run, rdir) if running else None
         return info

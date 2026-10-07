@@ -54,6 +54,22 @@ def test_a_sweep_pass_by_pass_one_design_each_then_the_end():
     assert "with" not in " ".join(designs), "one at a time: no pass ran with another"
 
 
+def test_baseline_mark_keeps_untagged_checks_in_pass_zero():
+    events = [
+        {"ev": "hello", "t": 0, "pid": 1},
+        {"ev": "mark", "t": 1, "name": "pass", "why": json.dumps({"n": 0, "baseline": True})},
+        {"ev": "start", "t": 2, "id": 1, "name": "test: baseline", "parent": None, "params": {}},
+        {"ev": "end", "t": 3, "id": 1, "seconds": 1, "failed": False, "output": {"verdict": "passed"}},
+        {"ev": "mark", "t": 4, "name": "pass", "why": json.dumps({"n": 1})},
+        {"ev": "start", "t": 5, "id": 2, "name": "generation: draft", "parent": None, "params": {}},
+        {"ev": "end", "t": 6, "id": 2, "seconds": 1, "failed": False, "output": {}},
+    ]
+    got = tree("\n".join(json.dumps(e) for e in events))
+    assert "Pass 0" in titles(got) and "Pass 1" in titles(got)
+    assert "Check" in titles(branch(got, "Pass 0")["kids"])
+    assert "Design" in titles(branch(got, "Pass 1")["kids"])
+
+
 def test_passes_at_once_each_their_own_branch_and_the_conclusion():
     t = tree((FIX / "parallel.jsonl").read_text())
     assert titles(t) == ["Setup", "Pass 1", "Pass 2", "Pass 3", "Pass 4", "Pass 5", "Pass 6", "Conclusion", "End"]
