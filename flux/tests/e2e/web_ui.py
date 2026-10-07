@@ -1358,6 +1358,38 @@ def flows(r: Run) -> None:
         r.login("bob")
     r.step("raw network setting", raw_network_setting)
 
+    def nix_packages_setting():
+        """Extra tools are selected per loop by an admin and preserved by other setting changes."""
+        r.login("ada")
+        r.page("#/u/bob/app/sw/settings/loop", "document.querySelector('#adv-nix-packages')", "the app's Nix packages")
+        b.type("#adv-nix-packages", "jq\nripgrep\njq")
+        b.type("#adv-nixchip-packages", "verilator")
+        b.js("document.querySelector('#adv-nixchip-packages').dispatchEvent(new Event('change', {bubbles: true})); return 1")
+        b.wait("[...document.querySelectorAll('#main .save-mark')].some(x => x.dataset.state === 'saved')", what="Nix packages saved")
+        got = json.loads(r.api("/apps/sw/env?owner=bob")["body"])["advanced"]
+        r.check("Nix packages save under their own sources, without duplicates", got.get("nix_packages") == ["jq", "ripgrep"]
+                and got.get("nixchip_packages") == ["verilator"], str(got))
+        r.page("#/u/bob/app/sw/settings/loop", "document.querySelector('#adv-nix-packages')", "the saved packages")
+        r.check("Package settings remain after reopening", b.js("return document.querySelector('#adv-nix-packages').value") == "jq\nripgrep"
+                and b.js("return document.querySelector('#adv-nixchip-packages').value") == "verilator")
+        b.click("#adv-parallel")
+        b.wait("[...document.querySelectorAll('#main .save-mark')].some(x => x.dataset.state === 'saved')", what="other advanced settings saved")
+        got = json.loads(r.api("/apps/sw/env?owner=bob")["body"])["advanced"]
+        r.check("Changing another advanced setting preserves packages", got.get("nix_packages") == ["jq", "ripgrep"]
+                and got.get("nixchip_packages") == ["verilator"], str(got))
+        r.clean("Nix package admin settings")
+        r.login("bob")
+        r.page("#/app/sw/settings/loop", "document.querySelector('#main').textContent.includes('(admin only)')", "the owner's package settings")
+        r.check("The owner sees both sources without editable fields", not b.js("return !!document.querySelector('#adv-nix-packages')")
+                and "Nixpkgs packages: jq, ripgrep" in r.text() and "Nixchip packages: verilator" in r.text())
+        r.check("The owner cannot change packages through the API", r.api("/apps/sw/advanced", "PUT", {"nix_packages": ["hello"]})["status"] == 403)
+        b.js("window.__e2e.errors.splice(0); return 1")
+        r.clean("Nix package owner settings")
+        r.login("ada")
+        r.api("/apps/sw/advanced?owner=bob", "PUT", {})
+        r.login("bob")
+    r.step("nix packages setting", nix_packages_setting)
+
     def timeline_categories():
         """Broad work lanes and agent portions, using the real journal aggregation in a deterministic page fixture."""
         from flux_web.timeline import timeline

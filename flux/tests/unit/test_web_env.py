@@ -95,6 +95,35 @@ def test_a_loop_works_one_thing_at_a_time_unless_an_admin_allows_parallel_work(s
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": False}, headers=H).json()["advanced"] == {}
 
 
+def test_only_an_admin_selects_extra_nix_packages_for_one_loop(server, monkeypatch):
+    import json
+
+    app, store = server
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    for name in ("x", "y"):
+        bob.post("/api/apps", data={"name": name}, files=[("files", ("problem.yaml", b"statement: s\n"))], headers=H)
+    selected = {"nix_packages": [" jq ", "python3Packages.numpy", "jq"], "nixchip_packages": ["verilator"]}
+    assert bob.put("/api/apps/x/advanced", json=selected, headers=H).status_code == 403
+    put = lambda body: ada.put("/api/apps/x/advanced?owner=bob", json=body, headers=H)  # noqa: E731
+    assert put(selected).json()["advanced"] == {"nix_packages": ["jq", "python3Packages.numpy"], "nixchip_packages": ["verilator"]}
+    assert bob.get("/api/apps/x/env").json()["advanced"]["nixchip_packages"] == ["verilator"]
+    monkeypatch.setenv("FLUX_ROOT", "/trusted/server/flux")
+    env = {"FLUX_SANDBOX_NIX_PACKAGES": "untrusted", "FLUX_ROOT": "/untrusted/user/flux"}
+    sandbox_env(env, True, advanced(store, "bob", "x"))
+    assert json.loads(env["FLUX_SANDBOX_NIX_PACKAGES"]) == {"nixpkgs": ["jq", "python3Packages.numpy"], "nixchip": ["verilator"]}
+    assert env["FLUX_SANDBOX_NIX_FLAKE"] == "/trusted/server/flux"
+    sandbox_env(env, True, advanced(store, "bob", "y"))
+    assert "FLUX_SANDBOX_NIX_PACKAGES" not in env and "FLUX_SANDBOX_NIX_FLAKE" not in env
+    sandbox_env(env, False, selected)
+    assert "FLUX_SANDBOX_NIX_PACKAGES" not in env
+    for bad in ("github:owner/repo#package", "../flake", 'jq"; abort "x', "jq; touch x"):
+        assert put({"nix_packages": [bad]}).status_code == 422
+    assert put({"nix_packages": ["jq"] * 65}).status_code == 422
+    assert put({"nix_packages": [], "nixchip_packages": []}).json()["advanced"] == {}
+    with pytest.raises(ValueError):
+        store.set_env("loop:bob:x", "FLUX_SANDBOX_NIX_PACKAGES", "{}")
+
+
 def test_only_an_admin_enables_raw_networking_and_the_choice_is_per_app(server):
     from flux_web.runs import machine_env
 

@@ -52,6 +52,7 @@ _DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
          "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_RAW_NETWORK", "FLUX_SANDBOX_REFUSALS", "FLUX_SANDBOX_MOUNTS",   # D936: the host side
+         "FLUX_SANDBOX_NIX_PACKAGES", "FLUX_SANDBOX_NIX_FLAKE",
          # D847: an agent's own folder on this machine (the ChatGPT extension sets CODEX_HOME=~/.codex):
          # not mounted inside, where the agent's login is in the Flux home
          "CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR")
@@ -539,6 +540,17 @@ def _engine_ok(eng: str) -> str:
 
 def launch(argv: list[str], args: Any, command: str) -> int:
     """Run `flux <argv>` in the sandbox and return its exit code."""
+    from .sandbox_packages import package_environment
+
+    try:
+        with package_environment(_local()):
+            return _launch(argv, args, command)
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"flux {command}: cannot prepare sandbox packages: {exc}", file=sys.stderr, flush=True)
+        return 2
+
+
+def _launch(argv: list[str], args: Any, command: str) -> int:
     eng = engine()
     why = _engine_ok(eng)
     if why:

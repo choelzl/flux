@@ -512,6 +512,8 @@ function advancedCard(e, save, saveLabel = "Save") {
     ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : []),
     a.raw_network ? "raw TCP/UDP allowed under an allowlist" : "HTTP(S) proxy only under an allowlist",
     ...(a.mounts || []).map(m => `${m.host} in it at ${m.inside} (${m.mode === "rw" ? "read-write" : "read-only"})`),   // D936
+    ...(a.nix_packages?.length ? [`Nixpkgs packages: ${a.nix_packages.join(", ")}`] : []),
+    ...(a.nixchip_packages?.length ? [`Nixchip packages: ${a.nixchip_packages.join(", ")}`] : []),
     a.parallel ? "parallel work allowed" : "one at a time"].join(" · ");
   if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, " (admin only)."));
   const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
@@ -520,6 +522,9 @@ function advancedCard(e, save, saveLabel = "Save") {
   const par = h("input", { type: "checkbox", checked: !!a.parallel, id: "adv-parallel" });
   const raw = h("input", { type: "checkbox", checked: !!a.raw_network, id: "adv-raw-network" });
   const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
+  const nix = h("textarea", { id: "adv-nix-packages", rows: 2, class: "mono", placeholder: "jq\nripgrep", value: (a.nix_packages || []).join("\n") });
+  const chip = h("textarea", { id: "adv-nixchip-packages", rows: 2, class: "mono", placeholder: "verilator\nsystemc", value: (a.nixchip_packages || []).join("\n") });
+  const packageNames = (input) => [...new Set(input.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean))];
   // D936: host folders in the sandbox, one per line: host path:path inside:ro|rw
   const mounts = h("textarea", { id: "adv-mounts", rows: 2, class: "mono", placeholder: "/srv/datasets:/mnt/datasets:ro\n/srv/scratch:/mnt/scratch:rw",
     value: (a.mounts || []).map(m => `${m.host}:${m.inside}:${m.mode}`).join("\n") });
@@ -531,8 +536,9 @@ function advancedCard(e, save, saveLabel = "Save") {
   const mark = saveMark();
   const collect = () => ({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
     pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.checked,
-    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean), raw_network: raw.checked, mounts: mountsOf() });
-  const go = autosave([mem, cpus, pids, tmp, par, hosts, raw, mounts], () => save(collect()), mark);
+    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean), raw_network: raw.checked, mounts: mountsOf(),
+    nix_packages: packageNames(nix), nixchip_packages: packageNames(chip) });
+  const go = autosave([mem, cpus, pids, tmp, par, hosts, raw, mounts, nix, chip], () => save(collect()), mark);
   sb.addEventListener("change", async () => {
     if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) {
       sb.checked = true; return;
@@ -549,6 +555,9 @@ function advancedCard(e, save, saveLabel = "Save") {
     h("label", { class: "check" }, raw, "Allow raw TCP/UDP"),
     h("p", { class: "muted small" }, "Under an allowlist, enable for protocols that need direct TCP/UDP. Off: HTTP(S) uses the proxy without an extra network container. Open networks keep their existing access."),
     h("label", { class: "stack" }, "Host folders in its sandbox, for its runs, Check and agent Tests (host path:path inside:ro or rw, one per line)", mounts),
+    h("label", { class: "stack" }, "Nixpkgs packages (attribute names, one per line)", nix),
+    h("label", { class: "stack" }, "Nixchip packages (attribute names, one per line)", chip),
+    h("p", { class: "muted small" }, "Uses Flux's locked package versions. Packages are fetched or built before the next sandbox start and cached. Available to runs, Check and agents; applies while sandboxing is enabled."),
     h("div", { class: "form-actions" }, mark)]);                                 // D939/D945: the check says it
 }
 

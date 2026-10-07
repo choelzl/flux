@@ -236,7 +236,9 @@ ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memor
             "allow": "hosts this loop may reach as well (D698)",
             "raw_network": "allow native TCP/UDP under an allowlist (off: HTTP(S) proxy only)",
             "parallel": "parallel work allowed: the document's workers and parts at once (off: one at a time, D741)",
-            "mounts": "host folders in the sandbox, read-only or read-write (D936)"}
+            "mounts": "host folders in the sandbox, read-only or read-write (D936)",
+            "nix_packages": "extra packages from Flux's locked nixpkgs input",
+            "nixchip_packages": "extra packages from Flux's locked nixchip input"}
 
 #: D936: what an admin mount never is -- on the host, nor inside the sandbox
 SYSTEM_PATHS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/run")
@@ -301,7 +303,7 @@ def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
 def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) -> None:
     """The sandbox as the server and the loop's advanced settings say (D697)."""
     for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE",
-              "FLUX_SANDBOX_MOUNTS"):
+              "FLUX_SANDBOX_MOUNTS", "FLUX_SANDBOX_NIX_PACKAGES", "FLUX_SANDBOX_NIX_FLAKE"):
         env.pop(k, None)
     if not server_sandbox:
         env["FLUX_SANDBOX"] = "0"                    # D704: a --no-sandbox server says so (the command's own default is on)
@@ -320,6 +322,11 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
             env[var] = str(adv[key])
     if adv.get("mounts"):
         env["FLUX_SANDBOX_MOUNTS"] = json.dumps(adv["mounts"])     # D936: the loop's admin mounts
+    if adv.get("nix_packages") or adv.get("nixchip_packages"):
+        env["FLUX_SANDBOX_NIX_PACKAGES"] = json.dumps({"nixpkgs": adv.get("nix_packages") or [],
+                                                      "nixchip": adv.get("nixchip_packages") or []})
+        # The host builds only against the server's checkout, never a user's FLUX_ROOT override.
+        env["FLUX_SANDBOX_NIX_FLAKE"] = os.environ.get("FLUX_ROOT") or str(Path(__file__).resolve().parents[4])
 
 
 def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],

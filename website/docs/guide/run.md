@@ -112,7 +112,10 @@ These install commands assume the repository root. The server reports its addres
 and sign in. Create a loop from an example, an empty baseline, an uploaded folder, a clone,
 an agent, or the configurator. The configurator edits the same document as the CLI.
 App Settings controls the document and user settings; administrators control sandbox and
-parallel-work permissions. The [Loop crafter](loop-crafter.md) is also available on this site.
+parallel-work permissions. Under a loop's **Settings › Loop › Advanced**, an admin can also
+list extra nixpkgs or nixchip package attributes, such as `jq` or `verilator`. They use Flux's
+locked versions, are cached, and become available on the next sandbox launch.
+The [Loop crafter](loop-crafter.md) is also available on this site.
 
 ## Hardware tools
 

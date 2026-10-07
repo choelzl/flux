@@ -233,6 +233,21 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   settings, `params`, a failure pattern, objectives with a stage or tie
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
+- **Extra sandbox packages:** in a loop's **Settings › Loop › Advanced**, an admin can list
+  **Nixpkgs packages** (for example `jq`, `ripgrep`, `python3Packages.numpy`) and **Nixchip
+  packages** (for example `verilator`, `systemc`), one attribute name per line. These resolve
+  from Flux's locked `nixpkgs` and `nixchip` inputs, not a separate channel. Names can refer
+  to nested attributes; arbitrary Nix expressions and flake URLs are not accepted.
+  Packages are fetched or built on the host before the next sandbox launch, then made available
+  to that loop's runs, Check, and agents. The first launch can take longer while tools build;
+  failures appear in its log. Cached profiles keep their store paths alive across Nix garbage
+  collection and refresh when Flux's lock file or the selection changes. Executables, headers,
+  library and pkg-config search paths are added; matching-version Python modules are also
+  available. Nixchip tools get their `NAME_HOME`, `NAME_BIN`, `NAME_LIB`, and `NAME_INCLUDE`
+  variables; Verilator's conflicting `VERILATOR_BIN` is unset, as in Flux's dev shell.
+  No extra runtime `LD_LIBRARY_PATH` is added, to avoid mixing Nix and host libc.
+  Clearing the lists restores the default tools on the next start. Packages apply only while
+  sandboxing is enabled; the host needs Nix and a Flux checkout with `flake.nix` and `flake.lock`.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
   accepted designs or decision. **New loop › Create or upload** takes a dropped folder, files or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
   cut midway is discarded): the page sends it in batches (300 files, 40 MB) and a file over 40 MB in

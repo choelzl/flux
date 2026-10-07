@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+
+from flux_cli.sandbox_packages import PACKAGE_ATTRIBUTE
 
 from .runs import HOME_SEED
 
@@ -129,6 +131,9 @@ class Mount(BaseModel):                  # D936: a folder of the host in a loop'
     mode: Literal["ro", "rw"] = "ro"
 
 
+NixPackage = Annotated[str, StringConstraints(strip_whitespace=True, max_length=120, pattern=PACKAGE_ATTRIBUTE)]
+
+
 class Advanced(BaseModel):
     sandbox: bool = True
     memory: str | None = Field(default=None, max_length=16)
@@ -139,6 +144,13 @@ class Advanced(BaseModel):
     raw_network: bool = False               # allowlisted native TCP/UDP, with a separate firewall helper
     parallel: bool = False                  # D741: parallel work allowed; how much is the document's
     mounts: list[Mount] | None = Field(default=None, max_length=16)
+    nix_packages: list[NixPackage] | None = Field(default=None, max_length=64)
+    nixchip_packages: list[NixPackage] | None = Field(default=None, max_length=64)
+
+    @field_validator("nix_packages", "nixchip_packages")
+    @classmethod
+    def unique_packages(cls, names: list[str] | None) -> list[str] | None:
+        return list(dict.fromkeys(names)) if names is not None else None
 
 
 class AgentConfig(BaseModel):            # D756: Admin › Agents, one agent's
