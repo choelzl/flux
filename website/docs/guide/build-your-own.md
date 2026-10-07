@@ -1,132 +1,221 @@
----
-hide:
-  - navigation
----
+# Configure a loop
 
-# Build your own problem
+Start with the [working loop](tutorial.md), a `flux example`, or `flux new NAME`.
+The document describes the experiment; the scripts beside it define how to generate, check,
+and measure a design. Use the [parameter reference](parameters.md) for defaults and allowed values.
 
-From an empty folder to a running search in six steps. Prefer a form? Use the
-[Loop crafter](loop-crafter.md). Prefer a sentence? `flux ask "what you want" --file spec.pdf`
-writes the document for you.
+## Define the goal and interface
 
-## 1. Pick a kind and write the start
+Write `statement` as the goal and `contract` as the interface and restrictions. State the
+function signature or module ports, supported inputs, numerical accuracy, and any implementation
+restrictions. Put executable checks in `flow.test`: prose alone does not establish correctness.
 
-```bash
-flux example rtl myproblem
+Choose the artifact `language`, such as `python`, `systemverilog`, or `cpp`. Flux uses it for
+the generated file extension; when omitted it can infer the language from known tools.
+
+```yaml
+statement: Find a fast implementation of count_primes(n).
+contract: >-
+  Export count_primes(n). Return the number of primes strictly below n for
+  nonnegative integer n. Do not change the interface or the benchmark.
+language: python
 ```
 
-| kind | the designs come from | judged by | AI model? |
-|---|---|---|---|
-| `rtl` | a model writes a Verilog module | Verilator against `golden.py`, Yosys and OpenROAD | yes |
-| `python` | a model writes a Python function | `check.py` (correct?), `bench.py` (how fast?) | yes |
-| `sweep` | a script writes one design per knob setting | `check.py`, `bench.py` | no |
-| `rtl-sweep` | a script writes one module per knob setting | Verilator and Yosys | no |
-| `tune` | the knobs go straight into your own commands | `check.py`, `bench.py` | no |
+## Choose how designs are made
 
-`flux example` writes `myproblem/`: a document, the scripts it names and a README, ready to run.
-`flux new myproblem` writes an empty baseline to fill in instead. Larger problems to copy from are
-in [`flux/applications/`](https://github.com/choelzl/flux/tree/main/flux/applications).
+| Approach | Configuration | Use it when |
+|---|---|---|
+| Script | `generate: {command: "..."}` | You can render each setting into a design |
+| Model | `generate: model` | You want generated code or algorithms; this is the default |
+| Coding agent | `generate: claude` (also `codex`, `opencode`) | The design needs edits across files or interactive checks |
+| Fixed candidates | `generate: {catalog: [...]}` | You already have artifacts to compare |
+| Tune settings | A search space, with no generator command | Commands consume the chosen settings directly |
 
-## 2. Say what you want
-
-Edit `myproblem/problem.yaml`:
-
-- `statement`: the request in plain words. The model reads it.
-- `contract`: rules every design must follow (names, ports, what is forbidden).
-- `objectives`: what "better" means, first one first, e.g.
-  `{metric: fmax_mhz, direction: maximize, goal: 1000}` then `{metric: area_um2, direction: minimize}`.
-
-## 3. Say what is correct
-
-- `rtl`: edit `golden.py`: `PORTS` and a `golden(**inputs)` function returning the right outputs.
-- `python`, `sweep`, `tune`: edit `check.py` so it prints `N failing` (0 when correct).
-- For a knob search: list the knobs under `flow.orchestrate.space` and write each design in the generator script.
-
-Papers help: put PDFs, notes or code in `library/` beside the document (or
-`flux/mentor/knowledge/library/` for every problem). Each is summed up once (by the model, or
-`flow.knowledge: {digest: opencode}`); matching excerpts reach the prompts, and agents get the
-paths. `flow: {knowledge: off}` turns it off.
-
-## 4. Check it
-
-```bash
-flux task check myproblem
-```
-
-It runs nothing: it lists the boxes, the stages and their tools, and says what is missing.
-
-## 5. Run it
-
-```bash
-flux task run myproblem --passes 1
-```
-
-Drop `--passes 1` to let it run until you stop it. Add `--tui` for the live screen. A search
-(`flow.orchestrate` with its `space`) tries one design a pass, the next picked from what the last ones
-measured: give it a pass per point, or `budget.batch: N` for N designs a pass.
-[Run a problem](run.md) has the options, stopping and resuming, and choosing the AI model.
-
-## 6. Read the result
-
-The report at the end names the design to build, the trade-offs, and every refused design with
-the reason. The chosen design is in `myproblem/out/`; `flux report myproblem/out/myproblem.db`
-writes an HTML page of the whole search.
-
-## Key reference
-
-| key | what it says |
-|---|---|
-| `id` | a short name (letters, digits, `_`); names the record, so an edited document resumes it |
-| `statement`, `contract` | the request and its rules, in words |
-| `language` | optional: the design's file type (`systemverilog`, `python`, `cpp`, `text`, ...); unsaid, the tools the checks name tell it |
-| `objectives` | `{metric, direction, goal}`: direction `minimize` or `maximize`; each `goal` is a limit (at least / at most), the goal-less ones decide in order, `balance: true` ones as their knee; `{keep: 0.9, above: 1.0}` is a limit relative to the best |
-| `flow` | each box of [the loop](loop-shape.md): who fills it, and its own settings (below) |
-| `flow.test` | a command that prints `N failing` or exits non-zero; or a map of named checks, run in order |
-| `flow.measure` | measurements, cheapest first, by name: `screen: <command>`; a command of yours prints `name=value` and lists `metrics:`; `cutoff:` one gate `{metric, at\|below\|within}` or a list, all must pass |
-| `flow.orchestrate` | the search: `sweep`, ..., or `{policy: sweep, space: {knob: [choices]}, seeds: [...]}` (the settings measured first) |
-| `flow.knowledge` | `{files: [...]}` read with every prompt; `{digest: opencode}` sums up the library by that agent; `off` |
-| `flow.select` | `{finalists: 3}`: how many reach the costliest stage |
-| `budget` | `steps`, `passes`, `repair_attempts`, `workers`, `prototype` |
-
-In commands: `{artifact}` is the design file, `{home}` the document's folder, `{python}` the
-Python in use, and `{knob}` each knob of `flow.orchestrate.space`. A command starting with `flux` runs this Flux.
-
-A gate can be several checks, cheapest first. Each has a name and a command; the first that
-fails refuses the design, and the repair is told where it failed:
+A script generator writes `{artifact}`; its stdout is not the artifact. For example:
 
 ```yaml
 flow:
-  test:                    # by name, run in the order written
-    lint: flux rtl lint {artifact}
-    golden: {run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 300}
+  generate:
+    command: ["{python}", "{home}/render.py", "{artifact}", "{block}"]
 ```
 
-A stage's `cutoff` is its gate: `cutoff: {metric: fmax_mhz, at: 1000}` sends on only the designs
-that meet timing at 1 GHz. `flux tools` lists every check and stage Flux has, with its command.
+The search supplies `{block}`. Use `{point}` when the generator needs the entire point as a
+JSON file, or `{params}` for settings shared by your own commands. See
+[Search and agents](loop-shape.md) for the search and agent setup.
 
-`budget.prototype: true` (the default with a golden model): the algorithm is written in Python
-first, checked on every input, then Flux writes the RTL; `systemc` does it with a SystemC module.
-Use `false` for plain logic such as adders.
+Commands accept a string or a list of arguments. A string is split into arguments, rather
+than executed by a shell: if you need a pipeline, put it in a script or explicitly use
+`bash -c`. Prefer argument lists when paths or values contain spaces. A command beginning
+with `flux` uses the same Flux installation as the loop.
 
-Every key is in the
-[author reference](https://github.com/choelzl/flux/blob/main/flux/core/loop/src/flux_loop/author_reference.md).
+## Build a gate, cheapest check first
 
-## When you need code: commands beside the document
+Checks run in the order written. The first failure refuses the candidate and later checks
+do not run. Name them for the action they perform:
 
-When a document cannot say it in prose or numbers (a solver, a simulator, a search of its own),
-write a script and name it in the box it belongs to:
+```yaml
+flow:
+  test:
+    build: "{python} -m py_compile {artifact}"
+    correctness:
+      run: "{python} {home}/check.py {artifact}"
+      timeout_s: 120
+```
 
-| what the document cannot say | the command beside it | what it reads and writes |
-|---|---|---|
-| a check of your own | `flow.test: {name: "{python} {home}/check.py {artifact}"}` | prints `N failing`; exit 3 = did not build |
-| a measurement | `flow.measure: {name: {command: ..., metrics: [...]}}` | prints `name=value` |
-| a generator over a space | `flow.generate: {command: "... {knob} {artifact}"}` or `{point}` | writes `{artifact}` |
-| a search of your own -- a solver, a proof, a model it asks itself | `flow.orchestrate: {command: "... {history} {state} {params}"}` | reads what was measured and refused, keeps its state, prints the next candidates, lessons, a conclusion |
-| a composition of sub-loops | the parent's `flow.generate: {command: "... {parts} {artifact}"}` | reads each sub-loop's answer, writes the whole |
-| settings | `params:` | `{params}`: a JSON file any command reads |
+A check named `build` treats every nonzero exit as a build failure. Any check exiting `3`
+also means the candidate did not build. Other checks use the default `N failing` pattern
+when it is present; otherwise exit `0` passes and a nonzero exit counts as one failure.
+Debug output on stderr is retained and is not, by itself, a failure.
 
-Worked examples:
-[macarray](https://github.com/choelzl/flux/tree/main/flux/applications/macarray),
-[bankmap](https://github.com/choelzl/flux/tree/main/flux/applications/bankmap),
-[interconnect_mapping](https://github.com/choelzl/flux/tree/main/flux/applications/interconnect_mapping),
-[nlu](https://github.com/choelzl/flux/tree/main/flux/applications/nlu) (seven sub-loops in folders).
+For a checker with a different output format, specify the pattern deliberately:
+
+```yaml
+flow:
+  test:
+    tests:
+      run: "{python} {home}/check.py {artifact}"
+      count_re: 'failures=(\d+)'
+```
+
+`count_re` captures an integer failure count. `fail_re` counts matching failures instead.
+These patterns scan stdout and stderr; a match can report failure even when the process exits
+`0`. Keep debug messages distinct from your machine-readable test summary.
+
+For RTL, define the ports and reference function in `golden.py`, then use:
+
+```yaml
+flow:
+  test:
+    lint: "flux rtl lint {artifact}"
+    golden: "flux rtl test {artifact} --golden {home}/golden.py"
+```
+
+The [RTL reference](parameters.md#rtl-golden-model) describes vectors, clocked designs, and
+floating-point tolerances. `flux tools` lists the built-in checks and their commands.
+
+## Measure surviving designs
+
+Measurements run stage by stage in document order. Start with a cheap screen and put the
+costliest measurement last. A custom stage must print the metrics it declares:
+
+```yaml
+flow:
+  measure:
+    screen:
+      command: "{python} {home}/bench.py {artifact} --quick"
+      metrics: [time_ms, bytes]
+      cutoff: {metric: bytes, below: 4096}
+    confirm:
+      command: "{python} {home}/bench.py {artifact} --full"
+      metrics: [time_ms, bytes]
+      timeout_s: 1800
+  select: {finalists: 2}
+```
+
+The `--quick` and `--full` flags here are flags your benchmark must implement. It should print,
+for example, `time_ms=2.31 bytes=2048`. Metrics can appear on stdout or stderr; a nonzero
+measurement command exit rejects its numbers. Use `metrics_re` for a different output format.
+
+Every stage must provide the metrics required by the objectives. Known RTL measurement
+commands infer their metrics and tool requirements:
+
+```yaml
+flow:
+  measure:
+    screen: "flux rtl measure {artifact} --stage synth --clock-ps 1000"
+    confirm:
+      command: "flux rtl measure {artifact} --stage place --clock-ps 1000"
+      timeout_s: 1800
+  select: {finalists: 2}
+```
+
+`needs: [tool_name]` declares required executables for a custom stage. A stage is skipped when
+a declared tool is missing; check the reported stage before treating a screening number as a
+confirmed result. `--screen-only` omits the costliest stage of a multi-stage chain.
+
+### Cutoffs and estimates
+
+`cutoff` decides whether a measured design proceeds: `at` is a minimum, `below` is a maximum,
+and `within` retains a fraction of the best result for that metric. A list requires every
+condition to pass:
+
+```yaml
+cutoff:
+  - {metric: fmax_mhz, at: 1000}
+  - {metric: area_um2, below: 80}
+```
+
+An optional `estimate` can screen a design before paying for the tool:
+
+```yaml
+estimate: {kind: surrogate, margin: 0.05}
+```
+
+The surrogate uses prior measurements at that stage and needs at least three rows.
+An estimate outside a cutoff or objective limit by more than the margin skips that stage.
+Estimates are not measurements; enable this only when that screening trade-off fits your
+experiment. The reference also covers command and model estimators.
+
+## Define what wins
+
+Separate **limits** (objectives with `goal`) from **preferences** (objectives without one):
+
+```yaml
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 1000}
+  - {metric: area_um2, direction: minimize, goal: 80}
+  - {metric: power_w, direction: minimize}
+```
+
+This asks for at least 1000 MHz, at most 80 µm², then minimum power among feasible designs.
+Goal-less preferences are compared in their written order. An absolute goal uses the deepest stage
+unless its `stage` names another. If nothing meets every limit, the report describes the
+closest standing design and its shortfall; it does not produce a feasible decision artifact.
+
+Use `balance: true` on multiple goal-less objectives for a compromise at the frontier's knee.
+A relative limit such as `{metric: speedup, direction: maximize, keep: 0.9, above: 1.0}`
+keeps 90% of the best measured gain over the baseline, instead of specifying an absolute goal.
+
+## Control time and concurrency
+
+```yaml
+budget:
+  passes: 10
+  steps: 3
+  repair_attempts: 6
+  batch: 1
+  workers: 1
+  parallel: 1
+```
+
+`passes` bounds the whole run; `steps` bounds work within one pass. `repair_attempts` bounds
+attempts to fix a draft. `batch` is designs from a search within a pass, `workers` controls
+measurement concurrency, and `parallel` controls simultaneous passes. They are separate knobs.
+On a server, an administrator must allow parallel work for the app; otherwise its concurrency
+cap wins. Keep timed benchmarks isolated, including from parallel passes and overlapping part
+work. The [budget reference](parameters.md#budget) includes those settings.
+
+Omit `passes`, or use `0`, to run until manually stopped. Finding a feasible design or a
+stalled search does not end an unlimited run. Individual attempts still have their budgets
+and timeouts; [Run and results](run.md) explains stopping and resuming.
+
+## Add context and reusable settings
+
+```yaml
+params: {input_size: 1000000, repetitions: 9}
+flow:
+  knowledge:
+    files: [spec.md, reference.py]
+    text: Prefer implementations that are easy to maintain.
+    digest: claude
+    lessons: mined
+```
+
+`params` reaches scripts through the `{params}` JSON file. Knowledge files and notes reach
+model prompts; the loop's `library/` and the operator's shared library supply papers.
+`digest` chooses who summarizes them; `lessons` reuses lessons from campaign records.
+`knowledge: off` disables this reading.
+
+Check each edited document with `flux task check FOLDER`, then do a bounded run with
+`flux task run FOLDER --passes 1`. Continue with [Search and agents](loop-shape.md) or look up
+the remaining fields in the [parameter reference](parameters.md).

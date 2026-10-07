@@ -1,155 +1,188 @@
----
-hide:
-  - navigation
----
+# Search and agents
 
-# The loop
+A loop separates **what to try next** (`flow.orchestrate`) from **how to make the design**
+(`flow.generate`). The gate and measurement stages establish the results. You can change the
+search or generator while keeping those checks, measurements, and objectives.
 
-Every document runs through one loop: propose, write, check, measure stage by stage, choose.
-Below, the loop as it runs when the document says nothing; in the [loop crafter](loop-crafter.md)
-a click on a box changes who does it.
+```mermaid
+flowchart LR
+    O[Choose an experiment] --> G[Generate a design]
+    G --> T[Check correctness]
+    T --> M[Measure survivors]
+    M --> S[Choose from objectives]
+    S --> O
+```
 
-<div id="flux-loop-drawing" class="flux-crafter">
-  <noscript>The drawing needs JavaScript. The table below lists the same boxes, top to bottom.</noscript>
-</div>
+## Search a space of settings
 
-<link rel="stylesheet" href="../../assets/crafter.css">
-<script src="../../assets/crafter.js"></script>
-
-- **Solid arrows** are the path of a design, top to bottom.
-- **Dashed arrows** feed a step: your notes, the background reading, the critic, the lessons.
-- **Red dotted arrows** are the ways a design is refused. A failed check sends it back to be
-  *repaired*; a critic's objection *sends it back*; a measurement short of the objective asks to
-  *improve* it; a design that fails a measurement's gate (or is estimated to) is *dropped*.
-- **At rest, explore**: when a round finds nothing new, the next asks for new designs that beat
-  the best. A run ends only when you stop it, or at `--passes N`.
-
-## Words used here
-
-| word | meaning |
-|---|---|
-| **document** | the `*.problem.yaml` file that describes one problem |
-| **check** | a command that refuses a wrong design: a lint, a test against the golden model, a script of yours. Together the checks are the **gate** (`flow.test`) |
-| **measurement** | one **stage** (`flow.measure`, by name), from cheap (synthesis, a formula) to costly (placement, a simulation) |
-| **objective** | what "better" means: a number, up or down, optionally with a limit to reach |
-| **round** | one **pass** of the loop; a run is a series of them |
-| **record** | the database of every design, number and refusal (`out/<id>.db`) |
-
-## The boxes
-
-Search is adaptive and permissive by default: an agent may try a different algorithm or
-architecture whenever it has a plausible hypothesis, even before the incumbent stalls.
-Keep correctness and contract checks; keep the best verified result while experimenting.
-The same DSE selector guides whole designs, parts, prototypes, and parameter proposals.
-Its values are preferences rather than prohibitions on other useful experiments.
+Use a finite space when you can list meaningful choices. The generator and other commands
+receive those choices as placeholders:
 
 ```yaml
 flow:
-  orchestrate: {by: claude, dse: anneal}
+  orchestrate:
+    policy: sweep
+    space:
+      algorithm: [list_sieve, slice_sieve, odd_sieve]
+      wheel: [0, 1]
+    seeds:
+      - {algorithm: list_sieve, wheel: 0}
+  generate: {command: "{python} {home}/render.py {artifact} {algorithm} {wheel}"}
+```
+
+The seed is measured first; an omitted knob uses its first choice. The first seed is the
+home point. Order numeric choices meaningfully because local search uses that order.
+
+| Policy | How it chooses experiments |
+|---|---|
+| `sweep` | Enumerate distinct combinations; a useful baseline for a small space |
+| `montecarlo` | Sample distinct random points |
+| `gradient` | Follow measured improvements among nearby choices |
+| `anneal` | Make local moves and sometimes accept worse points to escape a region |
+| `genetic` | Evolve a population through selection and mutation |
+| `pareto` | Explore trade-offs; requires at least two objectives |
+| `model` | Ask a model to propose legal points from the space and measured history |
+
+One pass normally carries one point. `budget.batch` lets it carry several; `budget.parallel`
+runs several passes simultaneously. A policy finishing its finite walk does not, by itself,
+stop an unlimited run. Use a pass cap for a bounded sweep.
+
+Configure a policy's own options under its name:
+
+```yaml
+flow:
+  orchestrate:
+    policy:
+      gradient: {steps: 16, patience: 2, reach: adjacent}
+    space:
+      block: [16, 32, 64, 128]
+      order: [ijk, ikj, jki]
+```
+
+The [search reference](parameters.md#search-settings) lists policy options and defaults.
+For a multi-phase search, keep the space and put a `phases` policy around its ordered phases:
+
+```yaml
+flow:
+  orchestrate:
+    space: {block: [16, 32, 64, 128], order: [ijk, ikj, jki]}
+    policy:
+      phases:
+        phases:
+          - {policy: montecarlo, name: sample, samples: 8, seed: 0}
+          - {policy: gradient, name: tune, knobs: [block], steps: 8}
+```
+
+### Conditional choices and components
+
+Avoid measuring a knob that has no effect on a chosen algorithm:
+
+```yaml
+space:
+  algorithm: [list_sieve, slice_sieve, odd_sieve]
+  wheel: {values: [0, 1], when: {algorithm: [list_sieve]}}
+```
+
+This is the `space` inside `flow.orchestrate`. Inactive choices sit at their home values and
+are not repeatedly measured as different designs. A nested component groups its knobs:
+
+```yaml
+space:
+  prefetch:
+    optional: true
+    distance: [1, 2, 4]
+    degree: [1, 2]
+```
+
+The search sees `prefetch.on`, `prefetch.distance`, and `prefetch.degree`. `{point}` provides
+these as nested JSON to a generator. A choice can also use `from: "out/invented/*.sv"` beside
+`values` to include filenames discovered when the document loads.
+
+## Let a model or agent explore designs
+
+A model or agent can invent algorithms and architectures without a predefined knob space.
+The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
+before the incumbent stalls. Select the emphasis using the existing `dse` setting:
+
+```yaml
+flow:
+  orchestrate: {by: claude, dse: adaptive}
+  generate: claude
+  critique: claude
 budget:
   exploration_quota: 0.25
-  passes: 0
 ```
 
-`flow.orchestrate.dse` reuses the search policy setting beside whoever orchestrates. It
-accepts `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations`, and the existing
-`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, and `pareto` values. There is no
-separate direction setting. `gradient` favors measured local trends; `anneal` allows
-temporarily worse moves and jumps; `genetic` encourages diverse alternatives and combining
-ideas; `pareto` develops different trade-offs. With a declared parameter space, the existing
-`flow.orchestrate: {policy: ..., space: ...}` syntax still runs its concrete search algorithm.
-
-The optional `budget.exploration_quota` is a fraction from 0 to 1. It reserves at least that
-share of attempted AI search moves for a new approach, including attempts that fail; it
-does not claim that the resulting designs will be novel or better. Zero, the default,
-leaves the choice to the orchestrator. Fixed numeric search algorithms retain their own
-sampling rules. Choices and reasons are recorded, and the web editor exposes the policy
-and quota. Verified alternatives remain on record and may receive further development.
-
-Reaching the objective does not end the campaign or freeze the next pass. By default it
-continues until stopped manually. Explicit `budget.passes` / `--passes` limits still apply;
-finite searches with no generator wait for a note or stop after exhausting their space.
-
-Most boxes can be done by *rules*, a *model* or a *coding agent* (Claude Code, Codex, OpenCode):
-one key per box in `flow:`; a box left out keeps its default, the first choice listed.
-
-```yaml
-flow:
-  orchestrate: sweep        # Search the settings: try every combination
-  generate: claude          # Make a design: a coding agent writes it
-  critique: model           # Second opinion: a model critic
-```
-
-| box | `flow:` key | what it does | choices, the default first |
-|---|---|---|---|
-| Check the document | `validate` | Before anything runs, the document is read for mistakes. | `rules`: the built-in checks · `model`: then a model reads it and objects · a coding agent |
-| Plan the round | `plan` | Optionally writes a plan for the round before any work starts. | `off`: step by step · `model`: a model writes the plan · a coding agent |
-| Pick the next job | `orchestrate` | Decides what to work on next. | unsaid: the model picks the next part, rules pick the kind of work · `rules`: no model · `model`: a model picks · `tools`: a model with tools picks · a coding agent. Left out when a search is on: the search picks. |
-| Your notes | `feedback` | Notes you type while it runs steer the next round. Typed in the live screen (`--tui`, then `f`). | `human` · `off` |
-| Search policy | `orchestrate` | Guides design and prototype experiments. With settings to search, existing algorithms still walk that space. Reasoned risks are allowed by default. | `none`: adaptive default · `adaptive` · `explore` · `improve` · `tune` · `finetune` · `variations` · `sweep`: every combination · `montecarlo`: diverse samples · `anneal`: local moves and jumps · `gradient`: measured trends · `genetic`: diverse alternatives · `pareto`: trade-offs · `model`: a model proposes settings · a coding agent |
-| Make a design | `generate` | Writes each candidate design. With a search, only your script runs: it makes each point a design (a model or an agent is not asked for a point, D911). | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
-| Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library |
-| Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {digest: opencode}` |
-| Check it works | `test` | Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's. | **fixed**: always your checks, said as `flow.test` |
-| Second opinion | `critique` | Optionally, a critic questions the parts, each admitted part and the final choice. | `off` · `model`: a model critic · a coding agent |
-| Measure | | Runs your measurements, cheapest first; a design that fails a gate is dropped. | **fixed**: always your measurements, said as `flow.measure`. Each may `estimate:` first and skip a design that cannot pass. |
-| Compare measures | `calibrate` | Checks how well the cheap measurement predicts the costly one. | `on` · `off`; never a model's or an agent's |
-| Choose the best | `select` | Picks the winner by your goals. | `objectives` · a coding agent breaks the ties they leave open |
-| Keep a record | | Every design, measurement and refusal is kept, and read back when you resume. | **fixed**: always on |
-| Learn from results | | Optionally turns past results into lessons for the next round, read with the library. | `off` · `mined`: lessons mined from the record, written `knowledge: {lessons: mined}` · a coding agent, `knowledge: {lessons: claude}` |
-
-A box takes a word or an agent's name (`claude`, `codex`, `opencode`); `{by: claude, ...}` only
-when it has options, e.g. `session: pass` for one agent session per round. An unusable answer
-falls back to the rules. `flux task check` prints each box with the choice in force.
-
-### In a document only
-
-The loop crafter offers the choices above. A document written by hand can also say:
-
-| key | value | meaning |
-|---|---|---|
-| `orchestrate` | `given` | take the parts in the order the document lists them, no model |
-| `orchestrate` | a list, e.g. `[sweep, gradient]` | several searches, one after the other |
-| `generate` | `{catalog: [...]}` | a fixed list of designs, no model |
-
-## Parts
-
-A large design can be several **parts**, each written and checked alone, then composed and
-measured as one: `parts: [decoder, datapath]`, `parts: {decoder: "...", datapath: "..."}`, or
-`parts: decompose` to let the loop divide the statement.
-
-## Measurements that estimate first
-
-With `estimate:` on a stage, a design predicted to miss its gate or a limit by more than the
-margin is skipped there.
-
-| `kind` | the estimate comes from |
+| `flow.orchestrate.dse` | Emphasis |
 |---|---|
-| `surrogate` | a fit over the designs this stage has already measured |
-| `command` | a script of yours that prints the same `name=value` numbers |
-| `model` | the AI model, from the design and the stage's past results |
+| `adaptive` | Choose local improvements or a new approach from the evidence |
+| `explore` | Try materially different algorithms, architectures, or representations |
+| `improve` | Improve the objectives through local or structural changes |
+| `tune` | Favor parameter and implementation changes near promising designs |
+| `finetune` | Favor small changes whose effect can be attributed |
+| `variations` | Develop distinct versions of promising approaches |
+| `sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, `pareto` | Apply the corresponding search emphasis to reasoning and prompts |
+
+Here `dse` is prompt and choice guidance, not a hard ban on broader changes. It is distinct
+from `policy`, which selects an actual search algorithm over a space. Prefer `policy: sweep`
+for enumerating knob combinations; use `{by: claude, dse: explore}` to guide an agent's work.
+
+`exploration_quota` reserves a minimum share of recorded search choices for exploration,
+including across parallel passes. It counts attempts, not elapsed seconds, successful designs,
+or a guaranteed fraction of a finite grid. Use `0` for no enforced quota. Existing verified
+candidates remain available when an experiment is worse or fails. Correctness checks and the
+contract still apply to every new design.
+
+Guidance reaches initial generation, repairs, prototype work, and later improvements. Logs
+record the selected move and its reason. A finite budget or manual stop controls the run;
+reaching a goal or keeping the same incumbent does not stop an unlimited campaign.
+
+## Put agents in the right steps
+
+Name an installed agent directly, and use `{by: ..., ...}` only when adding options:
 
 ```yaml
 flow:
-  measure:
-    place:
-      command: flux rtl measure {artifact} --stage place --clock-ps 1000
-      estimate: {kind: surrogate, margin: 0.05}
+  validate: rules
+  orchestrate: {by: claude, dse: adaptive}
+  plan: {by: claude, session: pass}
+  generate: {by: claude, timeout_s: 1800, probe: {gate: 20, stages: 3}}
+  critique: claude
+  select: {by: claude, finalists: 2}
+  knowledge: {digest: claude, lessons: mined}
 ```
 
-## Rules that never change
+`claude`, `codex`, and `opencode` are built in; a server can offer additional named agents.
+They can plan, generate, critique, and advise decisions. `flow.test` and `flow.measure` remain
+commands or evaluators: an agent cannot replace their factual results. Selection still uses
+the objectives; an agent's advice is checked and can fall back to the rules.
 
-- **The checks are never delegated.** No model or agent decides whether a design is correct; a
-  design that fails a check is refused, never ranked.
-- **A cheap measurement orders, it never concludes.** Quick estimates only choose which designs
-  go on to the costly stage. The decision quotes the deepest stage that ran, and the report
-  names it.
-- **Measured and modelled are kept apart.** The report says which numbers come from real tools
-  and which from estimates.
-- **Nothing is measured twice.** The record keys every measurement by the tools and the exact
-  source.
+A generation agent resumes one session for a part through its repairs until that part is
+admitted; a later improvement starts fresh. Do not set `session` on `generate`. Decision
+steps such as `plan` and `critique` accept `session: turn` (default) or `session: pass`.
 
-## Code a document cannot hold
+Agents can use `flux probe` to check their current file during a turn. `probe` budgets those
+checks per turn. Direct use of certain raw tools is restricted by default; `allow` can give
+specific tools back when that suits the task. See [agent options](parameters.md#agent-options).
 
-A solver, a simulator or a search of your own is a command the box names
-(`orchestrate: {command: ...}`); see [build your own](build-your-own.md#when-you-need-code-commands-beside-the-document).
+For the direct model, use `orchestrate: {by: model, dse: adaptive}` and `generate: model`.
+[Run and results](run.md#models-and-agent-environments) explains endpoint and agent setup.
+
+## Split a larger design
+
+`parts` names pieces of one artifact, either as a list, a map of descriptions, or `decompose`
+to ask the orchestrator to divide it. `subtasks` names child loop folders instead. A child
+inherits the parent's settings and overrides its own `flow`, `budget`, and `params` key by key.
+The parent's generator can compose child answers:
+
+```yaml
+subtasks: [ops/recip, ops/exp]
+flow:
+  generate: {command: "{python} {home}/compose.py {parts} {artifact}"}
+```
+
+`{parts}` gives the composition script a JSON file of the child answers. Write and test the
+composition as carefully as a generator. A parent using a model or agent instead can draft
+for its children. The [document reference](parameters.md#document-fields) covers the nesting
+limits, and the [NLU example](https://github.com/choelzl/flux/tree/main/flux/applications/nlu)
+shows a larger loop split into child folders.

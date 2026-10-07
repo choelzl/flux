@@ -1,109 +1,174 @@
----
-hide:
-  - navigation
----
+# Create your first loop
 
-# Tutorial: a square root circuit
+Build a loop that compares two ways to compute the sum of squares of the integers below `n`.
+One design loops over the inputs; the other uses a formula. Flux generates both, tests them
+against a reference, times them, and writes the faster passing design.
 
-Goal: a 16-bit integer square root in SystemVerilog, as fast and small as possible on ASAP7,
-written by an AI model and checked by Flux. About ten minutes of running.
+This example needs Python 3.11 or newer. It uses no model and no hardware tools.
 
-Before you start: the [full install](../index.md#get-started), and an AI model
-([choosing one](run.md#choosing-an-ai-model)). Run `flux selftest`: every line should
-say PASS.
+## 1. Install Flux
 
-## 1. Start from an example
+From a terminal:
 
 ```bash
-flux example rtl isqrt
+git clone https://github.com/choelzl/flux.git flux-repo
+cd flux-repo
+python3 -m venv .venv
+.venv/bin/pip install -e ./flux
+source .venv/bin/activate
 ```
 
-This writes `isqrt/`: a document, a golden model and a README. As written it is an 8-bit adder;
-the next two steps make it a square root.
+If Flux is already installed, use your existing environment. Keep that environment active for
+the commands below. Hardware setup is covered in [Run and results](run.md#hardware-tools).
 
-## 2. Say what is correct: `isqrt/golden.py`
+## 2. Create the folder and document
 
-The **golden model** computes the right answer; every design is tested against it.
-
-```python
-import math
-
-PORTS = [
-    {"name": "x", "dir": "in", "bits": 16, "unsigned": True},
-    {"name": "r", "dir": "out", "bits": 8, "unsigned": True},
-]
-COUNT = 200          # random inputs, on top of the corner cases
-
-def golden(x: int) -> dict:
-    return {"r": math.isqrt(x)}
+```bash
+flux new sums
 ```
 
-## 3. Say what you want: `isqrt/problem.yaml`
+Replace `sums/problem.yaml` with:
 
 ```yaml
-# the folder's name, isqrt, is the problem's id: the document does not say it
-statement: >-                     # the request, in words: the model reads it
-  A combinational integer square root in SystemVerilog: module `isqrt`, input `x` (16 bits,
-  unsigned), output `r` (8 bits), r = floor(sqrt(x)). As fast as possible on ASAP7, then as
-  small as possible.
-contract: >-                      # rules every design must follow
-  One module named exactly `isqrt`, purely combinational (no clock, no reset), ports
-  `input logic [15:0] x` and `output logic [7:0] r`. r must equal floor(sqrt(x)) for every x.
+statement: Find the fastest correct sum_squares(n) implementation.
+contract: >-
+  Provide sum_squares(n) for nonnegative integers n. Return the exact integer
+  sum of i*i for 0 <= i < n. Keep the function name and signature.
+language: python
 
 flow:
-  test: flux rtl test {artifact} --golden {home}/golden.py     # refuses a wrong design
-  measure:                                                     # measurements, cheapest first
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000  # Yosys synthesis: seconds
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000  # OpenROAD placement: the quoted numbers
-  select: {finalists: 2}
-objectives:                       # reach 1000 MHz, then the smallest area
-  - {metric: fmax_mhz, direction: maximize, goal: 1000}
-  - {metric: area_um2, direction: minimize}
-budget: {steps: 3, repair_attempts: 6}
+  orchestrate:
+    policy: sweep
+    space:
+      implementation: [loop, formula]
+  generate:
+    command: ["{python}", "{home}/render.py", "{artifact}", "{implementation}"]
+  test:
+    correctness: "{python} {home}/check.py {artifact}"
+  measure:
+    bench:
+      command: "{python} {home}/bench.py {artifact}"
+      metrics: [time_ms]
+
+objectives:
+  - {metric: time_ms, direction: minimize}
+
+budget: {passes: 2, steps: 1, workers: 1, prototype: false}
 ```
 
-## 4. Check it
+The folder name `sums` identifies the loop and its record; you do not add an `id` field.
+`space` has two choices, so this first run has two passes, one design per pass.
+`workers: 1` keeps the timed measurements from competing with each other.
+
+## 3. Write the generator
+
+Create `sums/render.py`:
+
+```python
+import sys
+from pathlib import Path
+
+implementations = {
+    "loop": "sum(i * i for i in range(n))",
+    "formula": "n * (n - 1) * (2 * n - 1) // 6",
+}
+expression = implementations[sys.argv[2]]
+Path(sys.argv[1]).write_text(f"def sum_squares(n):\n    return {expression}\n")
+```
+
+Flux replaces `{implementation}` with the selected knob value and `{artifact}` with the path
+where this script must write the design. `{home}` is the loop folder; `{python}` is the
+interpreter running Flux. See [command placeholders](parameters.md#command-placeholders).
+
+## 4. Write the correctness check
+
+Create `sums/check.py`:
+
+```python
+import importlib.util
+import sys
+
+try:
+    spec = importlib.util.spec_from_file_location("candidate", sys.argv[1])
+    candidate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(candidate)
+    function = candidate.sum_squares
+except Exception as exc:
+    print(f"did not load: {exc}")
+    sys.exit(3)
+
+failures = 0
+for n in [0, 1, 2, 10, 100, 1000]:
+    expected = sum(i * i for i in range(n))
+    try:
+        actual = function(n)
+    except Exception as exc:
+        actual = repr(exc)
+    if actual != expected:
+        failures += 1
+        print(f"FAIL n={n}: got {actual!r}, expected {expected}")
+print(f"{failures} failing")
+sys.exit(1 if failures else 0)
+```
+
+This is the **gate**: a failing design never reaches the benchmark. Exit `3` means the design
+could not build or load; exit `1` means it loaded but failed the tests. These six cases are
+this example's test coverage, not a proof for every possible input.
+
+## 5. Write the measurement
+
+Create `sums/bench.py`:
+
+```python
+import importlib.util
+import sys
+import time
+
+spec = importlib.util.spec_from_file_location("candidate", sys.argv[1])
+candidate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(candidate)
+candidate.sum_squares(1_000_000)  # warm up
+
+times = []
+for _ in range(9):
+    started = time.perf_counter()
+    candidate.sum_squares(1_000_000)
+    times.append((time.perf_counter() - started) * 1000)
+print(f"time_ms={min(times):.6f}")
+```
+
+`metrics: [time_ms]` tells Flux which `name=value` output to read. The objective asks it to
+minimize that number. The benchmark workload, repetition count, and statistic are your choice;
+here they make the difference between a loop and a formula easy to see.
+
+## 6. Check, run, and inspect
 
 ```bash
-flux task check isqrt
+flux task check sums
+flux task run sums --json sums/out/answer.json
+flux report sums/out/sums.db
 ```
 
-It lists the stages, their tools, the model it would use, and says "ready" or why not.
+`task check` validates the document and lists its requirements; it does not run the candidate
+tests or benchmark. The run executes them and stops after the two passes in `budget`.
+The formula should win this workload; the actual times come from your machine.
 
-## 5. Run it
-
-```bash
-flux task run isqrt --passes 3 --agent tools --json answer.json
-```
-
-`--agent tools` lets the model run checks inside its turns. What happened in a recorded run:
-
-| pass | what the loop did | result |
-|---|---|---|
-| 1 | the model wrote the algorithm in Python, checked on all 65,536 inputs; too costly, so it was asked for a cheaper one; Flux wrote the RTL; it passed the gate | 342 MHz, 45 um2 |
-| 2 | nothing left to try: the pass ended at rest | |
-| 3 | explore: asked for a design 30% cheaper | **396 MHz, 25 um2**, the decision |
-
-No design reached 1000 MHz, and the report says so. Left running, the loop keeps trying.
-
-## 6. Read the results
-
-| what | where |
+| File | Contents |
 |---|---|
-| the decision, the trade-offs, what was refused | the report at the end; `answer.json` |
-| the chosen design | `isqrt/out/isqrt.sv` |
-| how the search moved, pass by pass | `flux report isqrt/out/isqrt.db` (an HTML page) |
-| every prompt and reply | `flux log isqrt/out/isqrt.db` |
+| `sums/out/sums.py` | The chosen passing design |
+| `sums/out/sums.db` | The campaign record |
+| `sums/out/answer.json` | The decision and recorded results |
+| `sums/out/sums-report.html` | The report generated by `flux report` |
 
-## 7. Make it more agentic (one line each)
+Keep the record to reuse previous measurements. To try a separate experiment, copy the loop
+folder to a new name and omit its generated `out/` and `workbench/` directories.
 
-| to | add |
-|---|---|
-| let the model pick the next step | `--agent orchestrate`, or `flow: {orchestrate: tools}` |
-| let the model plan each pass | `--agent plan`, or `flow: {plan: model}` |
-| let a coding agent write the design | `flow: {generate: opencode}` (or `claude`, `codex`) |
-| give the model a method note | `flow.knowledge: {files: [method-note.md]}` |
-| steer it while it runs | `--tui`, then `f` to type a note |
+## Change the loop
 
-Next: [build your own](build-your-own.md), or [the loop](loop-shape.md) for what each of these
-steps is.
+Add another implementation to `render.py` and `space.implementation`, then raise `budget.passes`
+or override it with `--passes 3`. You can replace the generator with an agent, change the
+benchmark, add a second measurement stage, or introduce a limit alongside the speed objective.
+
+Continue with [Configure a loop](build-your-own.md), then [Search and agents](loop-shape.md).
+For ready-made starting points, `flux example python|rtl|sweep|tune|rtl-sweep NAME` writes a
+worked loop and its scripts.

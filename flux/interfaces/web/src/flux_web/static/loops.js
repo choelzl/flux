@@ -303,7 +303,8 @@ function markdown(text) {
       for (; i < lines.length && /^>\s?/.test(lines[i]); i++) q.push(lines[i].replace(/^>\s?/, ""));
       out.push(h("blockquote", {}, inline(q.join(" "))));
     } else if (!l.trim()) { i++; } else {
-      const para = [];
+      // Consume the fallback line even if it resembles an unfinished block (e.g. "| ...").
+      const para = [l]; i++;
       for (; i < lines.length && lines[i].trim() && !/^(```|#{1,6}\s|\s*\||\s*([-*+]|\d+\.)\s|>)/.test(lines[i]); i++) para.push(lines[i]);
       out.push(h("p", {}, inline(para.join(" "))));
     }

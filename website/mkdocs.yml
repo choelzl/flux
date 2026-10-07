@@ -1,7 +1,7 @@
 site_name: Flux
 site_description: >-
-  Flux searches for the best hardware design for a problem you describe: a model or a script
-  proposes designs, real tools check and measure them.
+  Learn to create and configure a Flux loop: generate designs, check correctness,
+  measure results, and choose search policies, agents, objectives, and budgets.
 site_url: https://choelzl.github.io/flux/
 repo_url: https://github.com/choelzl/flux
 repo_name: choelzl/flux
@@ -52,8 +52,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Tutorial: guide/tutorial.md
-  - Build your own: guide/build-your-own.md
-  - Loop crafter: guide/loop-crafter.md
-  - Run a problem: guide/run.md
-  - The loop: guide/loop-shape.md
+  - Build a loop:
+      - Create your first loop: guide/tutorial.md
+      - Configure a loop: guide/build-your-own.md
+      - Search and agents: guide/loop-shape.md
+      - Loop crafter: guide/loop-crafter.md
+  - Reference:
+      - Parameters: guide/parameters.md
+      - Run and results: guide/run.md
