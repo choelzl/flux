@@ -5,6 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
+import { compactToggle, measurementHeader, verdictBadge } from "./result_table.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -50,13 +51,15 @@ function topDesigns(ctx, r, n) {
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])].filter(m => top.some(d => d.numbers[m] != null)).slice(0, 4);
-  return h("div", { class: "blk" }, h("h3", {}, `Best ${top.length}`),
-    h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num" }, m)))),
+  const surface = h("div", { class: "blk" });
+  surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), compactToggle(surface)),
+    h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num measurement-head", title: m }, measurementHeader(m))))),
       h("tbody", {}, top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
-        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, d.name, d.verdict === "failed" ? h("span", { class: "pill bad small" }, "failed")
-          : d.verdict === "pending" ? h("span", { class: "pill warn small" }, "pending") : ""),
-        h("td", { class: "muted" }, d.shown),
-        ...ms.map(m => { const ok = d.meets[m]; return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}` }, d.numbers[m] == null ? "" : num4(d.numbers[m])); }))))));
+        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, h("span", { class: "table-design-name", title: d.name }, d.name),
+          verdictBadge(d.verdict, d.why.join("; "))),
+        h("td", { class: "muted" }, h("span", { class: "table-stage", title: d.shown }, d.shown)),
+        ...ms.map(m => { const ok = d.meets[m]; return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${m}: ${d.numbers[m] ?? "not measured"}` }, d.numbers[m] == null ? "" : num4(d.numbers[m])); })))))));
+  return surface;
 }
 /** No design meets every requirement (D900): no decision -- the closest design, apart, with what it
     does not meet; it is what the next pass can refine, not the answer. */

@@ -6,6 +6,7 @@ import { ago, api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
+import { compactToggle, measurementHeader, verdictBadge } from "./result_table.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -40,6 +41,7 @@ function resultsView(ctx, r) {
       full.artifact ? h("div", { class: "blk" }, h("h3", {}, "Design"), codeBlock(full.artifact, "")) : "");
   }
   const table = h("div", {});
+  const compactButton = compactToggle(table);
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const PAGE = 200;
   let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
@@ -93,10 +95,11 @@ function resultsView(ctx, r) {
   let sortFocus = null;
   const th = (key, label, extra = {}, ...more) => h("th", { ...extra, class: `sortable ${extra.class || ""}${sortKey === key ? " sorted" : ""}`,
     "aria-sort": sortKey === key ? (sortDir > 0 ? "ascending" : "descending") : "none", "data-label": label },
-    h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, onclick: () => {
+    extra.class?.includes("measurement-head") ? measurementHeader(label, sortButton(key, label), ...more) : [sortButton(key, label), ...more]);
+  const sortButton = (key, label) => h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, onclick: () => {
       if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; }
       sortFocus = key; drawTable();
-    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : "")), ...more);
+    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
     const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
     const shown = all.slice(0, pageN);
@@ -117,18 +120,18 @@ function resultsView(ctx, r) {
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
     table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
       h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Verdict"), th("stage", "Stage"),
-        ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num", title: l ? `${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : "" },
+        ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num measurement-head", title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
         th("when", "When"))),
       h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
         tick(d),
         h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
           h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`,          // D929: the keyboard opens it too
-            onclick: (e) => { e.stopPropagation(); open(d, tr); } }, d.name), d.part ? h("div", { class: "muted small" }, d.part) : ""),
-        h("td", {}, verdictPill(d)),
-        h("td", { class: "muted" }, d.shown),
+            onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: "table-design-name" }, d.name)), d.part ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
+        h("td", {}, verdictBadge(d.verdict, d.why.join("; "))),
+        h("td", { class: "muted" }, h("span", { class: "table-stage", title: d.shown }, d.shown)),
         ...r.metrics.map(m => { const v = d.numbers[m]; const ok = d.meets[m];
-          return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", {}, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
+          return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: v == null ? `${m}: not measured` : `${m}: ${v}${unit[m] ? " " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", { class: "measurement-unit" }, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
         h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
@@ -136,7 +139,7 @@ function resultsView(ctx, r) {
   const chipBox = h("div", { class: "chips" });
   function chips() {
     chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
-      h("span", { class: "grow" }), cmpBtn);
+      h("span", { class: "grow" }), compactButton, cmpBtn);
   }
   chips(); drawTable();
   // D916: two views of the same designs -- Results (the table, its filters, two compared, the selected

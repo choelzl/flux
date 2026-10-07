@@ -200,6 +200,12 @@ const widths = (i) => [...all()[i].tHead.querySelectorAll('th')].map(th => Math.
 const fits = (i, tag) => { for (const th of all()[i].tHead.querySelectorAll('th')) {
   const b = th.querySelector('button.th-sort'); if (!b) continue;
   const t = th.getBoundingClientRect(), r = b.getBoundingClientRect(), a = b.querySelector('.th-arrow').getBoundingClientRect(), nm = th.dataset.label;
+  if (th.classList.contains('measurement-head')) {
+    const head = th.closest('thead').getBoundingClientRect();
+    if (r.top < head.top - 1 || r.bottom > head.bottom + 1) bad.push(`${tag}: ${nm}'s angled button outside the header`);
+    if (a.width && (a.left < r.left - 1 || a.right > r.right + 1 || a.top < r.top - 1 || a.bottom > r.bottom + 1)) bad.push(`${tag}: ${nm}'s angled arrow outside its button`);
+    continue;
+  }
   if (r.left < t.left - 0.5 || r.right > t.right + 0.5) bad.push(`${tag}: ${nm}'s button outside its cell`);
   if (a.width && (a.left < r.left - 0.5 || a.right > r.right + 0.5 || a.top < t.top || a.bottom > t.bottom)) bad.push(`${tag}: ${nm}'s arrow outside`);
   if (th.scrollWidth > th.clientWidth + 1) bad.push(`${tag}: ${nm} overflows its cell`);
@@ -581,6 +587,49 @@ def flows(r: Run) -> None:
         finally:
             b.js("window.fetch = window.__historyFetch; delete window.__historyFetch; localStorage.removeItem('flux-tasks-view'); return 1")
     r.step("run history", run_history)
+
+    def compact_tables():
+        fixture = json.loads(json.dumps(GRAPHS_RESULTS))
+        metrics = ["area_um2", "fmax_mhz", "time_ms", "power_w", "long_measurement_name_for_latency", "another_long_measurement_for_throughput"]
+        fixture["metrics"] = metrics
+        stage = "long_measurement_stage_with_confirmation"
+        fixture["stages"] = [stage]
+        for i, d in enumerate(fixture["designs"]):
+            d["name"] += "-a-long-generated-design-name-with-implementation-details"
+            d["numbers"].update(dict.fromkeys(metrics[2:], i + 0.25))
+            d["shown"], d["stages"] = stage, {stage: d["numbers"]}
+        b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.removeItem('flux-results-compact');"
+             " window.fetch = (u, o) => String(u) === '/api/apps/sw' ? window.__compactFetch(u, o).then(async r => { const info = await r.json();"
+             " return new Response(JSON.stringify({...info, state: {...info.state, last_active: 1000}}), {headers: {'Content-Type': 'application/json'}}); })"
+             " : String(u).startsWith('/api/apps/sw/state') ? window.__compactFetch(u, o).then(async r =>"
+             " new Response(JSON.stringify({...await r.json(), last_active: 1000}), {headers: {'Content-Type': 'application/json'}}))"
+             " : String(u).startsWith('/api/apps/sw/results')"
+             " ? Promise.resolve(new Response(JSON.stringify(fixture), {headers: {'Content-Type': 'application/json'}}))"
+             " : window.__compactFetch(u, o); return 1", fixture)
+        try:
+            r.page("#/app/sw/results", "document.querySelector('table.designs th.measurement-head')", "wide results table")
+            width = b.js("return document.querySelector('table.designs').getBoundingClientRect().width")
+            r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
+            b.click("table.designs tbody input[type=checkbox]")
+            r.button("Compact table", ".chips")
+            compact_width = b.js("return document.querySelector('table.designs').getBoundingClientRect().width")
+            r.check("compact results shrink the wide table without losing measurements", compact_width < width - 50
+                    and b.js("return document.querySelector('table.designs tbody input').checked && [...document.querySelectorAll('table.designs td.num')].every(td => td.textContent.trim())"), f"{width:.0f}px -> {compact_width:.0f}px")
+            r.check("compact verdicts use accessible symbols and full values retain their units", b.js("const badge = document.querySelector('table.designs .verdict-badge'); const unit = document.querySelector('table.designs .measurement-unit'); return badge.getAttribute('aria-label') === 'accepted' && getComputedStyle(badge.querySelector('.verdict-icon')).display !== 'none' && getComputedStyle(unit).display === 'none' && unit.parentNode.title.includes('µm²')"))
+            b.shot(r.shots / "compact-results.png", full=True)
+            sort_fit("compact result headers")
+            r.button("Compact table", ".chips")
+            r.check("full table restores names and verdict labels", b.js("const name = document.querySelector('table.designs .table-design-name'); return getComputedStyle(name).maxWidth === 'none' && getComputedStyle(document.querySelector('table.designs .verdict-text')).display !== 'none'"))
+            r.button("Compact table", ".chips")
+            r.page("#/app/sw", "document.querySelector('.best-n')", "Decision's best designs")
+            r.check("Decision shares the compact preference and angled measurement headers", b.js("return document.querySelector('.best-table-head .compact-table').getAttribute('aria-pressed') === 'true' && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name').scrollWidth > document.querySelector('.best-n .table-design-name').clientWidth"))
+            b.shot(r.shots / "compact-decision.png", full=True)
+            r.button("Compact table", ".best-table-head")
+            r.check("Decision can restore full names", b.js("return getComputedStyle(document.querySelector('.best-n .table-design-name')).maxWidth === 'none'"))
+            r.clean("compact tables")
+        finally:
+            b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); return 1")
+    r.step("compact tables", compact_tables)
 
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")

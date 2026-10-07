@@ -330,6 +330,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     their complete content as plain text in a new tab, including files too large for the editor.
     Raw results include every retained measurement and design, without the chart and table limits.
     Fullscreen keeps the current view and unsaved edits; Close or Escape returns to it.
+  - **Compact table:** Results and Overview's Decision table have a toggle, remembered in your browser.
+    It shortens displayed design and stage names, uses ✓/✗/… for verdicts and hides repeated units;
+    measurement values remain visible, with full names, units and verdicts on hover.
+    Measurement headers are angled by default to fit more columns; Results headers still sort.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:
     Setup, Plan, Search, Design, Check, Measure, Choose or Critic. Builds and tests belong to Check;

@@ -320,6 +320,30 @@ table.designs tr.decided td { background: color-mix(in srgb, var(--ok) 6%, trans
 ul.misses { margin: 4px 0; padding-left: 18px; color: var(--bad); }
 ul.misses li { margin: 2px 0; }
 table.designs td { white-space: nowrap; }
+.result-table-surface thead th { vertical-align: bottom; }
+.result-table-surface th.measurement-head { padding: 4px 6px; }
+.measurement-heading { position: relative; min-width: 48px; height: var(--metric-height); }
+.measurement-label { position: absolute; right: 0; bottom: 12px; width: max-content; max-width: 220px;
+  transform: rotate(55deg); transform-origin: right bottom; text-align: right; white-space: nowrap; }
+.measurement-label .th-sort { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.measurement-label .measurement-text { display: block; overflow: hidden; text-overflow: ellipsis; }
+.measurement-label .lim { text-transform: none; letter-spacing: 0; }
+.verdict-icon { display: none; }
+.best-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.best-table-head h3 { margin: 0; }
+.best-n .verdict-badge { margin-left: 6px; font-size: 10.5px; }
+.result-table-surface[data-density=compact] td { padding: 4px 6px; }
+.result-table-surface[data-density=compact] .table-design-name,
+.result-table-surface[data-density=compact] .table-stage,
+.result-table-surface[data-density=compact] .table-part { display: inline-block; max-width: 18ch;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.result-table-surface[data-density=compact] .table-stage { max-width: 10ch; }
+.result-table-surface[data-density=compact] .table-part { display: block; }
+.result-table-surface[data-density=compact] .measurement-unit,
+.result-table-surface[data-density=compact] .verdict-text { display: none; }
+.result-table-surface[data-density=compact] .verdict-icon { display: inline; }
+.result-table-surface[data-density=compact] .verdict-badge { padding: 1px 5px; }
+.compact-table[aria-pressed=true] { background: var(--soft); border-color: var(--accent); }
 
 /* ---- highlighted code and the editor (D691) */
 .hl .tk-com { color: var(--tk-com); font-style: italic; }
@@ -355,6 +379,7 @@ pre.code { white-space: pre; overflow: auto; }
 .decision-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .decision-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .num-cell { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.num-cell small { overflow-wrap: anywhere; }
 .num-cell .big { font-size: 18px; font-weight: 600; }
 .num-cell.meets .big { color: var(--ok); }
 .num-cell.misses .big { color: var(--bad); }
