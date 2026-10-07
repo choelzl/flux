@@ -444,8 +444,19 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   once when a disk runs low), Compact databases (checkpoint, optimise, vacuum), Condense run logs
   (a log over a size keeps its recent part, the rest gzipped beside it), Prune server tables, and
   Prune stale records (rows measured under other inputs, D853; reports, deletes when told; off).
-  The four that act on loops run over every loop or the one picked, and a loop's owner can run
+  Additional tasks (schedules off until enabled): **Check database integrity** runs read-only
+  SQLite checks on the server database and stopped loops' `out/*.db` records; **Validate loop
+  documents** loads saved problem documents and their referenced parts without running tools
+  or agents. **Back up server database** saves `flux-web.db` and `secret.key` (if present) in
+  `<server-data>/backups/server-<timestamp>/`, accessible only by the server's OS user. It keeps
+  the latest seven backups by default; **Edit** changes the retention count and schedule.
+  These snapshots cover accounts, settings and run metadata. Back up loop folders and sandbox
+  caches separately to preserve source files, results and full agent history.
+  Tasks that act on loops run over every loop or the one picked, and a loop's owner can run
   them on it from its Settings. A running loop is never touched; every run is in the audit trail.
+  **Admin › Loops** automatically shows **Old documents** when migration or manual rewriting
+  is needed, with individual migration controls and **Migrate all**. The box disappears once
+  every document is current; originals are kept as `<file>.orig`.
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
     an allowlist HTTP(S) uses the host's proxy by default, without a helper container. An admin

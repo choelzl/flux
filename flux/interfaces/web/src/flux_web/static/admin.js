@@ -127,9 +127,7 @@ async function notifyDialog() {
 async function adminLoops(body) {
   // D921: the pause from the controls -- never Resources' disk walk and containers, seconds cold
   const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/controls").catch(() => null)]);
-  // D816: the documents of an earlier form, looked for when asked (each loop's documents are tried)
-  const migration = h("div", {});
-  const migrateBtn = act("Migrate old documents…", async () => { migrateBtn.hidden = true; await adminDocuments(migration); }, { cls: "small" });
+  const migration = h("div", { id: "document-migration", hidden: true });
   const paused = res ? res.paused : null;
   const running = allApps.filter(l => l.running).length;
   const reason = h("input", { placeholder: "why (users see it)" });
@@ -152,8 +150,9 @@ async function adminLoops(body) {
       }, { cls: "small danger" })),
     line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
   const box = h("div", {}, loopsBrowser(allApps, { who: true, memo: "flux-sort-admin-loops" }));
-  body.replaceChildren(controls, card("Every loop", box, { actions: [migrateBtn] }), migration);
+  body.replaceChildren(controls, card("Every loop", box), migration);
   setPageRefresh(async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true, memo: "flux-sort-admin-loops" })); });
+  await adminDocuments(migration);
 }
 let historyHours = 24;
 async function adminResources(body) {
@@ -276,8 +275,10 @@ async function adminApplications(body) {
     be of today's, and the migration -- one loop or all; a result is written only when it loads, the
     original kept as `<file>.orig`; what needs a person is said, not written. */
 async function adminDocuments(body) {
-  body.replaceChildren(skeleton(4));
   const r = await api("/admin/documents");
+  body.dataset.loaded = "true";
+  body.hidden = !r.loops.length;
+  if (!r.loops.length) { body.replaceChildren(); return; }
   const PILL = { "would migrate": "live", "needs a hand": "bad", failed: "bad", current: "ok", migrated: "ok" };
   const run = async (b, what) => {
     const got = await api("/admin/documents/migrate", { method: "POST", body: b });
@@ -304,16 +305,17 @@ async function adminDocuments(body) {
         h("ul", { class: "small mono" }, d.said.map(x => h("li", {}, x))),
         d.text ? h("pre", { class: "log small" }, d.text) : "") : ""))));
   body.replaceChildren(card("Old documents", [
-    h("p", { class: "muted small" }, r.loops.length ? `${r.loops.length} of ${r.total} loop(s) to migrate. ` : `All ${r.total} loop(s) current. `,
+    h("p", { class: "muted small" }, `${r.loops.length} of ${r.total} loop(s) to migrate. `,
       "Originals kept as ", h("code", {}, "<file>.orig"), "."),
     ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
-    ...(r.loops.length ? rows : [empty("Nothing to migrate.")])]));
+    ...rows]));
 }
 
 /** Maintenance (D885): the scheduled clean-up, a row a task -- on or off, how often, its settings,
     what it last did, Run now (a loop's tasks over every loop, or the one picked). */
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
+  keep_backups: "keep latest backups (at least 1)",
   max_mb: "condense over (MB)", keep_mb: "keep recent (MB)", failures_days: "login failures (days)",
   notices_days: "notifications (days)", audit_days: "audit trail (days, 0 keeps all)", delete: "delete them (not only report)" };
 async function adminMaintenance(body) {

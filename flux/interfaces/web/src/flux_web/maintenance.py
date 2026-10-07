@@ -1,17 +1,20 @@
 """Maintenance (D885): the clean-up an admin schedules, as Gitea's cron tasks. Each task has a
 schedule (every so many hours), an on/off switch, its settings and its last results; `tick` runs the
-ones due, one at a time on a thread of its own, and Run now runs one at once. Four act on loops --
-a loop's record, log, stale rows, caches -- over every loop, or one when asked (its owner may, from
+ones due, one at a time on a thread of its own, and Run now runs one at once. Loop tasks act
+over every loop, or one when asked (its owner may, from
 the loop's Settings). A running loop is never touched: its files are being written. Every run is in
 the audit trail."""
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import gzip
+import json
 import os
 import shutil
 import sqlite3
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -64,6 +67,16 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
          "counts them. Reports them; deletes them when told to.", 168, False, {"delete": False}, per_loop=True),
+    Task("integrity", "Check database integrity", "Read-only SQLite integrity checks on the server database "
+         "and stopped loops' out/*.db records. Reports problems without repairing or deleting data.",
+         168, False, per_loop=True),
+    Task("documents", "Validate loop documents", "Load each stopped loop's selected problem document, including "
+         "referenced parts. Reports errors without changing files or running tools or agents.",
+         24, False, per_loop=True),
+    Task("backups", "Back up server database", "Save a consistent copy of flux-web.db and secret.key in the "
+         "server data folder's backups/. Keep the latest backups, deleting older ones. Contains accounts, "
+         "settings and run metadata; loop files, outputs and sandbox caches are not included.",
+         24, False, {"keep_backups": 7}),
 )}
 
 
@@ -101,6 +114,8 @@ class Maintenance:
             elif isinstance(want, (int, float)):
                 if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
                     raise ValueError(f"{k}: a number, 0 or more")
+                if k == "keep_backups" and (v < 1 or v != int(v)):
+                    raise ValueError("keep_backups: a whole number, 1 or more")
             elif not isinstance(v, str):
                 raise ValueError(f"{k}: text")
         def change(all_: Any) -> Any:
@@ -199,6 +214,75 @@ class Maintenance:
         return f"; {len(busy)} running, left alone ({', '.join(busy[:4])})" if busy else ""
 
     # ---- the tasks: each returns (what it did in a line, whether it changed anything)
+    def _integrity(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        idle, busy = self._loops(loop)
+        dbs = [] if loop else [("server", Path(self.store.path))]
+        for u, a, d in idle:
+            dbs.extend((f"{u}/{a}/{db.relative_to(d)}", db) for db in sorted((d / "out").glob("*.db"))
+                       if not db.is_symlink() and db.resolve().is_relative_to(d.resolve()))
+        errors = []
+        for label, db in dbs:
+            try:
+                with contextlib.closing(sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)) as con:
+                    rows = [r[0] for r in con.execute("PRAGMA integrity_check")]
+                if rows != ["ok"]:
+                    errors.append(f"{label}: {'; '.join(rows)[:200]}")
+            except sqlite3.Error as exc:
+                errors.append(f"{label}: {exc}")
+        if errors:
+            raise ValueError(f"{len(errors)} of {len(dbs)} database(s) failed: " + "; ".join(errors[:6]) + self._skipped(busy))
+        return f"{len(dbs)} database(s) checked, all OK" + self._skipped(busy), False
+
+    def _documents(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        from flux_loop.document import confined, load_task
+        from flux_loop.document.library import inside
+
+        idle, busy = self._loops(loop)
+        errors = []
+        for u, a, d in idle:
+            try:
+                with confined(d):
+                    meta_path = inside(d / ".flux-app.json", "loop metadata")
+                    meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+                    doc = inside(d / str(meta.get("document") or "problem.yaml"), "problem document")
+                    load_task(doc)
+            except Exception as exc:  # noqa: BLE001 -- report one document and still check the others
+                errors.append(f"{u}/{a}: {' '.join(str(exc).split())[:200]}")
+        if errors:
+            raise ValueError(f"{len(errors)} of {len(idle)} loop document(s) failed: " + "; ".join(errors[:6]) + self._skipped(busy))
+        return f"{len(idle)} loop document(s) checked, all OK" + self._skipped(busy), False
+
+    def _backups(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
+        root = self.store.data / "backups"
+        if root.is_symlink():
+            raise ValueError("backups/ must be a folder in the server data directory, not a symlink")
+        root.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(root, 0o700)
+        dest = root / f"server-{time.time_ns()}"
+        tmp = Path(tempfile.mkdtemp(prefix=".server-", dir=root))
+        try:
+            db = tmp / "flux-web.db"
+            db.touch(mode=0o600)
+            with contextlib.closing(sqlite3.connect(self.store.path, timeout=30)) as src, \
+                    contextlib.closing(sqlite3.connect(db)) as dst:
+                src.backup(dst)
+            key = self.store.data / "secret.key"
+            if key.is_file():
+                target = tmp / "secret.key"
+                target.touch(mode=0o600)
+                target.write_bytes(key.read_bytes())
+            os.replace(tmp, dest)
+        finally:
+            if tmp.exists():
+                shutil.rmtree(tmp)
+        backups = sorted((d for d in root.iterdir() if d.name.startswith("server-")
+                          and d.name[7:].isdigit() and d.is_dir() and not d.is_symlink()),
+                         key=lambda d: int(d.name[7:]), reverse=True)
+        old = backups[max(1, int(p["keep_backups"])):]
+        for d in old:
+            shutil.rmtree(d)
+        return f"saved backups/{dest.name}/ (database and encryption key if present); {len(old)} older backup(s) removed", True
+
     def _scratch(self, p: dict[str, Any], _loop: Any) -> str:
         root, why = scratch_root(self.store.data)
         if root is None:

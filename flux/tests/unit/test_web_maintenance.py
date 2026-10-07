@@ -5,6 +5,7 @@ the clock only -- and a loop's tasks run on one loop for its owner."""
 from __future__ import annotations
 
 import gzip
+import json
 import os
 import sqlite3
 import time
@@ -162,6 +163,9 @@ def test_settings_are_checked(tmp_path):
         m.set_config("scratch", None, 0.001, None)
     with pytest.raises(ValueError, match="the server's, not a loop's"):
         m.run("tables", loop=("bob", "x"))
+    for v in (0, 1.5, True):
+        with pytest.raises(ValueError):
+            m.set_config("backups", None, None, {"keep_backups": v})
 
 
 def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(tmp_path, monkeypatch):
@@ -173,7 +177,7 @@ def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(
     for who, pw in (("ada", "correct horse battery"), ("bob", "another long secret"), ("cy", "a third long secret")):
         c[who] = TestClient(app)
         assert c[who].post("/api/login", json={"name": who, "password": pw}, headers=H).status_code == 200
-    files = [("files", ("problem.yaml", b"statement: s\n"))]
+    files = [("files", ("problem.yaml", b"statement: s\nflow: {test: {check: [echo, ok]}}\n"))]
     assert c["bob"].post("/api/apps", data={"name": "x"}, files=files, headers=H).status_code == 200
     got = c["ada"].get("/api/admin/maintenance").json()
     assert {t["key"] for t in got["tasks"]} == set(TASKS) and "bob/x" in got["loops"]
@@ -186,6 +190,11 @@ def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(
     assert {t["key"] for t in mine} == {k for k, t in TASKS.items() if t.per_loop}
     assert c["bob"].post("/api/apps/x/maintenance/compact", headers=H).json()["by"] == "bob"
     assert c["bob"].post("/api/apps/x/maintenance/tables", headers=H).status_code == 404, "a server task is the admin's"
+    assert c["bob"].post("/api/apps/x/maintenance/documents", headers=H).json()["ok"]
+    assert c["bob"].post("/api/apps/x/maintenance/integrity", headers=H).json()["ok"]
+    assert c["bob"].post("/api/apps/x/maintenance/backups", headers=H).status_code == 404
+    assert c["bob"].post("/api/admin/maintenance/backups/run", json={}, headers=H).status_code == 403
+    assert c["ada"].post("/api/admin/maintenance/backups/run", json={}, headers=H).json()["ok"]
     assert c["cy"].post("/api/apps/x/maintenance/compact", params={"owner": "bob"}, headers=H).status_code in (403, 404)
 
 
@@ -261,3 +270,95 @@ def test_the_refused_host_log_keeps_its_days_and_the_audit_all_of_it(tmp_path):
     assert got["said"].startswith("1 refused connection(s)"), got
     assert "new.example" in f.read_text() and "old.example" not in f.read_text()
     assert store._take_refusals() == 0, "what was kept was already read into the audit"
+
+
+def test_integrity_reports_corrupt_records_and_skips_busy_loops_and_external_links(tmp_path):
+    store = _store(tmp_path)
+    idle, busy = _loop(tmp_path, "idle"), _loop(tmp_path, "busy")
+    bad = idle / "out" / "bad.db"
+    bad.write_bytes(b"not a SQLite database")
+    (busy / "out" / "bad.db").write_bytes(b"also corrupt")
+    (idle / "out" / "linked.db").symlink_to(busy / "out" / "bad.db")
+    m = _m(store, [("bob", "idle", idle), ("bob", "busy", busy)], live={("bob", "busy")})
+    got = m.run("integrity", by="ada")
+    assert not got["ok"] and "1 of 2 database(s) failed" in got["said"] and "bob/idle/out/bad.db" in got["said"], got
+    assert "1 running, left alone" in got["said"] and bad.read_bytes() == b"not a SQLite database"
+    bad.unlink()
+    got = m.run("integrity", by="ada", loop=("bob", "idle"))
+    assert got["ok"] and got["said"].startswith("0 database(s) checked"), got
+    assert not {"integrity", "documents", "backups"} & set(m.due()), "new schedules require opting in"
+
+
+def test_documents_validate_the_selected_file_and_report_errors_without_writing(tmp_path):
+    store = _store(tmp_path)
+    good, bad, busy = (_loop(tmp_path, n) for n in ("good", "bad", "busy"))
+    (good / ".flux-app.json").write_text(json.dumps({"document": "chosen.yaml"}))
+    (good / "chosen.yaml").write_text("statement: add numbers\nflow: {test: {check: [echo, ok]}}\n")
+    (good / "problem.yaml").write_text("invalid: ignored\n")
+    bad_doc = bad / "problem.yaml"
+    bad_doc.write_text("statement: [broken\n")
+    m = _m(store, [("bob", "good", good), ("bob", "bad", bad), ("bob", "busy", busy)], live={("bob", "busy")})
+    got = m.run("documents", by="ada")
+    assert not got["ok"] and "1 of 2 loop document(s) failed" in got["said"] and "bob/bad:" in got["said"], got
+    assert "1 running, left alone" in got["said"] and bad_doc.read_text() == "statement: [broken\n"
+    assert m.run("documents", by="ada", loop=("bob", "good"))["ok"]
+
+
+@pytest.mark.parametrize("escape", ["metadata", "document", "selected path"])
+def test_document_checks_cannot_read_outside_the_loop(tmp_path, escape):
+    d = _loop(tmp_path)
+    outside = tmp_path / "outside.yaml"
+    outside.write_text("statement: external\n")
+    if escape == "metadata":
+        (d / ".flux-app.json").symlink_to(outside)
+    elif escape == "document":
+        (d / "problem.yaml").symlink_to(outside)
+    else:
+        (d / ".flux-app.json").write_text(json.dumps({"document": str(outside)}))
+    got = _m(_store(tmp_path), [("bob", "x", d)]).run("documents", by="ada")
+    assert not got["ok"] and "outside the loop's folder" in got["said"], got
+
+
+def test_server_backups_are_consistent_private_and_keep_only_the_requested_number(tmp_path):
+    store = _store(tmp_path)
+    encrypted = store._fernet().encrypt(b"saved API key").decode()
+    store.server_set("encrypted", encrypted)
+    m = _m(store, [])
+    m.set_config("backups", None, None, {"keep_backups": 2})
+    root = store.data / "backups"
+    root.mkdir()
+    (root / "keep-me").mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    (root / "server-1").symlink_to(external, target_is_directory=True)
+    first = None
+    for n in range(3):
+        store.server_set("snapshot", n)
+        got = m.run("backups", by="ada")
+        assert got["ok"], got
+        copies = sorted(p for p in root.glob("server-*") if not p.is_symlink())
+        first = first or copies[0]
+    assert len(copies) == 2 and not first.exists() and (root / "keep-me").is_dir() and external.exists()
+    assert "1 older backup(s) removed" in got["said"]
+    for p, expected in zip(copies, (1, 2), strict=True):
+        assert p.stat().st_mode & 0o777 == 0o700
+        for f in p.iterdir():
+            assert f.stat().st_mode & 0o777 == 0o600
+        restored = Store(p)
+        assert restored.server_get("snapshot") == expected
+        assert restored._fernet().decrypt(restored.server_get("encrypted").encode()) == b"saved API key"
+        assert {u.name for u in restored.users()} == {"ada", "bob"}
+
+
+def test_failed_backup_preserves_existing_snapshots_and_removes_partial_files(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    m = _m(store, [])
+    assert m.run("backups", by="ada")["ok"]
+    root = store.data / "backups"
+    before = set(root.iterdir())
+    def fail_publish(*_args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("flux_web.maintenance.os.replace", fail_publish)
+    got = m.run("backups", by="ada")
+    assert not got["ok"] and "disk full" in got["said"] and set(root.iterdir()) == before

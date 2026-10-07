@@ -2110,6 +2110,10 @@ def flows(r: Run) -> None:
     def documents_migrated():
         """D811: a loop of an earlier form is listed in Admin › Documents with what would change, and
         the admin migrates it there; its start was refused saying so."""
+        r.login("ada")
+        r.page("#/admin", "document.querySelector('#document-migration[data-loaded=true]')", "Admin › Loops without old documents")
+        r.check("no old documents: the migration box and its old toggle are absent",
+                b.js("return !document.querySelector('#document-migration .card') && ![...document.querySelectorAll('#main button')].some(b => b.textContent.includes('Migrate old documents'))"))
         r.login("bob")
         old = ("id: oldsum\nstatement: add two numbers\nlanguage: python\n"
                "gate: {test: [python, check.py, '{artifact}'], count_re: '(\\d+) failing'}\n"
@@ -2126,7 +2130,7 @@ def flows(r: Run) -> None:
                      [["problem.yaml", old.replace("id: oldsum\n", "") + "world: flux_x.world:World\n"]])
         r.check("a loop whose world needs a person is uploaded", made["status"] == 200, str(made)[:300])
         refused = r.api("/apps/oldform/start", "POST", {"passes": 1})
-        r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Migrate old documents" in refused["body"], refused["body"][:300])
+        r.check("its start says it needs migrating, and where", refused["status"] == 409 and "Old documents" in refused["body"], refused["body"][:300])
         r.login("ada")
         r.page("#/admin", "document.querySelector('#main .card')", "Admin › Loops")
         r.check("the controls say no more than their buttons (D846)", "nobody can start one" not in r.text())
@@ -2136,8 +2140,9 @@ def flows(r: Run) -> None:
         r.dialog_button("Send")
         b.wait("[...document.querySelectorAll('.toast')].some(t => t.textContent.startsWith('Sent to'))", timeout=10, what="the notification sent")
         r.check("the admin sends a notification to everyone", True)
-        r.button("Migrate old documents…", "#main")                            # D816: a button on the Loops tab
         b.wait("[...document.querySelectorAll('#main .mig-loop')].some(x => x.textContent.includes('oldform'))", timeout=60, what="the documents to migrate")
+        r.check("old documents appear automatically without a toggle",
+                b.js("return ![...document.querySelectorAll('#main button')].some(b => b.textContent.includes('Migrate old documents'))"))
         text = b.js("return [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).textContent")
         r.check("it says the document, where it goes and that it would migrate", "oldsum.problem.yaml" in text and "problem.yaml" in text
                 and "would migrate" in text, text[:300])
@@ -2154,7 +2159,38 @@ def flows(r: Run) -> None:
         said = json.loads(r.api("/apps/oldform/validate?owner=bob", "POST", {"text": text})["body"] or "{}")
         r.check("migrated: the loop's document is problem.yaml, and it loads", info.get("document") == "problem.yaml"
                 and said.get("ok") is True and "flow:" in text, f"{info.get('document')} {said}")
+        r.api("/apps/worldly/file?path=problem.yaml&owner=bob", "PUT", {"text": "statement: rewritten\nflow: {test: {check: [echo, ok]}}\n"})
+        r.page("#/admin", "document.querySelector('#document-migration[data-loaded=true]')", "Admin › Loops after migration")
+        r.check("after migrating and rewriting, the migration box disappears",
+                b.js("return document.querySelector('#document-migration').hidden && !document.querySelector('#document-migration .card')"))
     r.step("documents migrated", documents_migrated)
+
+    def maintenance_options():
+        r.login("ada")
+        r.page("#/admin/maintenance", "document.querySelector('.mt-table')", "Admin › Maintenance")
+        titles = ["Check database integrity", "Validate loop documents", "Back up server database"]
+        for title in titles:
+            r.check(f"{title}: available, schedule initially off", b.js("const row = [...document.querySelectorAll('.mt-table tbody tr')].find(r => r.querySelector('strong').textContent === arguments[0]); return row && row.classList.contains('off')", title))
+        b.js("[...document.querySelectorAll('.mt-table tbody tr')].find(r => r.textContent.includes('Back up server database')).querySelectorAll('button')[1].click(); return 1")
+        b.wait("document.querySelector('dialog[open] .mt-edit')", what="backup options")
+        warning = b.js("return document.querySelector('dialog[open]').textContent")
+        r.check("backup options say which files are copied and which are excluded", "flux-web.db" in warning and "secret.key" in warning and "not included" in warning)
+        b.type("dialog[open] input[data-k=keep_backups]", "2")
+        b.js("document.querySelector('dialog[open] input[data-k=keep_backups]').dispatchEvent(new Event('change', {bubbles: true})); return 1")
+        b.wait("document.querySelector('dialog[open] [data-state=saved]')", what="backup retention saved")
+        cfg = json.loads(r.api("/admin/maintenance")["body"])
+        r.check("backup retention autosaves", next(t for t in cfg["tasks"] if t["key"] == "backups")["params"]["keep_backups"] == 2)
+        r.dialog_button("Close")
+        b.wait("!document.querySelector('dialog[open]')", what="backup options closed")
+        b.js("[...document.querySelectorAll('.mt-table tbody tr')].find(r => r.textContent.includes('Back up server database')).querySelector('button').click(); return 1")
+        b.wait("[...document.querySelectorAll('.mt-table tbody tr')].some(r => r.textContent.includes('saved backups/server-'))", what="backup result")
+        r.check("Run shows the saved backup location", True)
+        r.clean("Maintenance")
+        r.login("bob")
+        r.page("#/app/sw/settings/loop", "document.querySelector('.mt-table')", "Loop maintenance")
+        text = r.text()
+        r.check("owners can check their loop's database and document, while backups stay admin-only", all(t in text for t in titles[:2]) and titles[2] not in text)
+    r.step("maintenance options", maintenance_options)
 
     def invitation():
         """D818: a user added without a password gets a link; it sets the password and logs them in."""
