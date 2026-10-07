@@ -136,6 +136,7 @@ class Advanced(BaseModel):
     pids: int | None = None
     tmp_size: str | None = Field(default=None, max_length=16)
     allow: list[str] | None = None
+    raw_network: bool = False               # allowlisted native TCP/UDP, with a separate firewall helper
     parallel: bool = False                  # D741: parallel work allowed; how much is the document's
     mounts: list[Mount] | None = Field(default=None, max_length=16)
 

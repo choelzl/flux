@@ -148,9 +148,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                    "FLUX_SANDBOX_TIMEOUT": "450"}                      # D768: it ends itself, whatever happens to us
             from .runs import advanced
 
-            mounts = (advanced(store, user.name, loop).get("mounts") or None) if loop else None
+            adv = advanced(store, user.name, loop) if loop else {}
+            mounts = adv.get("mounts") or None
             sandbox_env(env, sandbox, {"mounts": mounts} if mounts else {})     # D936: a loop's Test sees its mounts
-            machine_env(env, sandbox_config(store), {})
+            machine_env(env, sandbox_config(store), adv)        # a loop's Test uses its hosts and raw-network choice
             flux = shutil.which("flux", path=env.get("PATH"))
             argv = [*([flux] if flux else [sys.executable, "-m", "flux_cli"]), "agent", "test", agent, "--live", "--json", "-"]
             try:

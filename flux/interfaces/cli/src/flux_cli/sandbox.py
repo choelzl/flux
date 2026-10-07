@@ -13,9 +13,10 @@ run and refreshed in place. Another application's traces and caches, another use
 real home (`~/.ssh`, other repositories) and the Docker socket are not there.
 
 Network: the host's (`FLUX_SANDBOX_NET=open`, the default), or only the hosts an allowlist names
-(`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): a separate helper owns
-the network firewall, allowing native TCP and UDP to those destinations. HTTP(S) still uses
-the host's allowlist proxy and its upstream corporate proxy (D722). Loopback stays inside.
+(`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): HTTP(S) uses the host's
+allowlist proxy and its upstream corporate proxy (D722), with no extra network container.
+`FLUX_SANDBOX_RAW_NETWORK=1` opts into a separate firewall helper for native TCP/UDP to the
+same destinations. Loopback stays inside.
 
 Certificates (D722): the host's trust store is the container's -- `/etc/ssl`, `/etc/pki`,
 `/usr/local/share/ca-certificates` (under `/usr`), the files the host's `SSL_CERT_FILE`,
@@ -50,7 +51,7 @@ ETC = ("passwd", "group", "nsswitch.conf", "ssl", "pki", "ca-certificates", "ca-
 _DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "SSH_AGENT_PID", "GPG_AGENT_INFO", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY",
          "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DOCKER_HOST", "KRB5CCNAME", "VSCODE_IPC_HOOK_CLI",
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
-         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_REFUSALS", "FLUX_SANDBOX_MOUNTS",   # D936: the host side
+         "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_RAW_NETWORK", "FLUX_SANDBOX_REFUSALS", "FLUX_SANDBOX_MOUNTS",   # D936: the host side
          # D847: an agent's own folder on this machine (the ChatGPT extension sets CODEX_HOME=~/.codex):
          # not mounted inside, where the agent's login is in the Flux home
          "CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR")
@@ -547,8 +548,10 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     name = f"flux-{uuid.uuid4().hex[:10]}"
     strict = os.environ.get("FLUX_SANDBOX_NET", "open") == "allowlist"
     allow = _allowlist()
+    native = bool(allow) and os.environ.get("FLUX_SANDBOX_RAW_NETWORK") == "1"
     proxy = None
     proxy_dir = None
+    guard_name = None
     mine = run_dir(name)                                      # a local filesystem: a home on sshfs/NFS cannot hold a socket
     if allow or strict:                                       # D698: an empty allowlist refuses all, never opens
         from .sandbox_proxy import AllowProxy
@@ -556,7 +559,7 @@ def launch(argv: list[str], args: Any, command: str) -> int:
         proxy_dir = str(mine)
         proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow, log=os.environ.get("FLUX_SANDBOX_REFUSALS"),
                            about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name},
-                           **({"network_path": str(run_dir(name + "-network") / "network.sock")} if allow else {}))
+                           **({"network_path": str(run_dir(name + "-network") / "network.sock")} if native else {}))
         proxy.start()
     # D714: the flux that is running, by its own interpreter -- not whichever `flux` PATH finds
     # first, nor `sys.argv[0]`, which under `python -m` is a source file, not a program
@@ -564,7 +567,7 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     print(f"flux {command}: in the {eng} sandbox {name}", file=sys.stderr, flush=True)
     try:
         network = None
-        if proxy is not None and allow:
+        if proxy is not None and native:
             guard_name = name + "-network"
             try:
                 # Isolated Python ignores the task's PYTHONPATH and user site packages.
@@ -592,12 +595,14 @@ def launch(argv: list[str], args: Any, command: str) -> int:
     finally:
         if proxy is not None:
             try:
-                subprocess.run([*engine_cli(eng), "rm", "-f", name + "-network"], capture_output=True, timeout=30)
+                if guard_name is not None:
+                    subprocess.run([*engine_cli(eng), "rm", "-f", guard_name], capture_output=True, timeout=30)
             except (OSError, subprocess.SubprocessError):
                 pass
             finally:
                 proxy.stop()
-                shutil.rmtree(run_dir(name + "-network"), ignore_errors=True)
+                if guard_name is not None:
+                    shutil.rmtree(run_dir(guard_name), ignore_errors=True)
         shutil.rmtree(mine, ignore_errors=True)              # the variables' file with it
 
 

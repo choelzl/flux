@@ -179,10 +179,10 @@ machine.
 - **HOME** is the application's (`apps/<id>/home`), holding the agents' sessions, their
   configuration and a copy of their login. Another application's cache is not there. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
   not there. The model settings and key come in through the environment.
-- **Network:** the host's by default. `FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8` gives no
-  network except those destinations: both native TCP and UDP are permitted. HTTP(S) keeps
-  using the allowlist proxy on the host. Allowlisted networking requires `nft` (nftables)
-  on the Linux host; a helper installs the firewall before the task starts.
+- **Network:** the host's by default. `FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8` restricts
+  HTTP(S) to those destinations through the host's proxy, with no extra network container.
+  Add `FLUX_SANDBOX_RAW_NETWORK=1` when the task needs native TCP/UDP as well. Only then
+  does a helper install the allowlist firewall before the task starts; it requires host `nft` (nftables).
 - **Limits:** `FLUX_SANDBOX_MEMORY=16g`, `FLUX_SANDBOX_CPUS=8`, `FLUX_SANDBOX_PIDS` (4096).
 - **Off:** `--no-sandbox` or `FLUX_SANDBOX=0`.
 - **Engine:** rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE=podman|docker`)
@@ -373,7 +373,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     CPUs, processes, scratch size, and **Allow parallel work** (D740, D741): off, a loop runs one tool
     and drafts one part at a time whatever its document asks (the log says so); on, the document
     says how many (`budget.workers`, `parallel_parts`). Only an admin changes the advanced
-    settings (also when creating a loop); everyone sees them.
+    settings (also when creating a loop); everyone sees them. **Allow raw TCP/UDP** is off by
+    default and takes effect on the next start. Under an allowlist, enabling it adds a firewall
+    helper for direct TCP/UDP to the allowed destinations. Off, HTTP(S) uses the proxy alone.
+    The choice also applies to the app's Check and agent connection Tests. Open networks keep their existing access.
 - **Agents and models (Admin › Agents and models, D756, D807, D814):** one tab per tool -- Flux's own model and the agent by default; each agent, its program and login above the model it uses and the variables only it gets, one Save; the other providers; **Every agent** (the server's variables, which every run and agent gets); **+ Add an agent**. A user's Account has the same tabs (**My agents and models**): each agent's login and Test, its model, its own variables; their variables for every agent. In detail: OpenCode, Claude Code and Codex, and any the admin adds -- **Add an
   agent**: a name (lower case: what a document says, `generate: nga`), a kind (opencode, claude or codex: how it
   runs) and its program (a path) -- e.g. a company's own OpenCode beside the plain one. An agent is offered to users
@@ -400,8 +403,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   them on it from its Settings. A running loop is never touched; every run is in the audit trail.
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
-    an allowlist the container's network permits native TCP and UDP to allowed destinations.
-    IPs and CIDRs permit both protocols at all ports. Flux resolves allowed domains on the
+    an allowlist HTTP(S) uses the host's proxy by default, without a helper container. An admin
+    can enable **Allow raw TCP/UDP** for an individual app under **Settings › Advanced**.
+    When enabled, IPs and CIDRs permit both protocols at all ports. Flux resolves allowed domains on the
     host and admits their addresses before answering DNS; subdomains work the same way.
     When a name passes through an IP/CIDR rule, only its matching addresses are admitted.
     Native traffic is filtered by destination address, so names sharing an admitted IP share
@@ -418,7 +422,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     see it in the Sandbox tab.
     A program that ignores the proxy settings still looks its host up: under an allowlist the
     container resolves through Flux (D717), and a name the list does not allow is refused and
-    shows in the admin's audit as "a name lookup". A bare IP is reachable only when an IP/CIDR
+    shows in the admin's audit as "a name lookup". With raw networking enabled, a bare IP is reachable only when an IP/CIDR
     rule permits it or an allowed name has resolved to it. Other bare-IP traffic is dropped
     by the firewall and does not appear in the name-lookup audit. Loopback stays inside.
     A blocked destination fails that request; it does not stop the current pass or the
@@ -440,7 +444,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     scratch inside (a tmpfs, with its PATH folders and the loops' caches mounted on it).
   - From the command line: `FLUX_SANDBOX_HOME` names the home; without it, a run's home is
     `~/.local/share/flux/home`, started from your own agents' configuration and logins;
-    `FLUX_SANDBOX_NET=allowlist` and `FLUX_SANDBOX_ALLOW` set the network.
+    `FLUX_SANDBOX_NET=allowlist` and `FLUX_SANDBOX_ALLOW` set the network;
+    `FLUX_SANDBOX_RAW_NETWORK=1` enables native TCP/UDP through the firewall helper.
   - A run's variables reach its container in a file of its own (0600), never on the command line, where
     any user of the machine could read them (D745).
 - **Environment variables:** the server's (Admin › Models and variables), a user's (Account), a

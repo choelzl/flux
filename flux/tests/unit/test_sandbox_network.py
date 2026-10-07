@@ -96,6 +96,7 @@ def args(tmp_path):
 def test_only_the_separate_helper_gets_firewall_control_and_the_task_joins_after_readiness(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("FLUX_SANDBOX_ALLOW", "example.test")
+    monkeypatch.setenv("FLUX_SANDBOX_RAW_NETWORK", "1")
     monkeypatch.setattr(sandbox, "_engine_ok", lambda _: "")
     monkeypatch.setattr(AllowProxy, "start", lambda self: self.network_ready.set())
     seen = []
@@ -118,12 +119,14 @@ def test_only_the_separate_helper_gets_firewall_control_and_the_task_joins_after
     parent = proxy.rsplit("/", 1)[0]
     assert f"{parent}:{parent}:ro" in task, "the task cannot replace the host's policy socket"
     assert all("network.sock" not in value for value in environments[0].values()), "the task cannot access the helper's policy socket"
+    assert "FLUX_SANDBOX_RAW_NETWORK" not in environments[0], "the raw-network switch is host-side launch configuration"
     assert "rm" in seen[-1], "the helper is removed after the task finishes"
 
 
 def test_helper_failure_continues_the_pass_through_the_isolated_http_relay(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("FLUX_SANDBOX_ALLOW", "example.test")
+    monkeypatch.setenv("FLUX_SANDBOX_RAW_NETWORK", "1")
     monkeypatch.setattr(sandbox, "_engine_ok", lambda _: "")
     monkeypatch.setattr(AllowProxy, "start", lambda _: None)
     monkeypatch.setattr(sandbox.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stderr="helper failed", stdout=""))
@@ -132,6 +135,44 @@ def test_helper_failure_continues_the_pass_through_the_isolated_http_relay(tmp_p
     assert sandbox.launch(["task", "run", "p"], args(tmp_path), "task run") == 0
     assert len(launched) == 1 and launched[0][launched[0].index("--network") + 1] == "none"
     assert "--cap-add" not in launched[0]
+
+
+@pytest.mark.parametrize("eng", ["docker", "podman"])
+@pytest.mark.parametrize("raw, allow, mode, net", [
+    (None, "example.test", "allowlist", "none"),
+    ("0", "example.test", "allowlist", "none"),
+    ("1", "", "allowlist", "none"),
+    ("1", "", "open", "host"),
+])
+def test_a_network_helper_is_unnecessary_without_raw_access_and_allowed_destinations(tmp_path, monkeypatch, eng, raw, allow, mode, net):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("FLUX_SANDBOX_ALLOW", allow)
+    monkeypatch.setenv("FLUX_SANDBOX_NET", mode)
+    monkeypatch.delenv("FLUX_SANDBOX_RAW_NETWORK", raising=False)
+    if raw is not None:
+        monkeypatch.setenv("FLUX_SANDBOX_RAW_NETWORK", raw)
+    monkeypatch.setattr(sandbox, "engine", lambda: eng)
+    monkeypatch.setattr(sandbox, "_engine_ok", lambda _: "")
+    proxies, containers, operations, environments = [], [], [], []
+    monkeypatch.setattr(AllowProxy, "start", lambda self: proxies.append(self))
+    monkeypatch.setattr(sandbox.subprocess, "run", lambda cmd, **kw: operations.append(cmd))
+    def run_task(cmd, **kw):
+        containers.append(cmd)
+        environments.append(sandbox.container_env(cmd))
+        return 0
+
+    monkeypatch.setattr(sandbox.subprocess, "call", run_task)
+    assert sandbox.launch(["task", "run", "p"], args(tmp_path), "task run") == 0
+    assert len(containers) == 1 and not operations, "only the task starts; there is no helper startup or removal"
+    task = containers[0]
+    assert task[task.index("--network") + 1] == net and "--cap-add" not in task
+    if net == "none":
+        assert len(proxies) == 1 and proxies[0].network_path is None
+        env = environments[0]
+        assert env["HTTPS_PROXY"] == "http://127.0.0.1:18080"
+        assert "FLUX_SANDBOX_NETWORK" not in env
+    else:
+        assert not proxies
 
 
 def test_a_blocked_destination_does_not_abort_the_design_loop(tmp_path):

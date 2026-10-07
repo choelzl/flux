@@ -41,7 +41,7 @@ def test_variables_come_from_the_server_then_the_user_then_the_loop(server):
     assert bob.put("/api/env", json={"name": "LEVEL", "value": "user"}, headers=H).status_code == 200
     assert bob.put("/api/apps/x/env", json={"name": "LEVEL", "value": "loop"}, headers=H).status_code == 200
     assert bob.put("/api/apps/x/env", json={"name": "SEED", "value": "7"}, headers=H).status_code == 200
-    for bad in ("FLUX_SANDBOX", "FLUX_SANDBOX_ALLOW", "PATH", "LD_PRELOAD", "FLUX_CLAUDE_ARGS", "OPENCODE_CONFIG_CONTENT",
+    for bad in ("FLUX_SANDBOX", "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_RAW_NETWORK", "PATH", "LD_PRELOAD", "FLUX_CLAUDE_ARGS", "OPENCODE_CONFIG_CONTENT",
                 "FLUX_CLAUDE_ENV", "FLUX_AGENTS", "FLUX_SHARED_VARS", "FLUX_CLAUDE_API_KEY", "FLUX_REMOTE_MODEL", "1X", "A-B"):
         assert bob.put("/api/apps/x/env", json={"name": bad, "value": "0"}, headers=H).status_code == 400, bad
     seen = bob.get("/api/apps/x/env").json()
@@ -93,6 +93,61 @@ def test_a_loop_works_one_thing_at_a_time_unless_an_admin_allows_parallel_work(s
     assert bob.put("/api/apps/x/advanced", json={"parallel": True}, headers=H).status_code == 403
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": True}, headers=H).json()["advanced"] == {"parallel": True}
     assert ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"parallel": False}, headers=H).json()["advanced"] == {}
+
+
+def test_only_an_admin_enables_raw_networking_and_the_choice_is_per_app(server):
+    from flux_web.runs import machine_env
+
+    app, store = server
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    for name in ("x", "y"):
+        bob.post("/api/apps", data={"name": name}, files=[("files", (f"{name}.problem.yaml", b"statement: s\n"))], headers=H)
+    assert bob.get("/api/apps/x/env").json()["advanced"] == {}
+    assert bob.put("/api/apps/x/advanced", json={"raw_network": True}, headers=H).status_code == 403
+    r = ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"raw_network": True, "allow": ["example.test"]}, headers=H)
+    assert r.status_code == 200 and r.json()["advanced"] == {"raw_network": True, "allow": ["example.test"]}
+    assert bob.get("/api/apps/x/env").json()["advanced"]["raw_network"] is True
+    for name in ("x", "y"):
+        env = {"FLUX_SANDBOX": "1", "FLUX_SANDBOX_RAW_NETWORK": "1"}
+        machine_env(env, {"network": "allowlist", "allow": ["server.test"]}, advanced(store, "bob", name))
+        assert (env.get("FLUX_SANDBOX_RAW_NETWORK") == "1") == (name == "x"), "a server environment value cannot enable it on other apps"
+        assert env["FLUX_SANDBOX_ALLOW"] == ("server.test,example.test" if name == "x" else "server.test")
+    r = ada.put("/api/apps/x/advanced", params={"owner": "bob"}, json={"raw_network": False}, headers=H)
+    assert r.status_code == 200 and r.json()["advanced"] == {}
+    env = {"FLUX_SANDBOX": "1", "FLUX_SANDBOX_RAW_NETWORK": "1"}
+    machine_env(env, {"network": "allowlist", "allow": ["server.test"]}, advanced(store, "bob", "x"))
+    assert "FLUX_SANDBOX_RAW_NETWORK" not in env
+    env = {"FLUX_SANDBOX": "0", "FLUX_SANDBOX_RAW_NETWORK": "1"}
+    machine_env(env, {}, {"raw_network": True})
+    assert "FLUX_SANDBOX_RAW_NETWORK" not in env, "unsandboxed runs need no helper"
+    assert any(a["action"] == "advanced settings" and '"raw_network": true' in a["detail"] for a in ada.get("/api/audit").json())
+
+
+def test_agent_connection_tests_use_raw_networking_only_in_the_enabled_apps_context(server, monkeypatch):
+    import json
+    import subprocess
+    from types import SimpleNamespace
+
+    app, store = server
+    bob = _client(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
+    store.server_set("sandbox", {"network": "allowlist", "allow": ["server.test"]})
+    store.server_set("adv:bob:x", {"raw_network": True, "allow": ["app.test"]})
+    original, seen = subprocess.run, []
+
+    def run(cmd, **kw):
+        if "--live" in cmd and "test" in cmd:
+            seen.append(kw["env"])
+            return SimpleNamespace(returncode=0, stdout=json.dumps({"agent": "opencode", "ok": True, "steps": []}), stderr="")
+        return original(cmd, **kw)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert bob.post("/api/agents/opencode/test?loop=x", headers=H).json()["ok"]
+    assert seen[-1]["FLUX_SANDBOX_RAW_NETWORK"] == "1"
+    assert "app.test" in seen[-1]["FLUX_SANDBOX_ALLOW"]
+    assert bob.post("/api/agents/opencode/test", headers=H).json()["ok"]
+    assert "FLUX_SANDBOX_RAW_NETWORK" not in seen[-1]
+    assert "app.test" not in seen[-1]["FLUX_SANDBOX_ALLOW"]
 
 
 def test_admin_agents_sets_each_agents_program_login_files_and_hosts(server, tmp_path, monkeypatch):

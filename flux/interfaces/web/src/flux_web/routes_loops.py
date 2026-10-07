@@ -83,7 +83,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(400, "pids: from 64 to 1000000")
         body.allow = _rules(body.allow or []) or None
         got = {k: v for k, v in body.model_dump().items() if v not in (None, "", []) and not (k == "sandbox" and v is True)
-               and not (k == "parallel" and v is False)}
+               and not (k in ("parallel", "raw_network") and v is False)}
         if got.get("mounts"):
             from .admin import cache_root
             from .runs import check_mounts

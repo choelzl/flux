@@ -934,6 +934,34 @@ def flows(r: Run) -> None:
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
 
+    def raw_network_setting():
+        """Only an admin can opt an individual app into raw transports, saved from its checkbox."""
+        r.login("ada")
+        r.page("#/u/bob/app/sw/settings/loop", "document.querySelector('#adv-raw-network')", "the app's raw-network setting")
+        r.check("Raw TCP/UDP is off by default", not b.js("return document.querySelector('#adv-raw-network').checked"))
+        b.click("#adv-raw-network")
+        b.wait("[...document.querySelectorAll('#main .save-mark')].some(x => x.dataset.state === 'saved')", what="raw networking saved")
+        got = json.loads(r.api("/apps/sw/env?owner=bob")["body"])
+        r.check("The admin checkbox enables raw networking for this app", got["advanced"].get("raw_network") is True, str(got["advanced"]))
+        r.page("#/u/bob/app/sw/settings/loop", "document.querySelector('#adv-raw-network')", "the saved app setting")
+        r.check("Raw TCP/UDP remains enabled after reopening Settings", b.js("return document.querySelector('#adv-raw-network').checked"))
+        r.clean("raw-network admin setting")
+        r.login("bob")
+        r.page("#/app/sw/settings/loop", "document.querySelector('#main').textContent.includes('(admin only)')", "the owner's read-only advanced settings")
+        r.check("The owner sees raw networking enabled without an editable checkbox", not b.js("return !!document.querySelector('#adv-raw-network')")
+                and "raw TCP/UDP allowed" in r.text())
+        r.check("The owner cannot change raw networking through the API", r.api("/apps/sw/advanced", "PUT", {"raw_network": False})["status"] == 403)
+        b.js("window.__e2e.errors.splice(0); return 1")           # the expected refusal
+        r.login("ada")
+        r.page("#/u/bob/app/sw/settings/loop", "document.querySelector('#adv-raw-network')", "disabling raw networking")
+        b.click("#adv-raw-network")
+        b.wait("[...document.querySelectorAll('#main .save-mark')].some(x => x.dataset.state === 'saved')", what="proxy-only networking saved")
+        got = json.loads(r.api("/apps/sw/env?owner=bob")["body"])
+        r.check("Disabling raw TCP/UDP restores the proxy-only default", "raw_network" not in got["advanced"], str(got["advanced"]))
+        r.clean("raw-network setting disabled")
+        r.login("bob")
+    r.step("raw network setting", raw_network_setting)
+
     def timeline_categories():
         """Broad work lanes and agent portions, using the real journal aggregation in a deterministic page fixture."""
         from flux_web.timeline import timeline

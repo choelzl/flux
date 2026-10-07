@@ -187,8 +187,11 @@ def machine_env(env: dict[str, str], cfg: dict[str, Any], adv: dict[str, Any]) -
         env["PATH"] = os.pathsep.join([*extra, *[d for d in have if d]])   # the sandbox mounts each, read-only
     env.pop("FLUX_SANDBOX_ALLOW", None)
     env.pop("FLUX_SANDBOX_NET", None)
+    env.pop("FLUX_SANDBOX_RAW_NETWORK", None)
     if env.get("FLUX_SANDBOX") == "0":
         return ""                                         # on the host: the admin chose this loop's network as the machine's
+    if adv.get("raw_network") is True:
+        env["FLUX_SANDBOX_RAW_NETWORK"] = "1"
     loop = [str(x) for x in adv.get("allow") or []]
     if cfg.get("network") == "allowlist":
         allow = [*(cfg.get("allow") or []), *loop]
@@ -231,6 +234,7 @@ def _net_said(allow: list[str]) -> str:
 ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memory limit (e.g. 16g)", "cpus": "CPUs (e.g. 8)",
             "pids": "processes at most", "tmp_size": "scratch /tmp size (e.g. 20g)",
             "allow": "hosts this loop may reach as well (D698)",
+            "raw_network": "allow native TCP/UDP under an allowlist (off: HTTP(S) proxy only)",
             "parallel": "parallel work allowed: the document's workers and parts at once (off: one at a time, D741)",
             "mounts": "host folders in the sandbox, read-only or read-write (D936)"}
 
