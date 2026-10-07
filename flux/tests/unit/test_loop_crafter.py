@@ -442,31 +442,36 @@ def test_the_estimates_say_what_task_check_says(tmp_path):
     assert said == BUILT["explained"]["estimates"]
 
 
-def test_the_loop_page_lists_the_crafters_boxes():
-    """guide/loop-shape.md shows the crafter's drawing and explains it: its table has one row per
-    box of the drawing, under the drawing's title, with the box's `flow:` key and every word the
-    crafter can write for it."""
-    page = (REPO / "website/docs/guide/loop-shape.md").read_text()
-    assert 'id="flux-loop-drawing"' in page and "assets/crafter.js" in page
-    rows = {}
-    for line in page.split("## The boxes", 1)[1].split("### ", 1)[0].splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.startswith("|") and len(cells) == 4 and not set(cells[0]) <= set("-"):
-            rows[cells[0]] = cells
-    rows.pop("box")
-    boxes = BUILT["boxes"]
-    assert sorted(rows) == sorted(b["title"] for b in boxes.values())
-    for key, box in boxes.items():
-        _, flow_key, does, choices = rows[box["title"]]
-        written = {"dse": "orchestrate"}.get(key, key)        # D797: the search is said as `orchestrate`
-        assert flow_key == (f"`{written}`" if box["flow"] else ""), key
-        assert does.startswith(box["says"]), (key, does)
-        said = set(re.findall(r"`\{?(\w+)", choices))
-        for value in box["values"]:
-            if value == "default" or value.startswith("agent:") or len(box["values"]) == 1:
-                continue                                # unsaid, `{agent: ...}` (below the table), fixed
-            assert value in said, (key, value, choices)
-        if any(v.startswith("agent:") for v in box["values"]):
-            assert "coding agent" in choices, key
-        if len(box["values"]) == 1:
-            assert "**fixed**" in choices, key
+def test_the_crafter_page_mounts_the_builder_and_links_its_guides():
+    """The interactive form lives on its own page beside the written guides."""
+    guide = REPO / "website/docs/guide"
+    page = (guide / "loop-crafter.md").read_text()
+    assert 'id="flux-crafter"' in page
+    for asset in ("crafter.js", "crafter.css"):
+        assert f'"../../assets/{asset}"' in page
+        assert (ASSETS / asset).is_file()
+    links = set(re.findall(r"\]\(([^)]+)\)", page))
+    assert {"tutorial.md", "build-your-own.md", "parameters.md"} <= links
+    for link in links:
+        assert (guide / link).is_file(), link
+
+
+def test_the_guides_document_the_crafters_flow_and_search_settings():
+    """Public fields belong in the reference; search choices belong in the search guide."""
+    guide = REPO / "website/docs/guide"
+    reference = (guide / "parameters.md").read_text()
+    fields = set(re.findall(r"^\| `(flow\.[^`]+)` \|", reference, re.M))
+    for key, box in BUILT["boxes"].items():
+        if box["flow"] or key == "measure":
+            written = "orchestrate.dse" if key == "dse" else key
+            assert f"flow.{written}" in fields, key
+    knowledge = reference.split("### Knowledge settings", 1)[1].split("## Search settings", 1)[0]
+    for key in ("digest", "lessons"):
+        assert f"| `{key}` |" in knowledge, key
+
+    search = (guide / "loop-shape.md").read_text()
+    columns = re.findall(r"^\| (`[^|]+`) \|", search, re.M)
+    choices = set(re.findall(r"`(\w+)`", " ".join(columns)))
+    for value in BUILT["boxes"]["dse"]["values"]:
+        if value != "none" and not value.startswith("agent:"):
+            assert value in choices, value
