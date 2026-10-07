@@ -126,10 +126,10 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
     } };
 }
 
-/** Make or change a loop's problem, three ways (D704). New: the configurator, an upload, or an
-    agent that writes it from a description and files. Existing: the configurator, the document
+/** Make or change a loop's problem (D704). New: a starter or upload, the configurator, an
+    agent that writes it from a description and files, or a clone. Existing: the configurator, the document
     and its files edited directly, or an agent that revises it as told. */
-const CONFIG_MODES = { empty: "Empty loop", configurator: "Configurator", upload: "Upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
+const CONFIG_MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 /** D824: a loop's problem cloned into a new loop of one's own. */
 async function cloneDialog(name, owner) {
   const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
@@ -144,17 +144,6 @@ async function cloneDialog(name, owner) {
   toast(`${got.name}: cloned`, "ok");
   location.hash = `#/app/${enc(got.name)}`;
 }
-/** D825: a loop's baseline -- the skeleton problem.yaml, the README of its parts, library/ -- then its configurator. */
-function emptyForm(body) {
-  const name = h("input", { id: "empty-name", placeholder: "my_loop", class: "mono", autocomplete: "off" });
-  body.replaceChildren(card(null, [h("p", { class: "muted" }, "A skeleton problem.yaml, a README and an empty library/."),
-    h("label", { class: "stack" }, "Its name", name),
-    h("div", { class: "form-actions" }, act("Make the empty loop", async () => {
-      const got = await api("/apps/new-empty", { method: "POST", body: { name: name.value.trim() } });
-      toast(`${got.name}: fill in its problem`, "ok");
-      location.hash = `#/app/${enc(got.name)}/settings/problem`;
-    }, { cls: "primary" }))]));
-}
 async function cloneForm(body) {
   const loops = await api("/loops");
   const pick = h("select", { id: "clone-from", "aria-label": "The loop to clone" },
@@ -168,7 +157,7 @@ async function configurePage(name, owner, mode = "configurator") {
   const show = pageShow();
   const isNew = !name;
   const host = h("div", {});
-  const sub = isNew ? "Build the problem with the configurator, upload one you have, or have an agent write it from what you tell it and the files you give it."
+  const sub = isNew ? "Start empty, upload a loop, build it with the configurator, or have an agent write it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
   const hd = head(isNew ? "New loop" : h("span", {}, "Configure ", h("a", { href: appHref(owner, name) }, name)), sub);
   hd.classList.add("configure-head");                     // D913: on a phone, its line of ways is the menu's
@@ -200,7 +189,8 @@ function draftUsed(d) {
 
 function configureInto(host, name, owner, mode, base, { small = false, barHost = null } = {}) {
   const isNew = !name;
-  const modes = isNew ? ["empty", "configurator", "upload", "agent", "clone"] : ["configurator", "edit", "agent"];
+  const modes = isNew ? ["upload", "configurator", "agent", "clone"] : ["configurator", "edit", "agent"];
+  if (isNew && mode === "empty") mode = "upload";          // older links open the combined form
   if (!modes.includes(mode)) mode = "configurator";
   const draft = isNew ? (DRAFT = DRAFT || storedDraft() || newDraft()) : null;
   const body = h("div", {}), tabBar = h("div", { class: (small ? "subtabs" : "tabs") + " config-modes", role: "tablist" });
@@ -232,7 +222,6 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
       else if (mode === "upload") body.replaceChildren(uploadForm());
       else if (mode === "edit") await directEdit(body, name);
       else if (mode === "clone") await cloneForm(body);
-      else if (mode === "empty") emptyForm(body);
       else await (isNew ? newByAgent(body, draft, drawKept) : reviseByAgent(body, name, owner));
     } catch (x) { body.replaceChildren(card(null, h("p", { class: "err" }, x.message))); }
   }

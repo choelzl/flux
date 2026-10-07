@@ -3,7 +3,9 @@ applications folder of this Flux, which an admin makes a loop of theirs, its fil
 
 from __future__ import annotations
 
+import io
 import os
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,6 +38,28 @@ def _client(app, name, password):
     c = TestClient(app)
     assert c.post("/api/login", json={"name": name, "password": password}, headers=H).status_code == 200
     return c
+
+
+@pytest.mark.parametrize("prefix", ["", "my-loop/", "my-loop\\"])
+def test_a_zip_can_hold_the_files_or_their_containing_folder(server, prefix):
+    app, tmp = server
+    bob = _client(app, "bob", "another long secret")
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        if prefix:
+            z.writestr(prefix.replace("\\", "/"), b"")
+        z.writestr(prefix + "problem.yaml", DOC)
+        z.writestr(prefix + "scripts/check.py", b"print('ok')\n")
+        z.writestr(prefix + "library/spec.md", b"the specification")
+    response = bob.post("/api/apps", data={"name": "zipped"},
+                        files=[("files", ("my-loop.ZIP", archive.getvalue(), "application/zip"))], headers=H)
+    assert response.status_code == 200, response.text
+    assert response.json()["document"] == "problem.yaml"
+    loop = tmp / "data/users/bob/apps/zipped"
+    assert (loop / "problem.yaml").read_bytes() == DOC
+    assert (loop / "scripts/check.py").read_bytes() == b"print('ok')\n"
+    assert (loop / "library/spec.md").read_bytes() == b"the specification"
+    assert not (loop / "my-loop").exists(), "only the containing folder is removed"
 
 
 def test_a_large_file_arrives_in_parts_and_a_batch_says_its_limit(server):

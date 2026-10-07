@@ -206,13 +206,19 @@ flux user add ada --admin            # the first account, on the server's machin
 flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 behind a TLS proxy, with --secure-cookie
 ```
 
-- **New loop**, three ways (D704; no Example since D767): **Configurator** (below; the form's **Loop name** is the loop's
+- **New loop**, four ways: **Create or upload** starts an empty loop when no files are selected,
+  or imports a folder, files, or a single `.zip`. The empty loop opens in the configurator with
+  a starter `problem.yaml`, README, and empty `library/`. A ZIP can have its files at the root
+  or inside one containing folder (as Windows commonly creates); that containing folder is
+  removed, while nested scripts, resources, and library folders are kept. **Clear files** returns
+  to empty creation. **Configurator** (below; the form's **Loop name** is the loop's
   name and its problem's id; the checklist shows what is left to do; who does each step is folded),
-  **Upload** (a folder, files or a `.zip`), or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
+  or **Agent**: name the loop, say what it should do, attach what it should read (a spec,
   a reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex or Flux's own
   model; one not installed says so). The agent writes the problem document and the files it names
   -- `flux ask --no-run` in the sandbox, with your model settings -- and the document is checked;
   nothing runs. The loop's Overview follows it (its log, Stop), and you review it before starting.
+  **Clone a loop** copies an existing loop's problem without its runs.
 - **Configure**, three ways: **Configurator**; **Direct edit** (the document's YAML as written,
   saved with its diff shown, its files beside); **Agent**: say what should change, and the agent
   revises the document and its files in place, keeping its name; its diff is shown when done. It
@@ -228,9 +234,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   of their own) is kept exactly as written and listed beside the file. Comments are not kept.
   A save first shows what it changes, line by line, and writes only when you confirm it.
 - **Loops list:** search, filter by state (running, idle, failed), order by activity, name,
-  accepted designs or decision. **New loop › Upload** takes a dropped folder, files or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
+  accepted designs or decision. **New loop › Create or upload** takes a dropped folder, files or a `.zip`, of any size (a progress dialog Escape does not close; Cancel stops it, and a file
   cut midway is discarded): the page sends it in batches (300 files, 40 MB) and a file over 40 MB in
-  parts of 32 MB, with a progress bar. A loop holds up to 100,000 files and 8 GB of its own; one
+  parts of 32 MB, with a progress bar. A single ZIP is sent intact for the server to unpack.
+  A loop holds up to 100,000 files and 8 GB of its own; one
   request from elsewhere, 900 files and 256 MB (a zip, up to the loop's limits). A failure is said
   above the dialog, as is any error the page did not expect. Each loop shows its accepted and measured designs and the
   decision's number on the first objective (✓ or ✗ against its limit).

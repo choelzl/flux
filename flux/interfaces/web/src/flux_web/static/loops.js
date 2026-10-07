@@ -99,8 +99,11 @@ async function sendFiles(name, entries, { create = false, folder = "", onProgres
   list.sort((a, b) => (isDoc(b) ? 1 : 0) - (isDoc(a) ? 1 : 0));
   const total = list.reduce((n, e) => n + e.file.size, 0);
   let sent = 0, written = 0, made = !create;
-  const small = list.filter(e => e.file.size <= BATCH_BYTES), big = list.filter(e => e.file.size > BATCH_BYTES);
-  if (create && !small.some(isDoc)) throw new Error("No problem document (problem.yaml) at the top of the upload.");
+  // The server unpacks a sole ZIP and removes its containing folder. Send it intact, even
+  // above the normal batching threshold: parts upload requires a loop that already exists.
+  const archive = create && list.length === 1 && /\.zip$/i.test(list[0].path);
+  const small = list.filter(e => archive || e.file.size <= BATCH_BYTES), big = list.filter(e => !archive && e.file.size > BATCH_BYTES);
+  if (create && !archive && !small.some(isDoc)) throw new Error("No problem document (problem.yaml) at the top of the upload. Choose a ZIP on its own to unpack it.");
   for (let i = 0; i < small.length;) {
     const batch = [];
     let bytes = 0;
@@ -226,27 +229,44 @@ function loopsBrowser(loops, { who = false, memo } = {}) {
   return box;
 }
 
-/** Upload a loop (D696, D704: a tab of New loop): a folder or files dropped or chosen, a `.zip`,
-    under a name. */
+/** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 function uploadForm() {
-  const name = h("input", { placeholder: "my_adder", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%", id: "up-name" });
+  const name = h("input", { placeholder: "my_loop", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%", id: "up-name", autocomplete: "off" });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
   let dropped = [];
   const said = h("div", { class: "muted small" });
-  const dz = dropZone("Drop the loop's folder, its files or a .zip here", (got, dir) => {
-    dropped = got;
+  const clear = h("button", { type: "button", class: "small", hidden: true, onclick: () => {
+    files.value = ""; folder.value = ""; dropped = []; ready([]);
+  } }, "Clear files");
+  const ready = (got, dir = null) => {
     if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^[^A-Za-z0-9]+/, "");
-    said.replaceChildren(`${got.length} file(s) ready`, dir ? ` from ${dir}/` : "");
+    said.replaceChildren(got.length ? `${got.length} file(s) ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator.", dir ? ` from ${dir}/` : "");
+    clear.hidden = !got.length;
+  };
+  const dz = dropZone("Drop the loop's folder, its files or a .zip here", (got, dir) => {
+    files.value = ""; folder.value = ""; dropped = got; ready(got, dir);
   });
-  const go = act("Upload", async () => {
+  files.addEventListener("change", () => {
+    folder.value = ""; dropped = []; ready([...files.files]);
+  });
+  folder.addEventListener("change", () => {
+    files.value = ""; dropped = []; ready([...folder.files], folder.files[0]?.webkitRelativePath.split("/")[0]);
+  });
+  ready([]);
+  const go = act("Create loop", async () => {
     // a chosen folder names every file under its own name: that name goes (D702: once, here)
     const picked = [...folder.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
     const top = new Set(picked.map(e => e.path.split("/")[0]));
     const fromFolder = top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
     const chosen = [...[...files.files].map(f => ({ file: f, path: f.name })), ...fromFolder, ...dropped];
-    if (!chosen.length) { toast("Drop or choose the loop's files first.", "warn"); return; }
     if (!name.value.trim()) { toast("Name the loop first.", "warn"); name.focus(); return; }
+    if (!chosen.length) {
+      const got = await api("/apps/new-empty", { method: "POST", body: { name: name.value.trim() } });
+      toast(`${got.name}: fill in its problem`, "ok");
+      location.hash = `#/app/${enc(got.name)}/settings/problem`;
+      return;
+    }
     const pd = progressDialog("Uploading", `${chosen.length} file(s) to ${name.value.trim()}`);
     try {
       const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: pd.set, signal: pd.signal });
@@ -257,8 +277,8 @@ function uploadForm() {
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
     }
   }, { cls: "primary" });
-  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "A problem.yaml and its files: a folder, files or a .zip."),
-    h("label", { class: "stack" }, "Name", name), dz, said,
+  return card(null, h("div", { class: "upload" }, h("p", { class: "muted" }, "Start empty, or upload a problem.yaml and its files. A ZIP can contain the loop's folder; choose the ZIP on its own."),
+    h("label", { class: "stack" }, "Name", name), dz, h("div", { class: "row" }, said, clear),
     h("div", { class: "row" }, h("label", { class: "stack" }, "or choose files / a .zip", files), h("label", { class: "stack" }, "or a folder", folder)),
     h("div", { class: "form-actions" }, go)));
 }

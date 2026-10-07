@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 import traceback
+import zipfile
 from pathlib import Path
 
 HOME = Path(os.environ.get("FLUX_E2E_HOME") or Path.home() / "snap" / "firefox" / "common" / "flux-e2e")
@@ -321,7 +322,7 @@ class Run:
 
     def button(self, label, scope="#main"):
         """Click the button (or link) whose text is `label`, in `scope`; a tab only when the scope
-        is a tab bar (the Upload tab and the Upload button share their label)."""
+        is a tab bar."""
         ok = self.b.js("""const [label, scope] = arguments;
             const tabs = scope.includes('tabs');
             const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
@@ -395,7 +396,7 @@ def flows(r: Run) -> None:
     def new_loop_tabs():
         r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("New loop has five ways (D767, D824: a loop cloned, D825: an empty loop)", tabs == ["Empty loop", "Configurator", "Upload", "Agent", "Clone a loop"], str(tabs))
+        r.check("New loop combines empty creation and upload", tabs == ["Create or upload", "Configurator", "Agent", "Clone a loop"], str(tabs))
         r.check("New loop has no folder panel (D827)", not b.js("return !!document.querySelector('details.folder-roles')"))
         b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
         r.clean("New loop › Configurator")
@@ -483,19 +484,61 @@ def flows(r: Run) -> None:
     r.step("draft across modes", draft_across_modes)
 
     def upload():
-        r.page("#/configure/upload", "document.querySelector('#up-name')", "the Upload tab")
+        r.page("#/configure/upload", "document.querySelector('#up-name')", "Create or upload")
         b.type("#up-name", "sw")
         inputs = b.js("return [...document.querySelectorAll('#main input[type=file]')].length")
         r.check("the upload has a file and a folder picker", inputs == 2, str(inputs))
         paths = [str(f) for f in sorted((r.files / "sw").iterdir()) if f.is_file()]
         b.attach("#main input[type=file]:not([webkitdirectory])", "\n".join(paths))   # several at once: one per line
-        r.button("Upload")
+        r.button("Create loop")
         b.wait("location.hash === '#/app/sw'", timeout=30, what="the new loop's page")
         head = b.wait("document.querySelector('.page-head') && document.querySelector('.page-head').innerText.includes('problem.yaml')"
                       " && document.querySelector('.page-head').innerText", what="the loop's own header")
         r.check("uploaded: the loop's page with its document", "problem.yaml" in head, head)
         r.clean("upload")
     r.step("upload", upload)
+
+    def upload_zip():
+        """A ZIP goes intact to the server, including one above the ordinary batch size."""
+        for name, prefix in (("zip-root", ""), ("zip-folder", "sw/")):
+            archive = r.files / f"{name}.ZIP"
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as z:
+                if prefix:
+                    z.writestr(prefix, "")
+                for f in sorted((r.files / "sw").iterdir()):
+                    if f.is_file():
+                        z.write(f, prefix + f.name)
+                z.writestr(prefix + "library/spec.md", "the specification")
+                if prefix:
+                    z.writestr(prefix + "resources/data.bin", b"\0" * (40 * 2**20 + 1))
+            r.page("#/configure/upload", "document.querySelector('#up-name')", "Create or upload a ZIP")
+            b.type("#up-name", name)
+            b.attach("#main input[type=file]:not([webkitdirectory])", str(archive))
+            r.button("Create loop")
+            b.wait(f"location.hash === '#/app/{name}'", timeout=45, what="the zipped loop's page")
+            files = [f["path"] for f in json.loads(r.api(f"/apps/{name}/files")["body"])]
+            spec = r.api(f"/apps/{name}/file?path=library/spec.md")
+            r.check(f"{name}: unpacked at the loop root, keeping nested files", "problem.yaml" in files
+                    and spec["status"] == 200 and spec["body"] == "the specification" and "sw" not in files, str(files))
+            r.clean(name)
+        r.check("the folder ZIP crosses the ordinary upload batch size", archive.stat().st_size > 40 * 2**20)
+    r.step("upload zip", upload_zip)
+
+    def empty_loop():
+        r.page("#/configure/empty", "document.querySelector('#up-name')", "the old Empty loop link")
+        r.check("old empty-loop links select the combined form", b.js("return document.querySelector('.config-modes .on').textContent") == "Create or upload")
+        paths = [str(r.files / "sw/problem.yaml")]
+        b.attach("#main input[type=file]:not([webkitdirectory])", "\n".join(paths))
+        r.button("Clear files")
+        r.check("clearing files returns to empty-loop creation", b.js("return !document.querySelector('input[type=file]').files.length")
+                and "Without files:" in r.text())
+        b.type("#up-name", "blank")
+        r.button("Create loop")
+        b.wait("location.hash === '#/app/blank/settings/problem' && document.querySelector('.flux-crafter')", timeout=20, what="the empty loop's configurator")
+        files = [f["path"] for f in json.loads(r.api("/apps/blank/files")["body"])]
+        r.check("an empty loop is the baseline, opened in its configurator", sorted(files) == ["README.md", "library", "problem.yaml"], str(files))
+        r.clean("empty loop")
+    r.step("empty loop", empty_loop)
 
     def raw_and_fullscreen():
         r.page("#/app/sw/files", "document.querySelector('#main ul.files')", "Files")
@@ -2107,8 +2150,7 @@ def flows(r: Run) -> None:
     r.step("invitation", invitation)
 
     def clone():
-        """D824: a loop cloned from New loop (never from a loop's page, D825): its problem, none of its runs.
-        D825: an empty loop, the baseline, opened in its configurator."""
+        """D824: a loop cloned from New loop (never from a loop's page, D825): its problem, none of its runs."""
         r.login("bob")
         r.page("#/app/sw", "document.querySelector('.page-head')", "sw")
         r.check("a loop's page offers no clone", not b.js("return [...document.querySelectorAll('.page-head button')].some(x => x.textContent.trim() === 'Clone…')"))
@@ -2121,13 +2163,7 @@ def flows(r: Run) -> None:
         b.wait("location.hash === '#/app/sw-copy'", timeout=20, what="the clone's page")
         files = [f["path"] for f in json.loads(r.api("/apps/sw-copy/files?ignored=true")["body"])]
         r.check("the clone has the problem, not the runs", "problem.yaml" in files and "out" not in files and "runs" not in files, str(files))
-        r.page("#/configure/empty", "document.querySelector('#empty-name')", "New loop › Empty loop")
-        b.js("document.querySelector('#empty-name').value = 'blank'; return 1")
-        r.button("Make the empty loop", "#main")
-        b.wait("location.hash === '#/app/blank/settings/problem' && document.querySelector('.flux-crafter')", timeout=20, what="the empty loop's configurator")
-        files = [f["path"] for f in json.loads(r.api("/apps/blank/files")["body"])]
-        r.check("an empty loop is the baseline, opened in its configurator", sorted(files) == ["README.md", "library", "problem.yaml"], str(files))
-        r.clean("clone and empty loop")
+        r.clean("clone")
     r.step("clone", clone)
 
     def sorted_lists():
