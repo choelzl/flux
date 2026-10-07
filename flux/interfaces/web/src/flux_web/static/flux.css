@@ -356,8 +356,10 @@ table.designs td { white-space: nowrap; }
 .hl .tk-sub { color: var(--tk-sub); font-weight: 600; }
 .hl .tk-punc { color: var(--tk-punc); }
 .editor { position: relative; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
-.editor-layer, .editor-input { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 10px 12px; margin: 0;
-  white-space: pre; tab-size: 4; letter-spacing: normal; word-spacing: normal; border: 0; }
+.editor .editor-layer, .editor .editor-input { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 10px 12px; margin: 0;
+  white-space: pre; tab-size: 4; letter-spacing: normal; word-spacing: normal; border: 0;
+  font-weight: 400; font-style: normal; font-variant-ligatures: none; }
+.editor .editor-layer span { font-weight: inherit; font-style: inherit; }
 .editor-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: var(--ink); }
 .editor-input { position: relative; display: block; width: 100%; min-height: 440px; resize: vertical; background: transparent;
   color: transparent; caret-color: var(--ink); overflow: auto; border-radius: 7px; }
@@ -520,7 +522,7 @@ ul.flist li a { flex: 1; }
 .link.danger-link { color: var(--bad); font-size: 16px; padding: 0 6px; }
 .narrow-in { max-width: 220px; }
 .file-edit { display: grid; gap: 10px; min-width: min(760px, 86vw); }
-.file-edit .editor { height: 52vh; }
+.file-edit .editor-input { height: 52vh; }
 dialog.dlg:has(.file-edit) { width: min(900px, calc(100vw - 32px)); }
 .set-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; margin: 10px 0; }
 fieldset.set-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; margin: 0; display: grid; gap: 8px; }

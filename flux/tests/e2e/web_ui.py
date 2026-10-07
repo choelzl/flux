@@ -533,6 +533,55 @@ def flows(r: Run) -> None:
             b.js("window.fetch = window.__viewerFetch; delete window.__viewerFetch; return 1")
     r.step("raw and fullscreen", raw_and_fullscreen)
 
+    def editor_alignment():
+        r.page("#/app/sw/files", "document.querySelector('#main ul.files')", "Files")
+        b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.wait("document.querySelector('.viewer .editor textarea')", what="file editor")
+        b.js("const ta = document.querySelector('.editor-input'); window.__editorOriginal = ta.value;"
+             " ta.value = Array.from({length: 180}, (_, i) => `row_${i}:\\t'${'x'.repeat(180)}' # a comment`).join('\\n') + '\\n';"
+             " ta.dispatchEvent(new Event('input')); return 1")
+        b.wait("document.querySelector('.editor-layer').textContent.startsWith('row_0:')", what="highlighted long file")
+        geometry = """const ta = document.querySelector('.editor-input'), layer = document.querySelector('.editor-layer');
+          const a = getComputedStyle(ta), b = getComputedStyle(layer);
+          return {top: ta.scrollTop, highlightedTop: layer.scrollTop, left: ta.scrollLeft, highlightedLeft: layer.scrollLeft,
+            height: ta.scrollHeight, highlightedHeight: layer.scrollHeight, width: ta.scrollWidth, highlightedWidth: layer.scrollWidth,
+            viewport: [ta.clientWidth, ta.clientHeight], highlightedViewport: [layer.clientWidth, layer.clientHeight],
+            font: [a.fontSize, a.lineHeight, a.fontFamily, a.fontWeight, a.fontStyle, a.fontVariantLigatures],
+            highlightedFont: [b.fontSize, b.lineHeight, b.fontFamily, b.fontWeight, b.fontStyle, b.fontVariantLigatures],
+            tokenFonts: [...new Set([...layer.querySelectorAll('span')].map(s => { const t = getComputedStyle(s); return t.fontWeight + ':' + t.fontStyle; }))]};"""
+        def aligned(where):
+            g = b.js(geometry)
+            r.check(f"editor text and caret align {where}", abs(g["height"] - g["highlightedHeight"]) <= 1
+                    and g["highlightedWidth"] >= g["width"]
+                    and abs(g["top"] - g["highlightedTop"]) <= 1 and abs(g["left"] - g["highlightedLeft"]) <= 1
+                    and g["font"] == g["highlightedFont"] and g["viewport"] == g["highlightedViewport"]
+                    and g["tokenFonts"] == [g["font"][3] + ":" + g["font"][4]], str(g))
+        try:
+            aligned("before scrolling")
+            for pos, label in ((0.5, "halfway down"), (1, "at the bottom and right edge")):
+                b.js("const ta = document.querySelector('.editor-input'); ta.scrollTop = ta.scrollHeight * arguments[0]; ta.scrollLeft = ta.scrollWidth * arguments[0]; ta.dispatchEvent(new Event('scroll')); return 1", pos)
+                aligned(label)
+            r.button("Fullscreen", ".viewer")
+            b.wait("document.querySelector('dialog.fullscreen-view .editor-input')", what="fullscreen editor")
+            b.js("const ta = document.querySelector('.editor-input'); ta.scrollTop = ta.scrollHeight; ta.dispatchEvent(new Event('scroll')); return 1")
+            aligned("after expanding fullscreen")
+            b.keys(b.ESCAPE)
+            b.wait("!document.querySelector('dialog.fullscreen-view[open]')", what="editor restored")
+            b.wait("document.querySelector('.editor-layer').clientHeight === document.querySelector('.editor-input').clientHeight && document.querySelector('.editor-layer').clientWidth === document.querySelector('.editor-input').clientWidth", what="restored highlight viewport")
+            aligned("after restoring the editor")
+            b.js("document.querySelector('.editor-input').style.height = '520px'; return 1")
+            b.wait("document.querySelector('.editor-layer').clientHeight === document.querySelector('.editor-input').clientHeight", what="highlight layer resized")
+            b.js("const ta = document.querySelector('.editor-input'); ta.scrollTop = ta.scrollHeight; ta.dispatchEvent(new Event('scroll')); return 1")
+            aligned("after resizing at the bottom")
+            b.js("const ta = document.querySelector('.editor-input'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return 1")
+            b.keys("z")
+            b.wait("document.querySelector('.editor-layer').textContent.endsWith('\\nz')", what="typed character highlighted at the bottom")
+            aligned("after typing on the last line")
+            r.clean("editor alignment")
+        finally:
+            b.js("const ta = document.querySelector('.editor-input'); ta.value = window.__editorOriginal; ta.dispatchEvent(new Event('input')); delete window.__editorOriginal; return 1")
+    r.step("editor alignment", editor_alignment)
+
     def run_history():
         events = [{"ev": "hello", "t": 1001}, {"ev": "mark", "name": "pass", "n": 1, "t": 1002},
                   {"ev": "start", "id": 1, "name": "generation: old design", "parent": None, "t": 1003},

@@ -105,12 +105,25 @@ export function codeEditor(text, lang, { readonly = false } = {}) {
   layer.setAttribute("aria-hidden", "true");
   const ta = document.createElement("textarea");
   ta.className = "editor-input";
+  ta.wrap = "off";
   ta.spellcheck = false;
   ta.value = text;
   if (readonly) ta.readOnly = true;
   let t = null;
   const paint = () => { layer.replaceChildren(highlight(ta.value + (ta.value.endsWith("\n") ? " " : ""), lang)); sync(); };
-  const sync = () => { layer.scrollTop = ta.scrollTop; layer.scrollLeft = ta.scrollLeft; };
+  const sync = () => {
+    if (!ta.clientWidth || !ta.clientHeight) return;
+    // Match the viewport inside the textarea's scrollbars; a larger layer clamps early at the bottom.
+    layer.style.width = `${ta.clientWidth}px`;
+    layer.style.height = `${ta.clientHeight}px`;
+    layer.scrollTop = ta.scrollTop; layer.scrollLeft = ta.scrollLeft;
+  };
+  let attached = false;
+  const resize = new ResizeObserver(() => {
+    if (ta.isConnected) { attached = true; sync(); }
+    else if (attached) resize.disconnect();               // discarded editors should stop observing
+  });
+  resize.observe(ta);
   ta.addEventListener("input", () => { clearTimeout(t); t = setTimeout(paint, ta.value.length > 60000 ? 250 : 40); });
   ta.addEventListener("scroll", sync);
   ta.addEventListener("keydown", (e) => {                     // Tab indents, as an editor does
