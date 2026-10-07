@@ -458,7 +458,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Streams:** the Live and Log tabs say whether their stream is live. A dropped stream is opened
   again where it left off (no line twice, none lost), waiting up to 30 s between tries, and a
   banner says when the server cannot be reached. A stopped server waits at most 3 s for open
-  streams; a restarted one finds its running loops again.
+  streams; a restarted one finds its running loops again. The installed user service stops only
+  the server on updates (`KillMode=process`); its loop sessions and containers continue running.
+  For an older service installation, re-run `scripts/install-service.py` from `flux/` with the
+  same server arguments, then `systemctl --user daemon-reload` before restarting it.
 - **The agent by default** (Admin › Agents and models, Account): who writes problems and answers
   questions unless chosen otherwise (an agent's name, or model); a user's own over the admin's. An agent's
   program is Admin › Agents' (D807), for every run; its folder goes on the run's PATH, so the sandbox mounts

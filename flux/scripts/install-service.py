@@ -53,7 +53,9 @@ ExecStart={command}
 Restart=always
 RestartSec=10
 TimeoutStopSec=30
-KillMode=control-group
+# Runs have their own sessions and outlive the web server; its next start finds them again.
+# Stop only the server on updates. Killing the whole cgroup also SIGTERMs Podman/crun loops.
+KillMode=process
 
 [Install]
 WantedBy=default.target

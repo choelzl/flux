@@ -154,7 +154,13 @@ or edits to `flake.nix` / `flake.lock`. Ordinary uncommitted Python edits requir
 `systemctl --user restart flux.service`. The watcher does not fetch updates, change the
 lock file, or restart a manually stopped server. Updating Nix dependencies can take time
 to build or download; follow the journal for progress. Server restarts disconnect live
-requests and can interrupt running tasks, so update between runs.
+requests, but running loops keep their own sessions and the restarted server finds them again.
+The service stops only its main process (`KillMode=process`), so an update does not send
+SIGTERM to their Podman/crun containers. Agent logins and connection Tests from the old
+server are cleaned up separately.
+
+If you installed an earlier version, re-run the installer with your existing server arguments
+and run `systemctl --user daemon-reload` before the next restart to apply this stop policy.
 
 For startup at boot and operation after logout, enable user lingering once with
 `loginctl enable-linger "$USER"` (your system may require administrator authorization).
