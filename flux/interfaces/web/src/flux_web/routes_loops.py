@@ -388,18 +388,75 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         store.audit(user.name, "write document", body.name)
         return {"name": body.name, **meta}
 
+    def reset_owner(name: str, user: User, owner: str | None) -> Workspace:
+        w, whose = reader(user, owner, name)
+        if whose.id != user.id:
+            raise HTTPException(403, "only the loop's owner may reset it")
+        try:
+            w.app(name)
+        except WorkspaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return w
+
+    @app.get("/api/apps/{name}/reset")
+    def reset_plan(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        from .reset import plan
+
+        w = reset_owner(name, user, owner)
+        try:
+            return plan(w, name, user.name)
+        except ValueError as exc:
+            raise fail(exc) from exc
+
+    @app.post("/api/apps/{name}/reset")
+    def reset_app(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        from .admin import _key, cache_root
+        from .confine import within
+        from .reset import clear, plan
+
+        w = reset_owner(name, user, owner)
+        if not maintenance._lock.acquire(blocking=False):
+            raise HTTPException(409, "wait for maintenance to finish first")
+        try:
+            # Starts and agent finalizers cannot recreate or write folders while they are cleared.
+            with runs.lifecycle_lock, authoring._lock, authoring._finishing, asks._lock:
+                affected = plan(w, name, user.name)
+                d = w.app(name)
+                if any(runs.live(r) for r in store.runs(user, name)):
+                    raise HTTPException(409, "stop the loop first")
+                within(d / "runs", d)            # agent status reads must stay in this loop
+                if authoring.state(d).get("running") or asks.running(d):
+                    raise HTTPException(409, "stop the loop's agents first")
+                key = _key(user.name, name)
+                if (cache_root() / key).exists() and any(
+                    _key(u.name, a["name"]) == key and (u.id, a["name"]) != (user.id, name)
+                    for u in store.users() for a in ws(u).apps()
+                ):
+                    raise HTTPException(409, "this loop shares a cache folder with another loop; cannot reset it safely")
+                clear(w, name, user.name)
+                store.clear_runs(user, name)
+                store.audit(user.name, "reset app", f"{name}: " + ", ".join(f["path"] for f in affected["folders"]))
+        except ValueError as exc:
+            raise fail(exc) from exc
+        except OSError as exc:
+            raise HTTPException(500, f"reset could not clear all files: {exc}") from exc
+        finally:
+            maintenance._lock.release()
+        return {"ok": name}
+
     @app.delete("/api/apps/{name}")
     def delete_app(name: str, user: User = Depends(user_of)) -> dict[str, str]:
-        if any(runs.live(r) for r in store.runs(user, name)):
-            raise HTTPException(409, "stop the loop first")
-        try:
-            ws(user).delete(name)
-        except WorkspaceError as exc:
-            raise fail(exc) from exc
-        store.server_set(f"env:loop:{user.name}:{name}", None)        # D697: its variables and settings go with it
-        store.server_set(f"adv:{user.name}:{name}", None)
-        store.server_set(f"share:{user.name}:{name}", None)
-        store.audit(user.name, "delete app", name)
+        with runs.lifecycle_lock:
+            if any(runs.live(r) for r in store.runs(user, name)):
+                raise HTTPException(409, "stop the loop first")
+            try:
+                ws(user).delete(name)
+            except WorkspaceError as exc:
+                raise fail(exc) from exc
+            store.server_set(f"env:loop:{user.name}:{name}", None)        # D697: its variables and settings go with it
+            store.server_set(f"adv:{user.name}:{name}", None)
+            store.server_set(f"share:{user.name}:{name}", None)
+            store.audit(user.name, "delete app", name)
         return {"ok": name}
 
     @app.get("/api/apps/{name}")

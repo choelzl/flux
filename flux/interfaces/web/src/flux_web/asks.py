@@ -113,7 +113,7 @@ class Asks:
             try:
                 st = json.loads(_text(d, "ask.json"))
             except (OSError, ValueError):
-                st = {}
+                return {}                              # a reset/forget may precede the waiting thread
             if st.get("ended") is None:
                 st.update(ended=time.time(), rc=rc, ok=(d / "answer.md").is_file() and rc in (0, None))
                 _write(d, "ask.json", json.dumps(st))

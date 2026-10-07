@@ -137,7 +137,7 @@ class Authoring:
         try:
             st = json.loads(f["state"].read_text())
         except (OSError, ValueError):
-            st = {}
+            return {"running": False, "ever": False}   # reset may have removed a completed job
         if st.get("ended") is not None:                 # done already, by the other
             st["running"] = False
             return st

@@ -372,6 +372,11 @@ class Store:
         with self._db() as db:
             return [_record_checked(dict(r)) for r in db.execute(q + " ORDER BY r.id DESC", args)]
 
+    def clear_runs(self, user: User, app: str) -> None:
+        """Forget a reset loop's saved starts; the caller has excluded live jobs and new starts."""
+        with self._db() as db:
+            db.execute("DELETE FROM runs WHERE user_id = ? AND app = ?", (user.id, app))
+
     def latest_run(self, user: User, app: str) -> dict[str, Any] | None:
         """The loop's latest start (D918): one row from the index, not every start checked."""
         with self._db() as db:

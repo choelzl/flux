@@ -401,11 +401,17 @@ def loop_files(app_dir: Path) -> dict[str, Path]:
 class RunManager:
     def __init__(self, store: Store, *, sandbox: bool = True, max_running: int = 4) -> None:
         self.store, self.sandbox, self.max_running = store, sandbox, max_running
+        self.lifecycle_lock = threading.RLock()       # a reset must not overlap a new launch
 
     # ---- start: the loop resumes from its record
     def start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any],
               by: User | None = None) -> None:
         """`user`: whose loop (its record, settings, limits); `by`: who started it, when another (D701)."""
+        with self.lifecycle_lock:
+            self._start(user, app, app_dir, document, doc_id, options, by)
+
+    def _start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any],
+               by: User | None = None) -> None:
         by = by or user
         paused = self.store.server_get("paused")
         if paused:

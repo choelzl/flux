@@ -1,7 +1,7 @@
 // Flux web: a loop's Settings tab (but the problem, configure.js's) -- its variables, its sharing,
-// the admin's advanced settings, its maintenance, Delete (D892: out of loopPage).
+// the admin's advanced settings, its maintenance, Reset and Delete (D892: out of loopPage).
 
-import { act, ago, api, card, confirmDialog, enc, h, skeleton, toast } from "./ui.js";
+import { act, ago, api, card, confirmDialog, dialog, enc, h, skeleton, toast } from "./ui.js";
 import { advancedCard, envEditor, envTable } from "./loops.js";
 import { route } from "./app.js";
 
@@ -50,11 +50,23 @@ async function settingsView(ctx) {
     e.user.length || e.server.length ? h("div", { class: "blk" }, h("h3", {}, "Under them"),
       envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))],
         new Set(e.loop.map(x => x.name)))) : ""]);
-  const danger = isOwner ? card("Delete this loop", [h("p", { class: "muted" }, "Its document, files, record and log go. This cannot be undone."),
-    h("div", { class: "form-actions" }, ctx.st.running ? h("span", { class: "muted" }, "Stop it first.") : act("Delete", async () => {
+  const danger = isOwner ? card("Reset or delete this loop", [
+    h("p", { class: "muted" }, "Reset clears generated results, logs, history, workbench and caches, keeping source files, settings and sharing. Delete removes the entire loop. Both are permanent."),
+    h("div", { class: "form-actions" }, ctx.st.running ? h("span", { class: "muted" }, "Stop it first.") : [act("Reset", async () => {
+      const plan = await api(`/apps/${enc(name)}/reset`);
+      const warning = h("div", {},
+        h("p", {}, h("strong", {}, "This cannot be undone."), " All results, passes, full logs and agent history will be lost."),
+        h("p", {}, "These folders and everything inside them will be removed:"),
+        h("ul", { class: "reset-folders" }, plan.folders.map(f => h("li", {}, h("code", {}, f.path), h("div", { class: "muted small" }, f.what)))),
+        h("p", {}, plan.history + " will also be cleared."),
+        h("p", {}, "Your problem document, source files, library, settings and sharing stay. Stop any running agents first."));
+      if (!await dialog(`Reset ${name}?`, warning, [["Cancel", false], ["Reset", true, "danger solid"]])) return;
+      await api(`/apps/${enc(name)}/reset`, { method: "POST" });
+      toast(`${name} reset`, "ok"); route();
+    }, { cls: "danger" }), act("Delete", async () => {
       if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
       await api(`/apps/${enc(name)}`, { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
-    }, { cls: "danger" }))], { cls: "danger-card" }) : "";
+    }, { cls: "danger" })])], { cls: "danger-card" }) : "";
   // D885: the loop's own clean-up, for whoever may change it; what each did last on this loop
   const mt = await api(`/apps/${enc(name)}/maintenance${qs}`).catch(() => null);
   const mtCard = mt && mt.tasks.length ? card("Maintenance", [h("p", { class: "muted" }, ctx.st.running ? "Stop the loop first: a running loop is never touched." : "Run on this loop now; the admin's schedule runs them on every loop."),

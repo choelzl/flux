@@ -247,7 +247,8 @@ class Run:
         args = ["flux", "serve", "--port", str(self.port), "--data", str(self.data)]
         if os.environ.get("FLUX_E2E_SANDBOX") != "1":
             args.append("--no-sandbox")
-        self.server = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=open(HOME / "serve.log", "w"))
+        self.server = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=open(HOME / "serve.log", "w"),
+                                       env={**os.environ, "XDG_CACHE_HOME": str(self.data / "cache")})
         for _ in range(60):
             try:
                 socket.create_connection(("127.0.0.1", self.port), timeout=1).close()
@@ -679,6 +680,42 @@ def flows(r: Run) -> None:
         finally:
             b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); return 1")
     r.step("compact tables", compact_tables)
+
+    def reset_loop():
+        made = r.api("/apps/new-empty", "POST", {"name": "resettable"})
+        r.check("create a separate loop to reset", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/resettable"
+        source = (root / "problem.yaml").read_text()
+        for rel in ("out/old.db", "runs/loop.log", "workbench/notes.md", ".author-work/draft.txt"):
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("old run data")
+        r.page("#/app/resettable/settings/loop", "document.querySelector('#main .danger-card')", "Reset settings")
+        r.check("Reset and Delete share the owner's box", b.js("""return ['Reset', 'Delete'].every(label =>
+            [...document.querySelectorAll('.danger-card button')].some(x => x.textContent === label))"""))
+        r.button("Reset", ".danger-card")
+        b.wait("document.querySelector('dialog[open] .reset-folders')", what="the folder warning")
+        warning = b.js("return document.querySelector('dialog[open]').innerText")
+        r.check("the reset warning names every folder and says it cannot be undone",
+                all(f"{root / n}/" in warning for n in ("out", "runs", "workbench", ".author-work"))
+                and f"{r.data}/cache/flux/apps/bob.resettable/" in warning and "cannot be undone" in warning, warning)
+        r.check("the warning says source files and settings stay", "source files" in warning and "sharing stay" in warning)
+        r.check("folder paths fit the dialog", b.js("""const d = document.querySelector('dialog[open]');
+            return d.scrollWidth <= d.clientWidth + 1"""))
+        r.dialog_button("Cancel")
+        r.check("Cancel keeps the old run files", (root / "out/old.db").is_file() and (root / "runs/loop.log").is_file())
+        r.button("Reset", ".danger-card")
+        r.dialog_button("Reset")
+        b.wait("!document.querySelector('dialog[open]') && [...document.querySelectorAll('.toast')].some(x => x.textContent.includes('resettable reset'))",
+               what="reset completed")
+        b.wait("document.querySelector('#main .danger-card')", what="Settings refreshed")
+        r.check("confirmed reset removes generated folders", all(not (root / n).exists() for n in ("out", "runs", "workbench", ".author-work")))
+        r.check("confirmed reset keeps the problem", (root / "problem.yaml").read_text() == source)
+        r.check("reset stays on the loop's Settings", b.js("return location.hash.includes('/app/resettable/settings')"))
+        r.clean("reset loop")
+        r.api("/apps/resettable", "DELETE")
+        r.page("#/app/sw", "document.querySelector('#main .tabs')", "the original loop")
+    r.step("reset loop", reset_loop)
 
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
