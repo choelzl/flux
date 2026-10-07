@@ -5,6 +5,7 @@
 import { codeEditor, langOf } from "./highlight.js";
 import { act, ago, api, bytes, card, dialog, empty, enc, h, request, skeleton, toast } from "./ui.js";
 import { dropZone, progressDialog, sendFiles } from "./loops.js";
+import { viewerTools } from "./viewer.js";
 
 // D908: an open Actions menu closes on a click elsewhere or Escape
 document.addEventListener("click", (e) => document.querySelectorAll("details.actions-menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; }));
@@ -201,7 +202,8 @@ function filesTab(ctx) {
       const cut = !!r.headers.get("x-flux-truncated");              // D907: a bounded preview, said; not saved back
       const ed = codeEditor(text, langOf(path), { readonly: !mine || cut });
       if (mine && !cut) draft = { path, ed, saved: text, rev: r.headers.get("x-flux-revision") || (it && it.revision) || "" };
-      viewer.replaceChildren(itemHead(path, false, it, [mine && !cut ? act("Save", () => saveDraft(), { cls: "small" }) : "", download]),
+      viewer.replaceChildren(itemHead(path, false, it, [mine && !cut ? act("Save", () => saveDraft(), { cls: "small" }) : "",
+        ...viewerTools(viewer, { title: path, rawUrl: fileUrl(path, false) + "&raw=true" }), download]),
         cut ? h("div", { class: "callout warn truncated" }, `Showing the first ${size(new TextEncoder().encode(text).length)} of ${size(+r.headers.get("x-flux-size"))}: `
           + "too large to show or edit here whole. Download has all of it.") : "", ed.el);
     } else {

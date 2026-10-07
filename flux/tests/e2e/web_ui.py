@@ -490,6 +490,98 @@ def flows(r: Run) -> None:
         r.clean("upload")
     r.step("upload", upload)
 
+    def raw_and_fullscreen():
+        r.page("#/app/sw/files", "document.querySelector('#main ul.files')", "Files")
+        b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.wait("document.querySelector('.viewer textarea')", what="file editor")
+        b.js("window.__viewEditor = document.querySelector('.viewer textarea'); window.__viewText = window.__viewEditor.value;"
+             " window.__viewEditor.value += '\\n# unsaved fullscreen edit\\n'; window.__viewEditor.dispatchEvent(new Event('input')); return 1")
+        r.button("Fullscreen", ".viewer-head")
+        b.wait("document.querySelector('dialog.fullscreen-view[open] .viewer textarea')", what="fullscreen editor")
+        r.check("fullscreen files preserve the editor and unsaved text", b.js("return document.querySelector('dialog textarea') === window.__viewEditor && window.__viewEditor.value.includes('unsaved fullscreen edit')"))
+        b.keys(b.ESCAPE)
+        b.wait("!document.querySelector('dialog.fullscreen-view[open]')", what="Escape returns to file")
+        r.check("Escape restores the same editor", b.js("return document.querySelector('.viewer textarea') === window.__viewEditor"))
+        url = b.js("return document.querySelector('.viewer a.raw-view').getAttribute('href')")
+        raw = r.api(url.removeprefix("/api"))
+        r.check("Raw files open complete plain text", "raw=true" in url and raw["status"] == 200 and "statement:" in raw["body"])
+        b.js("window.__viewEditor.value = window.__viewText; window.__viewEditor.dispatchEvent(new Event('input')); delete window.__viewEditor; delete window.__viewText; return 1")
+        r.page("#/app/sw/live/log", "document.querySelector('.log-card a.raw-view')", "Log")
+        r.button("Fullscreen", ".log-card")
+        b.wait("document.querySelector('dialog.fullscreen-view[open] .logview')", what="fullscreen log")
+        r.check("logs expand with their controls and a complete Raw link", b.js("return !!document.querySelector('dialog .toolbar a.raw-view[href*=\"download=false\"]')"))
+        b.keys(b.ESCAPE)
+        b.wait("!document.querySelector('dialog.fullscreen-view[open]')", what="log returned")
+        b.js("window.__viewerFetch = window.fetch.bind(window); const fixture = arguments[0]; window.fetch = (u, o) =>"
+             " String(u).startsWith('/api/apps/sw/results') ? Promise.resolve(new Response(JSON.stringify(fixture), {headers: {'Content-Type': 'application/json'}}))"
+             " : window.__viewerFetch(u, o); return 1", GRAPHS_RESULTS)
+        try:
+            r.page("#/app/sw/results", "document.querySelector('.results-head a.raw-view')", "Results")
+            r.button("Fullscreen", ".results-head")
+            b.wait("document.querySelector('dialog.fullscreen-view[open] table.designs')", what="fullscreen results")
+            r.check("results have Raw and fullscreen table views", b.js("return !!document.querySelector('dialog .results-head a.raw-view[href*=\"/results\"]')"))
+            b.keys(b.ESCAPE)
+            b.wait("!document.querySelector('dialog.fullscreen-view[open]')", what="results returned")
+            r.clean("raw and fullscreen")
+        finally:
+            b.js("window.fetch = window.__viewerFetch; delete window.__viewerFetch; return 1")
+    r.step("raw and fullscreen", raw_and_fullscreen)
+
+    def run_history():
+        events = [{"ev": "hello", "t": 1001}, {"ev": "mark", "name": "pass", "n": 1, "t": 1002},
+                  {"ev": "start", "id": 1, "name": "generation: old design", "parent": None, "t": 1003},
+                  {"ev": "start", "id": 2, "name": "agent: claude", "parent": 1, "t": 1004},
+                  {"ev": "end", "id": 2, "t": 1005, "seconds": 1, "output": {"reply": "old reply", "steps": [{"k": "tool", "name": "bash", "out": "old compiler output"}]}},
+                  {"ev": "start", "id": 3, "name": "tool: old compiler", "parent": 1, "t": 1006, "params": {"command": "old build"}},
+                  {"ev": "end", "id": 3, "t": 1007, "seconds": 1, "output": {"stdout": "old compiler output"}},
+                  {"ev": "end", "id": 1, "t": 1008, "seconds": 5, "output": {}}]
+        history = {"starts": [{"id": 911, "record_id": 911, "started": 2000, "ended": 2100, "rc": 0},
+                              {"id": 910, "record_id": 911, "started": 1000, "ended": 1100, "rc": 0}],
+                   "campaigns": [{"campaign_id": "retained-campaign", "created_at": "1970-01-01T00:00:00Z", "status": "paused", "run_id": 911}]}
+        turn = {"k": 1, "ts": 1005, "kind": "agent", "agent": "claude", "ok": True, "rc": 0, "seconds": 1,
+                "prompt": "old full prompt", "reply": "old reply", "steps": [{"k": "tool", "name": "bash", "out": "old compiler output"}]}
+        b.js("window.__historyFetch = window.fetch.bind(window); const fixture = arguments[0]; window.fetch = (u, o) => {"
+             " const url = new URL(String(u), location.origin), p = url.pathname; let body;"
+             " if (p === '/api/apps/sw/runs') body = JSON.stringify(fixture.history);"
+             " else if (p === '/api/apps/sw/run-data') body = fixture.events;"
+             " else if (p === '/api/apps/sw/log/raw') body = url.searchParams.get('run_id') === '910' ? 'OLD full output\\n' : 'NEW output\\n';"
+             " else if (p === '/api/apps/sw/turns') body = JSON.stringify({turns: [fixture.turn]});"
+             " else if (p === '/api/apps/sw/results') body = JSON.stringify(fixture.results);"
+             " return body === undefined ? window.__historyFetch(u, o) : Promise.resolve(new Response(body, {headers: {'Content-Type':"
+             " ['/api/apps/sw/runs', '/api/apps/sw/turns', '/api/apps/sw/results'].includes(p) ? 'application/json' : 'text/plain'}})); }; return 1",
+             {"history": history, "events": "".join(json.dumps(e) + "\n" for e in events), "turn": turn, "results": GRAPHS_RESULTS})
+        try:
+            b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
+            r.page("#/app/sw/live/history/910", "document.querySelector('.history-tasks .tree .node')", "older start's complete task tree")
+            r.check("historical start is selected from its bookmarked URL", b.js("return document.querySelector('[aria-label=\"Historical start\"]').value") == "910")
+            b.click(".history-tasks .tree .branch")
+            b.wait("document.querySelector('.history-tasks .node.leaf')", what="older pass's design")
+            r.check("history replays old passes and tool output", b.js("const text = document.querySelector('.history-tasks').textContent; return text.includes('Pass 1') && text.includes('tool: old compiler') && text.includes('old compiler output')"))
+            b.click(".history-tasks .node.leaf")
+            b.wait("document.querySelector('.history-tasks .detail').textContent.includes('agent: claude')", what="older design's agent")
+            r.check("history replays the agent conversation inside its pass", b.js("return document.querySelector('.history-tasks .detail').textContent.includes('old compiler output')"))
+            # Inspect the raw link in this tab; complete streamed content is covered by the API tests.
+            r.check("raw historical journal is scoped to the old start", b.js("return document.querySelector('.history-tasks > .actions a').getAttribute('href').includes('start_id=910')"))
+            r.button("Log", ".history-controls + p + .subtabs")
+            b.wait("document.querySelector('.history-log') && document.querySelector('.history-log').textContent.includes('OLD full output')", what="older full output")
+            r.check("older log is shown without newer output", not b.js("return document.querySelector('.history-log').textContent.includes('NEW output')"))
+            r.button("Agents", ".history-controls + p + .subtabs")
+            b.wait("document.querySelector('button.open-turn')", what="older agent turn")
+            b.click("button.open-turn")
+            b.wait("document.querySelector('.detail').textContent.includes('old compiler output')", what="old agent's complete conversation")
+            r.button("Raw", ".detail .actions")
+            b.wait("document.querySelector('dialog.raw-content') || document.querySelector('dialog .raw-content')", what="raw agent turn")
+            r.check("historical agent raw output keeps its prompt and tool calls", b.js("return document.querySelector('dialog .raw-content').textContent.includes('old full prompt') && document.querySelector('dialog .raw-content').textContent.includes('old compiler output')"))
+            b.keys(b.ESCAPE)
+            b.wait("!document.querySelector('dialog[open]')", what="raw agent returned")
+            r.button("Results", ".history-controls + p + .subtabs")
+            b.wait("document.querySelector('table.designs')", what="retained campaign results")
+            r.check("history offers recorded results and their report", b.js("return !!document.querySelector('.results-head a[href*=\"campaign=retained-campaign\"]')"))
+            r.clean("run history")
+        finally:
+            b.js("window.fetch = window.__historyFetch; delete window.__historyFetch; localStorage.removeItem('flux-tasks-view'); return 1")
+    r.step("run history", run_history)
+
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
         r.check("a loop has six tabs (D713)", tabs == ["Overview", "Live", "Results", "Agents", "Files", "Settings"], str(tabs))

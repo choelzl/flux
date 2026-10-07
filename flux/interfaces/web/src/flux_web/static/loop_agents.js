@@ -4,6 +4,7 @@
 import { proseBlock } from "./highlight.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, skeleton } from "./ui.js";
 import { conversation } from "./loops.js";
+import { viewerTools } from "./viewer.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -31,7 +32,7 @@ async function agentsView(ctx) {
   const { name, qs, q, body } = ctx;
   const ok = ctx.still();                                 // D919: drawn only while still the tab chosen
   body.replaceChildren(card(null, skeleton(7)));
-  const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), api(`/apps/${enc(name)}/usage${qs}`)]);
+  const [{ turns }, use] = await Promise.all([api(`/apps/${enc(name)}/turns${qs}`), ctx.history ? null : api(`/apps/${enc(name)}/usage${qs}`)]);
   if (!ok()) return;
   const one = h("div", { class: "detail" }, empty("Select a turn."));
   let picked = 0;                                         // D919: the turn selected last is the one shown
@@ -52,6 +53,7 @@ async function agentsView(ctx) {
     const factEl = ([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 && v !== "0" ? " bad" : ""}` }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v)));
     const more = facts.filter(([k]) => !MAIN.has(k));
     one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
+      h("div", { class: "actions" }, ...viewerTools(one, { title: "Agent turn", rawText: JSON.stringify(full, null, 2) })),
       h("div", { class: "facts" }, facts.filter(([k]) => MAIN.has(k)).map(factEl)),
       more.length ? h("details", { class: "facts-more" }, h("summary", {}, `More: ${more.map(([k]) => k).join(", ")}`), h("div", { class: "facts" }, more.map(factEl))) : "",
       ...(Array.isArray(full.steps) && full.steps.length
@@ -65,7 +67,7 @@ async function agentsView(ctx) {
   const tokOf = (t) => { const n = t.notes && typeof t.notes === "object" ? t.notes : {};
     const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
     return i == null && o == null ? "" : `${fmtTok(i || 0)} → ${fmtTok(o || 0)}`; };
-  body.replaceChildren(usageCard(use), h("div", { class: "split" },
+  body.replaceChildren(use ? usageCard(use) : "", h("div", { class: "split" },
     card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
         h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", { class: "num", title: "tool calls" }, "Tools"), h("th", {}, ""))),
       h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },

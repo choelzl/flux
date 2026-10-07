@@ -12,6 +12,7 @@ import { timelineTab } from "./loop_timeline.js";
 import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
+import { historyTab } from "./loop_history.js";
 
 async function loopPage(name, owner, path = "") {
   const show = pageShow();
@@ -37,7 +38,7 @@ async function loopPage(name, owner, path = "") {
   let askOpen = parts[0] === "ask";
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
-  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], Results: [["", "Results"], ["graphs", "Graphs"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["problem", "Problem"], ["loop", "Variables and sharing"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
@@ -212,8 +213,11 @@ async function loopPage(name, owner, path = "") {
   let drawn = 0;
   const still = () => { const mine = drawn; return () => mine === drawn && !show.stale(); };
   const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, body, curSub, goTab, drawBody, refresh, still,
+    get historyId() { return Number(mode); }, selectHistory: (id) => { mode = String(id); setUrl(); },
     get st() { return st; }, get tab() { return tab; } };
   const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
+  const past = historyTab(ctx);
+  cleanup.push(past.close);
   /** Questions about the loop (D705): an agent reads it -- its files, its record, its log -- and
       answers; nothing changes. Kept with the loop, newest first; one answered at a time. */
   let askTimer = null, askWho = null;
@@ -284,6 +288,7 @@ async function loopPage(name, owner, path = "") {
     drawn++;
     const ok = still();
     drawBanner(); drawSubs();
+    if (tab !== "Live" || curSub() !== "history") past.close();
     // D917: the stream carries what the view shows -- Tasks: the journal, the live state and the
     // log's card; the Log: the log; any other tab: nothing (each part resumes where it was)
     const ran = st.running || st.last_active;
@@ -314,6 +319,8 @@ async function loopPage(name, owner, path = "") {
           h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
         ""));
       live.draw(); liveLog.fill(); composer.update();
+    } else if (tab === "Live" && curSub() === "history") {
+      await past.show();
     } else if (tab === "Live" && curSub() === "timeline") {
       body.replaceChildren(card(null, skeleton(7)));
       await timelineView();

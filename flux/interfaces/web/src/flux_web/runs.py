@@ -451,6 +451,15 @@ class RunManager:
         # their limit -- before anything is launched; a launch that fails gives the place back
         run_id = self.store.reserve_run(user, app, self.limit(user), str(db), str(files["log"]), argv, options)
         try:
+            from .confine import open_read
+
+            try:
+                with open_read(files["log"], app_dir) as fh:
+                    fh.seek(0, 2)
+                    offset = fh.tell()
+            except FileNotFoundError:
+                offset = 0
+            self.store.set_run(run_id, options=json.dumps({**options, "log_offset": offset}))
             append(files["log"], f"\n── started {time.strftime('%Y-%m-%d %H:%M:%S')} by {by.name} · {', '.join(said)} ──\n", app_dir)
             # D732: through the stamper, which writes each line with its time
             proc = subprocess.Popen([sys.executable, "-m", "flux_web.stamp", str(files["log"]), "--", *argv], cwd=str(app_dir),

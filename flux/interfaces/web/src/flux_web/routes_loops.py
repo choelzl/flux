@@ -423,7 +423,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise fail(exc) from exc
 
     @app.get("/api/apps/{name}/file")
-    def app_file(name: str, path: str, download: bool = False, owner: str | None = None, user: User = Depends(user_of)):
+    def app_file(name: str, path: str, download: bool = False, raw: bool = False, owner: str | None = None, user: User = Depends(user_of)):
         """A file: text as a preview of at most TEXT_MAX bytes, `X-Flux-Truncated` and its whole
         size said when cut (D907); a download, or a file not text, streamed whole in pieces."""
         from urllib.parse import quote
@@ -433,15 +433,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             data, is_text, size = w.read(name, path)
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        if download or not is_text:
+        if download or raw or not is_text:
             def pieces():
                 with w.open_file(name, path) as (fh, _size):
                     while chunk := fh.read(1 << 20):
                         yield chunk
             leaf = Path(path).name
             ascii_leaf = leaf.encode("ascii", "replace").decode().replace('"', "_")
-            return StreamingResponse(pieces(), media_type="application/octet-stream", headers={
-                "Content-Disposition": f"attachment; filename=\"{ascii_leaf}\"; filename*=UTF-8''{quote(leaf)}",
+            return StreamingResponse(pieces(), media_type="text/plain; charset=utf-8" if raw and is_text and not download else "application/octet-stream", headers={
+                "Content-Disposition": f"{'inline' if raw and is_text and not download else 'attachment'}; filename=\"{ascii_leaf}\"; filename*=UTF-8''{quote(leaf)}",
                 "Content-Length": str(size)})
         cut = size > len(data)
         try:

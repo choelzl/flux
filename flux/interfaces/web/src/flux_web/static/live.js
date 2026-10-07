@@ -3,6 +3,7 @@
 import { crafterCatalog, setCrafterCatalog } from "./state.js";
 import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
+import { viewerTools } from "./viewer.js";
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
     pick one from (D692). */
@@ -134,10 +135,12 @@ function logView(base, qs, stream) {
   startSel.addEventListener("change", () => { startIdx = Number(startSel.value); render(); });
   let t; filter.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { makeMatcher(); render(); }, 150); });
   drawStarts();
+  const el = h("div", {});
   const bar = h("div", { class: "toolbar" }, startSel,
     h("label", { class: "check" }, follow, "follow"), h("label", { class: "check" }, wrap, "wrap"),
     h("label", { class: "check" }, problems, "problems only"), h("label", { class: "check", title: "Each line's time" }, times, "times"),
-    filter, count, h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
+    filter, count, ...viewerTools(el, { title: "Log", rawUrl: `${base}/log/raw${qs || "?"}${qs ? "&" : ""}download=false` }),
+    h("a", { class: "btn small", href: `${base}/log/raw${qs}` }, "Download"));
   const pill = streamPill();
   // D759: a day-long run's log opens on its last 2 MB; the earlier lines on asking
   const earlier = h("span", { class: "log-earlier small", hidden: true });
@@ -150,7 +153,9 @@ function logView(base, qs, stream) {
       h("button", { type: "button", class: "small", onclick: () => { lines.length = 0; shown = []; partial = ""; seen = 0;
         starts.length = 0; earlier.hidden = true; drawStarts(); render(); stream.restart("log", { tail: 0 }); } }, "Load all"));
   } }, { tail: TAIL });
-  return { el: h("div", {}, bar, box), render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
+  el.append(bar, box);
+  el.addEventListener("viewerresize", () => { ROW = 0; drawn = ""; render(); });
+  return { el, render: () => { ROW = 0; render(); }, lineEl, recent: (k) => lines.slice(-k), onLines: (f) => listeners.push(f),
            problem: (t) => PROBLEM.test(t), times, onTimes: (f) => timeListeners.push(f) };
 }
 
@@ -583,6 +588,8 @@ function liveTree(base, qs, onQuestion, stream) {
       h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
         n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done"),   // D928
         n.pseudo ? "" : h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
+      h("div", { class: "actions" }, ...viewerTools(detail, { title: n.name,
+        rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) })),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
       leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more."));

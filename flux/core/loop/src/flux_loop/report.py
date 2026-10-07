@@ -77,10 +77,11 @@ def _when(text: str) -> float:
         return 0.0
 
 
-def load(db: str, campaign: str | None = None, objectives: Objectives | None = None) -> Report:
+def load(db: str, campaign: str | None = None, objectives: Objectives | None = None, until: float | None = None) -> Report:
     """The record's rows, passes and ledger for one campaign (`campaign`: an id prefix; the
     default is the latest). The objective vector: the given one, else the record's latest
-    `decided:objectives` row, else the first two numeric metrics measured."""
+    `decided:objectives` row, else the first two numeric metrics measured.
+    `until`: a historical view through that time, in seconds since the epoch."""
     from flux_store import CampaignStore
 
     store = CampaignStore(db)
@@ -99,6 +100,8 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
         row = store.campaign_row(cid) or {}
         objective_doc = row.get("objective") if isinstance(row.get("objective"), dict) else {}
         events = store.events(cid)
+        if until is not None:
+            events = [e for e in events if _when(e.get("created_at") or "") <= until]
         notes: list[str] = []
         if objectives is None:
             docs = [e for e in events if e.get("kind") == "decided:objectives"]
@@ -106,6 +109,8 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
                 objectives = Objectives.from_doc((docs[-1].get("detail") or {}).get("objectives") or [])
         rows: list[Row] = []
         for t in store.trials(cid, status="ok"):
+            if until is not None and _when(t.created_at) > until:
+                continue
             if t.result is None or not t.stage or t.stage in ("gate", "admit", "prototype"):
                 continue
             metrics = {}

@@ -74,6 +74,105 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             return None
         return path
 
+    def selected_run(name: str, user: User, owner: str | None, run_id: int | None):
+        w, whose, d, run = loop_of(name, user, owner)
+        if run_id is not None:
+            run = store.run(run_id)
+            if not run or run["user_id"] != whose.id or run["app"] != name:
+                raise HTTPException(404, "no such start of this loop")
+        return w, whose, d, run
+
+    def selected_campaign(run, campaign):
+        if campaign is None:
+            return runs.campaign(run)[0]
+        from flux_store import CampaignStore
+
+        if not run or not os.path.isfile(run["db"]):
+            raise HTTPException(404, "no record for this start")
+        record = CampaignStore(run["db"])
+        try:
+            if campaign not in {c["campaign_id"] for c in record.list_campaigns()}:
+                raise HTTPException(404, "no such campaign in this record")
+        finally:
+            record.close()
+        return campaign
+
+    def start_end(name, user, owner, start_id, run):
+        if start_id is None:
+            return None
+        _w, whose, _d, start = selected_run(name, user, owner, start_id)
+        if not run or start["db"] != run["db"]:
+            raise HTTPException(404, "this start uses another record")
+        if start.get("ended"):
+            return float(start["ended"])
+        following = next((r for r in reversed(store.runs(whose, name)) if r["id"] > start_id), None)
+        if following:
+            return float(following["started"])
+        import time
+
+        return time.time()
+
+    @app.get("/api/apps/{name}/runs")
+    def run_history(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """Starts of this loop and the retained campaigns (a campaign may span several starts)."""
+        from flux_store import CampaignStore
+
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        starts, campaigns, seen = [], [], {}
+        for run in store.runs(whose, name):
+            running = runs.live(run)
+            record_id = seen.setdefault(run["db"], run["id"])
+            starts.append({k: run.get(k) for k in ("id", "started", "ended", "rc")} | {"running": running, "record_id": record_id})
+            if record_id != run["id"] or not os.path.isfile(run["db"]):
+                continue
+            record = CampaignStore(run["db"])
+            try:
+                campaigns.extend({**c, "run_id": run["id"]} for c in record.list_campaigns())
+            finally:
+                record.close()
+        return {"starts": starts, "campaigns": sorted(campaigns, key=lambda c: c["created_at"], reverse=True)}
+
+    @app.get("/api/apps/{name}/run-data")
+    def run_data(name: str, campaign: str, kind: str, run_id: int | None = None, start_id: int | None = None, owner: str | None = None,
+                 user: User = Depends(user_of)):
+        """A retained campaign's complete raw journal or transcript."""
+        from .confine import Escape, open_read
+        from .run_history import trace_path
+
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        selected_campaign(run, campaign)
+        lo, hi = 0.0, float("inf")
+        if start_id is not None:
+            _w, whose, _d, start = selected_run(name, user, owner, start_id)
+            if start["db"] != run["db"]:
+                raise HTTPException(404, "this start uses another record")
+            lo = float(start["started"])
+            following = next((r for r in reversed(store.runs(whose, name)) if r["id"] > start_id), None)
+            hi = float(following["started"]) if following else float("inf")
+        try:
+            path = trace_path(run, campaign, kind, runs)
+            fh = open_read(path, *runs.roots(run))
+        except FileNotFoundError:
+            raise HTTPException(404, "this campaign's data is no longer available") from None
+        except (Escape, ValueError, OSError) as exc:
+            raise HTTPException(400, "this campaign's data is not available here") from exc
+
+        def chunks():
+            with fh:
+                if start_id is not None:
+                    for line in fh:
+                        try:
+                            row = json.loads(line)
+                            t = float(row.get("t" if kind == "events" else "ts") or 0)
+                        except (ValueError, TypeError, AttributeError):
+                            continue
+                        if lo <= t < hi:
+                            yield line
+                    return
+                while chunk := fh.read(1 << 16):
+                    yield chunk
+        return StreamingResponse(chunks(), media_type="text/plain; charset=utf-8")
+
     def _reader(kind: str, path_of, at: tuple[int | None, int], roots_of, since_of=lambda run: 0):
         """A followed file -- the log or the journal -- from its cursor `at` (inode, byte): `look(run)`
         is its next piece, (data or None, moved, cursor after). For the journal, `since_of(run)` is
@@ -290,8 +389,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return _sse(_multiplex(request, lambda: None, {"log": look}, preface, bare=True))
 
     @app.get("/api/apps/{name}/log/raw")
-    def log_raw(name: str, owner: str | None = None, user: User = Depends(user_of)):
-        _w, _whose, d, _run = loop_of(name, user, owner)
+    def log_raw(name: str, owner: str | None = None, run_id: int | None = None, download: bool = True,
+                preview: bool = False, user: User = Depends(user_of)):
+        _w, whose, d, run = selected_run(name, user, owner, run_id)
         from .confine import Escape, open_read
 
         path = loop_files(d)["log"]
@@ -302,16 +402,35 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except (Escape, OSError) as exc:
             raise HTTPException(400, "the log is not a file of this loop") from exc
 
+        lo, hi = 0, os.fstat(fh.fileno()).st_size
+        if run_id is not None:
+            from .run_history import log_range
+
+            following = next((r for r in reversed(store.runs(whose, name)) if r["id"] > run_id), None)
+            try:
+                lo, hi = log_range(fh, run, following)
+            except FileNotFoundError:
+                fh.close()
+                raise HTTPException(404, "this start's log is no longer available") from None
+        size = hi - lo
+        cut = preview and size > (1 << 20)
+        if preview:
+            hi = min(hi, lo + (1 << 20))
+
         def chunks():
             with fh:
-                while True:
-                    b = fh.read(1 << 16)
+                fh.seek(lo)
+                left = hi - lo
+                while left > 0:
+                    b = fh.read(min(left, 1 << 16))
                     if not b:
                         return
+                    left -= len(b)
                     yield b
 
         return StreamingResponse(chunks(), media_type="text/plain; charset=utf-8",
-                                 headers={"Content-Disposition": f'attachment; filename="{name}.log"'})
+                                 headers={"Content-Disposition": f'{"attachment" if download else "inline"}; filename="{name}.log"',
+                                          "X-Flux-Size": str(size), **({"X-Flux-Truncated": "1"} if cut else {})})
 
     turn_index: dict[str, tuple[int, int, list[int], list[dict[str, Any]]]] = {}   # path -> (inode, read, offsets, summaries)
     turn_lock = threading.Lock()
@@ -349,18 +468,40 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             return list(offsets), list(rows)
 
     @app.get("/api/apps/{name}/turns")
-    def turns(name: str, k: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+    def turns(name: str, k: int | None = None, owner: str | None = None, run_id: int | None = None,
+              campaign: str | None = None, start_id: int | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """The loop's model and agent turns, newest last: the last 500 summed up, or turn `k` whole."""
-        _w, _whose, _d, run = loop_of(name, user, owner)
-        path = runs.turns_path(run)
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        if campaign is not None:
+            from .run_history import trace_path
+
+            selected_campaign(run, campaign)
+            try:
+                path = _confined(trace_path(run, campaign, "turns", runs), runs.roots(run))
+            except (ValueError, OSError):
+                path = None
+        else:
+            path = runs.turns_path(run)
         if not (path and os.path.exists(path)):
+            if campaign is not None:
+                raise HTTPException(404, "this campaign's transcript is no longer available")
             return {"turns": []}
         offsets, rows = _turn_summaries(path)
         hide = _masks()                                       # D850: the admin's stderr masks
+        lo, hi = 0.0, float("inf")
+        if start_id is not None:
+            _w, whose, _d, start = selected_run(name, user, owner, start_id)
+            if start["db"] != run["db"]:
+                raise HTTPException(404, "this start uses another record")
+            lo = float(start["started"])
+            following = next((r for r in reversed(store.runs(whose, name)) if r["id"] > start_id), None)
+            hi = float(following["started"]) if following else float("inf")
         if k is None:
-            listed = [{"k": n, **t} for n, t in enumerate(rows, 1) if t is not None]
-            return {"turns": hide.fields(listed[-500:]), "total": len(listed)}
+            listed = [{"k": n, **t} for n, t in enumerate(rows, 1) if t is not None and lo <= float(t.get("ts") or 0) < hi]
+            return {"turns": hide.fields(listed if start_id is not None else listed[-500:]), "total": len(listed)}
         if not 1 <= k <= len(offsets):
+            return {"turns": []}
+        if rows[k - 1] is None or not lo <= float(rows[k - 1].get("ts") or 0) < hi:
             return {"turns": []}
         with open(path, "rb") as fh:                         # the one turn, read from its place
             fh.seek(offsets[k - 1])
@@ -410,20 +551,23 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return [_user_usage(u) for u in store.users()]
 
     @app.get("/api/apps/{name}/results")
-    def results(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+    def results(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None, start_id: int | None = None,
+                raw: bool = False,
+                user: User = Depends(user_of)) -> dict[str, Any]:
         from flux_loop.report import load
 
-        _w, _whose, d, run = loop_of(name, user, owner)
-        cid, _rdir = runs.campaign(run)
+        _w, _whose, d, run = selected_run(name, user, owner, run_id)
+        cid = selected_campaign(run, campaign)
+        until = start_end(name, user, owner, start_id, run)
         if not cid or not os.path.exists(run["db"]):
             return {"campaign": None}
-        rep = load(run["db"], cid)
+        rep = load(run["db"], cid, until=until)
         from .results import designs, thin
 
-        rows = thin(rep.rows, [(o.metric, o.direction) for o in rep.objectives])
+        rows = thin(rep.rows, [(o.metric, o.direction) for o in rep.objectives], cap=len(rep.rows) if raw else 3000)
         answer = None
-        ans = loop_files(d)["answer"]
-        if ans.exists():
+        ans = loop_files(d)["answer"] if campaign is None and run_id is None and start_id is None else None
+        if ans is not None and ans.exists():
             try:
                 from .confine import open_read
 
@@ -433,11 +577,12 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 pass
         from .results import decision_doc
 
-        decision = decision_doc(run["db"], ans, cid)            # D809: the record's latest pass's, while it runs too; D840: which one
+        decision = decision_doc(run["db"], ans, cid, until)     # D809: the record's pass; D840: which design
         from .results import decision_said
 
-        decided_by = decision_said(run["db"], cid)              # D815: why, as the loop said it
-        listed = designs(run["db"], _stages(_w, name), decision, limit=20000)
+        decided_by = decision_said(run["db"], cid, until)       # D815: why, as the loop said it
+        stages = _stages(_w, name) if campaign is None else [{"name": s} for s in dict.fromkeys(row.stage for row in rep.rows)]
+        listed = designs(run["db"], stages, decision, limit=None if raw else 20000, campaign=campaign, until=until)
         objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
                           for o in rep.objectives]                     # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
@@ -447,21 +592,29 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/apps/{name}/design")
     def design(name: str, design: str, part: str = "", key: str = "", owner: str | None = None,
+               run_id: int | None = None, campaign: str | None = None, start_id: int | None = None,
                user: User = Depends(user_of)) -> dict[str, Any]:
         """One design of the loop: its source, why it failed, every stage's numbers (D690); `key`:
         which, of the designs a name was given to (D840)."""
         from flux_store import CampaignStore
 
-        from .results import content_key
+        from .results import _when, content_key
 
-        _w, _whose, _d, run = loop_of(name, user, owner)
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        if campaign is not None:
+            selected_campaign(run, campaign)
+        until = start_end(name, user, owner, start_id, run)
         if not run or not os.path.exists(run["db"]):
             raise HTTPException(404, "no record yet")
         store = CampaignStore(run["db"])
         found: dict[str, Any] = {"name": design, "part": part, "artifact": None, "trials": []}
         try:
             for camp in store.list_campaigns():
+                if campaign is not None and camp["campaign_id"] != campaign:
+                    continue
                 for t in store.trials(camp["campaign_id"], status="ok"):
+                    if until is not None and _when(t.created_at) > until:
+                        continue
                     c = t.candidate or {}
                     if str(c.get("name")) != design or str(c.get("subgoal") or "") != part or (key and content_key(c) != key):
                         continue
@@ -477,13 +630,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return found
 
     @app.get("/api/apps/{name}/report", response_class=HTMLResponse)
-    def report(name: str, owner: str | None = None, user: User = Depends(user_of)) -> HTMLResponse:
+    def report(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None, start_id: int | None = None,
+               user: User = Depends(user_of)) -> HTMLResponse:
         from flux_loop.report import load, render
 
-        _w, _whose, _d, run = loop_of(name, user, owner)
-        cid, _rdir = runs.campaign(run)
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        cid = selected_campaign(run, campaign)
+        until = start_end(name, user, owner, start_id, run)
         if not cid:
             raise HTTPException(404, "no record yet")
-        return HTMLResponse(render(load(run["db"], cid)),
+        return HTMLResponse(render(load(run["db"], cid, until=until)),
                             headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
                                      "X-Frame-Options": "SAMEORIGIN"})

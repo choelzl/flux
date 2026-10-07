@@ -117,8 +117,8 @@ async function route() {
     let m;
     setPageOwner(null);
     // D713: a loop's address is its tab and what is under it: /live/log, /files/workbench, /settings/problem/edit
-    if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z-]+)*)$/))) return await loopPage(decodeURIComponent(m[1]), null, m[2].slice(1));
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)((?:\/[a-z-]+)*)$/))) { setPageOwner(decodeURIComponent(m[1])); return await loopPage(decodeURIComponent(m[2]), pageOwner, m[3].slice(1)); }
+    if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) return await loopPage(decodeURIComponent(m[1]), null, m[2].slice(1));
+    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) { setPageOwner(decodeURIComponent(m[1])); return await loopPage(decodeURIComponent(m[2]), pageOwner, m[3].slice(1)); }
     if (hash === "#/new") return await newPage();
     if ((m = hash.match(/^#\/configure(?:\/([a-z]+))?$/))) return await configurePage(null, null, m[1]);
     if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");

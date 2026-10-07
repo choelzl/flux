@@ -252,7 +252,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
 - **A loop's page** (D713: six tabs -- Overview, Live, Results, Agents, Files, Settings -- some with views
-  under them: Live › Tasks, Log, Timeline; Files › Loop files, Workbench; Settings › Problem (the
+  under them: Live › Tasks, Log, Timeline, History; Files › Loop files, Workbench; Settings › Problem (the
   configurator, Direct edit, an agent), Variables and sharing (with Advanced and, for the owner, Delete
   at the end). The header has Start/Stop and Check. **Ask** is a button at the bottom right that opens a
   panel over any tab: the questions and answers, and a new question. Escape closes it. An address
@@ -321,6 +321,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (with wrap on, the last 3000).
     Show one start or all. It can follow (it pauses when
     you scroll up), wrap, filter by text or `/regex/`, show problems only, and download.
+  - **History** (under Live): choose an older start to replay every retained pass, tool and agent task,
+    read its text output, or open its agent conversations with prompts and tool calls. Results and reports
+    can also be selected by recorded campaign, through the chosen start's end; a resumed campaign includes earlier measurements. Removed data
+    is shown as unavailable. Links to a selected start can be bookmarked (`#/app/x/live/history/<start-id>`).
+    **Raw** opens complete logs, journals and transcripts; the text log preview is limited to 1 MiB.
+  - **Raw and Fullscreen:** file, log, result, task and agent viewers have these controls. Raw files stream
+    their complete content as plain text in a new tab, including files too large for the editor.
+    Raw results include every retained measurement and design, without the chart and table limits.
+    Fullscreen keeps the current view and unsaved edits; Close or Escape returns to it.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:
     Setup, Plan, Search, Design, Check, Measure, Choose or Critic. Builds and tests belong to Check;

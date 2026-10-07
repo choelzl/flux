@@ -19,6 +19,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from collections import OrderedDict
 from typing import Any
 
@@ -27,8 +28,12 @@ __all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "desig
 _NOT_MEASURED = ("gate", "admit", "prototype")
 
 
-def _objective_limits(db: str) -> Any:
-    """The objectives, from the record's latest campaign's latest `decided:objectives` -- read alone
+def _at(until: float) -> str:
+    return datetime.fromtimestamp(until, timezone.utc).isoformat()
+
+
+def _objective_limits(db: str, campaign: str | None = None, until: float | None = None) -> Any:
+    """The objectives, from the given or latest campaign's latest `decided:objectives` -- read alone
     (D774), not with the whole record -- or None. Their limits are what a design must meet (D899)."""
     import sqlite3
 
@@ -38,8 +43,11 @@ def _objective_limits(db: str) -> Any:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         try:
             row = con.execute("SELECT e.detail_json FROM campaign_events e WHERE e.kind = 'decided:objectives' "
-                              "AND e.campaign_id = (SELECT campaign_id FROM campaigns ORDER BY created_at DESC LIMIT 1) "
-                              "ORDER BY e.id DESC LIMIT 1").fetchone()
+                              + ("AND e.campaign_id = ? " if campaign else
+                                 "AND e.campaign_id = (SELECT campaign_id FROM campaigns ORDER BY created_at DESC LIMIT 1) ")
+                              + ("AND e.created_at <= ? " if until is not None else "")
+                              + "ORDER BY e.id DESC LIMIT 1",
+                              (*((campaign,) if campaign else ()), *((_at(until),) if until is not None else ()))).fetchone()
         finally:
             con.close()
         if row is None:
@@ -64,7 +72,7 @@ def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -
     return got["name"] if got else None
 
 
-def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) -> dict[str, Any] | None:
+def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None, until: float | None = None) -> dict[str, Any] | None:
     """The loop's decision (D809): the record's latest pass's -- each pass writes its conclusion,
     so a loop that runs for days has one from its first pass on -- unless the run's answer
     (`runs/answer.json`, written when a run ends) is newer. `campaign`: the run's own (a record may
@@ -81,8 +89,9 @@ def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) 
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         try:
             row = con.execute("SELECT detail_json, created_at FROM campaign_events WHERE kind = 'conclusion' "
-                              + ("AND campaign_id = ? " if campaign else "") + "ORDER BY id DESC LIMIT 1",
-                              (campaign,) if campaign else ()).fetchone()
+                              + ("AND campaign_id = ? " if campaign else "")
+                              + ("AND created_at <= ? " if until is not None else "") + "ORDER BY id DESC LIMIT 1",
+                              (*((campaign,) if campaign else ()), *((_at(until),) if until is not None else ()))).fetchone()
         finally:
             con.close()
         if row:
@@ -119,7 +128,7 @@ def decision_doc(db: str, answer_path: Any = None, campaign: str | None = None) 
     return {"name": str(name), "key": said.get("decision_key"), "metrics": metrics}
 
 
-def decision_said(db: str, campaign: str | None = None) -> str:
+def decision_said(db: str, campaign: str | None = None, until: float | None = None) -> str:
     """Why the record's latest pass decided as it did (D815): its `decided_by` -- e.g. "the least
     area_um2 at fmax_mhz >= 800" -- or ""."""
     import sqlite3
@@ -128,8 +137,9 @@ def decision_said(db: str, campaign: str | None = None) -> str:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         try:
             row = con.execute("SELECT detail_json FROM campaign_events WHERE kind = 'conclusion' "
-                              + ("AND campaign_id = ? " if campaign else "") + "ORDER BY id DESC LIMIT 1",
-                              (campaign,) if campaign else ()).fetchone()
+                              + ("AND campaign_id = ? " if campaign else "")
+                              + ("AND created_at <= ? " if until is not None else "") + "ORDER BY id DESC LIMIT 1",
+                              (*((campaign,) if campaign else ()), *((_at(until),) if until is not None else ()))).fetchone()
         finally:
             con.close()
         return str((json.loads(row[0]) or {}).get("decided_by") or "") if row else ""
@@ -155,10 +165,11 @@ def _objectives(db: str) -> Any:
         return None
 
 
-def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10) -> None:
+def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10, objectives: Any = None) -> None:
     """The best `n` by the loop's own rule (D809): `Objectives.decide` over the designs measured on
     the deepest stage any reached -- picked, set aside, picked again -- each its `rank` (1 the best)."""
-    objectives = _objectives(db)
+    if objectives is None:
+        objectives = _objectives(db)
     if not objectives or not out:
         return
     from types import SimpleNamespace
@@ -249,14 +260,14 @@ def _signature(db: str) -> tuple:
     return tuple(out)
 
 
-def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, limit: int = 1000,
-            stale_s: float = 0.0, since: Any = None) -> dict[str, Any]:
+def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, limit: int | None = 1000,
+            stale_s: float = 0.0, since: Any = None, campaign: str | None = None, until: float | None = None) -> dict[str, Any]:
     """`stages`: the document's stages as the loader writes them (name, cutoff). D774: kept
     while the record is unchanged; with `stale_s`, also while it changed less than that ago --
     a running loop's line in a list need not be read again on every look. `since` (a start's
     time, D901): the result also says `this_start`, the designs first measured since, counted over
-    every design, not the page."""
-    key = (db, json.dumps(stages, sort_keys=True, default=str), limit)
+    every design, not the page. `campaign` and `until`: one campaign as it stood at a past start's end."""
+    key = (db, json.dumps(stages, sort_keys=True, default=str), limit, campaign, until)
     said = json.dumps(decision, sort_keys=True, default=str)
     sig = _signature(db)
     with _KEEPING:
@@ -266,7 +277,7 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
     if got is not None and got[1] == said and (got[0] == sig or time.monotonic() - got[2] < stale_s):
         out, firsts = got[3], got[4]
     else:
-        out = _designs(db, stages, decision, limit)
+        out = _designs(db, stages, decision, limit, campaign, until)
         firsts = out.pop("_firsts", [])
         with _KEEPING:                                 # as it stands after the read (opening it touches its log)
             _KEPT[key] = (_signature(db), said, time.monotonic(), out, firsts)
@@ -291,14 +302,19 @@ def _when(s: Any) -> float:
         return 0.0
 
 
-def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit: int) -> dict[str, Any]:
+def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit: int | None,
+             campaign: str | None = None, until: float | None = None) -> dict[str, Any]:
     from flux_store import CampaignStore
 
     store = CampaignStore(db)
     by: dict[tuple[str, str], dict[str, Any]] = {}
     try:
         for camp in store.list_campaigns():
+            if campaign is not None and camp["campaign_id"] != campaign:
+                continue
             for t in store.trials(camp["campaign_id"], status="ok"):
+                if until is not None and _when(t.created_at) > until:
+                    continue
                 if t.result is None or not t.stage or t.stage in _NOT_MEASURED:
                     continue
                 raw = {m: t.result.value_of(m) for m in t.result.metrics}
@@ -323,7 +339,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     from flux_loop.eligibility import eligibility, judging_stage
     from flux_loop.objective import Objectives
 
-    vector = _objective_limits(db) or Objectives()
+    vector = _objective_limits(db, campaign, until) or Objectives()
     objectives = [o for o in vector if o.goal is not None]
     cutoffs = _cutoffs(stages)
     chain = [st.get("name") for st in stages] or sorted({s for d in by.values() for s in d["stages"]})
@@ -386,7 +402,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     for d in out:                                   # a name given to more than one design: told apart by what each is
         if names[(d["part"], d["base"])] > 1:
             d["name"] = f"{d['base']}·{d['key'][:6]}"
-    _rank(out, order, db)
+    _rank(out, order, db, objectives=vector if campaign is not None or until is not None else None)
     closest = _decided(out, decision)                           # D900: after the ranking, its best is the closest
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not (d["decision"] or d["closest"]))  # the decided design (or the closest) on top
@@ -398,7 +414,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     return {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
-            "metrics": metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
+            "metrics": metrics if limit is None else metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
 
 
 def thin(all_rows: list[Any], objectives: list[tuple[str, str]], cap: int = 3000) -> list[dict[str, Any]]:

@@ -119,6 +119,7 @@ def test_past_a_page_the_counts_are_of_every_design(tmp_path):
     got = designs(db, [{"name": "screen"}], since=0)
     assert len(got["designs"]) == 1000 and got["total"] == 1200 and got["counts"]["accepted"] == 1200
     assert got["this_start"] == 1200 and "_firsts" not in got
+    assert len(designs(db, [{"name": "screen"}], limit=None)["designs"]) == 1200, "raw views include every design"
     assert designs(db, [{"name": "screen"}], since=time.time() + 60)["this_start"] == 0, "none since a later start"
 
 
