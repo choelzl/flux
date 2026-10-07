@@ -362,6 +362,8 @@ def prefers_edits(cap: Any, subgoal: str | None, state: LoopState, best_score: f
     is a passing design being made faster, unless a redesign was asked for (D499). Returns
     the reason, or None to let it run."""
     part = state.part(subgoal)
+    if part.dse not in ("finetune", "refine"):
+        return None                       # default search permits reasoned structural experiments
     if part.redesign:
         return None
     if not (best_score == best_score) or best_score == float("inf"):       # nothing in hand
@@ -485,18 +487,21 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
             parts += [human or "", first_prompt, plan_line, *help_lines]
         elif agent is not None:
             parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
-                      "The prototype is already in the file named below: edit it there (or rewrite it if "
-                      "the approach itself is wrong). Do not run it: the loop checks it and comes back with the result.",
+                      "The prototype is already in the file named below: edit or replace it to test a reasoned hypothesis. "
+                      "Do not run it: the loop checks it and comes back with the result.",
                       reminder_for(proto, subgoal, state)]
         else:
             numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(code.splitlines()))
             parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
-                      "Fix it with the SMALLEST edits (find must match exactly once), or "
-                      "send a new prototype if the approach itself is wrong.",
+                      "Use edits (find must match exactly once) or a new prototype, whichever best tests "
+                      "your hypothesis. Structural changes are allowed before this approach stalls.",
                       reminder_for(proto, subgoal, state),
                       *help_lines,
                       f"Current prototype (line numbers for reading only):\n\n{numbered}"]
-        prompt = _compose(prefix, *parts)
+        from .direction import begin, guidance
+
+        begin(problem, state, subgoal)
+        prompt = _compose(prefix, guidance(problem, state, subgoal), *parts)
         checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
         t_attempt = time.monotonic()
         answer = None

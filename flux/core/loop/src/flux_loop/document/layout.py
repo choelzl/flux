@@ -24,7 +24,9 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
     for box, value in flow.items():
         words = {inner: word for word, inner in (_BY_WORDS.get(box) or {}).items() if inner is not None}
         rest = {k: x for k, x in value.items() if k not in ("agent", "policy")} if isinstance(value, dict) else {}
-        if isinstance(value, str) and box != "dse" and value in words:
+        if box == "orchestrate" and isinstance(value, dict) and value.get("name") == "agent" and "dse" in value:
+            out[box] = {"by": "tools", **{k: v for k, v in value.items() if k != "name"}}
+        elif isinstance(value, str) and box != "dse" and value in words:
             out[box] = words[value]
         elif isinstance(value, dict) and "agent" in value:
             got = _by_doc(value["agent"], rest)
@@ -47,6 +49,11 @@ def _by_layout(flow: dict[str, Any]) -> dict[str, Any]:
         if isinstance(dse, dict) and set(dse) == {"command"} and isinstance(dse["command"], dict):
             dse = {"command": dse["command"].get("run"), **{k: v for k, v in dse["command"].items() if k != "run"}}
         out["orchestrate"] = {"by": "model"} if dse == "model" else dse
+    o = out.get("orchestrate")
+    if isinstance(o, dict) and len(o) == 1:
+        name, cfg = next(iter(o.items()))
+        if name in ("llm", "rules", "agent") and isinstance(cfg, dict) and "dse" in cfg:
+            out["orchestrate"] = {"by": {"llm": "model", "rules": "rules", "agent": "tools"}[name], **cfg}
     k = out.get("knowledge")                               # D830: who digests is `digest:`
     if isinstance(k, dict) and "by" in k:
         agent_opts = {x: k[x] for x in _AGENT_OPTS if x in k}

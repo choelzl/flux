@@ -122,6 +122,7 @@ class Improve:
     explore: bool = False
     #: a pass's direction (D845): the ladder's due step if any, else the generator reworks it -- never "stand"
     refine: bool = False
+    dse: str = ""                 # chosen move; the public setting remains flow.orchestrate.dse
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,7 @@ class LoopRequest:
     repair_attempts: int = 12       # inner-loop attempts per generation
     explore_every: int = 4          # 1 in N generations starts fresh, not from best
     explore_after: int = 2          # D845: passes the decision stands before a pass explores (then in turn)
+    exploration_quota: float = 0.0  # minimum share of attempted improvements devoted to new approaches
     cooldown_after: int = 3         # consecutive no-builds before a subgoal yields
     structured: bool = True         # schema-constrained decoding when the proposer allows
     patching: bool = True           # repair by find/replace edits, not rewrites
@@ -234,6 +236,8 @@ class PartState:
     """What the loop knows about one part beyond its admitted design: its numbers measured
     alone, its depth proxies, and the improve ladder's counters (D509)."""
 
+    dse: str = ""                 # search move currently guiding this part's prompts
+
     alone: dict[str, float] = field(default_factory=dict)   # its numbers measured alone on the deepest stage
     shrunk: str = ""                                          # digest of the prototype already made cheaper
     depth_by_digest: dict[str, Any] = field(default_factory=dict)   # prototype digest -> logic-depth proxy
@@ -284,6 +288,7 @@ class LoopState:
     proto_best: dict[str, tuple[float, str, str]] = field(default_factory=dict)  # best refused prototype per part (score, code, why)
     plans: dict[str, dict[str, Any]] = field(default_factory=dict)  # part -> brief, budget
     dse: list[dict[str, Any]] = field(default_factory=list)   # the seeds, then what each DSE phase did
+    search_choices: list[str] = field(default_factory=list) # attempted search moves without a persistent record
     plan: dict[str, Any] = field(default_factory=dict)   # the loop plan this pass follows (applied)
     critiqued: dict[str, int] = field(default_factory=dict)     # part -> times sent back
     judged: int = 0

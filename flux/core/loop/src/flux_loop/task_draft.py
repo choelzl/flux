@@ -107,9 +107,12 @@ class DraftMixin:
             # the session holds the brief: what failed, the file, fix it (D669)
             path.write_text(prior.artifact)
             message = (f"THE LOOP RAN YOUR DRAFT AND REFUSED IT:\n{failure.strip()[:4000]}\n\nThe refused draft is in "
-                       f"`{path}`. Fix that file in place (or rewrite it if the approach is wrong)"
+                       f"`{path}`. Edit or replace it to test a reasoned improvement"
                        + ("; `flux probe` has a new budget for this turn. " if budget is not None else ". ")
                        + "Then reply with one line saying the file is written.\n")
+            from .direction import guidance
+
+            message += guidance(self, state, sg)
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
         prompt_file = workdir / f"PROMPT-{safe}.md"
@@ -215,9 +218,12 @@ class DraftMixin:
         if resume:
             # the session holds the brief: what the check said, the file, fix it (D669)
             message = (f"THE LOOP RAN YOUR PROTOTYPE AND REFUSED IT:\n{(failure or 'see the check').strip()[:4000]}\n\n"
-                       f"It is in `{path}`. Edit it there (or rewrite it if the approach is wrong)"
+                       f"It is in `{path}`. Edit or replace it to test a reasoned improvement"
                        + ("; `flux probe gate` has a new budget for this turn. " if budget is not None else ". ")
                        + "Then reply with one line saying the file is written.\n")
+            from .direction import guidance
+
+            message += guidance(self, state, subgoal)
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),

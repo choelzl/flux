@@ -31,6 +31,7 @@ class Kind(str, Enum):
     REDESIGN_STALLED = "redesign_stalled"  # a redesign pass ended where the last one did
     REST = "rest"                          # the design stands; nothing on the ladder was due
     DECISION = "decision"                  # an orchestrator's pick and why
+    SEARCH_CHOICE = "search_choice"        # DSE intent for an attempted improvement, retained across passes
 
     @property
     def void(self) -> "Kind | None":

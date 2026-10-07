@@ -352,6 +352,9 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
     def prompt_prefix(self, subgoal: str | None, state: LoopState) -> str:
         t = self.task
         lines = [f"TASK {t.id}: {t.statement}"]
+        from .direction import guidance
+
+        lines.append(guidance(self, state, subgoal, active=False))
         part = self._part(subgoal)
         if part is not None:
             lines.append(f"PART {part.name}" + (f": {part.statement}" if part.statement else "")
@@ -373,13 +376,14 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                       human: str | None, prior: Candidate | None, prior_why: str
                       ) -> tuple[str, dict | None]:
         from .novelty import tried_block
+        from .direction import guidance
 
         target = f"part {subgoal}" if subgoal else f"task {self.task.id}"
-        parts = [human or "", tried_block(self, state, subgoal)]          # D839: what was tried, the best first
+        parts = [human or "", guidance(self, state, subgoal), tried_block(self, state, subgoal)]
         if prior is not None:
             numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(prior.artifact.splitlines()))
             parts += [f"What the loop said about your previous attempt for {target}:\n\n{prior_why}",
-                      "Rework it, or send a new one if the approach itself is wrong.",
+                      "Rework it or try a new approach when there is a plausible hypothesis worth measuring.",
                       f"Previous attempt (line numbers for reading only):\n\n{numbered}"]
         else:
             parts.append(f"Write {target} now" + (f" ({method})" if method else "") + ".")
@@ -544,10 +548,9 @@ def model_use(task: "TaskSpec") -> str:
             reasons.append(f"{box}: model")
     reasons += [f"stage {r.name} estimates with it" for r in task.stages if r.estimate and r.estimate.kind == "model"]
     orch = (task.roles or {}).get("orchestrator")
+    orch_name = orch if isinstance(orch, str) else (orch.get("name") or next(iter(orch), "")) if isinstance(orch, dict) else ""
     coding = isinstance(orch, dict) and isinstance(orch.get("agent"), dict) and orch["agent"].get("coding")
-    if not coding and (orch in ("llm", "model", "agent") or (isinstance(orch, dict) and set(orch) & {"llm", "model", "agent"})):
+    if not coding and orch_name in ("llm", "model", "agent"):
         # D843: a coding agent orchestrating (`orchestrate: opencode`, D640) picks by its own turns, not Flux's model
-        reasons.append(f"the orchestrator is the {orch if isinstance(orch, str) else next(iter(orch))}")
+        reasons.append(f"the orchestrator is the {orch_name}")
     return "; ".join(reasons)
-
-

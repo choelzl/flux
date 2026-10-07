@@ -87,6 +87,7 @@ class Rules:
     """
 
     name: str = "rules"
+    dse: str = ""
 
     def divide(self, problem: Any, state: Any, critique: str | None = None) -> Any | None:
         return None                      # the problem declares its own parts
@@ -143,6 +144,7 @@ class ModelOrchestrator:
     """
 
     name: str = "llm"
+    dse: str = ""
 
     def divide(self, problem: Any, state: Any, critique: str | None = None) -> Any | None:
         """The division stays the problem's, which has the task's words; a document asks its
@@ -165,7 +167,9 @@ class ModelOrchestrator:
         kinds = kinds + ["batch"]
         if state.proposer is None:
             return _in_hand_first(state, waiting)
-        lines = ["A design search is running. Choose what the next step should do."]
+        from .direction import guidance
+
+        lines = ["A design search is running. Choose what the next step should do.", guidance(problem, state, active=False)]
         if state.improve:
             lines.append(f"improve: {len(state.improve)} design(s) an evaluator sent back "
                          f"to be redrafted: {state.improve[0].why[:160]}")
@@ -187,20 +191,22 @@ class ModelOrchestrator:
 
 
     def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
-        """D845: refine the standing design or explore a new one, the model asked; None: the rules."""
+        """Ask the model which experiment to try; an unanswered choice falls back to rules."""
         from .model import _ask, _json
 
         if state.proposer is None:
             return None
-        schema = {"type": "object", "properties": {"pick": {"enum": ["refine", "explore"]}, "why": {"type": "string"}},
+        from .direction import CHOICES
+
+        schema = {"type": "object", "properties": {"pick": {"enum": list(CHOICES)}, "why": {"type": "string"}},
                   "required": ["pick"]}
         prompt = "\n".join(["You orchestrate a design campaign: one design a pass.", *lines,
-                             'Reply with ONLY JSON: {"pick": "refine" or "explore", "why": "<one line>"}'])
+                             'Reply with ONLY JSON: {"pick": "<one of ' + ', '.join(CHOICES) + '>", "why": "<hypothesis and evidence>"}'])
         try:
             doc = _json(_ask(state, prompt, schema).text)
         except Exception:  # noqa: BLE001 -- an unanswered choice is not a failed run
             return None
-        if isinstance(doc, dict) and doc.get("pick") in ("refine", "explore"):
+        if isinstance(doc, dict) and doc.get("pick") in CHOICES:
             return str(doc["pick"]), str(doc.get("why") or "")[:200]
         return None
 
@@ -217,6 +223,7 @@ class AgentOrchestrator:
     name: str = "agent"
     fallback: Any = field(default_factory=lambda: Rules())
     coding: Any = None           # a coding agent's spec: each pick is its box turn, not a model's (D640)
+    dse: str = ""
 
     def divide(self, problem: Any, state: Any, critique: str | None = None) -> Any | None:
         return None                      # the division is the plan's (D505 planning) or the problem's
@@ -249,10 +256,12 @@ class AgentOrchestrator:
         return got["pick"] if got else None
 
     def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
-        """D845: refine the standing design or explore a new one, decided with tools and recorded."""
+        """Choose an experiment with tools and record the hypothesis behind it."""
         if self.coding is None and state.proposer is None:
             return None
-        got = self._decide(problem, state, "direction", lines, ["refine", "explore"])
+        from .direction import CHOICES
+
+        got = self._decide(problem, state, "direction", lines, list(CHOICES))
         return (got["pick"], str(got.get("why") or "")[:200]) if got else None
 
     def choose_improve(self, problem: Any, item: Any, options: list, state: Any) -> Any | None:
@@ -296,6 +305,9 @@ class AgentOrchestrator:
                 *lines,
                 'Reply with ONLY JSON: {"pick": "<one of ' + ", ".join(choices) + '>", "why": "<one or two lines: the numbers that decide it>"'
                 + (', "method": "<one line>"' if extra and "method" in extra else "") + "}"]
+        from .direction import guidance
+
+        head.insert(1, guidance(problem, state))
         props: dict = {"pick": {"type": "string", "enum": list(choices)}, "why": {"type": "string"}}
         props.update(extra or {})
         schema = {"type": "object", "properties": props, "required": ["pick", "why"]}
@@ -439,10 +451,11 @@ def rig(**specs: Any) -> Roles:
     return Roles(**{role: make(role, spec) for role, spec in specs.items()})
 
 
-register("orchestrator", "rules", lambda _c: Rules())
+register("orchestrator", "rules", lambda c: Rules(dse=c.get("dse", "")))
 register("orchestrator", "given", lambda c: Given(c.get("parts") or c.get("value") or ()))
-register("orchestrator", "llm", lambda _c: ModelOrchestrator())
-register("orchestrator", "agent", lambda c: AgentOrchestrator(coding=(c or {}).get("coding")))
+register("orchestrator", "llm", lambda c: ModelOrchestrator(dse=c.get("dse", "")))
+register("orchestrator", "agent", lambda c: AgentOrchestrator(coding=(c or {}).get("coding"), dse=c.get("dse", "")))
+
 register("knowledge", "mined", lambda c: _mined(c))
 register("knowledge", "digest", lambda c: _digest_mentor(c))
 register("knowledge", "sources", lambda c: _sources_mentor(c))

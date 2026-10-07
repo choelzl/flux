@@ -112,7 +112,7 @@ def test_a_policy_without_a_space_or_an_objective_says_so():
         def space(self, state):
             return {}
 
-    assert Sweep().search(Flat(None), state) is None and any("nothing to search" in m for m in said)
+    assert Sweep().search(Flat(None), state) is None and any("policy guides design and prototype experiments" in m for m in said)
 
     class Blind(Bowl):
         def objectives(self):
@@ -140,7 +140,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
     assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 point(s): x[3] x y[2]")
                for line in describe_flow(task, prob))
     assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
-    with pytest.raises(TaskError, match="available: agent, anneal, command, control, genetic"):
+    with pytest.raises(TaskError, match="available: adaptive, agent, anneal, command, control, explore, finetune, genetic"):
         TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": "hillclimb"}})
     with pytest.raises(TaskError, match="space.y: a non-empty list"):
         TaskSpec.from_dict({**doc, "flow": {**doc.get("flow", {}), "orchestrate": {"space": {"x": [1], "y": []}}}})

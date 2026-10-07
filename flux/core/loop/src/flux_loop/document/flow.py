@@ -37,6 +37,17 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     roles: dict[str, Any] = {}
     from ..boxes import DELEGABLE, NEVER
 
+    raw = dict(raw)
+    search_hint = None
+    if isinstance(raw.get("orchestrate"), dict) and "dse" in raw["orchestrate"]:
+        from ..direction import PROMPTS
+
+        value = dict(raw["orchestrate"])
+        search_hint = value.pop("dse")
+        if not isinstance(search_hint, str) or search_hint not in PROMPTS:
+            raise TaskError(f"flow.orchestrate.dse is one of {', '.join(PROMPTS)}, not {search_hint!r}")
+        raw["orchestrate"] = value
+
     for box, value in raw.items():
         if not (isinstance(value, dict) and "agent" in value) or box in ("generate", "knowledge"):   # their own (D773)
             continue
@@ -75,7 +86,19 @@ def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         value = raw["orchestrate"]
         # a coding agent picks through the agent orchestrator (D640)
         roles["orchestrator"] = {"agent": {"coding": value["agent"]}} if isinstance(value, dict) and "agent" in value else value
+        if search_hint:
+            spec = roles["orchestrator"]
+            if isinstance(spec, str):
+                spec = {spec: {"dse": search_hint}}
+            elif "name" in spec:
+                spec = {**spec, "dse": search_hint}
+            else:
+                key = next(iter(spec))
+                spec = {key: {**spec[key], "dse": search_hint}}
+            roles["orchestrator"] = spec
         flow["orchestrate"] = value
+        if search_hint:
+            flow["orchestrate"] = {**value, "dse": search_hint}
     if "dse" in raw:
         value = raw["dse"]
         if isinstance(value, dict) and set(value) == {"agent"}:

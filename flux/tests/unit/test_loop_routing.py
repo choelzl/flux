@@ -2,8 +2,8 @@
 
 Any stage in the chain can send a design back to the generator; an improved part replaces what was
 admitted; routing that fails is not a gate; `improve` is a kind of work the orchestrator chooses; a
-mis-posed problem is refused before anything is spent; both early stops (good enough, out of
-time) are off unless turned on.
+mis-posed problem is refused before anything is spent; explicit time budgets bound passes,
+and reaching a target leaves the campaign free to keep experimenting.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from flux_loop import (Candidate, Improve, LoopRequest, Problem, PromptProblem, Scored, TaskSpec,
+from flux_loop import (Candidate, Improve, LoopRequest, Problem, PromptProblem, TaskSpec,
                        Template, Verdict, rig, run_loop)
 from flux_llm import Reply
 
@@ -189,7 +189,7 @@ def test_a_wall_clock_stops_the_pass_and_says_so(tmp_path):
     assert len(out.scored) < 50, "it did not run every step"
 
 
-def test_good_enough_stops_the_pass_with_its_reason(tmp_path):
+def test_meeting_a_target_leaves_the_campaign_free_to_keep_experimenting(tmp_path):
     class Enough(Fabric):
         def good_enough(self, state):
             best = max((s.metrics["served"] for s in state.scored), default=0.0)
@@ -197,10 +197,10 @@ def test_good_enough_stops_the_pass_with_its_reason(tmp_path):
 
     problem = Enough(target=4.0)
     out = run_loop(problem, _request(tmp_path, steps=9), proposer=None, log=lambda _m: None)
-    assert out.stopped.startswith("good enough: served 4"), out.stopped
-    assert not out.cut_short, "a target met is not a budget cut"
-    assert any("good enough" in l for l in out.lessons)
-    assert problem.drafts == ["w2", "w4"], "it stopped instead of widening again"
+    assert out.stopped == "nothing left to do", out.stopped
+    assert not out.cut_short
+    assert not any("stopped because it was good enough" in l for l in out.lessons)
+    assert problem.drafts == ["w2", "w4"], "the route has no further work, rather than a goal forcing a stop"
 
 
 # ------------------------------------------------------- input/problem valid?

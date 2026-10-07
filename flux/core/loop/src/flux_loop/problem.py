@@ -150,6 +150,9 @@ def plan_with_model(problem: Any, menu: list[str], state: LoopState,
     prompt, schema = problem.plan_prompt(menu, state, human)
     if not prompt:
         return default, ""
+    from .direction import guidance
+
+    prompt += "\n" + guidance(problem, state, active=False)
     try:
         reply = _ask(state, prompt, schema).text
     except Exception:  # noqa: BLE001
@@ -446,17 +449,11 @@ class OrchestratorRole(_Role):
         return self.objectives().best_of(rows, stage, self.stages()) if self.objectives() else None
 
     def good_enough(self, state: LoopState) -> str | None:
-        """Optional early stop (D463), off unless a problem implements it: whether the
-        pass is done before its budget runs out, and why in words:
-        "the target is met: 612 MHz at 0.51 mm2". The loop checks this before each step and
-        stops with that reason in the report. None = keep working.
+        """Describe whether the measured whole design meets every objective limit.
 
-        A target is a property of the request, not of the loop, which is why this is a hook
-        and why the default never stops: "good enough" for one study is a constraint met, for
-        another a frontier that has not moved in three steps, and for a sweep that wants every
-        point it is nothing at all. Same for `LoopRequest.budget_s`: no clock unless a caller
-        sets one. The default (D511, D658): every limit met by the whole design (the last
-        composed candidate measured), with no goal-less objective left to improve."""
+        Kept for callers reporting goal attainment; the campaign continues experimenting
+        after reaching a target. With a goal-less objective left to improve, returns None.
+        """
         objs = self.objectives()
         if not objs.limits:
             return None
@@ -579,6 +576,9 @@ class GeneratorRole(_Role):
         solver. A problem whose generation is neither overrides this."""
         from .generation import _generate_with_model
         from .sources import Model, iterate
+        from .direction import begin
+
+        begin(self, state, subgoal)
 
         source = self.generator(subgoal, state)
         if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
@@ -612,7 +612,7 @@ class GeneratorRole(_Role):
 
     def objectives(self) -> "Objectives":
         """The objective as a vector (D511): `flux_loop.Objectives`, ordered, the first the goal
-        when it names one. The frontier's axes, the decision, the early stop and which of a
+        when it names one. The frontier's axes, the decision and which of a
         part's admitted designs stands at a reload all derive from it below; a problem with
         no objectives (the default) has no frontier and decides on the first thing measured."""
         return Objectives()

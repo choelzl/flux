@@ -255,7 +255,7 @@ class TaskSpec:
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
         budget = dict(doc.get("budget") or {})
-        if "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2:
+        if space and "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2:
             raise TaskError(f"flow.dse: pareto needs two objectives; this document has {len(objectives)}")
         if flow:
             if flow.get("calibrate") == "off":
@@ -268,6 +268,9 @@ class TaskSpec:
         bad = sorted(set(budget) - known)
         if bad:
             raise TaskError(f"budget keys {bad} are not loop knobs; known: {sorted(known)}")
+        quota = budget.get("exploration_quota", 0)
+        if isinstance(quota, bool) or not isinstance(quota, (int, float)) or not 0 <= quota <= 1:
+            raise TaskError("budget.exploration_quota is a fraction between 0 and 1")
         if budget.get("prototype", True) not in (True, False, "python", "systemc"):
             raise TaskError(f"budget.prototype is true, false, python or systemc, not {budget['prototype']!r}")
         said_language = doc.get("language")

@@ -41,6 +41,7 @@ _BY_WORDS = {"validate": {"rules": "rules", "model": "llm"},
              "calibrate": {"on": "on", "off": "off"},
              "knowledge": {"off": "off", "model": None}}
 _BY_SETTINGS = {"generate": ("command", "catalog"), "select": ("finalists",), "dse": ("policy", "space", "seeds"),
+                "orchestrate": ("dse",),
                 "knowledge": ("files", "sheet", "text", "off")}
 
 
@@ -128,11 +129,18 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
             continue
         if "agent" in value:
             raise TaskError(f"flow.{box}: who works it is `by` -- {{by: {value['agent'] if isinstance(value['agent'], str) else 'claude'}}} (D795)")
+        if box == "orchestrate" and set(value) == {"dse"}:
+            value = {"by": "model", **value}
         if "by" not in value:
             continue                                           # its settings alone (generate's command, dse's space, ...)
         v = dict(value)
         by = v.pop("by")
         settings = {k: v.pop(k) for k in list(v) if k in _BY_SETTINGS.get(box, ())}
+        if box == "orchestrate" and "dse" in settings:
+            from ..direction import PROMPTS
+
+            if not isinstance(settings["dse"], str) or settings["dse"] not in PROMPTS:
+                raise TaskError(f"flow.orchestrate.dse is one of {', '.join(PROMPTS)}")
         if box == "dse" and by == "model" and v:           # the model's search, with its own options
             cfg, v = dict(v), {}
             out[box] = {**settings, "policy": {"llm": cfg}}
@@ -147,7 +155,10 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
             if box == "dse":
                 out[box] = {**settings, "policy": "llm"}
             elif settings:                                     # the reading, the finalists: the word is the default
-                out[box] = settings
+                if box == "orchestrate":
+                    out[box] = {"name": inner, **settings} if inner == "agent" else {inner: settings}
+                else:
+                    out[box] = settings
             elif inner is None:
                 out.pop(box)
             else:

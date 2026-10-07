@@ -202,7 +202,7 @@ class Policy(Rules):
     def search(self, problem: Any, state: Any) -> Iterator[list[Candidate]] | None:
         space = {k: list(v) for k, v in dict(problem.space(state) or {}).items() if v}
         if not space:
-            state.say(f"  {self.name}: no `flow.dse.space` is declared and the world names none; nothing to search")
+            state.say(f"  {self.name}: no parameter space; the policy guides design and prototype experiments")
             return None
         self._space, self._when = space, dict(getattr(getattr(problem, "task", None), "when", None) or {})
         seeds = [dict(p) for p in (getattr(problem, "seeds", None) or (lambda _s: []))(state) or []]
@@ -728,6 +728,12 @@ class ModelSearch(Policy):
                   "required": ["points"]}
         complaint = ""
         for round_ in range(int(self.rounds)):
+            from .direction import choose, guidance, reserve_choice
+
+            # Reserve exploratory rounds using the same campaign ledger as code redesigns.
+            baseline = state.admitted.get("*") or Candidate("parameter space", "")
+            pick, why = choose(problem, state, baseline, "Choose the next region of the declared parameter space.")
+            pick, why = reserve_choice(state, pick, why)
             measured = self.values(list(state.scored), metric, sign) if metric else []
             measured.sort(key=lambda t: t[0])
             rows = [f"  {json.dumps({k: p.get(k) for k in space}, default=str)} -> {metric} {sign * v:g}" for v, p in measured[:int(self.shown)]]
@@ -740,6 +746,7 @@ class ModelSearch(Policy):
                     prefix = ""
             lines = [
                 *([prefix.rstrip()] if prefix.strip() else []),
+                guidance(problem, state),
                 f"DESIGN-SPACE EXPLORATION, round {round_ + 1} of {self.rounds}. The space (each knob and its choices, in order):",
                 *(f"  {k}: {json.dumps(v)}" for k, v in space.items()),
                 *([f"The other knobs are held at the incumbent's: {json.dumps(base, default=str)}"] if base else []),
@@ -859,6 +866,10 @@ def make_phase(spec: Any, default_label: str = "") -> Policy:
     if cls is None or cls is Phases:
         raise ValueError(f"phase policy {name!r} is not one of {', '.join(n for n in _POLICIES if n != 'phases')}")
     pol = cls(**_config(cls, spec))
+    from .direction import PRESETS
+
+    if name in PRESETS:
+        pol.name = pol.dse = name
     if not pol.label:
         pol.label = default_label
     return pol
@@ -987,3 +998,11 @@ def _factory(cls):
 for _cls in (Sweep, MonteCarlo, Anneal, Gradient, Genetic, ModelSearch, Pareto, Control, Phases, CommandSearch):
     _POLICIES[_cls.name] = _cls
     register("orchestrator", _cls.name, _factory(_cls))
+
+# The same selector also names search preferences. With knobs, a model/agent proposes
+# legal points; without knobs, it guides generation and prototype work.
+from .direction import PRESETS as _INTENTS
+
+for _intent in _INTENTS:
+    _POLICIES[_intent] = ModelSearch
+    register("orchestrator", _intent, lambda config, name=_intent: ModelSearch(**{**_config(ModelSearch, config), "name": name, "dse": name}))

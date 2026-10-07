@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 import re
 
-import pytest
-
 from flux_loop import (BuildError, Candidate, LoopRequest, Problem, Scored, Verdict,
                        apply_patch, run_loop)
 from flux_llm import Reply
@@ -271,7 +269,7 @@ def test_the_prototype_stage_resumes_from_the_best_on_record_and_stops_when_noth
 
 def test_a_resume_does_not_take_a_prototype_for_the_best_design(tmp_path):
     """A passing prototype on record is reloaded as a prototype, not as the part's best target design (D471)."""
-    from flux_loop import LoopRequest, LoopState, Candidate, StageNames, _reload
+    from flux_loop import LoopRequest, LoopState, StageNames, _reload
     from flux_records import Records
 
     class P(Problem):
@@ -529,7 +527,7 @@ def test_focus_window_shows_the_fault_and_the_outline():
 
 def test_prompts_put_the_static_prefix_first_and_carry_compute_results(tmp_path):
     """The static prefix leads every prompt, the changing part follows, and computations come back next turn (D422)."""
-    from flux_loop import LoopRequest, LoopState, Problem, Candidate, BuildError, run_loop
+    from flux_loop import LoopRequest, run_loop
 
     prompts = []
 
@@ -708,6 +706,7 @@ def test_a_rewrite_that_drops_its_tables_gets_them_back_and_a_rewrite_near_a_goo
 
     st = LoopState(request=LoopRequest(repair_attempts=1, prototype_attempts=3),
                    say=lambda _m: None, proposer=Model(), feedback=None, workdir=str(tmp_path))
+    st.part("a").dse = "finetune"      # explicit fine tuning retains the small-edit guard
     cand, built, reason = _generate_with_model(P(), "a", "", st, None)
     assert "your NEW prototype was not run: the text in hand fails only 1 of 40 inputs" in prompts[2]
     assert reason == "" and "a" in st.prototypes and st.prototypes["a"].startswith("T = 5\ndef design")   # T put back

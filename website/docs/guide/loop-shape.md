@@ -37,6 +37,39 @@ a click on a box changes who does it.
 
 ## The boxes
 
+Search is adaptive and permissive by default: an agent may try a different algorithm or
+architecture whenever it has a plausible hypothesis, even before the incumbent stalls.
+Keep correctness and contract checks; keep the best verified result while experimenting.
+The same DSE selector guides whole designs, parts, prototypes, and parameter proposals.
+Its values are preferences rather than prohibitions on other useful experiments.
+
+```yaml
+flow:
+  orchestrate: {by: claude, dse: anneal}
+budget:
+  exploration_quota: 0.25
+  passes: 0
+```
+
+`flow.orchestrate.dse` reuses the search policy setting beside whoever orchestrates. It
+accepts `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations`, and the existing
+`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`, and `pareto` values. There is no
+separate direction setting. `gradient` favors measured local trends; `anneal` allows
+temporarily worse moves and jumps; `genetic` encourages diverse alternatives and combining
+ideas; `pareto` develops different trade-offs. With a declared parameter space, the existing
+`flow.orchestrate: {policy: ..., space: ...}` syntax still runs its concrete search algorithm.
+
+The optional `budget.exploration_quota` is a fraction from 0 to 1. It reserves at least that
+share of attempted AI search moves for a new approach, including attempts that fail; it
+does not claim that the resulting designs will be novel or better. Zero, the default,
+leaves the choice to the orchestrator. Fixed numeric search algorithms retain their own
+sampling rules. Choices and reasons are recorded, and the web editor exposes the policy
+and quota. Verified alternatives remain on record and may receive further development.
+
+Reaching the objective does not end the campaign or freeze the next pass. By default it
+continues until stopped manually. Explicit `budget.passes` / `--passes` limits still apply;
+finite searches with no generator wait for a note or stop after exhausting their space.
+
 Most boxes can be done by *rules*, a *model* or a *coding agent* (Claude Code, Codex, OpenCode):
 one key per box in `flow:`; a box left out keeps its default, the first choice listed.
 
@@ -53,7 +86,7 @@ flow:
 | Plan the round | `plan` | Optionally writes a plan for the round before any work starts. | `off`: step by step · `model`: a model writes the plan · a coding agent |
 | Pick the next job | `orchestrate` | Decides what to work on next. | unsaid: the model picks the next part, rules pick the kind of work · `rules`: no model · `model`: a model picks · `tools`: a model with tools picks · a coding agent. Left out when a search is on: the search picks. |
 | Your notes | `feedback` | Notes you type while it runs steer the next round. Typed in the live screen (`--tui`, then `f`). | `human` · `off` |
-| Search the settings | `orchestrate` | Walks the list of settings (the space) to choose which to try. Its space: `flow.orchestrate: {policy: sweep, space: {...}}`. | `none` · `sweep`: every combination · `montecarlo`: random samples · `anneal` · `gradient`: step towards better · `genetic`: breed the best · `pareto`: the trade-off front · `model`: a model proposes settings · a coding agent |
+| Search policy | `orchestrate` | Guides design and prototype experiments. With settings to search, existing algorithms still walk that space. Reasoned risks are allowed by default. | `none`: adaptive default · `adaptive` · `explore` · `improve` · `tune` · `finetune` · `variations` · `sweep`: every combination · `montecarlo`: diverse samples · `anneal`: local moves and jumps · `gradient`: measured trends · `genetic`: diverse alternatives · `pareto`: trade-offs · `model`: a model proposes settings · a coding agent |
 | Make a design | `generate` | Writes each candidate design. With a search, only your script runs: it makes each point a design (a model or an agent is not asked for a point, D911). | `model`: a model writes it · `{command: "..."}`: your script writes it · a coding agent |
 | Background reading | `knowledge` | What the model reads with every request. | unsaid: the library (your papers and notes, see [build your own](build-your-own.md#3-say-what-is-correct)) and the files the document lists · `none`: no library |
 | Digest the papers | | Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt. | `model` (unsaid): the model sums them up · a coding agent, written `knowledge: {digest: opencode}` |

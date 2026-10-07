@@ -58,6 +58,9 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                          state: LoopState, human: str | None
                          ) -> tuple[Candidate | None, Any, str]:
     req = state.request
+    from .direction import begin, guidance
+
+    begin(problem, state, subgoal)
     key = subgoal or "*"
     tag = subgoal or problem.name
     plan = state.plans.get(key) or {}
@@ -125,7 +128,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
         body, schema = pair
         brief = (state.plans.get(key) or {}).get("brief")                    # the plan's method for this part
         brief_block = f"BRIEF (from the orchestrator):\n{brief}" if brief else ""
-        return _compose(prefix, brief_block, proto_block, body, help_text), schema
+        return _compose(prefix, brief_block, proto_block, body, guidance(problem, state, subgoal), help_text), schema
 
     def fresh(h: str | None) -> tuple[str, dict | None]:
         return wrap(problem.design_prompt(subgoal, method, state, h, prior, prior_why))
@@ -150,10 +153,20 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             with _phase(f"repair: {tag}", why=f"attempt {attempt + 1}"):
                 try:
                     p, sch = wrap(problem.patch_prompt(subgoal, _shown(cand), last_err, state))
+                    if state.part(subgoal).dse not in ("refine", "finetune"):
+                        p += "\nA full replacement is also allowed when it tests a plausible improvement. Reply with {\"artifact\": \"<complete text>\", \"why\": \"<hypothesis>\"} instead of edits."
+                        if sch is not None:
+                            sch = {**sch, "properties": {**sch.get("properties", {}), "artifact": {"type": "string"}},
+                                   "anyOf": [{"required": ["edits"]}, {"required": ["artifact"]}]}
+                            sch.pop("required", None)
                     reply = _ask(state, p, sch, tools=tools).text
                 except Exception as exc:  # noqa: BLE001
                     return None, None, f"patcher did not run ({exc})"
             edits, pwhy = parse_patch(reply)
+            if edits is None and state.part(subgoal).dse not in ("refine", "finetune"):
+                replacement, reason = problem.parse_design(reply, subgoal)
+                if replacement is not None:
+                    edits, pwhy = [{"find": cand.artifact, "replace": replacement.artifact}], "full replacement: " + reason
             if edits is None:
                 state.say(f"  patch unusable ({pwhy}); rewriting {tag} instead")
                 mode = "design"

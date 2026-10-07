@@ -101,7 +101,7 @@ def test_a_pass_with_a_standing_design_builds_one_by_a_direction(tmp_path):
     assert first.decision is not None and first.stopped == "one design a pass", first.stopped
     said: list[str] = []
     again = run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=said.append)
-    assert any("direction: refine" in m for m in said), said
+    assert any("direction: improve" in m for m in said), said
     # the fake agent writes the same digits each time: refused as a repeat, tried again, never a rest
     assert any("is digits#1 again, already measured" in m for m in said)
     assert again.stopped.startswith("no new design passed the gate") and not again.at_rest, again.stopped
@@ -119,8 +119,8 @@ def test_the_rules_refine_while_the_decision_moves_then_explore_in_turn():
 
     prob = SimpleNamespace(roles=lambda: SimpleNamespace(orchestrator=None))
     standing = Candidate("p#3", "x")
-    assert choose(prob, state(["p#3", "p#2"]), standing, "")[0] == "refine"
-    assert choose(prob, state(["p#3", "p#3"]), standing, "")[0] == "refine", "stood one pass: fewer than two"
+    assert choose(prob, state(["p#3", "p#2"]), standing, "")[0] == "improve"
+    assert choose(prob, state(["p#3", "p#3"]), standing, "")[0] == "improve", "reasoned structural improvements are allowed before stagnation"
     assert choose(prob, state(["p#3", "p#3", "p#3"]), standing, "")[0] == "explore"
     assert choose(prob, state(["p#3"] * 4), standing, "")[0] == "refine", "then in turn"
     asked = SimpleNamespace(roles=lambda: SimpleNamespace(orchestrator=SimpleNamespace(direction=lambda p, s, lines: ("explore", "the front is flat"))))

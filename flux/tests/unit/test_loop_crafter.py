@@ -208,6 +208,29 @@ BUILT = _run() if shutil.which("node") else {}
 GOOD = sorted(k for k, v in BUILT.items() if "state" in v and not v.get("bad") and not v.get("partial"))
 
 
+@pytest.mark.parametrize("policy", ["adaptive", "explore", "improve", "tune", "finetune", "variations",
+                                    "sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"])
+def test_search_preferences_and_quota_round_trip_without_a_parameter_space(tmp_path, policy):
+    script = r"""
+const c = require(process.argv[1]);
+const doc = {id: 'search', statement: 'Develop new ideas',
+  flow: {orchestrate: {by: 'claude', timeout_s: 321, dse: process.argv[2]}, test: {check: 'true'}},
+  budget: {exploration_quota: 0.25}};
+const imported = c.fromDoc(doc, null);
+console.log(JSON.stringify({yaml: c.buildYaml(imported.state), kept: imported.kept,
+  policy: imported.state.flow.dse, issues: c.check(imported.state)}));
+"""
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), policy], capture_output=True, text=True, check=True)
+    out = json.loads(result.stdout)
+    assert out["kept"] == [] and out["policy"] == policy
+    doc = tmp_path / "problem.yaml"
+    doc.write_text(out["yaml"])
+    spec = load_task(doc)
+    assert spec.budget["exploration_quota"] == 0.25
+    config = spec.roles["orchestrator"]["agent"]
+    assert config["dse"] == policy and config["coding"]["timeout_s"] == 321
+
+
 def _load(tmp_path: Path, case: dict, pending: bool = False):
     """The loaded task; with `pending`, a refusal of what the loop is being extended to take
     (cutoff lists, objective limits) skips instead of failing."""
@@ -447,4 +470,3 @@ def test_the_loop_page_lists_the_crafters_boxes():
             assert "coding agent" in choices, key
         if len(box["values"]) == 1:
             assert "**fixed**" in choices, key
-

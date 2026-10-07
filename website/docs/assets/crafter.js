@@ -17,6 +17,7 @@
   var AGENTS = ["opencode", "claude", "codex"];
   /** The registered DSE policies a document names by word (dse.py), and the model's half. */
   var DSE_POLICIES = ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"];
+  var DSE_INTENTS = ["adaptive", "explore", "improve", "tune", "finetune", "variations"];
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
   var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
   var NEVER = ["test", "calibrate"];
@@ -80,8 +81,9 @@
       choices: [{ value: "off", half: "rules", label: "No plan: step by step" },
                 { value: "model", half: "model", label: "A model writes the plan" }]
         .concat(agentChoices("A coding agent writes the plan")) },
-    dse: { title: "Search the settings", says: "Walks the list of settings (the space) to choose which to try.",
-      choices: [{ value: "none", half: "off", label: "No search" }]
+    dse: { title: "Search policy", says: "Guides design and prototype experiments. With settings to search, existing algorithms still walk that space. Reasoned risks are allowed by default.",
+      choices: [{ value: "none", half: "model", label: "Default: adaptive, reasoned risks welcome" }]
+        .concat(DSE_INTENTS.map(function (p) { return { value: p, half: "model", label: p }; }))
         .concat(DSE_POLICIES.map(function (p) {
           return { value: p, half: "rules", label: { sweep: "Try every combination", montecarlo: "Random samples",
             anneal: "Annealing", gradient: "Step towards better", genetic: "Genetic (breed the best)",
@@ -191,13 +193,19 @@
       `flow.generate: {command}`. */
   function paramOnly(state) {
     var f = (state && state.flow) || {};
-    return !!(f.dse && f.dse !== "none" && f.generate !== "command");
+    return !!(parameterSearch(state) && f.generate !== "command");
+  }
+
+  function parameterSearch(state) {
+    return !!(state.flow && state.flow.dse && state.flow.dse !== "none" && (state.space || []).some(function (r) {
+      return String(r.knob || "").trim() && choicesOf(r.choices).length;
+    }));
   }
 
   /** The half a box is in for this state (for the drawing's colour). */
   function halfOf(state, box) {
     var v = (state.flow || {})[box];
-    if (box === "orchestrate" && state.flow && state.flow.dse && state.flow.dse !== "none") return "off";
+    if (box === "orchestrate" && parameterSearch(state)) return "off";
     if (box === "generate" && paramOnly(state)) return "off";                    // D911: not run in a search
     if (!BOXES[box] || isFixed(box)) return "fixed";
     var c = choiceOf(box, v);
@@ -650,7 +658,7 @@
     return FLOW_BOXES.filter(function (b) {
       var v = flow[b];
       if (v === undefined || v === BOXES[b].choices[0].value) return false;
-      if (b === "orchestrate" && flow.dse && flow.dse !== "none") return false;
+      if (b === "orchestrate" && parameterSearch(state)) return false;
       if (NEVER.indexOf(b) >= 0 && String(v).indexOf("agent:") === 0) return false;
       if (state.agentRaw && state.agentRaw[b] && String(v).indexOf("agent:") === 0) return true;   // its own settings (D728)
       return !!choiceOf(b, v);
@@ -705,7 +713,7 @@
     }
 
     var b = state.budget || {}, bp = [];
-    ["steps", "passes", "parallel", "batch", "repair_attempts", "workers"].forEach(function (key) {
+    ["steps", "passes", "parallel", "batch", "repair_attempts", "workers", "exploration_quota"].forEach(function (key) {
       var v = String(b[key] || "").trim();
       if (v !== "") bp.push([key, typed(v)]);
     });
@@ -734,7 +742,14 @@
       if (dv && typeof dv === "object" && !Array.isArray(dv)) Object.keys(dv).forEach(function (k) { F.push("    " + q(k) + ": " + inline(dv[k], false)); });
       else if (dv !== undefined) F.push("    policy: " + inline(dv, false));
       F = F.concat(D);
-    } else if (dv !== undefined) F.push("  orchestrate: " + inline(dv, false));
+    } else if (dv !== undefined) {
+      if (typeof dv === "string" && DSE_POLICIES.concat(DSE_INTENTS).indexOf(dv) >= 0) {
+        F = F.filter(function (line) { return !/^  orchestrate:/.test(line); });
+        var who = toSurface("orchestrate", flowObj(state, "orchestrate")) || "model";
+        var intent = typeof who === "string" ? { by: who === "default" ? "model" : who, dse: dv } : Object.assign({}, who, { dse: dv });
+        F.push("  orchestrate: " + inline(intent, false));
+      } else F.push("  orchestrate: " + inline(dv, false));
+    }
 
     // test: the checks, in order
     var checks = r.checks.filter(function (c) { return c.run; });
@@ -977,11 +992,12 @@
     (state.space || []).forEach(function (x) {
       if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
-    var searching = flow.dse && flow.dse !== "none";
-    if (searching && !knobs.length) error("A search needs settings to walk: add some under Extra > Settings to search.");
+    var searching = parameterSearch(state);
+    if (flow.dse && flow.dse !== "none" && !knobs.length) note("The DSE policy guides code and prototype experiments; no parameter space is required.");
     at = STEP_OF.flow;
-    if (flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
-    if (!searching && knobs.length) warn("The settings are only searched when \"Search the settings\" is on.");
+    if (searching && flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
+    if (state.budget.exploration_quota && !(Number(state.budget.exploration_quota) >= 0 && Number(state.budget.exploration_quota) <= 1)) error("Exploration quota must be a fraction between 0 and 1.");
+    if (!searching && knobs.length) warn("The settings are only searched when a search policy is selected.");
     if (searching && flow.orchestrate && flow.orchestrate !== "default") warn("With a search, the search picks the next job; \"Pick the next job\" is left out.");
     if (flow.generate === "command" && !String(state.generateCommand || "").trim()) error("Say the command that writes each design.");
 
@@ -1035,7 +1051,7 @@
   var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
                     "objectives", "budget"];
-  var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype"];
+  var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype", "exploration_quota"];
 
   function argvOf(run) {
     var a = Array.isArray(run) ? run.map(String) : String(run || "").trim().split(/\s+/).filter(Boolean);
@@ -1113,7 +1129,7 @@
   /** D797: whether an `orchestrate` value is a search -- a policy's word, phases, or a space. */
   function isSearch(v) {
     if (Array.isArray(v)) return true;
-    if (typeof v === "string") return DSE_POLICIES.indexOf(v) >= 0 || ["control", "phases"].indexOf(v) >= 0;
+    if (typeof v === "string") return DSE_POLICIES.concat(DSE_INTENTS).indexOf(v) >= 0 || ["control", "phases"].indexOf(v) >= 0;
     return !!v && typeof v === "object" && ("space" in v || "seeds" in v || "policy" in v);
   }
 
@@ -1127,6 +1143,9 @@
     for (k in fl) {
       var key = k === "orchestrate" && isSearch(fl[k]) ? "dse" : k;            // D797: a search is the orchestrator's
       var val = fl[k];
+      if (k === "orchestrate" && val && typeof val === "object" && "dse" in val) {
+        f.dse = val.dse; val = Object.assign({}, val); delete val.dse;
+      }
       if (k === "knowledge" && val && typeof val === "object" && !Array.isArray(val) && "digest" in val) {   // D830
         val = Object.assign({}, val);
         var dg2 = val.digest; delete val.digest;
@@ -1869,7 +1888,7 @@
 
     function subtitle(name, half, max) {
       var text = half === "off" && name === "orchestrate" && state.flow.dse !== "none" ? "the search" : HALVES[half];
-      if (name === "orchestrate" && state.flow.orchestrate === "default" && !(state.flow.dse && state.flow.dse !== "none")) {
+      if (name === "orchestrate" && state.flow.orchestrate === "default" && !parameterSearch(state)) {
         text = hasParts() ? "model picks the part" : "default: one design";
       }
       if (name === "generate" && paramOnly(state)) text = "not run: settings only";        // D911
@@ -1917,7 +1936,7 @@
         p.appendChild(h("p", { class: "fc-hint fc-now", text: "A search is on: only a script turns a point's settings into a design. " +
           "With a model or a coding agent here, nothing writes a design -- the settings alone reach your commands (a parameter-only search)." }));
       }
-      if (openBox === "orchestrate" && state.flow.dse !== "none") {
+      if (openBox === "orchestrate" && parameterSearch(state)) {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
       } else if (box.choices.length === 1) {
         p.appendChild(h("p", { class: "fc-hint", text: "This step is fixed: " + box.choices[0].label + "." }));
@@ -2015,6 +2034,7 @@
         num("Rounds at once", "parallel", "1", "Rounds run side by side, each its own design; on a server an admin allows it"),
         num("Search designs a round", "batch", "1", "With a search: designs one round tries side by side; 1 picks each round's design from the last ones' numbers"),
         num("Repairs per design", "repair_attempts", "12", "Repairs a draft gets after a check fails"),
+        num("Exploration quota", "exploration_quota", "0", "Minimum fraction of attempted improvements reserved for new approaches, 0 to 1; 0 leaves the choice to the model"),
         num("Designs fully measured", "finalists", "3", "How many designs reach the costliest measurement"),
         num("Tool runs at once", "workers", "auto", "Measurements in parallel; 1 for anything timed"),
         field("Prototype first", function () { return b.prototype; }, function (v) { b.prototype = v; },
@@ -2031,7 +2051,7 @@
           h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
-      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once \"Search the settings\" is on, in the Graph", [
+      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once a search policy is selected in the Graph", [
         h("div", { class: "fc-rows" }, knobs),
         button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 

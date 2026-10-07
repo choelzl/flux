@@ -489,9 +489,10 @@ def options(problem: "Problem", ladder: Ladder, item: Improve, state: "LoopState
     sibling = problem.siblings(op, proto, state) if "import" in ladder.steps else None
     d = part_depth(problem, op, state) or {}
     d0 = int(d.get("depth") or 0)
-    # a contender is due when it is within reach: a fraction of the standing value, or no
-    # deeper than the design that stands
-    within_reach = bool(cont) and (
+    # Permissive search can develop a distant alternative; fine tuning favors contenders
+    # already near the incumbent. Either way, the explicit contender budget applies.
+    permissive = ps.dse not in ("finetune", "refine")
+    within_reach = bool(cont) and (permissive or
         known is None or float(cont.get("value", 0)) >= ladder.contender_reach * float(known)
         or (d0 and int(cont.get("depth", 0) or 0) <= d0)) and contender_passes < ladder.contender_passes
     on_record = shallower_on_record(state, op, proto, d0) if d0 else None
@@ -534,7 +535,7 @@ def options(problem: "Problem", ladder: Ladder, item: Improve, state: "LoopState
                            f"measurement; {redesigns} of {ladder.redesigns} alternatives tried this pass"
                            + (f"; the alternative on record stands at {alt[0]:g} over" if alt else "")
                            + (f", and {stalled} pass(es) ended there without improving it" if stalled else ""),
-                           due=depth_done and redesigns < ladder.redesigns and stalled < ladder.stalls,
+                           due=redesigns < ladder.redesigns and stalled < ladder.stalls,
                            run=lambda: redesign(problem, ladder, op, proto, state, item.why)),
     }
     out = [menu[name] for name in ladder.steps if name in menu]

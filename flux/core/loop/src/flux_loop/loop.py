@@ -365,21 +365,12 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             if one and state.built > built_before and not state.improve:   # a critic's send-back finishes first
                 state.stopped = "one design a pass"
                 break
-            # The two optional stops first, so nothing runs after the pass is done (D463): no
-            # clock unless a caller set one, no target unless the problem has one.
+            # A caller's explicit wall-clock budget still bounds one pass. Reaching an
+            # objective does not freeze the campaign; the next experiment can improve it.
             if request.budget_s is not None and time.monotonic() - started >= request.budget_s:
                 state.stopped = "the wall clock"
                 state.say(f"  the wall-clock budget ({request.budget_s:g}s) is spent after "
                           f"{step} step(s)")
-                break
-            # D593: a pass exploring after a rest does not stop because the goal is met --
-            # meeting it is where exploring starts (the next objective, the goal held)
-            done = problem.good_enough(state) if not request.explore else None
-            if done:
-                state.stopped = f"good enough: {done}"
-                state.say(f"  stopping: {done}")
-                state.lessons.append(
-                    f"[loop] the pass stopped because it was good enough: {done}")
                 break
             waiting = list(todo)
             if one and not waiting and not state.improve and not directed and state.built == built_before:
@@ -550,8 +541,8 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
         head = (f"The campaign is at rest: this design stands and nothing the loop tried improved it "
                 f"(exploring, pass {state.request.explore} in a row). ")
         items.append(Improve(cand, head + said + " A different structure or algorithm is welcome when reworking "
-                             "this one has stalled; it must still pass the gate.",
-                             stage=stage, subgoal=sub, explore=True))
+                             "there is a reasoned hypothesis worth measuring; it must still pass the gate.",
+                             stage=stage, subgoal=sub, explore=True, dse="explore"))
     if items:
         state.say(f"  exploring: {len(items)} design(s) go back to the generator for a better one")
     elif not state.admitted:
@@ -576,8 +567,8 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     state.say(f"  direction: {pick} {cand.name} -- {why}")
     state.lessons.append(f"[direction] {pick}: {why}")
     if pick == "explore":
-        return Improve(cand, f"This design stands. {said}", stage=stage, subgoal=None, explore=True)
-    return Improve(cand, f"This design stands; refine it. {said}", stage=stage, subgoal=None, refine=True)
+        return Improve(cand, f"Use this measured baseline to test a new approach. {said}", stage=stage, subgoal=None, explore=True, dse=pick)
+    return Improve(cand, f"Test a reasoned improvement; structural changes are welcome. {said}", stage=stage, subgoal=None, refine=True, dse=pick)
 
 
 def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) -> str:
@@ -609,13 +600,25 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     """One design handed back to the generator with its numbers (D463), then gated and
     measured on the first stage again, as a step of the same loop."""
     say = state.say
+    from dataclasses import replace
+    from .direction import choose, guidance, reserve_choice
+
+    # A part's ladder already asks the orchestrator to pick its next action. Supply the
+    # DSE preference and quota there without spending a second, competing decision turn.
+    pick, why = (item.dse or "explore", item.why) if item.dse or item.explore else choose(problem, state, item.candidate, item.why, consult=False)
+    pick, why = reserve_choice(state, pick, why, item.subgoal)
+    item = replace(item, dse=pick, explore=pick == "explore", refine=item.refine,
+                   why=item.why + "\n" + guidance(problem, state, item.subgoal))
+    state.say(f"  search [{item.subgoal or '*'}]: {pick} -- {why[:200]}")
     say(f"improve {item.candidate.name} (from the {item.stage or 'gate'} stage): "
         f"{item.why[:120]}")
     rested_before = len(state.rested)
     ps = state.part(item.subgoal)
     ps.sessions.clear()                     # D669: an improve is a new job, a new agent ...
     try:
-        with _phase(f"generation: improve {item.candidate.name}", why=item.stage):
+        with _phase(f"generation: improve {item.candidate.name}", why=item.stage) as out:
+            out["dse"] = pick
+            out["hypothesis"] = why
             cand, built, reason = problem.improve(item, state)
     finally:
         ps.sessions.clear()                 # ... whose session ends with it
