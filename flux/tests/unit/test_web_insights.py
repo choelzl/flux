@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import types
 
+import pytest
+
 from flux_web import insights as ins
 
 DAY = ins.DAY
@@ -41,6 +43,44 @@ def test_each_endpoint_and_agent_as_its_turns_found_it(tmp_path):
     assert (q["turns"], q["failed"], q["rate"], q["last_error"]) == (2, 1, 0.5, "timed out")
     assert eps["codex"]["last_error"] == "exit 1: bwrap: denied" and eps["claude-opus"]["failed"] == 0
     assert ins.endpoints(_turns(tmp_path), since=NOW) == [], "none since"
+
+
+@pytest.mark.parametrize("stderr", ["the agent ran past 900s and was stopped", ""])
+def test_agent_time_limits_do_not_count_as_endpoint_failures(tmp_path, stderr):
+    path = tmp_path / "turns.jsonl"
+    turns = [{"ts": NOW - 60, "kind": "agent", "agent": "claude", "ok": False, "rc": 124,
+              "stderr": stderr, "seconds": 900, "tokens_in": 1000, "tokens_out": 200, "cost_usd": 0.5}]
+    path.write_text("".join(json.dumps(t) + "\n" for t in turns))
+    rows = [("ada", "nlu", *t) for t in ins._rows(str(path))]
+    assert rows[0][6] is None, "a time limit is neutral, not a successful reply"
+    endpoint, = ins.endpoints(rows, since=NOW - DAY)
+    assert (endpoint["turns"], endpoint["failed"], endpoint["rate"]) == (1, 0, 0)
+    assert endpoint["last_error"] == "" and endpoint["last_error_at"] is None
+    assert endpoint["p50"] == endpoint["p95"] == 900 and endpoint["last"] == NOW - 60
+    usage = ins.usage_by_day(rows, days=1, now=NOW)
+    assert usage["top"][0] == {"user": "ada", "app": "nlu", "turns": 1, "tokens": 1200.0, "cost": 0.5, "seconds": 900.0}
+    rate = ins.token_rate(rows, hours=1, now=NOW)
+    assert sum(p["in_agent"] for p in rate) * 20 == pytest.approx(1000)
+    assert sum(p["out_agent"] for p in rate) * 20 == pytest.approx(200)
+
+    # A newer time limit must not replace or hide a real agent failure.
+    with path.open("a") as fh:
+        fh.write(json.dumps({"ts": NOW - 120, "kind": "agent", "agent": "claude", "ok": False,
+                             "rc": 1, "stderr": "connection timed out", "seconds": 10}) + "\n")
+    rows = [("ada", "nlu", *t) for t in ins._rows(str(path))]
+    endpoint, = ins.endpoints(rows, since=NOW - DAY)
+    assert (endpoint["turns"], endpoint["failed"], endpoint["rate"]) == (2, 1, 0.5)
+    assert endpoint["last_error"] == "exit 1: connection timed out" and endpoint["last_error_at"] == NOW - 120
+
+
+def test_a_model_request_timeout_still_counts_as_an_endpoint_failure(tmp_path):
+    path = tmp_path / "turns.jsonl"
+    path.write_text(json.dumps({"ts": NOW - 60, "kind": "turn", "model": "qwen", "server": "https://ai.example.org/v1",
+                                "rc": 124, "error": "timed out", "seconds": 30}) + "\n")
+    rows = [("ada", "nlu", *t) for t in ins._rows(str(path))]
+    endpoint, = ins.endpoints(rows, since=NOW - DAY)
+    assert (endpoint["turns"], endpoint["failed"], endpoint["rate"]) == (1, 1, 1)
+    assert endpoint["last_error"] == "timed out" and endpoint["last_error_at"] == NOW - 60
 
 
 def test_the_hosts_refused_most_first_with_their_loops(tmp_path):

@@ -52,6 +52,7 @@ def failures(store: Any, runs: Any, since: float, until: float | None = None) ->
 
 def _rows(path: str) -> list[tuple]:
     """A loop's turns, each (ts, kind, who, endpoint, ok, seconds, tokens in, out, cost, error).
+    `ok=None` marks an agent's local time limit, neutral for endpoint health.
     D921: read as the file grows -- a turn appended is that turn read, not the transcript again
     (another file, or one cut, from its start)."""
     from .usage import grown
@@ -84,6 +85,8 @@ def _rows(path: str) -> list[tuple]:
             where = f"{who} · {model}" if model and not model.startswith(who) else (model or who)
             ok = bool(t.get("ok")) and not t.get("error")
             err = "" if ok else (str(t.get("error") or "") or f"exit {t.get('rc')}: " + " ".join(str(t.get("stderr") or "").split())[-200:])
+            if t.get("rc") == 124:                  # Flux stopped the agent at its local time budget
+                ok = None
         else:
             who = str(t.get("model") or kind)
             where = (urlsplit(str(t.get("server") or "")).hostname or "local") + " · " + who
@@ -173,7 +176,8 @@ def usage_by_day(rows: list[tuple], days: int = 14, now: float | None = None) ->
 def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """Each model endpoint and agent as its turns since `since` found it: turns, failures and
     their rate, the median and the slow (95th) seconds, the last failure, when last used. `forgot`
-    (D850): `kind|where` -> when the admin removed it; only turns after that count."""
+    (D850): `kind|where` -> when the admin removed it; only turns after that count.
+    Local agent time limits count as turns and timing, but not failures."""
     forgot = forgot or {}
     by: dict[tuple[str, str], list[tuple]] = {}
     for _user, _app, ts, kind, who, where, ok, secs, *_rest, err in rows:
@@ -182,7 +186,7 @@ def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None =
     out = []
     for (kind, where), xs in by.items():
         secs = sorted(s for _t, _ok, s, _e in xs)
-        bad = [x for x in xs if not x[1]]
+        bad = [x for x in xs if x[1] is False]
         q = lambda f: secs[min(len(secs) - 1, int(f * len(secs)))] if secs else 0.0   # noqa: E731
         last_bad = max(bad, key=lambda x: x[0]) if bad else None
         out.append({"key": f"{kind}|{where}", "kind": kind, "where": where, "turns": len(xs), "failed": len(bad), "rate": len(bad) / len(xs),

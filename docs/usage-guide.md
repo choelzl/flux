@@ -523,7 +523,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     words) and the agents' Tests that failed; turns, tokens and cost by user and by agent or model, a bar a
     day, and the loops that used most; each model endpoint and agent with its turns, failures, median and
     slow (95%) time and its last failure; the hosts the sandboxes refused, by which loops; the disk by user
-    (home, loops, the largest). All from what the server keeps already: nothing new is recorded for it.
+    (home, loops, the largest). An agent reaching its local time limit counts toward turns, timing and usage,
+    but not endpoint failures or the last failure. All from what the server keeps already: nothing new is recorded for it.
   - **Applications:** the `applications/` folder of this Flux (or `FLUX_APPLICATIONS`), each with
     what it asks and its size. **Use** makes one a loop of the admin's: its files hard linked
     (copied across disks), its record, log and workbench its own; an edit replaces a file rather
