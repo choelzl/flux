@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from .provenance import trace_root
+from .sandbox_paths import container_path, host_path
 
 __all__ = ["clear_stop", "register", "request_own_stop", "request_stop", "run_dir", "status", "stop_requested"]
 
@@ -36,7 +37,7 @@ def run_dir(campaign_id: str, db: str | None = None) -> str:
     if db:
         where = (_read(_pointer(db)) or {}).get(campaign_id)
         if where:
-            return where
+            return container_path(where)
     return os.path.join(trace_root(), (campaign_id or "")[:12] or "no-record")
 
 
@@ -58,7 +59,7 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
             pass
     doc = {"pid": os.getpid(), "argv": list(argv if argv is not None else sys.argv), "cwd": os.getcwd(),
            "started": mine.get("started") or time.time(), "workdir": workdir,
-           "log": os.environ.get("FLUX_RUN_LOG") or None,
+           "log": host_path(os.environ["FLUX_RUN_LOG"]) if os.environ.get("FLUX_RUN_LOG") else None,
            "container": os.environ.get("FLUX_SANDBOX_NAME") or None,   # D680: its pid is the container's
            "container_cli": json.loads(os.environ.get("FLUX_SANDBOX_CLI") or "null"),   # D682: how to reach it
            "passes": int(mine.get("passes") or 0), "last_pass_ended": mine.get("last_pass_ended"),
@@ -66,7 +67,7 @@ def register(campaign_id: str, workdir: str, *, argv: list[str] | None = None, d
     _write(os.path.join(d, "run.json"), doc)
     if db and db != ":memory:":
         try:
-            _write(_pointer(db), {**(_read(_pointer(db)) or {}), campaign_id: d})
+            _write(_pointer(db), {**(_read(_pointer(db)) or {}), campaign_id: host_path(d)})
         except OSError:
             pass                               # a read-only record's folder: the trace root still works
     _CURRENT.clear()
@@ -158,6 +159,8 @@ def status(campaign_id: str, db: str | None = None) -> dict[str, Any]:
     if not doc:
         return out
     out.update(doc)
+    if out.get("log"):
+        out["log"] = container_path(out["log"])
     out["state"] = "running" if _running(doc) else "stale"
     return out
 

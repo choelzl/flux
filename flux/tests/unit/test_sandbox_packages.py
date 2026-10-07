@@ -95,7 +95,8 @@ def test_extra_tools_and_nixchip_paths_reach_the_container_only_for_this_launch(
     monkeypatch.setattr(sandbox, "_engine_ok", lambda eng: "")
     monkeypatch.setenv("FLUX_SANDBOX_NET", "open")
     monkeypatch.setenv("FLUX_SANDBOX_ALLOW", "")
-    doc = tmp_path / "problem.yaml"
+    doc = tmp_path / "loop" / "problem.yaml"
+    doc.parent.mkdir()
     doc.write_text("statement: s\n")
     args = types.SimpleNamespace(file=str(doc), db=None, out=None, json=None)
     seen = []

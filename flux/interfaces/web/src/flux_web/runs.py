@@ -243,7 +243,8 @@ ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memor
 #: D936: what an admin mount never is -- on the host, nor inside the sandbox
 SYSTEM_PATHS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/run")
 #: the sandbox's own places inside (beside the loop's folders and the host's system mounts)
-SANDBOX_OWN = ("/tmp", "/home/flux", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/nix")
+SANDBOX_OWN = ("/tmp", "/home/flux", "/sandbox", "/sandbox-cache", "/sandbox-record", "/sandbox-output",
+               "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/nix")
 
 
 def _inside(p: str, root: str) -> bool:
@@ -292,7 +293,7 @@ def check_mounts(rows: list[dict[str, Any]], data: Path, loop_dir: Path, caches:
 def mounts_said(adv: dict[str, Any]) -> str:
     """The loop's admin mounts for its log (D936)."""
     rows = adv.get("mounts") or []
-    return ("mounts: " + ", ".join(f"{m['host']} -> {m['inside']} ({'read-write' if m.get('mode') == 'rw' else 'read-only'})"
+    return ("mounts: " + ", ".join(f"{m['inside']} ({'read-write' if m.get('mode') == 'rw' else 'read-only'})"
                                    for m in rows)) if rows else ""
 
 

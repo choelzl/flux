@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 
 from flux_llm import ScriptedProposer
 from flux_loop import Candidate, LoopRequest, Problem, Verdict, ops, run_loop
@@ -123,3 +124,27 @@ def test_the_record_finds_the_run_whatever_the_trace_root(tmp_path, monkeypatch)
     ops.request_stop("abcdef0123456789", "from another shell", db=db)
     assert ops.stop_requested().startswith("from another shell")           # the running process sees it
     ops.clear_stop()
+
+
+def test_sandbox_run_pointer_and_provenance_remain_readable_on_the_host(tmp_path, monkeypatch):
+    from flux_loop.provenance import stamp
+
+    inside, host = tmp_path / "container-cache", tmp_path / "host-cache"
+    inside.mkdir()
+    # Simulate a bind mount with a link, so both sides address the same files.
+    host.symlink_to(inside, target_is_directory=True)
+    monkeypatch.setenv("FLUX_SANDBOXED", "1")
+    monkeypatch.setenv("FLUX_SANDBOX_PATH_MAP", json.dumps([[str(host), str(inside)]]))
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(inside / "flux-traces"))
+    monkeypatch.setenv("FLUX_RUN_LOG", str(inside / "loop.log"))
+    db = str(tmp_path / "record.db")
+    directory = ops.register("abcdef0123456789", str(inside), db=db)
+    pointer = json.loads(Path(db + ".runs.json").read_text())
+    assert pointer["abcdef0123456789"] == str(host / "flux-traces" / "abcdef012345")
+    assert ops.run_dir("abcdef0123456789", db) == directory
+    assert ops.status("abcdef0123456789", db)["log"] == str(inside / "loop.log")
+    assert stamp(trace=str(inside / "pass"))["trace"] == str(host / "pass")
+    monkeypatch.delenv("FLUX_SANDBOXED")
+    assert ops.run_dir("abcdef0123456789", db) == pointer["abcdef0123456789"]
+    assert ops.status("abcdef0123456789", db)["log"] == str(host / "loop.log")
+    assert Path(ops.run_dir("abcdef0123456789", db), "run.json").is_file()

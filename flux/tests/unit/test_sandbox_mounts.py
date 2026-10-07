@@ -47,6 +47,7 @@ def test_the_argv_carries_each_mount_with_its_mode_and_leaves_out_the_sandboxs_o
     said = capsys.readouterr().err
     assert "admin mounts:" in said and "/mnt/ds (read-only)" in said and "/mnt/scratch (read-write)" in said
     assert "/tmp/x left out" in said and "/mnt/gone left out" in said
+    assert str(tmp_path) not in said, "mount summaries use the container's destinations"
     assert "FLUX_SANDBOX_MOUNTS" not in sandbox.container_env(cmd), "the host side is the admin's"
     env = {"FLUX_SANDBOX_MOUNTS": "stale"}
     sandbox_env(env, True, {})
@@ -105,6 +106,8 @@ def test_an_admin_sets_a_loops_mounts_and_the_refusals_say_why(server, tmp_path,
         "etc": [{"host": "/etc", "inside": "/mnt/ds"}],
         "inside /tmp": [{"host": str(ds), "inside": "/tmp/ds"}],
         "inside HOME": [{"host": str(ds), "inside": "/home/flux/ds"}],
+        "inside loop alias": [{"host": str(ds), "inside": "/sandbox/x/data"}],
+        "inside cache alias": [{"host": str(ds), "inside": "/sandbox-cache/data"}],
         "inside /": [{"host": str(ds), "inside": "/"}],
         "inside /usr": [{"host": str(ds), "inside": "/usr/share/ds"}],
         "inside relative": [{"host": str(ds), "inside": "mnt/ds"}],
@@ -133,7 +136,7 @@ def test_an_admin_sets_a_loops_mounts_and_the_refusals_say_why(server, tmp_path,
     env: dict[str, str] = {}
     sandbox_env(env, True, adv)
     assert json.loads(env["FLUX_SANDBOX_MOUNTS"])[1]["mode"] == "rw"
-    assert mounts_said(adv) == f"mounts: {ds.resolve()} -> /mnt/ds (read-only), {ds.resolve()} -> /mnt/out (read-write)"
+    assert mounts_said(adv) == "mounts: /mnt/ds (read-only), /mnt/out (read-write)"
     sandbox_env(env, True, advanced(store, "ada", "y"))
     assert "FLUX_SANDBOX_MOUNTS" not in env, "another loop: none"
     assert put([]).status_code == 200 and "mounts" not in advanced(store, "bob", "x")

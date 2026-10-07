@@ -7,9 +7,12 @@ to stand for a transpiler or judge change.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
+
+import pytest
 
 from flux_llm import Reply, ScriptedProposer
 from flux_loop import Candidate, LoopRequest, LoopState, Problem, Verdict, _reload, run_loop
@@ -190,12 +193,18 @@ def test_a_row_without_its_prototypes_digest_is_not_matched_by_guessing(tmp_path
     rec2.close("paused")
 
 
-def test_flux_gc_keeps_what_a_record_names(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mapped", [False, True])
+def test_flux_gc_keeps_what_a_record_names(tmp_path, monkeypatch, mapped):
     import argparse
 
     from flux_cli.commands import cmd_gc
 
     root = tmp_path / "traces"
+    if mapped:
+        host = tmp_path / "host-traces"
+        host.symlink_to(root, target_is_directory=True)
+        monkeypatch.setenv("FLUX_SANDBOXED", "1")
+        monkeypatch.setenv("FLUX_SANDBOX_PATH_MAP", json.dumps([[str(host), str(root)]]))
     kept, doomed, young = root / "abc123" / "20260101T000000", root / "abc123" / "20260102T000000", root / "abc123" / "20260103T000000"
     for d in (kept, doomed, young):
         d.mkdir(parents=True)

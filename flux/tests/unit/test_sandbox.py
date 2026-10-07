@@ -78,7 +78,7 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
 
     assert f"{Path(_os.environ['FLUX_SANDBOX_HOME']).resolve()}:/home/flux" in vols and env["HOME"] == "/home/flux", \
         "D744: HOME is the user's Flux home"
-    assert env["TMPDIR"] == "/tmp" and env["FLUX_TRACE_ROOT"] == str(app / "tmp" / "flux-traces"), \
+    assert env["TMPDIR"] == "/tmp" and env["FLUX_TRACE_ROOT"] == "/sandbox-cache/tmp/flux-traces", \
         "scratch on the container's own /tmp (abc hangs on a mounted one), traces in the cache"
     assert env["XDG_CACHE_HOME"] == "/home/flux/.cache", "D760: the user's own cache: a login kept there is their runs' too"
     assert not any("docker.sock" in v for v in vols) and not any(v.startswith(f"{Path.home()}/.config/flux") for v in vols)
@@ -210,6 +210,41 @@ def test_a_sub_loop_reads_through_its_parent_and_writes_the_parents_out_and_work
     assert str(top.resolve()) in ro
     assert str(top.resolve() / "out") in rw and str(top.resolve() / "workbench") in rw
     assert not (top / "ops" / "recip" / "out").exists() and not (top / "ops" / "recip" / "workbench").exists()
+    cmd = sandbox.container_argv(["flux", "task", "run", str(child)], _args(tmp_path, file=str(child)), "task run", "flux-child", None, "podman")
+    assert cmd[-1] == "/sandbox/nlu/ops/recip/problem.yaml"
+    assert f"{top.resolve()}:/sandbox/nlu:ro" in cmd
+
+
+def test_launch_paths_use_the_container_layout_with_the_same_loop_id(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    args = _args(tmp_path, db=str(tmp_path / "p" / "out" / "p.db"), json=str(tmp_path / "p" / "runs" / "answer.json"))
+    monkeypatch.chdir(tmp_path / "p")
+    inbox = tmp_path / "p" / "runs" / "feedback.txt"
+    monkeypatch.setenv("FLUX_FEEDBACK_INBOX", str(inbox))
+    monkeypatch.setenv("FLUX_INPUT_PATH", str(tmp_path / "p" / "data"))
+    monkeypatch.setenv("FLUX_SANDBOX_PATH_MAP", '[["/", "/bad-map"]]')
+    argv = ["flux", "task", "run", args.file, "--db", args.db, f"--json={args.json}"]
+    cmd = sandbox.container_argv(argv, args, "task run", "flux-paths", None, "podman")
+    assert cmd[cmd.index("--workdir") + 1] == "/sandbox/p"
+    assert cmd[-7:] == ["flux", "task", "run", "/sandbox/p/x.problem.yaml", "--db", "/sandbox/p/out/p.db", "--json=/sandbox/p/runs/answer.json"]
+    env = sandbox.container_env(cmd)
+    assert env["FLUX_FEEDBACK_INBOX"] == "/sandbox/p/runs/feedback.txt"
+    assert env["FLUX_INPUT_PATH"] == "/sandbox/p/data"
+    assert env["FLUX_TRACE_ROOT"] == "/sandbox-cache/tmp/flux-traces"
+    assert "/bad-map" not in env["FLUX_SANDBOX_PATH_MAP"]
+    assert f"{tmp_path / 'p'}:/sandbox/p:ro" in cmd
+    assert f"{tmp_path / 'p' / 'out'}:/sandbox/p/out" in cmd
+    assert f"{tmp_path / 'p' / 'runs'}:/sandbox/p/runs" in cmd
+
+
+def test_path_arguments_do_not_rewrite_agent_prompts(tmp_path):
+    args = types.SimpleNamespace(dir=str(tmp_path), file=[], skill=[])
+    prompt = f"Read {tmp_path}/problem.yaml and improve it"
+    argv = ["flux", "ask", prompt, "--dir", str(tmp_path)]
+    assert sandbox.container_paths(argv, args, [(str(tmp_path), "/sandbox/project")]) == [
+        "flux", "ask", prompt, "--dir", "/sandbox/project"]
+    argv[2] = str(tmp_path)
+    assert sandbox.container_paths(argv, args, [(str(tmp_path), "/sandbox/project")])[2] == str(tmp_path)
 
 
 def test_an_admins_agent_program_is_mounted_with_its_package_and_named_inside(monkeypatch, tmp_path):

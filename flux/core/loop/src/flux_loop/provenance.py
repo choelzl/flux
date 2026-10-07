@@ -49,6 +49,10 @@ def stamp(**more: Any) -> dict[str, Any]:
     """The provenance document of one row: the revision and the toolchain, plus whatever the
     writer knows (seconds, tokens, the trace directory, the batch size)."""
     doc: dict[str, Any] = {"git": git_revision(), "toolchain": toolchain()}
+    if more.get("trace"):
+        from .sandbox_paths import host_path
+
+        more["trace"] = host_path(str(more["trace"]))
     doc.update({k: v for k, v in more.items() if v is not None and v != ""})
     return doc
 

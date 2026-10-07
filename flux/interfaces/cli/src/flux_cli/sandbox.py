@@ -53,6 +53,7 @@ _DROP = ("HOME", "FLUX_SANDBOX_HOME", "FLUX_SANDBOX_TIMEOUT", "SSH_AUTH_SOCK", "
          # D716: the network's rules and the refusals file are the proxy's, outside: not the run's to read
          "FLUX_SANDBOX_ALLOW", "FLUX_SANDBOX_NET", "FLUX_SANDBOX_RAW_NETWORK", "FLUX_SANDBOX_REFUSALS", "FLUX_SANDBOX_MOUNTS",   # D936: the host side
          "FLUX_SANDBOX_NIX_PACKAGES", "FLUX_SANDBOX_NIX_FLAKE",
+         "FLUX_SANDBOX_PATH_MAP",
          # D847: an agent's own folder on this machine (the ChatGPT extension sets CODEX_HOME=~/.codex):
          # not mounted inside, where the agent's login is in the Flux home
          "CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR")
@@ -61,6 +62,8 @@ _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_",
 #: its own HOME (PATH folders, the flux source) are mounted at their own paths, and would otherwise
 #: make mount points in the user's home.
 HOME_IN = "/home/flux"
+LOOP_IN = "/sandbox"
+CACHE_IN = "/sandbox-cache"
 #: On one's own machine, the Flux home starts with the agents' configuration and logins of the
 #: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
 #: passes its settings in, so the key file itself stays outside.
@@ -112,10 +115,10 @@ def admin_mount_args(taken: list[str]) -> tuple[list[str], list[str]]:
                "its path inside is not absolute" if not os.path.isabs(inside) or ":" in inside or ":" in host else
                "its path inside is the sandbox's own" if inside_n == "/" or any(_under(inside_n, t) or _under(t, inside_n) for t in (*MOUNT_SYSTEM, *taken) if t) else "")
         if why:
-            said.append(f"{host} -> {inside} left out: {why}")
+            said.append(f"{inside} left out: {why}")
             continue
         args += ["-v", f"{host}:{inside_n}:{mode}"]
-        said.append(f"{host} -> {inside_n} ({'read-write' if mode == 'rw' else 'read-only'})")
+        said.append(f"{inside_n} ({'read-write' if mode == 'rw' else 'read-only'})")
     return args, said
 
 
@@ -415,12 +418,67 @@ def container_env(cmd: list[str]) -> dict[str, str]:
     return out
 
 
+def path_mapping(args: Any, command: str, app: Path, home: Path) -> list[tuple[str, str]]:
+    """Canonical paths for this launch; old mounts remain for saved scripts and records."""
+    pairs = [(str(app), CACHE_IN), (str(home), HOME_IN)]
+    root = None
+    if command in ("task run", "task check"):
+        root = _top(Path(args.file).resolve())
+    elif command == "ask":
+        root = Path(getattr(args, "dir", None) or os.getcwd()).resolve()
+    elif command == "consult":
+        root = Path(args.loop).resolve()
+    if root is not None:
+        # The folder's name is the loop's id, including when a sub-loop loads its parent.
+        pairs.append((str(root), f"{LOOP_IN}/{root.name}"))
+    from flux_loop.sandbox_paths import translate
+
+    for flag, inside in (("db", "/sandbox-record"), ("out", "/sandbox-output/out"), ("json", "/sandbox-output/json")):
+        value = getattr(args, flag, None)
+        if value and value not in (":memory:", "-"):
+            folder = str(Path(value).resolve().parent)
+            if translate(folder, pairs) == folder:
+                pairs.append((folder, inside))
+    return pairs
+
+
+def container_paths(argv: list[str], args: Any, pairs: list[tuple[str, str]], command: str = "") -> list[str]:
+    """Rewrite path arguments only; prompts, scripts and other free text are left intact."""
+    from flux_loop.sandbox_paths import translate
+
+    fields = ("file", "dir", "loop", "db", "out", "json", "plan", "replies", "author_replies", "skill", "home")
+    paths = set()
+    for field in fields:
+        value = getattr(args, field, None)
+        for path in value if isinstance(value, list) else [value]:
+            if path and isinstance(path, str) and path not in ("-", ":memory:"):
+                paths.add(path)
+    def mapped(value: str) -> str:
+        return translate(str(Path(value).resolve()), pairs) if value in paths else value
+
+    flags = {"--" + field.replace("_", "-") for field in fields}
+    result = []
+    for i, arg in enumerate(argv):
+        flag, eq, value = arg.partition("=")
+        if eq and flag in flags:
+            result.append(flag + "=" + mapped(value))
+        elif (i and argv[i - 1] in flags) or (command in ("task run", "task check") and arg == getattr(args, "file", None)):
+            result.append(mapped(arg))
+        else:
+            result.append(arg)
+    return result
+
+
 def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None,
                    eng: str | None = None, *, network: str | None = None, guard: bool = False) -> list[str]:
     eng = eng or engine()
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
     home = flux_home(args, command)                           # D744: the user's own, writable, kept
+    from flux_loop.sandbox_paths import PATH_MAP, translate
+
+    pairs = path_mapping(args, command, app, home)
+    argv = container_paths(argv, args, pairs, command)
     cli = engine_cli(eng)
     # scratch on the container's own /tmp: with TMPDIR on any directory mounted from the host,
     # Yosys's abc step hangs (both engines, D682); the traces stay in the application's cache
@@ -433,7 +491,7 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
            "--tmpfs", f"{_home()}:exec,mode=0700",
            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
            "--pids-limit", os.environ.get("FLUX_SANDBOX_PIDS", "4096"),
-           "--workdir", os.getcwd(), "--label", "flux.sandbox=1"]
+           "--workdir", translate(os.getcwd(), pairs), "--label", "flux.sandbox=1"]
     if eng == "podman" and (os.environ.get("FLUX_SANDBOX_TIMEOUT") or "").isdigit():
         cmd += ["--timeout", os.environ["FLUX_SANDBOX_TIMEOUT"]]   # D768: ended by Podman itself, its client gone or not
     if os.environ.get("FLUX_SANDBOX_APP"):
@@ -465,7 +523,15 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         cmd += ["-v", f"{p}:{p}:ro"]
     for p in rw:
         cmd += ["-v", f"{p}:{p}" + (":ro" if guard else "")]
-    extra, said = admin_mount_args([HOME_IN, "/tmp", str(_home()), *ro, *rw, *([proxy_dir] if proxy_dir else [])])
+    destinations = []
+    for paths, mode in ((ro, ":ro"), (rw, ":ro" if guard else "")):
+        for p in paths:
+            inside = translate(p, pairs)
+            if inside != p and inside != HOME_IN:
+                cmd += ["-v", f"{p}:{inside}{mode}"]
+                destinations.append(inside)
+    extra, said = admin_mount_args([HOME_IN, LOOP_IN, CACHE_IN, "/sandbox-record", "/sandbox-output", "/tmp", str(_home()),
+                                    *ro, *rw, *destinations, *([proxy_dir] if proxy_dir else [])])
     if guard:
         extra = [v[:-3] + ":ro" if v.endswith(":rw") else v for v in extra]
     cmd += extra                                              # D936: the loop's admin mounts, after the sandbox's own
@@ -481,6 +547,8 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
             env["NODE_EXTRA_CA_CERTS"] = bundle
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
                FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=f"{HOME_IN}/.cache")
+    env = {k: os.pathsep.join(translate(part, pairs) for part in v.split(os.pathsep)) for k, v in env.items()}
+    env[PATH_MAP] = json.dumps(pairs)
     if proxy_dir:
         cmd += ["-v", f"{proxy_dir}:{proxy_dir}:ro"]
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))

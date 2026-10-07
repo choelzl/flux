@@ -793,6 +793,7 @@ def cmd_gc(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from flux_loop import trace_root
+    from flux_loop.sandbox_paths import container_path
 
     root = Path(args.root or trace_root())
     referenced: set[str] = set()
@@ -807,7 +808,7 @@ def cmd_gc(args: argparse.Namespace) -> int:
                 except Exception:  # noqa: BLE001
                     continue
                 if trace:
-                    referenced.add(str(Path(trace).resolve()))
+                    referenced.add(str(Path(container_path(trace)).resolve()))
             con.close()
         except Exception as exc:  # noqa: BLE001
             print(f"  {db}: could not read ({exc!s:.80})")

@@ -168,6 +168,12 @@ machine.
 - **It sees:** the host read-only, meaning the system, `/nix/store`, the flux source, the
   executables on PATH and the problem folder. The same tools run, OpenCode and Claude Code
   included.
+- **Paths inside:** new runs use `/sandbox/<loop-name>/` for the loop, including its `out/`,
+  `workbench/` and feedback files; traces use `/sandbox-cache/tmp/flux-traces/`. Logs and agent
+  working directories show these container paths. The original host paths remain mounted for
+  saved scripts and older records that use absolute paths. A host-looking path in agent output
+  therefore names a permitted mount; it does not by itself indicate access outside the sandbox.
+  Persisted run pointers still name the host files so history and stop controls work outside it.
 - **It writes:** the record's folder, the problem's `out/` and `workbench/` (a sub-loop's in a folder: its
   parent's, whose folder it reads through -- D805), and the
   application's cache `~/.cache/flux/apps/<id>/`. That cache is shared by the application's
