@@ -83,7 +83,12 @@
         .concat(agentChoices("A coding agent writes the plan")) },
     dse: { title: "Search policy", says: "Guides design and prototype experiments. With settings to search, existing algorithms still walk that space. Reasoned risks are allowed by default.",
       choices: [{ value: "none", half: "model", label: "Default: adaptive, reasoned risks welcome" }]
-        .concat(DSE_INTENTS.map(function (p) { return { value: p, half: "model", label: p }; }))
+        .concat(DSE_INTENTS.map(function (p) {
+          return { value: p, half: "model", label: { adaptive: "Adaptive: follow the evidence, take reasoned risks",
+            explore: "Explore: try different algorithms or architectures", improve: "Improve: local or structural changes",
+            tune: "Tune: favor nearby parameter and implementation changes", finetune: "Finetune: favor small, attributable changes",
+            variations: "Variations: develop distinct alternatives" }[p] };
+        }))
         .concat(DSE_POLICIES.map(function (p) {
           return { value: p, half: "rules", label: { sweep: "Try every combination", montecarlo: "Random samples",
             anneal: "Annealing", gradient: "Step towards better", genetic: "Genetic (breed the best)",
@@ -1488,6 +1493,7 @@
       // compact: the hint is the input's tooltip, not a line of its own
       if (opts.compact && opts.hint) input.setAttribute("title", opts.hint);
       if (opts.key) input.setAttribute("data-fc-field", opts.key);     // D912: a save's error focuses its box
+      if (opts.disabled) input.disabled = true;
       // D941: the app's field -- a label.stack, its words above the box (flux.css; crafter.css on the docs page)
       return h("label", { class: "stack fc-field" + (opts.wide ? " fc-wide" : "") + (opts.narrow ? " fc-narrow" : "") + (opts.grow ? " fc-grow" : "") },
                [h("span", { class: "fc-label", text: label }), input, opts.hint && !opts.compact ? h("small", { class: "muted", text: opts.hint }) : null]);
@@ -2002,8 +2008,17 @@
     }
 
     function renderLevel2() {
+      var kept = (state.kept || []).indexOf("flow.boxes") >= 0;
+      var choices = BOXES.dse.choices.map(function (c) { return [c.value, c.label]; });
+      if (!choiceOf("dse", state.flow.dse)) choices.push([state.flow.dse, "Custom agent settings (kept as written)"]);
+      var policy = field("DSE search policy", function () { return state.flow.dse; }, function (v) {
+        state.flow.dse = v;
+        if (state.agentRaw) delete state.agentRaw.dse;
+      }, { key: "dse", options: choices, structural: true, disabled: kept,
+        hint: kept ? "The flow has custom settings kept as written; edit its DSE setting in Direct edit." :
+          "Guides design and prototype exploration. Adaptive welcomes reasoned risks. With settings in Extra, this also chooses how to search them." });
       if (!opts.foldSteps) {
-        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], drawing())]);
+        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [policy].concat(drawing()))]);
       }
       if (parts.stepsOpen === undefined) parts.stepsOpen = false;
       var body = h("div", {}, drawing());
@@ -2014,7 +2029,7 @@
         toggle.setAttribute("aria-expanded", parts.stepsOpen ? "true" : "false");
         if (parts.stepsOpen) renderDiagram();
       } } }, ["2. Who does each step?", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
-      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), body]);
+      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), policy, body]);
     }
 
     // -- level 3: the same fields and rows as above, behind one toggle

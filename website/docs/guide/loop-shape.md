@@ -104,6 +104,11 @@ A model or agent can invent algorithms and architectures without a predefined kn
 The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
 before the incumbent stalls. Select the emphasis using the existing `dse` setting:
 
+In the loop configurator, open **Graph → DSE search policy**. The dropdown includes the
+exploration and tuning preferences below, the search algorithms, and model or agent search.
+The default is adaptive. Without a knob space, a preference is saved as
+`flow.orchestrate.dse`; with settings defined in **Extra**, it selects the search policy.
+
 ```yaml
 flow:
   orchestrate: {by: claude, dse: adaptive}

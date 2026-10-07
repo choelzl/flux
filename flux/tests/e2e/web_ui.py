@@ -431,9 +431,52 @@ def flows(r: Run) -> None:
                 0 <= order[0] < order[1] < order[2] < order[3] and order[4] is False, str(order))
         b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Graph')).click(); return 1")
         r.check("the drawing is its step's", b.wait("document.querySelector('.fc-step svg .fc-box')", timeout=10, what="the drawing") is not None)
+        policy = b.js("const p = document.querySelector('[data-fc-field=dse]'); return [p.value, p.disabled, [...p.options].map(o => o.value), p.getBoundingClientRect().height]")
+        r.check("Graph exposes DSE with the adaptive default and all preferences", policy[0] == "none" and not policy[1]
+                and policy[3] > 0 and set(["adaptive", "explore", "improve", "tune", "finetune", "variations",
+                                         "sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"]) <= set(policy[2]), str(policy))
         r.check("New loop has no Example tab (D767)", not b.js("return [...document.querySelectorAll('#main .tabs a, #main .tabs button')].some(t => t.textContent.trim() === 'Example')"))
         r.check("nor a way to make a loop from an example", r.api("/apps/from-example", "POST", {"name": "x", "kind": "sweep"})["status"] in (404, 405))
     r.step("new loop tabs", new_loop_tabs)
+
+    def dse_setting():
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "dse_setting"})
+        r.check("create a separate loop for DSE settings", made["status"] == 200, made["body"])
+        doc = r.data / "users/bob/apps/dse_setting/problem.yaml"
+        raw = yaml.safe_load(doc.read_text())
+        raw["flow"] = {"orchestrate": {"by": "claude", "timeout_s": 321, "dse": "improve"}, "test": {"check": "true"}}
+        doc.write_text(yaml.safe_dump(raw, sort_keys=False))
+
+        def graph():
+            r.page("#/app/dse_setting/settings/problem", "document.querySelector('.fc-stepbar')", "the saved loop's configurator")
+            b.click(".fc-stepbar button[data-step=graph]")
+            b.wait("document.querySelector('[data-fc-field=dse]')", what="the DSE dropdown")
+
+        graph()
+        r.check("the DSE dropdown loads the saved preference", b.js("return document.querySelector('[data-fc-field=dse]').value") == "improve")
+        b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'explore'; p.dispatchEvent(new Event('change')); return 1")
+        b.js("document.querySelector('.fc-box[data-node=dse]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        r.check("the DSE graph popover follows the dropdown", b.js("return document.querySelector('.fc-pop input:checked').value") == "explore")
+        b.click("#fc-dse-tune")
+        r.check("the dropdown follows changes in the graph popover", b.js("return document.querySelector('[data-fc-field=dse]').value") == "tune")
+        b.keys(b.ESCAPE)
+        for value in ("explore", "none"):
+            b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = arguments[0]; p.dispatchEvent(new Event('change')); return 1", value)
+            r.button("Save to problem.yaml", ".fc-stepnav")
+            r.dialog_button("Save")
+            b.wait("!document.querySelector('.fc-status.fc-pending') && document.querySelector('.fc-status.fc-ok')", timeout=20, what="the DSE setting saved")
+            saved = json.loads(r.api("/apps/dse_setting/document")["body"])
+            expected = {"by": "claude", "timeout_s": 321}
+            if value != "none":
+                expected["dse"] = value
+            r.check(f"saving DSE {value} preserves the orchestrator's settings", saved["raw"]["flow"]["orchestrate"] == expected
+                    and saved["normal"] is not None, str(saved))
+            graph()
+            r.check(f"DSE {value} survives reloading the configurator", b.js("return document.querySelector('[data-fc-field=dse]').value") == value)
+        r.clean("DSE settings")
+    r.step("dse setting", dse_setting)
 
     def draft_across_modes():
         """D912: one creation draft across the ways -- the name, the statement and a staged file survive
