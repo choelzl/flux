@@ -433,7 +433,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Slow answers** (D774): a request over half a second is said in the server's log (`flux serve: slow: GET /api/… 1.23 s`;
     `FLUX_SLOW_S` sets the threshold) -- where to look when pages are slow.
   - **Leftovers** (D768): a login's or Test's container ends itself (Podman's `--timeout`); each minute the server removes
-    a sandbox container no process runs any more (in the audit); an agent's turn ends with everything it started.
+    sandbox containers no process runs any more, including stopped leftovers and their network helpers (in the audit).
+    A network helper stays while its task or client still exists; an agent's turn ends with everything it started.
     A login that ends well is tested at once (Account shows "testing…", then the result).
   - **Homes** (D744): every user has a home of their own, `<data>/users/<name>/home` (0700, no system
     account): their runs' HOME, writable at `/home/flux`, kept -- their agents' settings, logins and

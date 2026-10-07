@@ -132,3 +132,25 @@ def test_an_admin_edits_anyones_loop_and_a_user_still_only_their_own(server):
     store.add_user("cy", "cy has a long secret")
     cy = _client(app, "cy", "cy has a long secret")
     assert cy.put("/api/apps/x/file", params={"path": "y", "owner": "bob"}, json={"text": "z"}, headers=H).status_code == 403
+
+
+def test_an_admin_cannot_remove_a_running_loops_network_helper(server, monkeypatch):
+    from flux_web import admin
+
+    app, tmp = server
+    bob, ada = _client(app, "bob", "another long secret"), _client(app, "ada", "correct horse battery")
+    _loop(bob, "x")
+    proc = _running(app, tmp, "bob", "x")
+    monkeypatch.setattr(app.state.runs, "state", lambda *args: {"container": "flux-abcdef"})
+    removed = []
+    monkeypatch.setattr(admin, "kill_container", lambda name: removed.append(name) or "removed")
+    try:
+        for name in ("flux-abcdef", "flux-abcdef-network"):
+            r = ada.post(f"/api/admin/containers/{name}/kill", headers=H)
+            assert r.status_code == 409 and "stop the loop" in r.json()["detail"]
+        assert removed == []
+        assert ada.post("/api/admin/containers/flux-123456-network/kill", headers=H).status_code == 200
+        assert removed == ["flux-123456-network"]
+    finally:
+        proc.kill()
+        proc.wait(timeout=5)

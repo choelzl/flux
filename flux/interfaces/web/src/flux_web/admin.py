@@ -173,11 +173,10 @@ def kill_container(name: str) -> str:
     """A sandbox container stopped and removed: one left behind by a run that is gone."""
     from flux_cli.sandbox import engine, engine_cli
 
-    if not re.fullmatch(r"flux-[0-9a-f]{6,32}", name):
+    if not re.fullmatch(r"flux-[0-9a-f]{6,32}(?:-network)?", name):
         raise ValueError("not a sandbox container's name")
     _SEEN[1] = None                                         # D921: asked afresh next time
     cli = engine_cli(engine())
-    subprocess.run([*cli, "kill", name], capture_output=True, text=True, timeout=60)
     r = subprocess.run([*cli, "rm", "-f", name], capture_output=True, text=True, timeout=60)
     return "removed" if r.returncode == 0 else (r.stderr.strip() or "not removed")
 
@@ -222,18 +221,25 @@ def reap(grace_s: float = 120.0, now: float | None = None) -> list[dict[str, Any
     """D768: the sandbox containers no process runs any more -- a client killed with the server, a
     login or Test whose request is gone -- stopped and removed, after `grace_s` of their life (a
     client being started is not mistaken for one gone); a login's or Test's whose client is not this
-    server's own (one before a restart) with its client. Those removed."""
+    server's own (one before a restart) with its client. Stopped leftovers are removed too.
+    A detached network helper stays while its task or client exists. Those removed."""
     now = time.time() if now is None else now
     got = containers()
     if got.get("error"):
         return []
     held = attached()
+    remaining = {c["name"] for c in got["containers"]}
     gone = []
-    for c in got["containers"]:
-        if c["state"] != "running":
+    # Remove tasks before their helpers: the engine cannot remove a namespace still in use.
+    for c in sorted(got["containers"], key=lambda c: c["name"].endswith("-network")):
+        if c["state"] not in ("running", "exited", "stopped", "dead"):
             continue
         if c.get("started") is not None and now - float(c["started"]) < grace_s:
             continue
+        if c["name"].endswith("-network"):
+            parent = c["name"].removesuffix("-network")
+            if parent in held or parent in remaining:
+                continue
         client = held.get(c["name"])
         if client is not None:
             if not str(c.get("app") or "").endswith(SERVERS_OWN) or os.getpid() in _ancestors(client):
@@ -246,7 +252,10 @@ def reap(grace_s: float = 120.0, now: float | None = None) -> list[dict[str, Any
             said = kill_container(c["name"])
         except (ValueError, OSError, subprocess.TimeoutExpired):
             continue
-        gone.append({**c, "said": said})
+        if said == "removed":
+            remaining.discard(c["name"])
+            held.pop(c["name"], None)
+            gone.append({**c, "said": said})
     return gone
 
 

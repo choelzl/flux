@@ -8,6 +8,8 @@ import sys
 import time
 import types
 
+import pytest
+
 from flux_cli import sandbox
 from flux_web import admin
 
@@ -42,9 +44,93 @@ def test_a_container_no_process_runs_is_removed_after_its_grace(monkeypatch):
     monkeypatch.setattr(admin, "attached", lambda: {"flux-bbbbbb": 999_999})
     monkeypatch.setattr(admin, "kill_container", lambda n: killed.append(n) or "removed")
     gone = admin.reap(now=now)
-    assert killed == ["flux-aaaaaa"] and gone[0]["app"] == "ada.login" and gone[0]["said"] == "removed"
+    assert killed == ["flux-aaaaaa", "flux-dddddd"] and gone[0]["app"] == "ada.login" and gone[0]["said"] == "removed"
     monkeypatch.setattr(admin, "containers", lambda: {"containers": [], "error": "podman is not installed"})
     assert admin.reap(now=now) == []
+
+
+@pytest.mark.parametrize("state", ["running", "exited", "stopped", "dead"])
+def test_an_orphan_network_helper_is_removed(monkeypatch, state):
+    rows = [{"name": "flux-abcdef-network", "state": state, "started": 0}]
+    killed = []
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": rows})
+    monkeypatch.setattr(admin, "attached", lambda: {})
+    monkeypatch.setattr(admin, "kill_container", lambda name: killed.append(name) or "removed")
+    assert [c["name"] for c in admin.reap(now=10_000)] == ["flux-abcdef-network"]
+    assert killed == ["flux-abcdef-network"]
+
+
+@pytest.mark.parametrize("state", ["running", "exited"])
+@pytest.mark.parametrize("parent_listed", [True, False])
+def test_an_attached_tasks_network_helper_survives_reaping(monkeypatch, state, parent_listed):
+    rows = [{"name": "flux-abcdef-network", "state": state, "started": 0, "app": "ada.x"}]
+    if parent_listed:
+        rows.append({"name": "flux-abcdef", "state": "running", "started": 0, "app": "ada.x"})
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": rows})
+    monkeypatch.setattr(admin, "attached", lambda: {"flux-abcdef": 999_999})
+    monkeypatch.setattr(admin, "kill_container", lambda name: pytest.fail(f"removed a live task or helper: {name}"))
+    assert admin.reap(now=10_000) == []
+
+
+def test_orphan_tasks_are_removed_before_their_network_helpers(monkeypatch):
+    rows = [{"name": "flux-abcdef-network", "state": "running", "started": 0},
+            {"name": "flux-abcdef", "state": "exited", "started": 0}]
+    killed = []
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": rows})
+    monkeypatch.setattr(admin, "attached", lambda: {})
+    monkeypatch.setattr(admin, "kill_container", lambda name: killed.append(name) or "removed")
+    assert [c["name"] for c in admin.reap(now=10_000)] == ["flux-abcdef", "flux-abcdef-network"]
+    assert killed == ["flux-abcdef", "flux-abcdef-network"]
+
+
+def test_a_helper_stays_until_its_parent_is_removed(monkeypatch):
+    rows = [{"name": "flux-abcdef-network", "state": "running", "started": 0},
+            {"name": "flux-abcdef", "state": "running", "started": 0}]
+    attempts = []
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": rows})
+    monkeypatch.setattr(admin, "attached", lambda: {})
+    monkeypatch.setattr(admin, "kill_container", lambda name: attempts.append(name) or "engine busy")
+    assert admin.reap(now=10_000) == [], "failed removal must not be reported as success"
+    assert attempts == ["flux-abcdef"]
+
+
+def test_a_new_helper_is_given_time_to_start_its_task(monkeypatch):
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": [
+        {"name": "flux-abcdef-network", "state": "running", "started": 9_990}]})
+    monkeypatch.setattr(admin, "attached", lambda: {})
+    monkeypatch.setattr(admin, "kill_container", lambda name: pytest.fail(f"removed a new helper: {name}"))
+    assert admin.reap(now=10_000) == []
+
+
+@pytest.mark.parametrize("state", ["running", "created", "paused"])
+def test_a_helper_stays_while_its_unattached_task_is_starting_or_paused(monkeypatch, state):
+    rows = [{"name": "flux-abcdef-network", "state": "running", "started": 0},
+            {"name": "flux-abcdef", "state": state, "started": 9_990}]
+    monkeypatch.setattr(admin, "containers", lambda: {"containers": rows})
+    monkeypatch.setattr(admin, "attached", lambda: {})
+    monkeypatch.setattr(admin, "kill_container", lambda name: pytest.fail(f"removed a task or helper: {name}"))
+    assert admin.reap(now=10_000) == []
+
+
+@pytest.mark.parametrize("name", ["flux-abcdef", "flux-abcdef-network"])
+def test_removal_accepts_tasks_and_network_helpers(monkeypatch, name):
+    calls = []
+    monkeypatch.setattr(sandbox, "engine", lambda: "podman")
+    monkeypatch.setattr(sandbox, "engine_cli", lambda eng: [eng])
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(admin.subprocess, "run", run)
+    assert admin.kill_container(name) == "removed"
+    assert calls == [["podman", "rm", "-f", name]], "force removal handles running and stopped containers"
+
+
+@pytest.mark.parametrize("name", ["other-abcdef", "flux-abcdef-other", "flux-abcdef-network-other", "flux-abcdef;id"])
+def test_removal_rejects_other_container_names(name):
+    with pytest.raises(ValueError):
+        admin.kill_container(name)
 
 
 def test_a_client_is_found_attached_by_its_command_line():
@@ -73,7 +159,9 @@ def test_a_login_a_former_server_started_is_removed_with_its_client(monkeypatch)
     """A server restarted: its login's client lives on (a session of its own), read by no one."""
     p = subprocess.Popen(["sh", "-c", "sleep 300"], start_new_session=True)
     try:
-        rows = [{"name": "flux-eeeeee", "state": "running", "started": 0.0, "app": "ada.login"},
+        rows = [{"name": "flux-eeeeee-network", "state": "running", "started": 0.0, "app": "ada.login"},
+                {"name": "flux-ffffff-network", "state": "running", "started": 0.0, "app": "ada.nlu"},
+                {"name": "flux-eeeeee", "state": "running", "started": 0.0, "app": "ada.login"},
                 {"name": "flux-ffffff", "state": "running", "started": 0.0, "app": "ada.nlu"}]
         killed = []
         monkeypatch.setattr(admin, "containers", lambda: {"containers": rows, "error": None})
@@ -82,7 +170,7 @@ def test_a_login_a_former_server_started_is_removed_with_its_client(monkeypatch)
         assert admin.reap(now=1e9) == [] and p.poll() is None, "this server's own login: kept"
         monkeypatch.setattr(admin, "_ancestors", lambda pid: {pid, 1})              # as after a restart
         gone = admin.reap(now=1e9)
-        assert [g["name"] for g in gone] == ["flux-eeeeee"] and killed == ["flux-eeeeee"], "a loop's run lives on"
+        assert [g["name"] for g in gone] == killed == ["flux-eeeeee", "flux-eeeeee-network"], "a loop and its helper live on"
         assert p.wait(timeout=5) == -9, "its client ended too"
     finally:
         if p.poll() is None:

@@ -143,7 +143,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from . import admin as adm
 
         for (_u, _app), r in _live_loops().items():
-            if runs.state(store.user(name=_u), _app).get("container") == cname:
+            container = runs.state(store.user(name=_u), _app).get("container")
+            if container and cname in (container, container + "-network"):
                 raise HTTPException(409, f"{cname} is {_u}'s {_app}, running: stop the loop instead")
         try:
             said = adm.kill_container(cname)
