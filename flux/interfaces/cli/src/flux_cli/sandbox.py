@@ -13,9 +13,9 @@ run and refreshed in place. Another application's traces and caches, another use
 real home (`~/.ssh`, other repositories) and the Docker socket are not there.
 
 Network: the host's (`FLUX_SANDBOX_NET=open`, the default), or only the hosts an allowlist names
-(`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): the container has no
-network, and a proxy on the host (a Unix socket) forwards to allowed hosts only -- through the
-host's own proxy when it has one (D722); the container's loopback is its own, never proxied.
+(`FLUX_SANDBOX_ALLOW=localai.example.org,api.anthropic.com,10.0.0.0/8`): a separate helper owns
+the network firewall, allowing native TCP and UDP to those destinations. HTTP(S) still uses
+the host's allowlist proxy and its upstream corporate proxy (D722). Loopback stays inside.
 
 Certificates (D722): the host's trust store is the container's -- `/etc/ssl`, `/etc/pki`,
 `/usr/local/share/ca-certificates` (under `/usr`), the files the host's `SSL_CERT_FILE`,
@@ -414,7 +414,7 @@ def container_env(cmd: list[str]) -> dict[str, str]:
 
 
 def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_dir: str | None,
-                   eng: str | None = None) -> list[str]:
+                   eng: str | None = None, *, network: str | None = None, guard: bool = False) -> list[str]:
     eng = eng or engine()
     ro, rw = mounts_for(args, command)
     app = app_dir(args, command)
@@ -438,30 +438,34 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
         cmd += ["--label", f"flux.app={os.environ['FLUX_SANDBOX_APP']}"]    # `flux serve`'s admin finds its loop (D695)
     if eng == "docker":
         # the daemon is root: run as you; PID 1 is tini (Docker's --init lives under /sbin, the host's here)
-        cmd += ["--user", f"{os.getuid()}:{os.getgid()}", "--tmpfs", "/run"]
+        cmd += ["--user", "0:0" if guard else f"{os.getuid()}:{os.getgid()}", "--tmpfs", "/run"]
     else:
         # rootless: root inside is you outside; Podman's own init is PID 1
         cmd += ["--init"]
-    cmd += ["-it"] if sys.stdin.isatty() else ["-i"]
+    cmd += ["--detach", "--cap-add", "NET_ADMIN"] if guard else (["-it"] if sys.stdin.isatty() else ["-i"])
     for lim, flag in (("FLUX_SANDBOX_MEMORY", "--memory"), ("FLUX_SANDBOX_CPUS", "--cpus")):
         if os.environ.get(lim):
             cmd += [flag, os.environ[lim]]
-    cmd += ["--network", "none" if proxy_dir else "host"]
+    cmd += ["--network", network or ("none" if proxy_dir else "host")]
     if proxy_dir:
         # D717: a name lookup is asked of the relay inside (127.0.0.1:53), which asks the proxy --
         # a program that ignores HTTP(S)_PROXY still looks its host up, and that is seen and audited
         resolv = Path(proxy_dir) / "resolv.conf"
         try:
             resolv.write_text("nameserver 127.0.0.1\noptions attempts:1 timeout:2\n")
-            cmd += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=53", "-v", f"{resolv}:/etc/resolv.conf:ro"]
+            if not network or not network.startswith("container:"):
+                cmd += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=53"]
+            cmd += ["-v", f"{resolv}:/etc/resolv.conf:ro"]
         except OSError:
             pass                                              # no lookups seen; the proxy still filters
-    cmd += ["-v", f"{home}:{HOME_IN}"]                            # HOME: the user's Flux home
+    cmd += ["-v", f"{home}:{HOME_IN}" + (":ro" if guard else "")] # HOME: the user's Flux home
     for p in ro:
         cmd += ["-v", f"{p}:{p}:ro"]
     for p in rw:
-        cmd += ["-v", f"{p}:{p}"]
+        cmd += ["-v", f"{p}:{p}" + (":ro" if guard else "")]
     extra, said = admin_mount_args([HOME_IN, "/tmp", str(_home()), *ro, *rw, *([proxy_dir] if proxy_dir else [])])
+    if guard:
+        extra = [v[:-3] + ":ro" if v.endswith(":rw") else v for v in extra]
     cmd += extra                                              # D936: the loop's admin mounts, after the sandbox's own
     if said:
         print(f"flux {command}: admin mounts: " + "; ".join(said), file=sys.stderr, flush=True)
@@ -476,13 +480,25 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
                FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=f"{HOME_IN}/.cache")
     if proxy_dir:
-        cmd += ["-v", f"{proxy_dir}:{proxy_dir}"]
+        cmd += ["-v", f"{proxy_dir}:{proxy_dir}:ro"]
         env.update(FLUX_SANDBOX_PROXY=str(Path(proxy_dir) / "proxy.sock"))
+        if network and network.startswith("container:"):
+            env["FLUX_SANDBOX_NETWORK"] = "1"
         for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
             env[k] = f"http://127.0.0.1:{PROXY_PORT}"
         # D722: the container's loopback is its own (an agent's local server, its event stream);
         # through the proxy it would be refused, or be the host's
         env["NO_PROXY"] = env["no_proxy"] = "localhost,127.0.0.1,::1"
+    if guard:
+        control_dir = run_dir(name)
+        cmd += ["-v", f"{control_dir}:{control_dir}:ro"]
+        env["FLUX_SANDBOX_PROXY"] = str(control_dir / "network.sock")
+        nft = shutil.which("nft")
+        if not nft:
+            raise RuntimeError("allowlisted TCP/UDP networking needs nftables (`nft`) installed on the host")
+        env["FLUX_SANDBOX_NFT"] = str(Path(nft).resolve())
+        if not any(_under(env["FLUX_SANDBOX_NFT"], p) for p in ro):
+            cmd += ["-v", f"{env['FLUX_SANDBOX_NFT']}:{env['FLUX_SANDBOX_NFT']}:ro"]
     # D745: never a value on the command line -- `ps` shows it to every user of the machine (the
     # model's key was there). One line each in a file of the run's own (0600); a value of
     # several lines (which a file of variables cannot hold) by name, from this process's environment
@@ -539,23 +555,49 @@ def launch(argv: list[str], args: Any, command: str) -> int:
 
         proxy_dir = str(mine)
         proxy = AllowProxy(str(Path(proxy_dir) / "proxy.sock"), allow, log=os.environ.get("FLUX_SANDBOX_REFUSALS"),
-                           about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name})
+                           about={"app": os.environ.get("FLUX_SANDBOX_APP", ""), "command": command, "container": name},
+                           **({"network_path": str(run_dir(name + "-network") / "network.sock")} if allow else {}))
         proxy.start()
     # D714: the flux that is running, by its own interpreter -- not whichever `flux` PATH finds
     # first, nor `sys.argv[0]`, which under `python -m` is a source file, not a program
-    cmd = container_argv([sys.executable, "-m", "flux_cli", *argv], args, command, name, proxy_dir, eng)
     # D720: the run's log says where it runs, not how its network is limited nor how to leave the sandbox
     print(f"flux {command}: in the {eng} sandbox {name}", file=sys.stderr, flush=True)
     try:
+        network = None
+        if proxy is not None and allow:
+            guard_name = name + "-network"
+            try:
+                # Isolated Python ignores the task's PYTHONPATH and user site packages.
+                guard_cmd = container_argv([sys.executable, "-I", str(Path(__file__).with_name("sandbox_network.py"))], args, command,
+                                           guard_name, proxy_dir, eng, network="private" if eng == "podman" else "bridge", guard=True)
+                started = subprocess.run(guard_cmd, capture_output=True, text=True, timeout=60,
+                                         env={**os.environ, "TMPDIR": str(mine)})
+                if started.returncode or not proxy.network_ready.wait(30):
+                    detail = subprocess.run([*engine_cli(eng), "logs", guard_name], capture_output=True, text=True, timeout=15)
+                    raise RuntimeError("native network helper did not start: " + (started.stderr or detail.stderr or detail.stdout)[-1500:])
+                network = "container:" + guard_name
+            except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+                # Keep the existing isolated HTTP relay; a network failure does not end a pass.
+                print(f"flux {command}: {exc}; continuing this pass through the HTTP relay", file=sys.stderr, flush=True)
+        cmd = container_argv([sys.executable, "-m", "flux_cli", *argv], args, command, name, proxy_dir, eng, network=network)
         # D848: the engine's own scratch on the run's local folder: with -it Podman binds conmon's console
         # socket under TMPDIR, which a home on FUSE/NFS refuses ("container create failed"); inside, TMPDIR is /tmp
         return subprocess.call(cmd, env={**os.environ, "TMPDIR": str(mine)})
     except KeyboardInterrupt:
         subprocess.run([*engine_cli(eng), "kill", "--signal", "INT", name], capture_output=True)
         return 130
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f"flux {command}: {exc}", file=sys.stderr, flush=True)
+        return 2
     finally:
         if proxy is not None:
-            proxy.stop()
+            try:
+                subprocess.run([*engine_cli(eng), "rm", "-f", name + "-network"], capture_output=True, timeout=30)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            finally:
+                proxy.stop()
+                shutil.rmtree(run_dir(name + "-network"), ignore_errors=True)
         shutil.rmtree(mine, ignore_errors=True)              # the variables' file with it
 
 
@@ -601,7 +643,8 @@ def relay_proxy() -> None:
                 threading.Thread(target=pipe, args=(a, b), daemon=True).start()
 
     threading.Thread(target=serve, daemon=True, name="flux-sandbox-relay").start()
-    threading.Thread(target=_dns_relay, args=(sock_path,), daemon=True, name="flux-sandbox-dns").start()
+    if os.environ.get("FLUX_SANDBOX_NETWORK") != "1":
+        threading.Thread(target=_dns_relay, args=(sock_path,), daemon=True, name="flux-sandbox-dns").start()
 
 
 def _dns_name(q: bytes) -> str | None:

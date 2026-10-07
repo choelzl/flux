@@ -180,7 +180,9 @@ machine.
   configuration and a copy of their login. Another application's cache is not there. `~/.ssh`, other repositories, the Docker socket and `~/.config/flux` are
   not there. The model settings and key come in through the environment.
 - **Network:** the host's by default. `FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8` gives no
-  network except those hosts, through a proxy on the host. A refused host is said once.
+  network except those destinations: both native TCP and UDP are permitted. HTTP(S) keeps
+  using the allowlist proxy on the host. Allowlisted networking requires `nft` (nftables)
+  on the Linux host; a helper installs the firewall before the task starts.
 - **Limits:** `FLUX_SANDBOX_MEMORY=16g`, `FLUX_SANDBOX_CPUS=8`, `FLUX_SANDBOX_PIDS` (4096).
 - **Off:** `--no-sandbox` or `FLUX_SANDBOX=0`.
 - **Engine:** rootless Podman when installed, else Docker (`FLUX_SANDBOX_ENGINE=podman|docker`)
@@ -393,17 +395,30 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   them on it from its Settings. A running loop is never touched; every run is in the audit trail.
 - **Sandbox (Admin › Sandbox):** what every container gets.
   - **Network:** open, or an allowlist (hosts and their subdomains, `*.domain`, IPs, CIDRs). With
-    an allowlist the container has no network; a proxy on the host forwards to allowed hosts
-    only. A name is resolved and passes when one of its addresses is in an allowed IP or CIDR,
-    and is reached at that address. Optionally the model endpoints' hosts join the list. A loop's Settings (admins) may add
+    an allowlist the container's network permits native TCP and UDP to allowed destinations.
+    IPs and CIDRs permit both protocols at all ports. Flux resolves allowed domains on the
+    host and admits their addresses before answering DNS; subdomains work the same way.
+    When a name passes through an IP/CIDR rule, only its matching addresses are admitted.
+    Native traffic is filtered by destination address, so names sharing an admitted IP share
+    that permission. HTTP(S) retains the host's proxy, including its corporate upstream.
+    Native UDP needs a route from the host; an HTTP upstream cannot carry it.
+    The separate helper needs host `nft` (nftables); the task keeps all capabilities dropped
+    and cannot alter the firewall. If the helper fails to initialize, the pass continues
+    through the existing isolated HTTP relay; native TCP/UDP remains unavailable until a
+    later run can start the helper.
+    Optionally the model endpoints' hosts join the list. A loop's Settings (admins) may add
     hosts for that loop; a start adds none (D884). An empty
     allowlist reaches nothing. Users never see the admin's hosts (D716): a run's log says the network is
     limited and by how many entries, and the container's environment does not carry the list. Admins
     see it in the Sandbox tab.
     A program that ignores the proxy settings still looks its host up: under an allowlist the
     container resolves through Flux (D717), and a name the list does not allow is refused and
-    shows in the admin's audit as "a name lookup". A direct connection to a bare IP fails
-    (no network) and is not seen.
+    shows in the admin's audit as "a name lookup". A bare IP is reachable only when an IP/CIDR
+    rule permits it or an allowed name has resolved to it. Other bare-IP traffic is dropped
+    by the firewall and does not appear in the name-lookup audit. Loopback stays inside.
+    A blocked destination fails that request; it does not stop the current pass or the
+    campaign. The loop records failed attempts and continues with another candidate or
+    an allowed service, within the pass's ordinary step and time budgets.
   - **PATH:** each directory on the runs' PATH is mounted read-only. The server user's login PATH
     (their own shell's, interactive and login) can be added, and further directories.
   - **Slow answers** (D774): a request over half a second is said in the server's log (`flux serve: slow: GET /api/… 1.23 s`;
