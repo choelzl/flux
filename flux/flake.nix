@@ -190,6 +190,9 @@
             name = "flux-dev";
             packages = [
               pythonEnv pkgs.docker-client
+              # System Ninja loads Nix libstdc++ via LD_LIBRARY_PATH, mixing Nix libm
+              # with the host libc. Use Ninja built against the same Nix runtime.
+              pkgs.ninja
               pkgs.ruff        # the lint CI runs: `ruff check` (pyflakes rules; honours noqa)
               pkgs.systemc     # a SystemC prototype's testbench links it (D635)
               pkgs.hyperfine   # `flux prog time` (D661)
