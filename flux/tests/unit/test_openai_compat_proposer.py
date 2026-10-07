@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+from unittest.mock import patch
 
 import pytest
 
@@ -1000,7 +1001,9 @@ def test_the_preflight_says_why_a_run_cannot_start(monkeypatch):
 def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp_path, monkeypatch):
     """`~/.config/flux/flux.env` sets FLUX_* where the shell did not; the key is read from the
     file FLUX_REMOTE_API_KEY_FILE names (D651)."""
-    from flux_llm.openai_compat import load_user_config, remote_api_key
+    from flux_llm import openai_compat
+
+    monkeypatch.setattr(openai_compat, "LOADED", [])
 
     for name in ("FLUX_LLM_REMOTE", "FLUX_REMOTE_MODEL", "FLUX_REMOTE_API_KEY", "OPENROUTER_API_KEY",
                  "FLUX_REMOTE_API_KEY_FILE", "FLUX_LLM_TIMEOUT_S"):
@@ -1010,13 +1013,13 @@ def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp
     cfg.write_text(f"# the hosted model\nFLUX_LLM_REMOTE=1\nFLUX_REMOTE_MODEL=qwen-apex\n"
                    f"FLUX_REMOTE_API_KEY_FILE={tmp_path / 'key'}\nFLUX_LLM_TIMEOUT_S=60\nPATH=/nope\n")
     monkeypatch.setenv("FLUX_LLM_TIMEOUT_S", "86400")              # the shell wins
-    got = load_user_config(cfg)
     import os
 
-    assert set(got) == {"FLUX_LLM_REMOTE", "FLUX_REMOTE_MODEL", "FLUX_REMOTE_API_KEY_FILE"}
-    assert os.environ["FLUX_REMOTE_MODEL"] == "qwen-apex" and os.environ["FLUX_LLM_TIMEOUT_S"] == "86400"
-    assert os.environ.get("PATH") != "/nope", "only FLUX_/OLLAMA_ variables"
-    assert remote_api_key() == "sk-test-123"
-    assert os.environ["FLUX_REMOTE_API_KEY"] == "sk-test-123", "agents inherit the key from the environment"
-    for name in [*got, "FLUX_REMOTE_API_KEY"]:
-        monkeypatch.delenv(name, raising=False)
+    # Include the key loaded indirectly from its file in the environment restored at exit.
+    with patch.dict(os.environ):
+        got = openai_compat.load_user_config(cfg)
+        assert set(got) == {"FLUX_LLM_REMOTE", "FLUX_REMOTE_MODEL", "FLUX_REMOTE_API_KEY_FILE"}
+        assert os.environ["FLUX_REMOTE_MODEL"] == "qwen-apex" and os.environ["FLUX_LLM_TIMEOUT_S"] == "86400"
+        assert os.environ.get("PATH") != "/nope", "only FLUX_/OLLAMA_ variables"
+        assert openai_compat.remote_api_key() == "sk-test-123"
+        assert os.environ["FLUX_REMOTE_API_KEY"] == "sk-test-123", "agents inherit the key from the environment"

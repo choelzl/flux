@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -78,23 +79,25 @@ def test_the_aliases_from_the_shell_reach_each_kind_and_a_named_agent(agents, mo
 
 
 def test_the_aliases_from_flux_env_too(agents, tmp_path, monkeypatch, capsys):
-    from flux_llm.openai_compat import load_user_config
+    from flux_llm import openai_compat
+
+    monkeypatch.setattr(openai_compat, "LOADED", [])
 
     cfg = tmp_path / "flux.env"
     cfg.write_text("".join(f"{k}={v}\n" for k, v in ALIASES.items()) + "ANTHROPIC_AUTH_TOKEN=synthetic-native\nPATH=/nope\n"
                    "FLUX_CODEX_OAUTH_TOKEN=x\nFLUX_AGENT_BASE_URL=https://x.invalid\n")
-    got = load_user_config(cfg)
-    for k in got:
-        monkeypatch.setenv(k, os.environ[k])                     # undone after the test
-    said = capsys.readouterr().err
-    assert "ANTHROPIC_AUTH_TOKEN" in got and "PATH" not in got, "an agent's own name loads; anything else is said"
-    assert "PATH: not a Flux setting" in said and "FLUX_CODEX_OAUTH_TOKEN: a codex agent takes no login token" in said
-    assert "FLUX_AGENT_BASE_URL: agent is not an agent here" in said
-    _check_all(agents)
-    from flux_loop.agent import agent_config
+    # Snapshot before loading: recording variables afterwards would restore the loaded values.
+    with patch.dict(os.environ):
+        got = openai_compat.load_user_config(cfg)
+        said = capsys.readouterr().err
+        assert "ANTHROPIC_AUTH_TOKEN" in got and "PATH" not in got, "an agent's own name loads; anything else is said"
+        assert "PATH: not a Flux setting" in said and "FLUX_CODEX_OAUTH_TOKEN: a codex agent takes no login token" in said
+        assert "FLUX_AGENT_BASE_URL: agent is not an agent here" in said
+        _check_all(agents)
+        from flux_loop.agent import agent_config
 
-    _env, eff = agent_config("claude", "claude", dict(os.environ))
-    assert eff.fields["endpoint"]["source"] == "flux.env", "where it came from is said"
+        _env, eff = agent_config("claude", "claude", dict(os.environ))
+        assert eff.fields["endpoint"]["source"] == "flux.env", "where it came from is said"
 
 
 def test_the_aliases_inherited_by_the_server_and_its_settings_reach_a_web_run(agents, tmp_path, monkeypatch):

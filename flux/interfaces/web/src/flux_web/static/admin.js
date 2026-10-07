@@ -69,7 +69,7 @@ async function adminAudit(body, ok = () => true) {
       "invite user", "password set from a link"]],
     ["Runs", ["start", "stop", "note", "note removed", "stop all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
-      "edit", "upload", "add files", "delete file", "move file", "delete app", "asked about a loop", "clone loop", "empty loop",
+      "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "clone loop", "empty loop",
       "document migrated"]],
     ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
     ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test"]],

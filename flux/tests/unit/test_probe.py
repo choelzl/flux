@@ -24,16 +24,17 @@ def _task(tmp_path, **extra):
     return TaskSpec.from_dict({**doc, **extra}, base=tmp_path)
 
 
-def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
+def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path, monkeypatch):
     """D679: `measure` runs only the stages named, each on its own budget, concurrently, and says
     whether each meets its limits; the gate runs alone (`gate`) or first (`--gate`)."""
+    monkeypatch.setenv("FLUX_PARALLEL_MAX", "2")       # explicitly allow the concurrency this test checks
     # side by side, proved without timing: while `meet` exists, each stage says it started and
     # waits (up to 30 s) to see the other's start; run one after the other, the first would not
     meet = tmp_path / "meet"
     meet.mkdir()
-    slow = (f"import sys, time, pathlib; d = pathlib.Path({str(meet)!r}); me = sys.argv[1].split('/')[-1] + str(time.time())\n"
-            f"if d.is_dir():\n (d / (me + '.start')).touch(); t = time.time()\n"
-            f" while len(list(d.glob('*.start'))) < 2 and time.time() - t < 30: time.sleep(0.05)\n"
+    slow = (f"import os, sys, time, pathlib; d = pathlib.Path({str(meet)!r}); me = str(os.getpid())\n"
+            f"if d.is_dir():\n (d / (me + '.start')).touch(); t = time.monotonic()\n"
+            f" while len(list(d.glob('*.start'))) < 2 and time.monotonic() - t < 30: time.sleep(0.05)\n"
             f" (d / (me + ('.saw' if len(list(d.glob('*.start'))) >= 2 else '.alone'))).touch()\n")
     count = {"name": "count", "command": ["{python}", "-c", slow + "print('lines=' + str(len(open(sys.argv[1]).read().split())))",
                                           "{artifact}"], "metrics_re": {"lines": r"lines=(\d+)"}, "cutoff": {"metric": "lines", "below": 9}}
@@ -49,7 +50,7 @@ def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path):
     code, out = probe("gate", str(bad), ctx_path=ctx)
     assert code == 1 and "GATE: 1 failures" in out and "FAIL line 4" in out and "[gate probe 1 of 2]" in out
     code, out = probe("measure", str(bad), ["count", "size"], ctx_path=ctx)      # no gate: a wrong file is measured
-    assert len(list(meet.glob("*.saw"))) == 2 and not list(meet.glob("*.alone")), "side by side, not one after another"
+    assert len(list(meet.glob("*.saw"))) == 2 and not list(meet.glob("*.alone")), f"side by side, not one after another: {out}"
     import shutil
 
     shutil.rmtree(meet)                                                          # the later probes run alone
