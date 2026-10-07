@@ -64,6 +64,7 @@ _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_",
 HOME_IN = "/home/flux"
 LOOP_IN = "/sandbox"
 CACHE_IN = "/sandbox-cache"
+SOURCE_IN = "/opt/flux"
 #: On one's own machine, the Flux home starts with the agents' configuration and logins of the
 #: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
 #: passes its settings in, so the key file itself stays outside.
@@ -236,6 +237,14 @@ def _top(doc: Path) -> Path:
         return doc.parent
 
 
+def _source_root() -> Path | None:
+    """The running checkout, even when Flux was launched without the Nix shell hook."""
+    configured = os.environ.get("FLUX_ROOT")
+    candidates = [*Path(__file__).resolve().parents, *([Path(configured).resolve()] if configured else [])]
+    return next((p for p in candidates if (p / "core/loop/src").is_dir()
+                 and (p / "interfaces/cli/src").is_dir()), None)
+
+
 def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     """(read-only, writable) host paths the command needs, each mounted at its own path."""
     # a merged-/usr host's /bin, /lib, ... are links into /usr: /usr covers them, and the root
@@ -247,9 +256,9 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
         v = os.environ.get(var, "")
         if v and Path(v).is_absolute() and _exists(v) and not any(v == m or v.startswith(m + "/") for m in ro):
             ro.append(v)
-    root = os.environ.get("FLUX_ROOT")
-    if root:
-        ro.append(root)
+    source = _source_root()
+    if source is not None:
+        ro.append(str(source))
     ro.append(os.getcwd())
     # D714: the Python running flux -- a pip venv, its interpreter, an editable install's source --
     # wherever it lives; without it a `pip install` user's flux cannot import itself inside
@@ -421,6 +430,14 @@ def container_env(cmd: list[str]) -> dict[str, str]:
 def path_mapping(args: Any, command: str, app: Path, home: Path) -> list[tuple[str, str]]:
     """Canonical paths for this launch; old mounts remain for saved scripts and records."""
     pairs = [(str(app), CACHE_IN), (str(home), HOME_IN)]
+    source = _source_root()
+    if source is not None:
+        pairs.append((str(source), SOURCE_IN))
+        configured = os.environ.get("FLUX_ROOT")
+        if configured and Path(configured).resolve() == source:
+            alias = str(Path(configured).absolute())
+            if alias != str(source):
+                pairs.append((alias, SOURCE_IN))
     root = None
     if command in ("task run", "task check"):
         root = _top(Path(args.file).resolve())
@@ -460,7 +477,10 @@ def container_paths(argv: list[str], args: Any, pairs: list[tuple[str, str]], co
     result = []
     for i, arg in enumerate(argv):
         flag, eq, value = arg.partition("=")
-        if eq and flag in flags:
+        if i == 0 or (i == 2 and argv[0] == sys.executable and argv[1] == "-I"):
+            # The executable and the isolated network helper's script are paths, not prompt text.
+            result.append(translate(arg, pairs))
+        elif eq and flag in flags:
             result.append(flag + "=" + mapped(value))
         elif (i and argv[i - 1] in flags) or (command in ("task run", "task check") and arg == getattr(args, "file", None)):
             result.append(mapped(arg))
@@ -548,6 +568,13 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     env.update(TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp", FLUX_TMPDIR="/tmp",
                FLUX_TRACE_ROOT=str(app / "tmp" / "flux-traces"), XDG_CACHE_HOME=f"{HOME_IN}/.cache")
     env = {k: os.pathsep.join(translate(part, pairs) for part in v.split(os.pathsep)) for k, v in env.items()}
+    source_paths = [translate(p, pairs) for p in sys.path if p and _under(translate(p, pairs), SOURCE_IN)]
+    if source_paths:
+        # Editable installs may add host paths through .pth files instead of PYTHONPATH.
+        # Prefer the mounted source before site initialization can add those legacy paths.
+        env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys([*source_paths, *env.get("PYTHONPATH", "").split(os.pathsep)]))
+    if any(inside == SOURCE_IN for _, inside in pairs):
+        env["FLUX_ROOT"] = SOURCE_IN
     env[PATH_MAP] = json.dumps(pairs)
     if proxy_dir:
         cmd += ["-v", f"{proxy_dir}:{proxy_dir}:ro"]

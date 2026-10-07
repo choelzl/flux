@@ -73,7 +73,6 @@ def test_the_container_gets_no_host_secrets_and_its_own_home(monkeypatch, tmp_pa
     assert env["OPENCODE_SKIP_SAFE_CHECK"] == "1", "D714: OpenCode inside the sandbox"
     assert "CODEX_HOME" not in env, "D847: the host's agent folder is not mounted; the login is in the Flux home"
     vols = [c for c, prev in zip(cmd[1:], cmd) if prev == "-v"]
-    app = sandbox.app_dir(_args(tmp_path), "task run")
     import os as _os
 
     assert f"{Path(_os.environ['FLUX_SANDBOX_HOME']).resolve()}:/home/flux" in vols and env["HOME"] == "/home/flux", \
@@ -245,6 +244,64 @@ def test_path_arguments_do_not_rewrite_agent_prompts(tmp_path):
         "flux", "ask", prompt, "--dir", "/sandbox/project"]
     argv[2] = str(tmp_path)
     assert sandbox.container_paths(argv, args, [(str(tmp_path), "/sandbox/project")])[2] == str(tmp_path)
+
+
+@pytest.mark.parametrize("editable", [False, True])
+def test_flux_checkout_paths_are_canonical_in_the_runtime_environment(monkeypatch, tmp_path, editable):
+    import sys
+
+    root = tmp_path / "checkout" / "flux"
+    source = root / "core/loop/src"
+    source.mkdir(parents=True)
+    (root / ".nix-bin").mkdir()
+    monkeypatch.setattr(sandbox, "_source_root", lambda: root)
+    monkeypatch.setattr(sys, "path", [str(source), *sys.path])
+    monkeypatch.setenv("PATH", f"{root}/.nix-bin:{os.environ['PATH']}")
+    if editable:
+        monkeypatch.delenv("FLUX_ROOT", raising=False)
+        monkeypatch.delenv("PYTHONPATH", raising=False)
+    else:
+        monkeypatch.setenv("FLUX_ROOT", str(root))
+        monkeypatch.setenv("PYTHONPATH", f"{source}:/nix/store/python-packages")
+    monkeypatch.chdir(root)
+    args = _args(tmp_path)
+    cmd = sandbox.container_argv([str(root / ".nix-bin/flux")], args, "task run", "flux-source", None, "podman")
+    env = sandbox.container_env(cmd)
+    assert env["FLUX_ROOT"] == "/opt/flux"
+    assert env["PATH"].split(os.pathsep)[0] == "/opt/flux/.nix-bin"
+    assert env["PYTHONPATH"].split(os.pathsep)[0] == "/opt/flux/core/loop/src"
+    assert str(root) not in env["PATH"] + env["PYTHONPATH"]
+    assert cmd[cmd.index("--workdir") + 1] == "/opt/flux"
+    assert cmd[-1] == "/opt/flux/.nix-bin/flux"
+    assert f"{root}:/opt/flux:ro" in cmd
+    assert f"{source}:/opt/flux/core/loop/src:ro" in cmd
+
+
+def test_source_root_is_inferred_without_flux_root_environment(monkeypatch):
+    monkeypatch.delenv("FLUX_ROOT", raising=False)
+    root = sandbox._source_root()
+    assert root is not None and (root / "flake.nix").is_file()
+    assert Path(sandbox.__file__).resolve().is_relative_to(root)
+
+
+def test_source_symlink_alias_and_network_helper_are_mapped(monkeypatch, tmp_path):
+    import sys
+
+    root = tmp_path / "flux"
+    root.mkdir()
+    alias = tmp_path / "linked-flux"
+    alias.symlink_to(root, target_is_directory=True)
+    monkeypatch.setattr(sandbox, "_source_root", lambda: root)
+    monkeypatch.setenv("FLUX_ROOT", str(alias))
+    args = _args(tmp_path)
+    pairs = sandbox.path_mapping(args, "task run", sandbox.app_dir(args, "task run"), tmp_path / "home")
+    from flux_loop.sandbox_paths import translate
+
+    assert translate(str(alias / ".nix-bin"), pairs) == "/opt/flux/.nix-bin"
+    helper = str(root / "interfaces/cli/src/flux_cli/sandbox_network.py")
+    argv = [sys.executable, "-I", helper]
+    assert sandbox.container_paths(argv, args, pairs, "task run")[-1] == "/opt/flux/interfaces/cli/src/flux_cli/sandbox_network.py"
+    assert sandbox.container_paths(["flux", "ask", helper], args, pairs, "ask")[-1] == helper
 
 
 def test_an_admins_agent_program_is_mounted_with_its_package_and_named_inside(monkeypatch, tmp_path):

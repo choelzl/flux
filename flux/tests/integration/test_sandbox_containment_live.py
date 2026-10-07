@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import types
 from pathlib import Path
 
@@ -87,6 +88,35 @@ def test_a_loop_may_write_its_own_out_and_workbench(tmp_path):
     assert rc == 0 and "WROTE" in said, said
     assert (out / "design.v").read_text().strip() == "mine", "the loop's out/ is its own to write"
     assert (wb / "note.txt").exists()
+
+
+def test_flux_paths_and_tracebacks_use_the_container_checkout(tmp_path, monkeypatch):
+    """Actual imports (including cached bytecode) and executable lookup use the source alias."""
+    monkeypatch.delenv("FLUX_ROOT", raising=False)
+    args = _args(tmp_path)
+    name = f"flux-source-paths-{os.getpid()}"
+    program = (
+        "import os, shutil, traceback\n"
+        "import flux_loop.document.gate as gate\n"
+        "print('ROOT=' + os.environ['FLUX_ROOT'])\n"
+        "print('BIN=' + str(shutil.which('flux')))\n"
+        "print('SOURCE=' + gate.__file__)\n"
+        "print('CODE=' + gate._gate.__code__.co_filename)\n"
+        "print('PYTHONPATH=' + os.environ['PYTHONPATH'])\n"
+        "try: gate._gate(42)\n"
+        "except Exception: print(traceback.format_exc())\n")
+    cmd = sandbox.container_argv([sys.executable, "-c", program], args, "task run", name, None)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    finally:
+        subprocess.run([*sandbox.engine_cli(sandbox.engine()), "rm", "-f", name], capture_output=True, timeout=30)
+    said = result.stdout + result.stderr
+    assert result.returncode == 0, said
+    assert "ROOT=/opt/flux" in said and "BIN=/opt/flux/.nix-bin/flux" in said, said
+    assert "SOURCE=/opt/flux/core/loop/src/flux_loop/document/gate.py" in said, said
+    assert "CODE=/opt/flux/core/loop/src/flux_loop/document/gate.py" in said, said
+    assert 'File "/opt/flux/core/loop/src/flux_loop/document/gate.py"' in said, said
+    assert str(sandbox._source_root()) not in said, said
 
 
 def test_it_cannot_write_outside_its_folders(tmp_path):
