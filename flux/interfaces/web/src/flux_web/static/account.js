@@ -6,6 +6,7 @@ import { logo } from "./charts.js";
 import { envEditor, envTable } from "./loops.js";
 import { MECHANISM, VERIFIED, settingsForm } from "./admin.js";
 import { route } from "./app.js";
+import { restoreScroll, scrollState } from "./scroll.js";
 
 // ================================================================ pages
 async function loginPage() {
@@ -115,7 +116,11 @@ async function loginsCard(holders = null) {           // D814: `holders[agent]`:
     let st;
     try { st = await api(`/logins/session?since=${offset}`); } catch (_) { return; }
     if (!box.isConnected) return;
-    if (st.text) { text += st.text; offset = st.offset; out.replaceChildren(...linkify(text.slice(-60000))); out.scrollTop = out.scrollHeight; }
+    if (st.text) {
+      const place = scrollState(out);
+      text += st.text; offset = st.offset; out.replaceChildren(...linkify(text.slice(-60000)));
+      restoreScroll(out, place, { follow: true });
+    }
     term.querySelector(".login-what").textContent = st.running ? `Logging ${st.agent} in…` : st.agent ? `${st.agent}: the login ended${st.rc ? ` (exit ${st.rc})` : ""}` : "";
     for (const el of term.querySelectorAll(".login-row, .login-keys, .login-head button")) el.hidden = !st.running;
     if (st.running) timer = setTimeout(poll, 700);

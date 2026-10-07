@@ -330,7 +330,7 @@ function conversation(steps, { key = "", offset = 0, live = false, scroll = fals
       det.append(h("summary", {}, h("span", { class: "cv-kind" }, "Thinking"),
         h("span", { class: "cv-sum muted" }, t ? preview(t) : `redacted, about ${Number(st.redacted || 0).toLocaleString()} tokens`),
         live && last ? h("span", { class: "cv-live" }, "…") : ""),
-        t ? h("pre", { class: "cv-body cv-thought" }, t) : "");
+        t ? h("pre", { class: "cv-body cv-thought", "data-k": `${id}:thinking` }, t) : "");
     } else {
       const state = st.out != null ? (st.error ? "failed" : "") : live && last ? "running" : "";
       det.append(h("summary", {}, h("span", { class: "cv-kind" }, st.name || "tool"),
@@ -339,10 +339,10 @@ function conversation(steps, { key = "", offset = 0, live = false, scroll = fals
         ...Object.entries(st.input && typeof st.input === "object" ? st.input : st.input ? { input: String(st.input) } : {}).map(([k, v]) => {
           const t = String(v ?? "");
           return h("div", { class: "cv-io" }, h("small", {}, k || "input"),
-            t.includes("\n") || t.length > 90 ? h("pre", { class: "cv-body" }, t) : h("div", {}, h("code", { class: "cv-arg" }, t)));
+            t.includes("\n") || t.length > 90 ? h("pre", { class: "cv-body", "data-k": `${id}:input:${k}` }, t) : h("div", {}, h("code", { class: "cv-arg" }, t)));
         }),
         st.out != null ? h("div", { class: "cv-io" }, h("small", {}, st.error ? "error" : "output"),
-          h("pre", { class: `cv-body${st.error ? " err" : ""}` }, String(st.out).trim() || "(nothing)")) : "");
+          h("pre", { class: `cv-body${st.error ? " err" : ""}`, "data-k": `${id}:output` }, String(st.out).trim() || "(nothing)")) : "");
     }
     items.push(det);
   });

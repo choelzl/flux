@@ -306,7 +306,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     list_sieve-0`) shows its exit, time, folder and command, and the ends of its stdout and
     stderr, live while it runs; a non-zero exit is marked in the tree. A coding agent's task shows its conversation in order (D712): its words as text, its
     thinking and each tool call folded (a call opens on its input, field by field, and its output;
-    a failed one is red; what you open stays open as it updates), the latest at the bottom. The
+    a failed one is red; what you open stays open as it updates), the latest at the bottom.
+    Thinking and tool input/output boxes keep their individual scroll positions when other
+    logs update, including in fullscreen. A box at its end follows new output; scrolling upward
+    keeps your place. Detail tabs remember their positions separately for each task. The
     Agent turns tab shows a finished turn the same way, the prompt folded below it. Before D712, it showed: its model and version, status, output and
     exit; its thinking, the commands it ran, the last command's output and its words, each a stream
     that follows its end and keeps its place when read upward. Under it, the log as it grows, coloured as the Log tab, problems only on demand, and each line's

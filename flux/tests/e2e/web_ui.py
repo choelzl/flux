@@ -638,6 +638,115 @@ def flows(r: Run) -> None:
             b.js("window.fetch = window.__historyFetch; delete window.__historyFetch; localStorage.removeItem('flux-tasks-view'); return 1")
     r.step("run history", run_history)
 
+    def live_scroll():
+        """Actual live widgets with controlled stream updates, so unrelated output redraws repeat reliably."""
+        r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log before the scroll fixture")
+        b.ajs("""const done = arguments[arguments.length - 1];
+          Promise.all([import('/static/live.js'), import('/static/ui.js')]).then(([{liveTree, logView}, {h, card}]) => {
+            const listeners = {}, stream = {on: (kind, callbacks) => listeners[kind] = callbacks, restart: () => {}};
+            const tree = liveTree('/api/apps/sw', '', () => {}, stream), log = logView('/api/apps/sw', '', stream);
+            const host = h('div', {class: 'scroll-fixture'}, h('div', {class: 'split'},
+              card(null, tree.tree, {cls: 'tree-card'}), card(null, tree.detail, {cls: 'detail-card'})), log.el);
+            document.querySelector('#main').replaceChildren(host);
+            tree.detail.style.maxHeight = '420px';
+            const wrap = [...log.el.querySelectorAll('label')].find(el => el.textContent.trim() === 'wrap').querySelector('input');
+            wrap.checked = true; wrap.dispatchEvent(new Event('change'));
+            const text = label => Array.from({length: 180}, (_, i) => label + ' line ' + i).join('\\n');
+            const steps = [{k: 'think', text: text('first thought')},
+              {k: 'tool', name: 'bash', input: {command: text('input')}, out: text('tool output')},
+              {k: 'think', text: text('second thought')}];
+            const now = Date.now() / 1000;
+            for (const e of [{ev: 'hello', t: now - 50}, {ev: 'mark', name: 'pass', why: '{"n":1}', t: now - 49},
+              {ev: 'start', id: 1, name: 'generation: prototype', t: now - 48},
+              {ev: 'start', id: 2, parent: 1, name: 'agent: claude', t: now - 47, params: {prompt: text('prompt')}},
+              {ev: 'update', id: 2, fields: {steps, 'steps total': steps.length}},
+              {ev: 'start', id: 3, name: 'tool: sibling', t: now - 46, params: {command: 'compile'}}]) listeners.events.onData(e);
+            for (let i = 10; i < 100; i++) {
+              const t = now - 40 + i/10;
+              listeners.events.onData({ev: 'mark', name: 'pass', why: JSON.stringify({n: i}), t});
+              listeners.events.onData({ev: 'start', id: i, name: 'generation: variant ' + i, t: t + 0.01});
+              listeners.events.onData({ev: 'end', id: i, t: t + 0.02, seconds: 0.01});
+            }
+            listeners.events.onReady(); tree.draw();
+            listeners.log.onData(text('log') + '\\n');
+            window.__scrollFixture = {host, tree, log, listeners, steps, text, update: 0};
+            requestAnimationFrame(() => requestAnimationFrame(() => { tree.draw(); done(true); }));
+          }).catch(e => done(String(e)));""")
+        try:
+            b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-step').forEach(el => el.open = true); return 1")
+            b.wait("(() => { const d = window.__scrollFixture.tree.detail; return [...d.querySelectorAll('details.cv-step')].every(el => el.open) && d.scrollHeight > d.clientHeight + 500; })()", what="opened thinking and tool output")
+            positions = b.js("""const f = window.__scrollFixture;
+              const boxes = [...f.tree.detail.querySelectorAll('pre[data-k]')];
+              boxes.forEach((el, i) => el.scrollTop = 70 + 45*i);
+              f.tree.detail.scrollTop = 110;
+              f.host.querySelector('.tree').scrollTop = 120;
+              f.log.el.querySelector('.logview').scrollTop = 180;
+              f.log.el.querySelector('.logview').dispatchEvent(new Event('scroll'));
+              f.oldThought = boxes[0];
+              f.panelPlaces = [f.tree.detail.scrollTop, f.host.querySelector('.tree').scrollTop];
+              return boxes.map(el => [el.dataset.k, el.scrollTop]);""")
+            r.check("thinking and tool input/output have independent scrollable boxes", len(positions) == 4 and all(p[1] > 0 for p in positions), str(positions))
+            b.js("""const f = window.__scrollFixture;
+              f.listeners.live.onData({updates: {3: {stdout: 'unrelated compiler output ' + ++f.update}}});
+              f.listeners.log.onData('another log updated\\n'); return 1;""")
+            b.wait("window.__scrollFixture.oldThought !== document.querySelector('.scroll-fixture .cv-thought')", what="a stream-driven redraw")
+            after = b.js("return [...window.__scrollFixture.tree.detail.querySelectorAll('pre[data-k]')].map(el => [el.dataset.k, el.scrollTop])")
+            r.check("unrelated stream updates preserve every thinking and tool box", after == positions, str(after))
+            panels = b.js("const f = window.__scrollFixture; return [f.panelPlaces, [f.tree.detail.scrollTop, f.host.querySelector('.tree').scrollTop]]")
+            r.check("task panel and task tree keep their places", panels[0] == panels[1] == [110, 120], str(panels))
+            r.check("wrapped log keeps its place when output arrives", b.js("return Math.abs(window.__scrollFixture.log.el.querySelector('.logview').scrollTop - 180) < 2"))
+            b.js("window.__scrollFixture.tree.detail.querySelector('.cv-think').open = false; return 1")
+            b.wait("!window.__scrollFixture.tree.detail.querySelector('.cv-think').open", what="folded thinking")
+            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: 'more unrelated output'}}}); f.tree.draw(); return 1")
+            r.check("an unrelated update keeps thinking folded", b.js("return !window.__scrollFixture.tree.detail.querySelector('.cv-think').open"))
+            b.js("window.__scrollFixture.tree.detail.querySelector('.cv-think').open = true; return 1")
+            b.wait(f"window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop === {positions[0][1]}", what="reopened thinking position")
+            r.check("reopening thinking restores its saved position", True)
+            r.button("Input", ".scroll-fixture .dtabs")
+            b.js("const el = window.__scrollFixture.tree.detail.querySelector('pre[data-k]'); el.scrollTop = 230; return 1")
+            r.button("Live", ".scroll-fixture .dtabs")
+            after = b.js("return [...window.__scrollFixture.tree.detail.querySelectorAll('pre[data-k]')].map(el => [el.dataset.k, el.scrollTop])")
+            r.check("changing detail tabs keeps the conversation's places", after == positions, str(after))
+            r.button("Input", ".scroll-fixture .dtabs")
+            r.check("Input keeps its own position across tab changes", b.js("return window.__scrollFixture.tree.detail.querySelector('pre[data-k]').scrollTop") == 230)
+            r.button("Live", ".scroll-fixture .dtabs")
+            b.js("const f = window.__scrollFixture, el = f.tree.detail.querySelectorAll('.cv-thought')[1]; el.scrollTop = el.scrollHeight; f.tree.draw(); return 1")
+            b.js("""const f = window.__scrollFixture; f.steps[2].text += '\\n' + f.text('more thoughts');
+              f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}, 3: {stdout: 'new compile output'}}}); f.tree.draw(); return 1;""")
+            r.check("a thinking box at the bottom follows its growing output", b.js("const el = window.__scrollFixture.tree.detail.querySelectorAll('.cv-thought')[1]; return el.scrollTop + el.clientHeight >= el.scrollHeight - 2"))
+            r.check("a different box being read upward remains in place", b.js("return window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop") == positions[0][1])
+            b.js("""const f = window.__scrollFixture;
+              f.tree.detail.querySelectorAll('.cv-thought')[1].scrollTop = 190;
+              f.listeners.live.onData({updates: {2: {steps: f.steps.slice(1), 'steps total': 3}}}); f.tree.draw(); return 1;""")
+            r.check("rolling conversation tails keep the same step's position", b.js("return window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop") == 190)
+            b.js("const f = window.__scrollFixture; f.tree.detail.style.maxHeight = ''; return 1")
+            r.button("Fullscreen", ".scroll-fixture .detail .actions")
+            b.wait("document.querySelector('dialog.fullscreen-view[open]')", what="fullscreen task")
+            b.js("document.querySelector('.fullscreen-content').scrollTop = 160; window.__scrollFixture.tree.draw(); return 1")
+            fullscreen = b.js("const el = document.querySelector('.fullscreen-content'); return [el.scrollTop, el.scrollHeight, el.clientHeight, window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop]")
+            r.check("fullscreen output keeps both panel and thinking positions", abs(fullscreen[0] - 160) < 2 and fullscreen[3] == 190, str(fullscreen))
+            r.button("Close", "dialog.fullscreen-view")
+            b.js("""const f = window.__scrollFixture, now = Date.now()/1000;
+              f.listeners.events.onData({ev: 'end', id: 2, t: now, seconds: 50, output: {steps: f.steps.slice(1), 'steps total': 3}});
+              f.listeners.events.onData({ev: 'end', id: 1, t: now, seconds: 50});
+              f.tree.draw(); return 1;""")
+            r.check("a different task does not inherit the previous task's scroll", b.js("return window.__scrollFixture.tree.detail.dataset.task === '3' && window.__scrollFixture.tree.detail.scrollTop === 0"))
+            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: f.text('stdout'), stderr: f.text('stderr')}}}); f.tree.draw(); return 1")
+            b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stdout]').scrollTop = 155; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = 245; f.tree.draw(); return 1")
+            r.check("standalone tool stdout and stderr keep separate positions", b.js("const d = window.__scrollFixture.tree.detail; return d.querySelector('[data-k=stdout]').scrollTop === 155 && d.querySelector('[data-k=stderr]').scrollTop === 245"))
+            b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = f.tree.detail.querySelector('[data-k=stderr]').scrollHeight; f.tree.draw(); return 1")
+            b.js("""const f = window.__scrollFixture;
+              f.listeners.events.onData({ev: 'end', id: 3, t: Date.now()/1000, seconds: 50,
+                output: {exit: 0, stdout: f.text('stdout'), stderr: f.text('stderr') + '\\n' + f.text('final stderr')}});
+              f.tree.draw(); return 1;""")
+            r.check("completion keeps stdout where it was being read", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=stdout]').scrollTop") == 155)
+            r.check("following stderr includes the final completed output", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.scrollTop + el.clientHeight >= el.scrollHeight - 2"))
+            r.clean("live scroll")
+        finally:
+            b.js("window.__scrollFixture?.tree.close(); delete window.__scrollFixture; return 1")
+            r.page("#/app/sw", "document.querySelector('.page-head')", "the loop after the scroll fixture")
+    r.step("live scroll", live_scroll)
+
     def compact_tables():
         fixture = json.loads(json.dumps(GRAPHS_RESULTS))
         metrics = ["area_um2", "fmax_mhz", "time_ms", "power_w", "long_measurement_name_for_latency", "another_long_measurement_for_throughput"]

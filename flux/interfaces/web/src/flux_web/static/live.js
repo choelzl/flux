@@ -4,6 +4,7 @@ import { crafterCatalog, setCrafterCatalog } from "./state.js";
 import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 import { viewerTools } from "./viewer.js";
+import { restoreScroll, scrollState } from "./scroll.js";
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
     pick one from (D692). */
@@ -81,11 +82,13 @@ function logView(base, qs, stream) {
   /** The lines in view, a screen above and below; the same window is not drawn twice. */
   function paint() {
     if (wrap.checked) {
+      const place = scrollState(box);
       const tail = shown.slice(-WRAPPED);
       spacer.style.height = "0px"; win.style.transform = "";
       win.replaceChildren(...(shown.length > WRAPPED ? [h("div", { class: "ln more" }, `… ${shown.length - WRAPPED} earlier line(s): turn wrap off to scroll through all, or download the log`)] : []),
         ...tail.map(lineEl));
       drawn = "";
+      restoreScroll(box, place);
       return;
     }
     const r = rowHeight();
@@ -167,6 +170,7 @@ function liveTree(base, qs, onQuestion, stream) {
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
   let selected = null, selLeafKey = null, dirty = true;
   const open = new Map();                 // id -> true/false, what the user chose
+  const detailPlaces = new Map();         // task and tab -> panel and individual output positions
   const follow = h("input", { type: "checkbox", checked: true });
   const collapse = h("input", { type: "checkbox", checked: true });
   const search = h("input", { placeholder: "search tasks", class: "filter" });
@@ -176,7 +180,7 @@ function liveTree(base, qs, onQuestion, stream) {
   const soon = () => { if (!painted && !frame && treeBox.isConnected) frame = requestAnimationFrame(() => { frame = 0; draw(); }); };
   function onEvent(e) {
     const r = LT.apply(mdl, e);
-    if (r.reset) { open.clear(); selected = null; selLeafKey = null; painted = false; }
+    if (r.reset) { open.clear(); detailPlaces.clear(); delete detail.dataset.view; selected = null; selLeafKey = null; painted = false; }
     if (r.question) onQuestion(r.question);
     if (e.ev === "start" && lastLive && lastLive.updates && lastLive.updates[e.id]) {   // D918: a live snapshot that came before its task
       const n = nodes.get(e.id);
@@ -246,8 +250,12 @@ function liveTree(base, qs, onQuestion, stream) {
     follow.closest("label")?.classList.toggle("muted", !anyRunning);
     if (follow.checked) { const t = followTarget() || lastEnded(); if (t) selected = t; }   // at rest: the last ended (D696)
     const q = search.value.trim().toLowerCase();
+    const treePlace = scrollState(treeBox), graphPlace = scrollState(graphBox);
+    const graphRows = new Map([...graphBox.querySelectorAll("[data-k]")].map(el => [el.dataset.k, scrollState(el)]));
     if (mode === "graph") drawGraph(now);
     else drawLoopTree(now, q);
+    restoreScroll(treeBox, treePlace); restoreScroll(graphBox, graphPlace);
+    for (const el of graphBox.querySelectorAll("[data-k]")) restoreScroll(el, graphRows.get(el.dataset.k));
     drawDetail(now);
     drawStandings();
     dirty = false; painted = nodes.size > 0;
@@ -371,7 +379,7 @@ function liveTree(base, qs, onQuestion, stream) {
       if (!it.many) { const ks = group(n.kids); ks.forEach((k, i) => lay(k, depth + 1, i === ks.length - 1)); }
     };
     lay({ n: run }, 0, true);
-    runBox.replaceChildren(h("div", { class: "run-graph-head muted small" }, "This run's tasks", count >= MAX ? ` (the first ${MAX})` : ""), h("div", { class: "run-graph-rows" }, rows));
+    runBox.replaceChildren(h("div", { class: "run-graph-head muted small" }, "This run's tasks", count >= MAX ? ` (the first ${MAX})` : ""), h("div", { class: "run-graph-rows", "data-k": `run:${run.id}` }, rows));
   }
   async function loadDrawing() {
     drawingTried = true;
@@ -529,7 +537,7 @@ function liveTree(base, qs, onQuestion, stream) {
       h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
     return h("div", { class: "agent-view" },
       h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? " bad" : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
-      p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono" }, p.command)) : "",
+      p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono", "data-k": "command" }, p.command)) : "",
       stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, "err"),
       !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "No output recorded.") : "");
@@ -538,15 +546,24 @@ function liveTree(base, qs, onQuestion, stream) {
   function drawDetail(now) {
     if (!selected) { detail.replaceChildren(empty("Select a task.")); return; }
     const n = selected;
-    // D702: a stream read upward keeps its place across the redraw each second
-    const kept = new Map([...detail.querySelectorAll("pre[data-k], .cv[data-k]")].map(p => [p.dataset.k, p.scrollTop + p.clientHeight >= p.scrollHeight - 8 ? -1 : p.scrollTop]));
-    const sameTask = detail.dataset.task === String(n.id);
-    const panelTop = detail.scrollTop, panelAtEnd = detail.scrollTop + detail.clientHeight >= detail.scrollHeight - 12;
+    const fullscreen = detail.closest(".fullscreen-content");
+    const visible = el => el.getClientRects().length && !el.closest("details:not([open])");
+    // Remember every nested output independently, including conversation thinking and tool calls.
+    if (detail.dataset.view) {
+      const place = detailPlaces.get(detail.dataset.view) || { blocks: new Map() };
+      place.panel = scrollState(detail);
+      if (fullscreen) place.fullscreen = scrollState(fullscreen);
+      for (const el of detail.querySelectorAll("[data-k]")) {
+        if (visible(el)) place.blocks.set(el.dataset.k, scrollState(el));
+      }
+      detailPlaces.set(detail.dataset.view, place);
+      if (detailPlaces.size > 40) detailPlaces.delete(detailPlaces.keys().next().value);
+    }
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
       const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
       const long = text.length > 120 || text.includes("\n");
-      return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val" }, text) : h("div", { class: "val mono" }, text));
+      return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val", "data-k": `field:${title}:${k}` }, text) : h("div", { class: "val mono" }, text));
     })) : "";
     const path = []; for (let p = n.parent; p; p = p.parent) path.unshift(p.name);
     // D739: what a task was given, what it gave, its log, and what it does now -- each a tab,
@@ -566,11 +583,15 @@ function liveTree(base, qs, onQuestion, stream) {
     if (isAgent && logText) tabs.push(["Log", () => h("pre", { class: "val astream-body", "data-k": "log" }, logText)]);
     if ((isAgent || isTool) && (has(n.fields) || has(n.output))) tabs.push(["Every field", () => h("div", {}, block("Fields", n.fields), block("Output", n.output))]);
     const want = tabs.find(([t]) => t === detailTab) || tabs.find(([t]) => (detailTab === "Live" && t === "Output") || (detailTab === "Output" && t === "Live") || (detailTab === "Conversation" && t === "Live")) || tabs[0];
+    // Live output becoming a completed conversation/output is the same view of the same task.
+    const view = `${n.id}:${["Live", "Conversation", "Output"].includes(want?.[0]) ? "output" : want?.[0] || "empty"}`;
+    const place = detailPlaces.get(view);
+    detail.dataset.view = view;
     const tabBar = tabs.length > 1 ? h("div", { class: "dtabs", role: "tablist" }, tabs.map(([t]) => h("button", { type: "button", class: `small${want && t === want[0] ? " on" : ""}`, role: "tab",
       "aria-selected": String(!!want && t === want[0]), onclick: () => { detailTab = t; drawDetail(Date.now() / 1000); } }, t))) : "";
     const leaf = n.pseudo ? null : leafOf(n);
     const leafRows = leaf ? h("div", { class: "leaf-tasks" }, h("h3", {}, `${boxName(leaf)} ×${leaf.tasks.length}`),
-      h("div", { class: "run-graph-rows" }, leaf.tasks.map(v => {
+      h("div", { class: "run-graph-rows", "data-k": "leaf-tasks" }, leaf.tasks.map(v => {
         const fo = focusOf(v), on = within(v, n);
         return h("div", { class: `rg-row ${running(v) ? "running" : failedBelow(v) ? "failed" : "done"}${on ? " sel" : ""}`, tabindex: "0", role: "button",
           onclick: () => { selected = fo; follow.checked = false; draw(); },
@@ -593,13 +614,19 @@ function liveTree(base, qs, onQuestion, stream) {
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
       leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more."));
-    for (const pre of detail.querySelectorAll("pre.val, .cv[data-k]")) {
-      const k = pre.dataset.k, at = sameTask && k ? kept.get(k) : undefined;
-      pre.scrollTop = at === undefined || at === -1 ? pre.scrollHeight : at;   // a live tail shows its end, unless read upward
+    for (const el of detail.querySelectorAll("[data-k]")) {
+      const saved = place?.blocks.get(el.dataset.k);
+      const restore = () => {
+        if (saved) restoreScroll(el, saved, { follow: el.matches("pre, .cv") });
+        else if (el.matches("pre.val")) el.scrollTop = el.scrollHeight;
+      };
+      if (visible(el)) restore();
+      else el.closest("details")?.addEventListener("toggle", () => { if (visible(el)) restore(); }, { once: true });
     }
     // D731: the panel's own place -- kept across the redraw; a running task read at its end stays at the end
-    if (sameTask) detail.scrollTop = panelAtEnd && running(n) ? detail.scrollHeight : panelTop;
-    else detail.scrollTop = 0;
+    if (place) restoreScroll(detail, place.panel, { follow: running(n) && place.panel.scrollable });
+    else detail.scrollTop = detail.scrollLeft = 0;
+    if (fullscreen) restoreScroll(fullscreen, place?.fullscreen, { follow: running(n) && place?.fullscreen?.scrollable });
   }
   search.addEventListener("input", draw);
   follow.addEventListener("change", draw);
