@@ -101,6 +101,7 @@ class StopAll(BaseModel):
 class AskIn(BaseModel):                   # D705
     question: str = Field(max_length=20000)
     author: str = "opencode"
+    parent_id: str | None = Field(default=None, max_length=40)
 
 
 class LoginInput(BaseModel):             # D734: what the page types into an agent's login

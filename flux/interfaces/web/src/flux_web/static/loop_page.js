@@ -13,6 +13,7 @@ import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
 import { historyTab } from "./loop_history.js";
+import { restoreScroll, scrollState } from "./scroll.js";
 
 async function loopPage(name, owner, path = "") {
   const show = pageShow();
@@ -110,13 +111,15 @@ async function loopPage(name, owner, path = "") {
     st = got;
     question = st.question || null;                       // the state says whether the agent still asks
     runEnd();
-    drawHead(); drawBanner(); if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody();
+    drawHead(); drawBanner();
+    if (askOpen && was !== st.running) askView();
+    if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody();
   }
   // notes and the agent's question
   const noteText = h("textarea", { rows: 3, placeholder: "A note: it joins the next prompt, or answers the agent's open question." });
   const noteList = h("div", { class: "notes" });
   async function sendNote(text) {
-    const r = await api(`/apps/${enc(name)}/notes`, { method: "POST", body: { text } });
+    const r = await api(`/apps/${enc(name)}/notes${qs}`, { method: "POST", body: { text } });
     toast(r.ok, "ok"); noteText.value = ""; question = null; asked++; drawBanner(); drawNotes();   // D919: a state asked before it is not drawn
   }
   async function drawNotes() {
@@ -167,6 +170,7 @@ async function loopPage(name, owner, path = "") {
       const open = question && st.running;
       el.classList.toggle("asking", !!open);
       if (open) {
+        el.closest("details.steer-card")?.setAttribute("open", "");
         const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
         ask.replaceChildren(h("strong", {}, "Agent asks"), h("span", { class: "muted" }, left ? ` · ${dur(left)} left` : " · timed out"),
           h("pre", { class: "question" }, question.question));
@@ -218,65 +222,107 @@ async function loopPage(name, owner, path = "") {
   const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
   const past = historyTab(ctx);
   cleanup.push(past.close);
-  /** Questions about the loop (D705): an agent reads it -- its files, its record, its log -- and
-      answers; nothing changes. Kept with the loop, newest first; one answered at a time. */
-  let askTimer = null, askWho = null;
-  const askQ = h("textarea", { rows: 3, id: "ask-q", placeholder: "e.g. Why did it stall at 2 GHz? Which design is best on area, and by how much? What should the next pass try?" });
+  // Conversations keep their own reply context; loop notes still join the next design prompt.
+  let askTimer = null, askWho = null, askReply = null, askBusy = false, askSending = false;
+  let notesOpen = false;
+  const askQ = h("textarea", { rows: 2, id: "ask-q", "aria-label": "Message", placeholder: "Ask about this loop…" });
+  askQ.addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); sendAsk(); }
+  });
   cleanup.push(() => clearTimeout(askTimer));
+  const askHistory = h("div", { class: "ask-history" });
   const askBox = h("div", { class: "drawer-body" });
-  // D758: one place to talk to a loop -- a note to it while it runs (an answer when its agent asks), and a
-  // question to an agent about it -- the drawer, from every tab; no bar docked under Live any more
   const drawer = h("aside", { class: "drawer", "aria-label": "Talk to this loop" },
     h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
   const askFab = h("button", { class: "ask-fab", type: "button", onclick: () => setAsk(!askOpen) }, "Talk");
   function setAsk(open) {
     askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
-    if (open) { askBox.replaceChildren(skeleton(4)); askView(); } else clearTimeout(askTimer);
+    if (open) askView(); else { clearTimeout(askTimer); askSeq++; }
   }
   const onKey = (e) => { if (e.key === "Escape" && askOpen && !document.querySelector("dialog[open]")) setAsk(false); };
   document.addEventListener("keydown", onKey);
   cleanup.push(() => document.removeEventListener("keydown", onKey));
   let askSeq = 0;
+  async function sendAsk() {
+    if (!mine || askBusy || askSending) return;
+    const text = askQ.value.trim();
+    if (!text) { askQ.focus(); return; }
+    askSending = true;
+    try {
+      const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: askWho.value, parent_id: askReply } });
+      if (askQ.value.trim() === text) askQ.value = "";
+      askReply = sent.id; askBusy = true; askSending = false;
+      await askView();
+      askHistory.querySelector(`[data-ask-turn="${sent.id}"]`)?.scrollIntoView({ block: "nearest" });
+    } catch (x) { toast(x.message, "bad"); } finally { askSending = false; }
+  }
   async function askView() {
-    const my = ++askSeq;                                  // D919: the latest look at the drawer draws it
+    const my = ++askSeq;
     const list = await api(`/apps/${enc(name)}/asks${qs}`).catch(() => []);
-    if (!askOpen || my !== askSeq) return;
-    const busy = list.some(a => a.running);
+    if (!askOpen || show.stale() || my !== askSeq) return;
+    askBusy = list.some(a => a.running);
     clearTimeout(askTimer);
-    if (busy) askTimer = setTimeout(() => { if (askOpen && !askBox.contains(document.activeElement)) askView(); else if (askOpen) askTimer = setTimeout(askView, 3000); }, 3000);
-    let form = "", steer = "";
-    if (mine && st.running) {                       // D758: the running loop's notes, and its agent's open question
-      composer.update();
-      drawNotes();
-      steer = card("A note to the running loop", [h("p", { class: "muted" }, "Sent with its next prompt."),
-        composer.el], { cls: "steer-card" });
+    if (askBusy) askTimer = setTimeout(askView, 3000);
+    const reply = list.find(a => a.id === askReply);
+    if (!reply) askReply = null;
+    if (mine) askWho = askWho || await agentSelect("ask-who");
+    if (!askOpen || show.stale() || my !== askSeq) return;
+    const place = scrollState(askHistory), active = document.activeElement;
+    const selection = active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : null;
+    const logs = new Map([...askHistory.querySelectorAll("[data-ask-log]")].map(el => [el.dataset.askLog, scrollState(el)]));
+    const details = new Map([...askHistory.querySelectorAll("details[data-ask-output]")].map(el => [el.dataset.askOutput, el.open]));
+    let steer = "";
+    if (mine && st.running) {
+      composer.update(); drawNotes();
+      steer = h("details", { class: "steer-card card", open: notesOpen || !!question,
+        ontoggle: e => { notesOpen = e.target.open; } }, h("summary", {}, question ? "The loop is waiting for your answer" : "Send a note to the running loop"),
+        h("p", { class: "muted small" }, "Notes join the loop’s next prompt."), composer.el);
     }
+    function replyTo(a) {
+      askReply = a.id;
+      if ([...askWho.querySelectorAll("option")].some(o => o.value === a.author)) askWho.value = a.author;
+      askView().then(() => askQ.focus());
+    }
+    const turn = a => h("div", { class: "ask-turn", "data-ask-turn": a.id },
+      h("div", { class: "ask-message ask-user" }, h("div", { class: "ask-meta" }, h("strong", {}, a.by), " · ", ago(a.started)), h("p", {}, a.question)),
+      h("div", { class: "ask-message ask-agent" }, h("div", { class: "ask-meta" }, h("strong", {}, a.author), a.ended ? [" · ", dur(a.ended - a.started)] : ""),
+        a.running ? h("div", { class: "row" }, h("span", { class: "pill live" }, h("i", { class: "dot" }), "Reading the loop"),
+          mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : "")
+          : a.answer ? markdown(a.answer) : h("p", { class: "muted" }, "No answer was returned."),
+        (a.log || []).length ? h("details", { class: "ask-output", "data-ask-output": a.id, open: details.get(a.id) || false }, h("summary", {}, "Activity"),
+          h("pre", { class: "log small author-log", "data-ask-log": a.id }, a.log.join("\n"))) : "",
+        mine && !a.running && a.answer ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-reply", disabled: askBusy || askSending,
+          "data-reply-to": a.id, onclick: () => replyTo(a) }, "Reply")) : ""));
+    const threads = new Map();
+    for (const a of [...list].sort((a, b) => a.started - b.started || a.id.localeCompare(b.id))) {
+      const id = a.thread_id || a.id;
+      if (!threads.has(id)) threads.set(id, []);
+      threads.get(id).push(a);
+    }
+    const conversations = [...threads.values()].sort((a, b) => b.at(-1).started - a.at(-1).started).map(turns => {
+      const selected = turns.some(a => a.id === askReply), running = turns.some(a => a.running);
+      return card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"),
+        mine && !running ? binButton("conversation", "Remove this conversation?", "All its messages, answers and saved reply context are removed for everyone who sees this loop.",
+          async () => { await api(`/apps/${enc(name)}/asks/${turns[0].id}${qs}`, { method: "DELETE" }); askView(); }) : ""), ...turns.map(turn)],
+        { cls: `ask-card has-bin${selected ? " selected-thread" : ""}` });
+    });
+    askHistory.replaceChildren(steer, ...(conversations.length ? conversations : [card(null, empty("No conversations yet."))]));
+    let form = "";
     if (mine) {
-      // D919: the question being written and who answers are kept across the drawer's refreshes
-      const q = askQ, who = askWho = askWho || await agentSelect("ask-who");
-      if (!askOpen || my !== askSeq) return;
-      form = card(null, [h("p", { class: "muted" }, "An agent reads the loop and answers; it changes nothing."),
-        h("label", { class: "stack" }, "Your question", q),
-        h("div", { class: "row" }, h("label", { class: "stack" }, "Who answers", who), h("span", { class: "grow" }),
-          act("Ask", async () => {
-            if (!q.value.trim()) { toast("Ask something.", "warn"); q.focus(); return; }
-            toast((await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: q.value, author: who.value } })).ok, "ok");
-            q.value = "";                                   // sent: the draft's work is done
-            askView();
-          }, { cls: "primary", title: busy ? "Another question is being answered" : null }))]);
+      const send = act(askBusy ? "Answering…" : "Send", sendAsk, { cls: "primary ask-send", title: "Ctrl+Enter or ⌘+Enter to send" });
+      send.disabled = askBusy;
+      form = h("div", { class: "ask-compose" },
+        h("div", { class: "ask-compose-head" }, h("span", { class: "ask-reply-context", title: reply?.question }, reply ? `Reply to: ${reply.question}` : "New conversation"),
+          reply ? h("button", { type: "button", class: "small ask-new", disabled: askSending, onclick: () => { askReply = null; askView().then(() => askQ.focus()); } }, "New chat") : ""),
+        askQ, h("div", { class: "ask-compose-actions" }, h("label", { class: "ask-agent-picker" }, "Agent", askWho), send));
     }
-    const one = (a) => card(null, [
-      mine && !a.running ? binButton("question", "Remove this question?", "The question and its answer are removed for everyone who sees this loop.",
-        async () => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); toast("The question and its answer are removed", "ok"); askView(); }) : "",
-      h("div", { class: "ask-head" }, h("strong", {}, a.question), h("div", { class: "muted small" }, `${a.author} · asked by ${a.by} `, ago(a.started),
-        a.ended ? [" · took ", dur(a.ended - a.started)] : "")),
-      a.running ? [h("div", { class: "row" }, h("span", { class: "pill live" }, h("i", { class: "dot" }), "reading the loop"),
-          mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : ""),
-          h("pre", { class: "log small author-log" }, (a.log || []).join("\n") || "…")]
-        : a.answer ? markdown(a.answer) : [h("p", { class: "callout bad" }, "No answer."), h("pre", { class: "log small author-log" }, (a.log || []).join("\n"))]],
-      { cls: "ask-card has-bin" });
-    askBox.replaceChildren(steer, mine ? h("h3", { class: "drawer-sub" }, "Ask an agent about it") : "", form,
-      ...(list.length ? list.map(one) : [card(null, empty("No questions."))]));
+    askBox.replaceChildren(askHistory, form);
+    restoreScroll(askHistory, place);
+    for (const el of askHistory.querySelectorAll("[data-ask-log]")) restoreScroll(el, logs.get(el.dataset.askLog), { follow: true });
+    if (active && askBox.contains(active)) {
+      active.focus({ preventScroll: true });
+      if (selection) active.setSelectionRange(...selection);
+    }
   }
 
   function drawSubs() {

@@ -311,7 +311,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(400, "ask something")
         check_author(body.author)
         try:
-            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author), by=user.name)
+            ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author),
+                               by=user.name, parent_id=_ask_id(body.parent_id) if body.parent_id is not None else None)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")

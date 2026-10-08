@@ -116,6 +116,10 @@ def brief(question: str, loop: Path, out: Path, record: Path | None, *, inline: 
         parts.append(f"Answer in Markdown, plainly, with the numbers and lines that support it, in the file "
                      f"`{out / ANSWER}` (your working directory); then end your turn with one line saying so. Read the "
                      "files and query the record as you need; do not run the design tools, and do not write in the loop's folder.")
+    conversation = out / "conversation.json"
+    if conversation.is_file():
+        history = json.loads(conversation.read_text())
+        parts.append("PREVIOUS CONVERSATION (context for the follow-up below):\n" + json.dumps(history, ensure_ascii=False, indent=2))
     parts.append(f"THE QUESTION:\n{question.strip()}")
     return "\n\n".join(parts) + "\n"
 

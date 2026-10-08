@@ -148,6 +148,98 @@ objectives: [{metric: timings.fast, goal: 15}]
 
     r.step("dictionary metrics", dictionary_metrics)
 
+    def ask_conversations():
+        with loop(r, "ui-ask-chat") as name:
+            root, other = "20261008-120000", "20261007-120000"
+            answer = "## Findings\n" + ("This is a long answer with useful detail.\n\n" * 25) + "\n```text\n" + ("very_long_tool_output_" * 35 + "\n") * 30 + "```\n| Metric | Value |\n| --- | --- |\n| " + "long_metric_name_" * 25 + " | 42 |\n<img src=x onerror=alert(1)>"
+            data = [{"id": root, "thread_id": root, "question": "Why is this design best?", "answer": answer,
+                     "author": "opencode", "by": "bob", "started": 200, "ended": 210, "running": False,
+                     "log": [f"tool log {i}" for i in range(70)]},
+                    {"id": other, "question": "An unrelated question", "answer": "A separate answer", "author": "opencode",
+                     "by": "bob", "started": 100, "ended": 110, "running": False, "log": []}]
+            b.js("""window.__askFetch = window.fetch; window.__askData = arguments[1]; window.__askPosted = []; window.__askPolls = 0; window.__askNotes = [];
+              const app = '/api/apps/' + arguments[0], json = body => new Response(JSON.stringify(body), {headers: {'Content-Type': 'application/json'}});
+              window.fetch = async (u, o = {}) => {
+                const path = new URL(String(u), location.href).pathname;
+                if (path === app + '/notes') {
+                  if (o.method === 'POST') { window.__askNotes.push({id: 'note-1', by: 'bob', t: 1000, text: JSON.parse(o.body).text}); return json({ok: 'sent'}); }
+                  return json(window.__askNotes);
+                }
+                if (path === app + '/asks') {
+                  if (o.method === 'POST') {
+                    const body = JSON.parse(o.body); window.__askPosted.push(body);
+                    if (window.__askFail) return new Response(JSON.stringify({detail: 'Try again shortly'}), {status: 409, headers: {'Content-Type': 'application/json'}});
+                    const id = '20261008-12000' + (window.__askPosted.length + 1), parent = window.__askData.find(a => a.id === body.parent_id);
+                    window.__askData.push({id, parent_id: body.parent_id, thread_id: parent?.thread_id || parent?.id || id,
+                      question: body.question, answer: 'The follow-up answer', author: body.author, by: 'bob', started: 300, ended: 310, running: false, log: []});
+                    return json({id, ok: 'reading'});
+                  }
+                  window.__askPolls++; return json(window.__askData);
+                }
+                const response = await window.__askFetch(u, o);
+                if (path !== app && path !== app + '/state') return response;
+                const body = await response.json();
+                return json(path === app ? {...body, state: {...body.state, running: true, last_active: 1000}} : {...body, running: true, last_active: 1000});
+              }; return 1;""", name, data)
+            try:
+                r.page(f"#/app/{name}/ask", "document.querySelector('.drawer.open .ask-reply')", "chat drawer")
+                b.wait("getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="open drawer transition")
+                r.check("Ask keeps conversations separate and renders answer text safely", b.js("return document.querySelectorAll('.ask-card').length === 2 && !document.querySelector('.ask-agent img')"))
+                b.click(f'.ask-reply[data-reply-to="{root}"]')
+                b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
+                b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")
+                b.click(".drawer-head button")
+                b.click(".ask-fab")
+                b.wait("document.querySelector('.drawer.open #ask-q') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened chat")
+                r.check("closing Ask preserves the follow-up and its draft", b.js("return document.querySelector('#ask-q').value === 'Explain the numbers' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
+                b.click(".ask-send")
+                b.wait("window.__askPosted.length === 1 && document.querySelectorAll('.ask-turn').length === 3", what="follow-up response")
+                r.check("Reply sends its parent and keeps turns together in order", b.js("const posted = window.__askPosted[0], turns = [...document.querySelector('.selected-thread').querySelectorAll('.ask-user p')]; return posted.parent_id === arguments[0] && posted.question === 'Explain the numbers' && turns[0].textContent === 'Why is this design best?' && turns[1].textContent === posted.question && !document.querySelector('#ask-q').value", root))
+                b.click(".ask-new")
+                b.wait("document.querySelector('.ask-compose-head').textContent === 'New conversation'", what="new chat composer")
+                r.check("New chat clears the reply context", b.js("return document.querySelector('.ask-compose-head').textContent") == "New conversation")
+                b.js("window.__askFail = true; document.querySelector('#ask-q').value = 'Keep this draft'; return 1")
+                b.click(".ask-send")
+                b.wait("window.__e2e.bad.some(t => t.includes('Try again shortly'))", what="failed send explained")
+                r.check("a failed send keeps the unsent message", b.js("return document.querySelector('#ask-q').value") == "Keep this draft")
+                b.js("window.__askFail = false; window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad').forEach(t => t.remove()); return 1")
+                b.click(".steer-card > summary")
+                note = "long/path/" * 80
+                b.js("const t = document.querySelector('.composer-in'); t.value = arguments[0]; t.dispatchEvent(new Event('input')); return 1", note)
+                b.click(".composer-row button")
+                b.wait("document.querySelector('.notes')?.textContent.includes('long/path/')", what="sent loop note")
+                r.check("notes are distinct from agent conversations", b.js("return window.__askNotes.length === 1 && window.__askPosted.length === 2"))
+                b.js("document.querySelector('details[data-ask-output]').open = true; const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].running = true; window.__askData[0].ended = null; return 1")
+                # Closing/reopening starts the poll while keeping the same history scroll container.
+                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.wait("document.querySelector('.ask-send')?.disabled && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="busy conversation")
+                b.js("const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].log.push('new activity'); return 1")
+                b.wait("window.__askPolls > window.__askBeforePoll && document.querySelector('[data-ask-log]')?.textContent.includes('new activity')", what="chat activity refresh")
+                r.check("polling preserves draft, focus, expanded activity and scroll positions", b.js("return document.querySelector('#ask-q').value === 'Keep this draft' && document.activeElement.id === 'ask-q' && document.querySelector('.ask-history').scrollTop === 170 && document.querySelector('[data-ask-log]').scrollTop === 55 && document.querySelector('details[data-ask-output]').open"))
+                for width in (1200, 390):
+                    b.cmd("WebDriver:SetWindowRect", {"width": width, "height": 900})
+                    bounds = b.js("const d = document.querySelector('.drawer'), h = document.querySelector('.ask-history'), f = document.querySelector('.ask-compose'), q = document.querySelector('#ask-q'), n = document.querySelector('.composer'); return {drawer: d.scrollWidth <= d.clientWidth + 1, history: h.scrollWidth <= h.clientWidth + 1, note: n.scrollWidth <= n.clientWidth + 1, footer: f.getBoundingClientRect().bottom <= innerHeight + 1, input: q.getBoundingClientRect().right <= innerWidth, historyHeight: h.clientHeight}")
+                    r.check(f"chat and long notes fit at {width}px; the composer stays visible", all(bounds[k] for k in ("drawer", "history", "note", "footer", "input")) and bounds["historyHeight"] > 200, bounds)
+                b.shot(r.shots / "ask-chat-mobile.png", full=True)
+                b.cmd("WebDriver:SetWindowRect", {"width": 1200, "height": 900})
+                b.js("window.__askData[0].running = false; window.__askData[0].ended = 210; document.querySelector('.steer-card').open = false; document.querySelector('#ask-q').value = ''; return 1")
+                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.wait("document.querySelector('.ask-reply') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="finished conversation")
+                b.click(f'.ask-reply[data-reply-to="{root}"]')
+                b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="selected conversation")
+                b.js("document.querySelector('.ask-history').scrollTop = 0; document.querySelectorAll('.toast').forEach(t => t.remove()); return 1")
+                b.shot(r.shots / "ask-chat-desktop.png", full=True)
+                r.check("watcher sharing for the chat fixture", r.api(f"/apps/{name}/shares", "PUT", {"user": "cy", "perm": "watch"})["status"] == 200)
+                r.login("cy")
+                r.page(f"#/u/bob/app/{name}/ask", "document.querySelector('.drawer.open .ask-card')", "watch-only conversation")
+                r.check("watchers read conversations without reply, send, notes or delete controls", b.js("return document.querySelectorAll('.ask-turn').length === 3 && !document.querySelector('#ask-q, .ask-reply, .ask-send, .steer-card, .ask-card .bin')"))
+                r.clean("Ask conversations")
+            finally:
+                b.js("window.fetch = window.__askFetch; return 1")
+                b.cmd("WebDriver:SetWindowRect", {"width": 1200, "height": 900})
+
+    r.step("ask conversations", ask_conversations)
+
     def navigation():
         with loop(r, "ui-navigation") as name:
             for path, tab, sub in (("live/log", "Live", "Log"), ("live/history", "Live", "History"),
