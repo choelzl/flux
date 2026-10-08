@@ -80,7 +80,7 @@ def run_baseline(problem, state):
     fingerprint = _fingerprint(problem)
     saved = state.records.recall("baseline") if state.records is not None else []
     reused = False
-    if fingerprint and saved and saved[-1].get("fingerprint") == fingerprint:
+    if fingerprint and saved and saved[-1].get("fingerprint") == fingerprint and saved[-1].get("ok"):
         try:
             _restore(state, saved[-1])
             reused = True
