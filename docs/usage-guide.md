@@ -430,6 +430,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Hover for the absolute value, reference and sample count. Missing values, no accepted reference,
     or a zero reference show — because percent change is undefined.
     Graphs show baseline measurements as gray reference lines; search designs remain points.
+    **Focus** in the Pareto controls fits both axes to the feasible front in the selected design
+    scope and stage. Distant designs, goals and baseline references can fall outside the view.
+    Toggle it off to restore the full range. The setting is remembered per browser and loop;
+    without a feasible front, the graph keeps the full range.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:
     Setup, Plan, Search, Design, Check, Measure, Choose or Critic. Builds and tests belong to Check;

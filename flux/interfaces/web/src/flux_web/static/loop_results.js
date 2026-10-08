@@ -164,6 +164,7 @@ function resultsView(ctx, r) {
   const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
   const savedGraphs = preferences.read().graphs;
   const graphPrefs = savedGraphs && typeof savedGraphs === "object" && !Array.isArray(savedGraphs) ? savedGraphs : {};
+  let paretoFocus = graphPrefs.paretoFocus === true;
   let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
   let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
   const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
@@ -185,7 +186,7 @@ function resultsView(ctx, r) {
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? (groups.includes(graphPrefs.scope) ? graphPrefs.scope : "whole") : "";
   function rememberGraphs() {
-    preferences.save({ graphs: { x: px, y: py, paretoStage: pst, timeStage: tst, metrics: [...tMetrics], scope } });
+    preferences.save({ graphs: { x: px, y: py, paretoStage: pst, paretoFocus, timeStage: tst, metrics: [...tMetrics], scope } });
   }
   const scopeBox = h("div", {});
   function drawScope() {
@@ -197,8 +198,13 @@ function resultsView(ctx, r) {
     paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
       h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; rememberGraphs(); drawPareto(); })),
       h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; rememberGraphs(); drawPareto(); })),
-      h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; rememberGraphs(); drawPareto(); }))),
-      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope, legend: false }));
+      h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; rememberGraphs(); drawPareto(); })),
+      h("button", { type: "button", class: `small chip pareto-focus${paretoFocus ? " on" : ""}`, "aria-pressed": String(paretoFocus),
+        title: paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view",
+        disabled: nums.length < 2, onclick: () => {
+          paretoFocus = !paretoFocus; rememberGraphs(); drawPareto(); paretoBox.querySelector(".pareto-focus").focus({ preventScroll: true });
+        } }, "Focus")),
+      nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope, legend: false, focus: paretoFocus }));
   }
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };

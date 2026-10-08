@@ -5,6 +5,7 @@ import { baselinePoints, bestSeries, designPoints, directionOf, frontier, groupL
 
 // ================================================================ charts (D692)
 const SVGNS = "http://www.w3.org/2000/svg";
+let paretoSerial = 0;
 function sv(tag, attrs = {}, ...kids) {
   const el = document.createElementNS(SVGNS, tag);
   for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) el.setAttribute(k, v);
@@ -133,13 +134,13 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
   const refs = (metric) => baselinePoints(designPoints(designs, { metric, stage }), counts);
   const xr = refs(xm), yr = refs(ym);
   const front = frontier(scoped.filter(p => p.eligible), dx, dy).sort((a, b) => a.x - b.x);
-  const on = new Set(front);
+  const on = new Set(front), focused = opts.focus === true && front.length > 0;
   const goal = (m) => { const o = (objectives || []).find(x => x.metric === m); return o && o.goal != null ? Number(o.goal) : null; };
   const gx = goal(xm), gy = goal(ym);
   const span = (vals) => { let lo = vals[0], hi = vals[0]; for (const v of vals) { if (v < lo) lo = v; if (v > hi) hi = v; }
     if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; } const p = (hi - lo) * 0.08; return [lo - p, hi + p]; };
-  const xs = pts.map(p => p.x).concat(xr.map(p => p.metrics[xm]), gx != null ? [gx] : []);
-  const ys = pts.map(p => p.y).concat(yr.map(p => p.metrics[ym]), gy != null ? [gy] : []);
+  const xs = focused ? front.map(p => p.x) : pts.map(p => p.x).concat(xr.map(p => p.metrics[xm]), gx != null ? [gx] : []);
+  const ys = focused ? front.map(p => p.y) : pts.map(p => p.y).concat(yr.map(p => p.metrics[ym]), gy != null ? [gy] : []);
   if (!xs.length || !ys.length) return empty("No measurements in this scope.");
   const [x0, x1] = span(xs), [y0, y1] = span(ys);
   const X = (v) => L + (W - L - R) * (v - x0) / (x1 - x0), Y = (v) => T + (H - T - B) * (1 - (v - y0) / (y1 - y0));
@@ -150,30 +151,34 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     : `M${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join("");
   const said = !scoped.length ? `No ${scope} design has both ${xm} and ${ym}${stage ? " at " + stage : ""}${scope === "whole" ? "; parts are not pooled" : ""}`
     : !front.length ? "No feasible design yet" : null;
+  const clipId = `pareto-plot-${++paretoSerial}`;
   const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart pareto", role: "img", "aria-label": `${ym} against ${xm}: ${said || `${front.length} design(s) on the feasible front`}` },
     sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }), sv("line", { x1: L, x2: L, y1: T, y2: H - B, class: "axis" }),
     ticks(y0, y1).map(v => [sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "grid" }), sv("text", { x: L - 6, y: Y(v) + 4, class: "tick", "text-anchor": "end" }, num4(v))]),
     ticks(x0, x1).map(v => [sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "grid" }), sv("text", { x: X(v), y: H - B + 14, class: "tick", "text-anchor": "middle" }, num4(v))]),
-    gx != null ? sv("line", { x1: X(gx), x2: X(gx), y1: T, y2: H - B, class: "limit" }) : "",
-    gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
-    xr.map(p => { const v = p.metrics[xm]; return sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "baseline-ref", "data-metric": xm, "data-value": v },
-      sv("title", {}, `${p.name} · Baseline (pass 0) · ${xm} ${num4(v)} at ${p.stage}`)); }),
-    yr.map(p => { const v = p.metrics[ym]; return sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "baseline-ref", "data-metric": ym, "data-value": v },
-      sv("title", {}, `${p.name} · Baseline (pass 0) · ${ym} ${num4(v)} at ${p.stage}`)); }),
-    front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
-    pts.sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0)).map(p => {
-      const r = on.has(p) ? 4.5 : 3.2;
-      const c = mark(S.of(p.group), X(p.x), Y(p.y), r, { "data-name": p.name, "data-group": p.group,
-          class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}` },
-        sv("title", {}, pointTitle(p, [`${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])));
-      if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
-      return p.decision ? [c, ring(X(p.x), Y(p.y), r)] : c;
-    }),
+    sv("defs", {}, sv("clipPath", { id: clipId }, sv("rect", { x: L, y: T, width: W - L - R, height: H - T - B }))),
+    sv("g", { class: "pareto-plot", "clip-path": `url(#${clipId})` },
+      gx != null ? sv("line", { x1: X(gx), x2: X(gx), y1: T, y2: H - B, class: "limit" }) : "",
+      gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
+      xr.map(p => { const v = p.metrics[xm]; return sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "baseline-ref", "data-metric": xm, "data-value": v },
+        sv("title", {}, `${p.name} · Baseline (pass 0) · ${xm} ${num4(v)} at ${p.stage}`)); }),
+      yr.map(p => { const v = p.metrics[ym]; return sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "baseline-ref", "data-metric": ym, "data-value": v },
+        sv("title", {}, `${p.name} · Baseline (pass 0) · ${ym} ${num4(v)} at ${p.stage}`)); }),
+      front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
+      pts.sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0)).map(p => {
+        const r = on.has(p) ? 4.5 : 3.2;
+        const c = mark(S.of(p.group), X(p.x), Y(p.y), r, { "data-name": p.name, "data-group": p.group,
+            class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}` },
+          sv("title", {}, pointTitle(p, [`${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])));
+        if (onPick) { c.style.cursor = "pointer"; c.addEventListener("click", () => onPick(p.d)); }
+        return p.decision ? [c, ring(X(p.x), Y(p.y), r)] : c;
+      })),
     sv("text", { x: (W + L - R) / 2, y: H - 6, class: "tick", "text-anchor": "middle" }, `${xm} · ${dx === "minimize" ? "lower" : "higher"} is better`),
     sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, said ? h("strong", { class: "front-said" }, said)
       : h("strong", { class: "front-said" }, `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`),
     h("span", { class: "muted" }, ` · ${pts.length} search design(s)${stage ? " at " + stage : ", each at its deepest stage"}${opts.legend === false ? "" : " · "}`),
+    opts.focus ? h("span", { class: "muted pareto-focus-said" }, focused ? " · focused on front" : " · full range (no feasible front)") : "",
     opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending), baseline: xr.length + yr.length > 0 })), g);
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;

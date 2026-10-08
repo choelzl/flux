@@ -1927,6 +1927,43 @@ def flows(r: Run) -> None:
                       " const best = C.bestChart(C.designPoints(d, metric), metric, []), pareto = C.paretoChart(d, 'area_um2', 'fmax_mhz', '', fixture.objective_list);"
                       " done([best, pareto].map(el => [el.querySelectorAll('.baseline-ref').length, el.querySelectorAll('svg.best-chart .pt, svg.pareto .pt').length, /NaN|Infinity/.test(el.innerHTML)])); }).catch(e => done(String(e)));", GRAPHS_RESULTS)
         r.check("baseline-only graphs draw finite reference lines without search points", alone == [[2, 0, False], [3, 0, False]], str(alone))
+        focused = b.ajs("""const done = arguments[arguments.length - 1]; import('/static/charts.js').then(C => {
+          const d = (name, x, y, extra = {}) => ({name, group: 'whole', eligible: true, verdict: 'accepted', shown: 'confirm',
+            numbers: {x, y}, stages: {confirm: {x, y}}, first: '2026-10-01T00:00:00Z', ...extra});
+          const rows = [d('a', 10, 20), d('b', 20, 10), d('bad', 1e6, 1e6), d('failed', 0, 0, {eligible: false}),
+            d('part', -1e6, -1e6, {group: 'part'}), d('base', 2e6, 2e6, {baseline: true})];
+          const objectives = ['x', 'y'].map(metric => ({metric, direction: 'minimize', goal: 3e6}));
+          const plot = (rows, focus, stage = '') => C.paretoChart(rows, 'x', 'y', stage, objectives, null, {scope: 'whole', focus, legend: false});
+          const geometry = el => {
+            const point = name => el.querySelector('.pt[data-name="' + name + '"]');
+            const x = name => Number(point(name).getAttribute('cx')), y = name => Number(point(name).getAttribute('cy'));
+            return {span: Math.abs(x('a') - x('b')), ySpan: Math.abs(y('a') - y('b')),
+              front: [...el.querySelectorAll('.on-front')].map(p => p.dataset.name),
+              all: el.querySelectorAll('.pt').length, badOutside: x('bad') > 546 && y('bad') < 14,
+              clipped: !!el.querySelector('.pareto-plot[clip-path]') && !!el.querySelector('clipPath rect')};
+          };
+          const full = geometry(plot(rows, false)), focus = geometry(plot(rows, true));
+          const single = plot([d('one', 0, 0), d('bad', 1e6, 1e6)], true);
+          const point = single.querySelector('.on-front');
+          const none = plot([d('failed', 0, 0, {eligible: false}), d('bad', 1e6, 1e6, {eligible: false})], true);
+          const baseline = plot(rows.filter(d => d.baseline), true);
+          rows[0].stages.screen = {x: 10, y: 30}; rows[1].stages.screen = {x: 5, y: 20};
+          const stage = plot(rows, true, 'screen');
+          done({full, focus, single: [Number(point.getAttribute('cx')), Number(point.getAttribute('cy')), /NaN|Infinity/.test(single.innerHTML)],
+            none: [none.querySelector('.pareto-focus-said').textContent, !!none.querySelector('.on-front'), /NaN|Infinity/.test(none.innerHTML)],
+            baseline: [baseline.querySelectorAll('.baseline-ref').length, /NaN|Infinity/.test(baseline.innerHTML)],
+            stage: [...stage.querySelectorAll('.on-front')].map(p => p.dataset.name)});
+        }).catch(e => done({error: String(e)}));""")
+        r.check("Focus fits only the scoped front, excluding distant designs, baselines and goals", focused.get("focus", {}).get("front") == ["a", "b"]
+                and focused["focus"]["span"] > 400 and focused["focus"]["ySpan"] > 200 and focused["full"]["span"] < 1
+                and focused["focus"]["badOutside"] and focused["focus"]["clipped"] and focused["focus"]["all"] == focused["full"]["all"] == 5, focused)
+        r.check("Focus handles a single zero-valued front, unavailable fronts, baselines and stage changes", focused.get("single") == [304, 140, False]
+                and focused["none"] == [" · full range (no feasible front)", False, False] and focused["baseline"] == [2, False]
+                and focused["stage"] == ["b"], focused)
+        b.click(".pareto-focus")
+        r.check("Focus toggles on with keyboard focus retained", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && document.activeElement === document.querySelector('.pareto-focus') && document.querySelector('.pareto-focus-said').textContent.includes('focused on front')"))
+        b.click(".pareto-focus")
+        r.check("Focus toggles off to restore the full view", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'false' && !document.querySelector('.pareto-focus-said')"))
         card = ("[...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === arguments[0])")
         area = b.js(f"const c = {card}; const f = [...c.querySelectorAll('figure')].find(x => x.querySelector('figcaption strong').textContent === 'area_um2');"
                     " return [f.querySelector('.best-said').textContent, f.querySelector('svg').getAttribute('aria-label')]", "Improvement by design")
@@ -1987,6 +2024,8 @@ def flows(r: Run) -> None:
               document.querySelector('#main .chips.scope button.on').textContent];"""
         expected = [["area_um2", "fmax_mhz", "screen"], "screen", ["fmax_mhz"], "decoder"]
         r.check("graph controls change axes, stages, selected measurements and scope", b.js(preferences) == expected)
+        b.click(".pareto-focus")
+        r.check("Focus stays enabled while an empty front uses the full range", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && document.querySelector('.pareto-focus-said').textContent.includes('no feasible front')"))
         r.page("#/", "document.querySelector('#main')", "home before a browser reload")
         b.js("window.__preferencesReload = 1; location.reload(); return 1")
         b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded browser document")
@@ -1994,6 +2033,7 @@ def flows(r: Run) -> None:
         b.js(stub, False, payload)
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "remembered graphs")
         r.check("graph preferences survive a full browser reload", b.js(preferences) == expected, str(b.js(preferences)))
+        r.check("Pareto Focus is remembered across a full browser reload", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).graphs.paretoFocus === true"))
         r.button("Results", ".subrow .subtabs")
         b.wait("document.querySelector('table.designs')", what="remembered columns after reload")
         r.check("hidden columns survive a full browser reload while all rows remain visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 1 && !document.querySelector('th[data-label=area_um2]') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
