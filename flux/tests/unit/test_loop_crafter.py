@@ -253,6 +253,67 @@ def _load(tmp_path: Path, case: dict, pending: bool = False):
         raise
 
 
+def test_search_categories_partition_choices_and_include_added_and_inline_agents():
+    script = r"""
+const c = require(process.argv[1]);
+c.setAgents([{name: 'local-search', label: 'Local search'}]);
+const groups = Object.fromEntries(c.DSE_GROUPS.map(([g]) => [g, c.dseChoices(g).map(x => x.value)]));
+const custom = c.dseChoices('delegated', 'agent:*').map(x => x.value);
+console.log(JSON.stringify({groups, custom, all: c.BOXES.dse.choices.map(x => x.value)}));
+"""
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js")], capture_output=True, text=True, check=True)
+    out = json.loads(result.stdout)
+    groups = out["groups"]
+    assert groups["preferences"] == ["none", "adaptive", "explore", "improve", "tune", "finetune", "variations"]
+    assert groups["algorithms"] == ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"]
+    assert groups["delegated"] == ["model", "agent:opencode", "agent:claude", "agent:codex", "agent:local-search"]
+    flat = [choice for group in groups.values() for choice in group]
+    assert len(flat) == len(set(flat)) and set(flat) == set(out["all"])
+    assert out["custom"] == groups["delegated"] + ["agent:*"]
+
+
+@pytest.mark.parametrize("policy", ["sweep", "montecarlo", "anneal", "gradient", "genetic", "model", "agent:claude", "agent:opencode", "agent:codex"])
+@pytest.mark.parametrize("space", [False, True])
+def test_search_category_choices_write_one_working_orchestrator(tmp_path, policy, space):
+    script = r"""
+const c = require(process.argv[1]);
+const s = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+c.setCatalog(JSON.parse(require('fs').readFileSync(process.argv[4], 'utf8')));
+s.flow.orchestrate = 'agent:claude';
+s.agentRaw = {orchestrate: {agent: {preset: 'claude', timeout_s: 321}}};
+s.flow.dse = process.argv[2];
+if (process.argv[3] === 'space') {
+  s.space = [{knob: 'block', choices: '16, 32'}];
+  s.flow.generate = 'command';
+  s.generateCommand = '{python} {home}/check.py {artifact} {block}';
+}
+process.stdout.write(JSON.stringify({yaml: c.buildYaml(s), hint: c.dseHint(s)}));
+"""
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), policy, "space" if space else "code", str(ASSETS / "tools.json")],
+                            input=json.dumps(BUILT["python"]["state"]), capture_output=True, text=True, check=True)
+    out = json.loads(result.stdout)
+    assert len(re.findall(r"^  orchestrate:", out["yaml"], re.M)) == 1
+    assert "dse-group" not in out["yaml"]
+    case = {"state": BUILT["python"]["state"], "files": "python", "yaml": out["yaml"]}
+    task = _load(tmp_path, case)
+    from flux_loop.roles import make
+
+    orchestrator = make("orchestrator", task.roles["orchestrator"])
+    if space:
+        from flux_loop.dse import ModelSearch
+
+        assert task.space == {"block": [16, 32]}
+        assert orchestrator.name == ("model" if policy.startswith("agent:") else policy)
+        if policy.startswith("agent:"):
+            assert isinstance(orchestrator, ModelSearch) and orchestrator.agent == policy.split(":", 1)[1]
+    elif policy in ("sweep", "montecarlo", "anneal", "gradient", "genetic"):
+        assert orchestrator.dse == policy and orchestrator.coding["timeout_s"] == 321
+        assert "does not run a finite-space search" in out["hint"]
+    else:
+        assert orchestrator.name == ("llm" if policy == "model" else "agent")
+        assert "separately chooses who writes" in out["hint"]
+
+
 def _errors(case):
     return " ".join(m["text"] for m in case["check"] if m["level"] == "error")
 

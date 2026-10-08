@@ -18,6 +18,36 @@
   /** The registered DSE policies a document names by word (dse.py), and the model's half. */
   var DSE_POLICIES = ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"];
   var DSE_INTENTS = ["adaptive", "explore", "improve", "tune", "finetune", "variations"];
+  // These groups filter the UI; the document still has one search choice.
+  var DSE_GROUPS = [["preferences", "Exploration and tuning"], ["algorithms", "Search algorithms"], ["delegated", "Model or agent"]];
+  function dseGroup(value) {
+    if (value === "none" || DSE_INTENTS.indexOf(value) >= 0) return "preferences";
+    return DSE_POLICIES.indexOf(value) >= 0 ? "algorithms" : "delegated";
+  }
+  function dseChoices(group, current) {
+    var choices = BOXES.dse.choices.filter(function (c) { return dseGroup(c.value) === group; });
+    if (current && dseGroup(current) === group && !choiceOf("dse", current)) {
+      choices.push({ value: current, label: "Custom agent settings (kept as written)", half: "agent" });
+    }
+    return choices;
+  }
+  function dseHint(state) {
+    var value = state.flow.dse, group = dseGroup(value), space = parameterSearch(state);
+    if (value === "none") return "Adaptive guidance by default: choose local improvements or a new approach from the evidence. Select a policy to search settings defined in Extra.";
+    if (group === "preferences") return space
+      ? "A configured model proposes legal settings using this emphasis and the measured history. No model means no model-proposed points."
+      : "Guides the orchestrator's next experiment and the design, repair and prototype prompts. Reasoned risks remain allowed; checks and objectives still apply.";
+    if (group === "delegated") return (value === "model" ? "Requires a configured model connection. " : "Requires the selected agent to be installed and configured. ") + (space
+      ? "Proposes legal points from the settings in Extra and the measured history; checks and measurements judge them."
+      : "Chooses the next job and search direction. The Make a design setting separately chooses who writes the design.");
+    var how = { sweep: "Enumerates every distinct combination.", montecarlo: "Samples distinct random points.",
+      anneal: "Tries neighboring points, sometimes accepting a worse point as the temperature cools.",
+      gradient: "Uses coordinate descent over neighboring choices, rather than calculating derivatives.",
+      genetic: "Evolves a population by selection, crossover and mutation.",
+      pareto: "Explores trade-offs using a Pareto tree; the algorithm needs at least two objectives." }[value];
+    return how + (space ? " Runs over the settings in Extra; checks and measurements judge each point."
+      : " Without settings in Extra, this guides reasoning and prompts; it does not run a finite-space search algorithm.");
+  }
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
   var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
   var NEVER = ["test", "calibrate"];
@@ -94,7 +124,7 @@
             anneal: "Annealing", gradient: "Step towards better", genetic: "Genetic (breed the best)",
             pareto: "Trade-off front" }[p] + " (" + p + ")" };
         }))
-        .concat([{ value: "model", half: "model", label: "A model proposes settings" }])
+        .concat([{ value: "model", half: "model", label: "Model: choose the next experiment" }])
         .concat(agentChoices("A coding agent proposes settings")) },
     generate: { title: "Make a design", says: "Writes each candidate design.",
       choices: [{ value: "model", half: "model", label: "A model writes it" },
@@ -760,8 +790,8 @@
       else if (dv !== undefined) F.push("    policy: " + inline(dv, false));
       F = F.concat(D);
     } else if (dv !== undefined) {
+      F = F.filter(function (line) { return !/^  orchestrate:/.test(line); });
       if (typeof dv === "string" && DSE_POLICIES.concat(DSE_INTENTS).indexOf(dv) >= 0) {
-        F = F.filter(function (line) { return !/^  orchestrate:/.test(line); });
         var who = toSurface("orchestrate", flowObj(state, "orchestrate")) || "model";
         var intent = typeof who === "string" ? { by: who === "default" ? "model" : who, dse: dv } : Object.assign({}, who, { dse: dv });
         F.push("  orchestrate: " + inline(intent, false));
@@ -1459,7 +1489,8 @@
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
               CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
-              AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
+              AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, DSE_GROUPS: DSE_GROUPS, dseGroup: dseGroup, dseChoices: dseChoices, dseHint: dseHint,
+              halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
               explain: explain, explainEstimate: explainEstimate, choicesOf: choicesOf, choiceText: choiceText, shellSplit: shellSplit,
               namedFiles: namedFiles, BUILTIN_SUBS: BUILTIN_SUBS, STEP_OF: STEP_OF, STEP_IDS: STEP_IDS, stepIndex: stepIndex };
 
@@ -1501,6 +1532,7 @@
       if (structural) renderForm();
       renderDiagram();
       renderOutput();
+      if (openBox === "dse") { fillPopover(); placePopover(); }
       if (opts.onChange) opts.onChange(state, !!structural);    // D912: every edit, a button's too (the files panel follows)
     }
 
@@ -1981,7 +2013,11 @@
         p.appendChild(h("p", { class: "fc-hint", text: "This step is fixed: " + box.choices[0].label + "." }));
       } else {
         var group = h("div", { class: "fc-choices", role: "radiogroup", "aria-label": box.title });
-        box.choices.forEach(function (c) {
+        if (openBox === "dse") {
+          p.appendChild(dseGroupField("dse-group-popover"));
+          p.appendChild(h("p", { class: "fc-hint", text: dseHint(state) }));
+        }
+        (openBox === "dse" ? dseChoices(dseGroup(state.flow.dse), state.flow.dse) : box.choices).forEach(function (c) {
           var id = "fc-" + openBox + "-" + c.value.replace(":", "-");
           var input = h("input", { type: "radio", name: "fc-choice", id: id, value: c.value });
           input.checked = state.flow[openBox] === c.value;
@@ -2040,18 +2076,27 @@
       return [legend, h("div", { class: "fc-drawing" }, [parts.svg, parts.lists])];
     }
 
+    function dseGroupField(key) {
+      return field("DSE policy category", function () { return dseGroup(state.flow.dse); }, function (v) {
+        // Selecting a category selects its default policy. The category itself is never saved.
+        state.flow.dse = dseChoices(v)[0].value;
+        if (state.agentRaw) delete state.agentRaw.dse;
+      }, { key: key, options: DSE_GROUPS, structural: true, grow: true,
+        disabled: (state.kept || []).indexOf("flow.boxes") >= 0 });
+    }
+
     function renderLevel2() {
       var kept = (state.kept || []).indexOf("flow.boxes") >= 0;
-      var choices = BOXES.dse.choices.map(function (c) { return [c.value, c.label]; });
-      if (!choiceOf("dse", state.flow.dse)) choices.push([state.flow.dse, "Custom agent settings (kept as written)"]);
+      var choices = dseChoices(dseGroup(state.flow.dse), state.flow.dse).map(function (c) { return [c.value, c.label]; });
       var policy = field("DSE search policy", function () { return state.flow.dse; }, function (v) {
         state.flow.dse = v;
         if (state.agentRaw) delete state.agentRaw.dse;
-      }, { key: "dse", options: choices, structural: true, disabled: kept,
+      }, { key: "dse", options: choices, structural: true, disabled: kept, grow: true,
         hint: kept ? "The flow has custom settings kept as written; edit its DSE setting in Direct edit." :
-          "Guides design and prototype exploration. Adaptive welcomes reasoned risks. With settings in Extra, this also chooses how to search them." });
+          dseHint(state) });
+      var selectors = h("div", { class: "fc-line fc-dse-selectors" }, [dseGroupField("dse-group"), policy]);
       if (!opts.foldSteps) {
-        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [policy].concat(drawing()))]);
+        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [selectors].concat(drawing()))]);
       }
       if (parts.stepsOpen === undefined) parts.stepsOpen = false;
       var body = h("div", {}, drawing());
@@ -2062,7 +2107,7 @@
         toggle.setAttribute("aria-expanded", parts.stepsOpen ? "true" : "false");
         if (parts.stepsOpen) renderDiagram();
       } } }, ["2. Who does each step?", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
-      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), policy, body]);
+      return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), selectors, body]);
     }
 
     // -- level 3: the same fields and rows as above, behind one toggle

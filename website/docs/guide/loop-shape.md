@@ -104,10 +104,26 @@ A model or agent can invent algorithms and architectures without a predefined kn
 The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
 before the incumbent stalls. Select the emphasis using the existing `dse` setting:
 
-In the loop configurator, open **Graph → DSE search policy**. The dropdown includes the
-exploration and tuning preferences below, the search algorithms, and model or agent search.
+In the loop configurator, open **Graph → DSE policy category**, then **DSE search policy**.
+The category filters the second dropdown; it is only a UI filter and adds no document setting.
+Changing category selects that category's first policy. A saved policy opens in its own category,
+and the search box in the drawing offers the same categories.
+
+| Category | Without settings in Extra | With a declared space of settings |
+|---|---|---|
+| Exploration and tuning | Guide the orchestrator's direction and design, repair and prototype prompts | A configured model proposes legal points with the selected emphasis |
+| Search algorithms | Use the algorithm's emphasis as prompt and direction guidance | Run the selected finite-space algorithm; no model is needed for the walk |
+| Model or agent | Choose who decides the next job and search direction | That model or agent proposes legal points from the space and measured history |
+
 The default is adaptive. Without a knob space, a preference is saved as
 `flow.orchestrate.dse`; with settings defined in **Extra**, it selects the search policy.
+The model choice requires a configured model connection. Agents require their command and
+credentials to be configured. Selecting an agent here does not change who writes code:
+**Make a design** controls generation separately. With a parameter space, a generation
+command can turn each proposed point into a design; otherwise the settings reach the check
+and measurement commands directly.
+Without a parameter space, a model or agent choice is saved as the orchestrator itself and
+appears in **Pick the next job** when the document is reopened.
 
 ```yaml
 flow:
@@ -131,6 +147,11 @@ budget:
 Here `dse` is prompt and choice guidance, not a hard ban on broader changes. It is distinct
 from `policy`, which selects an actual search algorithm over a space. Prefer `policy: sweep`
 for enumerating knob combinations; use `{by: claude, dse: explore}` to guide an agent's work.
+The algorithm names all have implemented walks: `gradient` is coordinate descent over
+discrete choices, rather than derivatives; `pareto` uses a tree guided by trade-offs across
+the first two objectives. Without a space, these names guide the reasoning instead of
+running those walks. Preferences influence choices but do not force every experiment to
+follow them, and a script that writes a design does not read model prompts.
 
 `exploration_quota` reserves a minimum share of recorded search choices for exploration,
 including across parallel passes. It counts attempts, not elapsed seconds, successful designs,
