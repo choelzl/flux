@@ -6,7 +6,7 @@ import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { measurementHeader, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -43,6 +43,7 @@ function resultsView(ctx, r) {
   }
   const table = h("div", { class: "result-table-surface" });
   const comparison = measurementComparison(r.designs);
+  const labels = measurementLabels(r.metrics);
   const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const PAGE = 200;
@@ -97,11 +98,11 @@ function resultsView(ctx, r) {
   let sortFocus = null;
   const th = (key, label, extra = {}, ...more) => h("th", { ...extra, class: `sortable ${extra.class || ""}${sortKey === key ? " sorted" : ""}`,
     "aria-sort": sortKey === key ? (sortDir > 0 ? "ascending" : "descending") : "none", "data-label": label },
-    extra.class?.includes("measurement-head") ? measurementHeader(label, sortButton(key, label), ...more) : [sortButton(key, label), ...more]);
-  const sortButton = (key, label) => h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, onclick: () => {
+    extra.class?.includes("measurement-head") ? measurementHeader(labels.get(key), sortButton(key, label), ...more) : [sortButton(key, label), ...more]);
+  const sortButton = (key, label) => h("button", { type: "button", class: `th-sort${sortKey === key ? " on" : ""}`, "data-key": key, "aria-label": label, onclick: () => {
       if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = ["name", "verdict", "stage"].includes(key) ? 1 : -1; }
       sortFocus = key; drawTable();
-    } }, label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
+    } }, labels.get(key) || label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
     const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
     const shown = all.slice(0, pageN);

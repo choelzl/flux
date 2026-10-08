@@ -29,9 +29,21 @@ export function measurementText(d, metric, compare, fmt, relative) {
     title: `${metric}: ${value == null ? "not measured" : fmt(value)} · ${delta} from ${ref}${reference?.value === 0 ? " (zero reference; percent change is undefined)" : ""}` };
 }
 
-export function measurementHeader(label, ...content) {
-  return h("div", { class: "measurement-heading", style: `--metric-height:${Math.min(190, Math.max(72, label.length * 5.4 + 18))}px` },
-    h("div", { class: "measurement-label" }, content[0] || h("span", { class: "measurement-text" }, label)),
+export function measurementLabels(metrics) {
+  const labels = new Map(), used = new Set();
+  for (const metric of metrics) {
+    const full = metric.replace(/_/g, " ");
+    const short = full.length > 20 ? `${full.slice(0, 7).trimEnd()}…${full.slice(-12).trimStart()}` : full;
+    let text = short, suffix = 1;
+    while (used.has(text)) text = `${short} ${++suffix}`;
+    labels.set(metric, text); used.add(text);
+  }
+  return labels;
+}
+
+export function measurementHeader(text, ...content) {
+  return h("div", { class: "measurement-heading", style: `--metric-length:${text.length + 2}` },
+    h("div", { class: "measurement-label" }, content[0] || h("span", { class: "measurement-text" }, text)),
     ...content.slice(1));
 }
 

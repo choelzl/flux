@@ -101,9 +101,8 @@ function bestChart(rows, obj, passes, opts = {}) {
     (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
     obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
       sv("text", { x: W - R, y: y(obj.goal) - 4, class: "tick limit-t", "text-anchor": "end" }, `${maxi ? "≥" : "≤"} ${num4(obj.goal)}`)] : "",
-    refs.map(p => [sv("line", { x1: L, x2: W - R, y1: y(p.v), y2: y(p.v), class: "baseline-ref", "data-value": p.v, "data-group": p.group },
-      sv("title", {}, `${p.name} · Baseline (pass 0) · ${obj.metric} ${num4(p.v)} at ${p.stage}`)),
-      sv("text", { x: L + 4, y: y(p.v) - 4, class: "tick baseline-label" }, `Baseline ${num4(p.v)}`)]),
+    refs.map(p => sv("line", { x1: L, x2: W - R, y1: y(p.v), y2: y(p.v), class: "baseline-ref", "data-value": p.v, "data-group": p.group },
+      sv("title", {}, `${p.name} · Baseline (pass 0) · ${obj.metric} ${num4(p.v)} at ${p.stage}`))),
     pts.map(p => mark(S.of(p.group), p.x, y(p.v), 3, { class: `pt ${p.verdict}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`, "data-name": p.name, "data-group": p.group },
       sv("title", {}, pointTitle(p, [`${obj.metric} ${num4(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])))),
     pts.filter(p => p.decision).map(p => ring(p.x, y(p.v), 3)),
@@ -165,9 +164,8 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     gy != null ? sv("line", { x1: L, x2: W - R, y1: Y(gy), y2: Y(gy), class: "limit" }) : "",
     xr.map(p => { const v = p.metrics[xm]; return sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "baseline-ref", "data-metric": xm, "data-value": v },
       sv("title", {}, `${p.name} · Baseline (pass 0) · ${xm} ${num4(v)} at ${p.stage}`)); }),
-    yr.map(p => { const v = p.metrics[ym]; return [sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "baseline-ref", "data-metric": ym, "data-value": v },
-      sv("title", {}, `${p.name} · Baseline (pass 0) · ${ym} ${num4(v)} at ${p.stage}`)),
-      sv("text", { x: L + 4, y: Y(v) - 4, class: "tick baseline-label" }, `Baseline ${num4(v)}`)]; }),
+    yr.map(p => { const v = p.metrics[ym]; return sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "baseline-ref", "data-metric": ym, "data-value": v },
+      sv("title", {}, `${p.name} · Baseline (pass 0) · ${ym} ${num4(v)} at ${p.stage}`)); }),
     front.length > 1 ? sv("path", { d: line, class: "front" }) : "",
     pts.sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0)).map(p => {
       const r = on.has(p) ? 4.5 : 3.2;

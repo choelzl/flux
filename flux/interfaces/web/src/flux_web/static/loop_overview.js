@@ -5,7 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { measurementHeader, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -51,7 +51,7 @@ function topDesigns(ctx, r, n) {
   const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
-  const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])].filter(m => top.some(d => d.numbers[m] != null)).slice(0, 4);
+  const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms);
   const surface = h("div", { class: "blk result-table-surface" });
   const rows = h("tbody", {}), comparison = measurementComparison(r.designs);
   function drawRows() {
@@ -64,7 +64,7 @@ function topDesigns(ctx, r, n) {
   const relative = relativeToggle(surface, drawRows);
   surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), relative),
     h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
-      ...ms.map(m => h("th", { class: "num measurement-head", title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(m))))), rows)));
+      ...ms.map(m => h("th", { class: "num measurement-head", "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m)))))), rows)));
   drawRows();
   return surface;
 }

@@ -366,7 +366,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Results tables:** Results and Overview's Decision table always use a compact layout.
     Shortened design names and ✓/✗/… status badges keep rows small; measurements use green/red
     text for limits, without extra checkmarks. Full names, stages, times, units and limit status
-    remain on hover. Measurement headers are angled to fit more columns; Results headers still sort.
+    remain on hover. Measurement headers use short diagonal labels that preserve the start and end
+    of long names, with edge space to prevent clipping; Results headers still sort. Both tables keep
+    every measurement column visible.
   - **Absolute / Relative (%):** Results and Overview's Decision table share a remembered toggle.
     Relative shows percent change from the latest baseline for the same metric, stage and design
     group (baseline = 0%; a value 30% lower = −30%). Without a matching baseline, it uses that
