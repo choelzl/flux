@@ -432,8 +432,16 @@
   /** The numbers a measurement reports. */
   function reports(row, cat) {
     var t = toolOf(row.tool, cat);
-    if (!t || isCustom(row.tool)) return list(row.metrics);
+    if (!t || isCustom(row.tool)) return list(row.metrics).concat((row.dictMetrics || []).map(function (m) { return String(m.name || "").trim(); }).filter(Boolean));
     return Object.keys(t.metrics || {});
+  }
+
+  function hasReport(stage, metric) {
+    var parent = stage.metrics.find(function (m) { return m && m.type === "dict" && m.name === metric; });
+    if (parent) return parent.aggregate !== "none";
+    return stage.reports.indexOf(metric) >= 0 || stage.metrics.some(function (m) {
+      return m && m.type === "dict" && metric.indexOf(m.name + ".") === 0 && metric.length > m.name.length + 1;
+    });
   }
 
   /** Every number some measurement reports, in order of first appearance. */
@@ -449,6 +457,16 @@
     var cs = cat || CATALOG;
     for (var i = 0; i < cs.length; i++) if (cs[i].metrics && cs[i].metrics[metric]) return cs[i].metrics[metric];
     return "";
+  }
+
+  function dictionarySpec(state, metric) {
+    for (var i = 0; i < (state.stages || []).length; i++) {
+      var found = (state.stages[i].dictMetrics || []).find(function (m) {
+        return metric === m.name || metric.indexOf(m.name + ".") === 0;
+      });
+      if (found) return found;
+    }
+    return null;
   }
 
   /** Which way a number is better when the author only asks to balance it. */
@@ -467,13 +485,14 @@
   /** The objectives as the document writes them, in the rows' order. */
   function objectivesOf(state, cat) {
     return (state.objectives || []).filter(function (o) { return String(o.metric || "").trim(); }).map(function (o) {
-      var m = o.metric.trim(), r;
+      var m = o.metric.trim(), dictionary = dictionarySpec(state, m), r;
       if (o.label === "atleast") r = { metric: m, direction: "maximize", goal: num(o.value) };
       else if (o.label === "atmost") r = { metric: m, direction: "minimize", goal: num(o.value) };
       else if (o.label === "min") r = { metric: m, direction: "minimize" };
-      else if (o.label === "balance") r = { metric: m, direction: o.direction || naturalDirection(m), balance: true };
+      else if (o.label === "balance") r = { metric: m, direction: o.direction || (dictionary && dictionary.direction) || naturalDirection(m), balance: true };
       else r = { metric: m, direction: "maximize" };
       if (o.unit && o.unit !== UNITS[m]) r.unit = o.unit;            // a unit the document said (D686)
+      else if (dictionary && dictionary.unit) r.unit = dictionary.unit;
       else if (!UNITS[m] && unitFor(m, cat)) r.unit = unitFor(m, cat);
       return r;
     });
@@ -670,7 +689,14 @@
         for (var key in d) if ((state.kept || []).indexOf(key) < 0) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
       }
       return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
-               metrics: write ? rep : [], needs: needs, gates: gates, estimate: estimateOf(st),
+               metrics: write ? rep.map(function (name) {
+                 var dictionary = (st.dictMetrics || []).find(function (m) { return m.name.trim() === name; });
+                 if (!dictionary) return (st.metricSpecs || []).find(function (m) { return m.name === name; }) || name;
+                 var metric = {name: name, type: "dict", direction: dictionary.direction || "minimize"};
+                 if (dictionary.unit) metric.unit = dictionary.unit;
+                 metric.aggregate = dictionary.aggregate || "mean";
+                 return metric;
+               }) : [], needs: needs, gates: gates, estimate: estimateOf(st),
                clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null,
                timeout: String(st.timeout || "").trim() };
     });
@@ -826,7 +852,7 @@
         var L = [];
         if (st.shape) for (var key in st.shape) L.push(q(key) + ": " + inline(st.shape[key], false));
         else L.push("command: " + q(st.command || "(the command)"));
-        if (st.metrics.length) L.push("metrics: " + flowSeq(st.metrics));
+        if (st.metrics.length) L.push("metrics: " + inline(st.metrics, false));
         if (st.needs.length) L.push("needs: " + flowSeq(st.needs));
         if (st.estimate) {
           var ep = [["kind", st.estimate.kind], ["margin", st.estimate.margin === null ? "?" : st.estimate.margin]];
@@ -982,10 +1008,16 @@
       if (!toolOf(st.tool, cat) && !isCustom(st.tool)) error("Measurement \"" + nm + "\": the tool " + st.tool + " is not in the catalog.");
       params(st, "Measurement", nm);
       if (isCustom(st.tool) && !rs.reports.length) error("Measurement \"" + nm + "\" needs the names of the numbers it prints (name=value).");
+      var metricNames = {};
+      rs.reports.forEach(function (name) {
+        if (metricNames[name]) error("Measurement \"" + nm + "\": metric " + name + " is repeated.");
+        metricNames[name] = true;
+      });
+      (st.dictMetrics || []).forEach(function (m) { if (!String(m.name || "").trim()) error("Measurement \"" + nm + "\": a dictionary needs a name."); });
       (st.gates || []).forEach(function (g) {
         var m = String(g.metric || "").trim();
         if (!m) { error("Measurement \"" + nm + "\": a gate needs the number it looks at."); return; }
-        if (rs.reports.indexOf(m) < 0) error("Measurement \"" + nm + "\" does not report " + m + ", so its gate cannot use it.");
+        if (!hasReport(rs, m)) error("Measurement \"" + nm + "\" does not report " + m + ", so its gate cannot use it.");
         var v = num(g.value);
         if (v === null) error("Measurement \"" + nm + "\": the gate on " + m + " needs a number.");
         else if (g.rule === "within" && !(v > 0 && v <= 100)) error("Measurement \"" + nm + "\": \"within\" is a percentage between 1 and 100.");
@@ -1023,10 +1055,12 @@
       if (!m) return;
       if (metricsSeen[m]) warn("The objective names " + m + " twice.");
       metricsSeen[m] = 1;
-      var by = r.stages.filter(function (st) { return st.reports.indexOf(m) >= 0; }).length;
+      if (r.stages.some(function (st) { return st.metrics.some(function (x) { return x && x.type === "dict" && x.name === m && x.aggregate === "none"; }); }))
+        error("The objective uses dictionary " + m + ": choose a named submetric, such as " + m + ".test, or configure a parent aggregate.");
+      var by = r.stages.filter(function (st) { return hasReport(st, m); }).length;
       if (!by) error("The objective uses " + m + ", which no measurement reports.");
       else if (by < r.stages.length) {
-        var missing = r.stages.filter(function (st) { return st.reports.indexOf(m) < 0; }).map(function (st) { return st.name; });
+        var missing = r.stages.filter(function (st) { return !hasReport(st, m); }).map(function (st) { return st.name; });
         error("The objective uses " + m + ", which " + missing.join(", ") + " does not report: every measurement must report every objective's number; put different tools in separate problems or pick metrics they all report.");
       }
       if ((o.label === "atleast" || o.label === "atmost") && num(o.value) === null) error("Say the number " + m + " must be " + (o.label === "atleast" ? "at least." : "at most."));
@@ -1058,8 +1092,8 @@
           var st = m.stage || (r.stages.length ? r.stages[r.stages.length - 1].name : "");
           var named = r.stages.find(function (s) { return s.name === st; });
           if (!named) error("Baseline metric " + m.metric + " needs an existing measurement stage.", "baseline-metrics");
-          if (!String(m.metric || "").trim() || reported(state).indexOf(m.metric) < 0) error("Choose a reported baseline metric.", "baseline-metrics");
-          if (named && named.metrics && named.metrics.length && named.metrics.indexOf(m.metric) < 0) error("Baseline metric " + m.metric + " is not reported by " + st + ".", "baseline-metrics");
+          if (!String(m.metric || "").trim() || !r.stages.some(function (s) { return hasReport(s, m.metric); })) error("Choose a reported baseline metric.", "baseline-metrics");
+          if (named && named.metrics && named.metrics.length && !hasReport(named, m.metric)) error("Baseline metric " + m.metric + " is not reported by " + st + ".", "baseline-metrics");
           if (!String(m.value == null ? "" : m.value).trim() || !isFinite(Number(m.value))) error("Baseline metric " + m.metric + " needs a finite numeric value.", "baseline-metrics");
           var key = JSON.stringify([st, m.metric]);
           if (baselineSeen[key]) error("Baseline metric " + m.metric + " is repeated on " + st + ".", "baseline-metrics");
@@ -1442,7 +1476,10 @@
         }
         if (m) row = { tool: m.tool.id, name: st.name, params: paramsOf(m.tool, m.params), metrics: "", needs: "", gates: [] };
         else row = { tool: "custom-stage", name: st.name, params: { command: argv.map(shellWord).join(" ") },
-                     metrics: (st.metrics || []).join(", "), needs: (st.needs || []).join(", "), gates: [] };
+                     metrics: (st.metrics || []).filter(function (m) { return typeof m === "string" || m.type !== "dict"; }).map(function (m) { return typeof m === "string" ? m : m.name; }).join(", "),
+                     dictMetrics: (st.metrics || []).filter(function (m) { return m && m.type === "dict"; }).map(function (m) { return Object.assign({}, m); }),
+                     metricSpecs: (st.metrics || []).filter(function (m) { return typeof m === "object" && m.type !== "dict"; }),
+                     needs: (st.needs || []).join(", "), gates: [] };
       } else if (st.evaluator) {
         var ev = (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.stage && t.stage.evaluator === st.evaluator; })[0];
         if (!ev) { stagesOk = false; return; }
@@ -1713,10 +1750,25 @@
           st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); changed(true);
         }, "small"), moreButton(st)]));
         var kids = [h("div", { class: "fc-line" }, line)];
+        if (custom) {
+          var dictionaries = st.dictMetrics || (st.dictMetrics = []);
+          dictionaries.forEach(function (metric, j) {
+            kids.push(h("div", { class: "fc-line" }, [h("span", { class: "fc-gate-word", text: "dictionary" }),
+              field("Name", function () { return metric.name; }, function (v) { metric.name = v; }, {compact: true, placeholder: "timings"}),
+              field("Direction", function () { return metric.direction || "minimize"; }, function (v) { metric.direction = v; }, {compact: true, options: [["minimize", "lower is better"], ["maximize", "higher is better"]]}),
+              field("Unit", function () { return metric.unit || ""; }, function (v) { metric.unit = v; }, {compact: true, narrow: true, placeholder: "ms"}),
+              field("Aggregate", function () { return metric.aggregate || "mean"; }, function (v) { metric.aggregate = v; },
+                {compact: true, options: [["mean", "mean"], ["median", "median"], ["min", "min"], ["max", "max"], ["sum", "sum"], ["none", "none"]]}),
+              button("×", function () { dictionaries.splice(j, 1); changed(true); }, "small fc-icon")]));
+          });
+          kids.push(button("+ Dictionary", function () { dictionaries.push({name: "", direction: "minimize", unit: ""}); changed(true); }, "fc-add-btn"));
+          if (dictionaries.length) kids.push(h("small", {text: 'Print timings={"test": 12, "skipped": null} or a JSON object of metrics. Objectives use timings.test. Missing tests stay unmeasured.'}));
+        }
         st.gates.forEach(function (g, j) {
           kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : "go on only if" }),
             field("Number", function () { return g.metric; }, function (v) { g.metric = v; },
-                  { compact: true, options: (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep) }),
+                  { compact: true, options: (st.dictMetrics || []).length ? null : (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep),
+                    hint: "Use a metric name, a parent aggregate or parent.test" }),
             field("Rule", function () { return g.rule; }, function (v) { g.rule = v; },
                   { compact: true, structural: true, options: [["at", "at least"], ["below", "at most"], ["within", "within % of the best"]] }),
             field(g.rule === "within" ? "Percent" : "Value", function () { return g.value; }, function (v) { g.value = v; }, { compact: true, narrow: true }),
@@ -1757,10 +1809,11 @@
     function renderObjective() {
       var rep = reported(state);
       var rows = state.objectives.map(function (o, i) {
-        var line = [h("span", { class: "fc-idx", text: String(i + 1) }), h("code", { class: "fc-obj-metric", text: o.metric }),
+        var line = [h("span", { class: "fc-idx", text: String(i + 1) }), dictionarySpec(state, o.metric) ? field("Number", function () { return o.metric; }, function (v) { o.metric = v; },
+            {compact: true, hint: "Use the parent aggregate or parent.test"}) : h("code", { class: "fc-obj-metric", text: o.metric }),
           field("How", function () { return o.label; }, function (v) { o.label = v; }, { compact: true, structural: true, options: LABELS })];
         if (o.label === "atleast" || o.label === "atmost") {
-          var u = unitFor(o.metric);
+          var u = (dictionarySpec(state, o.metric) || {}).unit || unitFor(o.metric);
           line.push(field("Value" + (u ? " (" + u + ")" : ""), function () { return o.value; }, function (v) { o.value = v; }, { compact: true, narrow: true }));
         }
         line.push(rowButtons(state.objectives, i));
@@ -1773,7 +1826,10 @@
         if (used.indexOf(m) < 0) sel.appendChild(h("option", { value: m, text: m + (unitFor(m) ? " (" + unitFor(m) + ")" : "") }));
       });
       sel.addEventListener("change", function () {
-        if (sel.value) { state.objectives.push(newObjective(sel.value, naturalDirection(sel.value) === "maximize" ? "max" : "min")); changed(true); }
+        if (sel.value) {
+          var direction = (dictionarySpec(state, sel.value) || {}).direction || naturalDirection(sel.value);
+          state.objectives.push(newObjective(sel.value, direction === "maximize" ? "max" : "min")); changed(true);
+        }
       });
       parts.goalWords = h("p", { class: "fc-goal-words" });
       renderGoalWords();
@@ -2148,8 +2204,9 @@
         var rows = metrics.map(function (m, i) {
           return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
             field("Metric", function () { return m.metric; }, function (v) { m.metric = v; },
-              { key: "baseline-metric-" + i, compact: true, structural: true, options: rep.map(function (v) { return [v, v]; }) }),
-            field("Value" + (unitFor(m.metric) ? " (" + unitFor(m.metric) + ")" : ""), function () { return m.value; }, function (v) { m.value = v; },
+              { key: "baseline-metric-" + i, compact: true, structural: true, options: state.stages.some(function (s) { return (s.dictMetrics || []).length; }) ? null : rep.map(function (v) { return [v, v]; }),
+                hint: "Use a metric name, a parent aggregate or parent.test" }),
+            field("Value" + (((dictionarySpec(state, m.metric) || {}).unit || unitFor(m.metric)) ? " (" + ((dictionarySpec(state, m.metric) || {}).unit || unitFor(m.metric)) + ")" : ""), function () { return m.value; }, function (v) { m.value = v; },
               { key: "baseline-value-" + i, compact: true, narrow: true }),
             field("Stage", function () { return m.stage || ""; }, function (v) { m.stage = v; },
               { key: "baseline-stage-" + i, compact: true, options: stageOptions }), rowButtons(metrics, i)])]);

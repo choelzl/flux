@@ -4,6 +4,7 @@
 import { act, ago, api, card, confirmDialog, dialog, enc, h, skeleton, toast } from "./ui.js";
 import { advancedCard, envEditor, envTable } from "./loops.js";
 import { route } from "./app.js";
+import { measurementColumns } from "./result_table.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -41,7 +42,7 @@ async function settingsView(ctx) {
   const { name, qs, body, info, mine, isOwner } = ctx;
   const ok = ctx.still();                               // D919
   body.replaceChildren(card(null, skeleton(7)));
-  const e = await api(`/apps/${enc(name)}/env${qs}`);
+  const [e, results] = await Promise.all([api(`/apps/${enc(name)}/env${qs}`), api(`/apps/${enc(name)}/results${qs}`)]);
   if (ctx.tab !== "Settings" || !ok()) return;
   const varsCard = card("Environment variables", [
     h("p", { class: "muted" }, isOwner ? "This loop's variables win over yours and the server's."
@@ -86,7 +87,10 @@ async function settingsView(ctx) {
       }))))]) : "";
   const shares = await sharingCard(name, isOwner);
   if (!ok()) return;
-  body.replaceChildren(varsCard, shares, advancedCard(e, async (adv) => {
+  const columns = measurementColumns(ctx, results.metrics || [], () => {}, results.metric_groups || {});
+  const measurements = card("Measurements", [h("p", { class: "muted" }, "Choose the columns shown in Results and Decision. Saved for this browser and loop; calculations still use every measured metric."),
+    results.metrics?.length ? columns.picker : h("p", { class: "muted" }, "No measurements yet.")], { cls: "measurement-preferences" });
+  body.replaceChildren(measurements, varsCard, shares, advancedCard(e, async (adv) => {
     await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
   }), mtCard, danger);
 }

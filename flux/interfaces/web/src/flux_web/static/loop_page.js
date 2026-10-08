@@ -39,7 +39,7 @@ async function loopPage(name, owner, path = "") {
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
   const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], Results: [["", "Results"], ["graphs", "Graphs"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
-                 Settings: [["problem", "Problem"], ["loop", "Variables and sharing"]] };
+                 Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
   function setUrl() {

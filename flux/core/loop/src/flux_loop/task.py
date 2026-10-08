@@ -244,7 +244,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         produced = {m for r in self.task.stages for m in (*r.metrics_re, *r.metrics)}
         if self.task.stages and not unknown:
             for objective in self.task.objectives:
-                if objective.metric not in produced:
+                if not any(s.reports(objective.metric) for s in self.task.stages):
                     wrong.append(
                         f"objective {objective.metric!r} names a metric no stage "
                         f"measures (this task measures: "
@@ -257,7 +257,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             for i, stage in enumerate(self.task.stages):
                 wanted = [o.metric for o in self.task.objectives
                           if not (o.goal is not None and o.stage in names and names.index(o.stage) > i)]
-                lacks = [m for m in wanted if m not in {*stage.metrics_re, *stage.metrics}]
+                lacks = [m for m in wanted if not stage.reports(m)]
                 if lacks:
                     wrong.append(f"the {stage.name} stage does not measure {', '.join(lacks)}: every stage must "
                                  "measure every objective, since each ranks its own results (measure them in "
@@ -266,7 +266,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             mine = {*stage.metrics_re, *stage.metrics}
             for rule in stage.cutoffs:
                 metric = rule.get("metric")
-                if metric and mine and metric not in mine:
+                if metric and mine and not stage.reports(metric):
                     wrong.append(f"the {stage.name} stage cuts on {metric!r}, which it does "
                                  f"not measure (it measures: {', '.join(sorted(mine))})")
         return wrong

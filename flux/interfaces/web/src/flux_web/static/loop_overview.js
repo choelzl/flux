@@ -5,7 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { designLabels, measurementColumns, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { designLabels, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -51,14 +51,16 @@ function topDesigns(ctx, r, n) {
   const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
-  const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms);
+  const groups = r.metric_groups || {}, unit = measurementUnitsFor(r);
+  const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms, groups);
   const names = designLabels(r.designs, ctx.name);
   const surface = h("div", { class: "blk result-table-surface" });
-  const head = h("thead", {}), rows = h("tbody", {}), comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
-  const columns = measurementColumns(ctx, ms, drawRows);
+  const directions = [...objs, ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
+  const head = h("thead", {}), rows = h("tbody", {}), comparison = measurementComparison(r.designs, directions);
+  const columns = measurementColumns(ctx, ms, drawRows, groups);
   function drawRows() {
     const metrics = columns.visible();
-    head.replaceChildren(h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
+    head.replaceChildren(measurementGroupRow(metrics, groups, 3), h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
       ...metrics.map(m => h("th", { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m))))));
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
@@ -97,6 +99,7 @@ async function overview(ctx) {
   const [r, notes, bench, use] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
     api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null)]);
   const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
+  const unit = measurementUnitsFor(r);
   const objs = (r.objective_list || []).slice(0, 2);
   const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
     h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");

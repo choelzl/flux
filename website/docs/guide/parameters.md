@@ -74,8 +74,8 @@ Inside `flow.measure.<stage>`, use a known tool command or a map:
 |---|---|---|
 | `command` | One of `command` / `evaluator` required | Command string or argument list |
 | `evaluator` | Alternative to `command` | Registered backend, such as `zigzag` or `timeloop` |
-| `metrics` | Inferred for known RTL commands | Names printed as `name=value`; required for ordinary custom commands unless using `metrics_re` |
-| `metrics_re` | Derived from `metrics` | Map of metric name to regex with a numeric capture |
+| `metrics` | Inferred for known RTL commands | Names printed as `name=value`, or typed dictionary declarations (below); required for ordinary custom commands unless using `metrics_re` |
+| `metrics_re` | Derived from `metrics` | Map of metric name to regex capturing a number or, for dictionary metrics, a JSON object |
 | `needs` | Inferred for known tools; otherwise empty | Executables required on PATH; missing tools skip the stage |
 | `timeout_s` | `600` | Command timeout in seconds |
 | `cutoff` | None | Condition or list of conditions to proceed to the next stage |
@@ -83,6 +83,15 @@ Inside `flow.measure.<stage>`, use a known tool command or a map:
 
 A stage's name is its map key. Its command must exit `0` for its numbers to be accepted.
 All stages must provide the objective metrics; put cheap stages first and confirmation last.
+
+For sparse named tests, use `metrics: [{name: timings, type: dict, direction: minimize, unit: ms,
+aggregate: mean}]`. Print `timings={"parse": 12, "compile": null}` or a JSON object of metrics.
+Each test becomes `timings.parse`, inheriting the parent's direction and unit. Missing, empty
+and non-finite values are unmeasured. The parent `timings` aggregates available finite tests:
+`mean` (default), `median`, `min`, `max` or `sum`; `none` disables aggregation. With no finite
+tests it remains unmeasured. Objectives, cutoffs and baseline values can target the parent
+aggregate or an individual test. In the crafter, add the parent objective and edit its Number
+field to target a named test.
 
 A cutoff is `{metric: name, at: N}` (minimum), `{metric: name, below: N}` (maximum), or
 `{metric: name, within: F}` (retain within the fraction of this run's best, `0 < F <= 1`).

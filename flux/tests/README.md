@@ -37,6 +37,12 @@ peaks and outages across both tiers. Unit tests in `test_web_insights.py` and
 `test_web_admin.py` cover overlapping and sub-second calls, window clipping, and retained
 campaigns across starts and records without counting shared transcripts twice.
 
+`FLUX_E2E_STEPS="dictionary metrics"` checks sparse dictionary columns, zero and missing
+measurements, parent aggregates, relative values, expansion, shared Decision preferences, browser reloads and
+the crafter's dictionary fields. `test_dictionary_metrics.py` covers parsing, inheritance,
+configurable aggregates, recording, historical metadata and real loops that rank by a named test
+or the parent mean.
+
 `FLUX_E2E_STEPS="partial agent usage,admin token rates"` also checks that interrupted-agent
 usage is visibly partial and wholly missing usage is shown as unavailable. `test_agent_usage.py`
 covers Claude's cumulative message snapshots, final-result precedence, repeated blocks,

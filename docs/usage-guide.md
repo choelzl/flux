@@ -85,6 +85,32 @@ or `hooks:` is said for a person to rewrite as commands.
 
 ## Check and run a problem
 
+For a variable set of timing tests, declare a dictionary metric:
+
+```yaml
+flow:
+  test: 'true'
+  measure:
+    bench:
+      command: '{python} {home}/bench.py {artifact}'
+      metrics:
+        - {name: timings, type: dict, direction: minimize, unit: ms}
+objectives:
+  - {metric: timings.parse}  # inherits minimize and ms
+```
+
+The script can print `timings={"parse": 12.5, "compile": null}` or a JSON object such as
+`{"timings": {"parse": 12.5, "compile": null}}`. JSON can span several lines, with diagnostic
+output before or after it. Keys name individual tests; each inherits the parent's numeric type,
+direction and unit. Omitted tests, null, empty and non-finite values stay unmeasured, while zero
+remains a measurement. Records and caches use names such as `timings.parse`; objectives,
+cutoffs and supplied baseline values can use the same names. The parent (`timings`) reports
+the mean of its available finite tests by default. Set `aggregate` to `mean`, `median`, `min`,
+`max`, `sum` or `none`; no finite tests means no aggregate measurement. Objectives can use
+either the aggregate or a named test. Missing a required objective measurement still uses the
+loop's normal eligibility rules. In the crafter, a custom measurement's **+ Dictionary** button
+adds the parent name, direction, unit and aggregate choice.
+
 ```bash
 flux task check DOC          # DOC: the folder, or its problem.yaml; what it needs, what it will skip; runs nothing
 flux task run DOC            # runs until stopped (Ctrl-C, flux stop, q in the TUI)
@@ -282,8 +308,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   Python, SystemVerilog/Verilog, VHDL, C/C++, JSON, Markdown, shell, Tcl). **Theme:** system,
   light or dark, from the top bar, remembered in the browser.
 - **A loop's page** (D713: six tabs -- Overview, Live, Results, Agents, Files, Settings -- some with views
-  under them: Live › Tasks, Log, Timeline, History; Files › Loop files, Workbench; Settings › Problem (the
-  configurator, Direct edit, an agent), Variables and sharing (with Advanced and, for the owner, Delete
+  under them: Live › Tasks, Log, Timeline, History; Files › Loop files, Workbench; Settings › Preferences
+  (the default for existing loops: measurement visibility, variables, sharing and maintenance), Problem (the
+  configurator, Direct edit, an agent), with Advanced and, for the owner, Reset and Delete
   at the end). The header has Start/Stop and Check. **Ask** is a button at the bottom right that opens a
   panel over any tab: the questions and answers, and a new question. Escape closes it. An address
   names the view (`#/app/x/live/log`, `#/app/x/settings/problem/edit`, `#/app/x/ask` opens the panel), and
@@ -370,12 +397,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     measurements use green/red text for limits, without extra checkmarks. Full names, stages, times, units and limit status
     remain on hover. Measurement headers use short diagonal labels that preserve the start and end
     of long names, with edge space to prevent clipping; Results headers still sort.
-    Open **Measurements** above either table and uncheck metrics to hide their columns.
+    Open **Settings › Preferences › Measurements** and uncheck metrics to hide their columns.
     **Hidden N** at the top toggles the ignored columns into view, dimmed, without changing
     your selections. Check a metric to restore it permanently. Column visibility and the toggle
     are shared between Results and Decision and
     remembered per account and loop in this browser. Graphs, comparisons and ranking continue
     to use the full measurements.
+    Dictionary metrics show one test at a time: choose a test in the dropdown or toggle **All**
+    to unroll every test into grouped subcolumns. These choices are shared between Results and
+    Decision and remembered in this browser. Tests omitted or reported as null, empty or NaN
+    stay unmeasured; they do not become zero.
   - **Graph preferences:** selected measurements, Pareto x/y axes, measurement stages and design
     scope are remembered per account and loop in this browser. If a saved metric or stage is no
     longer available, the view uses its defaults.

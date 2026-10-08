@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from .observe import _phase
+from .metrics import metric_groups, numeric_metrics
 from .provenance import stamp
 from .types import Candidate, LoopState, Scored
 
@@ -170,13 +171,12 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
                 except Exception:  # noqa: BLE001
                     pass
             continue
-        metrics = {k: float(v) for k, v in m.items()
-                   if isinstance(v, (int, float)) and not isinstance(v, bool)}
+        metrics = numeric_metrics(m, _metric_specs(problem, stage))
         payload = {k: v for k, v in m.items() if k not in metrics}
         scored = Scored(cand, stage, metrics, payload)
         if state.records is not None:
             try:
-                state.records.trial(_doc(cand, _as(problem, cand, stage, state, _with(prov, estimate.get(id(cand))))),
+                state.records.trial(_doc(cand, _as(problem, cand, stage, state, _grouped(_with(prov, estimate.get(id(cand))), m))),
                                     f"{cand.name}@{stage}", stage=stage,
                                     strategy=_strategy(cand), metrics=scored.metrics,
                                     wall_s=seconds, analytic=analytic, evaluator=evaluator)
@@ -234,6 +234,9 @@ def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage
 def _as(problem: Problem, cand: Candidate, stage: str, state: LoopState, prov: dict[str, Any]) -> dict[str, Any]:
     """The row's provenance with what it was measured as (D853): the stage's measurement key -- the
     candidate, the stage's command, the loop's inputs and params -- so a resume tells a stale row."""
+    definitions = _metric_specs(problem, stage)
+    if definitions:
+        prov = {**prov, "metric_specs": definitions}
     try:
         return {**prov, "measured_as": problem.cache_key(cand, stage, state)}
     except Exception:  # noqa: BLE001 -- a row without it is re-measured on a resume
@@ -245,18 +248,28 @@ def _with(prov: dict[str, Any], estimate: dict[str, Any] | None) -> dict[str, An
     return {**prov, "estimate": estimate} if estimate else prov
 
 
+def _grouped(prov: dict[str, Any], measured: dict[str, Any]) -> dict[str, Any]:
+    groups = metric_groups(measured)
+    return {**prov, "metric_groups": groups} if groups else prov
+
+
+def _metric_specs(problem: Problem, stage: str) -> dict[str, Any]:
+    spec = next((s for s in getattr(getattr(problem, "task", None), "stages", ()) if s.name == stage), None)
+    return spec.metric_specs if spec is not None else {}
+
+
 def _record(state: LoopState, cand: Candidate, stage: str, m: dict[str, Any], problem: Problem,
             *, seconds: float = 0.0, cached: bool = False) -> None:
     """One measured candidate on the campaign record, as `measure_many` writes it."""
     if state.records is None:
         return
-    metrics = {k: float(v) for k, v in m.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    metrics = numeric_metrics(m, _metric_specs(problem, stage))
     if not metrics:
         return
     try:
         analytic: bool | frozenset[str] = (True if stage in problem.analytic_stages()
                                            else (problem.analytic_metrics() or False))
-        state.records.trial(_doc(cand, _as(problem, cand, stage, state, stamp(seconds=seconds or None, cached=(True if cached else None)))),
+        state.records.trial(_doc(cand, _as(problem, cand, stage, state, _grouped(stamp(seconds=seconds or None, cached=(True if cached else None)), m))),
                             f"{cand.name}@{stage}", stage=stage, strategy=_strategy(cand), metrics=metrics,
                             wall_s=seconds, analytic=analytic, evaluator=problem.evaluator_name(stage))
     except Exception:  # noqa: BLE001

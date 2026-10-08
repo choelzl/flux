@@ -216,6 +216,46 @@ def _run():
     return json.loads(r.stdout)
 
 
+def test_dictionary_metric_fields_write_and_read_back_without_losing_submetric_objectives(tmp_path):
+    script = r"""
+const c = require(process.argv[1]); c.setCatalog(JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8')));
+const s = c.base(); s.id = 'sparse'; s.statement = 'Improve sparse tests'; s.language = 'text';
+s.checks.push(c.newCheck(s, 'custom')); s.checks[0].params.command = 'true';
+s.stages.push(c.newStage(s, 'custom-stage')); s.stages[0].params.command = 'true';
+s.stages[0].metrics = 'area'; s.stages[0].dictMetrics = [{name: 'timings', direction: 'minimize', unit: 'ms'}];
+s.stages[0].gates = [{metric: 'timings.fast', rule: 'below', value: '15'}];
+s.objectives.push(c.newObjective('timings.fast', 'min'));
+s.baseline = {mode: 'before', source: 'metrics', metrics: [{metric: 'timings.fast', value: '20', stage: ''}]};
+console.log(JSON.stringify({yaml: c.buildYaml(s), errors: c.check(s).filter(m => m.level === 'error')}));
+"""
+    made = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")], capture_output=True, text=True, check=True)
+    got = json.loads(made.stdout)
+    assert not got["errors"], got["errors"]
+    path = tmp_path / "problem.yaml"
+    path.write_text(got["yaml"])
+    task = load_task(path)
+    import yaml
+
+    read_script = r"""
+const c = require(process.argv[1]); c.setCatalog(JSON.parse(require('fs').readFileSync(process.argv[2], 'utf8')));
+const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const s = c.fromDoc(data.raw, data.normal).state;
+console.log(JSON.stringify({yaml: c.buildYaml(s), state: s, errors: c.check(s).filter(m => m.level === 'error')}));
+"""
+    read = subprocess.run(["node", "-e", read_script, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+                          input=json.dumps({"raw": yaml.safe_load(got["yaml"]), "normal": task.to_dict()}),
+                          capture_output=True, text=True, check=True)
+    again = json.loads(read.stdout)
+    assert not again["errors"], again["errors"]
+    assert again["state"]["stages"][0]["dictMetrics"][0]["unit"] == "ms"
+    path.write_text(again["yaml"])
+    restored = load_task(path)
+    assert restored.stages[0].metric_specs == task.stages[0].metric_specs
+    assert restored.objectives == task.objectives
+    assert restored.baseline == task.baseline
+    assert restored.stages[0].metric_specs["timings"]["aggregate"] == "mean"
+
+
 BUILT = _run() if shutil.which("node") else {}
 GOOD = sorted(k for k, v in BUILT.items() if "state" in v and not v.get("bad") and not v.get("partial"))
 

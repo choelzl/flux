@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .objective import Objectives
+from .metrics import numeric_metrics
 from .types import Candidate, LoopState, StageNames
 
 
@@ -189,7 +190,7 @@ class MeasureMixin:
                 state.say(f"  stage {stage}: the command exited {run.returncode}; its numbers are not taken")
                 return {"error": f"the command exited {run.returncode}" + (f": {tail}" if tail else "")}
             got = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))
-            if not got:
+            if not numeric_metrics(got):
                 state.say(f"  stage {stage}: no metric matched in the output")
                 return {"error": "no metric matched in the output"}
             return got
@@ -221,7 +222,11 @@ class MeasureMixin:
         spec = next((r for r in self.task.stages if r.name == stage), None)
         if spec is None or spec.estimate is None:
             return [(None, "")] * len(cands)
-        est, metrics = spec.estimate, list(spec.metrics or spec.metrics_re)
+        est = spec.estimate
+        metrics = [m for m in (spec.metrics or spec.metrics_re) if spec.reports(m)]
+        for metric in [o.metric for o in self.task.objectives] + [r.get("metric") for r in spec.cutoffs]:
+            if metric and spec.reports(metric) and metric not in metrics:
+                metrics.append(metric)
         todo = [i for i, c in enumerate(cands) if not self._cached(c, stage, state)]
         got: list[dict[str, float] | None] = [None] * len(cands)
         rows = measured_rows(state, stage) if est.kind != "command" else []
@@ -234,7 +239,7 @@ class MeasureMixin:
         else:
             for i in todo:
                 run = self._run(est.command or (), self._subs(cands[i], None, state), spec.timeout_s, f"estimate {stage}")
-                got[i] = (_metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or "")) or None) if run.ok else None   # D897
+                got[i] = (numeric_metrics(_metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))) or None) if run.ok else None   # D897
         rules = self._estimate_rules(spec, state, rows or measured_rows(state, stage))
         return [(g, failing(g, rules, est.margin) if g else "") for g in got]
 
@@ -311,9 +316,11 @@ class MeasureMixin:
             builds.update(toolchain_fingerprint())      # an evaluator runs the measuring tools
         # D853: the workload as read (its file's content, not its name) and the loop's inputs -- a
         # helper or a data file a stage reads changed, the measurement is not the same one
-        h = hashlib.sha256(json.dumps([list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
-                                       self.task.params, self._workload(), self.inputs(),
-                                       sorted(spec.metrics_re.items()), seen, builds],
+        signature = [list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
+                     self.task.params, self._workload(), self.inputs(), sorted(spec.metrics_re.items()), seen, builds]
+        if spec.metric_specs:
+            signature.append(spec.metric_specs)
+        h = hashlib.sha256(json.dumps(signature,
                                       sort_keys=True, default=str).encode())
         home = self.task.home
         for token in spec.command or ():
@@ -334,14 +341,35 @@ def _document(text: str) -> Any:
         return yaml.safe_load(text)
 
 
-def _metrics_in(spec: Any, out: str) -> dict[str, float]:
-    """The stage's metrics in a command's output, by its `metrics_re`."""
-    got: dict[str, float] = {}
+def _metrics_in(spec: Any, out: str) -> dict[str, Any]:
+    """Scalar name=value tokens, JSON dictionaries, or a JSON object of declared metrics."""
+    values: dict[str, Any] = {}
+    definitions = getattr(spec, "metric_specs", {})
+    decoder = json.JSONDecoder()
+    # JSON documents can be surrounded by tool diagnostics; later reports replace earlier ones.
+    for start in re.finditer(r"(?m)^[ \t]*(?=\{)", out):
+        try:
+            data = decoder.raw_decode(out[start.end():])[0]
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            for metric in getattr(spec, "metrics", tuple(spec.metrics_re)):
+                if metric in data:
+                    values[metric] = data[metric]
     for metric, pat in spec.metrics_re.items():
-        m = re.search(pat, out)
-        if m:
+        dictionary = definitions.get(metric, {}).get("type") == "dict"
+        matches = re.finditer(pat, out) if dictionary else [re.search(pat, out)]
+        for m in matches:
+            if m is None:
+                continue
             try:
-                got[metric] = float(m.group(1))
-            except ValueError:
+                values[metric] = (decoder.raw_decode(m.group(1).lstrip())[0] if dictionary
+                                  else float(m.group(1)))
+            except (ValueError, TypeError):
                 pass
+    got = numeric_metrics({m: v for m, v in values.items()
+                           if not isinstance(v, dict) or definitions.get(m, {}).get("type") == "dict"}, definitions)
+    groups = {m: list(v) for m, v in values.items() if isinstance(v, dict) and definitions.get(m, {}).get("type") == "dict"}
+    if groups:
+        got["_metric_groups"] = groups
     return got

@@ -252,7 +252,21 @@ class TaskSpec:
         if len({r.name for r in stages}) != len(stages):
             raise TaskError("stage names must be unique")
         try:
-            objectives = list(Objectives.from_doc(doc.get("objectives") or ()))
+            raw_objectives = []
+            for raw in doc.get("objectives") or ():
+                item = {"metric": raw} if isinstance(raw, str) else dict(raw) if isinstance(raw, dict) else raw
+                if isinstance(item, dict):
+                    metric = item.get("metric", "")
+                    for stage in stages:
+                        for parent, spec in stage.metric_specs.items():
+                            if spec.get("type") == "dict" and metric == parent and spec.get("aggregate") == "none":
+                                raise TaskError(f"objective {parent!r}: select a named submetric, such as {parent}.test, or configure a parent aggregate")
+                            if metric == parent or (isinstance(metric, str) and spec.get("type") == "dict" and metric.startswith(parent + ".")):
+                                for key in ("direction", "unit"):
+                                    if key in spec:
+                                        item.setdefault(key, spec[key])
+                raw_objectives.append(item)
+            objectives = list(Objectives.from_doc(raw_objectives))
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
         budget = dict(doc.get("budget") or {})
@@ -296,7 +310,7 @@ class TaskSpec:
                     if not isinstance(stage, str) or stage not in named:
                         raise TaskError("baseline.metrics: stage must name a measurement stage")
                     declared = {*named[stage].metrics, *named[stage].metrics_re}
-                    if declared and metric not in declared:
+                    if declared and not named[stage].reports(metric):
                         raise TaskError(f"baseline.metrics: {metric!r} is not reported by {stage!r}")
                     if (stage, metric) in seen:
                         raise TaskError(f"baseline.metrics: duplicate {metric!r} on {stage!r}")
@@ -383,7 +397,7 @@ class TaskSpec:
                        **({"evaluator": r.evaluator} if r.evaluator else {}),
                      **({"cutoff": dict(r.cutoff) if isinstance(r.cutoff, dict) else [dict(c) for c in r.cutoff]}
                         if r.cutoff else {}),
-                       **({"metrics": list(r.metrics)} if r.metrics else {}),
+                       **({"metrics": r.metric_doc()} if r.metrics else {}),
                        **({"needs": list(r.needs)} if r.needs else {}),
                        **({"estimate": r.estimate.to_doc()} if r.estimate else {}),
                        "timeout_s": r.timeout_s} for r in self.stages],

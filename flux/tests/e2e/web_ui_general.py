@@ -55,6 +55,99 @@ def edit(r, text):
 def general_flows(r, watch):
     b = r.b
 
+    def dictionary_metrics():
+        with loop(r, "ui-dictionary-metrics") as name:
+            put(r, name, "problem.yaml", """statement: Improve sparse timing tests
+language: text
+flow:
+  test: 'true'
+  measure:
+    bench:
+      command: 'true'
+      metrics: [area, {name: timings, type: dict, direction: minimize, unit: ms}]
+objectives: [{metric: timings.fast, goal: 15}]
+""")
+            def design(index, numbers, baseline=False):
+                return {"name": f"{name}#{index}", "base": f"{name}#{index}", "key": str(index), "part": "", "group": "whole",
+                        "baseline": baseline, "decision": index == 1, "closest": False, "rank": index if index else 3,
+                        "eligible": True, "verdict": "accepted", "pending": False, "why": [], "reasons": [],
+                        "shown": "bench", "stages": {"bench": numbers}, "numbers": numbers, "meets": {"timings.fast": True},
+                        "first": "2026-10-01T10:00:00Z", "last": "2026-10-01T10:00:00Z"}
+            payload = {"campaign": "fixture", "objectives": "timings.fast <= 15", "stages": ["bench"], "passes": [], "notes": [],
+                       "designs": [design(1, {"area": 4, "timings.fast": 0, "timings": 0}), design(2, {"area": 5, "timings.fast": 12, "timings.slow": 8, "timings": 10}),
+                                   design(0, {"area": 6, "timings.fast": 10, "timings.slow": 10, "timings": 10}, baseline=True)],
+                       "metrics": ["timings.fast", "area", "timings.slow", "timings.never", "timings"], "total": 3,
+                       "counts": {"accepted": 3, "pending": 0, "failed": 0}, "limits": [],
+                       "objective_list": [{"metric": "timings.fast", "direction": "minimize", "goal": 15}],
+                       "metric_groups": {"timings": {"type": "dict", "direction": "minimize", "unit": "ms", "aggregate": "mean", "metrics": ["timings", "timings.fast", "timings.never", "timings.slow"]}},
+                       "metric_info": {m: {"direction": "minimize", "unit": "ms"} for m in ("timings", "timings.fast", "timings.never", "timings.slow")}}
+            stub = """window.__dictionaryFetch = window.fetch; const name = arguments[0], data = arguments[1];
+              window.fetch = async (u, o) => {
+                const path = new URL(String(u), location.href).pathname, app = '/api/apps/' + name;
+                if (path === app + '/results') return new Response(JSON.stringify(data), {headers: {'Content-Type': 'application/json'}});
+                const response = await window.__dictionaryFetch(u, o);
+                if (path !== app && path !== app + '/state') return response;
+                const body = await response.json();
+                return new Response(JSON.stringify(path === app ? {...body, state: {...body.state, last_active: 1000}}
+                  : {...body, last_active: 1000}), {headers: {'Content-Type': 'application/json'}});
+              }; return 1;"""
+            b.js(stub, name, payload)
+            try:
+                def page(path="results", ready="document.querySelector('table.designs')"):
+                    r.page(f"#/app/{name}" + (f"/{path}" if path else ""), ready, path or "Overview")
+                def select(test):
+                    b.js("const s = document.querySelector('.dictionary-select'); s.value = arguments[0]; s.dispatchEvent(new Event('change')); return 1", f"timings.{test}" if test else "timings")
+                page()
+                r.check("dictionary tables initially show one named test", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 2 && document.querySelector('.dictionary-select').value === 'timings.fast' && !document.querySelector('.column-picker')"))
+                r.check("zero is a measured value", b.js("return document.querySelector('table.designs tbody td.num').textContent") == "0")
+                select("")
+                r.check("the parent aggregate is selectable with its unit", b.js("return document.querySelector('.dictionary-select option:checked').textContent === 'Aggregate (mean)' && [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '10' && td.title.includes('ms'))"))
+                select("slow")
+                r.check("missing dictionary tests remain empty", b.js("return document.querySelector('table.designs tbody td.num').textContent") == "")
+                b.click(".relative-values")
+                r.check("relative dictionary values use their own baseline", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '-20%' && td.title.includes('ms'))"))
+                b.click(".relative-values")
+                b.click(".dictionary-expand")
+                r.check("All unrolls grouped subcolumns and keeps unavailable tests", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && document.querySelector('th[scope=colgroup][title=timings]').colSpan === 4 && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8)"))
+                b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings.fast')", what="grouped table column labels")
+                page("", "document.querySelector('.best-n')")
+                r.check("Decision shares dictionary selection and expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && document.querySelector('.dictionary-select').value === 'timings.slow'"))
+                page("settings", "document.querySelector('.measurement-preferences .column-options')")
+                r.check("existing loops open Settings on Preferences", b.js("return document.querySelector('.subtabs [role=tab].on').textContent") == "Preferences")
+                b.click('.column-options input[data-metric="timings.fast"]')
+                page()
+                r.check("Preferences hides dictionary columns in Results", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 4 && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
+                b.click(".show-hidden-columns")
+                r.check("Hidden temporarily shows ignored tests without changing preferences", b.js("return document.querySelectorAll('table.designs th.hidden-measurement').length === 1 && document.querySelectorAll('table.designs th.measurement-head').length === 5"))
+                b.click(".show-hidden-columns")
+                b.click(".dictionary-expand")
+                select("never")
+                r.check("an unavailable test can be selected without becoming zero", b.js("return [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').textContent === '')"))
+                r.page("#/", "document.querySelector('#main')", "home before dictionary reload")
+                b.js("window.__dictionaryReload = true; location.reload(); return 1")
+                b.wait("!window.__dictionaryReload && document.querySelector('#who')", what="dictionary preference reload")
+                b.js(watch)
+                b.js(stub, name, payload)
+                page()
+                r.check("dictionary selection and hidden metrics survive a browser reload", b.js("return document.querySelector('.dictionary-select').value === 'timings.never' && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
+                page("settings/problem", "document.querySelector('.flux-crafter .fc-stepbar')")
+                parsed = b.ajs("""const done = arguments[arguments.length - 1]; fetch('/api/apps/' + arguments[0] + '/document').then(r => r.json())
+                  .then(v => done({error: v.error, stages: window.FluxCrafter.fromDoc(v.raw, v.normal || v.raw).state.stages}));""", name)
+                r.check("dictionary definitions reach the crafter", bool(parsed["stages"] and parsed["stages"][0].get("dictMetrics")), parsed)
+                b.click('.fc-stepbar button[data-step="measure"]')
+                b.wait("[...document.querySelectorAll('.flux-crafter input')].some(i => i.value === 'timings')", what="dictionary crafter fields")
+                r.check("the crafter reads dictionary definitions as editable fields", b.js("return [...document.querySelectorAll('.flux-crafter input')].some(i => i.value === 'ms') && [...document.querySelectorAll('.flux-crafter button')].some(b => b.textContent === '+ Dictionary') && [...document.querySelectorAll('.flux-crafter select')].some(s => s.value === 'mean' && s.querySelector('option[value=median]'))"))
+                b.js("const s = [...document.querySelectorAll('.flux-crafter select')].find(s => s.value === 'mean' && s.querySelector('option[value=median]')); s.value = 'median'; s.dispatchEvent(new Event('change')); return 1")
+                b.click('.fc-stepbar button[data-step="objective"]')
+                b.wait("document.querySelector('.flux-crafter input[aria-label=Number]')", what="named-test objective editor")
+                b.js("const i = document.querySelector('.flux-crafter input[aria-label=Number]'); i.value = 'timings.slow'; i.dispatchEvent(new Event('input')); return 1")
+                r.check("named-test objectives and the chosen aggregate appear in the document preview", b.js("return document.querySelector('.flux-crafter').textContent.includes('aggregate: median') && document.querySelector('.flux-crafter').textContent.includes('timings.slow')"))
+                r.clean("dictionary metrics and preferences")
+            finally:
+                b.js("window.fetch = window.__dictionaryFetch; localStorage.removeItem('flux-results:' + JSON.stringify(['bob', 'bob', arguments[0]])); localStorage.removeItem('flux-results-relative'); return 1", name)
+
+    r.step("dictionary metrics", dictionary_metrics)
+
     def navigation():
         with loop(r, "ui-navigation") as name:
             for path, tab, sub in (("live/log", "Live", "Log"), ("live/history", "Live", "History"),

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..estimate import KINDS as ESTIMATE_KINDS, Estimator
+from ..metrics import AGGREGATES
 from .commands import RTL_METRICS, RTL_STAT_METRICS, _command, _flux_rtl_tools, _stage_of, rtl_tools_kind
 from .keys import TaskError
 
@@ -34,6 +35,17 @@ class Stage:
     cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = field(default_factory=dict)   # one gate, or several
     needs: tuple[str, ...] = ()          # tools on PATH the stage wants; absent, the stage is skipped (D519)
     estimate: Estimator | None = None    # the pre-gate before the tool (D665)
+    metric_specs: dict[str, dict[str, str]] = field(default_factory=dict)
+
+    def reports(self, metric: str) -> bool:
+        if metric in self.metric_specs and self.metric_specs[metric].get("type") == "dict":
+            return self.metric_specs[metric].get("aggregate") in AGGREGATES
+        return metric in {*self.metrics, *self.metrics_re} or any(
+            spec.get("type") == "dict" and metric.startswith(name + ".") and len(metric) > len(name) + 1
+            for name, spec in self.metric_specs.items())
+
+    def metric_doc(self) -> list[Any]:
+        return [{"name": m, **self.metric_specs[m]} if m in self.metric_specs else m for m in self.metrics]
 
     @property
     def cutoffs(self) -> tuple[dict[str, Any], ...]:
@@ -58,15 +70,43 @@ def _stage(i: int, doc: Any) -> Stage:
     rtl_tools = _flux_rtl_tools(cmd) if cmd else []
     for tool in rtl_tools if "needs" not in doc else ():    # D628: `flux rtl measure` says what it runs
         needs.append(tool)
-    metrics = tuple(doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
-                                           else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS))
-    if not all(isinstance(m, str) for m in metrics):
-        raise TaskError(f"{at}.metrics is a list of metric names")
+    raw_metrics = doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
+                                        else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS)
+    if not isinstance(raw_metrics, (list, tuple)):
+        raise TaskError(f"{at}.metrics is a list of names or {{name, type: number|dict, direction, unit, aggregate}}")
+    metrics, metric_specs = [], {}
+    for item in raw_metrics:
+        if isinstance(item, dict):
+            name = item.get("name")
+            spec = {k: v for k, v in item.items() if k != "name"}
+            if set(spec) - {"type", "direction", "unit", "aggregate"} or spec.get("type", "number") not in ("number", "dict"):
+                raise TaskError(f"{at}.metrics: use {{name, type: number|dict, direction, unit, aggregate}}")
+            if "direction" in spec and spec["direction"] not in ("minimize", "maximize"):
+                raise TaskError(f"{at}.metrics: direction must be minimize or maximize")
+            if "unit" in spec and not isinstance(spec["unit"], str):
+                raise TaskError(f"{at}.metrics: unit must be text")
+            if spec.get("type") == "dict":
+                spec.setdefault("aggregate", "mean")
+            if "aggregate" in spec and (spec.get("type") != "dict" or spec["aggregate"] not in (*AGGREGATES, "none")):
+                raise TaskError(f"{at}.metrics: a dictionary aggregate is one of {', '.join(AGGREGATES)}, none")
+        else:
+            name, spec = item, None
+        if not isinstance(name, str) or not name.strip() or name == "_metric_groups" or name in metrics:
+            raise TaskError(f"{at}.metrics: names must be non-empty and unique")
+        metrics.append(name)
+        if spec is not None:
+            metric_specs[name] = spec
+    for parent, spec in metric_specs.items():
+        if spec.get("type") == "dict" and any(m.startswith(parent + ".") for m in metrics):
+            raise TaskError(f"{at}.metrics: dictionary {parent!r} already declares its submetrics; do not also declare {parent}.test")
+    metrics = tuple(metrics)
     metrics_re = dict(doc.get("metrics_re") or {})
     if cmd and not metrics_re and metrics:
         # `name=value` tokens (as `flux rtl measure` prints) need only the `metrics:` names
         # (D580); a token starts a line or follows whitespace, so `area_um2` never reads `xarea_um2`
-        metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=([-+0-9.eE]+)" for m in metrics}
+        metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=" +
+                     (r"(\{[^\n]*\})" if metric_specs.get(m, {}).get("type") == "dict" else r"([-+0-9.eE]+)")
+                     for m in metrics}
     for m, pat in metrics_re.items():
         try:
             if re.compile(pat).groups < 1:
@@ -100,7 +140,7 @@ def _stage(i: int, doc: Any) -> Stage:
     return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
                 evaluator=ev, metrics=metrics or tuple(metrics_re),
                 timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs),
-                estimate=_estimator(at, doc.get("estimate")))
+                estimate=_estimator(at, doc.get("estimate")), metric_specs=metric_specs)
 
 
 def _estimator(at: str, raw: Any) -> Estimator | None:

@@ -6,7 +6,7 @@ import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { designLabels, measurementColumns, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
+import { designLabels, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -15,6 +15,8 @@ import { measurementComparison } from "./measurementdata.js";
 function resultsView(ctx, r) {
   const { name, q, base, qs } = ctx;
   const preferences = resultPreferences(ctx);
+  const unit = measurementUnitsFor(r), metricGroups = r.metric_groups || {};
+  const directions = [...(r.objective_list || r.limits || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
   let filter = "all";
   const fmt = (v) => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -43,15 +45,15 @@ function resultsView(ctx, r) {
       full.artifact ? h("div", { class: "blk" }, h("h3", {}, "Design"), codeBlock(full.artifact, "")) : "");
   }
   const table = h("div", { class: "result-table-surface" });
-  const comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
-  const labels = measurementLabels(r.metrics);
+  const comparison = measurementComparison(r.designs, directions);
+  const labels = measurementLabels(r.metrics, metricGroups);
   const names = designLabels(r.designs, name);
   const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const columns = measurementColumns(ctx, r.metrics, () => {
     if (r.metrics.includes(sortKey) && !columns.visible().includes(sortKey)) sortKey = null;
     drawTable();
-  });
+  }, metricGroups);
   const PAGE = 200;
   let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
   const keyOf = (d) => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
@@ -68,7 +70,7 @@ function resultsView(ctx, r) {
       const ms = [...new Set([...Object.keys(a.stages[st] || {}), ...Object.keys(b.stages[st] || {})])];
       for (const m of ms) rows.push({ st, m, va: (a.stages[st] || {})[m], vb: (b.stages[st] || {})[m] });
     }
-    const dirs = r.objective_list || r.limits || [];
+    const dirs = directions;
     const cell = (v) => h("td", { class: "num mono" }, v == null ? "—" : fmt(v));
     const delta = (row) => {
       if (row.va == null || row.vb == null) return h("td", {}, "");
@@ -130,7 +132,7 @@ function resultsView(ctx, r) {
     const more = all.length > shown.length ? h("div", { class: "more" }, h("button", { class: "small", onclick: () => { pageN += PAGE; drawTable(); } },
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
     table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
-      h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
+      h("thead", {}, measurementGroupRow(metrics, metricGroups, 3), h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
         ...metrics.map(m => { const l = limitOf(m); return th(m, m, { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
       h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
@@ -155,7 +157,7 @@ function resultsView(ctx, r) {
   // D916: two views of the same designs -- Results (the table, its filters, two compared, the selected
   // design) and Graphs (the Pareto front, the improvement by design) -- the decision above both, the
   // selected design's detail in whichever shows; the graphs built when Graphs is first shown, then kept
-  const objectives = r.objective_list || r.limits || [];
+  const objectives = directions;
   const nums = r.metrics.filter(m => r.designs.some(d => Object.values(d.stages).some(n => n[m] != null)));
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
     .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));

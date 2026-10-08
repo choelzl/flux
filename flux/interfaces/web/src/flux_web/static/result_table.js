@@ -4,6 +4,10 @@ import { me } from "./state.js";
 
 export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
 
+export function measurementUnitsFor(results) {
+  return { ...measurementUnits, ...Object.fromEntries(Object.entries(results.metric_info || {}).filter(([, s]) => s.unit).map(([m, s]) => [m, s.unit])) };
+}
+
 export function resultPreferences(ctx) {
   const key = `flux-results:${JSON.stringify([me?.name || "", ctx.owner || me?.name || "", ctx.name])}`;
   let memory = {};
@@ -21,10 +25,15 @@ export function resultPreferences(ctx) {
 }
 
 /** A shared per-loop measurement picker for Results and the Decision table. */
-export function measurementColumns(ctx, metrics, redraw) {
+export function measurementColumns(ctx, metrics, redraw, groups = {}) {
   const prefs = resultPreferences(ctx), preferences = prefs.read(), saved = preferences.hiddenMetrics;
   const hidden = new Set(Array.isArray(saved) ? saved.filter(m => typeof m === "string") : []);
   let showHidden = preferences.showHiddenMetrics === true;
+  const dictionaries = Object.fromEntries(Object.entries(groups).map(([name, group]) => [name, metrics.filter(m => group.metrics.includes(m))]).filter(([, ms]) => ms.length));
+  const savedDictionaries = preferences.dictionaryMetrics;
+  const choices = savedDictionaries && typeof savedDictionaries === "object" && !Array.isArray(savedDictionaries) ? { ...savedDictionaries } : {};
+  const groupOf = new Map(Object.entries(dictionaries).flatMap(([name, ms]) => ms.map(m => [m, name])));
+  const dictionaryControls = h("div", { class: "dictionary-controls" });
   const boxes = new Map();
   const toggle = h("button", { type: "button", class: "small show-hidden-columns", onclick: () => {
     showHidden = !showHidden; changed();
@@ -38,7 +47,10 @@ export function measurementColumns(ctx, metrics, redraw) {
       boxes.set(metric, box);
       return h("label", { class: "column-option" }, box, h("span", { title: metric }, metric));
     }));
-  const picker = h("details", { class: "column-picker" }, h("summary", { class: "btn small" }, "Measurements"), options);
+  function selection(name) {
+    const available = dictionaries[name].filter(m => showHidden || !hidden.has(m)), saved = choices[name];
+    return { selected: available.includes(saved?.selected) ? saved.selected : available[0], expanded: saved?.expanded === true };
+  }
   function controls() {
     const n = metrics.filter(m => hidden.has(m)).length;
     if (!n) showHidden = false;
@@ -47,14 +59,53 @@ export function measurementColumns(ctx, metrics, redraw) {
     toggle.setAttribute("aria-pressed", String(showHidden));
     toggle.title = showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns";
     for (const [metric, box] of boxes) box.checked = !hidden.has(metric);
+    dictionaryControls.replaceChildren(...Object.entries(dictionaries).map(([name, ms]) => {
+      const current = selection(name);
+      const select = h("select", { class: "dictionary-select", "aria-label": `${name} test`, disabled: !current.selected,
+        onchange: () => { choices[name] = { ...selection(name), selected: select.value, expanded: false }; changed(); } },
+        ms.filter(m => showHidden || !hidden.has(m)).map(m => h("option", { value: m, selected: current.selected === m },
+          m === name ? `Aggregate (${groups[name].aggregate})` : m.slice(name.length + 1))));
+      return h("div", { class: "dictionary-control" }, h("label", {}, name, " ", select),
+        h("button", { type: "button", class: "small dictionary-expand", "data-group": name,
+          "aria-pressed": String(current.expanded), disabled: ms.length < 2 || !current.selected,
+          title: current.expanded ? `Show one ${name} test` : `Show all ${name} tests`, onclick: () => {
+            choices[name] = { ...selection(name), expanded: !selection(name).expanded }; changed();
+          } }, "All"));
+    }));
   }
   function changed() {
-    controls(); prefs.save({ hiddenMetrics: [...hidden], showHiddenMetrics: showHidden }); redraw();
+    controls(); prefs.save({ hiddenMetrics: [...hidden], showHiddenMetrics: showHidden, dictionaryMetrics: choices }); redraw();
   }
   controls();
-  return { controls: h("div", { class: "measurement-columns" }, toggle, picker),
+  return { controls: h("div", { class: "measurement-columns" }, toggle, dictionaryControls), picker: options,
     hidden: metric => hidden.has(metric),
-    visible: () => metrics.filter(m => showHidden || !hidden.has(m)) };
+    visible: () => {
+      const visible = metrics.filter(m => {
+        if (!showHidden && hidden.has(m)) return false;
+        const parent = groupOf.get(m), choice = parent && selection(parent);
+        return !parent || choice.expanded || choice.selected === m || (showHidden && hidden.has(m));
+      });
+      const seen = new Set();
+      return metrics.flatMap(m => {
+        const parent = groupOf.get(m);
+        if (!parent) return visible.includes(m) ? [m] : [];
+        if (seen.has(parent)) return [];
+        seen.add(parent); return visible.filter(x => groupOf.get(x) === parent);
+      });
+    } };
+}
+
+export function measurementGroupRow(metrics, groups = {}, leading = 0) {
+  const parentOf = new Map(Object.entries(groups).flatMap(([name, group]) => group.metrics.map(m => [m, name])));
+  if (!metrics.some(m => parentOf.has(m))) return "";
+  const spans = [];
+  for (const m of metrics) {
+    const name = parentOf.get(m) || "";
+    if (name && spans.at(-1)?.name === name) spans.at(-1).count++;
+    else spans.push({ name, count: 1 });
+  }
+  return h("tr", { class: "measurement-groups" }, h("th", { colspan: leading }),
+    spans.map(({ name, count }) => h("th", { colspan: count, scope: "colgroup", title: name }, name)));
 }
 
 /** Short display names; the original names and content keys still identify designs. */
@@ -109,10 +160,11 @@ export function measurementText(d, metric, compare, fmt, relative) {
     title: `${metric}: ${value == null ? "not measured" : fmt(value)} · ${delta} from ${ref}${reference?.value === 0 ? " (zero reference; percent change is undefined)" : ""}` };
 }
 
-export function measurementLabels(metrics) {
+export function measurementLabels(metrics, groups = {}) {
   const labels = new Map(), used = new Set();
   for (const metric of metrics) {
-    const full = metric.replace(/_/g, " ");
+    const parent = Object.keys(groups).find(name => groups[name].metrics.includes(metric));
+    const full = (parent ? metric === parent ? groups[parent].aggregate : metric.slice(parent.length + 1) : metric).replace(/_/g, " ");
     const short = full.length > 20 ? `${full.slice(0, 7).trimEnd()}…${full.slice(-12).trimStart()}` : full;
     let text = short, suffix = 1;
     while (used.has(text)) text = `${short} ${++suffix}`;

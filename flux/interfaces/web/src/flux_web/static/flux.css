@@ -347,11 +347,10 @@ table.designs td { white-space: nowrap; }
 .result-table-surface .table-part { display: block; font-size: 11px; }
 .result-table-surface .table-design-name.design-id { max-width: none; overflow: visible; }
 .measurement-columns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
-.measurement-columns:has(.column-picker[open]), .column-picker[open] { width: 100%; }
-.column-picker > summary { margin: 0; list-style: none; }
-.column-picker > summary::-webkit-details-marker { display: none; }
-.column-picker > summary::after { content: " ▾"; }
-.column-picker[open] > summary::after { content: " ▴"; }
+.dictionary-controls, .dictionary-control { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dictionary-control label { display: flex; align-items: center; gap: 6px; font-size: .85em; }
+.dictionary-select { width: auto; max-width: 15em; }
+.measurement-groups th { height: auto !important; padding: 4px 8px !important; text-align: center; border-bottom: 1px solid var(--line); font-size: .85em; }
 .column-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 4px 16px; padding: 8px; margin-top: 6px; background: var(--soft); border: 1px solid var(--line); border-radius: var(--radius); }
 .column-option { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; cursor: pointer; }

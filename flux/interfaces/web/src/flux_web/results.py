@@ -310,6 +310,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
 
     store = CampaignStore(db)
     by: dict[tuple[str, str], dict[str, Any]] = {}
+    definitions = {item["name"]: {k: v for k, v in item.items() if k != "name"}
+                   for stage in stages for item in stage.get("metrics", []) if isinstance(item, dict) and "name" in item}
+    groups = {name: {**spec, "metrics": []} for name, spec in definitions.items() if spec.get("type") == "dict"}
     try:
         for camp in store.list_campaigns():
             if campaign is not None and camp["campaign_id"] != campaign:
@@ -324,6 +327,17 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 if not numbers:
                     continue
                 c = t.candidate or {}
+                provenance = (c.get("meta") or {}).get("provenance") or {}
+                for parent, spec in provenance.get("metric_specs", {}).items():
+                    definitions.setdefault(parent, spec)
+                    if spec.get("type") == "dict":
+                        groups.setdefault(parent, {**spec, "metrics": []})
+                for parent, tests in provenance.get("metric_groups", {}).items():
+                    group = groups.setdefault(parent, {"type": "dict", "metrics": []})
+                    for test in tests:
+                        metric = f"{parent}.{test}"
+                        if metric not in group["metrics"]:
+                            group["metrics"].append(metric)
                 name = str(c.get("name") or t.candidate_key or "?")
                 part = str(c.get("subgoal") or (c.get("knobs") or {}).get("part") or "")
                 ck = content_key(c)                 # D840: a name a later start gave again is another design
@@ -411,14 +425,27 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not (d["decision"] or d["closest"]))  # the decided design (or the closest) on top
     metrics: list[str] = []
-    for m in [o.metric for o in objectives] + [c["metric"] for c in cutoffs] + [m for d in out for m in d["numbers"]]:
+    for parent, group in groups.items():
+        if group.get("aggregate") and group["aggregate"] != "none":
+            group["metrics"].append(parent)
+        for d in out:
+            for numbers in d["stages"].values():
+                for m in numbers:
+                    if m.startswith(parent + ".") and m not in group["metrics"]:
+                        group["metrics"].append(m)
+        group["metrics"] = sorted(set(group["metrics"]))
+    group_metrics = [m for group in groups.values() for m in group["metrics"]]
+    for m in [o.metric for o in vector] + [c["metric"] for c in cutoffs] + [m for d in out for numbers in d["stages"].values() for m in numbers] + group_metrics:
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
     return {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
-            "metrics": metrics if limit is None else metrics[:8], "limits": limits, "stages": [st.get("name") for st in stages]}
+            "metrics": metrics, "limits": limits, "stages": [st.get("name") for st in stages],
+            "metric_groups": groups,
+            "metric_info": {m: definitions.get(m) or next(({k: v for k, v in g.items() if k not in ("metrics", "type")}
+                            for parent, g in groups.items() if m in g["metrics"]), {}) for m in metrics}}
 
 
 def thin(all_rows: list[Any], objectives: list[tuple[str, str]], cap: int = 3000) -> list[dict[str, Any]]:
