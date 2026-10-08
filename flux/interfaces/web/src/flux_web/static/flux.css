@@ -309,9 +309,8 @@ details.files-fold[open] > summary { margin-bottom: 10px; }
 .chip { border-radius: 20px; padding: 3px 12px; font-size: 12.5px; }
 .chip.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 table.designs th .lim { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 11px; }
-table.designs td.meets { color: var(--ok); }
-table.designs td.misses { color: var(--bad); }
-table.designs td small { color: var(--muted); }
+.result-table-surface td.meets { color: var(--ok); }
+.result-table-surface td.misses { color: var(--bad); }
 table.designs tr.failed td:first-child { color: var(--muted); }
 table.designs tr.decided td { background: color-mix(in srgb, var(--ok) 6%, transparent); }
 .star { color: var(--warn); }
@@ -320,30 +319,28 @@ table.designs tr.decided td { background: color-mix(in srgb, var(--ok) 6%, trans
 ul.misses { margin: 4px 0; padding-left: 18px; color: var(--bad); }
 ul.misses li { margin: 2px 0; }
 table.designs td { white-space: nowrap; }
-.result-table-surface thead th { vertical-align: bottom; }
-.result-table-surface th.measurement-head { padding: 4px 6px; }
-.measurement-heading { position: relative; min-width: 48px; height: var(--metric-height); }
-.measurement-label { position: absolute; right: 0; bottom: 12px; width: max-content; max-width: 220px;
+.result-table-surface td, .result-table-surface th { padding: 5px 6px; font-size: 12px; }
+.result-table-surface thead th { vertical-align: bottom; font-size: 11px; }
+.result-table-surface td.num { font-variant-numeric: tabular-nums; }
+.result-table-surface .status-column { text-align: center; width: 1%; white-space: nowrap; }
+.result-table-surface .pick { width: 20px; }
+.measurement-heading { position: relative; min-width: 32px; height: var(--metric-height); }
+.measurement-label { position: absolute; right: 0; bottom: 12px; width: max-content; max-width: 200px;
   transform: rotate(55deg); transform-origin: right bottom; text-align: right; white-space: nowrap; }
-.measurement-label .th-sort { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0 0 0 13px; min-height: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-table-surface .measurement-label .th-arrow { right: auto; left: 0; }
 .measurement-label .measurement-text { display: block; overflow: hidden; text-overflow: ellipsis; }
-.measurement-label .lim { text-transform: none; letter-spacing: 0; }
-.verdict-icon { display: none; }
+.measurement-heading > .lim { position: absolute; right: 0; bottom: -3px; white-space: nowrap; }
 .best-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .best-table-head h3 { margin: 0; }
-.best-n .verdict-badge { margin-left: 6px; font-size: 10.5px; }
-.result-table-surface[data-density=compact] td { padding: 4px 6px; }
-.result-table-surface[data-density=compact] .table-design-name,
-.result-table-surface[data-density=compact] .table-stage,
-.result-table-surface[data-density=compact] .table-part { display: inline-block; max-width: 18ch;
+.result-table-surface .table-design-name,
+.result-table-surface .table-part { display: inline-block; max-width: 18ch;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.result-table-surface[data-density=compact] .table-stage { max-width: 10ch; }
-.result-table-surface[data-density=compact] .table-part { display: block; }
-.result-table-surface[data-density=compact] .measurement-unit,
-.result-table-surface[data-density=compact] .verdict-text { display: none; }
-.result-table-surface[data-density=compact] .verdict-icon { display: inline; }
-.result-table-surface[data-density=compact] .verdict-badge { padding: 1px 5px; }
-.compact-table[aria-pressed=true] { background: var(--soft); border-color: var(--accent); }
+.result-table-surface .table-part { display: block; font-size: 11px; }
+.result-table-surface .verdict-badge { display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; padding: 1px 4px; font-size: 11px; line-height: 16px; }
+.relative-values[aria-pressed=true] { background: var(--soft); border-color: var(--accent); }
 
 /* ---- highlighted code and the editor (D691) */
 .hl .tk-com { color: var(--tk-com); font-style: italic; }
@@ -792,6 +789,15 @@ body:has(.composer) .toasts { bottom: 150px; }
   table.list > tbody > tr > td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 6.5em; margin-right: 8px;
     color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
   table.list .actions { justify-content: flex-start; flex-wrap: wrap; }
+  /* Measurement matrices keep their column alignment inside their own scroll area. */
+  .result-table-surface table.list { display: table; width: 100%; }
+  .result-table-surface table.list > thead { display: table-header-group; }
+  .result-table-surface table.list > tbody { display: table-row-group; }
+  .result-table-surface table.list > tbody > tr { display: table-row; }
+  .result-table-surface table.list > tbody > tr > td { display: table-cell; padding: 5px 6px; white-space: nowrap; }
+  .result-table-surface table.list > tbody > tr > td.num { text-align: right; }
+  .result-table-surface table.list > tbody > tr > td.status-column { text-align: center; }
+  .result-table-surface table.list > tbody > tr > td[data-label]::before { display: none; }
 }
 .agent-found { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }
 .why-failed { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
@@ -1001,7 +1007,8 @@ svg.chart .pt { fill: var(--gc, var(--accent)); fill-opacity: .8; stroke: var(--
 svg.chart .pt.failed, svg.chart .pt.pending { fill: var(--panel); fill-opacity: 1; stroke-width: 1.6; }
 svg.chart .pt.pending { stroke-dasharray: 2 1.5; }
 svg.chart .pt.on-front { stroke: var(--ink); stroke-width: 1.3; fill-opacity: 1; }
-svg.chart .pt.baseline { stroke-width: 2; }
+svg.chart .baseline-ref { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 3; }
+svg.chart .baseline-label { fill: var(--muted); }
 svg.chart .pt.out { opacity: .35; }
 svg.chart .pt:hover { stroke-width: 2.4; }
 svg.chart .ring { fill: none; stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }

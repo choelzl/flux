@@ -37,18 +37,19 @@ def _design(name, group, stage, numbers, verdict, reasons=(), **more):
 #: D914-D916: a loop of parts as the results API says it -- a whole that meets the frequency floor and a
 #: smaller one that does not, decoders that all miss it, encoders measured at the screen stage only
 GRAPHS_RESULTS = {
-    "campaign": "stand-in", "total": 6, "feasible": True, "closest": None, "answer": None, "passes": [],
+    "campaign": "stand-in", "total": 7, "feasible": True, "closest": None, "answer": None, "passes": [],
     "objectives": "area_um2 (minimize), fmax_mhz >= 1000", "metrics": ["area_um2", "fmax_mhz"], "stages": ["screen", "confirm"],
     "limits": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 1000, "stage": None}],
     "objective_list": [{"metric": "area_um2", "direction": "minimize"}, {"metric": "fmax_mhz", "direction": "maximize", "goal": 1000}],
-    "counts": {"accepted": 2, "pending": 1, "failed": 3},
+    "counts": {"accepted": 3, "pending": 1, "failed": 3},
     "designs": [
-        _design("w-good", "whole", "confirm", {"area_um2": 31, "fmax_mhz": 1200}, "accepted", decision=True, baseline=True),
+        _design("w-good", "whole", "confirm", {"area_um2": 31, "fmax_mhz": 1200}, "accepted", decision=True),
         _design("w-bad", "whole", "confirm", {"area_um2": 12.5, "fmax_mhz": 800}, "failed", ["fmax_mhz 800 is below 1000"]),
         _design("dec-1", "decoder", "screen", {"area_um2": 1, "fmax_mhz": 900}, "failed", ["fmax_mhz 900 is below 1000"]),
         _design("dec-22", "decoder", "screen", {"area_um2": 2, "fmax_mhz": 950}, "failed", ["fmax_mhz 950 is below 1000"]),
         _design("enc-1", "encoder", "screen", {"area_um2": 10, "fmax_mhz": 1500}, "accepted"),
         _design("enc-22", "encoder", "screen", {"area_um2": 8, "fmax_mhz": 1100}, "pending", ["fmax_mhz waits for confirm"]),
+        _design("w-baseline", "whole", "confirm", {"area_um2": 40, "fmax_mhz": 1100}, "accepted", baseline=True),
     ]}
 
 PASSWORDS = {"ada": "ada the admin secret", "bob": "bob has a secret", "cy": "cy has a secret"}
@@ -947,7 +948,8 @@ def flows(r: Run) -> None:
             d["name"] += "-a-long-generated-design-name-with-implementation-details"
             d["numbers"].update(dict.fromkeys(metrics[2:], i + 0.25))
             d["shown"], d["stages"] = stage, {stage: d["numbers"]}
-        b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.removeItem('flux-results-compact');"
+            d["meets"]["fmax_mhz"] = d["numbers"]["fmax_mhz"] >= 1000
+        b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.setItem('flux-results-compact', 'false'); localStorage.removeItem('flux-results-relative');"
              " window.fetch = (u, o) => String(u) === '/api/apps/sw' ? window.__compactFetch(u, o).then(async r => { const info = await r.json();"
              " return new Response(JSON.stringify({...info, state: {...info.state, last_active: 1000}}), {headers: {'Content-Type': 'application/json'}}); })"
              " : String(u).startsWith('/api/apps/sw/state') ? window.__compactFetch(u, o).then(async r =>"
@@ -957,27 +959,42 @@ def flows(r: Run) -> None:
              " : window.__compactFetch(u, o); return 1", fixture)
         try:
             r.page("#/app/sw/results", "document.querySelector('table.designs th.measurement-head')", "wide results table")
-            width = b.js("return document.querySelector('table.designs').getBoundingClientRect().width")
             r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
             b.click("table.designs tbody input[type=checkbox]")
-            r.button("Compact table", ".chips")
-            compact_width = b.js("return document.querySelector('table.designs').getBoundingClientRect().width")
-            r.check("compact results shrink the wide table without losing measurements", compact_width < width - 50
-                    and b.js("return document.querySelector('table.designs tbody input').checked && [...document.querySelectorAll('table.designs td.num')].every(td => td.textContent.trim())"), f"{width:.0f}px -> {compact_width:.0f}px")
-            r.check("compact verdicts use accessible symbols and full values retain their units", b.js("const badge = document.querySelector('table.designs .verdict-badge'); const unit = document.querySelector('table.designs .measurement-unit'); return badge.getAttribute('aria-label') === 'accepted' && getComputedStyle(badge.querySelector('.verdict-icon')).display !== 'none' && getComputedStyle(unit).display === 'none' && unit.parentNode.title.includes('µm²')"))
+            r.check("results are always compact regardless of the old preference, with no toggle", b.js("const t = document.querySelector('table.designs'), name = t.querySelector('.table-design-name'); return !document.querySelector('.compact-table') && getComputedStyle(name).maxWidth !== 'none' && t.querySelectorAll('th').length === 9 && t.getBoundingClientRect().width <= t.parentElement.clientWidth + 1"))
+            r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.getAttribute('aria-label') === 'accepted' && badge.textContent === '✓' && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
+            r.check("measurement cells are plain values without checkmarks or repeated units", b.js("return [...document.querySelectorAll('table.designs td.num')].every(td => /^[-+0-9.e]+$/.test(td.textContent.trim())) && !document.querySelector('table.designs .measurement-verdict, table.designs .measurement-unit')"))
+            r.check("passing and failing measurements use distinct colors and explicit tooltip status", b.js("const good = document.querySelector('table.designs td.meets'), bad = document.querySelector('table.designs td.misses'); return getComputedStyle(good).color !== getComputedStyle(bad).color && good.title.includes('meets the limit') && bad.title.includes('misses the limit')"))
+            b.click(".chips .relative-values")
+            relative = b.js("const rows = [...document.querySelectorAll('table.designs tbody tr')]; const row = n => rows.find(x => x.innerText.includes(n));"
+                            " const cell = (n, i) => row(n).querySelectorAll('td.num')[i]; return [cell('w-good', 0).innerText.trim(), cell('w-good', 0).title,"
+                            " cell('w-good', 1).innerText.trim(), cell('dec-1', 0).innerText.trim(), cell('dec-1', 0).title,"
+                            " cell('w-baseline', 0).innerText.trim(), document.querySelector('table.designs tbody input').checked]")
+            r.check("relative uses baseline first and median fallback without losing compare selections",
+                    relative[0] == "-22.5%" and "baseline (w-baseline" in relative[1] and "31" in relative[1]
+                    and relative[2] == "+9.1%" and relative[3] == "-33.3%" and "median 1.5" in relative[4]
+                    and relative[5] == "0%" and relative[6], str(relative))
+            b.click(".chips .relative-values")
+            r.check("absolute restores original measurements", b.js("return document.querySelector('table.designs tbody td.num').innerText.trim() === '31'"))
+            alignment = b.js("return [...document.querySelectorAll('table.designs th.measurement-head')].map(th => { const end = th.querySelector('.th-sort').getBoundingClientRect(), col = th.getBoundingClientRect();"
+                             " return [th.dataset.label, end.right - (col.right - parseFloat(getComputedStyle(th).paddingRight)), end.bottom - document.querySelector('table.designs tbody').getBoundingClientRect().top]; })")
+            r.check("angled labels end above their own measurement columns", all(-2 <= delta <= 15 and below < -3 for _, delta, below in alignment), str(alignment))
             b.shot(r.shots / "compact-results.png", full=True)
             sort_fit("compact result headers")
-            r.button("Compact table", ".chips")
-            r.check("full table restores names and verdict labels", b.js("const name = document.querySelector('table.designs .table-design-name'); return getComputedStyle(name).maxWidth === 'none' && getComputedStyle(document.querySelector('table.designs .verdict-text')).display !== 'none'"))
-            r.button("Compact table", ".chips")
+            b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+            r.check("small screens retain aligned measurement columns in a scroll area", b.js("const t = document.querySelector('table.designs'), area = t.parentElement; return getComputedStyle(t).display === 'table' && getComputedStyle(t.tHead).display === 'table-header-group' && getComputedStyle(t.rows[1].cells[0]).display === 'table-cell' && getComputedStyle(area).overflowX === 'auto' && area.clientWidth < innerWidth && area.scrollWidth > area.clientWidth"))
+            b.shot(r.shots / "compact-results-mobile.png", full=True)
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            b.click(".chips .relative-values")
             r.page("#/app/sw", "document.querySelector('.best-n')", "Decision's best designs")
-            r.check("Decision shares the compact preference and angled measurement headers", b.js("return document.querySelector('.best-table-head .compact-table').getAttribute('aria-pressed') === 'true' && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name').scrollWidth > document.querySelector('.best-n .table-design-name').clientWidth"))
+            r.check("Decision is always compact, with a separate status column", b.js("return !document.querySelector('.compact-table') && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name').scrollWidth > document.querySelector('.best-n .table-design-name').clientWidth && document.querySelector('.best-n td.status-column').querySelector('.verdict-badge') && document.querySelector('.best-n .table-design-name').closest('td').title.includes('long_measurement_stage')"))
+            r.check("Decision shares relative preference and uses the complete measured population", b.js("return document.querySelector('.best-table-head .relative-values').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-22.5%' && td.title.includes('baseline (w-baseline'))"))
             b.shot(r.shots / "compact-decision.png", full=True)
-            r.button("Compact table", ".best-table-head")
-            r.check("Decision can restore full names", b.js("return getComputedStyle(document.querySelector('.best-n .table-design-name')).maxWidth === 'none'"))
+            r.check("Decision measurement cells use colors and contain no extra checkmarks", b.js("const good = document.querySelector('.best-n td.meets'), badge = document.querySelector('.best-n .verdict-badge.ok'); return getComputedStyle(good).color === getComputedStyle(badge).color && good.title.includes('meets the limit') && [...document.querySelectorAll('.best-n td.num, .num-cell')].every(td => !/[✓✗]/.test(td.textContent))"))
             r.clean("compact tables")
         finally:
-            b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); return 1")
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); localStorage.removeItem('flux-results-relative'); return 1")
     r.step("compact tables", compact_tables)
 
     def reset_loop():
@@ -1780,8 +1797,16 @@ def flows(r: Run) -> None:
         b.go(f"{r.url}/#/app/sw/results/graphs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=15, what="the stood-in graphs")
         baseline = b.js("return [...document.querySelectorAll('#main svg.pareto .pt.baseline, #main svg.best-chart .pt.baseline')].map(p => [p.tagName, p.getAttribute('data-name'), p.querySelector('title').textContent])")
-        r.check("baseline uses a distinct hexagon on both graphs", len(baseline) == 3 and all(p[0] == "polygon" and p[1] == "w-good" and "Baseline (pass 0)" in p[2] for p in baseline), str(baseline))
+        refs = b.js("return [...document.querySelectorAll('#main svg.pareto .baseline-ref, #main svg.best-chart .baseline-ref')].map(p => [p.tagName, Number(p.dataset.value), p.querySelector('title').textContent])")
+        r.check("baseline is a reference line on both graphs, never a search point", not baseline and len(refs) == 4
+                and sorted(p[1] for p in refs) == [40, 40, 1100, 1100]
+                and all(p[0] == "line" and "w-baseline" in p[2] and "Baseline (pass 0)" in p[2] for p in refs), str(refs))
         r.check("baseline has a shared graph legend", b.js("return (document.querySelector('#main .graphs-ctl [data-baseline]') || {}).textContent === 'Baseline (pass 0)'"))
+        alone = b.ajs("const done = arguments[arguments.length - 1], fixture = arguments[0];"
+                      " import('/static/charts.js').then(C => { const d = fixture.designs.filter(d => d.baseline), metric = {metric: 'area_um2', direction: 'minimize'};"
+                      " const best = C.bestChart(C.designPoints(d, metric), metric, []), pareto = C.paretoChart(d, 'area_um2', 'fmax_mhz', '', fixture.objective_list);"
+                      " done([best, pareto].map(el => [el.querySelectorAll('.baseline-ref').length, el.querySelectorAll('svg.best-chart .pt, svg.pareto .pt').length, /NaN|Infinity/.test(el.innerHTML)])); }).catch(e => done(String(e)));", GRAPHS_RESULTS)
+        r.check("baseline-only graphs draw finite reference lines without search points", alone == [[2, 0, False], [3, 0, False]], str(alone))
         card = ("[...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === arguments[0])")
         area = b.js(f"const c = {card}; const f = [...c.querySelectorAll('figure')].find(x => x.querySelector('figcaption strong').textContent === 'area_um2');"
                     " return [f.querySelector('.best-said').textContent, f.querySelector('svg').getAttribute('aria-label')]", "Improvement by design")
@@ -1799,6 +1824,9 @@ def flows(r: Run) -> None:
         r.check("back in Results the same design stays selected (D916)", b.js(
             "return (document.querySelector('#main .split.results .detail-card h2') || {}).textContent === 'w-bad'"
             " && (document.querySelector('#main table.designs tr.sel') || {}).innerText.includes('w-bad')"))
+        b.click(".chips .relative-values")
+        r.check("switching measurement values preserves the selected design", b.js("return document.querySelector('table.designs tr.sel').innerText.includes('w-bad') && document.querySelector('.detail-card h2').textContent === 'w-bad'"))
+        b.click(".chips .relative-values")
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=10)
         r.check("the graphs kept, not built again, the detail with them (D916)", b.js("const g = document.querySelector('#main .graphs');"

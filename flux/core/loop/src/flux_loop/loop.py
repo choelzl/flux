@@ -1151,8 +1151,17 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
     # pass whose deep stage measured nothing does not decide on the cheap stage's numbers
     # D861: the record's rows too (`history`): a generator loop's `state.scored` holds only this
     # pass's designs, so an exploring pass decided on its one new design alone
+    state.reached = reached
+    state.on_stage = on_stage
+    _merge_decision_history(problem, state)
+
+
+def _merge_decision_history(problem: Problem, state: LoopState) -> None:
+    """Normal passes and pass 0 rank the same fresh, retained evidence."""
     from .records import history
 
+    stages = problem.stages()
+    reached = state.reached
     recalled = history(problem, state)
     pools: dict[str, list[Scored]] = {}
     for st in stages:
@@ -1165,7 +1174,7 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
             pools[st] = list(latest.values())
             reached = st
     state.reached = reached
-    state.on_stage = {**on_stage, **pools}
+    state.on_stage = {**state.on_stage, **pools}
     # D895: a design of parts decides on the whole only -- a part measured alone climbs, so it can
     # be improved, but is never the loop's answer (the NLU's decision was one operator, pass after pass)
     if _of_parts(problem, state, [*recalled, *state.scored]):

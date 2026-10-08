@@ -73,7 +73,7 @@ def _restore(state, saved):
 
 
 def run_baseline(problem, state):
-    from .loop import _conclude, _judge, _publish, _result
+    from .loop import _conclude, _judge, _merge_decision_history, _publish, _result
 
     state.request = dataclasses.replace(state.request, critique_rounds=0, screen_only=False)
     state.cache = None  # a baseline must exercise tools, even when identical numbers are cached
@@ -90,6 +90,7 @@ def run_baseline(problem, state):
         line = "baseline pass 0 reused: inputs, configuration and tools unchanged"
         state.say(f"  {line}")
         state.lessons.append(line)
+        _merge_decision_history(problem, state)
         with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped"):
             result = _conclude(problem, state, []) if state.scored else _result(problem, state, None, state.stopped, [], [])
         result.provenance["baseline_reused"] = True
@@ -134,7 +135,9 @@ def run_baseline(problem, state):
                                            "fingerprint": fingerprint, "stopped": state.stopped,
                                            "reached": state.reached, "scored": [dataclasses.asdict(s) for s in state.scored],
                                            "admitted": {k: c.to_record() for k, c in state.admitted.items()}})
-    with _phase("decide: baseline", why="record the unchanged design's numbers"):
+    # Save only pass 0 in its reusable snapshot, then rank against the campaign's evidence.
+    _merge_decision_history(problem, state)
+    with _phase("decide: baseline", why="compare the unchanged design with retained measurements"):
         result = _conclude(problem, state, []) if state.scored else _result(problem, state, None, state.stopped, [], [])
     if state.depth == 0:
         _publish(problem, state, [], [], state.stopped, searching=False)

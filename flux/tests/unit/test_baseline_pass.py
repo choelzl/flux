@@ -151,6 +151,45 @@ def test_failed_baseline_recovers_with_unchanged_inputs_then_reuses_success(tmp_
     assert (tmp_path / "design.py").read_text() == "# unchanged design\nanswer = 42\n"
 
 
+@pytest.mark.parametrize("best_answer", [60, 20])
+@pytest.mark.parametrize("fail_baseline", [False, True])
+def test_late_baseline_decides_against_retained_designs_on_fresh_and_reused_runs(tmp_path, best_answer, fail_baseline):
+    from flux_loop.measure import cached_measure
+    from flux_loop.types import Candidate, Scored
+    from flux_web.results import decision_doc
+
+    task = _task(tmp_path, {"file": "design.py", "only": True})
+    doc = task.to_dict()
+    for stage in doc["flow"]["measure"].values():
+        stage["command"].append("{artifact}")
+    (tmp_path / "measure.py").write_text(
+        "import pathlib, re, sys\n"
+        "answer = int(re.search(r'answer = (\\d+)', pathlib.Path(sys.argv[3]).read_text()).group(1))\n"
+        "print('cost=' + str(100 - answer))\n"
+        "sys.exit(int(answer == 42 and sys.argv[2] == 'fine' and (pathlib.Path(sys.argv[1]) / 'out/fail-baseline').exists()))\n")
+    problem = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
+    earlier_problem = PromptProblem(dataclasses.replace(problem.task, baseline=None))
+    req = request_for(earlier_problem.task, db=str(tmp_path / "out.db"))
+    records = earlier_problem.open_records(req, lambda m: None)
+    seed = LoopState(request=dataclasses.replace(req, baseline=False), workdir=str(tmp_path / "out"),
+                     say=lambda m: None, proposer=None, feedback=None, records=records)
+    cand = Candidate("earlier-design", artifact=f"answer = {best_answer}\n")
+    for stage in earlier_problem.stages():
+        metrics = cached_measure(earlier_problem, seed, cand, stage, record=True)
+    records.conclude(earlier_problem.conclusion(Scored(cand, "fine", metrics, {}), "earlier pass"))
+    records.close("paused")
+    req = request_for(problem.task, db=req.db)  # Enable pass 0 after earlier normal passes were measured.
+    if fail_baseline:
+        (tmp_path / "out/fail-baseline").touch()
+    for reuse in (False, True):
+        out = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+        assert bool(out.provenance.get("baseline_reused")) == (reuse and not fail_baseline)
+        assert [s.metrics for s in out.scored] == [{"cost": 58.0}] * (1 if fail_baseline else 2)
+        assert out.decision.metrics == {"cost": 100.0 - best_answer if fail_baseline else min(58.0, 100.0 - best_answer)}
+        assert (out.decision.name == "earlier-design") == (fail_baseline or best_answer > 42)
+        assert decision_doc(req.db)["name"] == out.decision.name
+
+
 @pytest.mark.parametrize("change", ["source", "checker", "measurement", "params", "settings", "tools", "environment", "external"])
 def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, change):
     task = _task(tmp_path, {"file": "design.py", "only": True})

@@ -5,7 +5,8 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { compactToggle, measurementHeader, verdictBadge } from "./result_table.js";
+import { measurementHeader, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -51,14 +52,20 @@ function topDesigns(ctx, r, n) {
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])].filter(m => top.some(d => d.numbers[m] != null)).slice(0, 4);
-  const surface = h("div", { class: "blk" });
-  surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), compactToggle(surface)),
-    h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", {}, "Stage"), ...ms.map(m => h("th", { class: "num measurement-head", title: m }, measurementHeader(m))))),
-      h("tbody", {}, top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
-        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono" }, h("span", { class: "table-design-name", title: d.name }, d.name),
-          verdictBadge(d.verdict, d.why.join("; "))),
-        h("td", { class: "muted" }, h("span", { class: "table-stage", title: d.shown }, d.shown)),
-        ...ms.map(m => { const ok = d.meets[m]; return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${m}: ${d.numbers[m] ?? "not measured"}` }, d.numbers[m] == null ? "" : num4(d.numbers[m])); })))))));
+  const surface = h("div", { class: "blk result-table-surface" });
+  const rows = h("tbody", {}), comparison = measurementComparison(r.designs);
+  function drawRows() {
+    rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
+        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: "table-design-name", title: d.name }, d.name)),
+        h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
+        ...ms.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
+          return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
+  }
+  const relative = relativeToggle(surface, drawRows);
+  surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), relative),
+    h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
+      ...ms.map(m => h("th", { class: "num measurement-head", title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(m))))), rows)));
+  drawRows();
   return surface;
 }
 /** No design meets every requirement (D900): no decision -- the closest design, apart, with what it
@@ -96,8 +103,9 @@ async function overview(ctx) {
       r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Chosen as "), r.decided_by, ".") : "",
       h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => dec.numbers[m] != null).slice(0, 6).map(m => {
         const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
-        return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : "") }, h("small", {}, m),
-          h("div", { class: "big mono" }, num4(dec.numbers[m])), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}${ok === true ? " ✓" : ok === false ? " ✗" : ""}`) : "");
+        return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : ""),
+          title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, m),
+          h("div", { class: "big mono" }, num4(dec.numbers[m])), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
       })),
       dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
       topDesigns(ctx, r, 3)],

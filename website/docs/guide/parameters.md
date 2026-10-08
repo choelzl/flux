@@ -229,8 +229,8 @@ Generated `out/`, `runs/`, and `workbench/`
 folders, caches, and the library do not trigger a rerun. Reuse requires a persistent loop record;
 without one, each invocation runs pass 0. Older records without a fingerprint run it once to
 establish one. If inputs change during pass 0, the next start runs it again for those new inputs.
-Graphs draw baseline measurements as larger hexagons with a bold outline and a
-**Baseline (pass 0)** legend entry; their group color and requirement status still apply.
+Graphs draw baseline measurements as gray reference lines, separate from the search points, with a
+**Baseline (pass 0)** legend entry. Search points keep their group colors and requirement status.
 
 For a tool check or baseline measurement without optimization, set `only: true`, for example
 `baseline: {only: true}` or `baseline: {file: baseline.py, only: true}`. This explicitly ends the

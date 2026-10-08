@@ -2,11 +2,12 @@
 // charts (D892: out of loopPage; D916: Results and Graphs two views).
 
 import { codeBlock } from "./highlight.js";
-import { ago, api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
+import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { compactToggle, measurementHeader, verdictBadge } from "./result_table.js";
+import { measurementHeader, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -16,14 +17,14 @@ function resultsView(ctx, r) {
   let filter = "all";
   const fmt = (v) => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
-  const unit = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
   const limitOf = (m) => r.limits.find(l => l.metric === m);
   // D899: accepted only when it meets every requirement; pending while a later stage must judge one
   const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
     : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending") : h("span", { class: "pill bad" }, "failed");
   const detail = h("div", { class: "detail" }, empty("Select a design."));
-  let shownEl;
+  let shownEl, selectedKey;
   async function open(d, tr) {
+    selectedKey = keyOf(d);
     if (tr.parentNode) for (const x of tr.parentNode.children) x.classList.remove("sel");
     tr.classList.add("sel");
     detail.replaceChildren(skeleton(6));
@@ -40,8 +41,9 @@ function resultsView(ctx, r) {
       h("div", { class: "actions" }, ...viewerTools(detail, { title: d.name, rawText: JSON.stringify(full, null, 2) })),
       full.artifact ? h("div", { class: "blk" }, h("h3", {}, "Design"), codeBlock(full.artifact, "")) : "");
   }
-  const table = h("div", {});
-  const compactButton = compactToggle(table);
+  const table = h("div", { class: "result-table-surface" });
+  const comparison = measurementComparison(r.designs);
+  const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const PAGE = 200;
   let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
@@ -79,7 +81,7 @@ function resultsView(ctx, r) {
       [["Close", null, "primary"]]);
   }
   const valueOf = (d, key) => key === "name" ? d.name : key === "verdict" ? d.verdict : key === "stage" ? (r.stages || []).indexOf(d.shown)
-    : key === "when" ? Date.parse(d.last || "") || 0 : d.numbers[key];
+    : key === "when" ? Date.parse(d.last || "") || 0 : table.dataset.values === "relative" ? comparison(d, key).percent : d.numbers[key];
   function sorted(list) {
     if (!sortKey) return list;
     return list.slice().sort((a, b) => {
@@ -119,27 +121,25 @@ function resultsView(ctx, r) {
     const more = all.length > shown.length ? h("div", { class: "more" }, h("button", { class: "small", onclick: () => { pageN += PAGE; drawTable(); } },
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
     table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
-      h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Verdict"), th("stage", "Stage"),
+      h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
         ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num measurement-head", title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
-          l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }),
-        th("when", "When"))),
-      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}`, onclick: () => open(d, tr) },
+          l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
+      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
         tick(d),
-        h("td", { class: "mono" }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
+        h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
           h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`,          // D929: the keyboard opens it too
             onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: "table-design-name" }, d.name)), d.part ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
-        h("td", {}, verdictBadge(d.verdict, d.why.join("; "))),
-        h("td", { class: "muted" }, h("span", { class: "table-stage", title: d.shown }, d.shown)),
-        ...r.metrics.map(m => { const v = d.numbers[m]; const ok = d.meets[m];
-          return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: v == null ? `${m}: not measured` : `${m}: ${v}${unit[m] ? " " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, v == null ? "" : [fmt(v), unit[m] ? h("small", { class: "measurement-unit" }, " " + unit[m]) : "", ok === false ? " ✗" : ok === true ? " ✓" : ""]); }),
-        h("td", { class: "muted" }, d.last ? ago(Date.parse(d.last) / 1000) : "")); return tr; }))), more) : empty("No design matches."));
+        h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
+        ...r.metrics.map(m => { const ok = d.meets[m];
+          const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
+          return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });
   function chips() {
     chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
-      h("span", { class: "grow" }), compactButton, cmpBtn);
+      h("span", { class: "grow" }), relativeButton, cmpBtn);
   }
   chips(); drawTable();
   // D916: two views of the same designs -- Results (the table, its filters, two compared, the selected
@@ -195,7 +195,7 @@ function resultsView(ctx, r) {
     if (!nums.length) return card(null, empty("No metric measured to chart."));
     drawScope(); drawPareto(); drawTime();
     return h("div", { class: "graphs" },
-      card(null, [scopeBox, h("p", { class: "muted small graphs-note" }, `Every measured design is drawn (${r.designs.length}); the table's filter does not apply. `,
+      card(null, [scopeBox, h("p", { class: "muted small graphs-note" }, `Measured search designs are drawn (${r.designs.filter(d => !d.baseline).length}); baseline measurements are gray reference lines. The table's filter does not apply. `,
           "The best so far and the front count only designs that meet every requirement", groups.length ? ", within the scope" : "", "."),
         legend(styles, { front: true, pending: r.designs.some(d => d.verdict === "pending"), baseline: r.designs.some(d => d.baseline) })], { cls: "graphs-ctl" }),
       h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement by design", timeBox)),

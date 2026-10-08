@@ -58,6 +58,17 @@ function bestSeries(pts, maxi, counts) {
   return { steps, best };
 }
 
+/** The latest baseline for each group/stage, drawn as references rather than search points. */
+function baselinePoints(rows, counts = () => true) {
+  const latest = new Map();
+  const when = (p) => Date.parse(p.design?.last || "") / 1000 || p.when;
+  for (const p of rows) if (p.baseline && counts(p)) {
+    const key = JSON.stringify([p.group || "", p.stage]);
+    if (!latest.has(key) || when(p) >= when(latest.get(key))) latest.set(key, p);
+  }
+  return [...latest.values()];
+}
+
 /** The non-dominated points of `pts` ({x, y}) for the two directions, in O(n log n) (D914: a loop's
     20,000 designs): sorted by x, best first, a point is on the front when its y beats every y before
     it; equal points are all on it, as neither beats the other. */
@@ -92,4 +103,4 @@ function timeSegments(samples, get) {
   return segments;
 }
 
-export { bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf };
+export { baselinePoints, bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf };

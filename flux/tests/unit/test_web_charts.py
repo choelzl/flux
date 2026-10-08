@@ -13,13 +13,15 @@ import pytest
 
 HERE = Path(__file__).parent
 CHARTDATA = HERE.parents[1] / "interfaces/web/src/flux_web/static/chartdata.js"
+MEASUREMENTDATA = CHARTDATA.with_name("measurementdata.js")
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 
 def run(tmp_path: Path, body: str) -> dict:
     """`body` runs with chartdata.js's exports as `C`, and prints its answer as JSON."""
     shutil.copy(CHARTDATA, tmp_path / "chartdata.mjs")
-    (tmp_path / "t.mjs").write_text("import * as C from './chartdata.mjs';\n" + body)
+    shutil.copy(MEASUREMENTDATA, tmp_path / "measurementdata.mjs")
+    (tmp_path / "t.mjs").write_text("import * as C from './chartdata.mjs';\nimport * as M from './measurementdata.mjs';\n" + body)
     r = subprocess.run(["node", str(tmp_path / "t.mjs")], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
@@ -60,6 +62,59 @@ const ds = [design('initial', '', 31, 1200, true, { baseline: true }), design('n
 console.log(JSON.stringify(['confirm', 'deepest'].map(stage => C.designPoints(ds, { metric: 'area_um2', stage }).map(p => p.baseline))));
 """)
     assert got == [[True, False], [True, False]]
+
+
+def test_relative_measurements_match_baseline_by_stage_and_group(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const base = design('base', 'whole', 100, 1000, true, {baseline: true});
+const better = design('better', 'whole', 70, 1300, true);
+const part = design('part', 'decoder', 5, 500, true);
+const other = design('other', 'decoder', 15, 700, true);
+base.stages.screen = {area_um2: 50}; better.stages.screen = {area_um2: 25};
+const compare = M.measurementComparison([base, better, part, other]);
+console.log(JSON.stringify({cost: compare(better, 'area_um2'), freq: compare(better, 'fmax_mhz'),
+  screen: compare(better, 'area_um2', 'screen'), part: compare(part, 'area_um2'), missing: compare(better, 'power_w')}));
+""")
+    assert got["cost"]["percent"] == -30 and got["freq"]["percent"] == 30
+    assert got["cost"]["reference"]["kind"] == "baseline"
+    assert got["screen"]["percent"] == -50
+    assert got["part"]["percent"] == -50 and got["part"]["reference"]["value"] == 10
+    assert got["part"]["reference"]["kind"] == "median"
+    assert got["missing"]["percent"] is None
+
+
+def test_relative_reference_uses_latest_baseline_and_handles_zero(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const old = design('old', '', 100, 1000, true, {baseline: true, last: '2026-10-01T12:00:00Z'});
+const newer = design('newer', '', 50, 0, true, {baseline: true, last: '2026-10-02T12:00:00Z'});
+const d = design('d', '', 25, 800, true);
+const compare = M.measurementComparison([newer, old, d]);
+console.log(JSON.stringify({cost: compare(d, 'area_um2'), zero: compare(d, 'fmax_mhz')}));
+""")
+    assert got["cost"]["percent"] == -50 and got["cost"]["reference"]["name"] == "newer"
+    assert got["zero"]["percent"] is None and got["zero"]["reference"]["value"] == 0
+
+
+def test_median_fallback_resists_outliers_and_ignores_missing_values(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const ds = [10, 20, 1000, null, NaN].map((v, i) => design(String(i), '', v, 1, true));
+const compare = M.measurementComparison(ds);
+console.log(JSON.stringify(compare(ds[0], 'area_um2')));
+""")
+    assert got["reference"] == {"kind": "median", "value": 20}
+    assert got["percent"] == -50
+
+
+def test_baseline_references_are_latest_and_scoped(tmp_path):
+    got = run(tmp_path, """
+const rows = [{name: 'old', baseline: true, when: 2, design: {last: '2026-10-01T12:00:00Z'}, group: 'whole', stage: 'fine'},
+  {name: 'current', baseline: true, when: 1, design: {last: '2026-10-02T12:00:00Z'}, group: 'whole', stage: 'fine'},
+  {name: 'part', baseline: true, when: 3, group: 'decoder', stage: 'fine'},
+  {name: 'screen', baseline: true, when: 1, group: 'whole', stage: 'screen'},
+  {name: 'design', baseline: false, when: 4, group: 'whole', stage: 'fine'}];
+console.log(JSON.stringify(C.baselinePoints(rows, C.inScope(['whole', 'decoder'], 'whole')).map(p => p.name)));
+""")
+    assert got == ["current", "screen"]
 
 
 def test_a_design_failing_another_requirement_is_never_the_best(tmp_path):
