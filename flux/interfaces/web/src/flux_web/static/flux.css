@@ -327,15 +327,18 @@ table.designs td { white-space: nowrap; }
 .result-table-surface .status-column { text-align: center; width: 1%; white-space: nowrap; }
 .result-table-surface .pick { width: 20px; }
 .measurement-heading { position: relative; min-width: 32px; font-family: var(--mono); letter-spacing: 0;
+  display: flex; align-items: flex-end; justify-content: flex-end;
   height: max(68px, calc(var(--metric-length) * .83ch + 26px)); }
-.measurement-label { position: absolute; right: 0; bottom: 12px; width: max-content;
+.measurement-label { position: absolute; right: 0; bottom: 18px; width: max-content;
   transform: rotate(55deg); transform-origin: right bottom; text-align: right; white-space: nowrap; }
 .result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0; min-height: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.result-table-surface .measurement-heading > .measurement-sort-arrow { top: auto; left: 0; right: auto;
-  bottom: 15px; height: 10px; transform: none; cursor: pointer; }
+.measurement-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  min-height: 12px; white-space: nowrap; }
+.result-table-surface .measurement-footer > .measurement-sort-arrow { position: static;
+  flex: 0 0 10px; height: 10px; transform: none; cursor: pointer; }
 .measurement-label .measurement-text { display: block; overflow: hidden; text-overflow: ellipsis; }
-.measurement-heading > .lim { position: absolute; right: 0; bottom: -3px; white-space: nowrap; }
+.measurement-footer > .lim { white-space: nowrap; }
 .best-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .best-table-head h3 { margin: 0; }
 .result-table-surface .table-design-name,

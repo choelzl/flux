@@ -130,7 +130,7 @@ export function measurementHeader(text, ...content) {
   }
   return h("div", { class: "measurement-heading", style: `--metric-length:${text.length + 2}` },
     h("div", { class: "measurement-label" }, content[0] || h("span", { class: "measurement-text" }, text)),
-    ...content.slice(1), arrow);
+    h("div", { class: "measurement-footer" }, arrow, ...content.slice(1)));
 }
 
 export function verdictBadge(verdict, reason = "") {

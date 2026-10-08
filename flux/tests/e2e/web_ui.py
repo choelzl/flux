@@ -204,9 +204,13 @@ const fits = (i, tag) => { for (const th of all()[i].tHead.querySelectorAll('th'
   const t = th.getBoundingClientRect(), r = b.getBoundingClientRect(), arrow = th.querySelector('.th-arrow'), a = arrow.getBoundingClientRect(), nm = th.dataset.label;
   if (th.classList.contains('measurement-head')) {
     const head = th.closest('thead').getBoundingClientRect();
+    const footer = th.querySelector('.measurement-footer').getBoundingClientRect(), limit = th.querySelector('.lim');
     if (r.top < head.top - 1 || r.bottom > head.bottom + 1) bad.push(`${tag}: ${nm}'s angled button outside the header`);
     if (getComputedStyle(arrow).transform !== 'none') bad.push(`${tag}: ${nm}'s sort arrow rotated`);
     if (a.width && (a.left < t.left - 1 || a.right > t.right + 1 || a.top < head.top - 1 || a.bottom > head.bottom + 1)) bad.push(`${tag}: ${nm}'s arrow outside its header`);
+    if (a.top < r.bottom + 2 || Math.abs((a.top + a.bottom) / 2 - (footer.top + footer.bottom) / 2) > 1) bad.push(`${tag}: ${nm}'s arrow overlaps its diagonal label or is off its footer baseline`);
+    if (Math.abs(footer.right - (t.right - parseFloat(getComputedStyle(th).paddingRight))) > 1) bad.push(`${tag}: ${nm}'s footer is not aligned with its measurements`);
+    if (limit && a.right + 3 > limit.getBoundingClientRect().left) bad.push(`${tag}: ${nm}'s arrow overlaps its limit`);
     continue;
   }
   if (r.left < t.left - 0.5 || r.right > t.right + 0.5) bad.push(`${tag}: ${nm}'s button outside its cell`);
@@ -1000,6 +1004,10 @@ def flows(r: Run) -> None:
             r.check("diagonal headers fit inside the scroll area's edges", all(left >= 0 and right >= 0 for left, right in edges), str(edges))
             b.shot(r.shots / "compact-results.png", full=True)
             sort_fit("compact result headers")
+            keyboard = b.js("const button = document.querySelector('th[data-label=fmax_mhz] button.th-sort'); button.focus(); return document.querySelector('th[data-label=fmax_mhz]').getAttribute('aria-sort')")
+            b.cmd("WebDriver:ElementSendKeys", {"id": b.find('th[data-label=fmax_mhz] button.th-sort'), "text": "\ue007"})
+            r.check("measurement header keyboard sorting keeps focus on its label", b.js("return document.querySelector('th[data-label=fmax_mhz]').getAttribute('aria-sort')") != keyboard
+                    and b.js("return document.activeElement.dataset.key") == "fmax_mhz")
             r.check("upright measurement arrows still sort when clicked", b.js("const th = document.querySelector('th[data-label=area_um2]'), before = th.getAttribute('aria-sort'); th.querySelector('.measurement-sort-arrow').click(); return document.querySelector('th[data-label=area_um2]').getAttribute('aria-sort') !== before"))
             b.shot(r.shots / "compact-results-sorted.png", full=True)
             b.click(".column-picker summary")
@@ -1028,6 +1036,7 @@ def flows(r: Run) -> None:
             b.shot(r.shots / "measurement-picker-mobile.png", full=True)
             b.click(".column-picker summary")
             r.check("small screens retain aligned measurement columns in a scroll area", b.js("const t = document.querySelector('table.designs'), area = t.parentElement; return getComputedStyle(t).display === 'table' && getComputedStyle(t.tHead).display === 'table-header-group' && getComputedStyle(t.rows[1].cells[0]).display === 'table-cell' && getComputedStyle(area).overflowX === 'auto' && area.clientWidth < innerWidth && area.scrollWidth > area.clientWidth"))
+            sort_fit("compact result headers at 390px")
             r.check("the last diagonal header remains visible when scrolled to the right", b.js("const area = document.querySelector('table.designs').parentElement; area.scrollLeft = area.scrollWidth; const label = area.querySelector('th:last-child .measurement-label').getBoundingClientRect(); return label.right <= area.getBoundingClientRect().right && label.left >= area.getBoundingClientRect().left"))
             b.js("document.querySelector('table.designs').parentElement.scrollLeft = 0; return 1")
             b.shot(r.shots / "compact-results-mobile.png", full=True)
