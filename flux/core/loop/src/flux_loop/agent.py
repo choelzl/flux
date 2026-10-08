@@ -50,6 +50,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from .agent_usage import AgentUsage, from_output, usage  # noqa: F401 -- public usage helper
+
 #: Codex features a loop never uses (D848), off by config -- a Codex that lacks one ignores it
 _CODEX_OFF = ("-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.in_app_browser=false")
 
@@ -541,49 +543,6 @@ def _parse(output: str, stdout: str) -> tuple[str, str | None]:
     return stdout, None
 
 
-def usage(output: str, stdout: str) -> dict[str, float]:
-    """What a turn cost, as the agent reported it (D694): tokens in (cache reads included), out,
-    read from the cache, and the cost in USD when the agent prices it. Claude's `result` event
-    carries the turn's total; OpenCode says each step's in its `step_finish`, summed here."""
-    got: dict[str, float] = {}
-
-    def add(key: str, v: Any) -> None:
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and v:
-            got[key] = got.get(key, 0) + v
-
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line.startswith("{") or ('"step_finish"' not in line and '"result"' not in line and '"turn.completed"' not in line):
-            continue
-        try:
-            ev = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(ev, dict):
-            continue
-        if output == "opencode" and ev.get("type") == "step_finish":
-            part = ev.get("part") or {}
-            tok = part.get("tokens") or {}
-            cache = tok.get("cache") or {}
-            add("tokens_in", (tok.get("input") or 0) + (cache.get("read") or 0) + (cache.get("write") or 0))
-            add("tokens_out", (tok.get("output") or 0) + (tok.get("reasoning") or 0))
-            add("tokens_cached", cache.get("read"))
-            add("cost_usd", part.get("cost"))
-        elif output == "claude" and ev.get("type") == "result":
-            u = ev.get("usage") or {}
-            add("tokens_in", (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
-                + (u.get("cache_creation_input_tokens") or 0))
-            add("tokens_out", u.get("output_tokens"))
-            add("tokens_cached", u.get("cache_read_input_tokens"))
-            add("cost_usd", ev.get("total_cost_usd"))
-        elif output == "codex" and ev.get("type") == "turn.completed":
-            u = ev.get("usage") or {}
-            add("tokens_in", (u.get("input_tokens") or 0))            # cached ones are among them
-            add("tokens_out", (u.get("output_tokens") or 0) + (u.get("reasoning_output_tokens") or 0))
-            add("tokens_cached", u.get("cached_input_tokens"))
-    return got
-
-
 def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, workdir: Path) -> Turn:
     """The agent run once, recorded in the run's transcript (D599)."""
     import time
@@ -602,7 +561,7 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
                       about=turn.about, tool_calls=turn.tools, steps=turn.steps, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
                       **({"endpoint_recovery": turn.transport_error} if turn.transport_error else {}),
-                      **_priced(spec, usage(spec.output, turn.stdout or "")))
+                      **_priced(spec, from_output(spec.output, turn.stdout or "").record(finished=turn.ok)))
     if turn.transport_error and spec.resume and turn.session:
         from flux_llm import recovery
         from .observe import _phase
@@ -665,7 +624,7 @@ def _recovery_endpoint(spec: AgentSpec) -> tuple[str | None, dict[str, str]]:
     return None, {}
 
 
-def _priced(spec: AgentSpec, used: dict[str, float]) -> dict[str, Any]:
+def _priced(spec: AgentSpec, used: dict[str, Any]) -> dict[str, Any]:
     """The turn's usage, its cost from the prices set for this agent where there are (D835: they win
     over the agent's own figure), else as the agent priced it."""
     from flux_llm import transcript
@@ -727,6 +686,7 @@ class _Live:
 
     def __init__(self, output: str) -> None:
         self.output, self.tools, self.words, self.thinking, self.result = output, [], "", "", ""
+        self.usage = AgentUsage(output)
         # D712: what the agent did, in order -- its words, its thinking, each tool call with its
         # input and output -- so a page shows one conversation, not tails side by side
         self.steps: list[dict[str, Any]] = []
@@ -885,6 +845,7 @@ class _Live:
             return
         if not isinstance(ev, dict):
             return
+        self.usage.feed(ev)
         kind = ev.get("type")
         if kind in ("step_start", "turn.started"):
             self.finished = False
@@ -979,6 +940,11 @@ class _Live:
 
     def fields(self, now: float | None = None, t0: float | None = None) -> dict[str, str]:
         out = {}
+        used = self.usage.values()
+        if "tokens_in" in used or "tokens_out" in used:
+            tin = f"{used['tokens_in']:,.0f}" if "tokens_in" in used else "—"
+            tout = f"{used['tokens_out']:,.0f}" if "tokens_out" in used else "—"
+            out["tokens (reported)"] = f"{tin} in, {tout} out"
         if self.agent:
             out["agent"] = self.agent
         if now is not None:

@@ -533,11 +533,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from .usage import usage
 
         total: dict[str, Any] = {"user": u.name, "loops": 0, "turns": 0, "seconds": 0.0, "tokens_in": 0.0, "tokens_out": 0.0,
-                                 "tokens_cached": 0.0, "cost_usd": 0.0, "counted": 0}
+                                 "tokens_cached": 0.0, "cost_usd": 0.0, "counted": 0, "partial": 0}
         for a in Workspace(store.data, u.name).apps():
             got = usage(runs.turns_path(runs.latest(u, a["name"])))["total"]
             total["loops"] += 1
-            for k in ("turns", "seconds", "tokens_in", "tokens_out", "tokens_cached", "cost_usd", "counted"):
+            for k in ("turns", "seconds", "tokens_in", "tokens_out", "tokens_cached", "cost_usd", "counted", "partial"):
                 total[k] += got[k]
         return total
 

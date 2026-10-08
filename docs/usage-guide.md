@@ -409,7 +409,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     tool calls, session, exit and folder. Above them, what the
     turns cost: turns, time, tokens in (and from the cache), out, and USD where the agent prices
     it, in all and per agent or model. Tokens are counted from D694 on: an agent's own report
-    (Claude Code's `result`, OpenCode's `step_finish`), every exchange of a model turn.
+    (Claude Code's `result`, OpenCode's `step_finish`, Codex's `turn.completed`), every exchange
+    of a model turn. If Claude stops before its result, reported assistant-message and stream
+    usage is retained, deduplicated by message ID. OpenCode retains completed steps; Codex
+    retains completed turns. Interrupted requests can still have unreported tokens: their
+    usage is marked incomplete in the turn and usage totals, with no text-based estimates.
+    Older timeout records that saved no usage cannot be reconstructed from their reply text.
   - **Results:** the designs the loop measured successfully, across every start, each
     **accepted** or **failed** by the loop's limits (the stages' cutoffs, the objectives'
     limits), with its numbers at the deepest stage it reached and a mark on each limited one.
@@ -645,11 +650,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     gets no replacement, so two runs cannot overlap.
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
     and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
-    memory, disks, the containers' CPU and memory, loops running), kept a week, charted over the
-    last hour, 6 hours, day or week. Token input/output rates include every retained campaign,
+    memory, disks, the containers' CPU and memory, loops running), kept 30 days, charted over the
+    last hour, 6 hours, day, week or 30 days. The latest day keeps minute samples; days 2–7 use
+    five-minute samples and days 8–30 use thirty-minute samples. Older samples are compacted
+    hourly, keeping CPU/load peaks, weighted averages and empty gaps for sampling outages.
+    Expired samples are removed; database maintenance can reclaim the freed disk space.
+    Token input/output rates include every retained campaign,
     once per transcript, even after a restart. Each completed turn's tokens are spread over its
     duration and averaged over the displayed intervals (cached inputs included); ongoing turns
-    appear when they finish. Flat steps and hover intervals show those averages explicitly.
+    appear when they finish. Interrupted turns include only their reported usage and can
+    undercount unreported tokens. Flat steps and hover intervals show those averages explicitly.
     Hovering a chart shows the sample under the pointer, its time and values. The sandbox's containers with CPU, memory and PIDs, each with its
     loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache

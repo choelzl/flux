@@ -93,7 +93,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.get("/api/admin/history")
     def resource_history(hours: float = 24, _a: User = Depends(admin_of)) -> dict[str, Any]:
         """The machine over the last `hours` (D699), thinned for a chart."""
-        hours = max(0.25, min(hours, 168))
+        hours = max(0.25, min(hours, 720))
         return {"hours": hours, "samples": history.read(hours), "sampling": history._thread is not None}
 
     @app.get("/api/admin/token-rate")
@@ -101,7 +101,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """Tokens per second over every loop (D838), in and out, agents' and Flux's model's."""
         from . import insights
 
-        hours = max(0.25, min(hours, 168))
+        hours = max(0.25, min(hours, 720))
         samples = insights.token_rate(insights.turns(store, runs, retained=True), hours)
         return {"hours": hours, "bucket_seconds": hours * 3600 / 180, "samples": samples}
 

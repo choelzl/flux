@@ -287,11 +287,14 @@ def general_flows(r, watch):
 
     def admin_token_rates():
         r.login("ada")
-        b.js("""window.__rateFetch = window.fetch; window.__rateRequests = [];
+        b.js("""window.__rateFetch = window.fetch; window.__rateRequests = []; window.__historyRequests = [];
           window.__rateSmall = false; window.fetch = async (u, o) => {
             const url = new URL(String(u), location.href);
             const response = body => new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
-            if (url.pathname === '/api/admin/history') return response({sampling: true, samples: []});
+            if (url.pathname === '/api/admin/history') {
+              window.__historyRequests.push(Number(url.searchParams.get('hours')));
+              return response({sampling: true, samples: []});
+            }
             if (url.pathname !== '/api/admin/token-rate') return window.__rateFetch(u, o);
             const hours = Number(url.searchParams.get('hours')), size = hours * 3600 / 180;
             window.__rateRequests.push(hours);
@@ -329,9 +332,47 @@ def general_flows(r, watch):
             small = b.js("return document.querySelectorAll('.tchart figcaption')[1].textContent")
             r.check("small nonzero rates stay visible instead of rounding to zero", "all 0.004/s" in small
                     and "agents 0.003/s" in small and "Flux's model 0.001/s" in small, small)
+            r.button("30 d", ".chips")
+            b.wait("document.querySelector('.token-rate-note')?.textContent.includes('4h')", what="monthly token averages")
+            r.check("30 days requests both machine and token history", b.js("return window.__rateRequests.includes(720) && window.__historyRequests.includes(720)"))
+            r.check("the monthly range is selected", b.js("return document.querySelector('.chips .chip.on')?.textContent") == "30 d")
+            r.button("7 d", ".chips")
+            b.wait("document.querySelector('.chips .chip.on')?.textContent === '7 d'", what="return from month to week")
+            r.check("switching back requests both weekly histories", b.js("return window.__rateRequests.includes(168) && window.__historyRequests.includes(168)"))
             r.clean("resource token rate intervals")
         finally:
             b.js("window.fetch = window.__rateFetch; return 1")
             r.page("#/admin", "document.querySelector('.ctl-grid')", "leave resource fixture")
 
     r.step("admin token rates", admin_token_rates)
+
+    def partial_agent_usage():
+        with loop(r, "ui-partial-usage") as name:
+            b.js("""const name = arguments[0]; window.__partialFetch = window.fetch;
+              const base = {kind: 'agent', ts: Date.now() / 1000, seconds: 10, ok: false, rc: 124, tokens_complete: false};
+              const turns = [{...base, k: 1, agent: 'claude', tokens_in: 300, tokens_out: 30},
+                {...base, k: 2, agent: 'opencode', tokens_in: 100}, {...base, k: 3, agent: 'codex'}];
+              window.fetch = async (u, o) => {
+                const url = new URL(String(u), location.href); let body;
+                if (url.pathname === '/api/apps/' + name + '/turns') {
+                  const k = Number(url.searchParams.get('k')); body = {turns: k ? turns.filter(t => t.k === k) : turns};
+                } else if (url.pathname === '/api/apps/' + name + '/usage') body = {by: [], total: {
+                  turns: 3, counted: 2, partial: 3, errors: 3, seconds: 30, tokens_in: 400, tokens_out: 30, tokens_cached: 0, cost_usd: 0}};
+                else return window.__partialFetch(u, o);
+                return new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
+              }; return 1;""", name)
+            try:
+                r.page(f"#/app/{name}/agents", "document.querySelector('.open-turn')", "partial agent usage")
+                r.check("usage totals identify partial and wholly uncounted turns", "3 turn(s) with incomplete usage" in r.text()
+                        and "1 turn(s) not counted" in r.text())
+                tokens = b.js("return Object.fromEntries([...document.querySelectorAll('.open-turn')].map(b => [b.textContent, b.closest('tr').cells[3].textContent]))")
+                r.check("partial counts and unavailable usage are distinct", tokens == {"claude": "300 → 30 (partial)",
+                        "opencode": "100 → — (partial)", "codex": "Unavailable"}, tokens)
+                b.js("[...document.querySelectorAll('.open-turn')].find(b => b.textContent === 'claude').click(); return 1")
+                b.wait("document.querySelector('.detail-card .facts')?.textContent.includes('Partial:')", what="partial token detail")
+                r.check("turn details explain exactly which usage was retained", "includes only tokens the agent reported before stopping" in r.text())
+                r.clean("partial agent usage")
+            finally:
+                b.js("window.fetch = window.__partialFetch; return 1")
+
+    r.step("partial agent usage", partial_agent_usage)

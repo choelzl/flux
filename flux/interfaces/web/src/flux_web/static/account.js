@@ -66,6 +66,7 @@ async function accountPage() {
   show(head("Account", `Logged in as ${me.name}`),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
+      mine.partial ? ` (${mine.partial} turn(s) with incomplete usage)` : "",
       mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} at the prices set` : "", ".")) : "",
     // D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's
     // model; the variables every agent of yours gets

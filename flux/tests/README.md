@@ -31,9 +31,17 @@ FLUX_E2E_STEPS="fullscreen draft and raw,reset confirmation,run history isolatio
 
 `FLUX_E2E_STEPS="admin token rates"` checks Admin Resources' separate input/output rates,
 agent/model totals, flat averaging intervals, hover values on either side of a boundary, and
-the interval label when switching history ranges. Unit tests in `test_web_insights.py` and
+the interval label when switching history ranges, including 30 days for both machine and token
+history. `test_web_history.py` checks month retention, progressive compaction, weighted averages,
+peaks and outages across both tiers. Unit tests in `test_web_insights.py` and
 `test_web_admin.py` cover overlapping and sub-second calls, window clipping, and retained
 campaigns across starts and records without counting shared transcripts twice.
+
+`FLUX_E2E_STEPS="partial agent usage,admin token rates"` also checks that interrupted-agent
+usage is visibly partial and wholly missing usage is shown as unavailable. `test_agent_usage.py`
+covers Claude's cumulative message snapshots, final-result precedence, repeated blocks,
+OpenCode/Codex interruptions, and a real timed-out subprocess that reports more usage during
+SIGTERM shutdown. `test_web_partial_usage.py` checks the resulting API totals and completeness.
 
 `unit/test_web_api_lifecycle.py` checks live permission changes on the same login session:
 revoking/restoring shares across history and download endpoints, downgrading editors before

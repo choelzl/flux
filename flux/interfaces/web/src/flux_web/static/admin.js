@@ -247,11 +247,11 @@ async function adminResources(body) {
     const ss = hx.samples, cpus = ss.length ? ss[ss.length - 1].cpus : null;
     const pct = (v) => `${Math.round(v * 100)}%`;
     const disks = ss.length ? Object.keys(ss[ss.length - 1].disks || {}) : [];
-    const ranges = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"]];
+    const ranges = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"], [720, "30 d"]];
     overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
         h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
       hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
-      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages from completed turns, including cached inputs.`) : "",
+      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages from completed turns, including cached inputs. Interrupted turns may have incomplete usage.`) : "",
       h("div", { class: "tcharts" }, ...tokenCharts,
         timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
@@ -749,7 +749,7 @@ async function adminUsers(body) {
             }, `${u.name}'s kind`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
-        h("td", { class: "num mono" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
+        h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
         h("td", { class: "num" }, u.last_active ? ago(u.last_active) : h("span", { class: "muted" }, "never")),
         h("td", { class: "right" }, h("div", { class: "actions end" },
           act(u.disabled ? "Enable" : "Disable", async () => {

@@ -22,13 +22,14 @@ def _num(v: Any) -> float:
 
 
 def _empty() -> dict[str, Any]:
-    return {"turns": 0, "seconds": 0.0, "errors": 0, "counted": 0, **{k: 0.0 for k in _KEYS}}
+    return {"turns": 0, "seconds": 0.0, "errors": 0, "counted": 0, "partial": 0, **{k: 0.0 for k in _KEYS}}
 
 
 def _add(into: dict[str, Any], t: dict[str, Any]) -> None:
     into["turns"] += 1
     into["seconds"] += _num(t.get("seconds"))
     into["errors"] += 1 if t.get("error") or str(t.get("ok")) == "False" else 0
+    into["partial"] += int(t.get("tokens_complete") is False)
     notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
     tin = t.get("tokens_in", notes.get("input_tokens"))       # a model turn before D694: its last exchange
     tout = t.get("tokens_out", notes.get("output_tokens"))

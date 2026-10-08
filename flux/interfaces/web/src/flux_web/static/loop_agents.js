@@ -18,7 +18,8 @@ function usageCard(u) {
       fig("Turns", String(t.turns), t.errors ? `${t.errors} failed` : ""),
       fig("Time", dur(t.seconds) || "0s", t.turns ? `${dur(t.seconds / t.turns)} a turn` : ""),
       fig("Tokens in", t.counted ? fmtTok(t.tokens_in) : "—", t.tokens_cached ? `${fmtTok(t.tokens_cached)} from the cache` : ""),
-      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", t.counted < t.turns ? `${t.turns - t.counted} turn(s) not counted` : ""),
+      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", [t.partial ? `${t.partial} turn(s) with incomplete usage` : "",
+        t.counted < t.turns ? `${t.turns - t.counted} turn(s) not counted` : ""].filter(Boolean).join(" · ")),
       fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "at the prices set, else the agent's own" : "no prices set (Agents and models)")),
     u.by.length > 1 ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i > 1 ? "num" : "" }, x)))),
       h("tbody", {}, u.by.map(b => h("tr", {}, h("td", { class: "strong" }, b.who), h("td", { class: "muted" }, b.kind),
@@ -45,11 +46,12 @@ async function agentsView(ctx) {
     const facts = [["kind", full.kind], ["model", full.about || nt.model || full.model], ["server", full.server],
       ["session", full.session ? `${full.session}${full.session_id ? " · " + full.session_id : ""}` : null], ["exit", full.rc],
       ["tokens in", full.tokens_in ?? nt.input_tokens], ["tokens out", full.tokens_out ?? nt.output_tokens], ["from the cache", full.tokens_cached],
+      ["token usage", full.tokens_complete === false ? "Partial: includes only tokens the agent reported before stopping" : null],
       ["cost", full.cost_usd ? `$${Number(full.cost_usd).toFixed(4)}` : null], ["tool calls", full.tool_calls ?? (full.hops || []).length],
       ["prompt", full.prompt_chars ? `${full.prompt_chars} chars` : full.prompt ? `${String(full.prompt).length} chars` : null],
       ["finish", nt.finish], ["schema", nt.schema], ["folder", full.workdir]].filter(([, v]) => v != null && v !== "");
     // D712: what most want first -- the model, the exit, the tokens, the tools; the rest folded
-    const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "tool calls", "cost"]);
+    const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "token usage", "tool calls", "cost"]);
     const factEl = ([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 && v !== "0" ? " bad" : ""}` }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v)));
     const more = facts.filter(([k]) => !MAIN.has(k));
     one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
@@ -66,7 +68,8 @@ async function agentsView(ctx) {
   };
   const tokOf = (t) => { const n = t.notes && typeof t.notes === "object" ? t.notes : {};
     const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
-    return i == null && o == null ? "" : `${fmtTok(i || 0)} → ${fmtTok(o || 0)}`; };
+    if (i == null && o == null) return t.tokens_complete === false ? "Unavailable" : "";
+    return `${i == null ? "—" : fmtTok(i)} → ${o == null ? "—" : fmtTok(o)}${t.tokens_complete === false ? " (partial)" : ""}`; };
   body.replaceChildren(use ? usageCard(use) : "", h("div", { class: "split" },
     card(null, turns.length ? h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
         h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", { class: "num", title: "tool calls" }, "Tools"), h("th", {}, ""))),
