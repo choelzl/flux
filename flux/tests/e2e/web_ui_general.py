@@ -284,3 +284,54 @@ def general_flows(r, watch):
                 b.js("window.fetch = window.__restartFetch; return 1")
 
     r.step("admin restart all", admin_restart)
+
+    def admin_token_rates():
+        r.login("ada")
+        b.js("""window.__rateFetch = window.fetch; window.__rateRequests = [];
+          window.__rateSmall = false; window.fetch = async (u, o) => {
+            const url = new URL(String(u), location.href);
+            const response = body => new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
+            if (url.pathname === '/api/admin/history') return response({sampling: true, samples: []});
+            if (url.pathname !== '/api/admin/token-rate') return window.__rateFetch(u, o);
+            const hours = Number(url.searchParams.get('hours')), size = hours * 3600 / 180;
+            window.__rateRequests.push(hours);
+            return response({hours, bucket_seconds: size,
+              samples: [0, 30, 0, 20].map((agent, i) => ({start_t: 1000 + i * size, t: 1000 + (i + 1) * size,
+                in_agent: agent, in_model: [0, 10, 0, 5][i], out_agent: window.__rateSmall ? .003 : agent / 10,
+                out_model: window.__rateSmall ? .001 : [0, 1, 0, .5][i]}))});
+          }; return 1;""")
+        try:
+            r.page("#/admin/resources", "document.querySelector('.token-rate-note')", "resource token rates")
+            r.button("1 h", ".chips")
+            b.wait("document.querySelector('.token-rate-note')?.textContent.includes('20s')", what="20-second token averages")
+            captions = b.js("return [...document.querySelectorAll('.tchart figcaption')].slice(0, 2).map(e => e.textContent)")
+            r.check("input and output use separate series and sum agents plus model", "all 25/s" in captions[0]
+                    and "agents 20/s" in captions[0] and "Flux's model 5.0/s" in captions[0]
+                    and "all 2.5/s" in captions[1] and "agents 2.0/s" in captions[1], captions)
+            paths = b.js("return [...document.querySelectorAll('.tchart-svg path.ln')].map(p => p.getAttribute('d'))")
+            r.check("bucket averages have flat steps and include the first interval", len(paths) == 6
+                    and all(p.startswith("M62.0,") and p.count("H") == 4 and p.count("V") == 3 and "L" not in p for p in paths), paths)
+            def hover(fraction):
+                return b.js("""const svg = document.querySelector('.tchart-svg'), box = svg.getBoundingClientRect();
+                  svg.dispatchEvent(new PointerEvent('pointermove', {clientX: box.left + (62 + 350 * arguments[0]) / 420 * box.width,
+                    clientY: box.top + box.height / 2, bubbles: true}));
+                  return svg.parentNode.querySelector('.tchart-tip').innerText;""", fraction)
+            active = hover(1.9 / 4)
+            idle = hover(2.1 / 4)
+            r.check("hover reads the containing interval, without bridging into idle time", "all 40/s" in active
+                    and "all 0.0/s" in idle and " – " in active, [active, idle])
+            r.check("resource rates explain completed turns and cached inputs", "completed turns" in r.text()
+                    and "including cached inputs" in r.text())
+            b.js("window.__rateSmall = true; return 1")
+            r.button("6 h", ".chips")
+            b.wait("document.querySelector('.token-rate-note')?.textContent.includes('2m')", what="two-minute token averages")
+            r.check("changing the history range requests and labels the right averaging interval", b.js("return window.__rateRequests").count(6) >= 1)
+            small = b.js("return document.querySelectorAll('.tchart figcaption')[1].textContent")
+            r.check("small nonzero rates stay visible instead of rounding to zero", "all 0.004/s" in small
+                    and "agents 0.003/s" in small and "Flux's model 0.001/s" in small, small)
+            r.clean("resource token rate intervals")
+        finally:
+            b.js("window.fetch = window.__rateFetch; return 1")
+            r.page("#/admin", "document.querySelector('.ctl-grid')", "leave resource fixture")
+
+    r.step("admin token rates", admin_token_rates)

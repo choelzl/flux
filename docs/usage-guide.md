@@ -646,7 +646,11 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
     and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
     memory, disks, the containers' CPU and memory, loops running), kept a week, charted over the
-    last hour, 6 hours, day or week; hovering a chart shows the sample under the pointer, its time and values. The sandbox's containers with CPU, memory and PIDs, each with its
+    last hour, 6 hours, day or week. Token input/output rates include every retained campaign,
+    once per transcript, even after a restart. Each completed turn's tokens are spread over its
+    duration and averaged over the displayed intervals (cached inputs included); ongoing turns
+    appear when they finish. Flat steps and hover intervals show those averages explicitly.
+    Hovering a chart shows the sample under the pointer, its time and values. The sandbox's containers with CPU, memory and PIDs, each with its
     loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no

@@ -178,11 +178,11 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;
     `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */
-function timeChart(samples, series, { title, top = null, ref = null, refLabel = "", fmt = (v) => num4(v) } = {}) {
+function timeChart(samples, series, { title, top = null, ref = null, refLabel = "", intervals = false, fmt = (v) => num4(v) } = {}) {
   const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;
   const pts = samples.filter(s => series.some(se => se.get(s) != null));
   if (pts.length < 2) return h("figure", { class: "tchart" }, h("figcaption", {}, h("strong", {}, title)), h("p", { class: "muted small" }, "Not enough samples yet."));
-  const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const t0 = intervals ? pts[0].start_t : pts[0].t, t1 = pts[pts.length - 1].t;
   const vals = pts.flatMap(s => series.map(se => se.get(s)).filter(v => v != null));
   const hi = top != null ? top : Math.max(...vals, ref || 0) * 1.1 || 1;
   const X = (t) => L + (W - L - R) * (t - t0) / Math.max(1, t1 - t0), Y = (v) => T + (H - T - B) * (1 - Math.min(v, hi) / hi);
@@ -198,8 +198,10 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
       ref != null ? [sv("line", { x1: L, x2: W - R, y1: Y(ref), y2: Y(ref), class: "limit" }), sv("text", { x: W - R, y: Y(ref) - 3, class: "tick limit-t", "text-anchor": "end" }, refLabel)] : "",
       series.map((se, i) => {
         return timeSegments(samples, se.get).map(p => {
-          const d = p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
-          return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
+          const d = intervals
+            ? p.map((s, j) => `${j ? "V" : `M${X(s.start_t).toFixed(1)},`}${Y(se.get(s)).toFixed(1)}H${X(s.t).toFixed(1)}`).join("")
+            : p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
+          return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(intervals ? p[0].start_t : p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
             sv("path", { d, class: `ln s${i}` })];
         });
       }),
@@ -217,13 +219,16 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
     const t = t0 + (Math.min(Math.max(x, L), W - R) - L) / (W - L - R) * Math.max(1, t1 - t0);
     if (samples.some((s, i) => i > 0 && s.gap_before && t > samples[i - 1].t && t < (s.start_t ?? s.t))) { hide(); return; }
     let s = pts[0];
-    for (const p of pts) if (Math.abs(p.t - t) < Math.abs(s.t - t)) s = p;
-    const gx = X(s.t);
+    if (intervals) s = pts.find(p => p.start_t <= t && t <= p.t) || pts[pts.length - 1];
+    else for (const p of pts) if (Math.abs(p.t - t) < Math.abs(s.t - t)) s = p;
+    const gx = X(intervals ? t : s.t);
     guide.setAttribute("x1", gx); guide.setAttribute("x2", gx); guide.setAttribute("visibility", "visible");
     series.forEach((se, i) => { const v = se.get(s);
       if (v == null) { dots[i].setAttribute("visibility", "hidden"); return; }
       dots[i].setAttribute("cx", gx); dots[i].setAttribute("cy", Y(v)); dots[i].setAttribute("visibility", "visible"); });
-    tip.replaceChildren(h("div", { class: "mono small" }, new Date(s.t * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
+    const when = new Date((intervals ? s.start_t : s.t) * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", ...(intervals ? { second: "2-digit" } : {}) });
+    const end = intervals ? ` – ${new Date(s.t * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "";
+    tip.replaceChildren(h("div", { class: "mono small" }, when + end),
       ...series.map((se, i) => h("div", {}, h("i", { class: `sw s${i}` }), se.label, " ", h("strong", {}, se.get(s) != null ? fmt(se.get(s)) : "—"))));
     tip.hidden = false;
     const px = gx / W * box.width, half = tip.offsetWidth / 2;

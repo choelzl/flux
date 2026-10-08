@@ -29,6 +29,12 @@ FLUX_E2E_STEPS="fullscreen draft and raw,reset confirmation,run history isolatio
   nix develop --command python3 tests/e2e/web_ui.py
 ```
 
+`FLUX_E2E_STEPS="admin token rates"` checks Admin Resources' separate input/output rates,
+agent/model totals, flat averaging intervals, hover values on either side of a boundary, and
+the interval label when switching history ranges. Unit tests in `test_web_insights.py` and
+`test_web_admin.py` cover overlapping and sub-second calls, window clipping, and retained
+campaigns across starts and records without counting shared transcripts twice.
+
 `unit/test_web_api_lifecycle.py` checks live permission changes on the same login session:
 revoking/restoring shares across history and download endpoints, downgrading editors before
 pending mutations (without changing files or starting processes), and disabling an account.

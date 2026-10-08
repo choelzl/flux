@@ -236,13 +236,14 @@ async function adminResources(body) {
       api(`/admin/token-rate?hours=${historyHours}`).catch(() => null)]);
     if (!hx) return;
     // D838: every loop's tokens per second, read (in) and written (out), the agents' and Flux's model's
-    const ts = tr ? tr.samples : [], rate = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
+    const ts = tr ? tr.samples : [], rate = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s`
+      : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
     const sum = (s, d) => s[`${d}_agent`] + s[`${d}_model`];
     const tokenCharts = [
       timeChart(ts, [{ label: "all", get: (s) => sum(s, "in") }, { label: "agents", get: (s) => s.in_agent }, { label: "Flux's model", get: (s) => s.in_model }],
-        { title: "Tokens in per second, every loop", fmt: rate }),
+        { title: "Tokens in per second, every loop", fmt: rate, intervals: true }),
       timeChart(ts, [{ label: "all", get: (s) => sum(s, "out") }, { label: "agents", get: (s) => s.out_agent }, { label: "Flux's model", get: (s) => s.out_model }],
-        { title: "Tokens out (generated) per second, every loop", fmt: rate })];
+        { title: "Tokens out (generated) per second, every loop", fmt: rate, intervals: true })];
     const ss = hx.samples, cpus = ss.length ? ss[ss.length - 1].cpus : null;
     const pct = (v) => `${Math.round(v * 100)}%`;
     const disks = ss.length ? Object.keys(ss[ss.length - 1].disks || {}) : [];
@@ -250,6 +251,7 @@ async function adminResources(body) {
     overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
         h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
       hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
+      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages from completed turns, including cached inputs.`) : "",
       h("div", { class: "tcharts" }, ...tokenCharts,
         timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),

@@ -660,6 +660,31 @@ class RunManager:
     def turns_path(self, run: dict[str, Any] | None) -> str | None:
         return self._run_file(run, "turns.jsonl")
 
+    def turns_paths(self, run: dict[str, Any]) -> list[str]:
+        """Every retained campaign's transcript in this record, including resumed campaigns.
+        Deduplicate shared directories and apply the same confinement as the live transcript."""
+        from .confine import open_read, within
+
+        roots = self.roots(run)
+        try:
+            with open_read(f"{run['db']}.runs.json", *roots, text=True) as fh:
+                pointer = json.load(fh)
+        except (OSError, ValueError):
+            return []
+        if not isinstance(pointer, dict):
+            return []
+        paths = set()
+        for directory in pointer.values():
+            if not isinstance(directory, str):
+                continue
+            try:
+                path = os.path.join(directory, "turns.jsonl")
+                if not os.path.islink(path):
+                    paths.add(str(within(path, *roots)))
+            except ValueError:
+                continue
+        return sorted(paths)
+
     def _run_file(self, run: dict[str, Any] | None, name: str) -> str | None:
         """A file of the run's directory (confined by `campaign`), unless it is a link (D852): the
         directory is the run's to write, and what the server reads there it reads as itself."""

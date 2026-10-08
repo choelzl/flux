@@ -121,3 +121,48 @@ def test_token_rate_spreads_each_turn_over_its_time():
     assert abs(last["in_model"] - 3_000 / 600) < 1e-6 and abs(last["out_model"] - 0.5) < 1e-6, last
     assert all(b["in_agent"] == b["in_model"] == 0 for b in got[:-1])
     assert sum(b["in_agent"] for b in got) * 600 == 60_000, "every token counted once"
+
+
+def test_token_rate_preserves_subsecond_turns_at_a_bucket_boundary():
+    # The model finishes 100 ms after a boundary, so its 50 ms call belongs wholly
+    # to the new bucket. Stretching it to a second leaks tokens into the old bucket.
+    rows = [("bob", "x", 3600.1, "model", "qwen", "", True, 0.05, 100, 10, 0.0, "")]
+    got = ins.token_rate(rows, hours=1, points=6, now=4200)
+    assert got[-1]["start_t"] == 3600 and got[-1]["t"] == 4200
+    assert got[-1]["in_model"] == pytest.approx(100 / 600)
+    assert got[-1]["out_model"] == pytest.approx(10 / 600)
+    assert all(p["in_model"] == p["out_model"] == 0 for p in got[:-1])
+
+
+@pytest.mark.parametrize("points", [6, 60, 180])
+def test_token_rate_conserves_overlapping_turns_and_clips_the_window(points):
+    row = lambda ts, kind, seconds, tin, tout: ("bob", "x", ts, kind, "", "", True, seconds, tin, tout, 0.0, "")  # noqa: E731
+    rows = [row(4200, "agent", 1200, 12000, 1200), row(4200, "model", 600, 6000, 600),
+            row(1800, "agent", 2400, 2400, 240),  # only the last 1200s lie in the window
+            row(4201, "agent", 100, 999999, 999999)]  # future transcript: not counted
+    got = ins.token_rate(rows, hours=1, points=points, now=4200)
+    size = 3600 / points
+    assert sum(p["in_agent"] for p in got) * size == pytest.approx(13200)
+    assert sum(p["out_agent"] for p in got) * size == pytest.approx(1320)
+    assert sum(p["in_model"] for p in got) * size == pytest.approx(6000)
+    assert sum(p["out_model"] for p in got) * size == pytest.approx(600)
+    assert got[-1]["in_agent"] == pytest.approx(10)
+    assert got[-1]["in_model"] == pytest.approx(10)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_token_rate_skips_nonfinite_transcript_values(bad):
+    base = ("bob", "x", 4200, "agent", "", "", True, 10, 100, 10, 0.0, "")
+    for column in (2, 7, 8, 9):
+        row = list(base)
+        row[column] = bad
+        got = ins.token_rate([tuple(row), base], hours=1, now=4200)
+        assert sum(p["in_agent"] for p in got) * 20 == pytest.approx(100)
+        assert sum(p["out_agent"] for p in got) * 20 == pytest.approx(10)
+
+
+def test_token_rate_accepts_epoch_zero_and_untimed_legacy_turns():
+    rows = [("bob", "x", 0, "model", "qwen", "", True, 0, 100, 10, 0.0, "")]
+    got = ins.token_rate(rows, hours=1, now=0)
+    assert got[-1]["t"] == 0
+    assert sum(p["in_model"] for p in got) * 20 == pytest.approx(100)

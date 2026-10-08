@@ -102,7 +102,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from . import insights
 
         hours = max(0.25, min(hours, 168))
-        return {"hours": hours, "samples": insights.token_rate(insights.turns(store, runs), hours)}
+        samples = insights.token_rate(insights.turns(store, runs, retained=True), hours)
+        return {"hours": hours, "bucket_seconds": hours * 3600 / 180, "samples": samples}
 
     @app.get("/api/admin/resources")
     def resources(_a: User = Depends(admin_of)) -> dict[str, Any]:

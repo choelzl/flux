@@ -6,6 +6,7 @@ hosts the sandboxes refused; and where the disk goes, by user."""
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -105,15 +106,24 @@ def _rows(path: str) -> list[tuple]:
     return out
 
 
-def turns(store: Any, runs: Any) -> list[tuple]:
-    """Every loop's turns, each (user, app, *turn)."""
+def turns(store: Any, runs: Any, *, retained: bool = False) -> list[tuple]:
+    """Every loop's turns, each (user, app, *turn). With `retained`, include old campaigns
+    and records once each, so restarting a loop cannot erase its token-rate history."""
     from .workspace import Workspace
 
     out = []
+    records: dict[tuple[str, str], dict[str, dict]] = {}
+    if retained:
+        for run in store.runs():
+            records.setdefault((run["user"], run["app"]), {}).setdefault(run["db"], run)
     for u in store.users():
         for a in Workspace(store.data, u.name).apps():
-            path = runs.turns_path(runs.latest(u, a["name"]))
-            if path:
+            if retained:
+                paths = {p for run in records.get((u.name, a["name"]), {}).values() for p in runs.turns_paths(run)}
+            else:
+                path = runs.turns_path(runs.latest(u, a["name"]))
+                paths = {path} if path else set()
+            for path in sorted(paths):
                 out.extend((u.name, a["name"], *t) for t in _rows(path))
     return out
 
@@ -123,14 +133,18 @@ def token_rate(rows: list[tuple], hours: float = 24, points: int = 180, now: flo
     and Flux's own model's apart: each turn's tokens spread evenly over the time it took, summed per
     bucket of `hours / points`. A turn counts once it ends (the transcript is written then), so the
     newest bucket may grow."""
-    now = now or time.time()
+    now = now if now is not None else time.time()
     size = hours * 3600 / points
     t0 = now - hours * 3600
-    out = [{"t": t0 + (i + 1) * size, "in_agent": 0.0, "in_model": 0.0, "out_agent": 0.0, "out_model": 0.0} for i in range(points)]
+    out = [{"start_t": t0 + i * size, "t": t0 + (i + 1) * size,
+            "in_agent": 0.0, "in_model": 0.0, "out_agent": 0.0, "out_model": 0.0} for i in range(points)]
     for _user, _app, ts, kind, _who, _where, _ok, secs, tin, tout, _cost, _err in rows:
         end = float(ts or 0)
-        start = end - max(1.0, float(secs or 0))
-        if end <= t0 or start >= now or not (tin or tout):
+        duration = float(secs or 0)
+        if not all(math.isfinite(v) for v in (end, duration, tin, tout)) or tin < 0 or tout < 0:
+            continue
+        start = end - (duration if duration > 0 else 1.0)
+        if end <= t0 or end > now or start >= now or not (tin or tout):
             continue
         k = "agent" if kind == "agent" else "model"
         for i in range(max(0, int((start - t0) // size)), min(points, int((end - t0) // size) + 1)):

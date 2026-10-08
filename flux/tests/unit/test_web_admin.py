@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,62 @@ from flux_web.runs import loop_files
 from flux_web.store import Store
 
 H = {"X-Flux": "1"}
+
+
+def test_token_rates_include_retained_campaigns_and_records_once(server, monkeypatch):
+    app, tmp = server
+    bob = _client(app, "bob", "another long secret")
+    ada = _client(app, "ada", "correct horse battery")
+    _loop(bob, "tokens")
+    store, runs = app.state.store, app.state.runs
+    directory = store.data / "users/bob/apps/tokens"
+    log = directory / "runs/loop.log"
+    log.parent.mkdir(exist_ok=True)
+    db = directory / "out/old.db"
+    db.parent.mkdir(exist_ok=True)
+    paths = {}
+    for name, kind, tin, tout in (("old", "agent", 6000, 600), ("new", "model", 3000, 300)):
+        trace = directory / "out" / name
+        trace.mkdir()
+        path = trace / "turns.jsonl"
+        path.write_text(json.dumps({"ts": 4200, "kind": kind, "seconds": 600,
+                                    "tokens_in": tin, "tokens_out": tout}) + "\n")
+        paths[name] = str(trace)
+    # Resumed campaigns can point at the same directory, and starts can share a record.
+    db.with_name(db.name + ".runs.json").write_text(json.dumps({"old": paths["old"], "resume": paths["old"] + "/."}))
+    for record in (db, db, directory / "out/new.db"):
+        store.add_run(store.user(name="bob"), "tokens", str(record), str(log), ["flux"], {})
+    outside = tmp / "outside"
+    outside.mkdir()
+    (outside / "turns.jsonl").write_text(json.dumps({"ts": 4200, "seconds": 600, "tokens_in": 999999}) + "\n")
+    linked = directory / "out/linked"
+    linked.mkdir()
+    (linked / "turns.jsonl").symlink_to(outside / "turns.jsonl")
+    (directory / "out/new.db.runs.json").write_text(json.dumps({
+        "new": paths["new"], "bad": str(outside), "link": str(linked), "invalid": 42,
+        "missing": str(directory / "out/missing"),
+    }))
+    from flux_web import insights
+
+    monkeypatch.setattr(insights.time, "time", lambda: 4200)
+    assert bob.get("/api/admin/token-rate").status_code == 403
+    response = ada.get("/api/admin/token-rate?hours=1")
+    assert response.status_code == 200
+    got = response.json()
+    assert got["bucket_seconds"] == 20
+    samples = got["samples"]
+    assert sum(p["in_agent"] for p in samples) * 20 == pytest.approx(6000)
+    assert sum(p["out_agent"] for p in samples) * 20 == pytest.approx(600)
+    assert sum(p["in_model"] for p in samples) * 20 == pytest.approx(3000)
+    assert sum(p["out_model"] for p in samples) * 20 == pytest.approx(300)
+    assert runs.turns_paths(store.latest_run(store.user(name="bob"), "tokens")) == sorted([
+        str(directory / "out/missing/turns.jsonl"), str(directory / "out/new/turns.jsonl"),
+    ])
+    # An appended turn is picked up without rereading or duplicating old turns.
+    with (directory / "out/old/turns.jsonl").open("a") as fh:
+        fh.write(json.dumps({"ts": 4200, "kind": "agent", "seconds": 20, "tokens_in": 1000}) + "\n")
+    fresh = ada.get("/api/admin/token-rate?hours=1").json()["samples"]
+    assert sum(p["in_agent"] for p in fresh) * 20 == pytest.approx(7000)
 
 
 @pytest.fixture()
