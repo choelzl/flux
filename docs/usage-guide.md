@@ -369,11 +369,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     visible; custom names keep their original text. Compact ✓/✗/… status badges keep rows small;
     measurements use green/red text for limits, without extra checkmarks. Full names, stages, times, units and limit status
     remain on hover. Measurement headers use short diagonal labels that preserve the start and end
-    of long names, with edge space to prevent clipping; Results headers still sort. Both tables keep
-    every measurement column visible. In Results, use the eye button beside a design to hide its
-    row. **Hidden N** reveals hidden rows so you can show them individually or **Restore all**.
-    Row visibility is remembered per account and loop in this browser; measurements remain
-    available in graphs and relative-value references.
+    of long names, with edge space to prevent clipping; Results headers still sort.
+    Open **Measurements** above either table and uncheck metrics to hide their columns.
+    **Hidden N** at the top toggles the ignored columns into view, dimmed, without changing
+    your selections. Check a metric to restore it permanently. Column visibility and the toggle
+    are shared between Results and Decision and
+    remembered per account and loop in this browser. Graphs, comparisons and ranking continue
+    to use the full measurements.
   - **Graph preferences:** selected measurements, Pareto x/y axes, measurement stages and design
     scope are remembered per account and loop in this browser. If a saved metric or stage is no
     longer available, the view uses its defaults.

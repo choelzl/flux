@@ -1,7 +1,61 @@
 // Shared presentation for the Results table and the Overview's best designs.
 import { h } from "./ui.js";
+import { me } from "./state.js";
 
 export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
+
+export function resultPreferences(ctx) {
+  const key = `flux-results:${JSON.stringify([me?.name || "", ctx.owner || me?.name || "", ctx.name])}`;
+  let memory = {};
+  function read() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key));
+      return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+    } catch (_) { return memory; }
+  }
+  return { read, save(patch) {
+    memory = { ...read(), ...patch };
+    delete memory.hidden;  // obsolete row visibility; every design remains in its table
+    try { localStorage.setItem(key, JSON.stringify(memory)); } catch (_) { /* use this view */ }
+  } };
+}
+
+/** A shared per-loop measurement picker for Results and the Decision table. */
+export function measurementColumns(ctx, metrics, redraw) {
+  const prefs = resultPreferences(ctx), preferences = prefs.read(), saved = preferences.hiddenMetrics;
+  const hidden = new Set(Array.isArray(saved) ? saved.filter(m => typeof m === "string") : []);
+  let showHidden = preferences.showHiddenMetrics === true;
+  const boxes = new Map();
+  const toggle = h("button", { type: "button", class: "small show-hidden-columns", onclick: () => {
+    showHidden = !showHidden; changed();
+  } });
+  const options = h("div", { class: "column-options", role: "group", "aria-label": "Visible measurement columns" },
+    metrics.map(metric => {
+      const box = h("input", { type: "checkbox", checked: !hidden.has(metric), "data-metric": metric, onchange: () => {
+        if (box.checked) hidden.delete(metric); else hidden.add(metric);
+        changed();
+      } });
+      boxes.set(metric, box);
+      return h("label", { class: "column-option" }, box, h("span", { title: metric }, metric));
+    }));
+  const picker = h("details", { class: "column-picker" }, h("summary", { class: "btn small" }, "Measurements"), options);
+  function controls() {
+    const n = metrics.filter(m => hidden.has(m)).length;
+    if (!n) showHidden = false;
+    toggle.hidden = !n;
+    toggle.textContent = `Hidden ${n}`;
+    toggle.setAttribute("aria-pressed", String(showHidden));
+    toggle.title = showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns";
+    for (const [metric, box] of boxes) box.checked = !hidden.has(metric);
+  }
+  function changed() {
+    controls(); prefs.save({ hiddenMetrics: [...hidden], showHiddenMetrics: showHidden }); redraw();
+  }
+  controls();
+  return { controls: h("div", { class: "measurement-columns" }, toggle, picker),
+    hidden: metric => hidden.has(metric),
+    visible: () => metrics.filter(m => showHidden || !hidden.has(m)) };
+}
 
 /** Short display names; the original names and content keys still identify designs. */
 export function designLabels(designs, appName) {

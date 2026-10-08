@@ -3,30 +3,18 @@
 
 import { codeBlock } from "./highlight.js";
 import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
-import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf, sv } from "./charts.js";
+import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { designLabels, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { designLabels, measurementColumns, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
-import { me } from "./state.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
 /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
 function resultsView(ctx, r) {
   const { name, q, base, qs } = ctx;
-  const preferenceKey = `flux-results:${JSON.stringify([me?.name || "", ctx.owner || me?.name || "", name])}`;
-  let preferences = {};
-  try {
-    const saved = JSON.parse(localStorage.getItem(preferenceKey));
-    if (saved && typeof saved === "object" && !Array.isArray(saved)) preferences = saved;
-  } catch (_) { /* old, unavailable or corrupt storage: use defaults */ }
-  function remember(patch) {
-    preferences = { ...preferences, ...patch };
-    try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch (_) { /* use this view */ }
-  }
-  const hidden = new Set(Array.isArray(preferences.hidden) ? preferences.hidden.filter(k => typeof k === "string") : []);
-  let showHidden = false;
+  const preferences = resultPreferences(ctx);
   let filter = "all";
   const fmt = (v) => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -60,10 +48,14 @@ function resultsView(ctx, r) {
   const names = designLabels(r.designs, name);
   const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
+  const columns = measurementColumns(ctx, r.metrics, () => {
+    if (r.metrics.includes(sortKey) && !columns.visible().includes(sortKey)) sortKey = null;
+    drawTable();
+  });
   const PAGE = 200;
   let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
   const keyOf = (d) => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
-  const visibleRows = () => r.designs.filter(d => (filter === "all" || d.verdict === filter) && (showHidden || !hidden.has(keyOf(d))));
+  const visibleRows = () => r.designs.filter(d => filter === "all" || d.verdict === filter);
   let picked = [];                                      // two designs to compare (D694)
   const cmpBtn = h("button", { class: "small", disabled: true, onclick: () => compare() }, "Compare");
   const drawPicked = () => { cmpBtn.disabled = picked.length !== 2; cmpBtn.textContent = picked.length ? `Compare ${picked.length}/2` : "Compare"; };
@@ -120,6 +112,7 @@ function resultsView(ctx, r) {
     } }, labels.get(key) || label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
     const all = sorted(visibleRows());
+    const metrics = columns.visible();
     const shown = all.slice(0, pageN);
     const boxes = new Map();
     const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", "aria-label": `Compare ${d.name}`, checked: picked.some(p => keyOf(p) === keyOf(d)),
@@ -138,41 +131,25 @@ function resultsView(ctx, r) {
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
     table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
       h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
-        ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num measurement-head", title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
+        ...metrics.map(m => { const l = limitOf(m); return th(m, m, { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
-      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}${hidden.has(keyOf(d)) ? " hidden-design" : ""}`, onclick: () => open(d, tr) },
+      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
         tick(d),
         h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
           h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`, "aria-label": `Open ${d.name}`,          // D929: the keyboard opens it too
             onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}` }, names.get(d))),
-          h("button", { type: "button", class: "hide-design", title: hidden.has(keyOf(d)) ? "Show row" : "Hide row",
-            "aria-label": `${hidden.has(keyOf(d)) ? "Show" : "Hide"} ${d.name}`, onclick: (e) => {
-              e.stopPropagation();
-              if (hidden.has(keyOf(d))) hidden.delete(keyOf(d)); else hidden.add(keyOf(d));
-              picked = picked.filter(p => !hidden.has(keyOf(p))); drawPicked();
-              remember({ hidden: [...hidden] }); chips(); drawTable();
-            } }, sv("svg", { viewBox: "0 0 24 24", width: 14, height: 14, "aria-hidden": "true", fill: "none", stroke: "currentColor", "stroke-width": 1.6 },
-              sv("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" }), sv("circle", { cx: 12, cy: 12, r: 3 }),
-              hidden.has(keyOf(d)) ? "" : sv("path", { d: "M3 3 21 21" }))),
           d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
-        ...r.metrics.map(m => { const ok = d.meets[m];
+        ...metrics.map(m => { const ok = d.meets[m];
           const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
-          return h("td", { class: `mono num${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
+          return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });
   function chips() {
-    const nHidden = r.designs.filter(d => hidden.has(keyOf(d))).length;
-    if (!nHidden) showHidden = false;
     chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
-      nHidden ? h("button", { type: "button", class: `chip hidden-rows${showHidden ? " on" : ""}`, "aria-pressed": String(showHidden),
-        title: "Show hidden rows to restore them individually", onclick: () => { showHidden = !showHidden; chips(); drawTable(); } }, `Hidden ${nHidden}`) : "",
-      hidden.size && showHidden ? h("button", { type: "button", class: "small restore-rows", onclick: () => {
-        hidden.clear(); showHidden = false; remember({ hidden: [] }); chips(); drawTable();
-      } }, "Restore all") : "",
-      h("span", { class: "grow" }), relativeButton, cmpBtn);
+      h("span", { class: "grow" }), columns.controls, relativeButton, cmpBtn);
   }
   chips(); drawTable();
   // D916: two views of the same designs -- Results (the table, its filters, two compared, the selected
@@ -183,7 +160,8 @@ function resultsView(ctx, r) {
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
     .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));
   const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
-  const graphPrefs = preferences.graphs && typeof preferences.graphs === "object" && !Array.isArray(preferences.graphs) ? preferences.graphs : {};
+  const savedGraphs = preferences.read().graphs;
+  const graphPrefs = savedGraphs && typeof savedGraphs === "object" && !Array.isArray(savedGraphs) ? savedGraphs : {};
   let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
   let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
   const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
@@ -205,7 +183,7 @@ function resultsView(ctx, r) {
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? (groups.includes(graphPrefs.scope) ? graphPrefs.scope : "whole") : "";
   function rememberGraphs() {
-    remember({ graphs: { x: px, y: py, paretoStage: pst, timeStage: tst, metrics: [...tMetrics], scope } });
+    preferences.save({ graphs: { x: px, y: py, paretoStage: pst, timeStage: tst, metrics: [...tMetrics], scope } });
   }
   const scopeBox = h("div", {});
   function drawScope() {
