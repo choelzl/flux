@@ -97,7 +97,7 @@ def test_baseline_runs_real_checks_and_every_stage_without_agents_or_edits(tmp_p
 
 
 @pytest.mark.parametrize("gate_exit,measurement_exit,stages", [(1, 0, []), (3, 0, []), (0, 1, ["coarse"])])
-def test_baseline_failure_is_recorded_and_never_repaired(tmp_path, gate_exit, measurement_exit, stages):
+def test_baseline_failure_is_recorded_and_retried_without_repairs(tmp_path, gate_exit, measurement_exit, stages):
     task = _task(tmp_path, {"only": True}, gate_exit=gate_exit, measurement_exit=measurement_exit)
     req = request_for(task, db=str(tmp_path / "out.db"))
     out = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
@@ -106,10 +106,49 @@ def test_baseline_failure_is_recorded_and_never_repaired(tmp_path, gate_exit, me
     tools = tmp_path / "out/tools.txt"
     assert (tools.read_text().splitlines() if tools.exists() else []) == stages
     assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
-    reused = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
+    retried = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
+    assert not retried.provenance.get("baseline_reused")
+    assert retried.stopped == out.stopped and retried.refused == out.refused
+    assert retried.decision is None
+    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
+    assert (tools.read_text().splitlines() if tools.exists() else []) == stages * 2
+
+
+@pytest.mark.parametrize("failure,stages", [("check", []), ("coarse", ["coarse"]), ("fine", ["coarse", "fine"])])
+def test_failed_baseline_recovers_with_unchanged_inputs_then_reuses_success(tmp_path, failure, stages):
+    task = _task(tmp_path, {"file": "design.py", "only": True})
+    # A tool becomes available again without changing source, configuration or executable.
+    # The marker lives in generated output, which is deliberately outside the input fingerprint.
+    if failure == "check":
+        script, exit_code = tmp_path / "check.py", "1"
+    else:
+        script, exit_code = tmp_path / "measure.py", f"int(sys.argv[2] == {failure!r})"
+    script.write_text(script.read_text().replace("sys.exit(0)",
+        f"sys.exit(0 if (home / 'out' / 'tools-ready').exists() else {exit_code})"))
+    problem = PromptProblem(task)
+    req = request_for(task, db=str(tmp_path / "out.db"))
+    failed = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+    assert failed.stopped == "baseline failed" and failed.refused
+    assert [s.stage for s in failed.scored] == (["coarse"] if failure == "fine" else [])
+    (tmp_path / "out/tools-ready").touch()
+    recovered = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+    assert not recovered.provenance.get("baseline_reused")
+    assert recovered.stopped == "baseline checked and measured" and not recovered.refused
+    assert recovered.decision.metrics == {"cost": 7.0}
+    assert [s.stage for s in recovered.scored] == ["coarse", "fine"]
+    records = problem.open_records(req, lambda m: None)
+    snapshots = records.recall("baseline")
+    records.close("paused")
+    assert [s["ok"] for s in snapshots] == [False, True]
+    assert snapshots[0]["fingerprint"] == snapshots[1]["fingerprint"]
+    reused = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
     assert reused.provenance["baseline_reused"]
-    assert reused.stopped == out.stopped and reused.refused == out.refused
-    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
+    assert reused.stopped == recovered.stopped and not reused.refused
+    assert reused.decision.metrics == recovered.decision.metrics
+    assert [s.stage for s in reused.scored] == ["coarse", "fine"]
+    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
+    assert (tmp_path / "out/tools.txt").read_text().splitlines() == stages + ["coarse", "fine"]
+    assert (tmp_path / "design.py").read_text() == "# unchanged design\nanswer = 42\n"
 
 
 @pytest.mark.parametrize("change", ["source", "checker", "measurement", "params", "settings", "tools", "environment", "external"])

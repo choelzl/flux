@@ -15,6 +15,7 @@ mix another stage's runtime into this stage's provenance.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from flux_evaluator_abi import (
     SequentialBatch,
@@ -33,6 +34,15 @@ from flux_evaluator_abi import (
 
 from .errors import NotExpressibleError
 from .flow import run_ppa_flow
+
+
+def _binary_override(name: str) -> str:
+    value = os.environ.get(name.upper() + "_BIN")
+    if value is None:
+        return name
+    # nixchip exports <TOOL>_BIN as its bin/ directory; explicit commands still work.
+    return str(Path(value) / name) if Path(value).is_dir() else value
+
 
 def _canonical_datapath_source(spec: dict) -> str:
     """The canonical implementation of a derived dot-product spec: `acc = sum(a_i * w_i)` over
@@ -67,8 +77,8 @@ class OpenRoadEvaluator(SequentialBatch):
         self.timeout_s = timeout_s
         self.flow_depth = flow_depth
         # env overrides for the binaries, PATH otherwise (D147)
-        self.yosys_bin = os.environ.get("YOSYS_BIN", "yosys")
-        self.openroad_bin = os.environ.get("OPENROAD_BIN", "openroad")
+        self.yosys_bin = _binary_override("yosys")
+        self.openroad_bin = _binary_override("openroad")
 
     def evaluate(
         self, candidate: Candidate, budget: Budget, metrics: frozenset[str]
@@ -136,4 +146,3 @@ class OpenRoadEvaluator(SequentialBatch):
             ),
             escalation=Escalation(recommended=False),
         )
-

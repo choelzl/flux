@@ -21,7 +21,8 @@ extra-vocabulary metric. First real numbers: the 8-lane int-workload datapath is
   datapath". Tightening spec ports to true workload precision is a known future refinement.
 - **Toolchain**: `nix develop` (yosys + openroad 26Q2; first entry builds
   or-tools/openroad from source — see flake.nix for why upstream doesn't cache them).
-  `YOSYS_BIN`/`OPENROAD_BIN` env overrides follow D147's pattern.
+  `YOSYS_BIN`/`OPENROAD_BIN` accept an executable path, a command on `PATH`, or the
+  tool's `bin/` directory (as exported by nixchip). Without overrides, tools use `PATH`.
 
 Package: `flux-evaluator-openroad`, backend name `openroad` (12th registry entry). Platform
 provenance: `src/flux_evaluator_openroad/platform/asap7/PROVENANCE.md`.

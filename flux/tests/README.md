@@ -19,6 +19,20 @@ FLUX_E2E_STEPS="reload and browser history,delayed files and retry,concurrent fi
 For Snap Firefox, use a path that Firefox can access, such as one under
 `~/snap/firefox/common/`. No model or coding agent is needed by these flows.
 
+`e2e/web_ui_lifecycle.py` also covers fullscreen drafts (selection, scroll, Escape and navigation),
+raw file output, reset warnings/cancellation and retained inputs/settings, and older starts'
+logs, complete agent turns, design source, reloads and delayed responses. It uses real loop
+records and API responses, without models or agents:
+
+```sh
+FLUX_E2E_STEPS="fullscreen draft and raw,reset confirmation,run history isolation" \
+  nix develop --command python3 tests/e2e/web_ui.py
+```
+
+`unit/test_web_api_lifecycle.py` checks live permission changes on the same login session:
+revoking/restoring shares across history and download endpoints, downgrading editors before
+pending mutations (without changing files or starting processes), and disabling an account.
+
 conformance/ is the load-bearing directory: any new evaluator or generation backend must pass
 this suite proving it interprets the IR the same way as the reference, or fails loudly on the
 parts it cannot express.

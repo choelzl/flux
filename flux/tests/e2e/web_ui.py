@@ -2738,6 +2738,10 @@ def flows(r: Run) -> None:
 
     general_flows(r, WATCH)
 
+    from web_ui_lifecycle import lifecycle_flows
+
+    lifecycle_flows(r, WATCH)
+
     def screens():
         """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
         out = Path(os.environ["FLUX_E2E_SHOTS"])

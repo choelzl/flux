@@ -30,7 +30,10 @@ export function historyTab(ctx) {
     const campaignSel = h("select", { "aria-label": "Recorded campaign", onchange: () => { campaignId = campaignSel.value; load(); } });
     function drawControls() {
       const campaigns = history.campaigns.filter(c => c.run_id === start.record_id);
-      if (!campaigns.some(c => c.campaign_id === campaignId)) {
+      const chosen = campaigns.find(c => c.campaign_id === campaignId);
+      // Preserve an older campaign across resumed starts, but not a campaign that did not
+      // exist before the selected start ended: its historical Results would be empty.
+      if (!chosen || (start.ended && Date.parse(chosen.created_at) / 1000 > start.ended)) {
         const older = campaigns.find(c => Date.parse(c.created_at) / 1000 <= start.started + 5);
         campaignId = (older || campaigns[0] || {}).campaign_id || "";
       }

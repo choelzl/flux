@@ -196,9 +196,10 @@ should not travel with the document.
 ## Baseline / pass 0
 
 The optional top-level `baseline` setting runs checks and real measurements before pass 1
-and before any parallel passes, only if no baseline is recorded or its inputs, configuration,
-or tools have changed. Unchanged restarts reuse the recorded outcome, including failures,
-without running the preparation command, checks, or measurements again. It defaults to off. In the configurator, open
+and before any parallel passes, if no successful baseline is recorded or its inputs, configuration,
+or tools have changed. Unchanged restarts reuse a successful outcome without running the
+preparation command, checks, or measurements again. Failed baselines are retried on the next
+start, even when inputs are unchanged. It defaults to off. In the configurator, open
 **Extra → Baseline / pass 0** to choose when it runs and its source.
 
 ```yaml

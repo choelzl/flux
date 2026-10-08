@@ -2122,7 +2122,7 @@
         field("Baseline pass", function () { return bp.mode; }, function (v) { bp.mode = v; },
           { key: "baseline-mode", structural: true, disabled: (state.kept || []).indexOf("baseline") >= 0,
             options: [["off", "Off (default)"], ["before", "Pass 0, then normal passes"], ["only", "Pass 0 only: check tools and measure"]],
-            hint: "Runs before parallel passes only when no baseline is recorded or its inputs, settings or tools changed. Unchanged restarts reuse its results. Pass 0 does not use the normal pass budget; new measurements bypass caches and estimators." }),
+            hint: "Runs before parallel passes when no successful baseline is recorded or its inputs, settings or tools changed. Failed baselines are retried on the next start; unchanged successful results are reused. Pass 0 does not use the normal pass budget; new measurements bypass caches and estimators." }),
         bp.mode !== "off" ? field("Baseline source", function () { return bp.source; }, function (v) { bp.source = v; },
           { key: "baseline-source", structural: true, options: [["project", "Current project: run checks and measurements as written"],
             ["file", "Existing design file (unchanged)"], ["command", "A baseline preparation command"]],
