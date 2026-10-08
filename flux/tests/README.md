@@ -1,5 +1,23 @@
 # tests/ — unit, integration, conformance, golden
 
+`e2e/web_ui.py` runs the web interface in headless Firefox against its own temporary server,
+users, and loop data. Run it from `flux/` with
+`nix develop --command python3 tests/e2e/web_ui.py`. It exits nonzero on a failed check and
+saves failure screenshots under the browser fixture's `shots/` folder.
+
+The independent flows in `e2e/web_ui_general.py` cover deep-link reloads and browser history,
+delayed file responses and retries, concurrent edits and unsaved drafts, literal rendering of
+file and agent text, and logout/re-login isolation. Run only these flows with:
+
+```sh
+FLUX_E2E_STEPS="reload and browser history,delayed files and retry,concurrent file edits,safe text rendering,logout and re-login" \
+  nix develop --command python3 tests/e2e/web_ui.py
+```
+
+`FLUX_E2E_HOME=/absolute/path` chooses an isolated browser profile and upload fixture folder.
+For Snap Firefox, use a path that Firefox can access, such as one under
+`~/snap/firefox/common/`. No model or coding agent is needed by these five flows.
+
 conformance/ is the load-bearing directory: any new evaluator or generation backend must pass
 this suite proving it interprets the IR the same way as the reference, or fails loudly on the
 parts it cannot express.

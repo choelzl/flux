@@ -72,6 +72,18 @@ def _run(tmp_path: Path, script: str, env: dict[str, str] | None = None, proxy_d
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
+def _python(tmp_path: Path, program: str) -> tuple[int, str]:
+    """Use the launcher's interpreter directly, preserving the container environment."""
+    args = _args(tmp_path)
+    name = f"flux-python-{os.getpid()}-{abs(hash(program)) % 100000}"
+    cmd = sandbox.container_argv([sys.executable, "-c", program], args, "task run", name, None)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    finally:
+        subprocess.run([*sandbox.engine_cli(sandbox.engine()), "rm", "-f", name], capture_output=True, timeout=30)
+    return result.returncode, result.stdout + result.stderr
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _engine():
     why = _engine_runs()
@@ -93,8 +105,6 @@ def test_a_loop_may_write_its_own_out_and_workbench(tmp_path):
 def test_flux_paths_and_tracebacks_use_the_container_checkout(tmp_path, monkeypatch):
     """Actual imports (including cached bytecode) and executable lookup use the source alias."""
     monkeypatch.delenv("FLUX_ROOT", raising=False)
-    args = _args(tmp_path)
-    name = f"flux-source-paths-{os.getpid()}"
     program = (
         "import os, shutil, traceback\n"
         "import flux_loop.document.gate as gate\n"
@@ -105,18 +115,76 @@ def test_flux_paths_and_tracebacks_use_the_container_checkout(tmp_path, monkeypa
         "print('PYTHONPATH=' + os.environ['PYTHONPATH'])\n"
         "try: gate._gate(42)\n"
         "except Exception: print(traceback.format_exc())\n")
-    cmd = sandbox.container_argv([sys.executable, "-c", program], args, "task run", name, None)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
-    finally:
-        subprocess.run([*sandbox.engine_cli(sandbox.engine()), "rm", "-f", name], capture_output=True, timeout=30)
-    said = result.stdout + result.stderr
-    assert result.returncode == 0, said
+    rc, said = _python(tmp_path, program)
+    assert rc == 0, said
     assert "ROOT=/flux" in said and "BIN=/flux/.nix-bin/flux" in said, said
     assert "SOURCE=/flux/core/loop/src/flux_loop/document/gate.py" in said, said
     assert "CODE=/flux/core/loop/src/flux_loop/document/gate.py" in said, said
     assert 'File "/flux/core/loop/src/flux_loop/document/gate.py"' in said, said
     assert str(sandbox._source_root()) not in said, said
+
+
+def test_flux_wrapper_executes_from_the_canonical_path(tmp_path):
+    rc, said = _python(tmp_path,
+        "import shutil, subprocess\n"
+        "binary = shutil.which('flux')\n"
+        "print('BIN=' + str(binary))\n"
+        "result = subprocess.run([binary, '--help'], capture_output=True, text=True, timeout=30)\n"
+        "print(result.stdout + result.stderr)\n"
+        "raise SystemExit(result.returncode)\n")
+    assert rc == 0 and "BIN=/flux/.nix-bin/flux" in said, said
+    assert "task" in said, said
+    assert str(sandbox._source_root()) not in said, said
+
+
+def test_flux_runtime_is_read_only_while_canonical_loop_outputs_are_writable(tmp_path):
+    rc, said = _python(tmp_path,
+        "import errno, pathlib\n"
+        "for path in ('/flux/flake.nix', '/flux/core/loop/src/flux_loop/document/gate.py'):\n"
+        "    assert pathlib.Path(path).read_text(), path\n"
+        "    try:\n"
+        "        with open(path, 'r+'): pass\n"
+        "    except OSError as exc:\n"
+        "        assert exc.errno in (errno.EROFS, errno.EACCES, errno.EPERM), exc\n"
+        "    else: raise AssertionError('runtime is writable: ' + path)\n"
+        "pathlib.Path('/sandbox/loop/out/canonical.txt').write_text('mine')\n"
+        "pathlib.Path('/sandbox/loop/workbench/canonical.txt').write_text('mine')\n"
+        "print('READ_ONLY_RUNTIME_WRITABLE_OUTPUTS')\n")
+    assert rc == 0 and "READ_ONLY_RUNTIME_WRITABLE_OUTPUTS" in said, said
+    assert (tmp_path / "loop/out/canonical.txt").read_text() == "mine"
+    assert (tmp_path / "loop/workbench/canonical.txt").read_text() == "mine"
+
+
+def test_cached_host_bytecode_traceback_is_relocated_to_flux(tmp_path, monkeypatch):
+    import py_compile
+
+    root = tmp_path / "checkout/flux"
+    source = root / "core/loop/src"
+    source.mkdir(parents=True)
+    module = source / "path_probe.py"
+    module.write_text("def fail():\n    raise RuntimeError('bytecode')\n")
+    before = module.stat()
+    legacy = "/previous-machine/checkout/flux/core/loop/src/path_probe.py"
+    py_compile.compile(str(module), dfile=legacy, doraise=True, invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP)
+    # Keep the timestamp and size valid for the cache, with a different source exception:
+    # seeing "bytecode" proves that the import actually exercised the relocated .pyc.
+    module.write_text(module.read_text().replace("bytecode", "source__"))
+    os.utime(module, ns=(before.st_atime_ns, before.st_mtime_ns))
+    monkeypatch.setattr(sandbox, "_source_root", lambda: root)
+    monkeypatch.setenv("FLUX_ROOT", str(root))
+    monkeypatch.setenv("PYTHONPATH", str(source))
+    monkeypatch.setattr(sys, "path", [str(source), *sys.path])
+    rc, said = _python(tmp_path,
+        "import path_probe, traceback\n"
+        "print('SOURCE=' + path_probe.__file__)\n"
+        "print('CODE=' + path_probe.fail.__code__.co_filename)\n"
+        "try: path_probe.fail()\n"
+        "except RuntimeError: print(traceback.format_exc())\n")
+    assert rc == 0, said
+    assert "SOURCE=/flux/core/loop/src/path_probe.py" in said, said
+    assert "CODE=/flux/core/loop/src/path_probe.py" in said, said
+    assert 'File "/flux/core/loop/src/path_probe.py"' in said and "RuntimeError: bytecode" in said, said
+    assert legacy not in said and str(root) not in said, said
 
 
 def test_it_cannot_write_outside_its_folders(tmp_path):

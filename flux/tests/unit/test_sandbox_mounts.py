@@ -56,6 +56,32 @@ def test_the_argv_carries_each_mount_with_its_mode_and_leaves_out_the_sandboxs_o
     assert json.loads(env["FLUX_SANDBOX_MOUNTS"])[0]["inside"] == "/mnt/a"
 
 
+@pytest.mark.parametrize("inside", ["/flux", "/flux/core/loop/src", "/flux/../flux/.nix-bin"])
+def test_admin_mount_cannot_shadow_flux_runtime(monkeypatch, tmp_path, capsys, inside, ds):
+    from flux_web.runs import check_mounts
+
+    dataset = ds / "dataset"
+    dataset.mkdir()
+    monkeypatch.setenv("FLUX_SANDBOX_MOUNTS", json.dumps([{"host": str(dataset), "inside": inside, "mode": "rw"}]))
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-mount-protection", None, "podman")
+    mounts = [value for flag, value in zip(cmd, cmd[1:]) if flag == "-v"]
+    assert not any(value.startswith(str(dataset) + ":") for value in mounts)
+    assert "left out: its path inside is the sandbox's own" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="sandbox's own"):
+        check_mounts([{"host": str(dataset), "inside": inside, "mode": "rw"}],
+                     ds / "data", ds / "data/loop", ds / "cache")
+
+
+def test_admin_mount_with_similar_name_remains_available(ds):
+    from flux_web.runs import check_mounts
+
+    dataset = ds / "dataset"
+    dataset.mkdir()
+    rows = check_mounts([{"host": str(dataset), "inside": "/flux-tools", "mode": "ro"}],
+                        ds / "data", ds / "data/loop", ds / "cache")
+    assert rows == [{"host": str(dataset.resolve()), "inside": "/flux-tools", "mode": "ro"}]
+
+
 @pytest.fixture()
 def server(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))

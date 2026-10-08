@@ -2689,6 +2689,10 @@ def flows(r: Run) -> None:
         r.clean("phone wizard")
     r.step("phone wizard", phone_wizard)
 
+    from web_ui_general import general_flows
+
+    general_flows(r, WATCH)
+
     def screens():
         """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
         out = Path(os.environ["FLUX_E2E_SHOTS"])

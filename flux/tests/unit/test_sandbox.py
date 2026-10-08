@@ -304,6 +304,73 @@ def test_source_symlink_alias_and_network_helper_are_mapped(monkeypatch, tmp_pat
     assert sandbox.container_paths(["flux", "ask", helper], args, pairs, "ask")[-1] == helper
 
 
+@pytest.mark.parametrize("configured", ["missing", "partial", "checkout"])
+def test_installed_flux_only_maps_a_complete_configured_checkout(monkeypatch, tmp_path, configured):
+    installed = tmp_path / "site-packages/flux_cli/sandbox.py"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("")
+    root = tmp_path / "configured-flux"
+    if configured != "missing":
+        (root / "core/loop/src").mkdir(parents=True)
+    if configured == "checkout":
+        (root / "interfaces/cli/src").mkdir(parents=True)
+    monkeypatch.setattr(sandbox, "__file__", str(installed))
+    monkeypatch.setenv("FLUX_ROOT", str(root))
+    assert sandbox._source_root() == (root if configured == "checkout" else None)
+
+
+@pytest.mark.parametrize("eng", ["podman", "docker"])
+def test_nested_loop_keeps_its_own_mounts_and_output_paths(monkeypatch, tmp_path, eng):
+    root = tmp_path / "flux"
+    loop = root / "examples/demo"
+    loop.mkdir(parents=True)
+    doc = loop / "problem.yaml"
+    doc.write_text("statement: example\nlanguage: text\nflow: {test: 'true'}\n")
+    args = types.SimpleNamespace(file=str(doc), db=str(loop / "out/demo.db"), out=None, json=None, skill=[])
+    monkeypatch.setattr(sandbox, "_source_root", lambda: root)
+    monkeypatch.chdir(loop)
+    cmd = sandbox.container_argv(["flux", "task", "run", args.file, "--db", args.db], args,
+                                 "task run", "flux-nested", None, eng)
+    assert cmd[cmd.index("--workdir") + 1] == "/sandbox/demo"
+    assert cmd[-3:] == ["/sandbox/demo/problem.yaml", "--db", "/sandbox/demo/out/demo.db"]
+    assert f"{root}:/flux:ro" in cmd and f"{loop}:/sandbox/demo:ro" in cmd
+    assert f"{loop}/out:/sandbox/demo/out" in cmd
+    assert f"{loop}/workbench:/sandbox/demo/workbench" in cmd
+
+
+def test_source_mapping_preserves_other_packages_and_similarly_named_paths(monkeypatch, tmp_path):
+    import sys
+
+    root = tmp_path / "flux"
+    source = root / "core/loop/src"
+    source.mkdir(parents=True)
+    sibling = tmp_path / "flux-tools"
+    sibling.mkdir()
+    monkeypatch.setattr(sandbox, "_source_root", lambda: root)
+    monkeypatch.setattr(sys, "path", [str(source), str(source), *sys.path])
+    monkeypatch.setenv("PYTHONPATH", f"{source}:{sibling}:/nix/store/loop-packages")
+    monkeypatch.setenv("PATH", f"{sibling}:{os.environ['PATH']}")
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-deps", None, "podman")
+    env = sandbox.container_env(cmd)
+    assert env["PYTHONPATH"].split(os.pathsep) == ["/flux/core/loop/src", str(sibling), "/nix/store/loop-packages"]
+    assert env["PATH"].split(os.pathsep)[0] == str(sibling)
+    assert f"{sibling}:{sibling}:ro" in cmd
+
+
+def test_source_reverse_mapping_keeps_host_pointers_and_folder_boundaries(monkeypatch, tmp_path):
+    from flux_loop.sandbox_paths import PATH_MAP, container_path, host_path
+
+    root = tmp_path / "checkout/flux"
+    alias = tmp_path / "linked-flux"
+    monkeypatch.setenv("FLUX_SANDBOXED", "1")
+    monkeypatch.setenv(PATH_MAP, json.dumps([(str(root), "/flux"), (str(alias), "/flux")]))
+    assert container_path(str(root / "core/loop/src/gate.py")) == "/flux/core/loop/src/gate.py"
+    assert container_path(str(alias / ".nix-bin/flux")) == "/flux/.nix-bin/flux"
+    assert host_path("/flux/core/loop/src/gate.py") == str(root / "core/loop/src/gate.py")
+    assert host_path("/flux-tools/bin/tool") == "/flux-tools/bin/tool"
+    assert container_path(str(root) + "-tools/bin/tool") == str(root) + "-tools/bin/tool"
+
+
 def test_an_admins_agent_program_is_mounted_with_its_package_and_named_inside(monkeypatch, tmp_path):
     """D804, D848: FLUX_CLAUDE_BIN names a program outside PATH -- through a link that sits beside the
     model's key: the program's own folder is mounted read-only (Codex's helpers live beside it), never
