@@ -64,7 +64,7 @@ _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_",
 HOME_IN = "/home/flux"
 LOOP_IN = "/sandbox"
 CACHE_IN = "/sandbox-cache"
-SOURCE_IN = "/opt/flux"
+SOURCE_IN = "/flux"
 #: On one's own machine, the Flux home starts with the agents' configuration and logins of the
 #: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
 #: passes its settings in, so the key file itself stays outside.

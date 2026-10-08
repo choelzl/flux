@@ -112,10 +112,10 @@ def test_flux_paths_and_tracebacks_use_the_container_checkout(tmp_path, monkeypa
         subprocess.run([*sandbox.engine_cli(sandbox.engine()), "rm", "-f", name], capture_output=True, timeout=30)
     said = result.stdout + result.stderr
     assert result.returncode == 0, said
-    assert "ROOT=/opt/flux" in said and "BIN=/opt/flux/.nix-bin/flux" in said, said
-    assert "SOURCE=/opt/flux/core/loop/src/flux_loop/document/gate.py" in said, said
-    assert "CODE=/opt/flux/core/loop/src/flux_loop/document/gate.py" in said, said
-    assert 'File "/opt/flux/core/loop/src/flux_loop/document/gate.py"' in said, said
+    assert "ROOT=/flux" in said and "BIN=/flux/.nix-bin/flux" in said, said
+    assert "SOURCE=/flux/core/loop/src/flux_loop/document/gate.py" in said, said
+    assert "CODE=/flux/core/loop/src/flux_loop/document/gate.py" in said, said
+    assert 'File "/flux/core/loop/src/flux_loop/document/gate.py"' in said, said
     assert str(sandbox._source_root()) not in said, said
 
 

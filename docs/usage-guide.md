@@ -170,8 +170,8 @@ machine.
   included.
 - **Paths inside:** new runs use `/sandbox/<loop-name>/` for the loop, including its `out/`,
   `workbench/` and feedback files; traces use `/sandbox-cache/tmp/flux-traces/`. Logs and agent
-  working directories show these container paths. Flux's own checkout uses `/opt/flux`, including
-  `/opt/flux/.nix-bin` on `PATH` and its source folders on `PYTHONPATH`, so imports and tracebacks
+  working directories show these container paths. Flux's own checkout uses `/flux`, including
+  `/flux/.nix-bin` on `PATH` and its source folders on `PYTHONPATH`, so imports and tracebacks
   use that location. The original host paths remain mounted for
   saved scripts and older records that use absolute paths. A host-looking path in agent output
   therefore names a permitted mount; it does not by itself indicate access outside the sandbox.

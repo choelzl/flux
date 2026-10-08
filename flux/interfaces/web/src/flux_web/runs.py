@@ -244,7 +244,7 @@ ADVANCED = {"sandbox": "run in the sandbox (off: on the host)", "memory": "memor
 SYSTEM_PATHS = ("/proc", "/sys", "/dev", "/etc", "/boot", "/run")
 #: the sandbox's own places inside (beside the loop's folders and the host's system mounts)
 SANDBOX_OWN = ("/tmp", "/home/flux", "/sandbox", "/sandbox-cache", "/sandbox-record", "/sandbox-output",
-               "/opt/flux",
+               "/flux",
                "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/nix")
 
 

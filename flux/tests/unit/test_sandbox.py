@@ -267,14 +267,14 @@ def test_flux_checkout_paths_are_canonical_in_the_runtime_environment(monkeypatc
     args = _args(tmp_path)
     cmd = sandbox.container_argv([str(root / ".nix-bin/flux")], args, "task run", "flux-source", None, "podman")
     env = sandbox.container_env(cmd)
-    assert env["FLUX_ROOT"] == "/opt/flux"
-    assert env["PATH"].split(os.pathsep)[0] == "/opt/flux/.nix-bin"
-    assert env["PYTHONPATH"].split(os.pathsep)[0] == "/opt/flux/core/loop/src"
+    assert env["FLUX_ROOT"] == "/flux"
+    assert env["PATH"].split(os.pathsep)[0] == "/flux/.nix-bin"
+    assert env["PYTHONPATH"].split(os.pathsep)[0] == "/flux/core/loop/src"
     assert str(root) not in env["PATH"] + env["PYTHONPATH"]
-    assert cmd[cmd.index("--workdir") + 1] == "/opt/flux"
-    assert cmd[-1] == "/opt/flux/.nix-bin/flux"
-    assert f"{root}:/opt/flux:ro" in cmd
-    assert f"{source}:/opt/flux/core/loop/src:ro" in cmd
+    assert cmd[cmd.index("--workdir") + 1] == "/flux"
+    assert cmd[-1] == "/flux/.nix-bin/flux"
+    assert f"{root}:/flux:ro" in cmd
+    assert f"{source}:/flux/core/loop/src:ro" in cmd
 
 
 def test_source_root_is_inferred_without_flux_root_environment(monkeypatch):
@@ -297,10 +297,10 @@ def test_source_symlink_alias_and_network_helper_are_mapped(monkeypatch, tmp_pat
     pairs = sandbox.path_mapping(args, "task run", sandbox.app_dir(args, "task run"), tmp_path / "home")
     from flux_loop.sandbox_paths import translate
 
-    assert translate(str(alias / ".nix-bin"), pairs) == "/opt/flux/.nix-bin"
+    assert translate(str(alias / ".nix-bin"), pairs) == "/flux/.nix-bin"
     helper = str(root / "interfaces/cli/src/flux_cli/sandbox_network.py")
     argv = [sys.executable, "-I", helper]
-    assert sandbox.container_paths(argv, args, pairs, "task run")[-1] == "/opt/flux/interfaces/cli/src/flux_cli/sandbox_network.py"
+    assert sandbox.container_paths(argv, args, pairs, "task run")[-1] == "/flux/interfaces/cli/src/flux_cli/sandbox_network.py"
     assert sandbox.container_paths(["flux", "ask", helper], args, pairs, "ask")[-1] == helper
 
 
