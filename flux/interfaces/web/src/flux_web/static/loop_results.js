@@ -42,7 +42,7 @@ function resultsView(ctx, r) {
       full.artifact ? h("div", { class: "blk" }, h("h3", {}, "Design"), codeBlock(full.artifact, "")) : "");
   }
   const table = h("div", { class: "result-table-surface" });
-  const comparison = measurementComparison(r.designs);
+  const comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
   const labels = measurementLabels(r.metrics);
   const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)

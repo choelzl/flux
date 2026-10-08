@@ -971,10 +971,11 @@ def flows(r: Run) -> None:
                             " const cell = (n, i) => row(n).querySelectorAll('td.num')[i]; return [cell('w-good', 0).innerText.trim(), cell('w-good', 0).title,"
                             " cell('w-good', 1).innerText.trim(), cell('dec-1', 0).innerText.trim(), cell('dec-1', 0).title,"
                             " cell('w-baseline', 0).innerText.trim(), document.querySelector('table.designs tbody input').checked]")
-            r.check("relative uses baseline first and median fallback without losing compare selections",
+            r.check("relative uses baseline first and excludes failed designs from percentile references",
                     relative[0] == "-22.5%" and "baseline (w-baseline" in relative[1] and "31" in relative[1]
-                    and relative[2] == "+9.1%" and relative[3] == "-33.3%" and "median 1.5" in relative[4]
+                    and relative[2] == "+9.1%" and relative[3] == "—" and "no matching baseline or accepted measurements" in relative[4]
                     and relative[5] == "0%" and relative[6], str(relative))
+            r.check("relative percentile references ignore pending designs and describe their accepted population", b.js("const row = [...document.querySelectorAll('table.designs tbody tr')].find(r => r.innerText.includes('enc-22')); const cells = row.querySelectorAll('td.num'); return cells[0].innerText === '-20%' && cells[0].title.includes('P10 10') && cells[0].title.includes('1 accepted design)') && cells[1].innerText === '-26.7%' && cells[1].title.includes('P90 1500')"))
             b.click(".chips .relative-values")
             r.check("absolute restores original measurements", b.js("return document.querySelector('table.designs tbody td.num').innerText.trim() === '31'"))
             alignment = b.js("return [...document.querySelectorAll('table.designs th.measurement-head')].map(th => { const end = th.querySelector('.th-sort').getBoundingClientRect(), col = th.getBoundingClientRect();"

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 def run(tmp_path: Path, body: str) -> dict:
     """`body` runs with chartdata.js's exports as `C`, and prints its answer as JSON."""
     shutil.copy(CHARTDATA, tmp_path / "chartdata.mjs")
-    shutil.copy(MEASUREMENTDATA, tmp_path / "measurementdata.mjs")
+    (tmp_path / "measurementdata.mjs").write_text(MEASUREMENTDATA.read_text().replace('"./chartdata.js"', '"./chartdata.mjs"'))
     (tmp_path / "t.mjs").write_text("import * as C from './chartdata.mjs';\nimport * as M from './measurementdata.mjs';\n" + body)
     r = subprocess.run(["node", str(tmp_path / "t.mjs")], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
@@ -78,8 +78,8 @@ console.log(JSON.stringify({cost: compare(better, 'area_um2'), freq: compare(bet
     assert got["cost"]["percent"] == -30 and got["freq"]["percent"] == 30
     assert got["cost"]["reference"]["kind"] == "baseline"
     assert got["screen"]["percent"] == -50
-    assert got["part"]["percent"] == -50 and got["part"]["reference"]["value"] == 10
-    assert got["part"]["reference"]["kind"] == "median"
+    assert got["part"]["percent"] == pytest.approx(-100 / 6) and got["part"]["reference"]["value"] == 6
+    assert got["part"]["reference"]["kind"] == "P10"
     assert got["missing"]["percent"] is None
 
 
@@ -95,14 +95,64 @@ console.log(JSON.stringify({cost: compare(d, 'area_um2'), zero: compare(d, 'fmax
     assert got["zero"]["percent"] is None and got["zero"]["reference"]["value"] == 0
 
 
-def test_median_fallback_resists_outliers_and_ignores_missing_values(tmp_path):
+def test_percentile_fallback_resists_bad_outliers_and_ignores_missing_values(tmp_path):
     got = run(tmp_path, DESIGNS + """
 const ds = [10, 20, 1000, null, NaN].map((v, i) => design(String(i), '', v, 1, true));
 const compare = M.measurementComparison(ds);
 console.log(JSON.stringify(compare(ds[0], 'area_um2')));
 """)
-    assert got["reference"] == {"kind": "median", "value": 20}
-    assert got["percent"] == -50
+    assert got["reference"] == {"kind": "P10", "count": 3, "value": 12}
+    assert got["percent"] == pytest.approx(-100 / 6)
+
+
+def test_p90_speedup_uses_accepted_designs_only_and_interpolates(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const measured = (name, speedup, eligible, extra = {}) => {
+  const d = design(name, 'whole', 1, 1, eligible, extra);
+  d.stages.confirm = {mean_speedup: speedup}; return d;
+};
+const ds = Array.from({length: 10}, (_, i) => measured(String(i), i + 1, true));
+const failed = measured('failed', 1e9, false, {verdict: 'accepted'});
+const pending = measured('pending', -1e9, false, {pending: true, verdict: 'pending'});
+const part = measured('part', 1e9, true); part.group = 'decoder';
+const compare = M.measurementComparison([...ds, failed, pending, part]);
+console.log(JSON.stringify(compare(ds[4], 'mean_speedup')));
+""")
+    assert got["reference"] == {"kind": "P90", "count": 10, "value": 9.1}
+    assert got["percent"] == pytest.approx((5 - 9.1) / 9.1 * 100)
+
+
+def test_percentile_follows_declared_objective_direction(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const ds = [10, 20, 100].map((v, i) => {
+  const d = design(String(i), '', 1, 1, true); d.stages.confirm = {score: v}; return d;
+});
+const compare = M.measurementComparison(ds, [{metric: 'score', direction: 'minimize'}]);
+console.log(JSON.stringify(compare(ds[0], 'score')));
+""")
+    assert got["reference"] == {"kind": "P10", "count": 3, "value": 12}
+    assert got["percent"] == pytest.approx(-100 / 6)
+
+
+def test_no_accepted_measurements_leaves_reference_unavailable(tmp_path):
+    got = run(tmp_path, DESIGNS + """
+const d = design('failed', 'decoder', 5, 1, false);
+const other = design('accepted', 'whole', 10, 1, true);
+const compare = M.measurementComparison([d, other]);
+console.log(JSON.stringify(compare(d, 'area_um2')));
+""")
+    assert got == {"value": 5, "reference": None, "percent": None}
+
+
+@pytest.mark.parametrize("value", [0, -10])
+def test_percentile_with_one_accepted_design_and_zero_or_negative_reference(tmp_path, value):
+    got = run(tmp_path, DESIGNS + f"""
+const base = design('accepted', '', {value}, 1, true), d = design('failed', '', 20, 1, false);
+const compare = M.measurementComparison([base, d]);
+console.log(JSON.stringify(compare(d, 'area_um2')));
+""")
+    assert got["reference"] == {"kind": "P10", "count": 1, "value": value}
+    assert got["percent"] == (None if value == 0 else 300)
 
 
 def test_baseline_references_are_latest_and_scoped(tmp_path):

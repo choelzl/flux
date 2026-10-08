@@ -22,6 +22,13 @@ function verdictOf(d) {
   return { eligible, pending, verdict: eligible ? "accepted" : pending ? "pending" : "failed", reasons: (d.reasons && d.reasons.length ? d.reasons : d.why) || [] };
 }
 
+/** The objective's direction, otherwise the metric name's usual meaning. */
+function directionOf(metric, objectives) {
+  const o = (objectives || []).find(x => x.metric === metric);
+  if (o && o.direction) return o.direction;
+  return /area|power|energy|delay|latency|time|cells?|count|luts?|ffs?|error|loss|slack_viol|cost|size|bytes|cycles/i.test(metric) ? "minimize" : "maximize";
+}
+
 /** The groups of a loop's designs (D896), the whole first, then its parts by name, the unnamed last;
     none when the designs are not of parts. */
 function groupList(designs) {
@@ -103,4 +110,4 @@ function timeSegments(samples, get) {
   return segments;
 }
 
-export { baselinePoints, bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf };
+export { baselinePoints, bestSeries, designPoints, directionOf, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf };

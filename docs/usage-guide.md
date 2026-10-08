@@ -372,8 +372,11 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Absolute / Relative (%):** Results and Overview's Decision table share a remembered toggle.
     Relative shows percent change from the latest baseline for the same metric, stage and design
     group (baseline = 0%; a value 30% lower = −30%). Without a matching baseline, it uses that
-    group's median at that stage, across all measured designs. Hover for the absolute value and
-    reference. Missing values or a zero reference show — because percent change is undefined.
+    group's P90 performance at that stage, using accepted designs across the full results set:
+    P90 for higher-is-better metrics, P10 for lower-is-better metrics. Percentiles interpolate
+    between adjacent sorted values. Failed and pending designs do not influence this fallback.
+    Hover for the absolute value, reference and sample count. Missing values, no accepted reference,
+    or a zero reference show — because percent change is undefined.
     Graphs show baseline measurements as gray reference lines; search designs remain points.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:

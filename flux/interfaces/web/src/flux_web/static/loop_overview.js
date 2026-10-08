@@ -53,7 +53,7 @@ function topDesigns(ctx, r, n) {
   if (top.length < 2) return "";
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms);
   const surface = h("div", { class: "blk result-table-surface" });
-  const rows = h("tbody", {}), comparison = measurementComparison(r.designs);
+  const rows = h("tbody", {}), comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
   function drawRows() {
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: "table-design-name", title: d.name }, d.name)),

@@ -1,7 +1,7 @@
 // Flux web: the charts and marks drawn as SVG (D889: split out of app.js).
 
 import { empty, h } from "./ui.js";
-import { baselinePoints, bestSeries, designPoints, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf } from "./chartdata.js";
+import { baselinePoints, bestSeries, designPoints, directionOf, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf } from "./chartdata.js";
 
 // ================================================================ charts (D692)
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -114,12 +114,6 @@ function bestChart(rows, obj, passes, opts = {}) {
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `),
     said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best feasible search design so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
     opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending), baseline: refs.length > 0 })]), g);
-}
-/** Which way a metric is better (D693): the objective's direction, else the name's plain sense. */
-function directionOf(metric, objectives) {
-  const o = (objectives || []).find(x => x.metric === metric);
-  if (o && o.direction) return o.direction;
-  return /area|power|energy|delay|latency|time|cells?|count|luts?|ffs?|error|loss|slack_viol|cost|size|bytes|cycles/i.test(metric) ? "minimize" : "maximize";
 }
 /** Two metrics against each other (D693): every design measured with both, the limits dashed, a
     click opens the design. D914: the feasible front -- the non-dominated designs of those that meet
