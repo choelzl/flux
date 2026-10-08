@@ -687,8 +687,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 out.append({**runs.state(o, app_name), "owner": owner})
         return out
 
-    @app.post("/api/apps/{name}/start")
-    def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+    def prepare_start(name: str, body: RunOptions, owner: str | None, user: User):
+        """The same document and agent checks for a normal start or an admin restart."""
         w, whose, d, _run = loop_of(name, user, owner, edit=True)
         meta = w.meta(name)
         if authoring.state(d).get("running"):
@@ -720,6 +720,13 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                          + (", and some need a person" if older[0]["manual"] else "")
                                          + "): an admin migrates it in Admin › Loops › Old documents")
         agents_gate(whose, needs, name)                # D923: of the configuration this loop runs it with
+        return w, whose, d, meta
+
+    ctx.prepare_start = prepare_start
+
+    @app.post("/api/apps/{name}/start")
+    def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        w, whose, d, meta = prepare_start(name, body, owner, user)
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             from flux_loop.document import record_name
 
@@ -729,6 +736,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         w.set_meta(name, last_start_digest=w.inputs_digest(name), last_options=body.model_dump())    # D693
         store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
         return {"ok": f"{name} started: it resumes from its record"}
+
+    ctx.start_loop = start
 
     @app.post("/api/apps/{name}/stop")
     def stop(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:

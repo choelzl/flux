@@ -421,10 +421,11 @@ def test_a_5xx_is_retried_once_and_a_context_overflow_halves_the_budget(monkeypa
     assert r.notes["retried"] == "500: rpc error: Context size has been exceeded."
 
 
-def test_a_second_failure_and_a_4xx_are_not_retried(monkeypatch, hosted):
+def test_an_exhausted_recovery_budget_and_a_4xx_are_not_retried(monkeypatch, hosted):
     from flux_llm import OpenAIChatProposer
 
     monkeypatch.setattr(OpenAIChatProposer, "RETRY_AFTER_S", 0.0)
+    monkeypatch.setattr(OpenAIChatProposer, "RECOVERY_WAIT_S", 0.0)
     sent = _server(monkeypatch, context=None, answers=[
         _http(503, {"error": "busy"}), _http(503, {"error": "still busy"})])
     with pytest.raises(RuntimeError, match="answered 503: still busy"):
@@ -434,6 +435,26 @@ def test_a_second_failure_and_a_4xx_are_not_retried(monkeypatch, hosted):
     with pytest.raises(RuntimeError, match="answered 400: bad schema"):
         OpenAIChatProposer().propose("p")
     assert len(sent) == 1
+
+
+def test_model_server_reload_retries_same_request_without_losing_tool_history(monkeypatch, hosted):
+    from http.client import IncompleteRead
+    from flux_llm import OpenAIChatProposer, Tool, ToolBudget
+
+    monkeypatch.setattr(OpenAIChatProposer, "RETRY_AFTER_S", 0.0)
+    computed = []
+    tools = [Tool("compute", "run", {"type": "object"}, lambda args: computed.append(args) or "kept result")]
+    calling = {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "",
+                            "tool_calls": [_tool_call("compute", {"code": "x"})]}}]}
+    sent = _server(monkeypatch, context=None, answers=[calling, _http(502, {"error": "restarting"}),
+                                                    _http(503, {"error": "loading"}),
+                                                    IncompleteRead(b"partial response", 100),
+                                                    _http(502, {"error": "still loading"}), _ok("recovered")])
+    reply = OpenAIChatProposer().propose("keep this task", tools=tools, budget=ToolBudget(hops=1))
+    assert reply.text == "recovered" and len(sent) == 6 and len(computed) == 1
+    assert all(body == sent[1] for body in sent[1:]), "recovery retries the pending exchange unchanged"
+    assert sent[-1]["messages"][-1]["content"] == "kept result"
+    assert reply.notes["retried"] == "502: still loading"
 
 
 def test_the_reply_streams_and_the_thinking_shows_while_it_thinks(hosted, monkeypatch):
@@ -738,7 +759,9 @@ def test_a_round_that_runs_away_in_a_turn_with_tools_is_asked_again_without_thin
     assert r.notes["runaway"].startswith("empty response") and r.hops[0].tool == "history"
 
 
-def test_a_stream_that_says_error_or_ends_empty_is_retried(monkeypatch, hosted):
+@pytest.mark.parametrize("partial", [[], [{"choices": [{"delta": {"content": "unfinished reply", "tool_calls": [
+    {"index": 0, "id": "cut", "function": {"name": "compute", "arguments": '{"code":'}}]}}]}]])
+def test_a_stream_that_says_error_or_ends_incomplete_is_retried(monkeypatch, hosted, partial):
     """An `error` chunk follows the HTTP retry rules; a stream with no chunk at all is a cut
     connection and is retried once after a pause (D506)."""
     import urllib.request
@@ -748,7 +771,7 @@ def test_a_stream_that_says_error_or_ends_empty_is_retried(monkeypatch, hosted):
     monkeypatch.setenv("FLUX_LLM_STREAM", "1")
     monkeypatch.setattr(OpenAIChatProposer, "RETRY_AFTER_S", 0.0)
     scripts = iter([
-        [],                                                          # nothing at all
+        partial,                                                     # empty or cut text/tool arguments
         [{"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}],
     ])
     seen: list[dict] = []

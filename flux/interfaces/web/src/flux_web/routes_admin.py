@@ -16,11 +16,13 @@ from fastapi import Depends, FastAPI, HTTPException
 
 from .models import (
     MaintenanceSet, MaintenanceRun, Clean, Paused, Limit, NoticeIn, ForgetIn, MasksIn, StopAll, MigrateIn,
-    SandboxConfig,
+    SandboxConfig, RunOptions,
 )
 from .runs import login_path
 from .store import User
 from .workspace import Workspace, WorkspaceError
+
+RESTART_WAIT_S = 30.0
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -219,6 +221,73 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 for (u, app_name), r in _live_loops().items()}
         store.audit(a.name, "stop all", f"{len(said)} loop(s){' now' if body.now else ''}")
         return {"stopped": said}
+
+    @app.post("/api/admin/restart-all")
+    def restart_all(a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Restart only the snapshot of active loops, as their owners, with saved launch options."""
+        restarted, failed, skipped = {}, {}, {}
+        # Exclude concurrent starts and resets while stopping and replacing these processes.
+        with runs.lifecycle_lock:
+            if reason := store.server_get("paused"):
+                raise HTTPException(409, f"starts are paused by an admin: {reason}; resume starts before restarting loops")
+            pending = {}
+            live = _live_loops()
+            for (uname, name), run in live.items():
+                key = f"{uname}/{name}"
+                try:
+                    user = store.user(name=uname)
+                    if user is None or user.disabled:
+                        raise ValueError("the loop's owner is disabled or missing")
+                    count = sum(u == uname for u, _n in live)
+                    if count > runs.limit(user):
+                        raise ValueError(f"{count} active loops exceed the owner's current running limit; raise it before restarting")
+                    saved = json.loads(run.get("options") or "{}")
+                    options = RunOptions.model_validate({"passes": saved.get("passes"), **saved})
+                    # A metadata edit during a run must not change which document is restarted.
+                    argv = json.loads(run.get("argv") or "[]")
+                    if not options.document and len(argv) > 3 and argv[1:3] == ["task", "run"]:
+                        options.document = str(Path(argv[3]).relative_to(ws(user).app(name)))
+                    if not options.document:
+                        options.document = ws(user).meta(name).get("document")
+                    ctx.prepare_start(name, options, uname, a)
+                    current = store.run(run["id"])
+                    if not current or not runs.live(current):
+                        skipped[key] = "finished before restart; left stopped"
+                        continue
+                    runs.stop(current, now=True, why=f"all active loops restarted by {a.name}")
+                    pending[key] = (uname, name, current, options)
+                except (HTTPException, ValueError, WorkspaceError, OSError) as exc:
+                    failed[key] = str(exc.detail if isinstance(exc, HTTPException) else exc)
+            deadline = time.monotonic() + RESTART_WAIT_S
+            while pending:
+                for key, (uname, name, old, options) in list(pending.items()):
+                    current = store.run(old["id"])
+                    if current and runs.live(current):
+                        continue
+                    pending.pop(key)
+                    latest = runs.latest(store.user(name=uname), name)
+                    if latest and latest["id"] != old["id"]:
+                        skipped[key] = "another run replaced it; left unchanged"
+                        continue
+                    try:
+                        # Read after shutdown: a pass may have finished since the snapshot.
+                        if options.passes is not None:
+                            remaining = max(0, options.passes - runs.completed_passes(old))
+                            if not remaining:
+                                skipped[key] = "finite pass budget completed; left stopped"
+                                continue
+                            options.passes = remaining
+                        ctx.start_loop(name, options, uname, a)
+                        restarted[key] = {"passes": options.passes, "screen_only": options.screen_only, "document": options.document}
+                    except (HTTPException, ValueError, WorkspaceError, OSError) as exc:
+                        failed[key] = str(exc.detail if isinstance(exc, HTTPException) else exc)
+                if pending and time.monotonic() >= deadline:
+                    failed.update({key: "still stopping; no replacement was launched. Start it again once it has stopped" for key in pending})
+                    break
+                if pending:
+                    time.sleep(0.1)
+        store.audit(a.name, "restart all", f"{len(restarted)} restarted, {len(failed)} failed, {len(skipped)} skipped")
+        return {"restarted": restarted, "failed": failed, "skipped": skipped}
 
     @app.get("/api/admin/controls")
     def admin_controls(_a: User = Depends(admin_of)) -> dict[str, Any]:

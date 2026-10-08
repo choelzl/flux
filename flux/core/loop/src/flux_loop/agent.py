@@ -46,7 +46,7 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -490,6 +490,7 @@ class Turn:
     about: str = ""                # which model and tool version answered, as far as known (D696)
     tools: int = 0                 # the tool calls it made
     steps: list[dict[str, Any]] = field(default_factory=list)   # what it did, in order (D712)
+    transport_error: str = ""      # an API failure eligible for same-session recovery
 
 
 def _parse(output: str, stdout: str) -> tuple[str, str | None]:
@@ -600,8 +601,68 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       rc=turn.rc, reply=turn.text, stderr=(turn.stderr or "")[-2000:], seconds=round(time.monotonic() - t0, 2),
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
                       about=turn.about, tool_calls=turn.tools, steps=turn.steps, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
+                      **({"endpoint_recovery": turn.transport_error} if turn.transport_error else {}),
                       **_priced(spec, usage(spec.output, turn.stdout or "")))
+    if turn.transport_error and spec.resume and turn.session:
+        from flux_llm import recovery
+        from .observe import _phase
+
+        # Nested retries share one deadline; an outage must not reset the task's time limit.
+        deadline = float(subs.get("_recovery_deadline") or (t0 + spec.timeout_s))
+        count = int(subs.get("_recoveries") or 0)
+        if count < RECOVERIES and time.monotonic() < deadline:
+            base, headers = _recovery_endpoint(spec)
+            with _phase("agent: endpoint recovery", why=spec.tool, session=turn.session) as row:
+                def report(status: str) -> None:
+                    from flux_profile import progress
+
+                    row["status"] = status
+                    progress(status=status)
+
+                if recovery.wait_ready(base, headers, min(deadline, time.monotonic() + recovery.WAIT_S),
+                                       report):
+                    row["status"] = "endpoint available; continuing the same agent session"
+                    answer = ("Continue the interrupted task from where you stopped. The model endpoint had a "
+                              "temporary connection failure. Keep the existing files and completed work; finish "
+                              "the original request.")
+                    resumed = run_turn(replace(spec, timeout_s=max(0.01, deadline - time.monotonic())), spec.resume,
+                                       {**subs, "session": turn.session, "answer": answer,
+                                        "_recovery_deadline": str(deadline), "_recoveries": str(count + 1)}, workdir=workdir)
+                    resumed.began = turn.began
+                    return resumed
     return turn
+
+
+RECOVERIES = 3
+RECOVERY_IDLE_S = 15.0
+
+
+def _recovery_endpoint(spec: AgentSpec) -> tuple[str | None, dict[str, str]]:
+    """Probe only the provider this agent uses, with that provider's own credentials."""
+    env = _config_env(spec, _own_env(spec, dict(os.environ), spec.argv[0]))
+    kind = spec.kind or spec.tool
+    if kind == "claude":
+        headers = {"anthropic-version": "2023-06-01"}
+        if env.get("ANTHROPIC_API_KEY"):
+            headers["x-api-key"] = env["ANTHROPIC_API_KEY"]
+        if key := env.get("ANTHROPIC_AUTH_TOKEN") or env.get("CLAUDE_CODE_OAUTH_TOKEN"):
+            headers["Authorization"] = f"Bearer {key}"
+        return env.get("ANTHROPIC_BASE_URL"), headers
+    if kind == "codex":
+        key = env.get("OPENAI_API_KEY")
+        return env.get("OPENAI_BASE_URL"), {"Authorization": f"Bearer {key}"} if key else {}
+    if kind == "opencode":
+        try:
+            config = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+            provider = str(config.get("model") or "").split("/", 1)[0]
+            options = config.get("provider", {}).get(provider, {}).get("options", {})
+            key = options.get("apiKey") or ""
+            match = re.fullmatch(r"\{env:([^}]+)\}", key)
+            key = env.get(match[1], "") if match else key
+            return options.get("baseURL"), {"Authorization": f"Bearer {key}"} if key else {}
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return None, {}
 
 
 def _priced(spec: AgentSpec, used: dict[str, float]) -> dict[str, Any]:
@@ -677,9 +738,29 @@ class _Live:
         # its stderr, and how long since its last output line
         self.agent = self.status = self.limit = self.err = ""
         self.lines, self.last = 0, None
+        self.transport_error = ""
+        self.error_at: float | None = None
+        self.finished = False
 
     def feed_err(self, line: str) -> None:
+        from flux_llm.recovery import transient_error
+
         self.err = (self.err + line)[-self.OUT_TAIL:]
+        # stderr must name an API/transport failure, not just a numeric debug value.
+        if (re.search(r"api|http|error|connection|gateway|ECONN|socket", line, re.I)
+                and (transient_error(line) or re.search(r"\b(?:400|401|403|404)\b|unauthorized|authentication", line, re.I))):
+            self._transport(line)
+
+    def _transport(self, message: str) -> None:
+        import time
+        from flux_llm.recovery import transient_error
+
+        if self.finished:
+            return
+        self.transport_error = ""          # a later permanent API error supersedes the outage
+        if transient_error(message):
+            self.transport_error = message[:400]
+            self.error_at = time.monotonic()
 
     def _system(self, ev: dict[str, Any]) -> None:
         sub = str(ev.get("subtype") or "")
@@ -712,6 +793,7 @@ class _Live:
         """Words or thinking: one step while the same kind goes on, a new one after anything else."""
         if not text:
             return
+        self.transport_error = ""         # real progress: the agent recovered by itself
         last = self.steps[-1] if self.steps else None
         if last is not None and last["k"] == kind:
             last["text"] = (last["text"] + text)[-self.STEP_CHARS:]
@@ -759,6 +841,7 @@ class _Live:
             self.status = f"error: {item.get('message')}"[:300]
 
     def _tool_step(self, name: str, args: Any, ident: str | None = None, out: Any = None, error: bool = False) -> None:
+        self.transport_error = ""
         step: dict[str, Any] = {"k": "tool", "name": name, "call": _detail(name, args), "input": self._args(args)}
         if out is not None:
             step.update(out=_text_of(out)[-self.STEP_CHARS:], error=bool(error))
@@ -802,6 +885,23 @@ class _Live:
             return
         if not isinstance(ev, dict):
             return
+        kind = ev.get("type")
+        if kind in ("step_start", "turn.started"):
+            self.finished = False
+        # Only API error events; a failed tool, quoted log or reasoning mentioning 502
+        # must never interrupt healthy work.
+        if kind in ("error", "turn.failed") or (kind == "system" and ev.get("subtype") == "api_retry"):
+            self._transport(json.dumps(ev))
+        elif kind == "assistant" and ev.get("error"):
+            self._transport(json.dumps(ev))
+        elif kind == "result" and ev.get("is_error"):
+            self._transport(json.dumps(ev.get("errors") or ev.get("result") or ev))
+        elif kind == "item.completed" and (ev.get("item") or {}).get("type") == "error":
+            self._transport(json.dumps(ev))
+        elif (kind == "turn.completed" or (kind == "result" and not ev.get("is_error"))
+              or (kind == "step_finish" and (ev.get("part") or {}).get("reason") == "stop")):
+            self.transport_error = ""
+            self.finished = True
         if self.output == "codex":
             self._codex(ev)
             return
@@ -865,6 +965,8 @@ class _Live:
                     self._say(str(c.get("text") or ""))
                 elif c.get("type") == "thinking" and c.get("thinking") and not self.thinking:
                     self._think(str(c["thinking"]))
+            if ev.get("error"):
+                self._transport(json.dumps(ev))
         elif kind == "user":                         # a tool's result
             for c in (ev.get("message") or {}).get("content") or []:
                 if isinstance(c, dict) and c.get("type") == "tool_result":
@@ -1005,7 +1107,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     t0 = time.monotonic()
     timed_out = False
     shown = 0.0
-    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row:
+    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row, contextlib.ExitStack() as cleanup:
+        cleanup.callback(end_group, proc)             # manual interruption also reaps the old process
         ended, exited = False, None
         while True:
             if not ended and proc.poll() is not None:
@@ -1033,10 +1136,15 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
             if now - t0 > spec.timeout_s and proc.poll() is None:
                 end_group(proc)
                 timed_out = True
+            elif (live.transport_error and spec.resume and proc.poll() is None
+                  and now - max(live.last or t0, live.error_at or t0) >= RECOVERY_IDLE_S
+                  and (_parse(spec.output, "".join(out))[1] or subs.get("session"))):
+                row["endpoint recovery"] = "API error followed by silence; preserving the session for continuation"
+                end_group(proc)
             if now - shown >= 1.0:                    # the row, at most once a second
                 shown = now
                 progress(elapsed=f"{now - t0:.0f}s", **live.fields(now, t0))
-        end_group(proc)                               # D768: what it left running, too
+        cleanup.close()                               # D768: what it left running, too
         for t in readers:
             t.join(timeout=5)
         row.update(live.fields())
@@ -1047,8 +1155,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     if timed_out:                                     # its session kept: a later turn may resume it
         return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
                     about=about, tools=len(live.tools), steps=live.kept())
-    return Turn(proc.returncode == 0, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools),
-                steps=live.kept())
+    return Turn(proc.returncode == 0 and not live.transport_error, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools),
+                steps=live.kept(), transport_error=live.transport_error)
 
 
 def end_group(proc: subprocess.Popen) -> None:

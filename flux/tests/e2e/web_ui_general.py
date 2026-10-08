@@ -5,6 +5,7 @@ Run through web_ui.py; each step creates and deletes its own loop, without a mod
 
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from urllib.parse import quote
 
@@ -222,3 +223,64 @@ def general_flows(r, watch):
             r.clean("logout and re-login")
 
     r.step("logout and re-login", sessions)
+
+    def admin_restart():
+        with loop(r, "ui-admin-restart") as name:
+            r.login("ada")
+            apps = r.api("/admin/apps")
+            base = next(a for a in json.loads(apps["body"]) if a["name"] == name)
+            fixtures = [{**base, "running": True, "passes": 5, "options": {"passes": 10, "screen_only": True}},
+                        {**base, "owner": "ada", "user": "ada", "name": "unlimited", "running": True, "options": {"passes": None}}]
+            controls = json.loads(r.api("/admin/controls")["body"])
+            # Only mock process lifecycle responses here. Unit tests launch real stand-in processes.
+            b.js("""const [apps, controls] = arguments; window.__restartFetch = window.fetch;
+              window.__restartCalls = 0; window.__restartPaused = false; window.__restartEmpty = false; window.__restartFailed = false;
+              window.fetch = async (u, o) => {
+                const path = new URL(String(u), location.href).pathname;
+                let body;
+                if (path === '/api/admin/apps') body = window.__restartEmpty ? [] : apps;
+                else if (path === '/api/admin/controls') body = {...controls, paused: window.__restartPaused ? 'maintenance' : null};
+                else if (path === '/api/admin/restart-all') {
+                  window.__restartCalls++;
+                  body = {restarted: {'ada/unlimited': {passes: null}}, skipped: {},
+                    failed: window.__restartFailed ? {'bob/ui-admin-restart': 'still stopping; no replacement was launched'} : {}};
+                  if (!window.__restartFailed) body.restarted['bob/ui-admin-restart'] = {passes: 5};
+                } else return window.__restartFetch(u, o);
+                return new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
+              }; return 1;""", fixtures, controls)
+            try:
+                def page():
+                    r.page("#/admin", "document.querySelector('.ctl-grid')", "admin restart controls")
+
+                page()
+                r.button("Restart all active loops")
+                b.wait("document.querySelector('dialog.dlg[open]')", what="restart confirmation")
+                text = b.js("return document.querySelector('dialog.dlg[open]').innerText")
+                r.check("restart confirmation lists remaining finite budget and unlimited settings", "bob/ui-admin-restart: 5 of 10 pass(es) remaining · screen only" in text
+                        and "ada/unlimited: run forever" in text, text)
+                r.check("restart confirmation explains interruption and retained data", "interrupt their current pass" in text and "Files, results and logs are kept" in text)
+                r.dialog_button("Cancel")
+                r.check("canceling restart sends no request", b.js("return window.__restartCalls") == 0)
+                r.button("Restart all active loops")
+                r.dialog_button("Restart loops")
+                b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loop(s) restarted'))", what="restart result")
+                r.check("confirming restart submits one request and reports completion", True)
+                page()
+                b.js("window.__restartFailed = true; return 1")
+                r.button("Restart all active loops")
+                r.dialog_button("Restart loops")
+                b.wait("document.querySelector('dialog.dlg[open]')?.innerText.includes('Restart results')", what="partial restart result")
+                r.check("restart failures identify the affected loop", "bob/ui-admin-restart: still stopping" in b.js("return document.querySelector('dialog.dlg[open]').innerText"))
+                r.dialog_button("Close")
+                b.js("window.__restartPaused = true; return 1")
+                page()
+                disabled = "return [...document.querySelectorAll('.ctl-grid button')].find(b => b.textContent === 'Restart all active loops').disabled"
+                r.check("restart is disabled while starts are paused", b.js(disabled))
+                b.js("window.__restartPaused = false; window.__restartEmpty = true; return 1")
+                page()
+                r.check("restart is disabled without active loops", b.js(disabled))
+                r.clean("admin restart controls")
+            finally:
+                b.js("window.fetch = window.__restartFetch; return 1")
+
+    r.step("admin restart all", admin_restart)

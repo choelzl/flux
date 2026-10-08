@@ -23,6 +23,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from http.client import IncompleteRead
 from pathlib import Path
 
 from .proposer import Reply
@@ -291,9 +292,10 @@ class OpenAIChatProposer:
                                        "json_schema": {"name": "reply", "schema": schema}}
         return body
 
-    # One retry after a pause for a 5xx, an unreachable host or a cut connection; a 4xx is not
-    # retried. A context-size error retries with half the output budget (the cap is an estimate).
+    # A server reload/unreachable host gets bounded backoff; other 5xx errors get one retry.
+    # A 4xx is not retried. Context-size errors halve the output budget (the cap is an estimate).
     RETRY_AFTER_S = 3.0
+    RECOVERY_WAIT_S = 300.0       # server reloads outlast one immediate retry
 
     def _call(self, body: dict) -> dict:
         if self.stream:
@@ -399,10 +401,10 @@ class OpenAIChatProposer:
                         raise _Looped(f"thinking looped: a {cyc[0]}-character cycle repeated "
                                       f"{cyc[1]} times after ~{n} tokens; the request was aborted",
                                       think_txt)
-        if not content and not reasoning and not calls and finish is None:
-            # the stream ended before anything came (a cut connection, a server restart):
-            # said as unreachable, so the request goes once more after a pause
-            raise urllib.error.URLError("the stream ended with nothing in it (no chunk, no finish_reason)")
+        if finish is None:
+            # A server restart may leave partial text/tool arguments. They are not a finished
+            # answer; retry this request before any tool calls are executed.
+            raise urllib.error.URLError("the stream ended before completion (no finish_reason)")
         message = {"role": role, "content": "".join(content)}
         if reasoning:
             message["reasoning"] = "".join(reasoning)
@@ -596,7 +598,11 @@ class OpenAIChatProposer:
         """One request and its message back, with the retry rules above and the metadata."""
         body = self._body(messages, schema, think, tools=tools, hop_share=hop_share)
         retried = None
-        for attempt in (1, 2):
+        deadline = time.monotonic() + min(self.timeout_s, self.RECOVERY_WAIT_S)
+        attempt = 0
+        while True:
+            attempt += 1
+            recovering = False
             try:
                 payload = self._call(body)
                 break
@@ -608,18 +614,33 @@ class OpenAIChatProposer:
                 # include the body: the server says why ("model not found", a bad schema)
                 text = _error_text(exc)
                 out["error"] = f"{exc.code}: {text}"
-                if attempt == 2 or exc.code < 500:
+                recovering = exc.code in (502, 503, 504, 529)
+                if exc.code < 500 or (attempt >= 2 and (not recovering or time.monotonic() >= deadline)):
                     raise RuntimeError(f"{self.base_url} answered {out['error']}") from exc
                 if "context" in text.lower() and body.get("max_tokens"):
                     body["max_tokens"] = max(512, body["max_tokens"] // 2)
                 retried = out["error"]
             except urllib.error.URLError as exc:
                 out["error"] = f"unreachable: {exc.reason}"
-                if attempt == 2:
+                recovering = True
+                if attempt >= 2 and time.monotonic() >= deadline:
                     raise RuntimeError(f"{self.base_url} unreachable: {exc.reason}") from exc
                 retried = out["error"]
-            time.sleep(self.RETRY_AFTER_S)
+            except (ConnectionError, TimeoutError, IncompleteRead) as exc:
+                out["error"] = f"connection interrupted: {exc}"
+                recovering = True
+                if attempt >= 2 and time.monotonic() >= deadline:
+                    raise RuntimeError(f"{self.base_url} {out['error']}") from exc
+                retried = out["error"]
+            pause = self.RETRY_AFTER_S * 2 ** min(attempt - 1, 3) if recovering else self.RETRY_AFTER_S
+            if recovering:
+                from flux_profile import progress
+
+                progress(status=f"model endpoint unavailable; retrying the same request (attempt {attempt + 1})")
+                pause = min(pause, max(0.0, deadline - time.monotonic()))
+            time.sleep(pause)
         if retried:
+            out["status"] = "model endpoint recovered; the pending request completed"
             out["retried"] = f"after: {retried}" + (
                 f"; max_tokens now {body['max_tokens']}" if "max_tokens" in body else "")
             out.pop("error", None)

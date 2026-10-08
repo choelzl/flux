@@ -445,6 +445,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   `knowledge: {digest: nga}`. The server tells its runs which agents it added (`FLUX_AGENTS`), so such a
   document loads in the web; `flux task run` on the command line needs `FLUX_AGENTS='{"nga": "opencode"}'`
   and `FLUX_NGA_BIN` set.
+  **Endpoint recovery:** if an agent reports a transient API error (502/503/504/529 or a reset/refused
+  connection), Flux waits for its configured endpoint and sends **continue** to the same session.
+  An agent stuck after the error is stopped after 15 seconds without progress; only its subprocess
+  is replaced, keeping the loop, files, pass and session. Each readiness wait lasts at most five
+  minutes, with at most three continuations within the original turn's time limit. Recovery is
+  visible in the task tree and transcript. If the endpoint cannot be probed, the continuation
+  tries the pending work after a pause. Agents without resumable sessions keep their usual failure
+  handling. Tool failures, ordinary debug output, authentication errors and allowlist refusals
+  do not trigger recovery. Direct model calls retry the pending request with backoff for up to
+  five minutes; an incomplete stream is discarded before any tool calls are executed.
 - **Maintenance (Admin › Maintenance, D885):** clean-up on a schedule, as Gitea's cron tasks -- each
   task on or off, every so many minutes, hours or days, its settings, its last result and Run now.
   Clean scratch (FLUX_TMPDIR's old, unused entries; off until turned on, as the folder is the
@@ -596,6 +606,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     files again and keeps the record.
   - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
     reason users see; running loops go on), **stop every loop** after its pass or at once.
+    **Restart all active loops** interrupts current passes, waits for their processes to exit,
+    then resumes from the records with each loop's screen-only mode and selected problem document.
+    Finite runs use the remaining budget: 10 requested passes with 5 completed restart with 5;
+    run forever stays unlimited. Counts are read after stopping, exclude baseline pass 0 and
+    the interrupted pass, and reset for the replacement run. Repeated restarts keep subtracting
+    completed passes; exhausted budgets stay stopped. Files, results, logs and records stay;
+    idle loops stay idle.
+    Restart requires starts to be resumed and respects owners' running limits and agent checks.
+    Loops that cannot restart are listed individually; a process still stopping after 30 seconds
+    gets no replacement, so two runs cannot overlap.
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
     and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
     memory, disks, the containers' CPU and memory, loops running), kept a week, charted over the

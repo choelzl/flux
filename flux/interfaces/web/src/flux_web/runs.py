@@ -550,6 +550,26 @@ class RunManager:
             return str(cid), None
         return cid, rdir
 
+    def completed_passes(self, run: dict[str, Any]) -> int:
+        """Finished non-baseline passes of this start, including after its process exits.
+
+        Registration resets the counter on each start. An older campaign registration must
+        not spend this start's budget, and starting a pass is not completing it.
+        """
+        from .confine import open_read
+
+        _cid, rdir = self.campaign(run)
+        if not rdir:
+            return 0
+        try:
+            with open_read(os.path.join(rdir, "run.json"), *self.roots(run), text=True) as fh:
+                registration = json.load(fh)
+            if float(registration.get("started", 0)) < float(run["started"]):
+                return 0
+            return max(0, int(registration.get("passes") or 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            return 0
+
     #: A log line that says what went wrong (D757), as the page's own log marks problems.
     _PROBLEM = re.compile(r"\b(error|errors|traceback|exception|failed|failure|refused|missing|cannot|not answerable|"
                           r"did not build|timed out|killed|no such|not found|not on path|not installed|exited \d)\b", re.I)
@@ -594,7 +614,7 @@ class RunManager:
         info["campaign"] = cid
         if cid and running:
             st = ops.status(cid, run["db"])
-            if st.get("started") and abs(float(st["started"]) - float(run["started"])) < 300:   # this start's registration
+            if st.get("started") and float(st["started"]) >= float(run["started"]):   # this start's registration
                 info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
                             container=st.get("container"), baseline=bool(st.get("baseline")))
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
