@@ -217,6 +217,27 @@ your scripts. With no file or command, scripts run as written; `{artifact}` is a
 placeholder file, so use project paths such as `{home}/src` when measuring the current project.
 
 Pass 0 calls no model or coding agent, authors no golden model, and performs no repairs.
+
+You can also supply known reference values instead of running baseline tools. In the
+configurator's **Extra → Baseline / pass 0**, enable the baseline and choose
+**Provided metrics and values**. Add a metric, numeric value and optional stage for each row:
+
+```yaml
+baseline:
+  metrics:
+    - {metric: area_um2, value: 120}
+    - {metric: fmax_mhz, value: 1000, stage: place}
+```
+
+An omitted stage uses the loop's deepest measurement stage. Values must be finite numbers;
+zero and negative values are allowed. Each metric must belong to its stage, and a metric/stage
+pair can appear once. Choose one baseline source: metrics, file, command, or the current project.
+
+Provided values are recorded on pass 0 without running checks, builds or measurement tools.
+They become the baseline reference lines and relative-value references for their metric and
+stage. They supply no design artifact and are never selected as the decision or closest design.
+Unchanged values are reused on restart; edits import a new reference. `only: true` records the
+values and stops after pass 0. Normal passes still check and measure their generated designs.
 Measurements bypass caches, estimators, and search cutoffs to exercise every available stage;
 a failing check stops measurement, and a failing measurement stops later stages. Failures and
 numbers remain in the run's logs and record. Normal passes continue afterward, and pass 0 does

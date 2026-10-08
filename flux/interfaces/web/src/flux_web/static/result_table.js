@@ -3,6 +3,32 @@ import { h } from "./ui.js";
 
 export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
 
+/** Short display names; the original names and content keys still identify designs. */
+export function designLabels(designs, appName) {
+  const parsed = designs.map(d => {
+    const base = d.base || d.name, match = base.match(/^(.*)#([^#]+)$/);
+    const group = d.part || d.group || match?.[1] || "";
+    return { d, match, group: group === "whole" || group === appName ? "" : group };
+  });
+  const parts = parsed.some(({ d, group }) => d.part || group);
+  const entries = parsed.map(({ d, match, group }) => ({ d,
+    label: match ? `${parts ? group || "whole" : ""}#${match[2]}` : d.name }));
+  const byLabel = new Map();
+  for (const entry of entries) {
+    if (!byLabel.has(entry.label)) byLabel.set(entry.label, []);
+    byLabel.get(entry.label).push(entry);
+  }
+  return new Map(entries.map(({ d, label }) => {
+    const peers = byLabel.get(label);
+    if (peers.length === 1) return [d, label];
+    // A restart may reuse an ID for different content. Keep even colliding hash prefixes distinct.
+    if (!d.key || peers.some(p => p.d !== d && p.d.key === d.key)) return [d, d.name];
+    let n = 6;
+    while (n < d.key.length && peers.some(p => p.d !== d && p.d.key?.slice(0, n) === d.key.slice(0, n))) n++;
+    return [d, `${label}·${d.key.slice(0, n)}`];
+  }));
+}
+
 export function relativeToggle(surface, redraw) {
   let relative = false;
   try { relative = localStorage.getItem("flux-results-relative") === "true"; } catch (_) { /* storage may be disabled */ }
@@ -42,9 +68,15 @@ export function measurementLabels(metrics) {
 }
 
 export function measurementHeader(text, ...content) {
+  const button = content[0], arrow = button?.querySelector(".th-arrow");
+  if (arrow) {
+    arrow.remove();
+    arrow.classList.add("measurement-sort-arrow");
+    arrow.addEventListener("click", () => button.click());
+  }
   return h("div", { class: "measurement-heading", style: `--metric-length:${text.length + 2}` },
     h("div", { class: "measurement-label" }, content[0] || h("span", { class: "measurement-text" }, text)),
-    ...content.slice(1));
+    ...content.slice(1), arrow);
 }
 
 export function verdictBadge(verdict, reason = "") {

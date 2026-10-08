@@ -330,9 +330,10 @@ table.designs td { white-space: nowrap; }
   height: max(68px, calc(var(--metric-length) * .83ch + 26px)); }
 .measurement-label { position: absolute; right: 0; bottom: 12px; width: max-content;
   transform: rotate(55deg); transform-origin: right bottom; text-align: right; white-space: nowrap; }
-.result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0 0 0 13px; min-height: 0;
+.result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0; min-height: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.result-table-surface .measurement-label .th-arrow { right: auto; left: 0; }
+.result-table-surface .measurement-heading > .measurement-sort-arrow { top: auto; left: 0; right: auto;
+  bottom: 15px; height: 10px; transform: none; cursor: pointer; }
 .measurement-label .measurement-text { display: block; overflow: hidden; text-overflow: ellipsis; }
 .measurement-heading > .lim { position: absolute; right: 0; bottom: -3px; white-space: nowrap; }
 .best-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
@@ -341,6 +342,11 @@ table.designs td { white-space: nowrap; }
 .result-table-surface .table-part { display: inline-block; max-width: 16ch;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .result-table-surface .table-part { display: block; font-size: 11px; }
+.result-table-surface .table-design-name.design-id { max-width: none; overflow: visible; }
+.result-table-surface .hide-design { border: 0; background: transparent; color: var(--muted); padding: 2px;
+  margin-left: 4px; min-height: 0; vertical-align: middle; cursor: pointer; }
+.result-table-surface .hide-design:hover, .result-table-surface .hide-design:focus-visible { color: var(--ink); }
+.result-table-surface .hidden-design { opacity: .55; }
 .result-table-surface .verdict-badge { display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; padding: 1px 4px; font-size: 11px; line-height: 16px; }
 .relative-values[aria-pressed=true] { background: var(--soft); border-color: var(--accent); }

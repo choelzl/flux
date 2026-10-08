@@ -283,6 +283,8 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         return self._tools_missing(baseline=True)
 
     def _tools_missing(self, *, baseline: bool = False) -> list[str]:
+        if (baseline or (self.task.baseline or {}).get("only")) and (self.task.baseline or {}).get("metrics"):
+            return []  # supplied reference values require no build, gate, or measurement executable
         missing: list[str] = []
         declared = {f"stage {r.name}" for r in self.task.stages if r.needs}   # skipped, not missing
         for _label, cmd in self.task.commands():

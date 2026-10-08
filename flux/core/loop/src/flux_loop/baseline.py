@@ -33,6 +33,9 @@ def _fingerprint(problem):
             return "missing or unreadable"
 
     config = task.baseline or {}
+    if "metrics" in config:
+        body = {"schema": 1, "id": task.id, "parts": [p.name for p in task.parts], "metrics": config["metrics"]}
+        return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     source = None
     if "file" in config:
         path = Path(config["file"].replace("{home}", task.home or "."))
@@ -69,7 +72,32 @@ def _restore(state, saved):
     state.reached = reached
     state.stopped = stopped
     for row in scored:
+        if row.candidate.meta.get("baseline_metrics"):
+            continue
         state.on_stage.setdefault(row.stage, []).append(row)
+
+
+def _provided_metrics(problem, state):
+    """Record external reference numbers without claiming a checked, reproducible design."""
+    task = problem.task
+    cand = Candidate(f"{task.id}#baseline", knobs={"baseline_metrics": task.baseline["metrics"]},
+        meta={"baseline": True, "baseline_metrics": True,
+        "baseline_workspace": True, "composed": [p.name for p in task.parts]})
+    stages = {}
+    for row in task.baseline["metrics"]:
+        stages.setdefault(row["stage"], {})[row["metric"]] = row["value"]
+    for stage in problem.stages():
+        if stage not in stages:
+            continue
+        with _phase(f"measure: {stage}", why="provided baseline values; no tool run") as out:
+            metrics = stages[stage]
+            state.scored.append(Scored(cand, stage, metrics, {"supplied": True}))
+            if state.records is not None:
+                state.records.trial(cand.to_record(), f"{cand.name}@{stage}", stage=stage,
+                    strategy="baseline", metrics=metrics, wall_s=0, analytic=True, evaluator="baseline@provided")
+            out["source"] = "provided metrics"
+            out["metrics"] = metrics
+    return cand
 
 
 def run_baseline(problem, state):
@@ -77,6 +105,12 @@ def run_baseline(problem, state):
 
     state.request = dataclasses.replace(state.request, critique_rounds=0, screen_only=False)
     state.cache = None  # a baseline must exercise tools, even when identical numbers are cached
+    provided = "metrics" in (getattr(getattr(problem, "task", None), "baseline", None) or {})
+
+    def outcome():
+        return (_conclude(problem, state, []) if state.scored and (not provided or state.on_stage)
+                else _result(problem, state, None, state.stopped, [], []))
+
     fingerprint = _fingerprint(problem)
     saved = state.records.recall("baseline") if state.records is not None else []
     reused = False
@@ -87,47 +121,49 @@ def run_baseline(problem, state):
         except (KeyError, TypeError, ValueError):
             pass  # an older or incomplete snapshot cannot stand in for a real tool run
     if reused:
-        line = "baseline pass 0 reused: inputs, configuration and tools unchanged"
+        line = "baseline pass 0 reused: provided metrics unchanged" if provided else "baseline pass 0 reused: inputs, configuration and tools unchanged"
         state.say(f"  {line}")
         state.lessons.append(line)
         _merge_decision_history(problem, state)
         with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped"):
-            result = _conclude(problem, state, []) if state.scored else _result(problem, state, None, state.stopped, [], [])
+            result = outcome()
         result.provenance["baseline_reused"] = True
         if state.depth == 0:
             _publish(problem, state, [], [], line, searching=False)
         return result
     cand = Candidate(f"{problem.name}#baseline", meta={"baseline": True})
     try:
-        with _phase("knowledge: baseline", why="unchanged file, preparation command, or current project") as out:
-            cand = problem.baseline_candidate(state)
-            out["source"] = "current project" if cand.meta.get("baseline_workspace") else "unchanged artifact"
-        with _phase("test: baseline", why="no repairs or agent edits") as out:
-            built = problem.build(cand, None, state)
-            verdict = _judge(problem, built, cand, None, state)
-            out["verdict"] = "passed" if verdict.ok else verdict.why
-        if not verdict.ok:
-            _record_trial(state, cand, None, verdict)
-            state.refused.append((cand.name, verdict.why))
+        if provided:
+            cand = _provided_metrics(problem, state)
         else:
-            # A project-only measurement is visible on the record, but supplies no design to resume.
-            if not cand.meta.get("baseline_workspace"):
-                state.admitted["*"] = cand
-                _record_trial(state, cand, None, verdict, admitted=True)
+            with _phase("knowledge: baseline", why="unchanged file, preparation command, or current project") as out:
+                cand = problem.baseline_candidate(state)
+                out["source"] = "current project" if cand.meta.get("baseline_workspace") else "unchanged artifact"
+            with _phase("test: baseline", why="no repairs or agent edits") as out:
+                built = problem.build(cand, None, state)
+                verdict = _judge(problem, built, cand, None, state)
+                out["verdict"] = "passed" if verdict.ok else verdict.why
+            if not verdict.ok:
+                _record_trial(state, cand, None, verdict)
+                state.refused.append((cand.name, verdict.why))
             else:
-                _record_trial(state, cand, None, verdict, gate_passed=True)
-            for stage in problem.stages():
-                rows = measure_many(problem, state, [cand], stage)
-                if not rows:
-                    break
-                state.scored.extend(rows)
-                state.on_stage[stage] = rows
-                state.reached = stage
+                if not cand.meta.get("baseline_workspace"):
+                    state.admitted["*"] = cand
+                    _record_trial(state, cand, None, verdict, admitted=True)
+                else:
+                    _record_trial(state, cand, None, verdict, gate_passed=True)
+                for stage in problem.stages():
+                    rows = measure_many(problem, state, [cand], stage)
+                    if not rows:
+                        break
+                    state.scored.extend(rows)
+                    state.on_stage[stage] = rows
+                    state.reached = stage
     except Exception as exc:  # noqa: BLE001 -- baseline errors are recorded, never sent to an agent
         why = f"{type(exc).__name__}: {exc}"
         state.refused.append((cand.name, why))
         _record_trial(state, cand, None, Verdict(False, 1.0, why), error=why)
-    state.stopped = "baseline failed" if state.refused else "baseline checked and measured"
+    state.stopped = "baseline failed" if state.refused else "baseline metrics recorded" if provided else "baseline checked and measured"
     state.say(f"  {state.stopped}" + (": " + state.refused[-1][1] if state.refused else ""))
     if state.records is not None:
         state.records.remember("baseline", {"candidate": cand.name, "ok": not state.refused,
@@ -138,7 +174,7 @@ def run_baseline(problem, state):
     # Save only pass 0 in its reusable snapshot, then rank against the campaign's evidence.
     _merge_decision_history(problem, state)
     with _phase("decide: baseline", why="compare the unchanged design with retained measurements"):
-        result = _conclude(problem, state, []) if state.scored else _result(problem, state, None, state.stopped, [], [])
+        result = outcome()
     if state.depth == 0:
         _publish(problem, state, [], [], state.stopped, searching=False)
     return result

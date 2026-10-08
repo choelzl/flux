@@ -364,11 +364,25 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Raw results include every retained measurement and design, without the chart and table limits.
     Fullscreen keeps the current view and unsaved edits; Close or Escape returns to it.
   - **Results tables:** Results and Overview's Decision table always use a compact layout.
-    Shortened design names and ✓/✗/… status badges keep rows small; measurements use green/red
-    text for limits, without extra checkmarks. Full names, stages, times, units and limit status
+    Generated names appear as `#ID`, or `part#ID` when parts or different design groups are present.
+    Reused IDs include a short content-key suffix to distinguish designs. These labels stay fully
+    visible; custom names keep their original text. Compact ✓/✗/… status badges keep rows small;
+    measurements use green/red text for limits, without extra checkmarks. Full names, stages, times, units and limit status
     remain on hover. Measurement headers use short diagonal labels that preserve the start and end
     of long names, with edge space to prevent clipping; Results headers still sort. Both tables keep
-    every measurement column visible.
+    every measurement column visible. In Results, use the eye button beside a design to hide its
+    row. **Hidden N** reveals hidden rows so you can show them individually or **Restore all**.
+    Row visibility is remembered per account and loop in this browser; measurements remain
+    available in graphs and relative-value references.
+  - **Graph preferences:** selected measurements, Pareto x/y axes, measurement stages and design
+    scope are remembered per account and loop in this browser. If a saved metric or stage is no
+    longer available, the view uses its defaults.
+  - **Provided baseline:** in the configurator's Extra step, enable **Baseline / pass 0** and
+    choose **Provided metrics and values**. Add metric/value rows and optionally select a stage;
+    the default is the deepest measurement stage. This writes, for example,
+    `baseline: {metrics: [{metric: time_ms, value: 12}]}`. Pass 0 imports the values without
+    running tools. They supply graph and relative-value references and are never selected as a
+    design. Unchanged values are reused on restart; edited values create a new reference.
   - **Absolute / Relative (%):** Results and Overview's Decision table share a remembered toggle.
     Relative shows percent change from the latest baseline for the same metric, stage and design
     group (baseline = 0%; a value 30% lower = −30%). Without a matching baseline, it uses that

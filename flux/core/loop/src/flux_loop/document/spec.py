@@ -272,8 +272,37 @@ class TaskSpec:
             baseline = {}
         elif isinstance(baseline, dict):
             baseline = dict(baseline)
-            if set(baseline) - {"file", "command", "timeout_s", "only"} or {"file", "command"} <= set(baseline):
-                raise TaskError("baseline takes file OR command, optional timeout_s and only; true checks the project as it is")
+            if set(baseline) - {"file", "command", "metrics", "timeout_s", "only"} or len(set(baseline) & {"file", "command", "metrics"}) > 1:
+                raise TaskError("baseline takes file OR command OR metrics, optional timeout_s and only; true checks the project as it is")
+            if "metrics" in baseline:
+                rows = baseline["metrics"]
+                if not isinstance(rows, list) or not rows:
+                    raise TaskError("baseline.metrics must be a non-empty list of metric/value rows")
+                if not stages:
+                    raise TaskError("baseline.metrics needs a measurement stage")
+                named = {s.name: s for s in stages}
+                normalized, seen = [], set()
+                for row in rows:
+                    if not isinstance(row, dict) or set(row) - {"metric", "value", "stage"}:
+                        raise TaskError("baseline.metrics rows take metric, value and optional stage")
+                    metric, value = row.get("metric"), row.get("value")
+                    if not isinstance(metric, str) or not metric.strip():
+                        raise TaskError("baseline.metrics: metric must be a non-empty name")
+                    if isinstance(value, bool) or not isinstance(value, (int, float)) or not -float("inf") < value < float("inf"):
+                        raise TaskError("baseline.metrics: value must be a finite number")
+                    stage = row.get("stage", stages[-1].name)
+                    if stage in ("deepest", "last"):
+                        stage = stages[-1].name
+                    if not isinstance(stage, str) or stage not in named:
+                        raise TaskError("baseline.metrics: stage must name a measurement stage")
+                    declared = {*named[stage].metrics, *named[stage].metrics_re}
+                    if declared and metric not in declared:
+                        raise TaskError(f"baseline.metrics: {metric!r} is not reported by {stage!r}")
+                    if (stage, metric) in seen:
+                        raise TaskError(f"baseline.metrics: duplicate {metric!r} on {stage!r}")
+                    seen.add((stage, metric))
+                    normalized.append({"metric": metric, "value": float(value), "stage": stage})
+                baseline["metrics"] = normalized
             if "file" in baseline:
                 if not isinstance(baseline["file"], str) or not baseline["file"].strip():
                     raise TaskError("baseline.file must be a non-empty file path")

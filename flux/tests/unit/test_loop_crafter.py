@@ -68,6 +68,12 @@ s.stages.push(c.newStage(s, "bench-script"));
 s.objectives = [obj("time_ms", "min")];
 add("python", "python", s);
 
+s = JSON.parse(JSON.stringify(s));
+s.baseline = {mode: "before", source: "metrics", metrics: [{metric: "time_ms", value: "0", stage: ""}]};
+add("baseline_metrics", "python", s);
+out.baseline_readback = c.fromDoc({statement: "Measure", baseline: {metrics: [{metric: "time_ms", value: 2.5, stage: "bench"}]}}, null).state.baseline;
+out.baseline_alias = c.fromDoc({statement: "Measure", baseline: {metrics: [{metric: "time_ms", value: 2.5, stage: "deepest"}]}}, null).state.baseline;
+
 // ChampSim: build + smoke-run a prefetcher header; simulate; most speed-up
 s = fresh("prefetcher_h", "cpp");
 s.checks.push(c.newCheck(s, "compile"));
@@ -168,6 +174,12 @@ add("estimates_said", "rtl", s); out.explained.estimates = s.stages.map(st => c.
 // what can still go wrong
 const bad = (name, s) => add(name, "none", s, {bad: true});
 bad("bad_empty", c.base());
+for (const [name, value] of [["blank", ""], ["infinite", "Infinity"], ["text", "debug"]]) {
+  s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics[0].value = value;
+  bad("bad_baseline_" + name, s);
+}
+s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics.push({...s.baseline.metrics[0]}); bad("bad_baseline_duplicate", s);
+s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics[0].stage = "removed"; bad("bad_baseline_stage", s);
 s = fresh("x", "python"); s.checks.push(c.newCheck(s, "lint")); bad("bad_no_lint_for_python", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.stages[0].gates = [{metric: "energy_pj", rule: "at", value: "1"}]; bad("bad_gate_metric", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives.push(obj("latency_ns", "min")); bad("bad_objective_metric", s);
@@ -341,6 +353,16 @@ def test_rtl_checks_run_in_order_and_the_limits_are_goals(tmp_path):
     got = [(o.metric, o.direction, o.goal) for o in t.objectives]
     assert got == [("fmax_mhz", "maximize", 1000), ("area_um2", "minimize", 80), ("power_w", "minimize", None)]
     assert BUILT["rtl"]["words"] == ["fmax_mhz at least 1000 MHz, area_um2 at most 80 um2, then least power_w"]
+
+
+def test_provided_baseline_round_trips_and_validates_numeric_rows(tmp_path):
+    task = _load(tmp_path, BUILT["baseline_metrics"])
+    assert task.baseline == {"metrics": [{"metric": "time_ms", "value": 0, "stage": task.stages[-1].name}]}
+    assert BUILT["baseline_readback"] == {"mode": "before", "source": "metrics", "file": "", "command": "", "timeout": "",
+                                        "metrics": [{"metric": "time_ms", "value": "2.5", "stage": "bench"}]}
+    assert BUILT["baseline_alias"]["metrics"][0]["stage"] == ""
+    for case in ("blank", "infinite", "text", "duplicate", "stage"):
+        assert "baseline" in _errors(BUILT["bad_baseline_" + case]).lower()
 
 
 def test_two_gates_on_one_stage_are_a_cutoff_list(tmp_path):

@@ -10,6 +10,22 @@ from flux_web.results import designs
 STAGES = [{"name": "screen", "cutoff": {"metric": "fmax_mhz", "at": 900}}, {"name": "confirm"}]
 
 
+def test_supplied_baseline_is_a_reference_even_when_better_than_every_design(tmp_path):
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.remember("objectives", {"objectives": [{"metric": "area_um2", "direction": "minimize"}]})
+    rec.trial({"name": "t#baseline", "artifact": "", "meta": {"baseline": True, "baseline_metrics": True}},
+              "baseline@confirm", stage="confirm", strategy="baseline", metrics={"area_um2": 1}, evaluator="baseline@provided")
+    rec.trial({"name": "t#1", "artifact": "real design"}, "t#1@screen", stage="screen", strategy="loop",
+              metrics={"area_um2": 10}, evaluator="screen")
+    rec.close("paused")
+    got = designs(db, [{"name": "screen"}, {"name": "confirm"}], decision={"name": "t#baseline"})
+    rows = {d["name"]: d for d in got["designs"]}
+    assert rows["t#baseline"]["reference_only"] and rows["t#baseline"]["baseline"]
+    assert rows["t#baseline"]["rank"] is None and not rows["t#baseline"]["decision"] and not rows["t#baseline"]["closest"]
+    assert rows["t#1"]["rank"] == 1  # the reference's deeper stage must not suppress real candidates
+
+
 def test_baseline_measurements_are_identified_for_graphs(tmp_path):
     db = str(tmp_path / "r.db")
     rec = Records(db, objective={"study": "t"}, name="t")

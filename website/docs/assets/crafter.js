@@ -502,7 +502,7 @@
       id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "",
-      baseline: { mode: "off", source: "project", file: "", command: "", timeout: "" },
+      baseline: { mode: "off", source: "project", file: "", command: "", timeout: "", metrics: [] },
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
       space: [], partsMode: "none", parts: "",
     };
@@ -737,6 +737,11 @@
         config.command = String(basepass.command || "").trim();
         if (String(basepass.timeout || "").trim()) config.timeout_s = typed(basepass.timeout);
       }
+      if (basepass.source === "metrics") config.metrics = (basepass.metrics || []).map(function (m) {
+        var row = { metric: m.metric, value: String(m.value == null ? "" : m.value).trim() ? Number(m.value) : "" };
+        if (m.stage) row.stage = m.stage;
+        return row;
+      });
       if (basepass.mode === "only") config.only = true;
       out += "\nbaseline: " + (Object.keys(config).length ? inline(config, false) : "true") + "\n";
     }
@@ -1046,6 +1051,21 @@
       if (bp.source === "file" && !String(bp.file || "").trim()) error("Say the unchanged baseline design's file.", "baseline-file");
       if (bp.source === "command" && !String(bp.command || "").trim()) error("Say the baseline command.", "baseline-command");
       if (bp.source === "command" && bp.timeout && !(isFinite(Number(bp.timeout)) && Number(bp.timeout) > 0)) error("The baseline timeout must be a positive number.");
+      if (bp.source === "metrics") {
+        var baselineSeen = {};
+        if (!(bp.metrics || []).length) error("Add at least one baseline metric and value.", "baseline-metrics");
+        (bp.metrics || []).forEach(function (m) {
+          var st = m.stage || (r.stages.length ? r.stages[r.stages.length - 1].name : "");
+          var named = r.stages.find(function (s) { return s.name === st; });
+          if (!named) error("Baseline metric " + m.metric + " needs an existing measurement stage.", "baseline-metrics");
+          if (!String(m.metric || "").trim() || reported(state).indexOf(m.metric) < 0) error("Choose a reported baseline metric.", "baseline-metrics");
+          if (named && named.metrics && named.metrics.length && named.metrics.indexOf(m.metric) < 0) error("Baseline metric " + m.metric + " is not reported by " + st + ".", "baseline-metrics");
+          if (!String(m.value == null ? "" : m.value).trim() || !isFinite(Number(m.value))) error("Baseline metric " + m.metric + " needs a finite numeric value.", "baseline-metrics");
+          var key = JSON.stringify([st, m.metric]);
+          if (baselineSeen[key]) error("Baseline metric " + m.metric + " is repeated on " + st + ".", "baseline-metrics");
+          baselineSeen[key] = true;
+        });
+      }
     }
     (state.space || []).forEach(function (x) {
       if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
@@ -1313,11 +1333,15 @@
     var bp = raw.baseline;
     if (bp === true) s.baseline.mode = "before";
     else if (bp && typeof bp === "object" && !Array.isArray(bp) &&
-             Object.keys(bp).every(function (k) { return ["file", "command", "only", "timeout_s"].indexOf(k) >= 0; })) {
+             Object.keys(bp).every(function (k) { return ["file", "command", "metrics", "only", "timeout_s"].indexOf(k) >= 0; })) {
       s.baseline.mode = bp.only ? "only" : "before";
       if (bp.file !== undefined) { s.baseline.source = "file"; s.baseline.file = String(bp.file); }
       if (bp.command !== undefined) { s.baseline.source = "command"; s.baseline.command = argvOf(bp.command).map(shellWord).join(" "); }
       if (bp.timeout_s !== undefined) s.baseline.timeout = String(bp.timeout_s);
+      if (Array.isArray(bp.metrics)) {
+        s.baseline.source = "metrics";
+        s.baseline.metrics = bp.metrics.map(function (m) { return { metric: m.metric, value: String(m.value), stage: m.stage === "deepest" || m.stage === "last" ? "" : m.stage || "" }; });
+      }
     } else if (bp !== undefined && bp !== null && bp !== false) keep("baseline", "custom baseline settings");
     var lang = String(raw.language || normal.language || "");
     if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
@@ -2118,6 +2142,22 @@
     function renderLevel3() {
       var b = state.budget;
       var bp = state.baseline || (state.baseline = { mode: "off", source: "project" });
+      function baselineMetrics() {
+        var metrics = bp.metrics || (bp.metrics = []), rep = reported(state);
+        var stageOptions = [["", "Deepest stage (default)"]].concat(resolve(state).stages.map(function (s) { return [s.name, s.name]; }));
+        var rows = metrics.map(function (m, i) {
+          return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
+            field("Metric", function () { return m.metric; }, function (v) { m.metric = v; },
+              { key: "baseline-metric-" + i, compact: true, structural: true, options: rep.map(function (v) { return [v, v]; }) }),
+            field("Value" + (unitFor(m.metric) ? " (" + unitFor(m.metric) + ")" : ""), function () { return m.value; }, function (v) { m.value = v; },
+              { key: "baseline-value-" + i, compact: true, narrow: true }),
+            field("Stage", function () { return m.stage || ""; }, function (v) { m.stage = v; },
+              { key: "baseline-stage-" + i, compact: true, options: stageOptions }), rowButtons(metrics, i)])]);
+        });
+        return h("div", { class: "fc-rows", "data-fc-field": "baseline-metrics" }, rows.concat([
+          button("+ Add baseline metric", function () { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); changed(true); }, "fc-add-btn"),
+          h("p", { class: "fc-hint", text: "Reference values for graphs and relative measurements. No checks or measurement tools run for this source, and it is never selected as a design." })]));
+      }
       var baseline = sub("Baseline / pass 0", "check and measure before any agent edits or repairs", [
         field("Baseline pass", function () { return bp.mode; }, function (v) { bp.mode = v; },
           { key: "baseline-mode", structural: true, disabled: (state.kept || []).indexOf("baseline") >= 0,
@@ -2125,7 +2165,7 @@
             hint: "Runs before parallel passes when no successful baseline is recorded or its inputs, settings or tools changed. Failed baselines are retried on the next start; unchanged successful results are reused. Pass 0 does not use the normal pass budget; new measurements bypass caches and estimators." }),
         bp.mode !== "off" ? field("Baseline source", function () { return bp.source; }, function (v) { bp.source = v; },
           { key: "baseline-source", structural: true, options: [["project", "Current project: run checks and measurements as written"],
-            ["file", "Existing design file (unchanged)"], ["command", "A baseline preparation command"]],
+            ["file", "Existing design file (unchanged)"], ["command", "A baseline preparation command"], ["metrics", "Provided metrics and values"]],
             hint: "Current project uses your scripts as written. Select a file when scripts expect a design in {artifact}." }) : null,
         bp.mode !== "off" && bp.source === "file" ? field("Baseline design file", function () { return bp.file; }, function (v) { bp.file = v; },
           { key: "baseline-file", placeholder: "baseline.py", hint: "Relative to the loop folder. Flux checks and measures a copy, leaving the original untouched." }) : null,
@@ -2133,7 +2173,8 @@
           { key: "baseline-command", placeholder: "{python} {home}/baseline.py {artifact}",
             hint: "Runs once with the usual placeholders and first seed or default knob values. May write {artifact}, or prepare the project for your scripts." }) : null,
         bp.mode !== "off" && bp.source === "command" ? field("Baseline command timeout (seconds)", function () { return bp.timeout; }, function (v) { bp.timeout = v; },
-          { placeholder: "600" }) : null]);
+          { placeholder: "600" }) : null,
+        bp.mode !== "off" && bp.source === "metrics" ? baselineMetrics() : null]);
       function num(label, key, dflt, hint) {
         return field(label, function () { return b[key]; }, function (v) { b[key] = v; },
                      { compact: true, placeholder: dflt, hint: hint + " (budget." + key + "; empty: " + dflt + ")" });

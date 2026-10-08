@@ -201,11 +201,12 @@ const bad = [], n = all().length;
 const widths = (i) => [...all()[i].tHead.querySelectorAll('th')].map(th => Math.round(th.getBoundingClientRect().width));
 const fits = (i, tag) => { for (const th of all()[i].tHead.querySelectorAll('th')) {
   const b = th.querySelector('button.th-sort'); if (!b) continue;
-  const t = th.getBoundingClientRect(), r = b.getBoundingClientRect(), a = b.querySelector('.th-arrow').getBoundingClientRect(), nm = th.dataset.label;
+  const t = th.getBoundingClientRect(), r = b.getBoundingClientRect(), arrow = th.querySelector('.th-arrow'), a = arrow.getBoundingClientRect(), nm = th.dataset.label;
   if (th.classList.contains('measurement-head')) {
     const head = th.closest('thead').getBoundingClientRect();
     if (r.top < head.top - 1 || r.bottom > head.bottom + 1) bad.push(`${tag}: ${nm}'s angled button outside the header`);
-    if (a.width && (a.left < r.left - 1 || a.right > r.right + 1 || a.top < r.top - 1 || a.bottom > r.bottom + 1)) bad.push(`${tag}: ${nm}'s angled arrow outside its button`);
+    if (getComputedStyle(arrow).transform !== 'none') bad.push(`${tag}: ${nm}'s sort arrow rotated`);
+    if (a.width && (a.left < t.left - 1 || a.right > t.right + 1 || a.top < head.top - 1 || a.bottom > head.bottom + 1)) bad.push(`${tag}: ${nm}'s arrow outside its header`);
     continue;
   }
   if (r.left < t.left - 0.5 || r.right > t.right + 0.5) bad.push(`${tag}: ${nm}'s button outside its cell`);
@@ -533,7 +534,8 @@ def flows(r: Run) -> None:
         (root / "baseline.py").write_text("answer = 42\n")
         path = root / "problem.yaml"
         raw = yaml.safe_load(path.read_text())
-        raw["flow"] = {"test": {"check": "true"}}
+        raw["flow"] = {"test": {"check": "true"}, "measure": {"measure": {"command": "true", "metrics": ["cost", "time_ms"]}}}
+        raw["objectives"] = [{"metric": "cost", "direction": "minimize"}]
         path.write_text(yaml.safe_dump(raw, sort_keys=False))
 
         def extra():
@@ -547,7 +549,7 @@ def flows(r: Run) -> None:
 
         extra()
         r.check("baseline is off by default in Extra", b.js("return document.querySelector('[data-fc-field=baseline-mode]').value") == "off")
-        for source, mode in (("project", "before"), ("file", "only"), ("command", "before")):
+        for source, mode in (("project", "before"), ("file", "only"), ("command", "before"), ("metrics", "before")):
             setv("baseline-mode", mode)
             setv("baseline-source", source)
             expected = True if source == "project" else {"file": "baseline.py", "only": True} if source == "file" else {"command": "{python} {home}/baseline.py {artifact}"}
@@ -555,6 +557,15 @@ def flows(r: Run) -> None:
                 setv("baseline-file", "baseline.py")
             if source == "command":
                 setv("baseline-command", expected["command"])
+            if source == "metrics":
+                r.button("+ Add baseline metric", ".fc-sub")
+                setv("baseline-metric-0", "cost")
+                setv("baseline-value-0", "0")
+                r.button("+ Add baseline metric", ".fc-sub")
+                setv("baseline-metric-1", "time_ms")
+                setv("baseline-value-1", "2.5")
+                setv("baseline-stage-1", "measure")
+                expected = {"metrics": [{"metric": "cost", "value": 0}, {"metric": "time_ms", "value": 2.5, "stage": "measure"}]}
             r.button("Save to problem.yaml", ".fc-stepnav")
             r.dialog_button("Save")
             b.wait("!document.querySelector('.fc-status.fc-pending') && document.querySelector('.fc-status.fc-ok')", timeout=20, what="baseline saved")
@@ -563,6 +574,8 @@ def flows(r: Run) -> None:
             extra()
             got = b.js("return ['baseline-mode', 'baseline-source'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)")
             r.check(f"baseline {source} survives reloading the configurator", got == [mode, source], str(got))
+            if source == "metrics":
+                r.check("provided baseline values and stages survive reloading", b.js("return ['baseline-metric-0', 'baseline-value-0', 'baseline-stage-0', 'baseline-metric-1', 'baseline-value-1', 'baseline-stage-1'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)") == ["cost", "0", "", "time_ms", "2.5", "measure"])
         r.clean("baseline settings")
     r.step("baseline setting", baseline_setting)
 
@@ -949,7 +962,7 @@ def flows(r: Run) -> None:
             d["numbers"].update(dict.fromkeys(metrics[2:], i + 0.25))
             d["shown"], d["stages"] = stage, {stage: d["numbers"]}
             d["meets"]["fmax_mhz"] = d["numbers"]["fmax_mhz"] >= 1000
-        b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.setItem('flux-results-compact', 'false'); localStorage.removeItem('flux-results-relative');"
+        b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.setItem('flux-results-compact', 'false'); localStorage.removeItem('flux-results-relative'); localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]');"
              " window.fetch = (u, o) => String(u) === '/api/apps/sw' ? window.__compactFetch(u, o).then(async r => { const info = await r.json();"
              " return new Response(JSON.stringify({...info, state: {...info.state, last_active: 1000}}), {headers: {'Content-Type': 'application/json'}}); })"
              " : String(u).startsWith('/api/apps/sw/state') ? window.__compactFetch(u, o).then(async r =>"
@@ -985,6 +998,20 @@ def flows(r: Run) -> None:
             r.check("diagonal headers fit inside the scroll area's edges", all(left >= 0 and right >= 0 for left, right in edges), str(edges))
             b.shot(r.shots / "compact-results.png", full=True)
             sort_fit("compact result headers")
+            r.check("upright measurement arrows still sort when clicked", b.js("const th = document.querySelector('th[data-label=area_um2]'), before = th.getAttribute('aria-sort'); th.querySelector('.measurement-sort-arrow').click(); return document.querySelector('th[data-label=area_um2]').getAttribute('aria-sort') !== before"))
+            b.shot(r.shots / "compact-results-sorted.png", full=True)
+            b.js("const row = [...document.querySelectorAll('table.designs tbody tr')].find(tr => tr.innerText.includes('w-bad')); row.querySelector('.hide-design').click(); return 1")
+            r.check("hiding a row keeps the other rows and exposes a restore control", b.js("return document.querySelectorAll('table.designs tbody tr').length === 6 && !document.querySelector('table.designs').innerText.includes('w-bad') && document.querySelector('.hidden-rows').textContent === 'Hidden 1'"))
+            r.page("#/", "document.querySelector('#main')", "loops before restoring rows")
+            r.page("#/app/sw/results", "document.querySelector('table.designs')", "remembered row visibility")
+            r.check("hidden rows remain hidden after reopening Results", b.js("return document.querySelectorAll('table.designs tbody tr').length === 6 && !document.querySelector('table.designs').innerText.includes('w-bad') && document.querySelector('.hidden-rows').getAttribute('aria-pressed') === 'false'"))
+            b.click(".hidden-rows")
+            r.check("hidden rows can be revealed and restored individually", b.js("const row = document.querySelector('table.designs tr.hidden-design'); const ok = row.innerText.includes('w-bad') && row.querySelector('.hide-design').title === 'Show row'; row.querySelector('.hide-design').click(); return ok && document.querySelectorAll('table.designs tbody tr').length === 7 && !document.querySelector('.hidden-rows')"))
+            b.js("while (document.querySelector('table.designs .hide-design[title=\"Hide row\"]')) document.querySelector('table.designs .hide-design[title=\"Hide row\"]').click(); return 1")
+            r.check("hiding every row leaves a working restore control", b.js("return !document.querySelector('table.designs') && document.querySelector('.hidden-rows').textContent === 'Hidden 7'"))
+            b.click(".hidden-rows")
+            b.click(".restore-rows")
+            r.check("Restore all clears remembered hidden rows", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && !document.querySelector('.hidden-rows') && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).hidden.length === 0"))
             b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
             r.check("small screens retain aligned measurement columns in a scroll area", b.js("const t = document.querySelector('table.designs'), area = t.parentElement; return getComputedStyle(t).display === 'table' && getComputedStyle(t.tHead).display === 'table-header-group' && getComputedStyle(t.rows[1].cells[0]).display === 'table-cell' && getComputedStyle(area).overflowX === 'auto' && area.clientWidth < innerWidth && area.scrollWidth > area.clientWidth"))
             r.check("the last diagonal header remains visible when scrolled to the right", b.js("const area = document.querySelector('table.designs').parentElement; area.scrollLeft = area.scrollWidth; const label = area.querySelector('th:last-child .measurement-label').getBoundingClientRect(); return label.right <= area.getBoundingClientRect().right && label.left >= area.getBoundingClientRect().left"))
@@ -1001,8 +1028,52 @@ def flows(r: Run) -> None:
             r.clean("compact tables")
         finally:
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
-            b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); localStorage.removeItem('flux-results-relative'); return 1")
+            b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); localStorage.removeItem('flux-results-relative'); localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
     r.step("compact tables", compact_tables)
+
+    def design_labels():
+        fixture = json.loads(json.dumps(GRAPHS_RESULTS))
+        for i, d in enumerate(fixture["designs"]):
+            prefix = d["part"] or "sw-a-very-long-application-name"
+            d["name"] = d["base"] = f"{prefix}#{'baseline' if d.get('baseline') else i + 42}"
+        single = {**fixture, "designs": [d for d in fixture["designs"] if not d["part"]], "total": 3,
+                  "counts": {"accepted": 2, "pending": 0, "failed": 1}}
+        b.js("window.__labelFetch = window.fetch.bind(window); window.__labelFixture = arguments[0];"
+             " localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]');"
+             " window.fetch = (u, o) => String(u) === '/api/apps/sw' ? window.__labelFetch(u, o).then(async r => { const info = await r.json();"
+             " return new Response(JSON.stringify({...info, state: {...info.state, last_active: 1000}}), {headers: {'Content-Type': 'application/json'}}); })"
+             " : String(u).startsWith('/api/apps/sw/results') ? Promise.resolve(new Response(JSON.stringify(window.__labelFixture), {headers: {'Content-Type': 'application/json'}}))"
+             " : String(u).startsWith('/api/apps/sw/design?') ? (window.__labelRequest = String(u), Promise.resolve(new Response('{\"artifact\": null}', {headers: {'Content-Type': 'application/json'}})))"
+             " : window.__labelFetch(u, o); return 1", single)
+        try:
+            r.page("#/app/sw/results", "document.querySelector('table.designs')", "short design IDs")
+            r.check("single-design tables omit the app name and display complete IDs", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === '#42,#43,#baseline' && [...document.querySelectorAll('table.designs .design-id')].every(s => getComputedStyle(s).maxWidth === 'none' && s.scrollWidth <= s.clientWidth + 1)"))
+            r.check("short design labels preserve full tooltips and accessible names", b.js("const b = document.querySelector('table.designs .open-design'); return b.title.includes('sw-a-very-long-application-name#42') && b.getAttribute('aria-label') === b.title && b.closest('td').title.includes('sw-a-very-long-application-name#42')"))
+            b.click("table.designs .open-design")
+            b.wait("document.querySelector('.detail-head h2')", what="the original design opened")
+            r.check("opening a short ID still requests and displays the original design", b.js("return new URL(window.__labelRequest, location.origin).searchParams.get('design') === 'sw-a-very-long-application-name#42' && document.querySelector('.detail-head h2').textContent === 'sw-a-very-long-application-name#42'"))
+            r.page("#/", "document.querySelector('#main')", "home before part labels")
+            b.js("window.__labelFixture = arguments[0]; return 1", fixture)
+            r.page("#/app/sw/results", "document.querySelector('table.designs')", "short labels with parts")
+            r.check("mixed designs show part#ID without brackets or repeated part subtitles", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === 'whole#42,whole#43,decoder#44,decoder#45,encoder#46,encoder#47,whole#baseline' && !document.querySelector('table.designs .table-part')"))
+            r.check("Design sorting orders the displayed parts and IDs", b.js("document.querySelector('th[data-label=Design] button').click(); return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).slice(0, 2).join() === 'decoder#44,decoder#45'"))
+            r.page("#/app/sw", "document.querySelector('.best-n')", "short Decision table labels")
+            r.check("Decision and Results share the same complete design labels", b.js("return [...document.querySelectorAll('.best-n .table-design-name')].every(s => /^(whole|decoder|encoder)#/.test(s.textContent) && !s.textContent.includes('[') && s.scrollWidth <= s.clientWidth + 1 && s.title.includes('#'))"))
+            b.shot(r.shots / "short-design-labels.png", full=True)
+            got = b.ajs("""const done = arguments[arguments.length - 1]; import('/static/result_table.js').then(({designLabels}) => {
+                const labels = ds => [...designLabels(ds, 'app').values()];
+                done([labels([{name:'app#9', group:'app'}, {name:'app#baseline', group:'whole'}]),
+                  labels([{name:'part#2', part:'part', group:'part'}]),
+                  labels([{name:'decoder#2', group:'decoder'}]),
+                  labels([{name:'alpha#2', group:'alpha'}, {name:'beta#2', group:'beta'}]),
+                  labels([{base:'app#9', name:'app#9·abcdef', key:'abcdef0'}, {base:'app#9', name:'app#9·abcdef', key:'abcdef1'}]),
+                  labels([{name:'custom name'}])]); }).catch(e => done(String(e)));""")
+            r.check("labels handle inferred groups, baseline, custom names and colliding ID hashes",
+                    got == [["#9", "#baseline"], ["part#2"], ["decoder#2"], ["alpha#2", "beta#2"], ["#9·abcdef0", "#9·abcdef1"], ["custom name"]], str(got))
+            r.clean("design labels")
+        finally:
+            b.js("window.fetch = window.__labelFetch; delete window.__labelFetch; delete window.__labelFixture; delete window.__labelRequest; localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
+    r.step("design labels", design_labels)
 
     def reset_loop():
         made = r.api("/apps/new-empty", "POST", {"name": "resettable"})
@@ -1800,6 +1871,7 @@ def flows(r: Run) -> None:
                 " : String(u).startsWith('/api/apps/sw/design?') ? said('{\"artifact\": null}') : real(u, o); return 1")
         payload = json.dumps(GRAPHS_RESULTS)
         r.page("#/", "document.querySelector('#main')", "the loops")
+        b.js("localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
         b.js(stub, False, payload)
         b.go(f"{r.url}/#/app/sw/results/graphs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=15, what="the stood-in graphs")
@@ -1859,6 +1931,43 @@ def flows(r: Run) -> None:
             f"return {card}.querySelector('.pt.on-front, path.front')", "Pareto front"), said)
         best = b.js(f"return [...{card}.querySelectorAll('figure')].map(f => [f.querySelector('.best-said').textContent, !!f.querySelector('path.best')])", "Improvement by design")
         r.check("before a feasible design, no best line (D914)", all(x == ["No feasible design yet", False] for x in best), str(best))
+
+        r.button("Results", ".subrow .subtabs")
+        b.wait("document.querySelector('table.designs')", what="Results to hide a row")
+        b.js("const row = [...document.querySelectorAll('table.designs tbody tr')].find(tr => tr.innerText.includes('w-bad')); row.querySelector('.hide-design').click(); return 1")
+        r.button("Graphs", ".subrow .subtabs")
+        b.wait("document.querySelector('#main svg.chart.pareto')", what="graph preferences")
+        b.js(f"const c = {card}; for (const [i, v] of [[0, 'area_um2'], [1, 'fmax_mhz']]) {{ const s = c.querySelectorAll('select')[i]; s.value = v; s.dispatchEvent(new Event('change')); }} return 1", "Pareto front")
+        b.js(f"const c = {card}, s = c.querySelector('select'); s.value = 'screen'; s.dispatchEvent(new Event('change')); [...c.querySelectorAll('.chips button')].find(b => b.textContent === 'area_um2').click(); return 1", "Improvement by design")
+        preferences = """const cards = [...document.querySelectorAll('#main .card')], c = title => cards.find(c => c.querySelector('h2')?.textContent === title);
+            return [[...c('Pareto front').querySelectorAll('select')].map(s => s.value),
+              c('Improvement by design').querySelector('select').value,
+              [...c('Improvement by design').querySelectorAll('.chips button.on')].map(b => b.textContent),
+              document.querySelector('#main .chips.scope button.on').textContent];"""
+        expected = [["area_um2", "fmax_mhz", "screen"], "screen", ["fmax_mhz"], "decoder"]
+        r.check("graph controls change axes, stages, selected measurements and scope", b.js(preferences) == expected)
+        r.page("#/", "document.querySelector('#main')", "home before a browser reload")
+        b.js("window.__preferencesReload = 1; location.reload(); return 1")
+        b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded browser document")
+        b.js(WATCH)
+        b.js(stub, False, payload)
+        r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "remembered graphs")
+        r.check("graph preferences survive a full browser reload", b.js(preferences) == expected, str(b.js(preferences)))
+        r.button("Results", ".subrow .subtabs")
+        b.wait("document.querySelector('table.designs')", what="remembered rows after reload")
+        r.check("hidden rows survive a full browser reload", b.js("return document.querySelectorAll('table.designs tbody tr').length === 6 && !document.querySelector('table.designs').innerText.includes('w-bad') && document.querySelector('.hidden-rows').textContent === 'Hidden 1'"))
+        b.click(".hidden-rows")
+        b.click(".restore-rows")
+        r.check("row restores preserve the saved graph preferences", b.js("const p = JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')); return !p.hidden.length && p.graphs.x === 'area_um2' && p.graphs.metrics.join() === 'fmax_mhz'"))
+        r.page("#/", "document.querySelector('#main')", "home before an empty graph selection")
+        b.js("const key = 'flux-results:[\"bob\",\"bob\",\"sw\"]', p = JSON.parse(localStorage.getItem(key)); p.graphs.metrics = []; localStorage.setItem(key, JSON.stringify(p)); return 1")
+        r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "no selected measurements")
+        r.check("an intentionally empty graph selection remains empty", b.js(f"const c = {card}; return !c.querySelector('figure') && !c.querySelector('.chips button.on') && c.textContent.includes('Pick a metric to chart')", "Improvement by design"))
+        r.page("#/", "document.querySelector('#main')", "home before obsolete preferences")
+        b.js("localStorage.setItem('flux-results:[\"bob\",\"bob\",\"sw\"]', JSON.stringify({hidden: 42, graphs: {x: 'removed', y: 'removed', paretoStage: 'removed', timeStage: 'removed', metrics: ['removed'], scope: 'removed'}})); return 1")
+        r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "obsolete graph settings")
+        r.check("removed metrics, stages and scopes fall back to usable defaults", b.js(preferences) == [["fmax_mhz", "area_um2", ""], "", ["area_um2", "fmax_mhz"], "Whole"], str(b.js(preferences)))
+        b.js("localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
         r.clean("graphs")
         shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
         if not shots:

@@ -168,6 +168,7 @@ def _objectives(db: str) -> Any:
 def _rank(out: list[dict[str, Any]], order: dict[str, int], db: str, n: int = 10, objectives: Any = None) -> None:
     """The best `n` by the loop's own rule (D809): `Objectives.decide` over the designs measured on
     the deepest stage any reached -- picked, set aside, picked again -- each its `rank` (1 the best)."""
+    out = [d for d in out if not d.get("reference_only")]
     if objectives is None:
         objectives = _objectives(db)
     if not objectives or not out:
@@ -198,6 +199,7 @@ def _decided(out: list[dict[str, Any]], decision: Any) -> dict[str, Any] | None:
     not meet every requirement, or a conclusion with no decision, leaves no design marked; the closest
     is returned instead -- the one the conclusion names, else that old decision, else the best ranked
     -- and marked `closest`."""
+    out = [d for d in out if not d.get("reference_only")]
     if not decision:
         return None                                             # no pass ended yet: nothing decided, nothing closest
     doc = decision if isinstance(decision, dict) else {"name": decision}
@@ -331,6 +333,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 group = "whole" if composed else (part or (name.split("#", 1)[0] if "#" in name else ""))
                 d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "group": group,
                                                      "baseline": bool((c.get("meta") or {}).get("baseline")),
+                                                     "reference_only": bool((c.get("meta") or {}).get("baseline_metrics")),
                                                      "stages": {}, "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]

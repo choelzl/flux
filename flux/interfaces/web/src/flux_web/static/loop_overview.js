@@ -5,7 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { designLabels, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -52,11 +52,12 @@ function topDesigns(ctx, r, n) {
   const top = (r.designs || []).slice().sort(cmp).slice(0, n);
   if (top.length < 2) return "";
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms);
+  const names = designLabels(r.designs, ctx.name);
   const surface = h("div", { class: "blk result-table-surface" });
   const rows = h("tbody", {}), comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
   function drawRows() {
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
-        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: "table-design-name", title: d.name }, d.name)),
+        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...ms.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
           return h("td", { class: `num mono${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));

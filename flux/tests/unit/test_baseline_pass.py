@@ -32,6 +32,67 @@ class PassResult:
     explorable: bool = True
 
 
+def test_supplied_baseline_records_values_without_tools_models_or_a_decision(tmp_path):
+    task = _task(tmp_path, {"only": True, "metrics": [{"metric": "cost", "value": 12},
+                        {"metric": "cost", "value": 20, "stage": "coarse"}]})
+    doc = task.to_dict()
+    doc["flow"]["test"] = {"check": "missing-baseline-check"}
+    for stage in doc["flow"]["measure"].values():
+        stage["command"] = "missing-baseline-measure"
+    task = TaskSpec.from_dict(doc, base=tmp_path)
+    problem = PromptProblem(task)
+    req = request_for(task, db=str(tmp_path / "out.db"))
+    assert problem.tools_missing() == problem.baseline_tools_missing() == []
+    assert model_use(task) == ""
+    for reused in (False, True):
+        out = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+        assert out.stopped == "baseline metrics recorded", out.refused
+        assert out.decision is None and not out.admitted and not out.refused
+        assert [(s.stage, s.metrics) for s in out.scored] == [("coarse", {"cost": 20}), ("fine", {"cost": 12})]
+        assert out.provenance.get("baseline_reused", False) == reused
+        assert out.provenance["measurements"] == 0
+    records = problem.open_records(req, lambda m: None)
+    rows = [t for t in records.store.trials(records.campaign_id) if t.stage in problem.stages()]
+    assert len(rows) == 2
+    assert all(t.candidate["meta"]["baseline_metrics"] and t.status == "ok" for t in rows)
+    records.close("paused")
+    assert not (tmp_path / "out/checks.txt").exists() and not (tmp_path / "out/tools.txt").exists()
+
+
+def test_changed_supplied_metrics_get_a_new_reference_and_preserve_the_real_decision(tmp_path):
+    task = _task(tmp_path, {"file": "design.py", "only": True})
+    req = request_for(task, db=str(tmp_path / "out.db"))
+    measured = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
+    assert measured.decision.metrics == {"cost": 7}
+    for value in (1, 2):  # an external reference is numerically better, but has no design to choose
+        doc = task.to_dict()
+        doc["baseline"] = {"only": True, "metrics": [{"metric": "cost", "value": value}]}
+        supplied = TaskSpec.from_dict(doc, base=tmp_path)
+        out = run_loop(PromptProblem(supplied), request_for(supplied, db=req.db), proposer=NoModel(), log=lambda m: None)
+        assert not out.provenance.get("baseline_reused")
+        assert out.decision.metrics == {"cost": 7}
+        assert out.decision.candidate.artifact.strip().endswith("answer = 42")
+        assert out.scored[0].metrics == {"cost": value}
+    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
+
+
+@pytest.mark.parametrize("rows", [[], {}, [1], [{"metric": "cost"}], [{"metric": "", "value": 1}],
+    [{"metric": "cost", "value": True}], [{"metric": "cost", "value": "1"}],
+    [{"metric": "cost", "value": float("nan")}], [{"metric": "cost", "value": float("inf")}],
+    [{"metric": "cost", "value": 1, "stage": "missing"}], [{"metric": "unknown", "value": 1}],
+    [{"metric": "cost", "value": 1, "extra": True}],
+    [{"metric": "cost", "value": 1}, {"metric": "cost", "value": 2, "stage": "fine"}]])
+def test_invalid_supplied_baseline_values_are_refused(tmp_path, rows):
+    with pytest.raises(TaskError, match="baseline.metrics"):
+        _task(tmp_path, {"metrics": rows})
+
+
+@pytest.mark.parametrize("source", ["file", "command"])
+def test_supplied_values_cannot_be_combined_with_a_baseline_source(tmp_path, source):
+    with pytest.raises(TaskError, match="baseline takes"):
+        _task(tmp_path, {source: "true", "metrics": [{"metric": "cost", "value": 1}]})
+
+
 def _task(tmp_path, baseline, *, gate_exit=0, measurement_exit=0):
     (tmp_path / "out").mkdir(exist_ok=True)
     (tmp_path / "design.py").write_text("# unchanged design\nanswer = 42\n")
@@ -298,8 +359,8 @@ def test_baseline_precedes_parallel_work_without_spending_a_normal_pass(tmp_path
     assert marks[0] == {"n": 0, "baseline": True}
 
 
-@pytest.mark.parametrize("baseline_fails", [False, True])
-def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_path, baseline_fails):
+@pytest.mark.parametrize("baseline_source", ["project", "failed", "provided"])
+def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_path, baseline_source):
     from flux_llm import ScriptedProposer
 
     base = _task(tmp_path, {"file": "design.py"})
@@ -315,8 +376,10 @@ def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_pa
         "answer = int(re.search(r'answer = (\\d+)', pathlib.Path(sys.argv[3]).read_text()).group(1))\n"
         "print('cost=' + str(100 - answer))\n")
     doc["budget"] = {"prototype": False, "steps": 1, "critique_rounds": 0}
-    if baseline_fails:
+    if baseline_source == "failed":
         doc["baseline"]["file"] = "absent.py"
+    elif baseline_source == "provided":
+        doc["baseline"] = {"metrics": [{"metric": "cost", "value": 0}]}
     task = TaskSpec.from_dict(doc, base=tmp_path)
     proposer = ScriptedProposer([json.dumps({"artifact": "answer = 43\n", "why": "a useful improvement"})])
     out = run_passes(lambda r, f: run_loop(PromptProblem(task), r, proposer=proposer, log=lambda m: None),
@@ -324,6 +387,9 @@ def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_pa
     assert proposer.prompts  # normal work follows pass 0, rather than ending with its result
     assert out.provenance["request"]["baseline"] is False
     assert any(s.candidate.artifact.strip() == "answer = 43" for s in out.scored), (out.refused, out.scored)
+    if baseline_source == "provided":
+        assert out.decision.candidate.artifact.strip() == "answer = 43"
+        assert not any(s.candidate.meta.get("baseline_metrics") for s in out.scored)
     assert (tmp_path / "design.py").read_text() == "# unchanged design\nanswer = 42\n"
 
 

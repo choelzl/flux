@@ -3,17 +3,30 @@
 
 import { codeBlock } from "./highlight.js";
 import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
-import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
+import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf, sv } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
+import { designLabels, measurementHeader, measurementLabels, measurementText, measurementUnits as unit, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
+import { me } from "./state.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
 /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
 function resultsView(ctx, r) {
   const { name, q, base, qs } = ctx;
+  const preferenceKey = `flux-results:${JSON.stringify([me?.name || "", ctx.owner || me?.name || "", name])}`;
+  let preferences = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(preferenceKey));
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) preferences = saved;
+  } catch (_) { /* old, unavailable or corrupt storage: use defaults */ }
+  function remember(patch) {
+    preferences = { ...preferences, ...patch };
+    try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch (_) { /* use this view */ }
+  }
+  const hidden = new Set(Array.isArray(preferences.hidden) ? preferences.hidden.filter(k => typeof k === "string") : []);
+  let showHidden = false;
   let filter = "all";
   const fmt = (v) => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -44,11 +57,13 @@ function resultsView(ctx, r) {
   const table = h("div", { class: "result-table-surface" });
   const comparison = measurementComparison(r.designs, r.objective_list || r.limits || []);
   const labels = measurementLabels(r.metrics);
+  const names = designLabels(r.designs, name);
   const relativeButton = relativeToggle(table, () => drawTable());
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const PAGE = 200;
   let pageN = PAGE;                                     // the rows drawn: a long loop's table grows by pages (D694)
-  const keyOf = (d) => `${d.part}|${d.name}`;
+  const keyOf = (d) => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
+  const visibleRows = () => r.designs.filter(d => (filter === "all" || d.verdict === filter) && (showHidden || !hidden.has(keyOf(d))));
   let picked = [];                                      // two designs to compare (D694)
   const cmpBtn = h("button", { class: "small", disabled: true, onclick: () => compare() }, "Compare");
   const drawPicked = () => { cmpBtn.disabled = picked.length !== 2; cmpBtn.textContent = picked.length ? `Compare ${picked.length}/2` : "Compare"; };
@@ -81,7 +96,7 @@ function resultsView(ctx, r) {
       ops ? (changed ? diffView(ops) : empty("The two sources are the same.")) : empty("A source is missing.")),
       [["Close", null, "primary"]]);
   }
-  const valueOf = (d, key) => key === "name" ? d.name : key === "verdict" ? d.verdict : key === "stage" ? (r.stages || []).indexOf(d.shown)
+  const valueOf = (d, key) => key === "name" ? names.get(d) : key === "verdict" ? d.verdict : key === "stage" ? (r.stages || []).indexOf(d.shown)
     : key === "when" ? Date.parse(d.last || "") || 0 : table.dataset.values === "relative" ? comparison(d, key).percent : d.numbers[key];
   function sorted(list) {
     if (!sortKey) return list;
@@ -104,7 +119,7 @@ function resultsView(ctx, r) {
       sortFocus = key; drawTable();
     } }, labels.get(key) || label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
-    const all = sorted(r.designs.filter(d => filter === "all" || d.verdict === filter));
+    const all = sorted(visibleRows());
     const shown = all.slice(0, pageN);
     const boxes = new Map();
     const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", "aria-label": `Compare ${d.name}`, checked: picked.some(p => keyOf(p) === keyOf(d)),
@@ -125,11 +140,21 @@ function resultsView(ctx, r) {
       h("thead", {}, h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
         ...r.metrics.map(m => { const l = limitOf(m); return th(m, m, { class: "num measurement-head", title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
-      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
+      h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}${hidden.has(keyOf(d)) ? " hidden-design" : ""}`, onclick: () => open(d, tr) },
         tick(d),
         h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
-          h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`,          // D929: the keyboard opens it too
-            onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: "table-design-name" }, d.name)), d.part ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
+          h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`, "aria-label": `Open ${d.name}`,          // D929: the keyboard opens it too
+            onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}` }, names.get(d))),
+          h("button", { type: "button", class: "hide-design", title: hidden.has(keyOf(d)) ? "Show row" : "Hide row",
+            "aria-label": `${hidden.has(keyOf(d)) ? "Show" : "Hide"} ${d.name}`, onclick: (e) => {
+              e.stopPropagation();
+              if (hidden.has(keyOf(d))) hidden.delete(keyOf(d)); else hidden.add(keyOf(d));
+              picked = picked.filter(p => !hidden.has(keyOf(p))); drawPicked();
+              remember({ hidden: [...hidden] }); chips(); drawTable();
+            } }, sv("svg", { viewBox: "0 0 24 24", width: 14, height: 14, "aria-hidden": "true", fill: "none", stroke: "currentColor", "stroke-width": 1.6 },
+              sv("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" }), sv("circle", { cx: 12, cy: 12, r: 3 }),
+              hidden.has(keyOf(d)) ? "" : sv("path", { d: "M3 3 21 21" }))),
+          d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...r.metrics.map(m => { const ok = d.meets[m];
           const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
@@ -139,7 +164,14 @@ function resultsView(ctx, r) {
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });
   function chips() {
+    const nHidden = r.designs.filter(d => hidden.has(keyOf(d))).length;
+    if (!nHidden) showHidden = false;
     chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
+      nHidden ? h("button", { type: "button", class: `chip hidden-rows${showHidden ? " on" : ""}`, "aria-pressed": String(showHidden),
+        title: "Show hidden rows to restore them individually", onclick: () => { showHidden = !showHidden; chips(); drawTable(); } }, `Hidden ${nHidden}`) : "",
+      hidden.size && showHidden ? h("button", { type: "button", class: "small restore-rows", onclick: () => {
+        hidden.clear(); showHidden = false; remember({ hidden: [] }); chips(); drawTable();
+      } }, "Restore all") : "",
       h("span", { class: "grow" }), relativeButton, cmpBtn);
   }
   chips(); drawTable();
@@ -151,12 +183,16 @@ function resultsView(ctx, r) {
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
     .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));
   const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
-  let px = nums[1] || nums[0], py = nums[0], pst = "", tMetrics = new Set(nums.slice(0, 2)), tst = "";
+  const graphPrefs = preferences.graphs && typeof preferences.graphs === "object" && !Array.isArray(preferences.graphs) ? preferences.graphs : {};
+  let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
+  let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
+  const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
+  let tMetrics = new Set(restoredMetrics && (!graphPrefs.metrics.length || restoredMetrics.length) ? restoredMetrics : nums.slice(0, 2));
   let view = "results";
   const paretoBox = h("div", {}), timeBox = h("div", {});
   const resultsDetail = h("div", {}, detail), graphsDetail = h("div", {});
   const pickRow = (d) => {                              // a point, or the decision's name: its detail, its row selected
-    const all = sorted(r.designs.filter(x => filter === "all" || x.verdict === filter));
+    const all = sorted(visibleRows());
     const at = all.indexOf(d);
     if (at >= pageN) { pageN = Math.ceil((at + 1) / PAGE) * PAGE; drawTable(); }
     const tr = [...table.querySelectorAll("tbody tr")][at];
@@ -167,26 +203,29 @@ function resultsView(ctx, r) {
   const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
   // D914: the best and the front are of one scope -- the whole, or a part -- never parts pooled
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
-  let scope = groups.length ? "whole" : "";
+  let scope = groups.length ? (groups.includes(graphPrefs.scope) ? graphPrefs.scope : "whole") : "";
+  function rememberGraphs() {
+    remember({ graphs: { x: px, y: py, paretoStage: pst, timeStage: tst, metrics: [...tMetrics], scope } });
+  }
   const scopeBox = h("div", {});
   function drawScope() {
     scopeBox.replaceChildren(groups.length ? h("div", { class: "chips scope", role: "group", "aria-label": "Scope" }, h("span", { class: "muted" }, "Compare within"),
       scopesOf(groups).map(([k, label]) => h("button", { class: `chip${scope === k ? " on" : ""}`, type: "button", "aria-pressed": scope === k ? "true" : "false",
-        onclick: () => { scope = k; drawScope(); drawPareto(); drawTime(); } }, label))) : "");
+        onclick: () => { scope = k; rememberGraphs(); drawScope(); drawPareto(); drawTime(); } }, label))) : "");
   }
   function drawPareto() {
     paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
-      h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; drawPareto(); })),
-      h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; drawPareto(); })),
-      h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; drawPareto(); }))),
+      h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; rememberGraphs(); drawPareto(); })),
+      h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; rememberGraphs(); drawPareto(); })),
+      h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; rememberGraphs(); drawPareto(); }))),
       nums.length < 2 ? empty("A front needs two measured metrics.") : paretoChart(r.designs, px, py, pst, objectives, pickRow, { styles, scope, legend: false }));
   }
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
     timeBox.replaceChildren(h("div", { class: "chart-ctl" },
       h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
-        onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); drawTime(); } }, m))),
-      h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; drawTime(); }))),
+        onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); rememberGraphs(); drawTime(); } }, m))),
+      h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; rememberGraphs(); drawTime(); }))),
       tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m);
         return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false }); }))
         : empty("Pick a metric to chart."));
@@ -204,7 +243,7 @@ function resultsView(ctx, r) {
   }
   // the decision, in a line, above both views (D900: none, when no design meets every requirement)
   const dec = r.designs.find(d => d.decision), near = r.designs.find(d => d.closest);
-  const nameBtn = (d) => h("button", { class: "link mono strong", type: "button", onclick: () => pickRow(d) }, d.name);
+  const nameBtn = (d) => h("button", { class: "link mono strong", type: "button", title: d.name, "aria-label": `Open ${d.name}`, onclick: () => pickRow(d) }, names.get(d));
   const decisionLine = h("div", { class: "decision-line" }, dec
     ? [h("span", { class: "pill ok" }, "★ decision"), nameBtn(dec), dec.part ? h("span", { class: "muted" }, `part ${dec.part}`) : "",
       h("span", { class: "muted" }, `measured at ${dec.shown}`),

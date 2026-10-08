@@ -1167,6 +1167,8 @@ def _merge_decision_history(problem: Problem, state: LoopState) -> None:
     for st in stages:
         latest: dict[str, Scored] = {}
         for s in [*recalled, *state.scored]:
+            if s.candidate.meta.get("baseline_metrics"):
+                continue  # supplied values are references, without a design to select
             if s.stage == st:
                 latest.pop(s.candidate.key(), None)
                 latest[s.candidate.key()] = s
