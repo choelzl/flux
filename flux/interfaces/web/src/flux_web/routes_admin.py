@@ -19,6 +19,7 @@ from .models import (
     SandboxConfig, RunOptions,
 )
 from .runs import login_path
+from .result_preferences import preferences
 from .store import User
 from .workspace import Workspace, WorkspaceError
 
@@ -43,7 +44,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             w = Workspace(store.data, u.name)
             for a in w.apps():
                 out.append({**a, "owner": u.name, **runs.state(u, a["name"], last.get(a["name"])),
-                            "summary": _summary(w, u, a["name"], last.get(a["name"]))})
+                            "summary": _summary(w, u, a["name"], last.get(a["name"])),
+                            "result_preferences": preferences(store, u.name, a["name"])})
         return out
 
     # ---- the machine and its controls (D695)
@@ -218,19 +220,36 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.post("/api/admin/stop-all")
     def stop_all(body: StopAll, a: User = Depends(admin_of)) -> dict[str, Any]:
-        said = {f"{u}/{app_name}": runs.stop(r, now=body.now, why=f"every loop stopped by {a.name}")
+        said = {f"{u}/{app_name}": ctx.actions.request(r, store.user(name=u), a, now=body.now)
                 for (u, app_name), r in _live_loops().items()}
         store.audit(a.name, "stop all", f"{len(said)} loop(s){' now' if body.now else ''}")
         return {"stopped": said}
 
     @app.post("/api/admin/restart-all")
-    def restart_all(a: User = Depends(admin_of)) -> dict[str, Any]:
+    def restart_all(body: StopAll = StopAll(), a: User = Depends(admin_of)) -> dict[str, Any]:
         """Restart only the snapshot of active loops, as their owners, with saved launch options."""
         restarted, failed, skipped = {}, {}, {}
         # Exclude concurrent starts and resets while stopping and replacing these processes.
         with runs.lifecycle_lock:
             if reason := store.server_get("paused"):
                 raise HTTPException(409, f"starts are paused by an admin: {reason}; resume starts before restarting loops")
+            if not body.now:
+                scheduled = {}
+                for (uname, name), run in _live_loops().items():
+                    key = f"{uname}/{name}"
+                    try:
+                        user = store.user(name=uname)
+                        if user is None:
+                            raise ValueError("the loop's owner is missing")
+                        said = ctx.actions.request(run, user, a, restart=True)
+                        if said == "not running":
+                            skipped[key] = "finished before restart; left stopped"
+                        else:
+                            scheduled[key] = ctx.actions.options(run, user).model_dump()
+                    except (HTTPException, ValueError, WorkspaceError, OSError) as exc:
+                        failed[key] = str(exc.detail if isinstance(exc, HTTPException) else exc)
+                store.audit(a.name, "restart all requested", f"{len(scheduled)} scheduled, {len(failed)} failed")
+                return {"scheduled": scheduled, "restarted": {}, "failed": failed, "skipped": skipped}
             pending = {}
             live = _live_loops()
             for (uname, name), run in live.items():
@@ -255,6 +274,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                     if not current or not runs.live(current):
                         skipped[key] = "finished before restart; left stopped"
                         continue
+                    ctx.actions.cancel(current)
                     runs.stop(current, now=True, why=f"all active loops restarted by {a.name}")
                     pending[key] = (uname, name, current, options)
                 except (HTTPException, ValueError, WorkspaceError, OSError) as exc:

@@ -167,7 +167,7 @@ def move_loop(store: Store, source: User, name: str, target: User, to: str, *, k
                 con.execute("UPDATE runs SET user_id = ?, app = ?, db = ?, log = ?, argv = ?, options = ? WHERE id = ?",
                             (target.id, to, db_path, _paths(row["log"], pairs), json.dumps(_paths(json.loads(row["argv"]), pairs)),
                              json.dumps(_paths(json.loads(row["options"]), pairs)), row["id"]))
-            for prefix in ("env:loop", "adv", "share"):
+            for prefix in ("env:loop", "adv", "share", "results"):
                 key, destination = f"{prefix}:{source.name}:{name}", f"{prefix}:{target.name}:{to}"
                 con.execute("DELETE FROM server WHERE key = ?", (destination,))
                 if transfer and prefix == "adv" and keep_permissions:

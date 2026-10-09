@@ -7,6 +7,7 @@ import { envEditor, envTable } from "./loops.js";
 import { MECHANISM, VERIFIED, settingsForm } from "./admin.js";
 import { route } from "./app.js";
 import { restoreScroll, scrollState } from "./scroll.js";
+import { editOverviewLayout } from "./overview_layout.js";
 
 // ================================================================ pages
 async function loginPage() {
@@ -64,6 +65,8 @@ async function accountPage() {
   const logins = { box: lg.box, term: lg.term, panels: Object.fromEntries(Object.entries(holders).map(([a, el]) =>
     [a, { el: h("div", { class: "agent-panel" }, h("h4", { class: "set-sub first" }, "Connection"), el) }])) };   // D924: connection first
   show(head("Account", `Logged in as ${me.name}`),
+    card("Overview layout", [h("p", { class: "muted" }, "Choose and order 3–5 small cards and arrange the larger cards in two columns. Applies to every loop in your account, across browsers."),
+      !me.impersonator ? act("Customize", editOverviewLayout, { cls: "small" }) : h("p", { class: "muted small" }, "Viewing this account's saved layout; impersonation is read-only.")]),
     mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
       mine.partial ? ` (${mine.partial} turn(s) with incomplete usage)` : "",

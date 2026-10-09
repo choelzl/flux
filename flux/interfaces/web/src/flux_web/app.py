@@ -31,9 +31,19 @@ CRAFTER = Path(os.environ.get("FLUX_CRAFTER_ASSETS") or Path(__file__).resolve()
 
 
 def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = False, max_running: int = 4) -> FastAPI:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def lifespan(app):
+        app.state.actions.resume()
+        try:
+            yield
+        finally:
+            app.state.actions.close()
+
     store = Store(data)
     runs = RunManager(store, sandbox=sandbox, max_running=max_running)
-    app = FastAPI(title="Flux", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(title="Flux", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
     app.state.store, app.state.runs = store, runs
     from .authoring import Authoring
 
@@ -241,6 +251,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
                           access=access, reader=reader, editor=editor, runner=runner, creator=creator,
                           fail=fail, loop_of=loop_of, env_list=_env_list,
                           set_env=_set_env, rules=_rules, masks=_masks, summary=_summary, stages=_stages, all_loops=_all_loops)
+    from .loop_actions import LoopActions
+
+    app.state.actions = ctx.actions = LoopActions(ctx)
     # the route groups (D888); agents first: it puts the readiness gates and the retest into ctx
     routes_accounts.register(app, ctx)
     routes_agents.register(app, ctx)

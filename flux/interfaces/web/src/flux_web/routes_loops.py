@@ -23,6 +23,7 @@ from .models import (
     LoopRename, LoopTransfer, ResetIn,
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env, loop_permissions
+from .result_preferences import ResultPreferences, merge_preferences, preferences
 from .store import User
 from .workspace import Changed, Exists, Workspace, WorkspaceError
 
@@ -36,6 +37,27 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     creator, runner = ctx.creator, ctx.runner
     agents_gate, author_agent, check_author = ctx.agents_gate, ctx.author_agent, ctx.check_author
     from .maintenance import TASKS
+
+    @app.get("/api/apps/{name}/preferences")
+    def get_preferences(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        return {"preferences": preferences(store, whose.name, name)}
+
+    @app.patch("/api/apps/{name}/preferences")
+    def patch_preferences(name: str, body: ResultPreferences, owner: str | None = None,
+                          user: User = Depends(user_of)) -> dict[str, Any]:
+        with runs.lifecycle_lock:
+            _w, whose, _d, _run = loop_of(name, user, owner, edit=True)
+            patch = body.model_dump(exclude_unset=True)
+            got = store.server_update(f"results:{whose.name}:{name}", lambda saved: merge_preferences(saved, patch))
+        return {"preferences": got}
+
+    @app.delete("/api/apps/{name}/preferences")
+    def reset_preferences(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        with runs.lifecycle_lock:
+            _w, whose, _d, _run = loop_of(name, user, owner, edit=True)
+            store.server_set(f"results:{whose.name}:{name}", None)
+        return {"preferences": {}}
 
     @app.get("/api/apps/{name}/maintenance")
     def loop_maintenance(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
@@ -160,7 +182,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                     out.append({**meta, "name": name, "owner": member.name, "perm": perm,
                                 **runs.state(member, name, last.get(name)),
                                 "summary": _summary(w, member, name, last.get(name)) if summaries else {},
-                                "can_run": store.can_run(user, member, name)})
+                                "can_run": store.can_run(user, member, name), "result_preferences": preferences(store, member.name, name)})
         return out
 
     @app.get("/api/group-loops")
@@ -178,7 +200,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 continue
             meta = w.meta(app_name)
             out.append({"name": app_name, "owner": owner, "perm": store.loop_access(user, o, app_name), "document": meta.get("document"),
-                        **runs.state(o, app_name), "summary": _summary(w, o, app_name), "can_run": store.can_run(user, o, app_name)})
+                        **runs.state(o, app_name), "summary": _summary(w, o, app_name), "can_run": store.can_run(user, o, app_name), "result_preferences": preferences(store, owner, app_name)})
         return out
 
     # ---- applications
@@ -250,7 +272,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         w = ws(user)
         last = store.latest_runs(user)                    # D918: every loop's latest start in one query
         out = [{**a, **runs.state(user, a["name"], last.get(a["name"])), "summary": _summary(w, user, a["name"], last.get(a["name"])),
-                "can_run": user.can("run_loops")}
+                "can_run": user.can("run_loops"), "result_preferences": preferences(store, user.name, a["name"])}
                for a in w.apps()]
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
         return out
@@ -532,6 +554,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                     for u in store.users() for a in ws(u).apps()
                 ):
                     raise HTTPException(409, "this loop shares a cache folder with another loop; cannot reset it safely")
+                ctx.actions.cancel(runs.latest(user, name))
                 clear(w, name, user.name, keep)
                 if "history" not in keep:
                     store.clear_runs(user, name)
@@ -558,6 +581,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             store.server_set(f"env:loop:{user.name}:{name}", None)        # D697: its variables and settings go with it
             store.server_set(f"adv:{user.name}:{name}", None)
             store.server_set(f"share:{user.name}:{name}", None)
+            store.server_set(f"results:{user.name}:{name}", None)
             store.audit(user.name, "delete app", name)
         return {"ok": name}
 
@@ -571,6 +595,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         perm = access(user, owner, name)[2]
         return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
                 "state": runs.state(whose, name), "can_run": store.can_run(user, whose, name),
+                "result_preferences": preferences(store, whose.name, name),
                 "can_edit": perm in ("owner", "edit", "admin"), "can_leave": user.name in store.shares(whose.name, name)}
 
     @app.get("/api/apps/{name}/files")
@@ -737,9 +762,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             meta = ws(user).clone(body.to.strip(), d, workbench=body.workbench, source=f"{whose.name}/{name}")
             created = True
             store.server_set(f"adv:{user.name}:{body.to.strip()}", kept or None)
+            store.server_set(f"results:{user.name}:{body.to.strip()}", preferences(store, whose.name, name) or None)
         except BaseException as exc:
             if created:
                 ws(user).delete(body.to.strip())
+                store.server_set(f"results:{user.name}:{body.to.strip()}", None)
             if isinstance(exc, WorkspaceError):
                 raise fail(exc) from exc
             raise
@@ -864,8 +891,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         _w, whose, _d, run = loop_of(name, user, owner)
         if user.id != whose.id:
             runner(user, owner, name)
-        said = runs.stop(run, now=body.now)
+        said = ctx.actions.request(run, whose, user, now=body.now)
         store.audit(user.name, "stop", f"{whose.name}/{name}: {said}")
+        return {"ok": said}
+
+    @app.post("/api/apps/{name}/restart")
+    def restart(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        _w, whose, _d, run = loop_of(name, user, owner, run=True)
+        said = ctx.actions.request(run, whose, user, restart=True, now=body.now)
+        store.audit(user.name, "restart requested", f"{whose.name}/{name}: {said}")
         return {"ok": said}
 
     @app.post("/api/apps/{name}/notes")

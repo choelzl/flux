@@ -353,6 +353,22 @@ class Run:
             fetch('/api' + path, {method, headers: {'X-Flux': '1', 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined})
               .then(async r => done({status: r.status, body: await r.text()})).catch(e => done({status: 0, body: String(e)}));""", path, method, body)
 
+    def preferences(self, name="sw", patch=None, reset=False):
+        """Wait for UI saves and read/write the project's durable preferences."""
+        saved = self.b.ajs("""const [name, patch, reset, done] = arguments;
+          import('/static/result_table.js').then(async module => {
+            await module.flushResultPreferences();
+            const response = await fetch('/api/apps/' + encodeURIComponent(name) + '/preferences', {
+              method: reset ? 'DELETE' : patch === null ? 'GET' : 'PATCH',
+              headers: {'X-Flux': '1', 'Content-Type': 'application/json'},
+              body: patch === null ? undefined : JSON.stringify(patch)});
+            if (!response.ok) throw new Error(await response.text());
+            window.__savedResults = (await response.json()).preferences;
+            done(window.__savedResults);
+          }).catch(error => done({error: String(error)}));""", name, patch, reset)
+        assert "error" not in saved, saved
+        return saved
+
     def close(self):
         self.b.quit()
         self.server.terminate()
@@ -970,6 +986,7 @@ def flows(r: Run) -> None:
     r.step("live scroll", live_scroll)
 
     def compact_tables():
+        r.preferences(reset=True)
         fixture = json.loads(json.dumps(GRAPHS_RESULTS))
         metrics = ["area_um2", "fmax_mhz", "time_ms", "power_w", "long_measurement_name_for_latency", "another_long_measurement_for_throughput"]
         fixture["metrics"] = metrics
@@ -1043,13 +1060,15 @@ def flows(r: Run) -> None:
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "all measurements hidden")
             r.check("hiding every metric keeps the Design and Status columns and all rows", b.js("return document.querySelectorAll('table.designs th').length === 3 && document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelector('.show-hidden-columns').textContent === 'Hidden 6'"))
             b.click(".show-hidden-columns")
-            r.check("Hidden is a short toggle that reveals ignored columns without selecting them", b.js("return document.querySelectorAll('table.designs th.hidden-measurement').length === 6 && document.querySelector('.show-hidden-columns').textContent === 'Hidden 6' && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true' && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).hiddenMetrics.length === 6"))
+            r.preferences()
+            r.check("Hidden is a short toggle that reveals ignored columns without selecting them", b.js("return document.querySelectorAll('table.designs th.hidden-measurement').length === 6 && document.querySelector('.show-hidden-columns').textContent === 'Hidden 6' && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true' && window.__savedResults.hiddenMetrics.length === 6"))
             b.click(".show-hidden-columns")
             r.check("toggling Hidden off hides the ignored columns again", b.js("return !document.querySelector('table.designs th.measurement-head') && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'false'"))
             r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "restore all measurements")
             b.js("for (const box of document.querySelectorAll('.measurement-options input[data-metric]')) if (!box.checked) box.click(); return 1")
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "all measurements restored")
-            r.check("selecting all metrics restores columns permanently and hides the empty toggle", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 6 && document.querySelector('.show-hidden-columns').hidden && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).hiddenMetrics.length === 0"))
+            r.preferences()
+            r.check("selecting all metrics restores columns permanently and hides the empty toggle", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 6 && document.querySelector('.show-hidden-columns').hidden && window.__savedResults.hiddenMetrics.length === 0"))
             b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
             r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "mobile measurement Preferences")
             r.check("the measurement picker fits the phone width even with long metric names", b.js("const p = document.querySelector('.measurement-options'), b = p.getBoundingClientRect(); return b.width > 0 && b.left >= 0 && b.right <= innerWidth && p.scrollWidth <= p.clientWidth + 1"))
@@ -1078,14 +1097,17 @@ def flows(r: Run) -> None:
             r.page("#/app/sw", "document.querySelector('.best-n')", "the shared Hidden toggle")
             r.check("the Hidden toggle is shared with Decision and keeps ignored columns dimmed", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 6 && document.querySelectorAll('.best-n th.hidden-measurement').length === 1 && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true'"))
             b.click(".show-hidden-columns")
-            r.check("Decision can hide ignored columns again without clearing their selection", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).hiddenMetrics.includes('long_measurement_name_for_latency')"))
+            r.preferences()
+            r.check("Decision can hide ignored columns again without clearing their selection", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && window.__savedResults.hiddenMetrics.includes('long_measurement_name_for_latency')"))
             r.clean("compact tables")
         finally:
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            r.preferences(reset=True)
             b.js("window.fetch = window.__compactFetch; delete window.__compactFetch; localStorage.removeItem('flux-results-compact'); localStorage.removeItem('flux-results-relative'); localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
     r.step("compact tables", compact_tables)
 
     def design_labels():
+        r.preferences(reset=True)
         fixture = json.loads(json.dumps(GRAPHS_RESULTS))
         for i, d in enumerate(fixture["designs"]):
             prefix = d["part"] or "sw-a-very-long-application-name"
@@ -1515,8 +1537,11 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('.drawer.open .notes .note')].some(n => n.textContent.includes('try a wider wheel'))", timeout=15, what="the note, listed")
         r.check("a note sent is confirmed and listed under the line", True)
         b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
-        r.button("Stop now", ".page-head")
-        r.dialog_button("Stop now")                       # it asks first; a one-pass loop had ended before it was asked
+        r.button("Stop", ".page-head")
+        b.wait("[...document.querySelectorAll('.page-head button')].some(b => b.textContent==='Stop NOW') || !document.querySelector('.page-head .pill.live')", what="stop scheduled")
+        if b.js("return !!document.querySelector('.page-head .pill.live')"):
+            r.button("Stop NOW", ".page-head")
+            r.dialog_button("Stop NOW")
         b.wait("!document.querySelector('.page-head .pill.live')", timeout=60, what="stopped")
         r.check("stopped", True)
         # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped
@@ -1939,7 +1964,7 @@ def flows(r: Run) -> None:
                 " : String(u).startsWith('/api/apps/sw/design?') ? said('{\"artifact\": null}') : real(u, o); return 1")
         payload = json.dumps(GRAPHS_RESULTS)
         r.page("#/", "document.querySelector('#main')", "the loops")
-        b.js("localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
+        r.preferences(reset=True)
         b.js(stub, False, payload)
         b.go(f"{r.url}/#/app/sw/results/graphs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=15, what="the stood-in graphs")
@@ -2055,34 +2080,41 @@ def flows(r: Run) -> None:
         b.click(".pareto-focus")
         r.check("Focus stays enabled while an empty front uses the full range", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && document.querySelector('.pareto-focus-said').textContent.includes('no feasible front')"))
         r.page("#/", "document.querySelector('#main')", "home before a browser reload")
-        b.js("window.__preferencesReload = 1; location.reload(); return 1")
+        r.preferences()
+        b.js("localStorage.clear(); window.__preferencesReload = 1; location.reload(); return 1")
         b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded browser document")
         b.js(WATCH)
         b.js(stub, False, payload)
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "remembered graphs")
-        r.check("graph preferences survive a full browser reload", b.js(preferences) == expected, str(b.js(preferences)))
-        r.check("Pareto Focus is remembered across a full browser reload", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).graphs.paretoFocus === true"))
+        r.check("graph preferences restore from the server with browser storage cleared", b.js(preferences) == expected, str(b.js(preferences)))
+        r.preferences()
+        r.check("Pareto Focus is remembered across a full browser reload", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && window.__savedResults.graphs.paretoFocus === true"))
         r.button("Results", ".subrow .subtabs")
         b.wait("document.querySelector('table.designs')", what="remembered columns after reload")
         r.check("hidden columns survive a full browser reload while all rows remain visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 1 && !document.querySelector('th[data-label=area_um2]') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
         b.click(".show-hidden-columns")
-        r.check("the Hidden toggle preserves ignored columns and the saved graph preferences", b.js("const p = JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')); return p.hiddenMetrics.join() === 'area_um2' && p.showHiddenMetrics && p.graphs.x === 'area_um2' && p.graphs.metrics.join() === 'fmax_mhz'"))
+        r.preferences()
+        r.check("the Hidden toggle preserves ignored columns and the saved graph preferences", b.js("const p = window.__savedResults; return p.hiddenMetrics.join() === 'area_um2' && p.showHiddenMetrics && p.graphs.x === 'area_um2' && p.graphs.metrics.join() === 'fmax_mhz'"))
         r.page("#/", "document.querySelector('#main')", "home before reloading the Hidden toggle")
-        b.js("window.__preferencesReload = 1; location.reload(); return 1")
+        r.preferences()
+        b.js("localStorage.clear(); window.__preferencesReload = 1; location.reload(); return 1")
         b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded Hidden preference")
         b.js(WATCH)
         b.js(stub, False, payload)
         r.page("#/app/sw/results", "document.querySelector('table.designs')", "remembered Hidden toggle")
-        r.check("the Hidden toggle survives a reload without forgetting ignored metrics", b.js("return document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('table.designs th.measurement-head').length === 2 && document.querySelector('th[data-label=area_um2]').classList.contains('hidden-measurement') && JSON.parse(localStorage.getItem('flux-results:[\"bob\",\"bob\",\"sw\"]')).hiddenMetrics.includes('area_um2')"))
+        r.preferences()
+        r.check("the Hidden toggle survives a reload without forgetting ignored metrics", b.js("return document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('table.designs th.measurement-head').length === 2 && document.querySelector('th[data-label=area_um2]').classList.contains('hidden-measurement') && window.__savedResults.hiddenMetrics.includes('area_um2')"))
         r.page("#/", "document.querySelector('#main')", "home before an empty graph selection")
-        b.js("const key = 'flux-results:[\"bob\",\"bob\",\"sw\"]', p = JSON.parse(localStorage.getItem(key)); p.graphs.metrics = []; localStorage.setItem(key, JSON.stringify(p)); return 1")
+        r.preferences(patch={"graphs": {"metrics": []}})
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "no selected measurements")
         r.check("an intentionally empty graph selection remains empty", b.js(f"const c = {card}; return !c.querySelector('figure') && !c.querySelector('.chips button.on') && c.textContent.includes('Pick a metric to chart')", "Improvement by design"))
         r.page("#/", "document.querySelector('#main')", "home before obsolete preferences")
-        b.js("localStorage.setItem('flux-results:[\"bob\",\"bob\",\"sw\"]', JSON.stringify({hiddenMetrics: 42, graphs: {x: 'removed', y: 'removed', paretoStage: 'removed', timeStage: 'removed', metrics: ['removed'], scope: 'removed'}})); return 1")
+        r.preferences(reset=True)
+        r.preferences(patch={"graphs": {"x": "removed", "y": "removed", "paretoStage": "removed", "timeStage": "removed", "metrics": ["removed"], "scope": "removed"}})
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "obsolete graph settings")
         r.check("removed metrics, stages and scopes fall back to usable defaults", b.js(preferences) == [["fmax_mhz", "area_um2", ""], "", ["area_um2"], "Whole"], str(b.js(preferences)))
         b.js("localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
+        r.preferences(reset=True)
         r.clean("graphs")
         shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
         if not shots:

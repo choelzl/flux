@@ -618,6 +618,8 @@ class RunManager:
                     last_active=(time.time() if running else (run.get("ended") or run["started"])),
                     failed=(not running and run.get("rc") not in OK_RC), stopped=(not running and run.get("rc") == 130),
                     options=json.loads(run.get("options") or "{}"))
+        action = (self.store.server_get("loop_actions") or {}).get(str(run["id"]), {})
+        info.update(stop_requested=bool(running and action), restart_requested=bool(running and action.get("kind") == "restart"))
         if info["failed"]:
             info["error"] = self.failure(run)              # D757: why, in the run's own words
         cid, rdir = self.campaign(run)
@@ -625,7 +627,7 @@ class RunManager:
         if cid and running:
             st = ops.status(cid, run["db"])
             if st.get("started") and float(st["started"]) >= float(run["started"]):   # this start's registration
-                info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop")),
+                info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop") or action),
                             container=st.get("container"), baseline=bool(st.get("baseline")))
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
         info["question"] = self.open_question(run, rdir) if running else None
@@ -757,12 +759,26 @@ class RunManager:
         if not run or not self.live(run):
             return "not running"
         cid, _rdir = self.campaign(run)
+        # A previous start's registration must never stop its replacement. Before this
+        # start registers, the web's persisted queue retries at the first safe boundary.
+        from .confine import open_read
+
+        try:
+            path = self._run_file(run, "run.json")
+            with open_read(path, *self.roots(run), text=True) as fh:
+                registered = json.load(fh)
+            if not isinstance(registered, dict) or float(registered.get("started") or 0) < float(run["started"]):
+                cid = None
+        except (OSError, ValueError, TypeError):
+            cid = None
         if cid:
             ops.request_stop(cid, why, db=run["db"])
             if now and ops.interrupt(cid, run["db"]):
                 return "stopping now: the pass ends, the record keeps what was judged"
             if not now:
                 return "it stops at the end of this pass"
+        if not now:
+            return "waiting for loop registration; it stops after this pass"
         try:                                                  # before it registered, or no answer: the process group
             os.killpg(int(run["pid"]), signal.SIGINT)
             return "stopping now"

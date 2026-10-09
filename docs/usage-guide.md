@@ -336,8 +336,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **Start and stop:** a start takes passes (or "until I stop it") and screen only, and is
   always sandboxed; its network is the admin's and the loop's Settings' (D884). The dialog offers the last start's choices, and runs the
   check when the inputs changed since it last ran; when it fails, the button says "Start
-  anyway". It resumes the loop from its record. Stop after the pass
-  or at once. A loop has one log (every start marked in it), one answer and one notes inbox;
+  anyway". It resumes the loop from its record. Active loops have **Stop** and **Restart**:
+  one press schedules the action after the pass. Its button turns red and becomes **Stop NOW**
+  or **Restart NOW**; pressing again asks you to confirm abandoning the current pass.
+  Cancelling that warning keeps the scheduled action. Stop replaces a pending restart;
+  Restart preserves the problem and run settings and subtracts completed passes from a finite
+  budget. Lists and admin controls always use after-pass actions. Requests persist on the server,
+  so closing the browser does not cancel them. A loop has one log (every start marked in it), one answer and one notes inbox;
   it has no run numbers.
 - **The agents' workbench:** on the application's page, the tools and notes the agents keep,
   each with its first line.
@@ -350,7 +355,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   under them: Live › Tasks, Log, Timeline, History; Files › Loop files, Workbench; Settings › Preferences
   (the default for existing loops: measurement visibility, variables, sharing and maintenance), Problem (the
   configurator, Direct edit, an agent), with Advanced and, for the owner, Reset and Delete
-  at the end). The header has Start/Stop and Check. **Talk** opens a panel over any tab, with
+  at the end). The header has Start, or Stop/Restart while active. **Talk** opens a panel over any tab, with
   conversations about the loop. **Reply** follows up on an answer, including earlier messages
   from that branch as context; **New chat** starts a separate conversation. **Collapse** shows
   only the initial prompt; **Expand** restores the conversation. This choice survives live
@@ -389,6 +394,15 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
+    **Layout** customizes the Overview for your entire account, across loops and browsers.
+    Select and reorder 3–5 small cards, then choose and arrange larger cards in two columns.
+    Use the up/down arrows to reorder and the left/right arrows to move between columns.
+    The live preview uses **Mock Data** and the same cards and charts as a real Overview,
+    updating immediately as you select, reorder, hide or move cards.
+    Save applies the layout; Cancel discards edits; Defaults restores the original arrangement
+    when saved. You can also open the editor from Account → Overview layout. On narrow screens,
+    column 1 comes before column 2. Empty notes, workbench and last-pass cards stay hidden;
+    failure notices and unanswered agent questions always remain visible.
   - **Long runs** (D759): Live › Tasks opens on the last 30 passes ("Earlier" loads the rest), the log on its
     last 2 MB ("Load all" for the rest). A run's journal keeps only its tasks' starts and ends; what runs now and the standings
     are `live.json` beside it, rewritten each second (D761), so an hour-long pass does not grow it.
@@ -467,31 +481,34 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **Hidden N** at the top toggles the ignored columns into view, dimmed, without changing
     your selections. Check a metric to restore it permanently. Column visibility and the toggle
     are shared between Results and Decision and
-    remembered per account and loop in this browser. Graphs, comparisons and ranking continue
+    saved with the project on the server, across browsers. Graphs, comparisons and ranking continue
     to use the full measurements.
     Dictionary metrics show one test at a time: choose a test in the dropdown or toggle **All**
     to unroll every test into grouped subcolumns. These choices are shared between Results and
-    Decision and remembered in this browser. Tests omitted or reported as null, empty or NaN
+    Decision and saved with the project on the server. Tests omitted or reported as null, empty or NaN
     stay unmeasured; they do not become zero.
   - **Main measurements:** in the same settings table, check **Main** for the metrics shown in
     loop lists and decision summaries. The first metric is the default; select several, or none.
     Main metrics also seed new chart selections; manually selected graphs keep their saved choices.
     Check **%** to show a metric as percent change from its baseline/reference instead of an
-    absolute value. These preferences are saved per account and loop in this browser and do not
+    absolute value. These preferences are saved with the project on the server, across browsers and do not
     change objectives, limits or ranking. Dictionary tests and parent aggregates can be selected
     independently. Missing values or an undefined percentage display as —.
   - **Graph preferences:** selected measurements, Pareto x/y axes, measurement stages and design
-    scope are remembered per account and loop in this browser. If a saved metric or stage is no
-    longer available, the view uses its defaults.
+    scope are saved with the project on the server, across browsers. If a saved metric or stage is no
+    longer available, the view uses its defaults. Owners, editors and admins save these shared
+    project preferences; viewers can explore chart controls temporarily. Preferences follow
+    renames, transfers and clones, and remain when results are reset. Old browser preferences
+    are ignored.
   - **Provided baseline:** in the configurator's Extra step, enable **Baseline / pass 0** and
     choose **Provided metrics and values**. Add metric/value rows and optionally select a stage;
     the default is the deepest measurement stage. This writes, for example,
     `baseline: {metrics: [{metric: time_ms, value: 12}]}`. Pass 0 imports the values without
     running tools. They supply graph and relative-value references and are never selected as a
     design. Unchanged values are reused on restart; edited values create a new reference.
-  - **Absolute / Relative (%):** Results and Overview's Decision table share a remembered toggle.
-    After setting individual percentages, **Per metric** uses those choices; cycle the button to
-    temporarily show all values as **Absolute** or **Relative (%)**, then back to **Per metric**.
+  - **Absolute / Relative:** Results and Overview's Decision table share a remembered toggle.
+    Tables offer two modes: **Absolute** shows measured values and **Relative** shows percent
+    changes for every measurement. Individual **%** settings apply to summaries and loop lists.
     Relative shows percent change from the latest baseline for the same metric, stage and design
     group (baseline = 0%; a value 30% lower = −30%). Without a matching baseline, it uses that
     group's P90 performance at that stage, using accepted designs across the full results set:
@@ -502,7 +519,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Graphs show baseline measurements as gray reference lines; search designs remain points.
     **Focus** in the Pareto controls fits both axes to the feasible front in the selected design
     scope and stage. Distant designs, goals and baseline references can fall outside the view.
-    Toggle it off to restore the full range. The setting is remembered per browser and loop;
+    Toggle it off to restore the full range. The setting is saved with the project on the server;
     without a feasible front, the graph keeps the full range.
   - **Timeline:** where one start's time went, from its journal. Every phase that does the work
     (a tool, an agent, a model call) is a bar in a broad work category, using the tree's vocabulary:
@@ -791,17 +808,18 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     than writing through the link, so the folder never changes. **Refresh** takes the folder's
     files again and keeps the record.
   - **Loops:** every user's loops, with controls over all of them. **Pause new starts** (with a
-    reason users see; running loops go on), **stop every loop** after its pass or at once.
-    **Restart all active loops** interrupts current passes, waits for their processes to exit,
+    reason users see; running loops go on), **Stop** every active loop after its pass.
+    **Restart** schedules all active loops to finish their current passes, waits for their processes to exit,
     then resumes from the records with each loop's screen-only mode and selected problem document.
     Finite runs use the remaining budget: 10 requested passes with 5 completed restart with 5;
     run forever stays unlimited. Counts are read after stopping, exclude baseline pass 0 and
-    the interrupted pass, and reset for the replacement run. Repeated restarts keep subtracting
+    any unfinished pass, and reset for the replacement run. Repeated restarts keep subtracting
     completed passes; exhausted budgets stay stopped. Files, results, logs and records stay;
     idle loops stay idle.
     Restart requires starts to be resumed and respects owners' running limits and agent checks.
-    Loops that cannot restart are listed individually; a process still stopping after 30 seconds
-    gets no replacement, so two runs cannot overlap.
+    Loops that cannot schedule a restart are listed individually; permissions and settings are
+    checked again at the pass boundary. Failures are reported in the bell. A replacement waits
+    for the old process to exit, so two runs cannot overlap. Idle loops stay idle.
   - **Resources:** the machine (CPUs, load, memory, the disks of the server's data, the caches
     and the sandbox storage), and over time: `flux serve` samples it once a minute (load,
     memory, disks, the containers' CPU and memory, loops running), kept 30 days, charted over the

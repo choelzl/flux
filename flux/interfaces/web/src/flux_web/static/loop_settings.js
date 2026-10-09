@@ -104,7 +104,7 @@ async function settingsView(ctx) {
   if (!ok()) return;
   const ownership = isOwner || me.role === "admin" ? await ownershipCard(ctx) : "";
   if (!ok()) return;
-  const measurements = card("Measurements", [h("p", { class: "muted" }, "Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % shows percent change from the matching baseline, otherwise P90 performance of accepted designs. Saved for this browser and loop; calculations still use every metric."),
+  const measurements = card("Measurements", [h("p", { class: "muted" }, "Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % formats summaries as percent change from the matching baseline, otherwise P90 performance of accepted designs. Tables have their own Absolute/Relative toggle. Saved with this project and shared across browsers; calculations still use every metric. Only owners, editors and admins can save changes."),
     results.metrics?.length ? measurementPreferences(ctx, results.metrics, results.metric_groups || {}) : h("p", { class: "muted" }, "No measurements yet.")], { cls: "measurement-preferences" });
   body.replaceChildren(measurements, varsCard, shares, ownership, advancedCard(e, async (adv) => {
     await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes

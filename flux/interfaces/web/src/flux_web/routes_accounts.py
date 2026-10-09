@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 
 from .models import Login, NewUser, UserChange, GroupIn, GroupChange, FileText, EnvVar, Settings
+from .models import OVERVIEW_DEFAULT, OVERVIEW_LARGE_CARDS, OVERVIEW_SMALL_CARDS, OverviewLayout
 from .store import SESSION_DAYS, PERMISSIONS, DEFAULT_PERMISSIONS, User
 
 
@@ -47,6 +48,27 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.get("/api/me")
     def me(user: User = Depends(user_of)) -> dict[str, Any]:
         return user.identity()
+
+    @app.get("/api/preferences/overview")
+    def overview_preferences(user: User = Depends(user_of)) -> dict[str, Any]:
+        saved = store.server_get(f"overview:user:{user.id}", OVERVIEW_DEFAULT)
+        try:
+            layout = OverviewLayout.model_validate(saved)
+        except ValueError:
+            layout = OverviewLayout.model_validate(OVERVIEW_DEFAULT)
+        return {"layout": layout.model_dump(), "default": OVERVIEW_DEFAULT,
+                "small_cards": OVERVIEW_SMALL_CARDS, "large_cards": OVERVIEW_LARGE_CARDS}
+
+    @app.put("/api/preferences/overview")
+    def save_overview_preferences(body: OverviewLayout, user: User = Depends(user_of)) -> dict[str, Any]:
+        layout = body.model_dump()
+        store.server_set(f"overview:user:{user.id}", layout)
+        return {"layout": layout}
+
+    @app.delete("/api/preferences/overview")
+    def reset_overview_preferences(user: User = Depends(user_of)) -> dict[str, Any]:
+        store.server_set(f"overview:user:{user.id}", None)
+        return {"layout": OVERVIEW_DEFAULT}
 
     @app.get("/api/impersonation")
     def impersonation(request: Request) -> dict[str, str] | None:

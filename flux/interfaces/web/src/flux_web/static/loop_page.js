@@ -5,7 +5,7 @@ import { cleanup, me, setPageRefresh } from "./state.js";
 import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, statePill, toast } from "./ui.js";
 import { liveTree, logView } from "./live.js";
 import { configureInto } from "./configure.js";
-import { agentSelect, binButton, lastSaid, markdown, startLoop, stopLoop } from "./loops.js";
+import { agentSelect, binButton, lastSaid, markdown, startLoop, stopLoop, restartLoop } from "./loops.js";
 import { authorTab, overview } from "./loop_overview.js";
 import { resultsView } from "./loop_results.js";
 import { timelineTab } from "./loop_timeline.js";
@@ -15,12 +15,15 @@ import { settingsView } from "./loop_settings.js";
 import { historyTab } from "./loop_history.js";
 import { ideasView } from "./loop_ideas.js";
 import { restoreScroll, scrollState } from "./scroll.js";
+import { flushResultPreferences } from "./result_table.js";
+import { editOverviewLayout } from "./overview_layout.js";
 
 async function loopPage(name, owner, path = "") {
   const show = pageShow();
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const q = owner ? `&owner=${enc(owner)}` : "";
   const base = `/api/apps/${enc(name)}`;
+  await flushResultPreferences();
   const info = await api(`/apps/${enc(name)}${qs}`);
   if (show.stale()) return;                         // D719: the user went elsewhere while it loaded
   // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
@@ -81,9 +84,15 @@ async function loopPage(name, owner, path = "") {
   function drawHead() {
     const acts = [];
     if (st.running && (canRun || isOwner)) {
-      acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
+      const stopNow = st.stop_requested && !st.restart_requested;
+      acts.push(act(stopNow ? "Stop NOW" : "Stop", async () => {
+        if (await stopLoop(name, stopNow, owner)) await refresh();
+      }, { cls: stopNow ? "danger solid" : "", title: stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass" }));
+      if (canRun) acts.push(act(st.restart_requested ? "Restart NOW" : "Restart", async () => {
+        if (await restartLoop(name, !!st.restart_requested, owner)) await refresh();
+      }, { cls: st.restart_requested ? "danger solid" : "", title: st.restart_requested ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings" }));
     } else if (!st.running && canRun && info.document) {
-      acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }));
+      acts.push(act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }));
     }
     if (canLeave) acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title:
@@ -99,7 +108,9 @@ async function loopPage(name, owner, path = "") {
     const mine = ++asked, was = st.running;
     const p = refreshing = api(`${base.slice(4)}/state${qs}`, { signal: leaving.signal });
     let got;
-    try { got = await p; } finally { if (refreshing === p) refreshing = null; }
+    try { got = await p; }
+    catch (x) { if (x.name === "AbortError") return; throw x; }
+    finally { if (refreshing === p) refreshing = null; }
     if (mine !== asked || show.stale()) return;
     st = got;
     // A start can select another problem; the header and tabs must use its current filename.
@@ -378,6 +389,9 @@ async function loopPage(name, owner, path = "") {
     const o = subsOf(tab), cur = curSub();
     subHolder.replaceChildren(o.length > 1 ? h("div", { class: "subtabs views", role: "tablist" }, o.map(([k, label]) => h("button", { role: "tab", type: "button",
       class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false", onclick: () => { sub = k; mode = ""; setUrl(); drawCrumbs(); drawBody(); } }, label))) : "");
+    if (tab === "Overview" && !me?.impersonator) subHolder.append(h("div", { class: "overview-layout-toolbar" },
+      act("Layout", async () => { if (await editOverviewLayout() && tab === "Overview" && !show.stale()) drawBody(); },
+        { cls: "small", title: "Customize the Overview for every loop in your account" })));
   }
   async function drawBody() {
     drawn++;
@@ -410,8 +424,10 @@ async function loopPage(name, owner, path = "") {
       if (!st.running && !st.last_active) {
         const ab = await authorBox();
         if (!ok()) return;
-        body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
-          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : "")));
+        await overview(ctx);
+        if (!ok()) return;
+        body.prepend(...[ab, card(null, info.document ? empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
+          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : ""))].filter(Boolean));
         return;
       }
       body.replaceChildren(card(null, skeleton(7)));

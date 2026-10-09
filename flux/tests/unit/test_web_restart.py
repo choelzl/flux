@@ -53,6 +53,7 @@ while True:
     try:
         yield app, tmp_path
     finally:
+        app.state.actions.close()
         for run in app.state.store.runs():
             if not run.get("ended"):
                 app.state.runs.stop(run, now=True)
@@ -101,7 +102,7 @@ def test_restart_all_preserves_finite_unlimited_screen_and_document_options(laun
 
     Workspace(store.data, "bob").set_meta("finite", document="finite.problem.yaml")
     store.server_set("test-revision", 2)
-    result = ada.post("/api/admin/restart-all", headers=H)
+    result = ada.post("/api/admin/restart-all", json={"now": True}, headers=H)
     assert result.status_code == 200, result.text
     got = result.json()
     assert got["failed"] == got["skipped"] == {}
@@ -130,7 +131,7 @@ def test_restart_all_preserves_finite_unlimited_screen_and_document_options(laun
     assert store.runs(store.user(name="bob"), "idle") == []
     assert any(a["action"] == "restart all" for a in ada.get("/api/audit").json())
     _completed(runs, runs.latest(store.user(name="bob"), "finite"), 2)
-    again = ada.post("/api/admin/restart-all", headers=H)
+    again = ada.post("/api/admin/restart-all", json={"now": True}, headers=H)
     assert again.status_code == 200, again.text
     assert again.json()["restarted"]["bob/finite"]["passes"] == 3, "repeated restarts retain the remaining budget"
     assert again.json()["restarted"]["ada/forever"]["passes"] is None
@@ -149,7 +150,7 @@ def test_restart_budget_uses_only_this_start_and_final_completion_count(launcher
     old = runs.latest(store.user(name="bob"), "budget")
     _completed(runs, old, completed, stale=stale)
     assert runs.state(store.user(name="bob"), "budget").get("passes") == (None if stale else completed)
-    result = ada.post("/api/admin/restart-all", headers=H).json()
+    result = ada.post("/api/admin/restart-all", json={"now": True}, headers=H).json()
     assert result["failed"] == {}
     if remaining:
         assert result["skipped"] == {}
@@ -167,7 +168,7 @@ def test_restart_all_requires_admin_and_mutation_header(server):  # noqa: F811
     bob, ada = _client(app, "bob", "another long secret"), _client(app, "ada", "correct horse battery")
     assert bob.post("/api/admin/restart-all", headers=H).status_code == 403
     assert ada.post("/api/admin/restart-all").status_code == 403
-    assert ada.post("/api/admin/restart-all", headers=H).json() == {"restarted": {}, "failed": {}, "skipped": {}}
+    assert ada.post("/api/admin/restart-all", headers=H).json() == {"scheduled": {}, "restarted": {}, "failed": {}, "skipped": {}}
 
 
 @pytest.mark.parametrize("blocked", ["paused", "limit", "document"])
@@ -205,7 +206,7 @@ def test_a_slow_stop_never_launches_an_overlapping_replacement(server, monkeypat
     monkeypatch.setattr(app.state.runs, "stop", lambda *_a, **_kw: "still stopping")
     monkeypatch.setattr(routes_admin, "RESTART_WAIT_S", 0)
     try:
-        result = ada.post("/api/admin/restart-all", headers=H).json()
+        result = ada.post("/api/admin/restart-all", json={"now": True}, headers=H).json()
         assert result["restarted"] == {} and "still stopping" in result["failed"]["bob/x"]
         assert proc.poll() is None and len(app.state.store.runs()) == 1
     finally:

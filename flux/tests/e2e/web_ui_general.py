@@ -6,7 +6,9 @@ Run through web_ui.py; each step creates and deletes its own loop, without a mod
 from __future__ import annotations
 
 import json
+import os
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import quote
 
 
@@ -99,6 +101,148 @@ def general_flows(r, watch):
 
     r.step("selected problem", selected_problem)
 
+    def overview_layout():
+        with loop(r, "ui-overview-layout") as name:
+            path = "/preferences/overview"
+            before = json.loads(r.api(path)["body"])["layout"]
+            r.api(path, "DELETE")
+            defaults = json.loads(r.api(path)["body"])["layout"]
+            other = name + "-other"
+            made = r.api("/apps/from-text", "POST", {"name": other, "filename": "problem.yaml", "text": DOCUMENT})
+            if made["status"] != 200:
+                raise AssertionError(made)
+            stub = """window.__overviewFetch = window.fetch; window.__overviewSaveFails = false;
+              const names = arguments[0], reply = body => new Response(JSON.stringify(body), {headers:{'Content-Type':'application/json'}});
+              window.fetch = async (u, o) => {
+                const path = new URL(String(u), location.href).pathname;
+                if (path === '/api/preferences/overview' && o?.method === 'PUT' && window.__overviewSaveFails)
+                  return new Response(JSON.stringify({detail:'Layout save unavailable'}), {status:503,headers:{'Content-Type':'application/json'}});
+                const name = names.find(n => path.startsWith('/api/apps/' + n + '/') || path === '/api/apps/' + n);
+                if (!name) return window.__overviewFetch(u,o);
+                const base = '/api/apps/' + name;
+                if (path === base + '/results') return reply({designs:[],metrics:[],passes:[{when:1000,conclusion:{decision:'fixture'}}],counts:{accepted:0,failed:0},objectives:'Minimize latency'});
+                const response = await window.__overviewFetch(u,o);
+                if (path !== base && path !== base + '/state') return response;
+                const data = await response.json(), state = path === base ? data.state : data;
+                Object.assign(state,{last_active:1000,failed:true,error:['Fixture failure notice']});
+                if(window.__overviewQuestion) Object.assign(state,{running:true,question:{question:'Fixture agent question',asked:Date.now()/1000,wait_s:3600}});
+                return reply(data);
+              }; return 1;"""
+
+            def page(selected=name):
+                r.page(f"#/app/{selected}", "document.querySelector('.ov-stats')", "Overview layout")
+
+            def layout():
+                return b.js("""return {stats:[...document.querySelectorAll('.ov-stats > [data-overview-card]')].map(x=>x.dataset.overviewCard),
+                  columns:[...document.querySelectorAll('.grid-2.ov > .col')].map(c=>[...c.children].map(x=>x.dataset.overviewCard))};""")
+
+            def action(title):
+                b.js("const button = [...document.querySelectorAll('dialog.overview-layout-dialog button')].find(x=>x.getAttribute('aria-label')===arguments[0]); if(!button || button.disabled) throw Error('Missing layout action '+arguments[0]); button.click(); return 1", title)
+
+            try:
+                # Real API and account storage; only loop result/state fixtures are synthetic.
+                page()
+                r.check("new loops render the account's five default small cards", layout()["stats"] == ["state", "designs", "passes", "usage", "objective"])
+                r.button("Layout", ".overview-layout-toolbar")
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')", what="layout editor")
+                r.check("the editor explains its account-wide scope", b.js("return document.querySelector('dialog').textContent.includes('every loop in your account, across browsers')"))
+                r.check("the editor previews real cards and charts with clearly marked mock data", b.js("const d=document.querySelector('dialog'); return d.textContent.includes('Mock Data') && d.querySelectorAll('.overview-layout-preview .ov-stats > .stat').length===5 && d.querySelector('.overview-layout-preview .decision-nums') && d.querySelector('.overview-layout-preview svg.best-chart') && d.querySelector('.overview-layout-preview [data-overview-card=notes]') && d.querySelector('.overview-layout-preview [data-overview-card=workbench]')"))
+                if shots := os.environ.get("FLUX_E2E_SHOTS"):
+                    Path(shots).mkdir(parents=True, exist_ok=True)
+                    b.shot(Path(shots) / "overview-layout-preview.png")
+                action("Remove Objective")
+                action("Remove Models and agents")
+                r.check("small cards cannot fall below three", b.js("return document.querySelector('[data-layout-list=stats] [aria-label=\"Remove State\"]').disabled"))
+                action("Move Passes on record up")
+                action("Move Passes on record up")
+                b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
+                r.check("the mock preview follows card selection and ordering immediately", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .ov-stats > .stat')].map(el=>el.dataset.overviewCard).join()==='tokens_out,state,designs' && document.querySelector('dialog .overview-layout-preview [data-overview-card=tokens_out] .big').textContent!=='—'"))
+                r.dialog_button("Cancel")
+                r.check("Cancel leaves saved and displayed layout untouched", json.loads(r.api(path)["body"])["layout"] == defaults and len(layout()["stats"]) == 5)
+                b.js(stub, [name, other])
+                page()
+                r.button("Layout", ".overview-layout-toolbar")
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
+                action("Remove Objective")
+                action("Remove Models and agents")
+                action("Move Passes on record up")
+                action("Move Passes on record up")
+                b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
+                action("Move Decision to column 2")
+                action("Move Decision up")
+                action("Move Decision up")
+                action("Remove Latest notes")
+                action("Remove Agents' workbench")
+                b.js("const s=document.querySelector('[data-layout-list=\"0\"] > .overview-layout-row select'); s.value='usage'; return 1")
+                action("Add card to column 1")
+                r.check("the preview reflects moved and hidden larger cards", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .grid-2.ov > .col')].map(col=>[...col.children].map(el=>el.dataset.overviewCard).join()).join('|')==='usage|decision,best,last_pass'"))
+                expected = {"stats": ["tokens_out", "state", "designs"], "columns": [["usage"], ["decision", "best", "last_pass"]]}
+                b.js("window.__overviewSaveFails=true; return 1")
+                r.dialog_button("Save")
+                b.wait("document.querySelector('dialog.overview-layout-dialog .err')?.textContent.includes('Layout save unavailable')", what="save failure")
+                r.check("a failed save keeps the editor and draft open", b.js("return document.querySelector('dialog.overview-layout-dialog[open] [data-layout-list=stats] li select').value === 'tokens_out'") and json.loads(r.api(path)["body"])["layout"] == defaults)
+                b.js("window.__overviewSaveFails=false; return 1")
+                r.dialog_button("Save")
+                b.wait("!document.querySelector('dialog.overview-layout-dialog') && document.querySelector('.ov-stats > [data-overview-card=tokens_out]')", what="saved custom Overview")
+                r.check("Save applies selected cards in their chosen columns and order", layout() == expected)
+                r.check("hiding and moving cards keeps failure notices visible", b.js("return document.querySelector('.why-failed')?.textContent.includes('Fixture failure notice')"))
+                page(other)
+                r.check("a second loop uses the same account layout", layout() == expected)
+                b.cmd("WebDriver:Refresh", {})
+                b.wait("document.querySelector('.ov-stats')", what="reloaded Overview")
+                b.js(stub, [name, other])
+                page(other)
+                r.check("layout persists after a browser reload", layout() == expected)
+                r.api(path, "PUT", {**expected, "columns": [[], []]})
+                b.js("window.__overviewQuestion=true; return 1")
+                page()
+                r.check("hiding every large card preserves errors and agent questions", b.js("return !document.querySelector('.grid-2.ov .card') && document.querySelector('.why-failed') && document.querySelector('.card.ask .question')?.textContent==='Fixture agent question'"))
+                b.js("window.__overviewQuestion=false; return 1")
+                r.api(path, "PUT", expected)
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "account layout settings")
+                r.button("Customize")
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
+                r.check("Account edits the same saved layout", b.js("return document.querySelector('[data-layout-list=stats] li select').value==='tokens_out'"))
+                r.dialog_button("Defaults")
+                r.check("Defaults restores five cards and prevents adding a sixth", b.js("return document.querySelectorAll('[data-layout-list=stats] li').length===5 && document.querySelector('button[aria-label=\"Add small card\"]').disabled"))
+                r.dialog_button("Cancel")
+                r.check("Defaults can be cancelled without overwriting saved choices", json.loads(r.api(path)["body"])["layout"] == expected)
+                page()
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                r.button("Layout", ".overview-layout-toolbar")
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
+                r.check("the editor fits narrow screens", b.js("const d=document.querySelector('dialog.overview-layout-dialog'); return d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().right<=innerWidth"))
+                r.dialog_button("Cancel")
+                r.check("custom cards fit narrow screens", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                r.button("Layout", ".overview-layout-toolbar")
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
+                r.dialog_button("Defaults")
+                r.dialog_button("Save")
+                b.wait("!document.querySelector('dialog.overview-layout-dialog') && document.querySelector('.ov-stats > [data-overview-card=objective]')", what="default layout saved")
+                r.check("saved Defaults restores the original arrangement", json.loads(r.api(path)["body"])["layout"] == defaults)
+                b.js("""const normal = window.fetch;
+                  window.fetch=(u,o)=>new URL(String(u),location.href).pathname==='/api/preferences/overview' && (!o?.method || o.method==='GET')
+                    ? new Promise(resolve=>{window.__releaseOverview=()=>normal(u,o).then(response=>{resolve(response);});}) : normal(u,o); return 1;""")
+                r.button("Layout", ".overview-layout-toolbar")
+                b.wait("typeof window.__releaseOverview==='function'", what="delayed layout load")
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave a pending layout request")
+                b.ajs("const done=arguments[arguments.length-1]; window.__releaseOverview().then(()=>setTimeout(()=>done(true),50))")
+                r.check("a late layout request cannot open an editor on another page", b.js("return !document.querySelector('dialog.overview-layout-dialog') && document.querySelector('#main h1').textContent==='Account'"))
+                r.clean("Overview layout")
+                b.js("window.fetch=window.__overviewFetch; return 1")
+                r.login("cy")
+                r.check("another account retains its independent default layout", json.loads(r.api(path)["body"])["layout"] == defaults)
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("if(window.__overviewFetch) window.fetch=window.__overviewFetch; document.querySelector('dialog.overview-layout-dialog')?.remove(); return 1")
+                r.login("bob")
+                r.api(path, "PUT", before)
+                deleted = r.api(f"/apps/{other}", "DELETE")
+                r.check("second Overview fixture removed", deleted["status"] == 200, deleted["body"])
+
+    r.step("overview layout", overview_layout)
+
     def main_measurements():
         from flux_web.results import measurement_summary
 
@@ -117,8 +261,7 @@ def general_flows(r, watch):
             data["decision_measurements"] = measurement_summary(data, data["designs"][0])
             summary = {"designs": 3, "accepted": 2, "metrics": data["metrics"], "best": {"design": f"{name}#1", "metric": "latency",
                        "value": 8, "stage": "bench", "measurements": data["decision_measurements"]}}
-            b.js("""window.__mainMetricFetch = window.fetch; window.__mainMetricRelative = localStorage.getItem('flux-results-relative');
-              localStorage.setItem('flux-results-relative', 'false');
+            b.js("""window.__mainMetricFetch = window.fetch;
               const name = arguments[0], data = arguments[1], summary = arguments[2], app = '/api/apps/' + name;
               const reply = body => new Response(JSON.stringify(body), {headers:{'Content-Type':'application/json'}});
               window.fetch = async (u, o) => {
@@ -142,12 +285,14 @@ def general_flows(r, watch):
                 r.check("Overview shows only selected main metrics with baseline percentages", b.js("const nums = document.querySelector('.decision-nums'); return nums.querySelectorAll('[data-summary-metric]').length === 1 && nums.querySelector('[data-summary-metric=score] .big').textContent === '+20%'"))
                 page("results", "document.querySelector('table.designs')")
                 b.wait("document.querySelector('table.designs tbody td[data-label=score]')", what="metric cell labels")
-                r.check("Results keeps all columns while respecting each metric's display", b.js("return document.querySelectorAll('th.measurement-head').length === 3 && document.querySelector('.decision-line [data-summary-metric=score]').textContent === 'score +20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '+20%'"))
+                r.check("table starts absolute while the decision summary keeps metric percentages", b.js("return document.querySelectorAll('th.measurement-head').length === 3 && document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('.decision-line [data-summary-metric=score]').textContent === 'score +20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120'"))
                 b.click(".relative-values")
-                r.check("Absolute temporarily overrides per-metric percentages", b.js("return document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120'"))
+                r.check("Relative shows percentage changes for every table metric", b.js("return document.querySelector('.relative-values').textContent === 'Relative' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '+20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '-20%'"))
+                page("", "document.querySelector('.best-n')")
+                r.check("Decision shares the table's Relative mode", b.js("return document.querySelector('.relative-values').textContent === 'Relative' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-20%')"))
                 b.click(".relative-values")
-                b.click(".relative-values")
-                r.check("Per metric restores the individual display settings", b.js("return document.querySelector('.relative-values').textContent === 'Per metric' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '+20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8'"))
+                page("results", "document.querySelector('table.designs')")
+                r.check("a second press returns to Absolute without a third mode", b.js("return document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8'"))
                 page("results/graphs", "document.querySelector('svg.best-chart')")
                 r.check("new graph selections default to the chosen main metric", b.js("const card = [...document.querySelectorAll('.card')].find(c => c.querySelector('h2')?.textContent === 'Improvement by design'); return [...card.querySelectorAll('.chips button.on')].map(b => b.textContent).join() === 'score'"))
                 r.page("#/", "document.querySelector('.loop-main-measurements [data-summary-metric=score]')", "loop list metrics")
@@ -171,8 +316,7 @@ def general_flows(r, watch):
             finally:
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.js("""window.fetch = window.__mainMetricFetch;
-                  if (window.__mainMetricRelative === null) localStorage.removeItem('flux-results-relative');
-                  else localStorage.setItem('flux-results-relative', window.__mainMetricRelative); return 1;""")
+                  return 1;""")
 
     r.step("main measurements", main_measurements)
 
@@ -379,12 +523,13 @@ objectives: [{metric: timings.fast, goal: 15}]
                 select("never")
                 r.check("an unavailable test can be selected without becoming zero", b.js("return [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').textContent === '')"))
                 r.page("#/", "document.querySelector('#main')", "home before dictionary reload")
-                b.js("window.__dictionaryReload = true; location.reload(); return 1")
+                r.preferences(name)
+                b.js("localStorage.clear(); window.__dictionaryReload = true; location.reload(); return 1")
                 b.wait("!window.__dictionaryReload && document.querySelector('#who')", what="dictionary preference reload")
                 b.js(watch)
                 b.js(stub, name, payload)
                 page()
-                r.check("dictionary selection and hidden metrics survive a browser reload", b.js("return document.querySelector('.dictionary-select').value === 'timings.never' && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
+                r.check("dictionary settings restore from the server with browser storage cleared", b.js("return document.querySelector('.dictionary-select').value === 'timings.never' && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
                 page("settings/problem", "document.querySelector('.flux-crafter .fc-stepbar')")
                 parsed = b.ajs("""const done = arguments[arguments.length - 1]; fetch('/api/apps/' + arguments[0] + '/document').then(r => r.json())
                   .then(v => done({error: v.error, stages: window.FluxCrafter.fromDoc(v.raw, v.normal || v.raw).state.stages}));""", name)
@@ -977,6 +1122,73 @@ objectives: [{metric: timings.fast, goal: 15}]
 
     r.step("logout and re-login", sessions)
 
+    def loop_controls():
+        with loop(r, "ui-loop-controls") as name:
+            b.js("""window.__controlFetch=window.fetch; window.__controlCalls=[];
+              window.__controlState={running:true,since:1000,last_active:1000,stop_requested:false,restart_requested:false};
+              const base='/api/apps/'+arguments[0], name=arguments[0];
+              const reply=data=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+              window.fetch=async(u,o)=>{
+                const path=new URL(String(u),location.href).pathname;
+                if(path===base+'/stop' || path===base+'/restart') {
+                  const options=JSON.parse(o.body), action=path.endsWith('/restart')?'restart':'stop';
+                  window.__controlCalls.push({action,...options,owner:new URL(String(u),location.href).searchParams.get('owner')});
+                  Object.assign(window.__controlState,{stop_requested:true,restart_requested:action==='restart'});
+                  return reply({ok:action+' requested'});
+                }
+                const response=await window.__controlFetch(u,o);
+                if(path===base || path===base+'/state') {
+                  const data=await response.json(); return reply(path===base?{...data,state:{...data.state,...window.__controlState}}:{...data,...window.__controlState});
+                }
+                if(path==='/api/apps' || path==='/api/admin/apps') return reply((await response.json()).map(row=>row.name===name?{...row,...window.__controlState}:row));
+                return response;
+              }; return 1;""", name)
+            try:
+                r.page(f"#/app/{name}", "document.querySelector('.page-head .pill.live')", "running loop controls")
+                r.check("an active loop has just Stop and Restart controls", b.js("return [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restart'"))
+                r.button("Stop", ".page-head")
+                b.wait("[...document.querySelectorAll('.page-head button')].some(b=>b.textContent==='Stop NOW')", what="scheduled stop")
+                r.check("first Stop schedules the pass boundary without a dialog", b.js("return window.__controlCalls.length===1 && !window.__controlCalls[0].now && !document.querySelector('dialog[open]') && document.querySelector('.page-head button.danger.solid').textContent==='Stop NOW'"))
+                r.button("Stop NOW", ".page-head")
+                b.wait("document.querySelector('dialog[open]')", what="immediate stop warning")
+                r.check("second Stop warns about abandoning the current pass", "abandons the current pass" in b.js("return document.querySelector('dialog').textContent"))
+                r.dialog_button("Cancel")
+                r.check("cancelled immediate Stop retains the scheduled request", b.js("return window.__controlCalls.length===1 && window.__controlState.stop_requested"))
+                r.button("Stop NOW", ".page-head")
+                r.dialog_button("Stop NOW")
+                b.wait("window.__controlCalls.length===2", what="immediate stop request")
+                r.check("confirmed second Stop sends now=true", b.js("return window.__controlCalls[1].action==='stop' && window.__controlCalls[1].now"))
+                r.button("Restart", ".page-head")
+                b.wait("[...document.querySelectorAll('.page-head button')].some(b=>b.textContent==='Restart NOW')", what="scheduled restart")
+                r.check("first Restart schedules a restart and resets Stop to its regular action", b.js("return window.__controlCalls.at(-1).action==='restart' && !window.__controlCalls.at(-1).now && [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restart NOW' && document.querySelector('.page-head button.danger.solid').textContent==='Restart NOW'"))
+                r.button("Restart NOW", ".page-head")
+                b.wait("document.querySelector('dialog[open]')", what="immediate restart warning")
+                r.check("immediate Restart explains abandonment and retained settings", b.js("const text=document.querySelector('dialog').textContent; return text.includes('abandons the current pass') && text.includes('remaining pass budget')"))
+                r.dialog_button("Cancel")
+                r.check("cancelled immediate Restart sends no extra request", b.js("return window.__controlCalls.length===3 && window.__controlState.restart_requested"))
+                r.button("Restart NOW", ".page-head")
+                r.dialog_button("Restart NOW")
+                b.wait("window.__controlCalls.length===4", what="immediate restart request")
+                r.check("confirmed second Restart sends now=true", b.js("return window.__controlCalls.at(-1).action==='restart' && window.__controlCalls.at(-1).now"))
+                r.page(f"#/app/{name}/settings", "document.querySelector('.measurement-options, .settings-section, .loop-ownership') || document.querySelector('#main .subtabs')", "another loop view")
+                r.page(f"#/app/{name}", "document.querySelector('.page-head button.danger.solid')", "return to the queued restart")
+                r.check("the pending action survives navigation", b.js("return document.querySelector('.page-head button.danger.solid').textContent==='Restart NOW'"))
+                r.page("#/", "document.querySelector('table.list tbody tr')", "loop list controls")
+                for index, label in enumerate(("Stop", "Stop", "Restart", "Restart")):
+                    r.button(label, "table.list tbody")
+                    b.wait(f"window.__controlCalls.length==={5 + index}", what="list action")
+                r.check("loop-list repeated presses remain after-pass actions", b.js("return window.__controlCalls.length===8 && window.__controlCalls.slice(4).every(c=>!c.now) && ![...document.querySelectorAll('table.list button')].some(b=>b.textContent.includes('NOW'))"))
+                r.login("ada")
+                r.page("#/admin", "document.querySelector('.ctl-grid') && document.querySelector('table.list tbody tr')", "admin loop controls")
+                r.button("Restart", "table.list tbody")
+                b.wait("window.__controlCalls.length===9", what="admin row restart")
+                r.check("admin row controls always use after-pass actions and the loop's owner", b.js("return !window.__controlCalls.at(-1).now && window.__controlCalls.at(-1).owner==='bob' && ![...document.querySelectorAll('.ctl-grid button,table.list button')].some(b=>b.textContent.includes('NOW') || b.textContent.includes('all now'))"))
+                r.clean("loop controls")
+            finally:
+                b.js("window.fetch=window.__controlFetch; return 1")
+
+    r.step("loop controls", loop_controls)
+
     def admin_restart():
         with loop(r, "ui-admin-restart") as name:
             r.login("ada")
@@ -995,9 +1207,10 @@ objectives: [{metric: timings.fast, goal: 15}]
                 else if (path === '/api/admin/controls') body = {...controls, paused: window.__restartPaused ? 'maintenance' : null};
                 else if (path === '/api/admin/restart-all') {
                   window.__restartCalls++;
-                  body = {restarted: {'ada/unlimited': {passes: null}}, skipped: {},
+                  window.__restartOptions=JSON.parse(o.body);
+                  body = {scheduled: {'ada/unlimited': {passes: null}}, restarted:{}, skipped: {},
                     failed: window.__restartFailed ? {'bob/ui-admin-restart': 'still stopping; no replacement was launched'} : {}};
-                  if (!window.__restartFailed) body.restarted['bob/ui-admin-restart'] = {passes: 5};
+                  if (!window.__restartFailed) body.scheduled['bob/ui-admin-restart'] = {passes: 5};
                 } else return window.__restartFetch(u, o);
                 return new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
               }; return 1;""", fixtures, controls)
@@ -1006,28 +1219,28 @@ objectives: [{metric: timings.fast, goal: 15}]
                     r.page("#/admin", "document.querySelector('.ctl-grid')", "admin restart controls")
 
                 page()
-                r.button("Restart all active loops")
+                r.button("Restart", ".ctl-grid")
                 b.wait("document.querySelector('dialog.dlg[open]')", what="restart confirmation")
                 text = b.js("return document.querySelector('dialog.dlg[open]').innerText")
                 r.check("restart confirmation lists remaining finite budget and unlimited settings", "bob/ui-admin-restart: 5 of 10 pass(es) remaining · screen only" in text
                         and "ada/unlimited: run forever" in text, text)
-                r.check("restart confirmation explains interruption and retained data", "interrupt their current pass" in text and "Files, results and logs are kept" in text)
+                r.check("restart confirmation explains finishing the pass and retained data", "finish their current pass" in text and "Files, results and logs are kept" in text)
                 r.dialog_button("Cancel")
                 r.check("canceling restart sends no request", b.js("return window.__restartCalls") == 0)
-                r.button("Restart all active loops")
+                r.button("Restart", ".ctl-grid")
                 r.dialog_button("Restart loops")
-                b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loop(s) restarted'))", what="restart result")
-                r.check("confirming restart submits one request and reports completion", True)
+                b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loop(s) scheduled to restart'))", what="restart result")
+                r.check("confirming restart requests the pass boundary and reports scheduling", b.js("return window.__restartOptions.now===false"))
                 page()
                 b.js("window.__restartFailed = true; return 1")
-                r.button("Restart all active loops")
+                r.button("Restart", ".ctl-grid")
                 r.dialog_button("Restart loops")
                 b.wait("document.querySelector('dialog.dlg[open]')?.innerText.includes('Restart results')", what="partial restart result")
                 r.check("restart failures identify the affected loop", "bob/ui-admin-restart: still stopping" in b.js("return document.querySelector('dialog.dlg[open]').innerText"))
                 r.dialog_button("Close")
                 b.js("window.__restartPaused = true; return 1")
                 page()
-                disabled = "return [...document.querySelectorAll('.ctl-grid button')].find(b => b.textContent === 'Restart all active loops').disabled"
+                disabled = "return [...document.querySelectorAll('.ctl-grid button')].find(b => b.textContent === 'Restart').disabled"
                 r.check("restart is disabled while starts are paused", b.js(disabled))
                 b.js("window.__restartPaused = false; window.__restartEmpty = true; return 1")
                 page()

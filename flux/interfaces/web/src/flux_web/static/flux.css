@@ -622,6 +622,39 @@ table.stand-t { margin-bottom: 10px; }
 .grid-2.ov { align-items: start; }
 .grid-2.ov > .col { display: grid; gap: 16px; align-content: start; }
 .grid-2.ov > .col > .card { margin: 0; }
+.stats.ov-stats { grid-template-columns: repeat(var(--overview-count, 5), minmax(0, 1fr)); }
+.ov-stats .stat { overflow-wrap: anywhere; }
+.overview-layout-toolbar { display: flex; justify-content: flex-end; margin: 0 0 10px auto; }
+dialog.dlg.overview-layout-dialog { width: min(1480px, calc(100vw - 32px)); }
+dialog.dlg.overview-layout-dialog[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.overview-layout-dialog > .err:empty { display: none; }
+.overview-customizer { display: grid; grid-template-columns: minmax(340px, .85fr) minmax(0, 1.4fr); gap: 24px; align-items: start; overflow: auto; min-height: 0; }
+.overview-preview-panel { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.overview-preview-head { display: flex; align-items: center; gap: 10px; }
+.overview-preview-head h3 { margin: 0; }
+.overview-layout-preview .stat { padding: 10px; }
+.overview-layout-preview .big { font-size: 19px; }
+.overview-layout-preview .stats { gap: 8px; }
+.overview-layout-preview .grid-2 { gap: 10px; }
+.overview-layout-preview .grid-2.ov > .col { gap: 10px; }
+@media (max-width: 1100px) { .overview-customizer { grid-template-columns: minmax(0, 1fr); } }
+.overview-layout-editor h3 { margin: 18px 0 4px; }
+.overview-layout-editor h4 { margin: 10px 0; }
+.overview-layout-list { min-width: 0; }
+.overview-layout-list ol { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
+.overview-layout-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.overview-layout-row select { flex: 1; min-width: 0; width: 0; }
+.overview-layout-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.overview-layout-actions button { min-width: 28px; padding: 4px 7px; }
+.overview-layout-list:not([data-layout-list="stats"]) li.overview-layout-row { flex-direction: column; align-items: stretch; gap: 4px; }
+.overview-layout-list:not([data-layout-list="stats"]) li select { width: 100%; flex: none; }
+.overview-layout-list:not([data-layout-list="stats"]) .overview-layout-actions { justify-content: flex-end; }
+@media (max-width: 1100px) { .stats.ov-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .stats.ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-layout-editor .grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 360px) { .stats.ov-stats { grid-template-columns: minmax(0, 1fr); } }
 pre.conclusion { max-height: 160px; overflow: auto; white-space: pre-wrap; }
 
 /* D699: the machine over time */

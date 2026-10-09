@@ -229,6 +229,35 @@ class Settings(BaseModel):
     values: dict[str, str | None]
 
 
+OVERVIEW_SMALL_CARDS = {
+    "state": "State", "designs": "Designs measured", "passes": "Passes on record",
+    "usage": "Models and agents", "objective": "Objective",
+    "tokens_in": "Tokens in", "tokens_out": "Tokens out", "cost": "Model and agent cost",
+}
+OVERVIEW_LARGE_CARDS = {
+    "decision": "Decision", "best": "Best so far", "last_pass": "Last pass",
+    "notes": "Latest notes", "workbench": "Agents' workbench", "usage": "Models and agents",
+}
+OVERVIEW_DEFAULT = {
+    "stats": ["state", "designs", "passes", "usage", "objective"],
+    "columns": [["decision", "notes", "workbench"], ["best", "last_pass"]],
+}
+
+
+class OverviewLayout(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stats: list[Literal["state", "designs", "passes", "usage", "objective", "tokens_in", "tokens_out", "cost"]] = Field(min_length=3, max_length=5)
+    columns: list[list[Literal["decision", "best", "last_pass", "notes", "workbench", "usage"]]] = Field(min_length=2, max_length=2)
+
+    @field_validator("stats", "columns")
+    @classmethod
+    def unique_cards(cls, value):
+        cards = [card for column in value for card in column] if value and isinstance(value[0], list) else value
+        if len(cards) != len(set(cards)):
+            raise ValueError("each card can appear only once")
+        return value
+
+
 class AgentRename(BaseModel):                  # D945
     name: str
     dry_run: bool = False

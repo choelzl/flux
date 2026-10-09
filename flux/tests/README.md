@@ -102,6 +102,29 @@ multiple or no main metrics, and phone layouts. `test_web_measurement_summary.py
 baseline and percentile references against the browser calculation, zero/negative references,
 nonfinite values, references outside a paged result set, and owner/admin loop summaries.
 
+Graph and measurement preferences belong to the project and are saved on the server.
+`FLUX_E2E_STEPS="login refused,login,upload,compact tables,graphs,main measurements,dictionary metrics"`
+checks shared Results/Decision settings, Pareto axes and focus, selected charts, hidden columns,
+main metrics and percentage formats, including restoration after clearing browser storage.
+`test_web_result_preferences.py` covers sessions/server restarts, owner/editor/viewer/admin
+permissions, concurrent partial updates, validation, CSRF, impersonation, isolation and
+rename/transfer/clone/reset/delete behavior. `test_web_result_preferences_js.py` checks queued
+saves, captured owner and choices, read-only exploration and recovery after failed saves.
+
+`FLUX_E2E_STEPS="overview layout"` checks account-wide card selection, ordering and column
+placement, 3–5 small-card limits, cancellation, save errors and retries, persistence across loops
+and browser reloads, defaults, account isolation, always-visible alerts and phone layouts.
+It also verifies that the mock-data preview uses real cards/charts and follows selection,
+ordering and column changes before saving.
+`test_web_overview_layout.py` covers validation, authentication, session/server persistence,
+read-only impersonation and accounts without loop permissions.
+
+`FLUX_E2E_STEPS="loop controls,admin restart all"` checks the two active-loop controls,
+after-pass first presses, red NOW buttons, abandonment warnings/cancellation, and ordinary
+after-pass actions in owner/admin lists. `test_web_loop_actions.py` covers real process exits,
+remaining budgets, stop superseding restart, authorization at the boundary, retained requests
+after a server restart, and bulk scheduling without restarting idle loops.
+
 `FLUX_E2E_STEPS="ideas notebook"` checks the Ideas subtab before measurements exist, literal
 note rendering, pass histories, failed attempts, Raw JSON, fullscreen, narrow screens and refresh.
 `FLUX_E2E_STEPS="ideas navigation"` checks empty notebooks, zero values, missing pass numbers,

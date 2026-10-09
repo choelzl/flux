@@ -7,6 +7,7 @@ import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.
 import { authoringCard, binButton } from "./loops.js";
 import { designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
+import { loadOverviewLayout } from "./overview_layout.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -65,7 +66,7 @@ function topDesigns(ctx, r, n) {
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
-        ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "configured" ? relativeMeasurement(ctx, m) : surface.dataset.values === "relative");
+        ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
           return h("td", { class: `num mono${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
   }
   const relative = relativeToggle(surface, drawRows, ctx);
@@ -98,10 +99,17 @@ function closestCard(ctx, r) {
 /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
     per objective, the latest notes and the agents' newest workbench entries. */
 async function overview(ctx) {
-  const { name, qs, body, mine, goTab, drawBody } = ctx;
+  const { name, qs } = ctx;
   const ok = ctx.still();                               // D919: drawn only while still the latest
-  const [r, notes, bench, use] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
-    api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null)]);
+  const [r, notes, bench, use, prefs] = await Promise.all([api(`/apps/${enc(name)}/results${qs}`), api(`/apps/${enc(name)}/notes${qs}`).catch(() => []),
+    api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null), loadOverviewLayout()]);
+  if (ctx.tab !== "Overview" || !ok()) return;
+  renderOverview(ctx, r, notes, bench, use, prefs);
+}
+
+/** Shared by the real Overview and the layout editor's mock-data preview. */
+function renderOverview(ctx, r, notes, bench, use, prefs) {
+  const { name, qs, body, mine, goTab, drawBody } = ctx, ok = ctx.still();
   const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
   const unit = measurementUnitsFor(r);
   const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
@@ -131,33 +139,56 @@ async function overview(ctx) {
   const st = ctx.st;                                // D892: the state as it is now, after the wait
   const q0 = st.question;
   if (ctx.tab !== "Overview" || !ok()) return;          // the tab changed while it loaded
-  body.replaceChildren(
-    h("div", { class: "stats five ov-stats" },
-      stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
+  const total = use?.total;
+  const stats = {
+    state: () => stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
         st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
-      stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
-      stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
-      use ? stat("Models and agents", `${use.total.turns} turn(s)`, [dur(use.total.seconds) || "0s",
-        use.total.counted ? ` · ${fmtTok(use.total.tokens_in)} → ${fmtTok(use.total.tokens_out)} tokens` : "",
-        use.total.cost_usd ? ` · $${use.total.cost_usd.toFixed(2)}` : ""], () => goTab("Agents")) : "",
-      stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null)),
+    designs: () => stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
+    passes: () => stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
+    usage: () => stat("Models and agents", total ? `${total.turns} turn(s)` : "—", total ? [dur(total.seconds) || "0s",
+      total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : "",
+      total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""] : "Usage unavailable", () => goTab("Agents")),
+    objective: () => stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null),
+    tokens_in: () => stat("Tokens in", total?.counted ? fmtTok(total.tokens_in) : "—", total?.partial ? "Includes incomplete usage" : "", () => goTab("Agents")),
+    tokens_out: () => stat("Tokens out", total?.counted ? fmtTok(total.tokens_out) : "—", total?.partial ? "Includes incomplete usage" : "", () => goTab("Agents")),
+    cost: () => stat("Model and agent cost", total?.cost_usd != null ? `$${total.cost_usd.toFixed(2)}` : "—", "At the configured prices", () => goTab("Agents")),
+  };
+  const cards = {
+    decision: () => decisionCard,
+    best: () => card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("Select a main metric in Settings → Measurements to chart.")),
+    last_pass: () => lastPass(ctx, r),
+    notes: () => notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note has-bin" },
+      h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text),
+      mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
+        async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawBody(); }) : "")))) : "",
+    workbench: () => bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
+      h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
+      b.first ? h("div", { class: "first" }, b.first) : "")))) : "",
+    usage: () => card("Models and agents", total ? [
+      h("p", {}, `${total.turns} turn(s) · ${dur(total.seconds) || "0s"}`),
+      h("p", {}, total.counted ? `${fmtTok(total.tokens_in)} tokens in · ${fmtTok(total.tokens_out)} tokens out` : "No token usage reported."),
+      total.partial ? h("p", { class: "muted small" }, `${total.partial} turn(s) with incomplete usage.`) : "",
+      total.cost_usd ? h("p", {}, `$${total.cost_usd.toFixed(2)} at the configured prices.`) : "",
+    ] : empty("Usage unavailable."), { actions: [h("button", { class: "small", onclick: () => goTab("Agents") }, "Agents")] }),
+  };
+  const selected = (id, build, small = false) => {
+    const node = build();
+    if (!node) return ""; // Empty notes, workbench and last-pass cards remain quiet.
+    node.dataset.overviewCard = id;
+    if (small) node.dataset.overviewSmall = "true";
+    return node;
+  };
+  body.replaceChildren(
+    h("div", { class: "stats ov-stats", style: `--overview-count:${prefs.layout.stats.length}` },
+      prefs.layout.stats.map(id => selected(id, stats[id], true))),
     // D757: a failed start says why, in its log's own words, where the loop is opened
     st.failed && (st.error || []).length ? h("section", { class: "card why-failed", role: "alert" }, h("div", { class: "card-head" }, h("h2", {}, "Why it stopped"),
       h("button", { class: "small", onclick: () => goTab("Live", "log") }, "Log")),
       h("pre", { class: "why-lines" }, st.error.join("\n"))) : "",
     q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "Agent asks"),
       h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
-    h("div", { class: "grid-2 ov" }, h("div", { class: "col" }, decisionCard,
-      // D755: a card with nothing in it is not drawn -- a quiet loop's Overview is its decision and charts
-      notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note has-bin" },
-        h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text),
-        mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
-          async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawBody(); }) : "")))) : "",
-      bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
-        h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
-        b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
-      h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("Select a main metric in Settings → Measurements to chart.")),
-        lastPass(ctx, r))));
+    h("div", { class: "grid-2 ov" }, prefs.layout.columns.map((ids, column) => h("div", { class: "col", "data-overview-column": column },
+      ids.map(id => selected(id, cards[id]))))));
 }
 
 /** The card of an agent writing the loop's problem: `authorBox()` gives it, or "" (D704). */
@@ -184,4 +215,4 @@ function authorTab(ctx) {
   return authorBox;
 }
 
-export { authorTab, overview };
+export { authorTab, overview, renderOverview };

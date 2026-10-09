@@ -113,7 +113,6 @@ function resultsView(ctx, r) {
       sortFocus = key; drawTable();
     } }, labels.get(key) || label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
-    const formats = preferences.read();
     const all = sorted(visibleRows());
     const metrics = columns.visible();
     const shown = all.slice(0, pageN);
@@ -144,7 +143,7 @@ function resultsView(ctx, r) {
           d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...metrics.map(m => { const ok = d.meets[m];
-          const display = measurementText(d, m, comparison, fmt, table.dataset.values === "configured" ? relativeMeasurement(ctx, m, false, formats) : table.dataset.values === "relative");
+          const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
           return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }

@@ -1,6 +1,5 @@
 // Shared presentation for the Results table and the Overview's best designs.
-import { h } from "./ui.js";
-import { me } from "./state.js";
+import { api, enc, h, toast } from "./ui.js";
 
 export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
 
@@ -8,23 +7,39 @@ export function measurementUnitsFor(results) {
   return { ...measurementUnits, ...Object.fromEntries(Object.entries(results.metric_info || {}).filter(([, s]) => s.unit).map(([m, s]) => [m, s.unit])) };
 }
 
+// Writes survive tab navigation; the next project load waits for pending saves.
+let preferenceWrites = Promise.resolve();
+export function flushResultPreferences() { return preferenceWrites; }
+
 export function resultPreferences(ctx) {
-  const key = `flux-results:${JSON.stringify([me?.name || "", ctx.owner || me?.name || "", ctx.name])}`;
-  let memory = {};
-  function read() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(key));
-      return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-    } catch (_) { return memory; }
-  }
+  const target = ctx.info || ctx;
+  const read = () => target.result_preferences || {};
   return { read, save(patch) {
-    memory = { ...read(), ...patch };
-    delete memory.hidden;  // obsolete row visibility; every design remains in its table
-    try { localStorage.setItem(key, JSON.stringify(memory)); } catch (_) { /* use this view */ }
+    patch = structuredClone(patch);
+    const previous = read();
+    const updated = { ...previous, ...patch };
+    target.result_preferences = updated;
+    // Viewers may explore charts without changing the project's shared settings.
+    if (!ctx.mine || !ctx.info) return Promise.resolve();
+    const owner = ctx.info.owner;
+    const path = `/apps/${enc(ctx.name)}/preferences?owner=${enc(owner)}`;
+    preferenceWrites = preferenceWrites.then(async () => {
+      try {
+        const saved = await api(path, { method: "PATCH", body: patch });
+        if (target.result_preferences === updated) target.result_preferences = saved.preferences;
+      } catch (error) {
+        if (target.result_preferences === updated) {
+          try { target.result_preferences = (await api(path)).preferences; }
+          catch (_) { target.result_preferences = previous; }
+        }
+        toast(`Project preferences were not saved: ${error.message}`, "bad");
+      }
+    });
+    return preferenceWrites;
   } };
 }
 
-/** Main summary metrics and individual display choices share the loop's browser preferences. */
+/** Main summary metrics and individual display choices share the loop's server preferences. */
 export function mainMeasurements(ctx, metrics, defaults = metrics) {
   const saved = resultPreferences(ctx).read().mainMetrics;
   if (!Array.isArray(saved)) return defaults.filter(m => metrics.includes(m));
@@ -53,10 +68,11 @@ export function measurementPreferences(ctx, metrics, groups = {}) {
       const relative = h("input", { type: "checkbox", checked: relativeMeasurement(ctx, metric), "data-relative-metric": metric,
         "aria-label": `Percent change for ${metric}`, onchange: () => {
           const saved = prefs.read().relativeMetrics;
-          prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked }, valuesMode: "configured" });
+          prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked } });
         } });
       return h("tr", {}, h("td", { class: "mono", title: metric }, metric), h("td", {}, visible), h("td", {}, primary), h("td", {}, relative));
     })));
+  if (!ctx.mine) for (const input of table.querySelectorAll("input")) input.disabled = true;
   return h("div", { class: "scroll-x" }, table);
 }
 
@@ -171,23 +187,19 @@ export function designLabels(designs, appName) {
 }
 
 export function relativeToggle(surface, redraw, ctx = null) {
-  let relative = false;
-  try { relative = localStorage.getItem("flux-results-relative") === "true"; } catch (_) { /* storage may be disabled */ }
   const prefs = ctx && resultPreferences(ctx), saved = prefs?.read() || {};
-  const configured = saved.relativeMetrics && Object.values(saved.relativeMetrics).some(v => typeof v === "boolean");
-  const modes = configured ? ["configured", "absolute", "relative"] : ["absolute", "relative"];
-  let mode = modes.includes(saved.valuesMode) ? saved.valuesMode : configured ? "configured" : relative ? "relative" : "absolute";
+  const modes = ["absolute", "relative"];
+  let mode = modes.includes(saved.valuesMode) ? saved.valuesMode : "absolute";
   const button = h("button", { type: "button", class: "small relative-values", "aria-label": "Relative measurements",
-    title: "Switch between metric settings, absolute values and percent changes. Percent change uses a matching baseline, otherwise P90 performance of accepted designs in the same group and stage. Hover for the reference and absolute measurement.",
+    title: "Switch between absolute values and percent changes for every measurement in the table. Percent change uses a matching baseline, otherwise P90 performance of accepted designs in the same group and stage. Hover for the reference and absolute measurement.",
     onclick: () => {
-      mode = modes[(modes.indexOf(mode) + 1) % modes.length]; relative = mode === "relative";
-      try { localStorage.setItem("flux-results-relative", String(relative)); } catch (_) { /* use this view */ }
-      if (configured) prefs.save({ valuesMode: mode });
+      mode = modes[(modes.indexOf(mode) + 1) % modes.length];
+      prefs?.save({ valuesMode: mode });
       draw(); redraw();
     } });
   function draw() {
     surface.dataset.values = mode;
-    button.textContent = mode === "configured" ? "Per metric" : mode === "relative" ? "Relative (%)" : "Absolute";
+    button.textContent = mode === "relative" ? "Relative" : "Absolute";
     button.setAttribute("aria-pressed", String(mode !== "absolute"));
   }
   draw(); return button;

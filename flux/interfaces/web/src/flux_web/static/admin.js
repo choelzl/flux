@@ -148,17 +148,17 @@ async function adminLoops(body) {
   const migration = h("div", { id: "document-migration", hidden: true });
   const paused = res ? res.paused : null;
   const running = allApps.filter(l => l.running).length;
-  const restart = act("Restart all active loops", async () => {
+  const restart = act("Restart", async () => {
     const loops = allApps.filter(l => l.running);
     const go = await dialog("Restart all active loops?", h("div", {},
-      h("p", {}, `${loops.length} active loop(s) will interrupt their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`),
+      h("p", {}, `${loops.length} active loop(s) will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`),
       h("p", {}, "Completed passes reduce each finite run's remaining budget; run forever stays unlimited. Counts are checked after stopping. Loops with no passes left stay stopped. Only loops still active when the request begins are restarted."),
       h("ul", {}, loops.map(l => h("li", {}, `${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${l.options.passes} pass(es) remaining`}${l.options?.screen_only ? " · screen only" : ""}`)))),
       [["Cancel", false], ["Restart loops", true, "primary"]]);
     if (!go) return;
-    const r = await api("/admin/restart-all", { method: "POST" });
+    const r = await api("/admin/restart-all", { method: "POST", body: { now: false } });
     const errors = Object.entries(r.failed), skipped = Object.entries(r.skipped);
-    toast(`${Object.keys(r.restarted).length} loop(s) restarted${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
+    toast(`${Object.keys(r.scheduled || r.restarted).length} loop(s) ${r.scheduled ? "scheduled to restart after this pass" : "restarted"}${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
     if (errors.length || skipped.length) await dialog("Restart results", h("ul", {},
       [...errors, ...skipped].map(([loop, why]) => h("li", {}, `${loop}: ${why}`))), [["Close", true, "primary"]]);
     route();
@@ -174,14 +174,11 @@ async function adminLoops(body) {
           await api("/admin/paused", { method: "PUT", body: { reason: reason.value.trim() || "maintenance" } }); toast("New starts paused", "ok"); route();
         }, { cls: "small" })),
     line(`Running: ${running}`,
-      act("Stop all after the pass", async () => {
+      act("Stop", async () => {
         if (!await confirmDialog("Stop every loop?", `${running} loop(s) stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
         const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${Object.keys(r.stopped).length} loop(s) asked to stop`, "ok"); route();
       }, { cls: "small" }),
-      act("Stop all now", async () => {
-        if (!await confirmDialog("Stop every loop now?", `${running} loop(s) end their pass at once.`, { ok: "Stop now", danger: true })) return;
-        const r = await api("/admin/stop-all", { method: "POST", body: { now: true } }); toast(`${Object.keys(r.stopped).length} loop(s) stopping`, "ok"); route();
-      }, { cls: "small danger" }), restart),
+      restart),
     line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
   const box = h("div", {}, loopsBrowser(allApps, { who: true, memo: "flux-sort-admin-loops" }));
   body.replaceChildren(controls, card("Every loop", box), migration);
@@ -217,7 +214,7 @@ async function adminResources(body) {
                 if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it; it is removed.", { ok: "Kill", danger: true })) return;
                 toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
               }, { cls: "small danger" })
-              : act("Stop the loop now", async () => { await stopLoop(c.loop, true, c.user); load(); }, { cls: "small" }))))))) : empty("No sandbox container."),
+              : act("Stop", async () => { await stopLoop(c.loop, false, c.user); load(); }, { cls: "small", title: "Stop the loop after this pass" }))))))) : empty("No sandbox container."),
       { actions: r.containers_at ? [h("span", { class: "muted small" }, "asked ", ago(r.containers_at))] : null });   // D921: a sample, said with its time
     const loops = r.loops.slice().sort((a, b) => b.total - a.total);
     const totalOf = (k) => loops.reduce((s, l) => s + (l[k] || 0), 0);

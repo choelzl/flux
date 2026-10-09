@@ -6,7 +6,7 @@ import { codeBlock, codeEditor } from "./highlight.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
 import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
-import { mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
+import { flushResultPreferences, mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
@@ -65,9 +65,16 @@ async function startLoopOwned(name) {
   return true;
 }
 async function stopLoop(name, now, owner) {
-  if (now && !await confirmDialog(`Stop ${name} now?`, "The pass ends now; what was measured is kept.", { ok: "Stop now", danger: true })) return;
+  if (now && !await confirmDialog(`Stop ${name} now?`, "This abandons the current pass. What was already measured is kept.", { ok: "Stop NOW", danger: true })) return false;
   const r = await api(`/apps/${enc(name)}/stop${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
+  return true;
+}
+async function restartLoop(name, now = false, owner) {
+  if (now && !await confirmDialog(`Restart ${name} now?`, "This abandons the current pass, then resumes with the same run settings and remaining pass budget. Files, results and logs are kept.", { ok: "Restart NOW", danger: true })) return false;
+  const r = await api(`/apps/${enc(name)}/restart${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
+  toast(r.ok, now ? "warn" : "info");
+  return true;
 }
 function lastSaid(st) {
   if (st.running) return ["running since ", ago(st.since), st.baseline ? " · baseline pass 0" : st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""];
@@ -188,10 +195,14 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
     const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
     const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
+    const runningActions = () => [
+      owner && !canRun ? "" : act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small", title: "Stop after this pass" }),
+      canRun ? act("Restart", () => restartLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small", title: "Restart after this pass with the same run settings" }) : "",
+    ];
     const acts = owner ? (!canRun ? [h("span", { class: "pill" }, l.perm === "edit" ? "can edit" : "watching")]
-        : l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+        : l.running ? runningActions()
         : [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })])
-      : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
+      : l.running ? runningActions()
       : [canRun ? act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }) : "",
          h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
     return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
@@ -201,10 +212,10 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
       h("td", { class: "muted" }, lastSaid(l)),
       h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
         sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
-      h("td", { class: "mono loop-main-measurements" }, sm.best ? mainMeasurements({ name, owner },
+      h("td", { class: "mono loop-main-measurements" }, sm.best ? mainMeasurements({ name, owner, result_preferences: l.result_preferences },
         sm.metrics || Object.keys(sm.best.measurements || { [sm.best.metric]: sm.best.value }), [sm.best.metric]).map(metric => {
           const measurement = sm.best.measurements?.[metric] || (metric === sm.best.metric ? sm.best : { value: null });
-          const display = measurementText({ shown: sm.best.stage || "" }, metric, () => measurement, num4, relativeMeasurement({ name, owner }, metric));
+          const display = measurementText({ shown: sm.best.stage || "" }, metric, () => measurement, num4, relativeMeasurement({ name, owner, result_preferences: l.result_preferences }, metric));
           return h("div", { class: measurement.meets === false ? "misses" : measurement.meets === true ? "meets" : "",
             "data-summary-metric": metric, title: `the decision, ${sm.best.design} · ${display.title}` },
             h("span", { class: "muted" }, metric + " "), display.text || "—");
@@ -445,6 +456,7 @@ function authoringCard(name, st, { onStop } = {}) {
 
 async function appsPage() {
   const show = pageShow();
+  await flushResultPreferences();
   const [loops, shared, group] = await Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]);
   const box = h("div", {}, loopsBrowser(loops));
   const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true, memo: "flux-sort-shared" }) : "");
@@ -593,5 +605,5 @@ function permissionChoice(settings = {}, id = "keep-permissions") {
 }
 
 export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,
-  envEditor, envTable, lastSaid, loopsBrowser, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop,
+  envEditor, envTable, lastSaid, loopsBrowser, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
   uploadForm, permissionChoice };
