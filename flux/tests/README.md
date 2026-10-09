@@ -58,6 +58,10 @@ checkboxes, group loop discovery and controls for viewers and runners. `test_web
 checks legacy migration, stable group IDs, live revocation, separate credential access,
 cross-group sharing, independent permissions and all loop creation/execution entry points.
 
+`FLUX_E2E_STEPS="login refused,login,upload,reset loop"` checks reset warnings, cancellation,
+Keep checkboxes, preserved workbench files and a full reset. `test_web_reset.py` also covers
+selective preservation of history and caches, invalid options, active-work refusal and isolation.
+
 `FLUX_E2E_STEPS="loop names"` checks configurator creation and upload validation. Naming tests
 also cover the loader, CLI examples, rename and clone, and invalid paths and characters.
 

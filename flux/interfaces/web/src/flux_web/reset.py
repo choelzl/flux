@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,13 @@ FOLDERS = {
     "workbench": "Agents' working files, tools and notes",
     ".author-work": "Problem-writing agent's scratch files",
 }
+FOLDER_KEYS = {"out": "history", "runs": "history", "workbench": "workbench", ".author-work": "author_work"}
+KEEP_OPTIONS = {
+    "workbench": "Workbench",
+    "history": "Results, logs and run history",
+    "author_work": "Author scratch files",
+    "cache": "Tool caches and agent traces",
+}
 
 
 def plan(workspace: Workspace, name: str, user: str) -> dict[str, Any]:
@@ -25,8 +33,9 @@ def plan(workspace: Workspace, name: str, user: str) -> dict[str, Any]:
     if root.is_symlink():
         raise WorkspaceError("cannot reset a linked loop folder")
     within(root, workspace.root)
-    return {"folders": [{"path": f"{root / folder}/", "what": what} for folder, what in FOLDERS.items()] + [
-        {"path": f"{cache_root() / _key(user, name)}/", "what": "This loop's tool caches, scratch files and agent traces"}],
+    return {"folders": [{"key": FOLDER_KEYS[folder], "path": f"{root / folder}/", "what": what} for folder, what in FOLDERS.items()] + [
+        {"key": "cache", "path": f"{cache_root() / _key(user, name)}/", "what": "This loop's tool caches, scratch files and agent traces"}],
+        "keep_options": [{"key": key, "label": label} for key, label in KEEP_OPTIONS.items()],
         "history": "All saved starts and their history, plus the last check and start status"}
 
 
@@ -40,7 +49,9 @@ def remove(path: Path) -> None:
         path.unlink(missing_ok=True)
 
 
-def clear(workspace: Workspace, name: str, user: str) -> None:
+def clear(workspace: Workspace, name: str, user: str, keep: Collection[str] = ()) -> None:
+    if set(keep) - KEEP_OPTIONS.keys():
+        raise ValueError("unknown reset option")
     plan(workspace, name, user)                  # validate again under the lifecycle locks
     root = workspace.app(name)
     try:
@@ -49,8 +60,11 @@ def clear(workspace: Workspace, name: str, user: str) -> None:
     except FileNotFoundError:
         meta = {}
     for folder in FOLDERS:
-        remove(root / folder)
-    remove(cache_root() / _key(user, name))
-    for field in ("last_check", "last_start_digest", "last_options"):
+        if FOLDER_KEYS[folder] not in keep:
+            remove(root / folder)
+    if "cache" not in keep:
+        remove(cache_root() / _key(user, name))
+    fields = ("last_check",) if "history" in keep else ("last_check", "last_start_digest", "last_options")
+    for field in fields:
         meta.pop(field, None)
     replace(root / ".flux-app.json", json.dumps(meta), root)

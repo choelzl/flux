@@ -732,11 +732,11 @@ async function adminUsers(body, ok = () => true) {
   const groupSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, catalog.groups.map(g =>
     h("option", { value: g.id, selected: g.id === value }, g.name + (g.admin ? " (server admin)" : ""))));
   const credentialSel = (value, onchange, label) => h("select", { "aria-label": label, onchange },
-    h("option", { value: "internal", selected: value === "internal" }, "Server settings"),
+    h("option", { value: "internal", selected: value === "internal" }, "Use server settings"),
     h("option", { value: "external", selected: value === "external" }, "Own settings only"));
   const initial = catalog.groups.find(g => g.builtin === "internal");
   const newGroup = groupSel(initial?.id, null, "Group of the new user");
-  const newCredentials = credentialSel("internal", null, "Credentials of the new user");
+  const newCredentials = credentialSel("internal", null, "Server access of the new user");
   const permissionsButton = (u) => act("Permissions…", async () => {
     const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
       h("input", { type: "checkbox", "data-permission": key, checked: u.permissions[key], disabled: u.role === "admin" }), label]);
@@ -768,7 +768,7 @@ async function adminUsers(body, ok = () => true) {
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
   const cols = [
     { label: "User", key: u => u.name, asc: true }, { label: "Group", key: u => u.group, asc: true },
-    { label: "Credentials", key: u => u.credential_mode, asc: true }, { label: "Permissions" },
+    { label: "Server access", key: u => u.credential_mode, asc: true, title: "Inherit server and machine model, agent and environment settings, or use only the user's own settings" }, { label: "Permissions" },
     { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
     { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
     { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
@@ -784,9 +784,9 @@ async function adminUsers(body, ok = () => true) {
               catch (x) { e.target.value = u.group_id; toast(x.message, "bad"); }
             }, `${u.name}'s group`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
         h("td", {}, credentialSel(u.credential_mode, async (e) => {
-          try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { credential_mode: e.target.value } }); u.credential_mode = e.target.value; toast("Credential access saved", "ok"); }
+          try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { credential_mode: e.target.value } }); u.credential_mode = e.target.value; toast("Server access saved", "ok"); }
           catch (x) { e.target.value = u.credential_mode; toast(x.message, "bad"); }
-        }, `${u.name}'s credentials`)), h("td", {}, permissionsButton(u)),
+        }, `${u.name}'s server access`)), h("td", {}, permissionsButton(u)),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
         h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
@@ -808,7 +808,7 @@ async function adminUsers(body, ok = () => true) {
         else toast(`${name.value} added`, "ok");
         route();
       }, { cls: "primary" })),
-    h("p", { class: "muted small" }, "Credential access is separate from group membership. New users can create and run their own loops; other members' loops need permission or individual sharing.")]));
+    h("p", { class: "muted small" }, "Server access lets runs inherit server and machine model, agent and environment settings. Own settings only requires the user's own configuration. Loop creation, execution and sharing are controlled by Permissions.")]));
 }
 
 async function adminGroups(body, ok = () => true) {

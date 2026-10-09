@@ -520,8 +520,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     (all results, measurements, decisions and pass records), `runs/` (full and archived logs,
     agent output, answers and notes), `workbench/`, `.author-work/`, and its own sandbox cache
     under `$XDG_CACHE_HOME/flux/apps/` (or `~/.cache/flux/apps/`). Saved start history and the last
-    check/start status also go. This cannot be undone. The problem document, source files,
-    library, settings and sharing stay; the next start begins fresh. Delete removes the whole loop.
+    check/start status also go by default. **Keep** checkboxes let you preserve the workbench,
+    results/logs/run history, author scratch files, or tool caches and agent traces. Results,
+    logs and saved run history are kept together so their links remain valid. The folder warning
+    updates with your choices. The last check status always clears, so tools need checking again.
+    This cannot be undone. The problem document, source files, library, settings and sharing stay.
+    Delete removes the whole loop.
 - **Agents and models (Admin › Agents and models, D756, D807, D814):** one tab per tool -- Flux's own model and the agent by default; each agent, its program and login above the model it uses and the variables only it gets, one Save; the other providers; **Every agent** (the server's variables, which every run and agent gets); **+ Add an agent**. A user's Account has the same tabs (**My agents and models**): each agent's login and Test, its model, its own variables; their variables for every agent. In detail: OpenCode, Claude Code and Codex, and any the admin adds -- **Add an
   agent**: a name (lower case: what a document says, `generate: nga`), a kind (opencode, claude or codex: how it
   runs) and its program (a path) -- e.g. a company's own OpenCode beside the plain one. An agent is offered to users

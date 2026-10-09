@@ -82,8 +82,9 @@ def test_reset_clears_generated_data_and_history_preserving_inputs_and_settings(
     assert bob.post("/api/apps/x/reset", headers=H).status_code == 200, "already empty is fine"
 
 
+@pytest.mark.parametrize("keep", [[], ["workbench", "history", "author_work", "cache"]])
 @pytest.mark.parametrize("busy", ["run", "author", "ask", "maintenance"])
-def test_reset_refuses_active_or_starting_work(reset_loop, busy):
+def test_reset_refuses_active_or_starting_work(reset_loop, busy, keep):
     app, bob, _w, d, cache = reset_loop
     if busy == "run":
         app.state.store.add_run(app.state.store.user(name="bob"), "x", "", "", [], {})
@@ -95,11 +96,54 @@ def test_reset_refuses_active_or_starting_work(reset_loop, busy):
     else:
         app.state.maintenance._lock.acquire()
     try:
-        assert bob.post("/api/apps/x/reset", headers=H).status_code == 409
+        assert bob.post("/api/apps/x/reset", json={"keep": keep}, headers=H).status_code == 409
         assert (d / "out/x.db").exists() and cache.exists()
     finally:
         if busy == "maintenance":
             app.state.maintenance._lock.release()
+
+
+@pytest.mark.parametrize("keep", [
+    ["workbench"], ["history"], ["author_work"], ["cache"],
+    ["workbench", "history", "author_work", "cache"],
+])
+def test_reset_preserves_only_selected_data_and_matching_history(reset_loop, keep):
+    app, bob, w, d, cache = reset_loop
+    store, user = app.state.store, app.state.store.user(name="bob")
+    ident = store.add_run(user, "x", str(d / "out/x.db"), str(d / "runs/loop.log"), [], {})
+    store.set_run(ident, ended=time.time(), rc=0)
+    w.set_meta("x", last_check={"ok": True}, last_start_digest="old", last_options={"passes": 2})
+    folders = {"history": [d / "out/x.db", d / "runs/loop.log", d / "runs/asks/old/answer.md"],
+               "workbench": [d / "workbench/notes.md"], "author_work": [d / ".author-work/problem.yaml"],
+               "cache": [cache / "trace.json"]}
+    contents = {p: p.read_text() for paths in folders.values() for p in paths}
+    response = bob.post("/api/apps/x/reset", json={"keep": keep}, headers=H)
+    assert response.status_code == 200, response.text
+    for key, paths in folders.items():
+        for p in paths:
+            if key in keep:
+                assert p.read_text() == contents[p]
+            else:
+                assert not p.exists()
+    assert bool(store.runs(user, "x")) == ("history" in keep)
+    meta = w.meta("x")
+    assert "last_check" not in meta
+    if "history" in keep:
+        assert meta["last_start_digest"] == "old" and meta["last_options"] == {"passes": 2}
+        assert store.run(ident)["db"] == str(d / "out/x.db")
+    else:
+        assert "last_start_digest" not in meta and "last_options" not in meta
+    assert (d / "library/source.py").read_text() == "# keep this\n"
+    audit = next(a for a in store.audit_log() if a["action"] == "reset app")
+    for key in keep:
+        assert key in audit["detail"]
+
+
+@pytest.mark.parametrize("keep", [["../workbench"], ["out"], "workbench", [1]])
+def test_reset_rejects_invalid_keep_options_without_deleting_files(reset_loop, keep):
+    _app, bob, _w, d, cache = reset_loop
+    assert bob.post("/api/apps/x/reset", json={"keep": keep}, headers=H).status_code == 422
+    assert (d / "workbench/notes.md").exists() and (d / "out/x.db").exists() and cache.exists()
 
 
 def test_reset_is_owner_only_and_requires_csrf(reset_loop):
@@ -167,6 +211,8 @@ def test_reset_refuses_cache_keys_shared_by_long_names(reset_loop):
     client = _client(app, user.name, "another long secret")
     assert client.post(f"/api/apps/{names[0]}/reset", headers=H).status_code == 409
     assert (shared / "keep").exists()
+    assert client.post(f"/api/apps/{names[0]}/reset", json={"keep": ["cache"]}, headers=H).status_code == 200
+    assert (shared / "keep").exists(), "preserving a shared cache is safe"
 
 
 def test_reset_reports_file_removal_failure_without_forgetting_history(reset_loop, monkeypatch):

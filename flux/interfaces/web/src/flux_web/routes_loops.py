@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 
 from .models import (
     DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn, MoveIn,
-    LoopRename, LoopTransfer,
+    LoopRename, LoopTransfer, ResetIn,
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env, loop_permissions
 from .store import User
@@ -507,12 +507,13 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise fail(exc) from exc
 
     @app.post("/api/apps/{name}/reset")
-    def reset_app(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+    def reset_app(name: str, body: ResetIn | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         from .admin import _key, cache_root
         from .confine import within
         from .reset import clear, plan
 
         w = reset_owner(name, user, owner)
+        keep = body.keep if body else []
         if not maintenance._lock.acquire(blocking=False):
             raise HTTPException(409, "wait for maintenance to finish first")
         try:
@@ -526,14 +527,17 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 if authoring.state(d).get("running") or asks.running(d):
                     raise HTTPException(409, "stop the loop's agents first")
                 key = _key(user.name, name)
-                if (cache_root() / key).exists() and any(
+                if "cache" not in keep and (cache_root() / key).exists() and any(
                     _key(u.name, a["name"]) == key and (u.id, a["name"]) != (user.id, name)
                     for u in store.users() for a in ws(u).apps()
                 ):
                     raise HTTPException(409, "this loop shares a cache folder with another loop; cannot reset it safely")
-                clear(w, name, user.name)
-                store.clear_runs(user, name)
-                store.audit(user.name, "reset app", f"{name}: " + ", ".join(f["path"] for f in affected["folders"]))
+                clear(w, name, user.name, keep)
+                if "history" not in keep:
+                    store.clear_runs(user, name)
+                removed = ", ".join(f["path"] for f in affected["folders"] if f["key"] not in keep)
+                store.audit(user.name, "reset app", f"{name}: cleared {removed or 'last check status only'}"
+                            + ("; kept " + ", ".join(sorted(set(keep))) if keep else ""))
         except ValueError as exc:
             raise fail(exc) from exc
         except OSError as exc:

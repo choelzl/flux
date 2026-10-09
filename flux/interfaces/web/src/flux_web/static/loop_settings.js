@@ -54,17 +54,30 @@ async function settingsView(ctx) {
       envTable([...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))],
         new Set(e.loop.map(x => x.name)))) : ""]);
   const danger = isOwner ? card("Reset or delete this loop", [
-    h("p", { class: "muted" }, "Reset clears generated results, logs, history, workbench and caches, keeping source files, settings and sharing. Delete removes the entire loop. Both are permanent."),
+    h("p", { class: "muted" }, "Reset clears generated data; choose what to keep in the confirmation. Source files, settings and sharing stay. Delete removes the entire loop. Both are permanent."),
     h("div", { class: "form-actions" }, ctx.st.running ? h("span", { class: "muted" }, "Stop it first.") : [act("Reset", async () => {
       const plan = await api(`/apps/${enc(name)}/reset`);
+      const keeps = plan.keep_options.map(o => h("label", { class: "check" },
+        h("input", { type: "checkbox", "data-reset-keep": o.key }), o.label));
+      const selected = () => keeps.map(l => l.querySelector("input")).filter(i => i.checked).map(i => i.dataset.resetKeep);
+      const folders = h("ul", { class: "reset-folders" }), history = h("p", {});
+      const draw = () => {
+        const keep = selected(), removed = plan.folders.filter(f => !keep.includes(f.key));
+        folders.replaceChildren(...(removed.length ? removed.map(f => h("li", {}, h("code", {}, f.path), h("div", { class: "muted small" }, f.what)))
+          : [h("li", { class: "muted" }, "No folders will be removed.")]));
+        history.textContent = keep.includes("history") ? "Results, logs and saved run history stay. The last check status will be cleared."
+          : plan.history + " will also be cleared.";
+      };
+      keeps.forEach(l => l.querySelector("input").addEventListener("change", draw));
+      draw();
       const warning = h("div", {},
-        h("p", {}, h("strong", {}, "This cannot be undone."), " All results, passes, full logs and agent history will be lost."),
+        h("p", {}, h("strong", {}, "This cannot be undone."), " Data listed below will be permanently removed."),
+        h("h3", {}, "Keep"), h("div", { class: "stack" }, keeps),
         h("p", {}, "These folders and everything inside them will be removed:"),
-        h("ul", { class: "reset-folders" }, plan.folders.map(f => h("li", {}, h("code", {}, f.path), h("div", { class: "muted small" }, f.what)))),
-        h("p", {}, plan.history + " will also be cleared."),
+        folders, history,
         h("p", {}, "Your problem document, source files, library, settings and sharing stay. Stop any running agents first."));
       if (!await dialog(`Reset ${name}?`, warning, [["Cancel", false], ["Reset", true, "danger solid"]])) return;
-      await api(`/apps/${enc(name)}/reset`, { method: "POST" });
+      await api(`/apps/${enc(name)}/reset`, { method: "POST", body: { keep: selected() } });
       toast(`${name} reset`, "ok"); route();
     }, { cls: "danger" }), act("Delete", async () => {
       if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;

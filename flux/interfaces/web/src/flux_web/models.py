@@ -16,6 +16,10 @@ class Login(BaseModel):
     password: str
 
 
+class ResetIn(BaseModel):
+    keep: list[Literal["workbench", "history", "author_work", "cache"]] = Field(default_factory=list)
+
+
 class NewUser(BaseModel):
     name: str
     password: str | None = None              # D818: none -- an invitation link to set it
