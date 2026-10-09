@@ -65,7 +65,7 @@ def loop_tools(problem: "Problem", subgoal: str | None, state: "LoopState", *,
                checked: Checked | None = None, stage: str = "prototype") -> list[Tool]:
     """The generic tools for one turn, from the problem's hooks. `checked` collects what
     `check` measured; without it (an RTL turn, a planning turn) there is no `check`."""
-    tools: list[Tool] = [_compute_tool(state)]
+    tools: list[Tool] = [_compute_tool(state), _ideas_tool(subgoal, state)]
     if checked is not None and stage == "prototype":
         tools.append(_check_tool(problem, subgoal, state, checked))
     if subgoal is not None and problem.prototype() is not None:
@@ -80,6 +80,28 @@ def loop_tools(problem: "Problem", subgoal: str | None, state: "LoopState", *,
     if skills:
         tools.append(_skill_tool(skills))                 # a skill loaded when it applies
     return tools
+
+
+def _ideas_tool(subgoal: str | None, state: "LoopState") -> Tool:
+    from .ideas import FIELDS, context, propose
+
+    def run(args: dict[str, Any]) -> str:
+        if args.get("action", "list") == "list":
+            return context(state, subgoal, limit=30) or "No ideas recorded for this part yet."
+        if args.get("action") not in ("propose", "select"):
+            return "error: use list, propose or select"
+        try:
+            ident = propose(state, subgoal, args.get("idea"))
+        except ValueError as exc:
+            return f"error: {exc}"
+        if args["action"] == "select":
+            state.__dict__.setdefault("_idea_selected", {})[subgoal or "*"] = [ident]
+        return ident
+
+    return Tool("ideas", "Read the cross-pass ideas notebook, propose a hypothesis for later, or select an idea "
+                "for the current experiment. Evaluations are recorded by Flux, not supplied by this tool.",
+                {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "propose", "select"]},
+                                                  "idea": FIELDS["idea"]}}, run)
 
 
 def _skill_tool(skills: list[Any]) -> Tool:

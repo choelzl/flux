@@ -166,11 +166,14 @@ flux knowledge digest --db DB     # the library's key points, digested once by t
 
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
 its own (D791): `library/` beside its document (papers and references, in any subfolders; `flux ask`
-puts its attachments there). Every prompt gets the excerpts nearest the problem and a line per paper,
-each coding agent a LIBRARY section with the papers and the files nearest its question (PDFs read with
-`pdftotext`); `flux task check` says how many documents, how many are the loop's own, and who reads them.
+puts its attachments there). Model prompts get the excerpts nearest the problem and a line per paper.
+Coding agents get a **LIBRARY** section with the full stored digests of the five nearest papers,
+ranked across the task's lookups, plus paths to nearby reference implementations. These digests replace
+the lexical excerpts and duplicated digest catalog in their briefs. If a nearest paper has no digest
+yet, the brief says so and provides its path to read (PDFs with `pdftotext`). `flux task check` says
+how many documents, how many are the loop's own, and who reads them.
 The sandbox mounts each library read-only. Every paper of the library is digested once -- the loop's own
-first, then the shared ones -- and the key points join every prompt; there is nothing to say for it, and
+first, then the shared ones -- and its key points become available to prompts; there is nothing to say for it, and
 `flow.knowledge: off` turns the library and its digest off (D791). The digest runs first in each pass's
 Setup (the tree's **Digest** leaf, before Reading: how many new, by whom, how many in all). A digest is kept in the run's home too (`~/.cache/flux/digests`, `FLUX_DIGESTS` elsewhere; on the web, each user's Flux home), keyed by the document's content: another loop or a later run takes it from there with no call, and only a changed document is digested again (D794), so no prompt waits on it (D771). An agent can digest instead of the model -- it reads each file
 itself (a PDF's tables and figures too) and is gated by its Test like any agent the loop uses:
@@ -184,6 +187,42 @@ In the configurator's drawing it is the **Digest the papers** box (the model, or
 the rest follow in later passes, and a digester that fails three times in a row waits for the next pass (D782).
 An agent reads each paper from a `paper.txt` beside it; it needs a model served with room for its own
 prompt (OpenCode's alone is about 33,000 tokens) and working tool calls -- else digest with the model (D785).
+
+Coding-agent briefs put the current turn's task and search direction before the static knowledge,
+including when writing a prototype. On exploration and variations passes, the incumbent is described by its leading
+**INTENT** header and recorded measurements, without its implementation. If there is no INTENT header,
+the loop uses its saved intent or explanation when available. Repair turns still include the refused
+draft so the agent can fix it. These passes start independently of earlier best designs and cached
+prototypes, while keeping those candidates on record. Variations develop distinct alternatives using
+intent and measured trade-offs, rather than starting with the incumbent's implementation.
+
+**Ideas notebook.** Each campaign retains hypotheses and alternative ideas alongside its trials.
+On later passes, drafting and prototype prompts include a bounded notebook summary: untested
+ideas, recent measurements, and failed attempts. These summaries contain no design source.
+The full notebook is in **Results → Ideas**, with expandable evaluation histories and Raw JSON
+and Fullscreen views. It survives stop/restart; clearing the loop's record also clears its notebook.
+
+A model can add optional fields to its normal artifact, prototype or edits reply:
+
+```json
+{
+  "idea": {"title": "Fewer stages", "hypothesis": "Removing redundant stages may reduce latency", "test": "Check correctness, measure cycles and area"},
+  "ideas": [{"title": "Lookup table", "hypothesis": "Trade area for fewer cycles"}]
+}
+```
+
+`idea` identifies the hypothesis this draft tests; `ideas` saves alternatives without claiming
+they have been evaluated. Revisit an existing hypothesis with `"idea": {"id": "idea-..."}`.
+Coding agents can write the same JSON to `<artifact filename>.ideas.json` beside their draft or
+prototype; their brief names the file. Models with tools can use `ideas` to list, propose or select
+a hypothesis. Leading INTENT headers on drafts are collected automatically when no idea is selected.
+Notes are optional: malformed notes do not refuse the design.
+
+Flux links ideas to the actual trial outcomes, including design, pass, stage, check failures and
+measured values. **Proposed** means untested, **checked** means a check passed, and **measured**
+means recorded measurements exist. Measured does not assert that an idea improved the objectives;
+failed attempts remain visible when a later attempt succeeds. The read-only API is
+`GET /api/apps/<name>/ideas`, with the same owner and historical run/campaign selectors as Results.
 
 ## The sandbox
 

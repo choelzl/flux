@@ -91,7 +91,10 @@ class DraftMixin:
             body, _schema = self.rewrite_prompt(sg, prior, failure, state)
         else:
             body, _schema = self.design_prompt(sg, "", state, getattr(attempt, "brief", "") or None, prior, failure)
-        brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state) or "", artifact=path, workdir=workdir,
+        from .ideas import bind, capture, instructions, sidecar
+
+        body += "\n\n" + instructions(path)
+        brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state, agent=True) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=prior.artifact if prior is not None else None, failure=failure,
                             questions=agent.questions,
@@ -113,6 +116,7 @@ class DraftMixin:
             from .direction import guidance
 
             message += guidance(self, state, sg)
+            message += "\n\n" + instructions(path)
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
         prompt_file = workdir / f"PROMPT-{safe}.md"
@@ -125,6 +129,7 @@ class DraftMixin:
 
             install(self.skill_list(), workdir)
         t0 = time.monotonic()
+        path.with_name(path.name + ".ideas.json").unlink(missing_ok=True)
         turn, asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
                                answer=self._agent_answerer(agent, brief, state), say=state.say,
                                session=resume, message=message)
@@ -132,8 +137,14 @@ class DraftMixin:
                            f"exited {turn.rc}, wrote no {path.name}", message or brief, t0, probe_ctx)
         knobs = {"task": self.task.id, "part": sg or "", "generator": f"agent:{agent.tool}"}
         meta = {"questions": [asdict(e) for e in asked]} if asked else {}
+        notes = sidecar(path)
+        ids = capture(state, sg, notes, inherited=(prior.meta.get("idea_ids") or []) if prior is not None else [])
+        if ids:
+            meta["idea_ids"] = ids
         if path.is_file():
-            return Candidate(name, path.read_text(), knobs=knobs, meta=meta, subgoal=sg), ""
+            cand = Candidate(name, path.read_text(), knobs=knobs, meta=meta, subgoal=sg)
+            bind(state, cand)
+            return cand, ""
         from .agent import question_in
 
         printed = _printed_artifact(turn.text) if turn.ok and question_in(turn.text) is None else None
@@ -211,6 +222,9 @@ class DraftMixin:
                             workbench=workbench_section(self.task.workbench),
                             probes=probe_line([], budget, proto=True, allowed=agent.allowed),
                             denied=set(agent.allowed) < set(DENIED))
+        from .ideas import capture, instructions, sidecar
+
+        brief += "\n" + instructions(path) + "\n"
         workbench_link(self.task.workbench, workdir)
         probe_ctx = probe_context(self.task, workdir, subgoal or "", budget, proto=proto)
         resume = sess.id if agent.resume and sess.id and code else None
@@ -230,10 +244,13 @@ class DraftMixin:
                 "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or ".",
                 "workbench": self.task.workbench, "probe": probe_ctx}
         t0 = time.monotonic()
+        path.with_name(path.name + ".ideas.json").unlink(missing_ok=True)
         turn, _asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
                                 answer=self._agent_answerer(agent, brief, state), say=state.say,
                                 session=resume, message=message)
         text = path.read_text() if path.is_file() else ""
+        notes = sidecar(path)
+        capture(state, subgoal, notes)
         self._session_turn(state, sess, turn, "prototype", subgoal, agent.tool, bool(text.strip()) and text != code,
                            f"exited {turn.rc}, left no new {path.name}", message or brief, t0, probe_ctx)
         if not text.strip() or (code and text == code):
@@ -241,7 +258,8 @@ class DraftMixin:
             state.say(f"  prototype {subgoal or self.task.id}: the coding agent {agent.tool} exited {turn.rc} "
                       f"and left no new prototype" + (f": {tail}" if tail else ""))
             return ""
-        return json.dumps({"prototype": text, "why": (turn.text or "")[-600:]})
+        return json.dumps({"prototype": text, "why": (turn.text or "")[-600:],
+                           **{k: notes[k] for k in ("idea", "ideas") if k in notes}})
 
     def _agent_answerer(self, agent: Any, brief: str, state: LoopState):
         """Who answers the agent's questions (D585), as the document's `questions:` allows: the

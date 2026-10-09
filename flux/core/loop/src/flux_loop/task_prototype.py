@@ -139,8 +139,8 @@ class PrototypeMixin:
         reworking the spelled RTL would be overwritten on the next spell. Others use the default."""
         cap = self.prototype()
         key = item.subgoal or "*"
-        if item.explore or cap is None or getattr(cap, "language", "") != "python" or key not in state.prototypes:
-            return Problem.improve(self, item, state)     # D845: an explore is a new algorithm, not a cheaper one
+        if item.explore or item.dse == "variations" or cap is None or getattr(cap, "language", "") != "python" or key not in state.prototypes:
+            return Problem.improve(self, item, state)     # explore/variations draft independently of the verified prototype
         return self._cost_pass(item, state, key)
 
     def _cost_pass(self, item: Any, state: LoopState, key: str) -> tuple[Candidate | None, Any, str]:
@@ -219,6 +219,11 @@ class PrototypeMixin:
         # The source prototype's digest lets a reload find it and its cost guard costly stages;
         # `transpiled` lets a transpiler change re-spell it (D510).
         meta: dict[str, Any] = {"prototype_sha": prototype_digest(prototype), "transpiled": True}
+        from .ideas import code_ids
+
+        ids = code_ids(state, prototype, subgoal)
+        if ids:
+            meta["idea_ids"] = ids
         if cost is not None:
             meta["prototype_cost"] = cost
         return Candidate(f"{subgoal or _leaf(self.task.id)}#spelled{self._count}", sv,

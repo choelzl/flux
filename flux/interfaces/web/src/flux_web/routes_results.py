@@ -550,6 +550,25 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def all_usage(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return [_user_usage(u) for u in store.users()]
 
+    @app.get("/api/apps/{name}/ideas")
+    def ideas(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None,
+              start_id: int | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        from datetime import datetime, timezone
+
+        from flux_loop.ideas import notebook
+        from flux_store import CampaignStore
+
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        cid = selected_campaign(run, campaign)
+        until = start_end(name, user, owner, start_id, run)
+        if not cid or not os.path.isfile(run["db"]):
+            return {"campaign": None, "ideas": []}
+        record = CampaignStore(run["db"])
+        try:
+            return notebook(record, cid, until=datetime.fromtimestamp(until, timezone.utc).isoformat() if until is not None else None)
+        finally:
+            record.close()
+
     @app.get("/api/apps/{name}/results")
     def results(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None, start_id: int | None = None,
                 raw: bool = False,

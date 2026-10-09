@@ -22,6 +22,12 @@ For Snap Firefox, use a path that Firefox can access, such as one under
 `FLUX_E2E_STEPS="login refused,login,upload,run history,live scroll"` checks agent prompt
 viewers for live tasks and older runs, including fullscreen text and retained scroll positions.
 `test_agent_live.py` checks that fresh and resumed agent inputs are saved in full at task start.
+`test_agent_brief_context.py` checks full nearest-paper digests, missing-digest handling, task-first
+briefs and exploration context containing only incumbent intent and measurements. The library,
+novelty and prototype tests also exercise these changes through real brief assembly and fake agents.
+Explore and Variations tests check that old best designs and cached prototypes are not used as
+source seeds, that comparison intent/numbers remain available, and that earlier candidates survive
+failed experiments. Variations also bypass incumbent tuning and prototype cost passes.
 
 `e2e/web_ui_lifecycle.py` also covers fullscreen drafts (selection, scroll, Escape and navigation),
 raw file output, reset warnings/cancellation and retained inputs/settings, and older starts'
@@ -83,6 +89,12 @@ measurements, parent aggregates, relative values, expansion, shared Decision pre
 the crafter's dictionary fields. `test_dictionary_metrics.py` covers parsing, inheritance,
 configurable aggregates, recording, historical metadata and real loops that rank by a named test
 or the parent mean.
+
+`FLUX_E2E_STEPS="ideas notebook"` checks the Ideas subtab before measurements exist, literal
+note rendering, pass histories, failed attempts, Raw JSON, fullscreen, narrow screens and refresh.
+`test_ideas.py` covers persistence across passes/restarts, pending hypotheses, tool selection,
+agent sidecars and repairs, prototype-to-design links, and real checks and measurements.
+`test_web_ideas.py` checks loop permissions and historical campaign/start boundaries.
 
 `FLUX_E2E_STEPS="partial agent usage,admin token rates"` also checks that interrupted-agent
 usage is visibly partial and wholly missing usage is shown as unavailable. `test_agent_usage.py`

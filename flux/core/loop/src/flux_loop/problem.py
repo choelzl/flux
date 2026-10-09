@@ -518,8 +518,10 @@ class GeneratorRole(_Role):
         by the rules or by the agent -- and run. Otherwise the default is the same generation
         sub-loop, seeded with the design in hand: the model path reworks it (D414's patch
         loop, which is what `state.best` is for), and a template, catalog or solver source
-        sees it as `Attempt.prior` with `Attempt.failure` carrying the numbers."""
-        options = [] if item.explore else self.improve_options(item, state)   # D593: past the rested ladder
+        sees it as `Attempt.prior` with `Attempt.failure` carrying the numbers. Explore and
+        Variations instead draft independent alternatives from intent and measurements."""
+        independent = item.explore or item.dse == "variations"
+        options = [] if independent else self.improve_options(item, state)
         if item.refine:
             options = [o for o in options if o.due]      # D845: a refine builds something; nothing due, the generator
         if options:
@@ -534,24 +536,16 @@ class GeneratorRole(_Role):
         from .sources import Model, iterate
 
         source = self.generator(item.subgoal, state)
-        if item.explore:
+        if independent:
             # D839: the campaign at rest asks for a NEW design, the standing one shown to beat -- not
             # handed over to be edited, which kept every exploring pass beside it
-            from .novelty import explore_brief
+            from .novelty import explore_brief, fresh_context
 
-            key = item.subgoal or "*"
-            keep = state.best.pop(key, None)
-            proto = state.prototypes.pop(key, None)       # a new design proves a new algorithm first
-            brief = explore_brief(item.why, item.candidate, str(getattr(getattr(self, "task", None), "language", "") or ""))
-            try:
+            brief = explore_brief(item.why, item.candidate, state, variations=item.dse == "variations")
+            with fresh_context(state, item.subgoal):
                 if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
                     return self.generate(item.subgoal, "", state, brief)
                 return iterate(self, source, item.subgoal, state, brief=brief)
-            finally:
-                if keep is not None:
-                    state.best[key] = keep
-                if proto is not None and key not in state.prototypes:
-                    state.prototypes[key] = proto         # no new one proved: the standing one stays
         if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
             key = item.subgoal or "*"
             keep = state.best.get(key)
@@ -580,10 +574,18 @@ class GeneratorRole(_Role):
 
         begin(self, state, subgoal)
 
-        source = self.generator(subgoal, state)
-        if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
-            return _generate_with_model(self, subgoal, method, state, human)
-        return iterate(self, source, subgoal, state)
+        def draft():
+            source = self.generator(subgoal, state)
+            if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
+                return _generate_with_model(self, subgoal, method, state, human)
+            return iterate(self, source, subgoal, state, brief=human or "")
+
+        if state.part(subgoal).dse in ("explore", "variations"):
+            from .novelty import fresh_context
+
+            with fresh_context(state, subgoal):
+                return draft()
+        return draft()
 
     #: Which declared sources belong in the static prompt prefix (D449): the ones that cannot
     #: change during a run. The record's read-back grows as the run measures, and would break
@@ -652,7 +654,14 @@ class GeneratorRole(_Role):
         as a window around the failing lines when the failure locates them (D422)."""
         view = focus_window(cand.artifact, self.locate(failure, cand.artifact),
                             state.request.patch_context_lines)
-        return patch_prompt(cand.name, cand.artifact, failure, view=view), patch_schema()
+        from .ideas import FIELDS, context
+
+        schema = patch_schema()
+        schema["properties"].update(FIELDS)
+        memory = context(state, subgoal)
+        prompt = patch_prompt(cand.name, cand.artifact, failure, view=view)
+        prompt += "\nYou may include `idea` to select a different hypothesis, or `ideas` to save alternatives for later."
+        return "\n\n".join(s for s in (memory, prompt) if s), schema
 
     def rewrite_prompt(self, subgoal: str | None, cand: Candidate, failure: str,
                        state: LoopState) -> tuple[str, dict | None]:

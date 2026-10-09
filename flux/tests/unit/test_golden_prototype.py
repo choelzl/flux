@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import yaml
+import pytest
 
 from flux_cli.main import main
 from flux_codegen_rtl_harness import golden_vectors
@@ -336,7 +337,8 @@ def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, mo
     doc = tmp_path / "p" / "sq" / "problem.yaml"
     d = yaml.safe_load(doc.read_text())
     fake = tmp_path / "agent.py"
-    fake.write_text(AGENT)
+    d.setdefault("flow", {})["knowledge"] = {"text": "STATIC_PROTOTYPE_CONTEXT " * 6000}
+    fake.write_text(AGENT + '\nopen(sys.argv[0] + ".brief", "w").write(brief)\n')
     d.setdefault("flow", {})["generate"] = {"by": {"command": ["{python}", str(fake), "{prompt_file}", "{artifact}"]}}
     doc.write_text(yaml.safe_dump(d, sort_keys=False))
     task = load_task(doc)
@@ -344,6 +346,8 @@ def test_a_coding_agent_writes_the_prototype_and_the_loop_checks_it(tmp_path, mo
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=ScriptedProposer([]),
                    log=said.append)
     assert out.decision is not None and out.decision.candidate.knobs.get("generator") == "py2sv", (said[-12:], out.refused)
+    brief = Path(str(fake) + ".brief").read_text()
+    assert brief.index("PROTOTYPE FIRST") < brief.index("STATIC_PROTOTYPE_CONTEXT")
 
 
 def test_the_documents_knowledge_reaches_the_prototype_stage(tmp_path):
@@ -357,6 +361,38 @@ def test_the_documents_knowledge_reaches_the_prototype_stage(tmp_path):
     prob = PromptProblem(task)
     state = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None)
     assert "SQUARE BY SHIFT-AND-ADD" in prefix_for(prob, prob.prototype(), None, state)
+    assert "SQUARE BY SHIFT-AND-ADD" in prefix_for(prob, prob.prototype(), None, state, agent=True)
+
+
+@pytest.mark.parametrize("dse", ["explore", "variations"])
+def test_independent_prototype_agent_does_not_receive_previous_design_sources(tmp_path, monkeypatch, dse):
+    from flux_loop import PromptProblem, request_for
+    from flux_loop.types import Candidate, Improve, LoopState, Scored
+
+    task, _ = _sq_doc(tmp_path)
+    fake = tmp_path / "agent.py"
+    fake.write_text(AGENT + '\nopen(sys.argv[0] + ".brief", "w").write(brief)\n')
+    task = replace(task, generator={"agent": {"command": ["{python}", str(fake), "{prompt_file}", "{artifact}"]}})
+    prob = PromptProblem(task)
+    work = tmp_path / "trace"
+    work.mkdir()
+    state = LoopState(request=request_for(task, db=str(tmp_path / "d.db")), say=lambda _: None,
+                      proposer=ScriptedProposer([]), feedback=None, workdir=str(work))
+    incumbent = Candidate("sq#old", "// INTENT: arithmetic\nOLD_RTL_SOURCE")
+    state.scored.append(Scored(incumbent, "screen", {"area_um2": 100}))
+    state.best["*"] = (1, Candidate("sq#previous", "PREVIOUS_BEST_SOURCE"), "old failure")
+    state.prototypes["*"] = "# OLD_VERIFIED_SOURCE\ndef design(a):\n    return {'y': (a * a) >> 4}\n"
+    state.proto_best["*"] = (1, "# OLD_REFUSED_SOURCE\ndef design(a):\n    return {'y': 0}\n", "old failure")
+    state.prototypes["sibling"] = "# OTHER_PART_SOURCE\ndef design(a):\n    return {'y': a}\n"
+    state.part(None).dse = dse
+    monkeypatch.setattr(prob, "subgoals", lambda: ["sibling"])
+    monkeypatch.setattr(prob, "_cost_pass", lambda *args: pytest.fail("independent alternatives bypass the incumbent cost pass"))
+    cand, _, reason = prob.improve(Improve(incumbent, "Try a distinct approach", explore=dse == "explore", dse=dse), state)
+    assert cand is not None, reason
+    brief = Path(str(fake) + ".brief").read_text()
+    assert "PROTOTYPE FIRST" in brief and "INTENT: arithmetic" in brief and "area_um2 100" in brief
+    assert all(source not in brief for source in ("OLD_RTL_SOURCE", "PREVIOUS_BEST_SOURCE", "OLD_VERIFIED_SOURCE", "OLD_REFUSED_SOURCE", "OTHER_PART_SOURCE"))
+    assert "THE LAST DRAFT" not in brief and "Your prototype for" not in brief
 
 
 def test_a_prototype_the_loop_cannot_spell_is_told_at_the_check(tmp_path):

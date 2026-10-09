@@ -147,7 +147,7 @@ class KnowledgeMixin:
             out.extend(mentor.sections(state))
         return out
 
-    def _role_knowledge(self, state: LoopState, focus: str | None = None) -> str:
+    def _role_knowledge(self, state: LoopState, focus: str | None = None, *, exclude: tuple[str, ...] = ()) -> str:
         """The knowledge role's text for a prompt (D462), beside the document's `knowledge`;
         `focus` (the part in hand) decides what is kept when the window is short (D550).
         Help, never a gate: an unreadable source contributes nothing."""
@@ -155,6 +155,7 @@ class KnowledgeMixin:
         if mentor is None:
             return ""
         try:
-            return mentor.prefix(state, focus=focus).strip()
+            keys = [src.key for src in mentor.sources if src.key not in exclude] if exclude else None
+            return mentor.prefix(state, focus=focus, keys=keys).strip()
         except Exception:  # noqa: BLE001
             return ""

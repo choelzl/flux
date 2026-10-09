@@ -1089,3 +1089,7 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .best-said { font-weight: 600; }
 
 .set-fields .inline .save-mark { min-width: 0; }
+.ideas-table td { white-space: normal; overflow-wrap: anywhere; min-width: 7rem; max-width: 28rem; vertical-align: top; }
+.ideas-table small, .idea-evaluations small { display: block; }
+.ideas-table p { margin: 0 0 .4rem; }
+.idea-evaluations pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 35rem; }

@@ -382,7 +382,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
     def _part(self, subgoal: str | None) -> Part | None:
         return next((p for p in self.parts if p.name == subgoal), None)
 
-    def prompt_prefix(self, subgoal: str | None, state: LoopState) -> str:
+    def prompt_prefix(self, subgoal: str | None, state: LoopState, *, agent: bool = False) -> str:
         t = self.task
         lines = [f"TASK {t.id}: {t.statement}"]
         from .direction import guidance
@@ -396,7 +396,8 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             lines.append(f"CONTRACT:\n{t.contract}")
         if t.knowledge:
             lines.append(f"KNOWLEDGE:\n{t.knowledge}")
-        role = self._role_knowledge(state, subgoal)      # the knowledge role's text: the library, ... (D462, D648)
+        # Agents receive ranked paper digests in LIBRARY, rather than duplicate excerpts and all digests here.
+        role = self._role_knowledge(state, subgoal, exclude=("library", "papers", "digest") if agent else ())
         if role:
             lines.append(role)
         lines.append(
@@ -413,6 +414,12 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
 
         target = f"part {subgoal}" if subgoal else f"task {self.task.id}"
         parts = [human or "", guidance(self, state, subgoal), tried_block(self, state, subgoal)]
+        from .ideas import FIELDS, context
+
+        parts.append(context(state, subgoal))
+        parts.append("Include an optional `idea` (title, hypothesis, test, or an existing notebook id) for the "
+                     "hypothesis this design tests, and `ideas` for alternatives to try later. Flux links actual "
+                     "checks and measurements to the chosen idea; do not invent evaluation results.")
         if prior is not None:
             numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(prior.artifact.splitlines()))
             parts += [f"What the loop said about your previous attempt for {target}:\n\n{prior_why}",
@@ -421,7 +428,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         else:
             parts.append(f"Write {target} now" + (f" ({method})" if method else "") + ".")
         schema = {"type": "object",
-                  "properties": {"artifact": {"type": "string"}, "why": {"type": "string"}},
+                  "properties": {"artifact": {"type": "string"}, "why": {"type": "string"}, **FIELDS},
                   "required": ["artifact"]}
         return "\n\n".join(p for p in parts if p), schema
 
@@ -441,8 +448,9 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         if artifact is None:
             return None, "the reply carried no artifact"
         self._count += 1
+        meta = {k: doc[k] for k in ("why", "idea", "ideas") if isinstance(doc, dict) and k in doc}
         return Candidate(f"{subgoal or self.task.id}#{self._count}", artifact,
-                         knobs={"task": self.task.id, "part": subgoal or ""}, subgoal=subgoal), ""
+                         knobs={"task": self.task.id, "part": subgoal or ""}, subgoal=subgoal, meta=meta), ""
 
     # ---- evaluator
     def _subs(self, cand: Candidate, subgoal: str | None, state: LoopState) -> dict[str, str]:

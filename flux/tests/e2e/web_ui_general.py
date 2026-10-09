@@ -56,6 +56,50 @@ def edit(r, text):
 def general_flows(r, watch):
     b = r.b
 
+    def ideas_notebook():
+        with loop(r, "ui-ideas-notebook") as name:
+            title = "<img src=x onerror=alert(1)>"
+            data = {"campaign": "fixture", "ideas": [
+                {"id": "idea-tested", "part": "core", "title": title, "hypothesis": "A faster arithmetic approach",
+                 "test": "Check corners; measure cycles", "status": "measured", "evaluations": [
+                     {"pass": 1, "design": "core#1", "stage": "gate", "status": "refused", "metrics": {},
+                      "error": "incorrect corner case", "at": "2026-10-09T10:00:00Z"},
+                     {"pass": 2, "design": "core#2", "stage": "bench", "status": "ok", "metrics": {"cycles": 8},
+                      "error": "", "at": "2026-10-09T10:05:00Z"}]},
+                {"id": "idea-future", "part": "core", "title": "Try a lookup table", "hypothesis": "Compare the area trade-off",
+                 "test": "", "status": "proposed", "evaluations": []}]}
+            b.js("""window.__ideasFetch = window.fetch; window.__ideasData = arguments[1];
+              const path = '/api/apps/' + arguments[0] + '/ideas';
+              window.fetch = async (u, o) => new URL(String(u), location.href).pathname === path
+                ? new Response(JSON.stringify(window.__ideasData), {headers: {'Content-Type': 'application/json'}})
+                : window.__ideasFetch(u, o); return 1;""", name, data)
+            try:
+                r.page(f"#/app/{name}/results/ideas", "document.querySelector('.ideas-table')", "Ideas")
+                r.check("Ideas is accessible before any measured design", b.js("return document.querySelector('.subtabs .on').textContent === 'Ideas' && document.querySelectorAll('.ideas-table > tbody > tr').length === 2"))
+                r.check("idea notes render literally and pending ideas stay untested", b.js("return !document.querySelector('.ideas-view img') && document.querySelector('.ideas-table').textContent.includes(arguments[0]) && document.querySelector('.ideas-table').textContent.includes('Not tested yet')", title))
+                b.click(".ideas-table details summary")
+                r.check("idea history includes failures, passes and measured numbers", b.js("return document.querySelector('details[open] .idea-evaluations').textContent.includes('incorrect corner case') && document.querySelector('details[open]').textContent.includes('cycles=8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2'"))
+                b.click(".raw-view")
+                b.wait("document.querySelector('dialog.fullscreen-view .raw-content')", what="raw notebook")
+                r.check("raw notebook includes full evaluation data", b.js("return JSON.parse(document.querySelector('dialog .raw-content').textContent).ideas[0].evaluations[1].metrics.cycles === 8"))
+                r.button("Close", "dialog.fullscreen-view")
+                b.click(".fullscreen-button")
+                b.wait("document.querySelector('dialog.fullscreen-view .ideas-table')", what="fullscreen notebook")
+                r.check("fullscreen preserves the open evaluation history", b.js("return !!document.querySelector('dialog details[open]')"))
+                r.button("Close", "dialog.fullscreen-view")
+                b.cmd("WebDriver:SetWindowRect", {"width": 480, "height": 900})
+                r.check("notebook tables scroll within their view on a narrow screen", b.js("return document.documentElement.scrollWidth <= innerWidth + 2"))
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.__ideasData.ideas.push({id:'idea-next', part:'core', title:'Another alternative', hypothesis:'Try a different structure', test:'', status:'proposed', evaluations:[]}); return 1")
+                r.button("Refresh")
+                b.wait("document.querySelectorAll('.ideas-table > tbody > tr').length === 3", what="refreshed ideas")
+                r.clean("ideas notebook")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.fetch = window.__ideasFetch; return 1")
+
+    r.step("ideas notebook", ideas_notebook)
+
     def dictionary_metrics():
         with loop(r, "ui-dictionary-metrics") as name:
             put(r, name, "problem.yaml", """statement: Improve sparse timing tests

@@ -958,7 +958,7 @@ def test_edits_pasted_with_the_listings_line_numbers_still_apply():
 
 # ---- tools inside a turn (D505)
 def test_a_turn_with_tools_checks_inside_it_and_a_passing_check_is_the_answer(tmp_path):
-    """With `tools` on, the prototype turn gets compute/check/history/knowledge, a passing
+    """With `tools` on, the prototype turn gets compute/ideas/check/history/knowledge, a passing
     in-turn check is the attempt, and RTL turns get the tools without `check` (D505)."""
     from flux_loop import LoopRequest, LoopState, Candidate, Verdict, _generate_with_model
 
@@ -1047,9 +1047,9 @@ def test_a_turn_with_tools_checks_inside_it_and_a_passing_check_is_the_answer(tm
     _generate_with_model(Picky(), "a", "", st4, None)
     assert st4.proto_best["a"][0] == 2.0                      # taken, not refused
     assert checks.count("def design(x):\n    return 42") == 1  # measured once, inside the turn
-    assert offered[0] == ["compute", "check", "history", "knowledge"]
+    assert offered[0] == ["compute", "ideas", "check", "history", "knowledge"]
     assert "YOU HAVE TOOLS in this turn" in prompts[0] and "CHECK BEFORE YOU SUBMIT" in prompts[0]
-    assert offered[-1] == ["compute", "history", "knowledge"]  # the RTL turn: no `check`
+    assert offered[-1] == ["compute", "ideas", "history", "knowledge"]  # the RTL turn: no `check`
     assert "YOU HAVE TOOLS in this turn" in prompts[-1] and "CHECK BEFORE" not in prompts[-1]
 
 

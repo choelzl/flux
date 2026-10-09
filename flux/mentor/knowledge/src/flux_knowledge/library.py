@@ -93,25 +93,38 @@ def paper_lines(index: Any, db: str = "", *, width: int = 200) -> list[str]:
     return out
 
 
-def relevant_files(queries: Sequence[str] | str, index: Any, n: int = 5) -> list[str]:
-    """The `n` library files whose chunks score highest for `queries`, as absolute paths."""
+def _relevant_paths(queries: Sequence[str] | str, index: Any, n: int, *, papers: bool = False) -> list[str]:
     from .retrieval import knowledge_lookup
 
     score: dict[str, float] = {}
+    k = max(20, len(_chunks(index))) if papers else 20
     for q in [queries] if isinstance(queries, str) else queries:
-        for hit in knowledge_lookup(q, standard_id="library", k=20, index=index):
+        for hit in knowledge_lookup(q, standard_id="library", k=k, index=index):
+            if papers and not hit.chunk.source_path.lower().endswith(PAPER_SUFFIXES):
+                continue
             score[hit.chunk.source_path] = score.get(hit.chunk.source_path, 0.0) + hit.score
-    return [absolute(p) for p, _s in sorted(score.items(), key=lambda t: -t[1])[:n]]
+    return [p for p, _s in sorted(score.items(), key=lambda t: -t[1])[:max(0, n)]]
+
+
+def relevant_files(queries: Sequence[str] | str, index: Any, n: int = 5) -> list[str]:
+    """The `n` library files whose chunks score highest for `queries`, as absolute paths."""
+    return [absolute(p) for p in _relevant_paths(queries, index, n)]
 
 
 def agent_section(question: str | Sequence[str], folders: Iterable[str] = (), db: str = "", n: int = 5) -> str:
-    """A coding agent's LIBRARY section: what the library holds, one line per paper, and the
-    files nearest the question (a text, or its lookups) to open; "" for an empty library."""
+    """A coding agent's LIBRARY: full stored digests of the nearest `n` papers, plus paths
+    and a paper index. Missing digests are identified, without substituting lexical snippets."""
+    from .digest import digests_in
+
     queries = [_query(question)] if isinstance(question, str) else list(question)
     try:
         index = index_for(folders)
-        lines = paper_lines(index, db)
-        near = relevant_files([q for q in queries if q.strip()], index, n)
+        lines = [f"  [{Path(p).name}]" for p in sorted({c.source_path for c in _chunks(index)
+                                                     if c.source_path.lower().endswith(PAPER_SUFFIXES)})]
+        queries = [q for q in queries if q.strip()]
+        near = relevant_files(queries, index, n)
+        papers = _relevant_paths(queries, index, n, papers=True)
+        digests = {absolute(p): d for p, d in digests_in(db).items()}
     except Exception:  # noqa: BLE001 -- the library is help, never a reason to fail a turn
         return ""
     if not lines and not near:
@@ -119,6 +132,12 @@ def agent_section(question: str | Sequence[str], folders: Iterable[str] = (), db
     out = ["LIBRARY (the operator's papers and reference implementations on this machine; open "
            "what helps -- PDFs read with `pdftotext <file> -`):"]
     out += lines
+    if papers:
+        out.append("\nNearest papers -- use these methods, numbers and pitfalls to inform your design:")
+        for path in papers:
+            full = absolute(path)
+            digest = str(digests.get(full, {}).get("digest") or "").strip()
+            out.append(f"\n[{Path(path).name}] {full}\n" + (digest or "Digest unavailable: open the paper for its method and details."))
     if near:
         out.append("Nearest this question:")
         out += [f"  {p}" for p in near]

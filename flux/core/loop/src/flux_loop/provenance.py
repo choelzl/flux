@@ -49,6 +49,11 @@ def stamp(**more: Any) -> dict[str, Any]:
     """The provenance document of one row: the revision and the toolchain, plus whatever the
     writer knows (seconds, tokens, the trace directory, the batch size)."""
     doc: dict[str, Any] = {"git": git_revision(), "toolchain": toolchain()}
+    from flux_profile import _tags
+
+    tags = _tags()
+    if tags.get("pass") is not None:
+        doc["pass"] = tags["pass"]
     if more.get("trace"):
         from .sandbox_paths import host_path
 

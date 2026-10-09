@@ -213,6 +213,10 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             cand, tnote = problem.apply_tools(subgoal, cand, reply, state)
             if tnote:
                 last_err = tnote
+        from .ideas import bind, record_failure
+        from .model import _json
+
+        bind(state, cand, _json(reply))
         again = twin(state, cand)
         if again is not None:                       # D839: a design measured already, refused before it is built
             state.say(f"  {tag}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
@@ -226,6 +230,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 built = problem.build(cand, subgoal, state)
                 out["built"] = "ok"
             except BuildError as exc:
+                record_failure(state, cand, "build", str(exc))
                 last_err = str(exc)[:600]
                 out["error"] = str(exc)[:4000]
         if built is None:
@@ -244,6 +249,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             if fails == 0:
                 state.say(f"  {tag} passes the fast check; handing it to the gate")
                 return cand, built, ""
+            record_failure(state, cand, "fast-check", summary or f"{fails} failure(s)", fails)
             # the trend: did the last edit help, by how much, and where it stands against the best
             trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
             if is_best:

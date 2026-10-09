@@ -442,8 +442,7 @@ def workbench_section(bench: str) -> str:
 
 
 def library_section(problem: Any, question: str | list[str], state: Any = None) -> str:
-    """The LIBRARY section of an agent's brief (D648): one line per paper and the absolute
-    paths of the files nearest `question`, from the problem's `library` source; "" without one."""
+    """The agent's LIBRARY section: nearest papers' full digests and reference file paths."""
     try:
         mentor = problem.knowledge()
         lib = mentor.source("library") if mentor is not None and hasattr(mentor, "source") else None
@@ -460,12 +459,12 @@ def library_section(problem: Any, question: str | list[str], state: Any = None) 
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
                 prior: str | None, failure: str, questions: str = "decide", library: str = "",
                 workbench: str = "", probes: str = "", denied: bool = True) -> str:
-    """The brief an agent reads: the static prefix (contract, knowledge), the design or the
-    repair prompt, the LIBRARY section, then what the loop expects of a terminal tool --
+    """The brief an agent reads: the current task first, then the contract and knowledge,
+    the LIBRARY section, then what the loop expects of a terminal tool --
     including whether its questions will be answered."""
     # the model half's reply shape (JSON with the artifact) is not how an agent answers: it writes the file
     prefix = "\n\n".join(p for p in prefix.split("\n\n") if not p.lstrip().startswith("REPLY SHAPE"))
-    parts = [p for p in (prefix.strip(), body.strip(), library.strip(), workbench.strip()) if p]
+    parts = [p for p in (body.strip(), prefix.strip(), library.strip(), workbench.strip()) if p]
     if prior:
         parts.append(f"THE LAST DRAFT (refused: {failure.strip()[:2000] or 'see above'}):\n```\n{prior}\n```")
     parts.append(

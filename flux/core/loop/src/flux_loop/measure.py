@@ -136,6 +136,10 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     length-invariant bug (D165) and is refused loudly, never re-paired."""
     if not cands:
         return []
+    from .ideas import bind
+
+    for cand in cands:
+        bind(state, cand)
     cands, estimate = _estimated(problem, state, list(cands), stage)
     if not cands:
         return []

@@ -36,6 +36,10 @@ def _record_trial(state: LoopState, cand: Candidate | None, subgoal: str | None,
                   error: str | None = None, gate_passed: bool = False) -> None:
     if state.records is None:
         return
+    if cand is not None:
+        from .ideas import bind
+
+        bind(state, cand)
     doc = (cand.to_record() if cand else {"name": subgoal or "?", "artifact": ""})
     doc["subgoal"] = subgoal
     # what made the row -- and, on an admitted design, the transpiler and judge versions, so a

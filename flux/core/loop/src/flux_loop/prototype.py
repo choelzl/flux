@@ -49,9 +49,11 @@ TOOLS_HELP = (
 
 
 def prototype_schema() -> dict:
+    from .ideas import FIELDS
+
     return {"type": "object",
             "properties": {"prototype": {"type": "string"}, "why": {"type": "string"},
-                           "edits": patch_schema()["properties"]["edits"]},
+                           "edits": patch_schema()["properties"]["edits"], **FIELDS},
             "required": []}
 
 
@@ -222,18 +224,27 @@ def spec_prompt(problem: Problem, cap: Any, subgoal: str | None, state: LoopStat
     hist = history(state, subgoal)
     if hist:
         prompt += "\n\n" + hist                            # D500
-    prompt += example(state, subgoal, problem.subgoals())  # D501
+    from .ideas import context
+
+    notes = context(state, subgoal)
+    if notes:
+        prompt += "\n\n" + notes
+    prompt += ("\n\nYou may include `idea` (title, hypothesis, test, or an existing notebook id) for this "
+               "experiment and `ideas` for alternatives to try later. Flux records their actual evaluation results.")
+    if state.part(subgoal).dse not in ("explore", "variations"):
+        prompt += example(state, subgoal, problem.subgoals())  # D501: no source examples when drafting distinct alternatives
     return prompt
 
 
-def prefix_for(problem: Problem, cap: Any, subgoal: str | None, state: LoopState) -> str:
+def prefix_for(problem: Problem, cap: Any, subgoal: str | None, state: LoopState, *, agent: bool = False) -> str:
     """The stage's static prefix (D491): the mentor's sheet, the library's paper excerpts, the
-    document's knowledge and the problem's contract line. Never the target's interface or
-    reply shape, which make the model answer in the target language."""
+    document's knowledge and the problem's contract line. Agents get ranked digests through
+    LIBRARY instead of these excerpts. Never the target's interface or reply shape, which
+    make the model answer in the target language."""
     mentor = problem.knowledge()
     sheet = mentor.text("sheet", state) if mentor is not None else ""
-    library = paper_excerpts(mentor.text("library", state)) if mentor is not None else ""
-    papers = mentor.text("papers", state) if mentor is not None else ""       # one line per paper (D648)
+    library = paper_excerpts(mentor.text("library", state)) if mentor is not None and not agent else ""
+    papers = mentor.text("papers", state) if mentor is not None and not agent else ""       # one line per paper (D648)
     library = "\n\n".join(p for p in (library, f"THE LIBRARY'S PAPERS (one line each):\n{papers}" if papers else "") if p)
     contract = cap.contract.format(part=subgoal or problem.name) if cap.contract else ""
     # The document's `knowledge:` block reaches this stage too (D618).
@@ -424,11 +435,15 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
     req = state.request
     if key in state.prototypes:
         return state.prototypes[key], ""
-    prefix = prefix_for(problem, proto, subgoal, state)
+    agent = problem.prototype_agent() if callable(getattr(problem, "prototype_agent", None)) else None
+    prefix = prefix_for(problem, proto, subgoal, state, agent=agent is not None)
     first_prompt = spec_prompt(problem, proto, subgoal, state)
     schema = prototype_schema()
     first_schema = {"type": "object", "properties": {"prototype": {"type": "string"}, "why": {"type": "string"}},
                     "required": ["prototype"]}           # nothing to edit yet (D604)
+    from .ideas import FIELDS, bind_code
+
+    first_schema["properties"].update(FIELDS)
     code: str | None = None
     state.part(key).proto_passes += 1
     unit = score_unit(proto, subgoal, state)                                      # D503
@@ -468,12 +483,12 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
     # The budget grows while the pass improves (D506): every new best grants
     # `prototype_patience` more attempts, up to `prototype_attempts_max`.
     # D618: a coding agent may write the prototype; the loop runs its check (D673)
-    agent = problem.prototype_agent() if callable(getattr(problem, "prototype_agent", None)) else None
     budget, patience, cap, sized = prototype_budget(req, agent is not None)
     state.say(f"  prototype {tag}: {sized} budget -- {budget} attempts, +{patience} per new best, at most {cap}")
     attempt = -1
     while attempt + 1 < budget:
         attempt += 1
+        previous_code = code
         parts = []
         name = (proto.extra or {}).get("name", "python")         # the prototype's language, in the reply shape
         help_lines = [(PROTOTYPE_FIRST_HELP if code is None else PROTOTYPE_HELP).replace("complete python", f"complete {name}"),
@@ -501,7 +516,8 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         from .direction import begin, guidance
 
         begin(problem, state, subgoal)
-        prompt = _compose(prefix, guidance(problem, state, subgoal), *parts)
+        prompt = (_compose(guidance(problem, state, subgoal), *parts, prefix) if agent is not None
+                  else _compose(prefix, guidance(problem, state, subgoal), *parts))
         checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
         t_attempt = time.monotonic()
         answer = None
@@ -578,6 +594,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
                 continue
             last_err = _unrun("", "your reply carried no prototype")
             continue
+        bind_code(state, subgoal, code, _json(reply), previous=previous_code or "")
         with _phase(f"test: prototype {tag}", why=f"attempt {attempt + 1}") as out:
             v = checked.verdict_for(code) if checked is not None else None     # measured in the turn already
             if v is None:
@@ -591,6 +608,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
                     out["submitted"] = f"score {v.score:g}; the turn had checked {b_v.score:g} -- taking that"
                     state.say(f"  prototype {tag}: the reply scores {v.score:g} but the turn checked "
                               f"{b_v.score:g}; the best of the turn is the attempt")
+                    bind_code(state, subgoal, b_code, {}, previous=code)
                     code, v = b_code, b_v
             out["verdict"] = f"{'PASSES' if v.ok else 'refused'}, score {v.score:g}"
             if v.why:
@@ -603,6 +621,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         # bound, D479): that concrete text is what is stored, recorded and transpiled.
         bound = (v.payload or {}).get("prototype") if isinstance(v.payload, dict) else None
         if isinstance(bound, str) and bound.strip():
+            bind_code(state, subgoal, bound, {}, previous=code)
             code = bound
         last = (code, v)
         if v.ok:
@@ -693,9 +712,11 @@ def _record_prototype(state: LoopState, subgoal: str | None, code: str, v: Verdi
                           f"pass{state.part(key).proto_passes or 1}")
              if state.workdir and state.workdir != "." else None)
     try:
+        from .ideas import code_ids
+
         state.records.trial(
             {"name": f"prototype:{subgoal or 'goal'}", "artifact": code, "knobs": {},
-             "meta": {"kind": "prototype",
+             "meta": {"kind": "prototype", "idea_ids": code_ids(state, code, subgoal),
                       "provenance": stamp(seconds=seconds or None, trace=trace, prompt=state.last_prompt_sha,
                                           library=state.cited.get(state.last_prompt_sha) or None, **turn_cost(reply))},
              "subgoal": subgoal, "score": float(v.score), "why": _gist(v.why or "")},

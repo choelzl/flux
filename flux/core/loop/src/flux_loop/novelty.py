@@ -13,9 +13,35 @@ and may send a design already measured again. Three things here:
 from __future__ import annotations
 
 import hashlib
+import re
+from contextlib import contextmanager
 from typing import Any
 
-__all__ = ["explore_brief", "tried_block", "twin", "twin_said"]
+__all__ = ["explore_brief", "fresh_context", "tried_block", "twin", "twin_said"]
+
+
+@contextmanager
+def fresh_context(state: Any, subgoal: str | None):
+    """Draft an independent alternative without seeding it with an earlier design or session.
+
+    Repairs within this experiment still see their own draft. Retain earlier verified designs
+    and refused prototypes afterward, including when generation fails or is interrupted.
+    """
+    key = subgoal or "*"
+    best = state.best.pop(key, None)
+    proto = state.prototypes.pop(key, None)
+    seed = state.proto_best.pop(key, None)
+    state.part(subgoal).sessions.clear()
+    state.__dict__.get("_idea_selected", {}).pop(key, None)
+    try:
+        yield
+    finally:
+        if best is not None:
+            state.best[key] = best
+        if proto is not None and key not in state.prototypes:
+            state.prototypes[key] = proto
+        if seed is not None:
+            state.proto_best[key] = min(seed, state.proto_best.get(key, seed), key=lambda s: s[0])
 
 
 def _digest(text: str) -> str:
@@ -87,10 +113,59 @@ def tried_block(problem: Any, state: Any, subgoal: str | None, limit: int = 8) -
             "different -- a new idea is worth more than a small edit:\n" + "\n".join(lines))
 
 
-def explore_brief(why: str, standing: Any, fence: str = "") -> str:
-    """The exploring pass's request (D839): beat the standing design with a different one."""
-    return (f"{why.strip()}\n\nWrite a NEW design that beats it -- a different structure, algorithm or set of "
+def _intent(standing: Any) -> str:
+    """Only an INTENT section in the leading comments/docstring, never implementation text."""
+    lines: list[str] = []
+    block = ""
+    for raw in standing.artifact.splitlines():
+        text = raw.strip()
+        if not text:
+            if lines:
+                break
+            continue
+        if text.startswith(('"""', "'''", "/*")) and not block:
+            block = text[:3] if text[0] != "/" else "*/"
+            text = text[3:] if text[0] != "/" else text[2:]
+        elif not block and not re.match(r"^(#|//|--|\*)", text):
+            break
+        if block and block in text:
+            text = text.split(block, 1)[0]
+            closing = True
+        else:
+            closing = False
+        text = re.sub(r"^(#|//|--|\*)\s*", "", text).strip()
+        head = re.match(r"INTENT\b\s*:?\s*(.*)", text, re.I)
+        if head:
+            lines.append("INTENT: " + head[1])
+        elif lines:
+            if re.match(r"[A-Z][A-Z _-]+:", text):
+                break
+            if text:
+                lines.append(text)
+        if closing:
+            if lines:
+                break
+            block = ""
+    if lines:
+        return "\n".join(lines)
+    meta = standing.meta or {}
+    summary = str(meta.get("intent") or meta.get("why") or "").strip()
+    return f"INTENT: {summary}" if summary else "INTENT: not recorded."
+
+
+def explore_brief(why: str, standing: Any, state: Any = None, *, variations: bool = False) -> str:
+    """Explore or vary a design, with incumbent intent and measurements only."""
+    rows = _measured(state, standing.subgoal) if state is not None else []
+    measured = next((s for s in reversed(rows) if _digest(s.candidate.artifact) == _digest(standing.artifact)), None)
+    numbers = (f"MEASURED ({measured.stage}): {_numbers(measured.metrics) or 'no numbers'}" if measured is not None
+               else "MEASURED: no recorded numbers available.")
+    directive = ("Write a DISTINCT alternative to the promising approaches. Use their intent and measured "
+                 "trade-offs as evidence, not their implementation as a starting point. Develop your own "
+                 "structure and choices; do not reproduce or patch an earlier design. It must still pass the gate."
+                 if variations else
+                 "Write a NEW design that beats it -- a different structure, algorithm or set of "
             "choices, not an edit of it. Take a risk: an idea that may fail is worth more here than a small "
-            "change that measures the same. It must still pass the gate.\n\n"
-            f"THE STANDING DESIGN, {standing.name} (to beat; for reference only -- do not edit or resend it):\n"
-            f"```{fence}\n{standing.artifact}\n```")
+            "change that measures the same. It must still pass the gate.")
+    return (f"{why.strip()}\n\n{directive}\n\n"
+            f"THE STANDING DESIGN, {standing.name} (to beat; do not edit or resend it):\n"
+            f"{_intent(standing)}\n{numbers}")

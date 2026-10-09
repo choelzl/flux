@@ -20,7 +20,7 @@ PROMPTS = {
     "improve": "Improve the objectives using local or structural changes. Do not preserve the current approach merely because it works.",
     "tune": "Favor tuning parameters and implementation choices around promising designs. Broader changes remain welcome when supported by a useful hypothesis.",
     "finetune": "Favor small, attributable edits near a promising candidate. Explain why a broader change is worth trying if you choose one.",
-    "variations": "Try distinct variations of promising approaches, including alternatives that need more than one attempt to develop. Avoid repeating evaluated candidates.",
+    "variations": "Try distinct variations of promising approaches, including alternatives that need more than one attempt to develop. Use intent and measured trade-offs as evidence, without copying or patching earlier designs. Avoid repeating evaluated candidates.",
     "sweep": "Cover distinct combinations systematically and compare them; do not repeatedly polish only the incumbent.",
     "montecarlo": "Sample diverse alternatives, including unfamiliar structures and regions of the space.",
     "anneal": "Balance local moves with larger jumps. A temporarily worse candidate can be a useful stepping stone; keep the best verified result separately.",

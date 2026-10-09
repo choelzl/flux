@@ -4,6 +4,10 @@ before it is built and told so; a fresh draft reads what was tried, the best fir
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from test_agent_sessions import _digits, _fake, _turns
 
 from flux_loop import PromptProblem, request_for, run_loop
@@ -18,17 +22,69 @@ def _state(task, tmp_path):
                      workdir=str(tmp_path / "trace"))
 
 
-def test_an_exploring_pass_asks_for_a_new_design_not_an_edit(tmp_path):
+@pytest.mark.parametrize("dse", ["explore", "variations"])
+def test_an_independent_pass_asks_for_a_new_design_not_an_edit(tmp_path, monkeypatch, dse):
+    from flux_loop.loop import _improve_step
+
+    task = replace(_digits(_fake(tmp_path), role="genok"), knowledge="STATIC_KNOWLEDGE " * 6000)
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    standing = Candidate("digits#1", "# INTENT: count in order\nINCUMBENT_SOURCE_MARKER\n" + DIGITS)
+    state.scored.append(Scored(standing, "test", {"score": 1.0}))
+    state.best["*"] = (1, Candidate("digits#old", "PREVIOUS_BEST_SOURCE_MARKER"), "old failure")
+    state.proto_best["*"] = (1, "PREVIOUS_PROTOTYPE_SOURCE_MARKER", "old failure")
+    state.__dict__["_history"] = [Scored(Candidate("digits#other", "OTHER_DESIGN_SOURCE_MARKER", meta={"why": "a table"}),
+                                       "test", {"score": 0.5})]
+    monkeypatch.setattr(prob, "improve_options", lambda *args: pytest.fail("independent alternatives bypass the tuning ladder"))
+    _improve_step(prob, state, Improve(standing, "It meets the goal; make it better.", subgoal=None,
+                                      explore=dse == "explore", dse=dse))
+    asked = _turns(tmp_path)[0]["text"]
+    directive = "Write a DISTINCT alternative" if dse == "variations" else "Write a NEW design that beats it"
+    assert directive in asked and "THE STANDING DESIGN, digits#1" in asked
+    assert "do not edit or resend it" in asked and "THE LAST DRAFT" not in asked, "shown to beat, not handed over"
+    assert "INTENT: count in order" in asked and "MEASURED (test): score 1" in asked
+    assert all(marker not in asked for marker in ("INCUMBENT_SOURCE_MARKER", "PREVIOUS_BEST_SOURCE_MARKER",
+                                                 "PREVIOUS_PROTOTYPE_SOURCE_MARKER", "OTHER_DESIGN_SOURCE_MARKER"))
+    assert "digits#other" in asked and "score 0.5" in asked
+    assert asked.index(directive) < asked.index("STATIC_KNOWLEDGE")
+    assert state.best["*"][1].artifact == "PREVIOUS_BEST_SOURCE_MARKER"
+    assert state.proto_best["*"][1] == "PREVIOUS_PROTOTYPE_SOURCE_MARKER"
+
+
+def test_variations_model_starts_fresh_instead_of_patching_the_best(tmp_path):
+    import json
+
+    from flux_llm import ScriptedProposer
+    from flux_loop.loop import _improve_step
+
+    task = replace(_digits(_fake(tmp_path), role="genok"), generator={})
+    prob = PromptProblem(task)
+    state = _state(task, tmp_path)
+    state.proposer = ScriptedProposer([json.dumps({"artifact": DIGITS, "why": "a distinct alternative"})])
+    (tmp_path / "trace").mkdir()
+    standing = Candidate("digits#old", "# INTENT: emit constants\nINCUMBENT_SOURCE_MARKER")
+    state.scored.append(Scored(standing, "test", {"score": 1.0}))
+    state.best["*"] = (1, Candidate("digits#previous", "PREVIOUS_BEST_SOURCE_MARKER"), "old failure")
+    _improve_step(prob, state, Improve(standing, "Try a variation", dse="variations"))
+    prompt = state.proposer.prompts[0]
+    assert "Write a DISTINCT alternative" in prompt and "INTENT: emit constants" in prompt
+    assert "INCUMBENT_SOURCE_MARKER" not in prompt and "PREVIOUS_BEST_SOURCE_MARKER" not in prompt
+    assert "Previous attempt" not in prompt and "edits" not in state.proposer.schemas[0]["properties"]
+
+
+def test_a_measured_repeat_does_not_become_a_variations_repair_seed(tmp_path):
     from flux_loop.loop import _improve_step
 
     task = _digits(_fake(tmp_path), role="genok")
     prob = PromptProblem(task)
     state = _state(task, tmp_path)
-    standing = Candidate("digits#1", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
-    _improve_step(prob, state, Improve(standing, "It meets the goal; make it better.", subgoal=None, explore=True))
-    asked = _turns(tmp_path)[0]["text"]
-    assert "Write a NEW design that beats it" in asked and "THE STANDING DESIGN, digits#1" in asked
-    assert "do not edit or resend it" in asked and "THE LAST DRAFT" not in asked, "shown to beat, not handed over"
+    standing = Candidate("digits#old", DIGITS, meta={"intent": "emit digits in order"})
+    state.scored.append(Scored(standing, "test", {"score": 1.0}))
+    _improve_step(prob, state, Improve(standing, "Try a distinct variation", dse="variations"))
+    turns = _turns(tmp_path)
+    assert len(turns) >= 2 and "already measured" in turns[1]["text"]
+    assert all(turn["mode"] == "first" and "THE LAST DRAFT" not in turn["text"] and DIGITS not in turn["text"]
+               for turn in turns)
 
 
 def test_a_draft_that_repeats_a_measured_design_is_refused_before_it_is_built(tmp_path):

@@ -127,6 +127,26 @@ def test_permissive_repair_accepts_a_complete_replacement_in_the_same_turn(tmp_p
     assert len(state.proposer.prompts) == 1
 
 
+def test_initial_variations_draft_does_not_resume_an_older_best_design(tmp_path):
+    import json
+
+    from flux_llm import ScriptedProposer
+
+    problem = PromptProblem(task("variations", "rules"))
+    state = LoopState(request=LoopRequest(prototype=False, repair_attempts=0), say=lambda _: None,
+                      proposer=ScriptedProposer([json.dumps({"artifact": "new design"})]), feedback=None,
+                      workdir=str(tmp_path))
+    state.best["*"] = (1, Candidate("old best", "OLD_BEST_SOURCE"), "old failure")
+    state.prototypes["*"] = "OLD_VERIFIED_PROTOTYPE"
+    state.proto_best["*"] = (1, "OLD_REFUSED_PROTOTYPE", "old failure")
+    cand, _, reason = problem.generate(None, "", state, None)
+    assert cand is not None and cand.artifact == "new design", reason
+    prompt = state.proposer.prompts[0]
+    assert "Try distinct variations" in prompt
+    assert all(source not in prompt for source in ("OLD_BEST_SOURCE", "OLD_VERIFIED_PROTOTYPE", "OLD_REFUSED_PROTOTYPE"))
+    assert state.prototypes["*"] == "OLD_VERIFIED_PROTOTYPE" and state.best["*"][1].artifact == "OLD_BEST_SOURCE"
+
+
 def test_reaching_a_goal_does_not_prevent_the_next_experiment(tmp_path):
     import json
 

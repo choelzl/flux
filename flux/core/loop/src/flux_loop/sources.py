@@ -39,7 +39,7 @@ class Attempt:
     index: int = 0
     prior: Candidate | None = None
     failure: str = ""
-    brief: str = ""                     # D839: what this draft is asked beyond the problem (an exploring pass's)
+    brief: str = ""                     # what this draft is asked beyond the problem (exploration/variations)
 
     @property
     def params(self) -> dict[str, Any]:
@@ -159,12 +159,21 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
             again = twin(state, cand)
             if again is not None:                   # D839: a design measured already, refused before it is built
                 failure, prior = twin_said(again), cand
+                if state.part(subgoal).dse in ("explore", "variations"):
+                    # A measured repeat is not this experiment's repair seed. Ask afresh,
+                    # carrying the comparison numbers without inlining that design's code.
+                    prior = None
+                    state.part(subgoal).sessions.clear()
+                    brief = f"{brief}\n\n{failure}".strip()
                 say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
                 continue
         try:
             with _phase(f"build: {cand.name}", why=source.name):
                 built = problem.build(cand, subgoal, state)
         except BuildError as exc:
+            from .ideas import record_failure
+
+            record_failure(state, cand, "build", str(exc))
             failure, prior = str(exc), cand
             say(f"  {source.name}: {cand.name} did not build ({failure!s:.80})")
             continue
@@ -175,6 +184,9 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
                 say(f"  {source.name}: {cand.name} passes after {index} repair(s)")
             return cand, built, ""
         failure, prior = text or f"{fails} failure(s)", cand
+        from .ideas import record_failure
+
+        record_failure(state, cand, "fast-check", failure, fails)
         say(f"  {source.name}: {cand.name} has {fails} failure(s) on the fast check")
     return None, None, (f"{source.name}: no candidate passed the fast check in {rounds} "
                         f"attempt(s); last: {failure!s:.200}")

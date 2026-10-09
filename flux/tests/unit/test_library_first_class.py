@@ -89,6 +89,30 @@ def test_an_agent_brief_carries_the_library_section_with_paths(lib, tmp_path):
     assert brief.index("LIBRARY (") < brief.index("HOW TO ANSWER")
 
 
+def test_agent_prefix_preserves_task_and_custom_knowledge_without_duplicate_paper_context(lib, tmp_path):
+    from types import SimpleNamespace
+
+    from flux_loop import PromptProblem, TaskSpec
+    from flux_loop.prototype import prefix_for
+    from flux_knowledge.digest import RECIPE
+    from flux_store import CampaignStore
+
+    state = _state(tmp_path)
+    CampaignStore(state.request.db).results.put_document("digest", {
+        "source": str(lib / "recurrence.md"), "digest": "STORED_PAPER_DIGEST", "recipe": RECIPE})
+    prob = PromptProblem(TaskSpec.from_dict({**DOC, "flow": {**DOC["flow"], "knowledge": {"text": "OPERATOR_CONTEXT"}}}))
+    agent_prefix = prob.prompt_prefix("core", state, agent=True)
+    assert "TASK sq:" in agent_prefix and "CONTRACT:" in agent_prefix and "OPERATOR_CONTEXT" in agent_prefix
+    assert "[recurrence.md]" not in agent_prefix and "STORED_PAPER_DIGEST" not in agent_prefix
+    model_prefix = prob.prompt_prefix("core", state)
+    assert "[recurrence.md] A non-restoring digit recurrence" in model_prefix and "STORED_PAPER_DIGEST" in model_prefix
+    cap = SimpleNamespace(contract="PROTOTYPE_CONTRACT for {part}")
+    proto_agent = prefix_for(prob, cap, "core", state, agent=True)
+    assert "OPERATOR_CONTEXT" in proto_agent and "PROTOTYPE_CONTRACT for core" in proto_agent
+    assert "[recurrence.md]" not in proto_agent
+    assert "[recurrence.md]" in prefix_for(prob, cap, "core", state)
+
+
 def test_task_check_says_what_the_library_holds(lib, tmp_path, capsys, monkeypatch):
     from flux_cli.main import main
 
