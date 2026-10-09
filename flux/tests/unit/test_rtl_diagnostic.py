@@ -11,7 +11,7 @@ endmodule"""
 
 
 def test_the_diagnostic_names_the_models_line_quotes_it_and_hints():
-    from flux_codegen_rtl_harness import explain_diagnostic
+    from rtl import explain_diagnostic
 
     msg = ("verilator exited 1:\n%Error: /tmp/x/dut.sv:5:29: syntax error, unexpected ',', expecting '}'\n"
            "%Error: Exiting due to 1 error(s)")
@@ -23,7 +23,7 @@ def test_the_diagnostic_names_the_models_line_quotes_it_and_hints():
 
 
 def test_a_diagnostic_that_maps_to_no_line_is_said_as_it_was():
-    from flux_codegen_rtl_harness import explain_diagnostic
+    from rtl import explain_diagnostic
 
     assert explain_diagnostic("%Error: /tmp/x/dut.sv:40:1: whatever", SOURCE, prefix_lines=2) == "%Error: /tmp/x/dut.sv:40:1: whatever"
     assert explain_diagnostic("nothing structured\nmore", SOURCE) == "nothing structured"
@@ -33,7 +33,7 @@ def test_a_diagnostic_that_maps_to_no_line_is_said_as_it_was():
 
 def test_the_harness_reads_a_fenced_module_and_screens_it_before_any_tool_runs():
     """The fence reader, lint pragmas and rules screen are the harness's, not each world's (D557)."""
-    from flux_codegen_rtl_harness import LINT_PRAGMA, fenced_module, lint_relaxed, sv_refusal
+    from rtl import LINT_PRAGMA, fenced_module, lint_relaxed, sv_refusal
 
     reply = "IDEA: x\n```verilog\nmodule m(input a, output b);\nassign b = a;\nendmodule\n```\nthanks"
     assert fenced_module("m", reply) == "module m(input a, output b);\nassign b = a;\nendmodule\n"

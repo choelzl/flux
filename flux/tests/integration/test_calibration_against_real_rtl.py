@@ -16,8 +16,8 @@ import pytest
 from flux_calibration import CalibrationStore, calibrate_result
 from flux_evaluator_abi import Budget, Candidate, Result
 from flux_evaluator_rtl import RTLEvaluator
-from flux_evaluator_timeloop import TimeloopEvaluator
-from flux_evaluator_zigzag import ZigZagEvaluator
+from timeloop_tools import TimeloopEvaluator
+from zigzag_tools import ZigZagEvaluator
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
 

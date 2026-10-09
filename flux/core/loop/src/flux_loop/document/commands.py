@@ -20,52 +20,17 @@ BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failur
                 "prompt", "prompt_file", "point", "params", "history", "state", "parts")
 
 
-#: what `flux rtl measure` prints (D628): a stage running it need not list them
-RTL_METRICS = ("fmax_mhz", "area_um2", "power_w", "cell_count")
-RTL_STAT_METRICS = ("area_um2", "cell_count")      # `--stage stat`: nothing timed (D662)
-
-
-def rtl_tools_kind(cmd: Iterable[str] | None) -> str:
-    """"test", "proto", "measure" for a `flux rtl ...` command, else ""."""
-    toks = list(cmd or ())
-    try:
-        at = toks.index("rtl")
-    except ValueError:
-        return ""
-    if at == 0 or "flux" not in " ".join(toks[:at]) or at + 1 >= len(toks):
-        return ""
-    return toks[at + 1]
-
-
-def _flux_rtl_tools(cmd: Iterable[str]) -> list[str]:
-    """The tools a `flux rtl lint|test|measure` or `flux prog count|size` command runs (D600): they
-    may be missing outside the Nix dev shell, and the command itself is Python, so `task check`
-    must name them."""
+def _flux_program_tools(cmd: Iterable[str]) -> list[str]:
+    """External tools used by Flux's program measurement helpers."""
     toks = list(cmd)
-    at = next((i for i, t in enumerate(toks) if t in ("rtl", "prog")), None)
+    try:
+        at = toks.index("prog")
+    except ValueError:
+        return []
     if not at or "flux" not in " ".join(toks[:at]):
         return []
     sub = toks[at + 1] if at + 1 < len(toks) else ""
-    if toks[at] == "prog":                # D661: `time` falls back to a Python loop without hyperfine
-        return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
-    if sub in ("test", "lint"):
-        return ["verilator"]
-    if sub == "measure":
-        if _stage_of(toks) == "stat":
-            return ["yosys"]              # D662: Yosys alone, nothing timed
-        return ["yosys", "openroad"]      # synthesis too: its timing is OpenROAD's OpenSTA
-    return []
-
-
-def _stage_of(toks: list[str]) -> str:
-    """A `flux rtl measure` command's `--stage` (synth when it says none)."""
-    for i, t in enumerate(toks):
-        if t == "--stage" and i + 1 < len(toks):
-            return toks[i + 1]
-        if t.startswith("--stage="):
-            return t.split("=", 1)[1]
-    return "synth"
-
+    return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
 
 def _digest_of(text: str | None) -> str:
     import hashlib
@@ -75,7 +40,7 @@ def _digest_of(text: str | None) -> str:
 
 def _inferred_language(gate: Any, stages: Any) -> str | None:
     """The language a document need not say (D832): the one the tools its checks and stages name
-    take -- `flux rtl ...` is SystemVerilog, a ChampSim build C++ -- from the tool catalog's
+    take, from the tool catalog's
     `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
     when nothing decides."""
     from ..toolbox import TOOLS
@@ -106,7 +71,7 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
 def _command(raw: Any, what: str) -> tuple[str, ...] | None:
     """A command the document says (D580): argv tokens as a list, or one string split like
     a shell would. A command whose head is `flux` runs this flux (`{python} -m
-    flux_cli.main`), so a document reads `flux rtl test {artifact} ...` and needs no
+    flux_cli.main`), so a document can name a Flux helper and needs no
     wrapper on PATH. `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}` and
     `{home}` are substituted at run time."""
     if raw is None:

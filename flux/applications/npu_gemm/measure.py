@@ -1,18 +1,22 @@
-"""Measure one architecture: ZigZag (through the evaluator registry) for the cycles and energy
+"""Measure one architecture: the app-local ZigZag tools for the cycles and energy
 of the workload on it, and a first-order area estimate at 28 nm. Prints `name=value` lines.
 `python measure.py ARCH WORKLOAD`."""
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
 
 import yaml
-from flux_evaluator_abi import Budget, Candidate, make_evaluator
+from flux_evaluator_abi import Budget, Candidate
+from zigzag_tools import ZigZagEvaluator
 
 MAC_MM2 = 0.004             # one int8 multiply-accumulate with its registers
 SRAM_MM2_PER_KB = 0.005     # the global buffer's SRAM
 
 arch = yaml.safe_load(open(sys.argv[1]))
 workload = yaml.safe_load(open(sys.argv[2]))
-result = make_evaluator("zigzag").evaluate(Candidate(workload=workload, arch=arch), Budget(),
+result = ZigZagEvaluator().evaluate(Candidate(workload=workload, arch=arch), Budget(),
                                            frozenset({"latency_cycles", "energy_pj"}))
 if not result.validity.ok:                  # D897: an invalid mapping measured nothing; the stage refuses it
     sys.exit("not valid: " + "; ".join(f"{v.kind} {v.detail}".strip() for v in result.validity.violations))

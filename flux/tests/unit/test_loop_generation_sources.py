@@ -248,7 +248,7 @@ def test_a_generator_the_document_cannot_mean_is_a_load_error():
         TaskSpec.from_dict(_doc(generator="template"))
     with pytest.raises(TaskError, match="must be a command"):
         TaskSpec.from_dict(_doc(generator={"command": 42}))
-    assert TaskSpec.from_dict(_doc(generator={"command": "flux rtl test {artifact}"})).generator["command"][:5] \
+    assert TaskSpec.from_dict(_doc(generator={"command": "flux probe gate {artifact}"})).generator["command"][:5] \
         == ["{python}", "-W", "ignore", "-m", "flux_cli.main"], "D580: a string command, a flux head"
     assert TaskSpec.from_dict(_doc(generator="model")).generator == {}, "the default, said out loud"
 

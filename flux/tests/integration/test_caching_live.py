@@ -10,7 +10,7 @@ from pathlib import Path
 
 import flux_ir
 from flux_evaluator_abi import Budget, Candidate
-from flux_evaluator_zigzag import ZigZagEvaluator
+from zigzag_tools import ZigZagEvaluator
 from flux_store import CachingEvaluator, ResultStore
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
@@ -57,7 +57,7 @@ def test_second_identical_call_is_served_from_the_store_not_a_real_zigzag_run(tm
 
 def test_caching_evaluator_composes_with_a_second_real_backend_without_cross_contamination(tmp_path):
     """ZigZag- and Timeloop-wrapping caches on one store never serve each other's results."""
-    from flux_evaluator_timeloop import TimeloopEvaluator
+    from timeloop_tools import TimeloopEvaluator
 
     workload = flux_ir.load_document(GEMM_WORKLOAD)
     arch = flux_ir.load_document(SIMPLE_NPU_1D)

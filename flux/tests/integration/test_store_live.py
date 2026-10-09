@@ -7,8 +7,8 @@ from pathlib import Path
 
 import flux_ir
 from flux_evaluator_abi import Budget, Candidate
-from flux_evaluator_timeloop import TimeloopEvaluator
-from flux_evaluator_zigzag import ZigZagEvaluator
+from timeloop_tools import TimeloopEvaluator
+from zigzag_tools import ZigZagEvaluator
 from flux_store import ResultStore
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]

@@ -141,8 +141,8 @@ def check_verilog(source: str, mapping: Mapping, request: MappingRequest, *, cou
     """The artifact itself, Verilated, against `banks_of` (D876): the exhaustive check above is
     of the numpy model, and Verilog that computes something else (a product cut to 32 bits) would
     pass it and build bank 0. The address corners, the windows of every stride from them, and
-    `count` random addresses; a `flux_codegen_rtl_harness.Check` (`.ok`, `.why`)."""
-    from flux_codegen_rtl_harness import Golden, check_rtl
+    `count` random addresses; a `rtl_check.Check` (`.ok`, `.why`)."""
+    from .rtl_check import Golden, check_rtl
 
     ab, bb = request.address_bits, request.bank_bits
     space = 1 << ab

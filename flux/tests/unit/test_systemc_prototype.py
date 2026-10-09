@@ -3,6 +3,8 @@ an SC_MODULE, checked on every golden vector by a generated testbench against li
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from flux_loop import PromptProblem, TaskSpec
@@ -33,7 +35,7 @@ def _prototype(tmp_path):
            "language": "systemverilog",
            "objectives": [{"metric": "area_um2", "direction": "minimize"}],
            "budget": {"prototype": "systemc"},
-           "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py"}}
+           "flow": {"test": "{python} " + str(Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py") + " test {artifact} --golden {home}/golden.py"}}
     return PromptProblem(TaskSpec.from_dict(doc, base=tmp_path)).prototype()
 
 
@@ -59,7 +61,7 @@ def test_every_vector_is_checked_against_the_golden_model(tmp_path):
 @pytest.mark.skipif(icsc() is None, reason="no ICSC_HOME: run in `nix develop` (linux)")
 def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     """D636: the verified SC_MODULE becomes SystemVerilog by ICSC, not by the model; the SV
-    has the golden ports and passes `flux rtl test` on every vector."""
+    has the golden ports and passes `rtl.py test` on every vector."""
     import subprocess
     import sys
 
@@ -71,8 +73,8 @@ def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     sv, why = cap.extra["translate"](RIGHT)
     assert sv and not why and "module add4" in sv and "always_comb" in sv
     (tmp_path / "add4.sv").write_text(sv)
-    run = subprocess.run([sys.executable, "-c", "import sys; from flux_cli.main import main; sys.exit(main())",
-                          "rtl", "test", str(tmp_path / "add4.sv"), "--golden", str(tmp_path / "golden.py")],
+    rtl = Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py"      # an RTL application's own tool (D948)
+    run = subprocess.run([sys.executable, str(rtl), "test", str(tmp_path / "add4.sv"), "--golden", str(tmp_path / "golden.py")],
                          capture_output=True, text=True, timeout=600)
     assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]
     bad, why = translate(RIGHT.replace("sc_out<sc_uint<5>> s", "sc_out<sc_uint<6>> s"), "add4", load(tmp_path / "golden.py"))

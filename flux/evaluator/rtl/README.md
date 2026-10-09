@@ -12,7 +12,7 @@ integration on something small and controllable first).
   configurable accelerator — proving the adapter works, not building a generator.
 - `Candidate.workload` — a two-operand `einsum` op with fully static bounds translates to
   `mac_array.sv`'s `{B, C, K}` shape parameters (`workload_translator.py`, generic
-  batch/reduction/output derivation, same approach as evaluator/timeloop's).
+  batch/reduction/output derivation, same approach as applications/npu_gemm/tools/timeloop_tools's).
 - `Candidate.arch` — `None` (LANES=8 default) or an inline Architecture IR document with exactly
   one compute dim (`architecture_translator.py`), whose size becomes `LANES`; K must be an exact
   multiple of it.
@@ -25,8 +25,8 @@ integration on something small and controllable first).
   workload values (this design's cycle count is data-independent, confirmed by re-running the
   same shape with 4 different random seeds and observing an identical count: 529 every time).
   The golden-reference generator (`generate_test_vectors`) is public.
-  `Result.validity.ok` reflects this real, independent check — unlike evaluator/zigzag's and
-  evaluator/timeloop's `ok=True` placeholder (neither has a checker yet).
+  `Result.validity.ok` reflects this real, independent check — unlike applications/npu_gemm/tools/zigzag_tools's and
+  applications/npu_gemm/tools/timeloop_tools's `ok=True` placeholder (neither has a checker yet).
 
 **The headline number:** for the exact same content-addressed (workload, architecture) pair used
 throughout Phase 1 — `ir/workload/examples/mlp-gemm0.yaml` on
@@ -39,12 +39,12 @@ cost-model artifact.
 
 **What's a documented v0.1 gap, not a silent shortcut:** `Candidate.mapping` must stay `None` —
 `mac_array.sv` has a single, fixed hand-written loop schedule, not a configurable one the way
-evaluator/zigzag's and evaluator/timeloop's `mapping_translator.py` modules are. No energy/
+applications/npu_gemm/tools/zigzag_tools's and applications/npu_gemm/tools/timeloop_tools's `mapping_translator.py` modules are. No energy/
 power model at all (`Result.metrics` only ever has `latency_cycles`) — real cycle-accurate
 energy would need either a switching-activity-based estimate or a real synthesis+power-analysis
 flow (Yosys + a real cell library), neither built yet. No multi-layer workloads, no
 per-operand-uneven mapping, no data-dependent workloads — same class of limits as
-evaluator/zigzag and evaluator/timeloop. Now wired into `flux-calibration` as
+applications/npu_gemm/tools/zigzag_tools and applications/npu_gemm/tools/timeloop_tools. Now wired into `flux-calibration` as
 `reference_source="rtl_sim"` real ground truth (see `calibration/README.md`,
 `tests/integration/test_calibration_against_real_rtl.py`, and the drift-detection CI built on top
 of it in `tests/integration/test_drift_detection.py`) — the analytic stages (ZigZag, Timeloop) are

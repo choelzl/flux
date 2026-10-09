@@ -84,7 +84,11 @@ def test_prog_size_reads_the_sections(capsys, tmp_path):
 def test_rtl_measure_stat_is_yosys_alone(capsys, tmp_path):
     sv = tmp_path / "add8.sv"
     sv.write_text("module add8(input logic [7:0] a, b, output logic [8:0] s);\n  assign s = a + b;\nendmodule\n")
-    code, got = _flux(capsys, "rtl", "measure", str(sv), "--stage", "stat")
+    from rtl import main
+
+    code = main(["measure", str(sv), "--stage", "stat"])
+    out = capsys.readouterr().out
+    got = dict(re.findall(r"(?:^|(?<=\s))(\w+)=(\S+)", out)) | {"_out": out}
     assert code == 0, got["_out"]
     assert float(got["area_um2"]) > 0 and int(got["cell_count"]) > 0
     assert got["stage"] == "stat" and "fmax_mhz" not in got
@@ -92,17 +96,17 @@ def test_rtl_measure_stat_is_yosys_alone(capsys, tmp_path):
 
 def test_documents_name_what_the_new_stages_need():
     from flux_loop import TaskSpec
-    from flux_loop.document import _flux_rtl_tools
+    from flux_loop.document import _flux_program_tools
 
     py = ["{python}", "-W", "ignore", "-m", "flux_cli.main"]
-    assert _flux_rtl_tools(py + ["prog", "count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
-    assert _flux_rtl_tools(py + ["prog", "size"]) == ["size"] and _flux_rtl_tools(py + ["prog", "time"]) == []
-    assert _flux_rtl_tools(py + ["rtl", "measure", "{artifact}", "--stage", "stat"]) == ["yosys"]
+    assert _flux_program_tools(py + ["prog", "count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
+    assert _flux_program_tools(py + ["prog", "size"]) == ["size"] and _flux_program_tools(py + ["prog", "time"]) == []
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
                                "language": "systemverilog",
-                               "flow": {"test": "flux rtl lint {artifact}",
-                                        "measure": {"stat": "flux rtl measure {artifact} --stage stat"}}})
+                               "flow": {"test": "{python} {home}/rtl.py lint {artifact}",
+                                        "measure": {"stat": {"command": "{python} {home}/rtl.py measure {artifact} --stage stat",
+                                                             "metrics": ["area_um2", "cell_count"], "needs": ["yosys"]}}}})
     assert task.stages[0].metrics == ("area_um2", "cell_count") and task.stages[0].needs == ("yosys",)
     prog = TaskSpec.from_dict({"id": "p",
                                "statement": "x",
@@ -149,10 +153,10 @@ def test_the_catalog_carries_the_new_tools():
         t = tool(tid)
         assert t["role"] == "stage" and all(m in UNITS for m in t["metrics"]), tid
     assert fill("prog-count") == 'flux prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
-    assert fill("rtl-stat") == "flux rtl measure {artifact} --stage stat --clock-ps 1000"
-    evals = [t for t in TOOLS if "stage" in t]
-    assert {t["stage"]["evaluator"] for t in evals} == {"zigzag", "timeloop"}
-    assert all("run" not in t and t["document"] == {"workload": "{workload}"} for t in evals)
+    assert fill("rtl-stat") == "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps 1000"
+    assert not [t for t in TOOLS if "stage" in t]
+    for backend in ("zigzag", "timeloop"):
+        assert fill(backend + "-eval").endswith("--backend " + backend)
+        assert "{home}/evaluate.py" in fill(backend + "-eval")
+        assert tool(backend + "-eval")["document"] == {"workload": "{workload}"}
     assert all(("run" in t) != ("stage" in t) for t in TOOLS)
-    with pytest.raises(ValueError, match="evaluator stage"):
-        fill("zigzag-eval")

@@ -17,8 +17,8 @@ import pytest
 import flux_ir
 from flux_calibration import CalibrationStore, apply_escalation_policy, calibrate_result
 from flux_evaluator_abi import Budget, Candidate, Result
-from flux_evaluator_timeloop import TimeloopEvaluator
-from flux_evaluator_zigzag import ZigZagEvaluator
+from timeloop_tools import TimeloopEvaluator
+from zigzag_tools import ZigZagEvaluator
 from flux_store import CorpusPartition, CorpusStore
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
@@ -228,8 +228,8 @@ def zigzag_cmes_by_width():
 
     import yaml
     from zigzag.api import get_hardware_performance_zigzag
-    from flux_evaluator_zigzag.architecture_translator import architecture_ir_to_zigzag_accelerator
-    from flux_evaluator_zigzag.workload_translator import workload_to_zigzag_layers
+    from zigzag_tools.architecture_translator import architecture_ir_to_zigzag_accelerator
+    from zigzag_tools.workload_translator import workload_to_zigzag_layers
 
     workload = flux_ir.load_document(GEMM_WORKLOAD)
     layers = workload_to_zigzag_layers(workload)

@@ -31,8 +31,8 @@ FLUX_ROOT = HERE.parents[3]
 from .document import DOCUMENT_KEYS  # noqa: E402 -- the loader's own list (D590)
 
 #: The worked examples every author reads, live from the repository so they never drift.
-EXAMPLES = (("mul8", ("problem.yaml", "golden.py")),
-            ("adder16", ("problem.yaml", "golden.py", "gen.py")))
+EXAMPLES = (("mul8", ("problem.yaml", "golden.py", "rtl.py")),
+            ("adder16", ("problem.yaml", "golden.py", "rtl.py", "gen.py")))
 
 DOCUMENT = "problem.yaml"
 DONE = "done.txt"
@@ -270,7 +270,7 @@ def _golden_fault(task: Any, workdir: Path) -> str:
     raw = cmd[cmd.index("--golden") + 1].replace("{home}", str(workdir))
     path = Path(raw)
     try:
-        from flux_codegen_rtl_harness import Golden, golden_vectors
+        from .golden_model import Golden, golden_vectors
 
         spec = importlib.util.spec_from_file_location("authored_golden", path)
         mod = importlib.util.module_from_spec(spec)

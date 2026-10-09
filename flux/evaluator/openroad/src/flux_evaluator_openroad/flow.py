@@ -38,13 +38,7 @@ _DEFAULT_CLOCK_PERIOD_PS = 2000.0
 
 def _merged_liberty_path(scratch: Path) -> Path:
     """Decompress the merged liberty (RVT/TT NLDM) into the scratch dir."""
-    import flux_codegen_rtl_harness
-
-    src = (
-        Path(flux_codegen_rtl_harness.__file__).resolve().parent
-        / "asap7_pdk"
-        / "asap7sc7p5t_simple_invbuf_seq_rvt_tt.lib.gz"
-    )
+    src = _PLATFORM / "liberty" / "asap7sc7p5t_simple_invbuf_seq_rvt_tt.lib.gz"
     out = scratch / "asap7_rvt_tt.lib"
     out.write_bytes(gzip.decompress(src.read_bytes()))
     return out

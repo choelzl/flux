@@ -12,6 +12,6 @@ What a generated-design harness is **told** and what it **reports**, for any tar
 | `HarnessRunResult` | what a harness returns: compiled, ran, vectors passed, the failing lines, the VCD, and measured cycles where a spec asks for them (D115) |
 | `reserved_check` | the reserved-identifier check, over whichever word set a language supplies (D51/D55) |
 
-**No language is in here.** `flux-codegen-rtl-harness` emits SystemVerilog and runs Verilator;
+**No language is in here.** `app-local RTL tools` emits SystemVerilog and runs Verilator;
 it owns its driver, its composite emitter and its reserved words, and imports this package for
 the rest (D453).

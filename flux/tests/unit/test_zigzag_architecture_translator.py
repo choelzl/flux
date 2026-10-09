@@ -6,7 +6,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_zigzag import NotExpressibleError, architecture_ir_to_zigzag_accelerator
+from zigzag_tools import NotExpressibleError, architecture_ir_to_zigzag_accelerator
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_NPU = FLUX_ROOT / "core/ir/architecture/examples/simple-npu-v1.yaml"

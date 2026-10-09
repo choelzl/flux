@@ -10,6 +10,8 @@ statement: >-
 
 subtasks: [ops/recip, ops/rsqrt, ops/sigmoid, ops/tanh, ops/gelu, ops/log, ops/exp]   # shallowest arithmetic first
 
+language: systemverilog
+
 objectives:                 # 3% margin on shallower stages, 3% tie band
   - {metric: fmax_mhz, direction: maximize, goal: 800, margin: 0.03, tie: 0.03}
   - {metric: area_um2, direction: minimize}
@@ -17,10 +19,18 @@ objectives:                 # 3% margin on shallower stages, 3% tie band
 
 flow:                       # every operator's, unless its folder says otherwise
   generate: claude    # D804: drafts each operator's prototype and RTL (a parent's command would compose)
-  test: flux rtl test {artifact} --golden {home}/golden.py     # {home}: the operator's folder
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # {home}: the operator's folder
   measure:
-    synth: {command: "flux rtl measure {artifact} --stage synth --clock-ps 1250 --timeout 1200", timeout_s: 1300}
-    place: {command: "flux rtl measure {artifact} --stage place --clock-ps 1250 --timeout 1800", timeout_s: 1900}
+    synth:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1250 --timeout 1200"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1300
+    place:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1250 --timeout 1800"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1900
   knowledge:
     sheet: knowledge/nlu-methods.md
     files: [knowledge/fp16_blocks.py]   # verified FP16 decode, rounding, Horner, segment tables

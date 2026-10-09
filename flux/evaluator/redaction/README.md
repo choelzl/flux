@@ -1,8 +1,8 @@
 # redaction/ — PDK confidentiality policy
 
 `policy.py` (docs/decisions.md D94/D96): a registry of PDKs with their confidentiality, and
-`require_not_confidential(pdk_name)`, which `flux_codegen_rtl_harness.asap7.synthesize_with_asap7`
-(the raw synthesis entry point) calls before any synthesis runs. A PDK registered confidential is
+`require_not_confidential(pdk_name)`, which an RTL application's `rtl.py measure` (`measure()`)
+calls before any synthesis runs. A PDK registered confidential is
 refused (`ConfidentialPdkError`); an unregistered one is refused too (`UnknownPdkError`), never
 assumed either way.
 

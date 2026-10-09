@@ -1,0 +1,30 @@
+# Test-only RTL loop: rtl.py checks against golden.py and measures the result.
+# times it on ASAP7. Change the statement, the contract and golden.py.
+#     flux task run ./__NAME__ --passes 1 --screen-only
+
+statement: >-
+  An unsigned 8-bit adder with carry out in SystemVerilog: module `__MODULE__`, inputs `a` and
+  `b` (8 bits), output `s` (9 bits), the smallest that makes 2000 MHz placed on ASAP7.
+contract: >-
+  One module named exactly `__MODULE__`, purely combinational, ports `input logic [7:0] a, b`
+  and `output logic [8:0] s`. s must equal a + b for every input.
+language: systemverilog
+
+flow:
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
+  measure:
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 500"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 500"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+  select: {finalists: 2}
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 2000}
+  - {metric: area_um2, direction: minimize}
+
+budget: {steps: 3, repair_attempts: 6, prototype: false}  # prototype: true for a numeric function

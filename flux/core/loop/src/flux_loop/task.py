@@ -36,7 +36,7 @@ from .types import BuildError, Candidate, LoopRequest, LoopState, Scored, Verdic
 if TYPE_CHECKING:  # pragma: no cover
     from .roles import Roles
 from .gradient import CHECK_WEIGHT
-from .document import (BUILD_FAILED, Part, TaskSpec, _digest_of, _flux_rtl_tools,
+from .document import (BUILD_FAILED, Part, TaskSpec, _digest_of, _flux_program_tools,
                         _knob_subs, _leaf, _point_name, _rig_for, _write_point, _substitute, describe_flow)
 from .document import TaskError  # noqa: F401 -- still importable from here
 # D891: PromptProblem's methods by concern, one mixin a module; the names stay importable from here
@@ -296,7 +296,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             found = Path(head).exists() if "/" in head else shutil.which(head) is not None
             if not found and head not in missing:
                 missing.append(head)
-            for tool in ([] if _label in declared else _flux_rtl_tools(cmd)):   # tools `flux rtl` runs (D600)
+            for tool in ([] if _label in declared else _flux_program_tools(cmd)):
                 if shutil.which(tool) is None and tool not in missing:
                     missing.append(tool)
         return missing

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_zigzag import (
+from zigzag_tools import (
     NotExpressibleError,
     einsum_op_to_zigzag_layer,
     workload_to_zigzag_layers,

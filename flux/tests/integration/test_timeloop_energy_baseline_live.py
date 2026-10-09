@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from flux_evaluator_timeloop.adapter import local_runner_requested
+from timeloop_tools.adapter import local_runner_requested
 
 pytestmark = [
     pytest.mark.skipif(shutil.which("docker") is None, reason="needs a docker daemon"),
@@ -48,7 +48,7 @@ def test_the_docker_path_still_produces_its_recorded_numbers(arch_name):
 
 def test_the_energy_came_from_real_estimation_plug_ins():
     """The pinned energies are only a baseline if they came from physical plug-ins, not `dummy_tables/` (D138)."""
-    from flux_evaluator_timeloop.adapter import _DUMMY_ESTIMATOR_MARKERS
+    from timeloop_tools.adapter import _DUMMY_ESTIMATOR_MARKERS
 
     # the guard fires on these markers; the image reports CactiSRAM / CactiDRAM / Library
     assert all(m.islower() for m in _DUMMY_ESTIMATOR_MARKERS)

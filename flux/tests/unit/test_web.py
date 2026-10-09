@@ -175,10 +175,10 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
 def test_before_a_start_the_check_is_known_for_the_inputs_as_they_are(server, tmp_path):
     """D693: the check's verdict is kept against a digest of the inputs; an edit makes it unknown
     again, and the configurator's save is previewed before it writes."""
-    from flux_cli.main import main
+    from tests.loop_fixtures import write_loop
 
     app, _ = server
-    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    write_loop("sweep", "sw", tmp_path)
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200
@@ -241,11 +241,11 @@ def _fake_start(app, user, name):
 def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     """D689: a loop is running or not; a start resumes it from its record; its one log keeps
     every start, marked; its state, journal, turns, results and report are the loop's."""
-    from flux_cli.main import main
+    from tests.loop_fixtures import write_loop
     from flux_loop.journal import read_events
 
     app, _ = server
-    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    write_loop("sweep", "sw", tmp_path)
     bob = _client(app, "bob", "another long secret")
     files = [("files", (f"sw/{p.name}", p.read_bytes())) for p in (tmp_path / "sw").iterdir() if p.is_file()]
     assert bob.post("/api/apps", data={"name": "sw"}, files=files, headers=H).status_code == 200

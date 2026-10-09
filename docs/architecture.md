@@ -76,7 +76,7 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ INTERFACES     flux task run/check · flux ask · flux rtl · flux report/status │
+│ INTERFACES     flux task run/check · flux ask · app tools · flux report/status │
 │                /stop/attach/gc/migrate · --json for scripts · the TUI         │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ THE LOOP       core/loop: the document, the roles, the author, skills, the    │

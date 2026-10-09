@@ -8,7 +8,7 @@ from typing import Any
 
 from ..estimate import KINDS as ESTIMATE_KINDS, Estimator
 from ..metrics import AGGREGATES
-from .commands import RTL_METRICS, RTL_STAT_METRICS, _command, _flux_rtl_tools, _stage_of, rtl_tools_kind
+from .commands import _command, _flux_program_tools
 from .keys import TaskError
 
 
@@ -67,11 +67,9 @@ def _stage(i: int, doc: Any) -> Stage:
         raise TaskError(f"{at}.needs is a list of tool names")
     needs = list(needs or [])
     cmd = _command(cmd, f"{at}.command")
-    rtl_tools = _flux_rtl_tools(cmd) if cmd else []
-    for tool in rtl_tools if "needs" not in doc else ():    # D628: `flux rtl measure` says what it runs
-        needs.append(tool)
-    raw_metrics = doc.get("metrics") or (() if "measure" not in rtl_tools_kind(cmd)
-                                        else RTL_STAT_METRICS if _stage_of(list(cmd)) == "stat" else RTL_METRICS)
+    if "needs" not in doc and cmd:
+        needs.extend(_flux_program_tools(cmd))
+    raw_metrics = doc.get("metrics") or ()
     if not isinstance(raw_metrics, (list, tuple)):
         raise TaskError(f"{at}.metrics is a list of names or {{name, type: number|dict, direction, unit, aggregate}}")
     metrics, metric_specs = [], {}
@@ -102,7 +100,7 @@ def _stage(i: int, doc: Any) -> Stage:
     metrics = tuple(metrics)
     metrics_re = dict(doc.get("metrics_re") or {})
     if cmd and not metrics_re and metrics:
-        # `name=value` tokens (as `flux rtl measure` prints) need only the `metrics:` names
+        # `name=value` tokens need only the `metrics:` names
         # (D580); a token starts a line or follows whitespace, so `area_um2` never reads `xarea_um2`
         metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=" +
                      (r"(\{[^\n]*\})" if metric_specs.get(m, {}).get("type") == "dict" else r"([-+0-9.eE]+)")

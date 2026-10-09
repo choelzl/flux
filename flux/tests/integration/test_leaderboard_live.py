@@ -17,7 +17,7 @@ from pathlib import Path
 import flux_ir
 import pytest
 from flux_evaluator_abi import Budget, Candidate
-from flux_evaluator_zigzag import ZigZagEvaluator
+from zigzag_tools import ZigZagEvaluator
 from flux_store import CorpusPartition, CorpusStore, ResultStore
 from flux_store.leaderboard import rank_results_for_entry
 
@@ -90,5 +90,4 @@ def test_holdout_entry_is_not_reachable_through_public_entries():
         if e.partition is CorpusPartition.HOLDOUT
     )
     assert holdout.id == "mlp-gemm0-simple-npu-1d-v4"
-
 

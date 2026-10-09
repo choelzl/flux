@@ -82,14 +82,14 @@ def test_each_backend_still_refuses_in_its_own_words():
     with pytest.raises(NotExpressibleError, match="mac_array.sv is bilinear"):
         einsum_op_to_mac_array_shape({"id": "op0", "kind": "einsum", "expr": "junk"})
 
-    from flux_evaluator_zigzag.workload_translator import einsum_op_to_zigzag_layer
+    from zigzag_tools.workload_translator import einsum_op_to_zigzag_layer
 
     with pytest.raises(NotExpressibleError, match="ZigZag's equation grammar is bilinear"):
         einsum_op_to_zigzag_layer({"id": "op0", "kind": "einsum", "expr": "junk"}, 0)
 
 
 def test_the_mapping_regime_answers_no_for_an_unparseable_op():
-    from flux_evaluator_zigzag.mapping_regime import reduction_dims
+    from zigzag_tools.mapping_regime import reduction_dims
 
     assert reduction_dims({"expr": "b c, c k -> b k"}) == ["c"]
     assert reduction_dims({"expr": "junk"}) == [], "an advisory predicate answers no"

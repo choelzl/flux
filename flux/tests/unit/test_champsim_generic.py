@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from flux_cli.main import main
-from flux_evaluator_champsim import build_header, measure, simulate
-from flux_evaluator_champsim.baseline import baseline_ipc
+from champsim_tools.commands import main
+from champsim_tools import build_header, measure, simulate
+from champsim_tools.baseline import baseline_ipc
 
 FAKE_SIM = r'''#!/usr/bin/env python3
 import hashlib, os, sys
@@ -146,7 +146,7 @@ def test_the_baseline_is_computed_once_and_cached(fake):
 def test_cli_run_prints_name_value_lines(fake, capsys):
     ini = fake["tmp"] / "k.ini"
     ini.write_text("l2c_prefetcher_types = bingo,stride\n")
-    assert main(["champsim", "run", str(ini), "--traces", str(fake["traces"]), "--warmup", "100", "--sim", "1000"]) == 0
+    assert main(["run", str(ini), "--traces", str(fake["traces"]), "--warmup", "100", "--sim", "1000"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("geomean_speedup=")
     names = {ln.split("=")[0] for ln in lines}
@@ -164,12 +164,12 @@ def test_build_installs_a_header_and_caches_the_binary(fake, capsys):
     assert ran["l2_pf_issued"] == 1000
     header = fake["tmp"] / "exstride.h"
     header.write_text(HEADER)
-    assert main(["champsim", "build", str(header)]) == 0
+    assert main(["build", str(header)]) == 0
     assert capsys.readouterr().out.splitlines() == ["0 failing"]
 
 
 def test_the_install_wires_knobs_and_the_dispatch(fake, tmp_path):
-    from flux_evaluator_champsim.build import install, stage_tree
+    from champsim_tools.build import install, stage_tree
 
     tree = stage_tree(fake["tree"], tmp_path / "copy")
     assert install(HEADER, tree) == "exstride"
@@ -183,28 +183,28 @@ def test_the_install_wires_knobs_and_the_dispatch(fake, tmp_path):
 def test_build_failure_prints_the_first_error_and_exits_3(fake, capsys):
     header = fake["tmp"] / "bad.h"
     header.write_text(HEADER.replace("public:", "public: COMPILE_ERROR"))
-    assert main(["champsim", "build", str(header)]) == 3
+    assert main(["build", str(header)]) == 3
     out = capsys.readouterr().out.splitlines()
     assert out == ["inc/flux_exstride.h:3:5: error: expected ';' before '}' token", "1 failing"]
     header.write_text("int x;\n")                         # no Prefetcher class at all
-    assert main(["champsim", "build", str(header)]) == 3
+    assert main(["build", str(header)]) == 3
 
 
 def test_check_refuses_a_prefetcher_that_issues_nothing(fake, capsys):
     good = fake["tmp"] / "good.h"
     good.write_text(HEADER)
-    assert main(["champsim", "check", str(good), "--traces", str(fake["traces"])]) == 0
+    assert main(["check", str(good), "--traces", str(fake["traces"])]) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "0 failing"
     inert = fake["tmp"] / "inert.h"
     inert.write_text(HEADER.replace("Exstride", "InertStride"))
-    assert main(["champsim", "check", str(inert), "--traces", str(fake["traces"])]) == 1
+    assert main(["check", str(inert), "--traces", str(fake["traces"])]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == "1 failing: issued no prefetches"
 
 
 def test_cli_run_on_a_header_builds_it_and_runs_it_with_its_partners(fake, capsys):
     header = fake["tmp"] / "exstride.h"
     header.write_text(HEADER)
-    assert main(["champsim", "run", str(header), "--traces", str(fake["traces"]), "--warmup", "100",
+    assert main(["run", str(header), "--traces", str(fake["traces"]), "--warmup", "100",
                  "--sim", "1000", "--with", "stride", "--jobs", "1"]) == 0
     assert "l2_pf_issued_alpha=2000" in capsys.readouterr().out.splitlines()
     assert "exstride stride|alpha.champsim.gz" in _calls(fake)

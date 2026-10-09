@@ -54,7 +54,7 @@ class Gate(tuple):
         return " && ".join(" ".join(c.run) for c in self)
 
 
-#: D628: what `flux rtl test`, `flux rtl proto` and the templates' checkers print; a gate that
+#: D628: what the application checkers print; a gate that
 #: prints no such line is judged by its exit code
 DEFAULT_COUNT_RE = r"(\d+) failing"
 

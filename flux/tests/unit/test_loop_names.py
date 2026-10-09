@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from flux_cli.commands import _write_folder, example_files
+from flux_cli.commands import _write_folder
+from tests.loop_fixtures import loop_files
 from flux_loop import load_task
 from flux_web.workspace import WorkspaceError, check_name
 from test_web import H, _client, server  # noqa: F401 -- shared fixture
@@ -68,7 +69,7 @@ def test_shared_crafter_accepts_the_same_name_characters():
 @pytest.mark.parametrize("name", ["9Loop-test", "-Loop_09", "_Loop-09"])
 @pytest.mark.parametrize("kind", ["rtl", "rtl-sweep"])
 def test_rtl_examples_use_valid_module_identifiers_separately_from_loop_names(tmp_path, name, kind):
-    folder = _write_folder(name, str(tmp_path), example_files(name, kind), "example")
+    folder = _write_folder(name, str(tmp_path), loop_files(name, kind), "new")
     task = load_task(folder / "problem.yaml")
     module = re.search(r"module (?:named exactly )?`([^`]+)`", task.statement)[1]
     assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", module)

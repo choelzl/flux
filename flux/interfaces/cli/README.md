@@ -1,7 +1,7 @@
 # interfaces/cli — the `flux` command
 
 The `flux` command: the loop's commands (`flux ask`, `flux task check|run`, `flux run`/`status`/
-`stop`/`attach`, `flux report`, `flux rtl test|measure`, `flux knowledge`, `flux gc`;
+`stop`/`attach`, `flux report`, `python rtl.py test|measure`, `flux knowledge`, `flux gc`;
 see [docs/usage-guide.md](../../../docs/usage-guide.md) and `flux --help`) and the three IR commands
 this page describes, `flux import`, `flux eval` and `flux replay`.
 
@@ -21,8 +21,7 @@ this page describes, `flux import`, `flux eval` and `flux replay`.
 
 Package: `flux-cli` (on `PYTHONPATH` under `nix develop`, which also puts a `flux`
 wrapper script — `python3 -c "from flux_cli.main import main; main()"` — on `PATH`; see
-`flake.nix`'s `shellHook`). Deliberately does **not** depend on
-`flux-evaluator-zigzag`/`flux-evaluator-timeloop` — see `registry.py`'s module docstring for why;
+`flake.nix`'s `shellHook`). The CLI does not depend on application-owned tools;
 `flux import` works with nothing but `flux-ir` on `PYTHONPATH`.
 
 Hand-written argparse. `flux task run <doc> --json FILE` writes the run's answer as JSON for a

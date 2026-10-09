@@ -19,7 +19,7 @@ from pathlib import Path
 import flux_ir
 import pytest
 from flux_evaluator_abi import Budget, Candidate, Method
-from flux_evaluator_zigzag import ZigZagEvaluator
+from zigzag_tools import ZigZagEvaluator
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
 

@@ -1063,129 +1063,6 @@ def cmd_knowledge_show(args: argparse.Namespace) -> int:
     return 0
 
 
-_EXAMPLE_README = {
-    "python": """# {name}
-
-A Python problem for Flux, written by `flux example python {name}`. The model writes
-`count_primes(n)`; `check.py` refuses a wrong one (the gate); `bench.py` times the survivors
-(the stage); the loop keeps the fastest and asks for faster.
-
-| file | what it is |
-|---|---|
-| `problem.yaml` | the ask: statement, contract, gate, stage, objective, budget |
-| `check.py` | the gate: known cases up to the workload's n and a few drawn per run, against a reference; prints `N failing of M` |
-| `bench.py` | the stage: times the candidate in 5 fresh processes, checks each answer, prints `time_ms=` (the median) |
-
-    flux task check problem.yaml
-    flux task run problem.yaml --passes 1      # one pass; without --passes it runs until stopped
-
-A model is needed: a local Ollama, or `FLUX_REMOTE_BASE_URL` / `FLUX_REMOTE_MODEL` for a server
-(README.md, "A run with a model"). To make it yours, change the statement and the contract,
-put your own cases in `check.py` and your own workload in `bench.py`.
-""",
-    "rtl": """# {name}
-
-An RTL problem for Flux, written by `flux example rtl {name}`. The model writes the module;
-`flux rtl test` proves it against `golden.py` on Verilator (the gate); `flux rtl measure` times
-it with Yosys and OpenSTA, then places it with OpenROAD on ASAP7 (the stages).
-
-| file | what it is |
-|---|---|
-| `problem.yaml` | the ask: statement, contract, gate, stages, objectives, budget |
-| `golden.py` | what the module must compute: `PORTS` and `golden(**inputs)` |
-
-    flux task check problem.yaml
-    flux task run problem.yaml --passes 1 --screen-only    # synthesis only, one pass
-
-It needs the dev shell's tools and a model. To make it yours, change the statement, the
-contract and `golden.py`; `flux/core/loop/src/flux_loop/author_reference.md` has the rules for
-golden models (floats, clocks, tolerances).
-""",
-    "rtl-sweep": """# {name}
-
-A hardware design-space sweep for Flux with no model, written by `flux example
-rtl-sweep {name}`. `gen.py` spells one module per point of the document's `flow.dse.space`; `flux rtl test`
-proves each against `golden.py` on Verilator; `flux rtl measure` synthesises the survivors with
-Yosys and OpenSTA on ASAP7.
-
-| file | what it is |
-|---|---|
-| `problem.yaml` | the space, the search, the gate, the stage, the objectives |
-| `gen.py` | the generator: a 16-bit popcount as a sum, an adder tree, or small tables |
-| `golden.py` | what the module must compute |
-
-    flux task run problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
-
-Add an architecture to `gen.py` and its name to `flow.dse.space`, or add knobs (widths, pipeline
-depth, table size). For placed numbers, add the `confirm` stage of `flux example rtl`.
-""",
-    "tune": """# {name}
-
-A tuning problem for Flux, written by `flux example tune {name}`. No model and no generated
-code: every point of the document's `flow.dse.space` is a setting, handed to the gate and the stage as
-`{{knob}}` placeholders. `check.py` refuses a setting that breaks the result; `bench.py` measures
-the rest; the fastest wins.
-
-| file | what it is |
-|---|---|
-| `problem.yaml` | the knobs, the search, the gate, the stage, the objective |
-| `workload.py` | the program being tuned: a blocked matrix multiply (block size, loop order) |
-| `check.py` / `bench.py` | the gate (still correct?) and the stage (`time_ms=`) |
-
-    flux task run problem.yaml --passes 15      # a pass a point of `flow.dse.space` (D738)
-
-To tune your own program, replace `workload.py`, list its knobs under `flow.dse.space`, and make the gate
-and the stage run it with them. They can be any command: a build with flags, a solver with
-parameters, a training script with hyperparameters. For a space too big to sweep, set
-`flow.dse` to `gradient`, `anneal` or `genetic`; for a trade-off, add a second objective and use
-`pareto`. `docs/extending.md` has the rest.
-""",
-    "sweep": """# {name}
-
-A design-space sweep for Flux with no model, written by `flux example sweep {name}`.
-`render.py` writes one candidate per point of the document's `flow.dse.space`; `check.py` refuses a
-wrong one; `bench.py` times the survivors; the fastest wins.
-
-| file | what it is |
-|---|---|
-| `problem.yaml` | the ask: the space, the search, the gate, the stage, the objective |
-| `render.py` | the generator: one candidate per point (`render.py <out> <algorithm> <wheel>`) |
-| `check.py` / `bench.py` | the gate and the stage |
-
-    flux task run problem.yaml --passes 6      # a pass a point of `flow.dse.space` (D738)
-
-To try another idea, add a value to `flow.dse.space` and its code to `render.py`; to search instead of
-sweeping, set `flow.dse` to `gradient`, `anneal`, `genetic` or `pareto`. Set
-`flow.generate: model` (and drop `flow.dse`) to let a model write candidates instead.
-""",
-}
-
-
-#: The worked examples (D825: `flux example KIND NAME`; `flux new` writes the baseline alone), each in a line.
-EXAMPLES = {
-    "sweep": "A script writes every point of a knob space; the fastest wins. No model needed.",
-    "tune": "Knobs go straight to your own commands (build flags, block sizes). No model needed.",
-    "python": "A model writes a Python function; a checker and a benchmark judge it.",
-    "rtl": "A model writes a SystemVerilog module; Verilator and ASAP7 synthesis judge it.",
-    "rtl-sweep": "A script spells one module per knob point; Verilator and Yosys judge them. No model needed.",
-}
-
-
-def example_files(name: str, kind: str) -> list[tuple[str, str]]:
-    """A worked example of `kind` named `name` (D825): (file name, text) pairs from
-    `flux_cli/examples/<kind>/`, the document as `problem.yaml`, and its README."""
-    from pathlib import Path
-    import re
-
-    if kind not in EXAMPLES:
-        raise ValueError(f"an example is one of {', '.join(EXAMPLES)}")
-    source = Path(__file__).with_name("examples") / kind
-    module = re.sub(r"[^A-Za-z0-9_]", "_", name)
-    if not re.match(r"[A-Za-z_]", module):
-        module = "_" + module
-    out = [(f.name, f.read_text().replace("__NAME__", name).replace("__MODULE__", module))
-           for f in sorted(source.iterdir()) if f.is_file()]
-    return [*out, ("README.md", _EXAMPLE_README[kind].format(name=name))]
 
 
 def baseline_files(name: str) -> list[tuple[str, str]]:
@@ -1210,6 +1087,7 @@ def _write_folder(name: str, where: str | None, files: list[tuple[str, str]], wh
         return None
     target.mkdir(parents=True, exist_ok=True)
     for rel, text in files:
+        (target / rel).parent.mkdir(parents=True, exist_ok=True)
         (target / rel).write_text(text)
     return target
 
@@ -1227,18 +1105,6 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_example(args: argparse.Namespace) -> int:
-    """`flux example KIND NAME` (D825): a worked example that runs -- a sweep, a tuning, a Python or an
-    RTL problem -- with its README."""
-    target = _write_folder(args.name, args.dir, example_files(args.name, args.kind), "example")
-    if target is None:
-        return 2
-    print(f"wrote {target}/: {', '.join(rel for rel, _t in example_files(args.name, args.kind))}")
-    points = {"sweep": 6, "rtl-sweep": 6, "tune": 15}.get(args.kind, 1)     # D738: a pass a point
-    command_target = f"./{target}" if str(target).startswith("-") else str(target)
-    print(f"next:\n  flux task check {command_target}\n  flux task run {command_target} --passes {points}"
-          + (" --screen-only" if args.kind == "rtl" else ""))
-    return 0
 
 
 def cmd_probe(args: argparse.Namespace) -> int:

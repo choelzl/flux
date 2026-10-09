@@ -48,8 +48,10 @@ def test_the_budget_keeps_only_its_own():
 
 def test_each_box_says_its_settings_in_the_forms_it_has():
     flow = lambda **f: TaskSpec.from_dict({**NEW, "flow": {**NEW["flow"], **f}})   # noqa: E731
-    rtl = "flux rtl measure {artifact} --stage synth --clock-ps 1000"           # a tool Flux knows: the command alone
-    t = flow(measure={"a": rtl, "b": rtl.split(), "c": {"command": "echo t=3", "metrics": ["t"], "timeout_s": 5}},
+    rtl = "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+    t = flow(measure={"a": {"command": rtl, "metrics": ["area_um2"]},
+                     "b": {"command": rtl.split(), "metrics": ["area_um2"]},
+                     "c": {"command": "echo t=3", "metrics": ["t"], "timeout_s": 5}},
              )
     assert [s.name for s in t.stages] == ["a", "b", "c"] and t.stages[0].command == t.stages[1].command
     assert t.stages[2].timeout_s == 5

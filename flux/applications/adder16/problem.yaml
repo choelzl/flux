@@ -13,10 +13,16 @@ flow:
       # D866: one knob, six designs -- carry-select's block size is in its name
       arch: [behavioral, ripple, carry_select_2, carry_select_4, carry_select_8, kogge_stone]
   generate: {command: "{python} {home}/gen.py {artifact} {arch}"}
-  test: flux rtl test {artifact} --golden {home}/golden.py
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
   measure:
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 333
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 333
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 333"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 333"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
   select: {finalists: 2}
   knowledge: off      # D867: the shared library is the NLU's papers, none of them about an adder
 

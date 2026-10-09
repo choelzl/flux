@@ -13,18 +13,24 @@ contract: |-
     - output logic [15:0] y, valid while `done` is high
   `y` is within 1 ULP of the FP16 rounding of the tanh-form GELU of `x`, computed in double
   precision. GELU(-inf) = -0 (0x8000), GELU(+inf) = +inf (0x7C00); a NaN input is returned as is.
+language: systemverilog
+
 objectives:
 - {metric: fmax_mhz, direction: maximize, goal: 500}
 - {metric: area_um2, direction: minimize}
 flow:
   generate: {by: opencode, timeout_s: 3600}
-  test: flux rtl test {artifact} --golden {home}/golden.py
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
   measure:
     synth:
-      command: flux rtl measure {artifact} --stage synth --clock-ps 2000 --timeout 1200
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 2000 --timeout 1200"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
       timeout_s: 1300
     place:
-      command: flux rtl measure {artifact} --stage place --clock-ps 2000 --timeout 1200
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 2000 --timeout 1200"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
       timeout_s: 1300
   knowledge:
     files: [fp16-functions.md]

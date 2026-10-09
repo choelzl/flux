@@ -7,7 +7,7 @@ statement: >-
 contract: >-
   The interface every design must have: its name, its inputs and outputs, what it must compute.
 # language: python             # optional: what a design is written in, when the checks' tools do not tell it
-                               # (`flux rtl ...` checks make it systemverilog by themselves)
+                               # (set this explicitly for application scripts)
 
 flow:
   # test -- the gate: each check refuses a wrong design, by name, in order. A command that prints

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_timeloop import NotExpressibleError, architecture_ir_to_timeloop_architecture_yaml
+from timeloop_tools import NotExpressibleError, architecture_ir_to_timeloop_architecture_yaml
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_NPU_1D = FLUX_ROOT / "core/ir/architecture/examples/simple-npu-1d-v1.yaml"

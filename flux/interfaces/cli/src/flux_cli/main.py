@@ -1,8 +1,8 @@
 """Flux CLI entry point: the one way in, for people, scripts and agents alike (docs/agent-surface.md).
 
 `flux task run|check` runs or validates a problem document (`--json FILE` writes the answer for a
-script), `flux ask` drives the loop from a prompt, `flux rtl lint|test|measure`, `flux prog time|count|size` and `flux champsim run|build|check` are the tools a
-document names, `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
+script), `flux ask` drives the loop from a prompt. Applications provide their own check and
+measurement commands. `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
 detached run; `flux eval`, `flux import` and `flux replay` are the IR evaluator commands.
 """
 
@@ -11,28 +11,26 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .champsim import cmd_champsim_build, cmd_champsim_check, cmd_champsim_run
-from .rtl import cmd_rtl_lint, cmd_rtl_measure, cmd_rtl_proto, cmd_rtl_test
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_example, cmd_log, cmd_probe)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
 from flux_evaluator_abi import available_evaluators
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="flux",
-        description="Flux: an AI-driven design-space exploration loop for hardware. A model or a coding agent "
+        description="Flux: an AI-driven design-space exploration loop. A model or a coding agent "
                     "proposes designs, real tools check and measure them, the loop decides and keeps a record.",
-        epilog="start with:\n  flux new myloop            (the baseline to fill in)\n  flux example sweep demo    (a worked example: sweep|tune|python|rtl|rtl-sweep)\n"
+        epilog="start with:\n  flux new myloop            (the baseline to fill in)\n"
                "  flux task check <folder>\n  flux task run <folder>\n"
                "  flux ask \"what you want\" --file spec.pdf\ndocs: README.md and docs/usage-guide.md",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",
-        # import, eval, replay and migrate still work but are hidden from the listing
-        metavar="{new,ask,task,tools,rtl,prog,champsim,report,log,run,status,stop,attach,knowledge,gc,selftest}")
+        # Older IR entry points remain callable but have no prominent help entry.
+        metavar="{new,ask,consult,task,probe,tools,prog,report,log,run,status,stop,attach,serve,user,login,agent,knowledge,gc,selftest}")
 
     import_p = subparsers.add_parser("import"
     )
@@ -101,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     user_p.add_argument("--data", default=None, help="The server's data (default: $XDG_DATA_HOME/flux/web).")
     user_p.set_defaults(func=_cmd_user)
 
-    st_p = subparsers.add_parser("selftest", help="Does Flux work on this machine: tools, a sweep, an RTL sweep, the model, a model-written problem.")
+    st_p = subparsers.add_parser("selftest", help="Check this machine: a command-driven loop, the model, optional application tools.")
     st_p.add_argument("--full", action="store_true", help="Also the README's first run (adder16, about three minutes).")
     st_p.add_argument("--no-model", action="store_true", help="Only the checks that need no model.")
     st_p.add_argument("--model", default=None, help="The model name to check (default: the one a run would use).")
@@ -113,17 +111,6 @@ def build_parser() -> argparse.ArgumentParser:
     new_p.add_argument("name", help="The loop's name (letters, digits, _): its id, and its folder unless --dir.")
     new_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
     new_p.set_defaults(func=cmd_new)
-    ex_p = subparsers.add_parser(
-        "example", help="Write a worked example that runs (D825): sweep, tune, python, rtl or rtl-sweep.")
-    ex_p.add_argument("kind", choices=("python", "rtl", "sweep", "tune", "rtl-sweep"),
-                      help="python: the model writes a function, a checker and a benchmark judge it; "
-                           "rtl: the model writes a module, Verilator and ASAP7 judge it; "
-                           "sweep: a script renders every point of a knob space, no model needed; "
-                           "tune: the knobs go straight to your own commands (build flags, block sizes, hyperparameters), no model; "
-                           "rtl-sweep: a script spells a module per knob point, Verilator and Yosys judge them, no model.")
-    ex_p.add_argument("name", help="Its name (letters, digits, _): its id, and its folder unless --dir.")
-    ex_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
-    ex_p.set_defaults(func=cmd_example)
 
     co_p = subparsers.add_parser(
         "consult", help="A question about a loop, answered by an agent that reads it and changes nothing (D705).")
@@ -277,57 +264,11 @@ def build_parser() -> argparse.ArgumentParser:
     tools_p.add_argument("--json", action="store_true", help="The catalog as JSON (what the loop crafter reads).")
     tools_p.set_defaults(func=cmd_tools)
 
-    rtl_p = subparsers.add_parser("rtl", help="The tools an RTL document names: lint, test against a golden model, check a prototype, measure on ASAP7.")
-    rtl_sub = rtl_p.add_subparsers(dest="rtl_command", required=True)
-    rl = rtl_sub.add_parser("lint", help="Verilator lint for hardware defects (latches, multiple drivers, combinational "
-                                         "loops, `<=` in combinational logic, mixed `=`/`<=`, implicit nets); prints each and "
-                                         "`N failing`; exit 3 when it does not parse.")
-    rl.add_argument("artifact"); rl.add_argument("--module", default=None, help="The top module (default: the first in the artifact).")
-    rl.add_argument("--extra", action="append", default=[], help="Another source file the module instantiates (repeatable).")
-    rl.add_argument("--timeout", type=float, default=120.0)
-    rl.set_defaults(func=cmd_rtl_lint)
-    rt = rtl_sub.add_parser("test", help="Verilate the artifact against golden.py's vectors; prints the failing ones and `N failing of M`.")
-    rt.add_argument("artifact"); rt.add_argument("--golden", required=True, help="golden.py: PORTS and golden(**inputs).")
-    rt.add_argument("--module", default=None, help="The module under test (default: the first `module` in the artifact).")
-    rt.add_argument("--timeout", type=float, default=300.0); rt.add_argument("--show", type=int, default=8, help="Failing vectors to print.")
-    rt.add_argument("--extra", action="append", default=[], help="Another source file the module instantiates (repeatable).")
-    rt.set_defaults(func=cmd_rtl_test)
-    rp = rtl_sub.add_parser("proto", help="Check a Python prototype `design(**inputs)` against golden.py -- every input when "
-                                          "they total 20 bits or fewer -- as the prototype stage does; prints where it fails "
-                                          "and `N failing of M`.")
-    rp.add_argument("prototype"); rp.add_argument("--golden", required=True, help="golden.py: PORTS and golden(**inputs).")
-    rp.add_argument("--table-max", type=int, default=None, help="The largest module-level table allowed (default 64).")
-    rp.add_argument("--timeout", type=float, default=120.0)
-    rp.set_defaults(func=cmd_rtl_proto)
-    rm_ = rtl_sub.add_parser("measure", help="Synthesise (synth), place or route the artifact on ASAP7; prints metric=value lines.")
-    rm_.add_argument("artifact"); rm_.add_argument("--stage", choices=("stat", "synth", "place", "route"), default="synth",
-                     help="stat: Yosys alone, area_um2 and cell_count (no timing); synth: + OpenSTA; place, route: OpenROAD.")
-    rm_.add_argument("--clock-ps", type=float, default=1000.0); rm_.add_argument("--module", default=None)
-    rm_.add_argument("--clock-port", default="auto", help="auto: clk when the module has one; none: combinational.")
-    rm_.add_argument("--reset-port", default="auto", help="auto: rst_n when the module is clocked and has one.")
-    rm_.add_argument("--repair-design", action="store_true", help="Buffer long wires and high fanout after placement.")
-    rm_.add_argument("--timeout", type=float, default=900.0)
-    rm_.set_defaults(func=cmd_rtl_measure)
 
     from .prog import add_parsers as add_prog
 
     add_prog(subparsers)
 
-    cs_p = subparsers.add_parser("champsim", help="ChampSim as tools a document names: run an .ini or a prefetcher header on traces, build, check.")
-    cs_sub = cs_p.add_subparsers(dest="champsim_command", required=True)
-    cr = cs_sub.add_parser("run", help="Measure ARTIFACT (an .ini, or a .h prefetcher built in) on every trace; prints name=value lines.")
-    cr.add_argument("artifact"); cr.add_argument("--traces", required=True, help="A directory of *.gz / *.xz traces.")
-    cr.add_argument("--warmup", type=int, required=True); cr.add_argument("--sim", type=int, required=True)
-    cr.add_argument("--with", dest="with_", default=None, help="More L2 prefetchers to run alongside, comma-separated.")
-    cr.add_argument("--jobs", type=int, default=None, help="Simulations at once (default: one per trace).")
-    cr.add_argument("--config", default=None, help="An .ini of knobs (and types) added to the artifact's: a header's partners need theirs.")
-    cr.set_defaults(func=cmd_champsim_run)
-    cb = cs_sub.add_parser("build", help="Build a prefetcher header into ChampSim; prints `0 failing` or the first error and `1 failing` (exit 3).")
-    cb.add_argument("header")
-    cb.set_defaults(func=cmd_champsim_build)
-    cc = cs_sub.add_parser("check", help="Build a prefetcher header and smoke-run it on one trace; fails when it issues no prefetches.")
-    cc.add_argument("header"); cc.add_argument("--traces", required=True)
-    cc.set_defaults(func=cmd_champsim_check)
 
     att_p = subparsers.add_parser("attach", help="Tail the log of the campaign's run (started by `flux run`).")
     att_p.add_argument("db", help="The campaign record.")

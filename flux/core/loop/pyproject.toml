@@ -6,7 +6,6 @@ requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
     "flux-cache",
-    "flux-codegen-rtl-harness",
     "flux-evaluator-abi",
     "flux-feedback",
     "flux-frontier",

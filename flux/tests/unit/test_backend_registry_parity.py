@@ -14,6 +14,11 @@ _FLUX_ROOT = Path(__file__).resolve().parents[2]
 _EVALUATORS_DIR = _FLUX_ROOT / "evaluator"
 
 
+@pytest.fixture(autouse=True)
+def _application_evaluators():
+    """Check the core registry without the test suite's optional application adapters."""
+
+
 def _local_src_dirs() -> list[Path]:
     """Every `src` directory on the dev shell's PYTHONPATH (`localSrcDirs` in flake.nix, as tests/unit/conftest.py reads it)."""
     import re
@@ -43,8 +48,8 @@ def test_the_evaluators_directory_is_findable():
     """Guards the guard: a moved directory would make every assertion below vacuous."""
     assert _EVALUATORS_DIR.is_dir(), f"expected an evaluator/ directory at {_EVALUATORS_DIR}"
     implemented = _implemented_adapter_dirs()
-    assert len(implemented) >= 5
-    assert {"champsim", "openroad", "rtl"} <= set(implemented)
+    assert len(implemented) >= 2
+    assert {"openroad", "rtl"} <= set(implemented)
 
 
 def test_every_implemented_adapter_is_registered_in_the_cli_registry():

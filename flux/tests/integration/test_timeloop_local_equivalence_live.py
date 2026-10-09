@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from flux_evaluator_timeloop.adapter import local_timeloop_available
+from timeloop_tools.adapter import local_timeloop_available
 
 pytestmark = pytest.mark.skipif(
     not local_timeloop_available(),
@@ -27,7 +27,7 @@ _BASELINE = json.loads((_ROOT / "tests/golden/timeloop_energy_baseline.json").re
 
 def _evaluate_locally(arch_name: str):
     from flux_evaluator_abi import Budget, Candidate
-    from flux_evaluator_timeloop import TimeloopEvaluator
+    from timeloop_tools import TimeloopEvaluator
 
     wl = yaml.safe_load((_ROOT / "core/ir/workload/examples/mlp-gemm0.yaml").read_text())
     arch = yaml.safe_load((_ROOT / f"core/ir/architecture/examples/{arch_name}.yaml").read_text())
@@ -53,9 +53,9 @@ def test_the_hermetic_path_reproduces_the_docker_numbers(arch_name):
 
 def test_the_energy_is_not_a_coincidence():
     """Every component was priced by a real Accelergy plug-in, not a dummy (D138)."""
-    from flux_evaluator_timeloop.adapter import estimators_used
+    from timeloop_tools.adapter import estimators_used
 
-    import flux_evaluator_timeloop.adapter as adapter
+    import timeloop_tools.adapter as adapter
 
     # Read inside the guard: the adapter's TemporaryDirectory is gone once `evaluate` returns.
     seen: list[set[str]] = []

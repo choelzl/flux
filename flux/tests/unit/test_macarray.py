@@ -150,7 +150,7 @@ def test_a_pe_that_lies_about_its_latency_is_refused_and_a_wrong_multiplier_says
     """The shared check refuses a design whose cycles differ from its claim, and a failing multiplier hears the failing inputs (D582)."""
     from dataclasses import replace
 
-    from flux_codegen_rtl_harness import check_rtl
+    from rtl import check_rtl
     from flux_macarray import verify
     from flux_macarray.invent import multiplier_golden
 
@@ -236,4 +236,3 @@ def test_the_steps_generate_check_and_keep(tmp_path):
     wrong = tmp_path / "w.sv"
     wrong.write_text(mult.read_text().replace("x * w", "x + w"))
     assert main(["mult-check", str(wrong), "--keep", str(keep)]) == 1 and len(list(keep.glob("*.sv"))) == 1
-

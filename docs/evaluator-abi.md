@@ -80,13 +80,18 @@ produced a confidently wrong DSE winner from a sweep that reported no errors.
 
 ## Backends
 
+Only `rtl` and `openroad` are registered by core Flux. ZigZag and Timeloop are owned by
+`applications/npu_gemm/`; use its `evaluate.py --backend zigzag|timeloop` command. ChampSim
+is owned by `applications/prefetcher/`; use its `champsim.py` or `bingo.py` commands. Their
+adapter classes remain inside those applications for reuse or explicit plugin registration.
+
 | Backend | Package | Status |
 |---|---|---|
-| `zigzag` | `evaluator/zigzag/` | Real. Translates a two-operand einsum + N-dimensional compute array + flat mapping into native ZigZag, runs the real `zigzag-dse` PyPI package. |
-| `timeloop` | `evaluator/timeloop/` | Real. Same class of einsum op via the real `timeloopaccelergy/accelergy-timeloop-infrastructure` Docker image or the hermetic nix runner ([decisions.md D206](decisions.md)); 1-D and 2-D compute arrays (D215); sparsity via Timeloop's own `densities`/`sparse_optimizations` (D78). |
+| `zigzag` | `applications/npu_gemm/tools/zigzag_tools/` | Real. Translates a two-operand einsum + N-dimensional compute array + flat mapping into native ZigZag, runs the real `zigzag-dse` PyPI package. |
+| `timeloop` | `applications/npu_gemm/tools/timeloop_tools/` | Real. Same class of einsum op via the real `timeloopaccelergy/accelergy-timeloop-infrastructure` Docker image or the hermetic nix runner ([decisions.md D206](decisions.md)); 1-D and 2-D compute arrays (D215); sparsity via Timeloop's own `densities`/`sparse_optimizations` (D78). |
 | `rtl` | `evaluator/rtl/` | Real. A hand-written `mac_array.sv`, compiled/run through real Verilator, self-checked against a Python golden reference every run. The first *measured*, not analytic, evaluator. |
 | `openroad` | `evaluator/openroad/` | Real. Yosys maps the candidate's derived datapath onto ASAP7 and OpenROAD places (optionally routes, D229) it — measured `area_mm2`/`power_w`/`worst_slack_ps` from placed silicon ([decisions.md D225](decisions.md)–[D230](decisions.md)). |
-| `champsim` | `evaluator/champsim/` | Real. ChampSim (Pythia) on one trace: an `.ini` of knobs for the prebuilt binary or a C++ prefetcher header built in; IPC, cycles and the L2 prefetch counters, simulated. |
+| `champsim` | `applications/prefetcher/tools/champsim_tools/` | Real. ChampSim (Pythia) on one trace: an `.ini` of knobs for the prebuilt binary or a C++ prefetcher header built in; IPC, cycles and the L2 prefetch counters, simulated. |
 
 ## Two faces of one measurement
 
@@ -94,7 +99,7 @@ The ABI is the interface for a candidate **the IR can express** — a Workload I
 Architecture IR document, an optional Mapping IR — which is what makes backends
 interchangeable: a search can swap `zigzag` for `timeloop` because both read the same
 documents. It is reached by NAME, from a problem document's `flow.measure`
-(`evaluator: openroad`, [decisions.md D430](decisions.md)) or `flux eval`.
+(`evaluator: openroad`, [decisions.md D430](decisions.md)) or `flux eval` for registered adapters.
 
 Several studies here measure something else. The macarray's candidate is generated
 SystemVerilog plus a clock constraint; the NLU's is an FP16 operator module; the prefetcher's is
@@ -103,7 +108,7 @@ and a fabric under a cycle law. None of those is an Architecture IR document, an
 through `evaluate` would add a translation layer between a study and its own artifact, with
 nothing on the other side able to interpret it. So they call the tool wrapper directly:
 `run_synthesis_flow` / `run_ppa_flow` (`evaluator/openroad`), `simulate` / `measure`
-(`evaluator/champsim`, the prefetcher's stages through `flux champsim run` and `bingo.py measure`).
+(`applications/prefetcher/tools/champsim_tools`, the prefetcher's stages through `python champsim.py run` and `bingo.py measure`).
 
 **The rule, and it is a one-implementation rule** ([decisions.md D451](decisions.md)): where a
 tool has both faces, the ABI adapter and the tool function call the SAME measurement code. The

@@ -13,7 +13,7 @@ from pathlib import Path
 import flux_ir
 import pytest
 from flux_evaluator_abi import Budget, Candidate, Method
-from flux_evaluator_timeloop import NotExpressibleError, TimeloopEvaluator
+from timeloop_tools import NotExpressibleError, TimeloopEvaluator
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 GEMM_WORKLOAD = FLUX_ROOT / "core/ir/workload/examples/mlp-gemm0.yaml"

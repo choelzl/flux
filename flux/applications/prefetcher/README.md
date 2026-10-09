@@ -1,6 +1,6 @@
 # prefetcher: the L2 prefetcher for 5G baseband traces
 
-Two problems on ChampSim (the `pythia` build in the dev shell), measured by `flux champsim` on
+Two problems on ChampSim (the `pythia` build in the dev shell), measured by `python champsim.py` on
 the three traces in `traces/` (not in git; see `traces/README.md`).
 
 | file | what it is |
@@ -8,7 +8,7 @@ the three traces in `traces/` (not in git; see `traces/README.md`).
 | `problem.yaml` | the configuration: the model writes a ChampSim `.ini` -- Bingo, the partners beside it and every knob |
 | `knobs.md` | what an `.ini` may say: the stack, each knob's meaning, range and shipped value, legality, storage |
 | `bingo_default.ini` | Bingo at its shipped configuration |
-| `bingo.py` | `check` (what knobs.md allows, `--max-storage`) and `measure` (`flux champsim` + the storage model) |
+| `bingo.py` | `check` (what knobs.md allows, `--max-storage`) and `measure` (`python champsim.py` + the storage model) |
 | `invent.problem.yaml` | a new C++ prefetcher, written by the model, measured beside Bingo -- the loop's second problem, its record `prefetcher.invent` (D787) |
 
 **The configuration.** The model reads `knobs.md` and `bingo_default.ini` and writes a knob
@@ -20,7 +20,7 @@ prefetcher, then the least storage (Bingo's tables and every partner's) among th
 back with their numbers and asks for better ones.
 
 **Invention.** The model writes one header subclassing ChampSim's `Prefetcher`;
-`flux champsim build` compiles it (a compile error is repaired), `flux champsim check` refuses
+`python champsim.py build` compiles it (a compile error is repaired), `python champsim.py check` refuses
 one that issues no prefetches, and the stages measure it beside Bingo's shipped configuration.
 
 ```bash

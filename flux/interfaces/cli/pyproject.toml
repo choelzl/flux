@@ -10,8 +10,8 @@ dependencies = [
     "flux-store",
 ]
 # The evaluator adapters (zigzag, timeloop, rtl, ...) are deliberately not listed: they are
-# resolved by name through flux-evaluator-abi's registry, so `flux eval --backend zigzag` needs
-# flux-evaluator-zigzag installed alongside, same as using any adapter directly.
+# resolved by name through flux-evaluator-abi's registry; an application adapter needs
+# an application registering its own adapter, same as using one directly.
 
 [project.scripts]
 flux = "flux_cli.main:main"

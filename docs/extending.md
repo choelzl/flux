@@ -4,8 +4,8 @@ What you can change to try something new, from the cheapest to the deepest, and 
 extension point is. **Stable** means it will keep working across releases. **Evolving** means it
 works and is tested, but its shape may still change.
 
-Start with `flux example python|rtl|sweep NAME`: it writes a problem that runs, and every
-section below changes one part of it.
+Start with `flux new NAME` and add your scripts, or copy a bundled application including its
+tool commands. Every section below changes one part of the loop.
 
 ## 1. The problem document (stable)
 
@@ -37,7 +37,7 @@ in the report).
 `flow.generate`:
 - `model` (the default): the model writes it and repairs it from the gate's output.
 - `{command: "..."}`: a script renders it. With a space (`flow.orchestrate.space`), the script runs once per point with
-  the knobs as placeholders (`flux example sweep`).
+  the knobs as placeholders.
 - `{by: opencode|claude|codex}` or `{by: {command: [...]}, timeout_s: N, questions:
   decide|model|operator}`: a coding agent writes it in a work directory. It does not compile or
   test: the loop runs the gate and brings a failure back to its session (D673, D674).
@@ -45,7 +45,7 @@ in the report).
 
 ### A prototype before the target (evolving, D604)
 
-When the gate is `flux rtl test ... --golden golden.py` and `budget.prototype: true`, the
+When the gate is `python rtl.py test ... --golden golden.py` and `budget.prototype: true`, the
 model first writes the algorithm as plain Python, `design(<the golden's inputs>) ->
 {output: bits}`. Integers and bits only, and a formula, not a lookup of the answers (D616):
 the range split where the function saturates or is the identity, a low-degree fixed-point
@@ -65,7 +65,7 @@ spelled nor synthesised. If the document
 names a `golden.py` that does not exist, the model writes it first from the statement and the
 contract. That golden is checked (it imports, makes its vectors, answers every output port),
 but read it before trusting a decision made against it. With `flow.generate: {by: ...}`, a coding agent writes the prototype
-and the loop checks it with `flux rtl proto FILE --golden golden.py`, the stage's own check (D618).
+and the loop checks it with `python rtl.py proto FILE --golden golden.py`, the stage's own check (D618).
 
 ## 4. How the search goes (stable names, evolving fields)
 

@@ -2,7 +2,7 @@
 
 The spec a driver is generated from, the netlist a composite is wired from, the run result a
 harness returns, and the reserved-identifier check -- with no language in any of it.
-`flux_codegen_rtl_harness` owns the emission and imports this.
+A language's harness owns the emission and imports this.
 """
 
 from .compose import CompositionSpec, Instance, composition_spec_from_dict

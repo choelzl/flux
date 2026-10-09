@@ -74,7 +74,7 @@ Inside `flow.measure.<stage>`, use a known tool command or a map:
 |---|---|---|
 | `command` | One of `command` / `evaluator` required | Command string or argument list |
 | `evaluator` | Alternative to `command` | Registered backend, such as `zigzag` or `timeloop` |
-| `metrics` | Inferred for known RTL commands | Names printed as `name=value`, or typed dictionary declarations (below); required for ordinary custom commands unless using `metrics_re` |
+| `metrics` | None | Names printed as `name=value`, or typed dictionary declarations (below); required for command stages unless using `metrics_re` |
 | `metrics_re` | Derived from `metrics` | Map of metric name to regex capturing a number or, for dictionary metrics, a JSON object |
 | `needs` | Inferred for known tools; otherwise empty | Executables required on PATH; missing tools skip the stage |
 | `timeout_s` | `600` | Command timeout in seconds |
@@ -360,7 +360,7 @@ supply `{knob}` placeholders from the search space.
 
 ## RTL golden model
 
-Define `PORTS` and `golden(**inputs)` in the file supplied to `flux rtl test --golden`:
+Define `PORTS` and `golden(**inputs)` in the file supplied to `python rtl.py test --golden`:
 
 ```python
 PORTS = [
@@ -385,7 +385,7 @@ Match the ports and clocking in the contract and design. Floating-point bit-patt
 should be unsigned; reinterpret their bits in the golden function, rather than converting
 an integer bit pattern numerically to a float. Derive expected values from the reference.
 
-Known RTL stage commands include `flux rtl measure {artifact} --stage stat|synth|place|route`.
+Known RTL stage commands include `python rtl.py measure {artifact} --stage stat|synth|place|route`.
 `stat` provides area and cell count; timed stages also provide frequency and power. Use
 `--clock-ps N` to set the timing target. `flux tools` prints the full tool catalog.
 

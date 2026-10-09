@@ -41,7 +41,7 @@ Not implemented: a benchmark family from a workload real evaluators can't fully 
 existing schema examples (`soc-dma-desc-fetch.yaml`, `llama3-8b-decode-layer0.yaml`) were checked
 and found deliberately not expressible by any real evaluator (no `einsum` op at all; dynamic
 bounds ZigZag's translator explicitly rejects), so neither can ever produce a real ranked result.
-D59's own real constraint, checked directly against `evaluator/zigzag`'s translator source: every
+D59's own real constraint, checked directly against `applications/npu_gemm/tools/zigzag_tools`'s translator source: every
 ZigZag-expressible op is a single bilinear (two-operand) contraction — a genuinely different *op
 shape* (e.g. a real conv/depthwise pattern) needs either a translator extension or a different
 backend (the RTL/SystemC generation framework, `codegen/`, has no such restriction) to add.

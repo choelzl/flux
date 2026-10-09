@@ -15,7 +15,7 @@ prefetcher's tables learn the replay: the stages stay within the shortest, 2M wa
 
 **They are not in git.** 380 MB of binary blobs do not belong in a source repository, and the
 repository-root `.gitignore` excludes them. The stages measure every `*.gz`/`*.xz` in this
-directory (`flux_evaluator_champsim.traces.resolve`) and stop with an error when there is none.
+directory (`champsim_tools.traces.resolve`) and stop with an error when there is none.
 
 ## Where they come from
 
@@ -26,4 +26,4 @@ or point the stages' `--traces` at another directory in a copy of the document. 
 download them for you.
 
 The IPC column is a reference, not the definition: every run measures its own no-prefetcher
-baseline on the binary in use (`flux_evaluator_champsim.baseline`, cached per binary and trace).
+baseline on the binary in use (`champsim_tools.baseline`, cached per binary and trace).

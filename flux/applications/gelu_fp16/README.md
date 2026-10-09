@@ -9,7 +9,7 @@ invent an algorithm rather than write RTL around a known one.
 
 1. **A coding agent writes the algorithm as Python.** It writes `design(x)` on integers and
    bits, with small tables for polynomial coefficients only (at most 64 entries). It runs
-   `flux rtl proto` on its draft: every input is checked in about a second, and the failures
+   `python rtl.py proto` on its draft: every input is checked in about a second, and the failures
    come back grouped by sign and exponent.
 2. **The loop spells the verified prototype as SystemVerilog** (`flux_loop.py2sv`), bit for
    bit, with every signal as wide as its measured range. Nobody transcribes it.

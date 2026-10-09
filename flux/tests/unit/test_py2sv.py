@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from flux_codegen_rtl_harness import Golden, check_rtl
+from rtl import Golden, check_rtl
 from flux_loop.golden_proto import exhaustive, table_functions
 from flux_loop.py2sv import Unsupported, spell
 

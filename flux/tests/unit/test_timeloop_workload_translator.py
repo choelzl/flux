@@ -6,7 +6,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_timeloop import (
+from timeloop_tools import (
     NotExpressibleError,
     einsum_op_to_timeloop_instance,
     flux_tensor_to_timeloop_dataspace,

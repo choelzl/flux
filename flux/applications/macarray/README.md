@@ -18,7 +18,7 @@ documents and the commands of `flux_macarray.steps`, one per phase (D798) -- no 
 | `orchestrate` | a sweep over the space; the multiplier knob also takes every file in `out/invented/` (`from: "out/invented/*.sv"`) |
 | `generate` | `steps gen {artifact} {multiplier} {reducer} {pipeline}`: the PE's RTL (`rtl.py`) |
 | `test` | `steps check {artifact} {pipeline}`: **Verilator** against golden vectors seeded from the workload (every lane at each corner, each lane alone at each corner, 200 random rows; D868), the latency checked against the stages the PE claims |
-| `measure` | `flux rtl measure --stage synth` (the **screen**: Yosys + OpenSTA, seconds, optimistic) and `--stage place` (**OpenROAD**, the number a report may quote) |
+| `measure` | `python rtl.py measure --stage synth` (the **screen**: Yosys + OpenSTA, seconds, optimistic) and `--stage place` (**OpenROAD**, the number a report may quote) |
 | `select` | the objectives: at least 1000 MHz placed, then the least area; the design they choose is always placed, the rest of the finalists spread along the fmax-vs-area frontier |
 
 ```bash

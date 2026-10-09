@@ -16,8 +16,8 @@ import flux_ir
 import pytest
 from flux_calibration.drift import GoldenPoint, assert_no_drift, check_drift, load_golden_corpus
 from flux_evaluator_abi import Budget, Candidate
-from flux_evaluator_timeloop import TimeloopEvaluator
-from flux_evaluator_zigzag import ZigZagEvaluator
+from timeloop_tools import TimeloopEvaluator
+from zigzag_tools import ZigZagEvaluator
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
 

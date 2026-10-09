@@ -5,7 +5,7 @@ shape where ZigZag's residual against RTL differs. The cases are measured points
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_zigzag import CAVEAT, caveat_for, fully_unrolls_reduction_dim, reduction_dims
+from zigzag_tools import CAVEAT, caveat_for, fully_unrolls_reduction_dim, reduction_dims
 
 
 def _wl(B: int, C: int, K: int) -> dict:

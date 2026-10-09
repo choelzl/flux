@@ -1,5 +1,5 @@
-"""A prototype stage from a golden model (D604): any document whose gate is
-`flux rtl test ... --golden <file>` gets a prototype-first path with no world to write. The
+"""A prototype stage from a golden model (D604): a document with an app-local gate command
+naming `--golden <file>` gets a prototype-first path with no world to write. The
 model first writes the algorithm as plain Python -- `design(**inputs) -> {output: value}` over
 integers and bits, as hardware would compute it -- checked in seconds against the golden
 model's vectors. Only a prototype that passes every vector goes on; the RTL turn is handed it
@@ -68,7 +68,7 @@ def load(path: Path) -> Any:
     """The golden model as the harness's `Golden`."""
     import importlib.util
 
-    from flux_codegen_rtl_harness import Golden
+    from .golden_model import Golden
 
     spec = importlib.util.spec_from_file_location(f"golden_{abs(hash(str(path)))}", path)
     mod = importlib.util.module_from_spec(spec)
@@ -209,7 +209,7 @@ def check(code: str, g: Any, rows: list[dict[str, Any]], timeout_s: float = 60.0
 def compare(g: Any, rows: list[dict[str, Any]], outputs: list[dict[str, Any]], unspelled: str = "") -> Verdict:
     """A prototype's outputs, one dict per vector, against the golden model's, in any language.
     Score: the failing vectors, reported by input region with examples."""
-    from flux_codegen_rtl_harness.golden import ulp_distance
+    from .golden_model import ulp_distance
 
     widths = {p["name"]: int(p["bits"]) for p in g.ports if p["dir"] == "out"}
     bad: list[str] = []
@@ -381,7 +381,7 @@ def capability(task: Any) -> Prototype | None:
     if g.clocked and not g.latency:
         return None                       # a clocked design's cycles are the RTL's, not an algorithm's
     # D864: a stated LATENCY is a pipeline the spelling cuts; the prototype stays the algorithm
-    from flux_codegen_rtl_harness import golden_vectors
+    from .golden_model import golden_vectors
 
     rows = exhaustive(g) or golden_vectors(g)
     ins = [p["name"] for p in g.ports if p["dir"] == "in"]
@@ -590,7 +590,7 @@ def _cost_main() -> None:
 
 
 def golden_vectors_of(g: Any) -> list[dict[str, Any]]:
-    from flux_codegen_rtl_harness import golden_vectors
+    from .golden_model import golden_vectors
 
     return golden_vectors(g)
 

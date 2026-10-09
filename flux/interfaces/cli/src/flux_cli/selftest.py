@@ -1,7 +1,7 @@
 """`flux selftest`: does Flux work on this machine? One command runs what a newcomer would, in a
 temporary directory, and prints PASS / FAIL / SKIP per check with the time it took.
 
-    flux selftest              # tools, a sweep, an RTL sweep, the model, a model-written problem
+    flux selftest              # a command-driven loop, the model, a model-written problem
     flux selftest --full       # also the README's first run (adder16, about three minutes)
     flux selftest --no-model   # only what needs no model
 """
@@ -28,13 +28,36 @@ def _flux(*args: str, cwd: Path, timeout: float) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, timeout=timeout)
 
 
-def _decided(cwd: Path, kind: str, timeout: float, *extra: str, passes: int = 1) -> tuple[bool, str]:
-    """`flux new` of this kind, run for `passes` passes: (a decision was made, what it was or why not)."""
-    name = f"st_{kind.replace('-', '_')}"
-    made = _flux("example", kind, name, cwd=cwd, timeout=120)
-    if made.returncode != 0:
-        return False, (made.stdout + made.stderr).strip().splitlines()[-1:][0] if (made.stdout + made.stderr).strip() else "flux new failed"
-    return _run_doc(cwd / name / "problem.yaml", cwd, timeout, *extra, passes=passes)
+def _smoke(cwd: Path) -> tuple[bool, str]:
+    """Exercise generation, checks, measurements and selection through ordinary app scripts."""
+    home = cwd / "smoke"
+    home.mkdir()
+    (home / "gen.py").write_text("from pathlib import Path\nimport sys\nPath(sys.argv[1]).write_text(sys.argv[2])\n")
+    (home / "check.py").write_text("from pathlib import Path\nimport sys\nassert int(Path(sys.argv[1]).read_text()) in (1, 2, 3)\n")
+    (home / "measure.py").write_text("from pathlib import Path\nimport sys\nprint('score=' + Path(sys.argv[1]).read_text())\n")
+    (home / "problem.yaml").write_text("""statement: Select the largest measured score.
+language: text
+flow:
+  orchestrate: {policy: sweep, space: {x: [1, 2, 3]}}
+  generate: {command: '{python} {home}/gen.py {artifact} {x}'}
+  test: '{python} {home}/check.py {artifact}'
+  measure:
+    score: {command: '{python} {home}/measure.py {artifact}', metrics: [score]}
+  knowledge: off
+objectives: [{metric: score, direction: maximize}]
+budget: {steps: 1, prototype: false}
+""")
+    return _run_doc(home / "problem.yaml", cwd, 300, passes=3)
+
+
+def _application(cwd: Path, name: str, timeout: float, *extra: str, passes: int = 1) -> tuple[bool | None, str]:
+    """Test a bundled application in a disposable copy, including its local tool commands."""
+    source = FLUX / "applications" / name
+    if not source.is_dir():
+        return None, "bundled application unavailable in this installation"
+    home = cwd / name
+    shutil.copytree(source, home, ignore=shutil.ignore_patterns("out", "workbench", "runs", "__pycache__"))
+    return _run_doc(home / "problem.yaml", cwd, timeout, *extra, passes=passes)
 
 
 def _run_doc(doc: Path, cwd: Path, timeout: float, *extra: str, passes: int = 1) -> tuple[bool, str]:
@@ -75,13 +98,10 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             True if not rtl_tools else None,
             "verilator, yosys, openroad" if not rtl_tools
             else f"missing {', '.join(rtl_tools)}: the RTL checks skip (use `nix develop`)"))
-        check("a sweep, no model (flux example sweep)", lambda: _decided(work, "sweep", 300, passes=6))         # D738: a pass a point
-        check("an RTL sweep (flux example rtl-sweep)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
-              else _decided(work, "rtl-sweep", 900, "--screen-only", passes=6))
+        check("a command-driven loop, no model", lambda: _smoke(work))
         if args.full:
             check("the README's first run (adder16)", lambda: (None, "needs verilator, yosys and openroad") if rtl_tools
-                  else _run_doc(FLUX / "applications/adder16/problem.yaml", work, 1800, "--screen-only",
-                                "--db", str(work / "adder16.db"), "--out", str(work / "adder16.v"), passes=12))
+                  else _application(work, "adder16", 1800, "--screen-only", passes=6))
         if args.no_model:
             check("the model", lambda: (None, "--no-model"))
         else:
@@ -90,8 +110,8 @@ def cmd_selftest(args: argparse.Namespace) -> int:
             prop = OpenAIChatProposer(args.model)
             down = prop.preflight()
             check("the model server", lambda: (not down, down or describe_model(prop)))
-            check("a problem the model writes (flux example python)", lambda: (None, "the model server is not ready") if down
-                  else _decided(work, "python", float(args.model_timeout), *(("--model", args.model) if args.model else ())))
+            check("a problem the model writes (primes)", lambda: (None, "the model server is not ready") if down
+                  else _application(work, "primes", float(args.model_timeout), *(("--model", args.model) if args.model else ())))
         agent = next((a for a in ("opencode", "claude", "codex") if shutil.which(a)), None)
         check("a coding agent on PATH", lambda: (bool(agent) or None, agent or "none of opencode, claude, codex"))
     failed = [r for r in rows if r[0] == "FAIL"]

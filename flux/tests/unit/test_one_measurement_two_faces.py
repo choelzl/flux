@@ -96,10 +96,10 @@ def test_champsims_two_faces_reach_the_same_runner():
     the no-prefetcher baseline all call it."""
     import inspect
 
-    import flux_evaluator_champsim.adapter as adapter
-    import flux_evaluator_champsim.baseline as baseline
-    import flux_evaluator_champsim.run as run
-    import flux_evaluator_champsim.study as study
+    import champsim_tools.adapter as adapter
+    import champsim_tools.baseline as baseline
+    import champsim_tools.run as run
+    import champsim_tools.study as study
 
     assert adapter.simulate is run.simulate and study.simulate is run.simulate and baseline.simulate is run.simulate
     assert "simulate(" in inspect.getsource(adapter.ChampSimEvaluator.evaluate)

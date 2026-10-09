@@ -9,10 +9,16 @@ contract: >-
 language: systemverilog
 
 flow:
-  test: flux rtl test {artifact} --golden {home}/golden.py
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
   measure:
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
   select: {finalists: 2}
 
 objectives:

@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   no-nix:
-    # D600: the route a newcomer without Nix takes -- pip install, `flux new`, a run to a
+    # The route without Nix: pip install and a command-driven smoke loop to a
     # decision. Minutes, no toolchain; it fails when a new import reaches the core path
     # without a declared dependency.
     name: pip install, no Nix
@@ -47,9 +47,6 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -e ./flux
           cd "$RUNNER_TEMP"
-          "$GITHUB_WORKSPACE/.venv/bin/flux" example sweep primes
-          "$GITHUB_WORKSPACE/.venv/bin/flux" task run primes --passes 1 --json answer.json
-          python -c "import json; d = json.load(open('answer.json')); assert d['decision'], d; print(d['decision'])"
           # the newcomer's own check (D623); the RTL checks skip on a runner without the tools
           "$GITHUB_WORKSPACE/.venv/bin/flux" selftest --no-model
 

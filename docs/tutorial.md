@@ -3,7 +3,7 @@
 This walks through setting up a problem of your own and letting Flux explore it: a model
 invents designs, real tools check and measure them, and the loop keeps going, pass after pass,
 toward a goal. The example is a combinational 16-bit integer square root in SystemVerilog,
-fast and small on ASAP7. Its two files are in [tutorial/isqrt/](tutorial/isqrt/). Every
+fast and small on ASAP7. Its files are in [tutorial/isqrt/](tutorial/isqrt/). Every
 number below comes from a real run with a hosted 35B model (`qwen3.6-35b-a3b-apex`).
 
 ## What "agentic" means here
@@ -36,11 +36,11 @@ any OpenAI-compatible server (`FLUX_REMOTE_BASE_URL`, `FLUX_REMOTE_MODEL`,
 ## 1. Start from a template
 
 ```bash
-flux example rtl isqrt
+cp -R ../docs/tutorial/isqrt ./isqrt
 ```
 
-This writes `isqrt/` with a problem document, a golden model and a README. It runs as it
-stands (an 8-bit adder); the next two steps make it the square root.
+This copies the tutorial's application, including its local `rtl.py` command and golden model.
+The next two steps explain the square-root contract and its checks.
 
 ## 2. Say what is correct: the golden model
 
@@ -80,11 +80,17 @@ language: systemverilog
 
 flow:
 
-  test: flux rtl test {artifact} --golden {home}/golden.py   # refuses a wrong design first
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # refuses a wrong design first
 
   measure:                           # measurement, cheapest first
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000  # Yosys synthesis: seconds
-    confirm: flux rtl measure {artifact} --stage place --clock-ps 1000  # OpenROAD placement: the numbers the report quotes
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
   select: {finalists: 2}
 
 objectives:                       # a goal first, then what to minimise among those that meet it
@@ -94,8 +100,8 @@ objectives:                       # a goal first, then what to minimise among th
 budget: {steps: 3, repair_attempts: 6}
 ```
 
-Everything else is inferred: the file extension from `language`, the record's name from `id`,
-what `flux rtl measure` prints and needs, the units, and that a goal is judged on the deepest
+The file extension comes from `language`, the record's name from the folder, and the units
+from the metric names. Each stage explicitly declares what it measures and needs. A goal is judged on the deepest
 stage. With a golden model the prototype stage is on by default (`budget.prototype: false`
 turns it off, for plain logic like an adder), and that is what matters for a numeric function
 like this one. The model first writes the algorithm as Python `design(x)` on integers. It is checked on every one of the
@@ -159,7 +165,7 @@ Each of these is one flag or one line; mix them.
 - **Hand the writing to a coding agent:** `flow: {generate: opencode}` (or `claude`,
   `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
   `prototype: true` the agent writes the Python prototype, which the loop checks with
-  `flux rtl proto` before it writes the RTL.
+  `python rtl.py proto` before it writes the RTL.
 - **Give it knowledge:** `flow.knowledge: {files: [method-note.md]}`: a method, measured facts, a
   paper. Not a design. `applications/gelu_fp16/` shows a method note for a hard function.
 - **Steer it while it runs:** type a note in the TUI (`f`); it reaches the next prompt.
@@ -185,7 +191,7 @@ budget: {steps: 12}  # every batch is a step: enough for all three phases
 On the `rtl-sweep` template (its knobs are `arch` and `chunk`) with 12 steps, `coarse` swept
 the architectures, `fine` moved `chunk` and raised fmax from 3,166 to 3,577 MHz, then `ideas`
 asked the model. With the template's `steps: 1` only the first phase runs.
-`flux example rtl-sweep NAME` starts from this shape. The policies are `sweep`,
+The bundled `applications/adder16` starts from a script-driven sweep. The policies are `sweep`,
 `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto` and `model` (the model proposes). The
 [cookbook](cookbook.md) says which suits which space.
 
@@ -193,9 +199,9 @@ asked the model. With the template's `steps: 1` only the first phase runs.
 
 | you have | start with |
 |---|---|
-| a Python function to write and speed up | `flux example python NAME` |
-| a program whose settings to tune | `flux example tune NAME` |
-| a script that writes designs from knobs | `flux example sweep NAME` |
+| a Python function to write and speed up | copy `applications/primes/` |
+| a program whose settings to tune | `flux new NAME`, then add commands using knob placeholders |
+| a script that writes designs from knobs | `flux new NAME`, then add a generator command and a search space |
 | only a description and some files | `flux ask "what you want" --file spec.pdf` |
 | an accelerator architecture for a workload | `applications/npu_gemm/`: a script writes the architecture, ZigZag measures it |
 

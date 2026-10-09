@@ -9,7 +9,7 @@ own `params` by name, which the author fills), `params` (name -> label, default,
 `languages` (the artifacts it fits) and `kinds` (the crafter's kinds of problem it belongs to).
 
 An evaluator stage (D663) has `stage` instead of `run`: the stage's keys besides `name` and
-`metrics` (`{"evaluator": "zigzag"}`), and `document`: the top-level keys the document then
+`metrics` (`{"evaluator": "openroad"}`), and `document`: the top-level keys the document then
 carries (`{"workload": "{workload}"}`), their `{param}`s filled as `run`'s are.
 """
 
@@ -43,7 +43,7 @@ _PROGS = ["c", "cpp", "python"]
 
 def _rtl_stage(depth: str, title: str, what: str) -> dict[str, Any]:
     return {"id": f"rtl-{depth}", "role": "stage", "title": title, "what": what,
-            "run": f"flux rtl measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
+            "run": f"{{python}} {{home}}/rtl.py measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
             "params": {"clock_ps": _p("Clock period", 1000, "ps")},
             "metrics": _m("fmax_mhz", "area_um2", "power_w", "cell_count", "path_ps"),
             "needs": ["yosys", "openroad"], "languages": _HDL, "kinds": ["rtl"]}
@@ -52,20 +52,20 @@ def _rtl_stage(depth: str, title: str, what: str) -> dict[str, Any]:
 TOOLS: list[dict[str, Any]] = [
     # ---- checks: a gate runs them in order, cheapest first (D652)
     {"id": "rtl-lint", "role": "check", "title": "Lint for hardware defects",
-     "what": "Verilator lint: latches, multiple drivers, combinational loops, `<=` in combinational logic, implicit nets.",
-     "run": "flux rtl lint {artifact}", "params": {}, "needs": ["verilator"],
+     "what": "Copy rtl.py and tools/ from applications/mul8: Verilator lint for latches, multiple drivers and combinational loops.",
+     "run": "{python} {home}/rtl.py lint {artifact}", "params": {}, "needs": ["verilator"],
      "pass": "passes with no defect; exit 3 = does not parse", "languages": _HDL, "kinds": ["rtl"]},
     {"id": "rtl-golden", "role": "check", "title": "Test against a golden model",
      "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-     "run": "flux rtl test {artifact} --golden {golden}", "params": {"golden": _p("Golden model", "{home}/golden.py")},
+     "run": "{python} {home}/rtl.py test {artifact} --golden {golden}", "params": {"golden": _p("Golden model", "{home}/golden.py")},
      "needs": ["verilator"], "pass": _N_FAILING, "languages": _HDL, "kinds": ["rtl"]},
     {"id": "champsim-build", "role": "check", "title": "Build the prefetcher into ChampSim",
-     "what": "Compiles a prefetcher header into ChampSim; the first compiler error is the report.",
-     "run": "flux champsim build {artifact}", "params": {}, "needs": ["pythia"],
+     "what": "Copy champsim.py and tools/ from applications/prefetcher: compiles a prefetcher header; reports the first compiler error.",
+     "run": "{python} {home}/champsim.py build {artifact}", "params": {}, "needs": ["pythia"],
      "pass": "passes when it builds; exit 3 = did not build", "languages": ["cpp"], "kinds": ["champsim"]},
     {"id": "champsim-check", "role": "check", "title": "Smoke-run the prefetcher",
      "what": "Builds the prefetcher and runs it on one trace; refused when it issues no prefetches.",
-     "run": "flux champsim check {artifact} --traces {traces}", "params": {"traces": _p("Trace folder", "{home}/traces")},
+     "run": "{python} {home}/champsim.py check {artifact} --traces {traces}", "params": {"traces": _p("Trace folder", "{home}/traces")},
      "needs": ["pythia"], "pass": _N_FAILING, "languages": ["cpp"], "kinds": ["champsim"]},
     {"id": "python-test-script", "role": "check", "title": "A test script of yours",
      "what": "A Python script beside the document runs the design on known cases and prints `N failing`.",
@@ -80,7 +80,7 @@ TOOLS: list[dict[str, Any]] = [
     # ---- stages: measurements, cheapest first; a `cutoff` is a stage's gate
     {"id": "rtl-stat", "role": "stage", "title": "Area and cells, Yosys alone (ASAP7)",
      "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
-     "run": "flux rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+     "run": "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}",
      "params": {"clock_ps": _p("Clock period (the mapper's target)", 1000, "ps")},
      "metrics": _m("area_um2", "cell_count"), "needs": ["yosys"], "languages": _HDL, "kinds": ["rtl"]},
     _rtl_stage("synth", "Synthesise and time (ASAP7)", "Yosys synthesis, timed by OpenROAD's OpenSTA: seconds per design."),
@@ -88,7 +88,7 @@ TOOLS: list[dict[str, Any]] = [
     _rtl_stage("route", "Route and time (ASAP7)", "OpenROAD placement and routing, the signoff numbers: minutes."),
     {"id": "champsim-run", "role": "stage", "title": "Simulate on your traces (ChampSim)",
      "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
-     "run": "flux champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+     "run": "{python} {home}/champsim.py run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
      "params": {"traces": _p("Trace folder", "{home}/traces"), "warmup": _p("Warm-up", 10_000_000, "instructions"),
                 "sim": _p("Simulated", 15_000_000, "instructions")},
      "metrics": _m("geomean_speedup"), "needs": ["pythia"], "languages": ["ini", "cpp"], "kinds": ["champsim"]},
@@ -122,14 +122,16 @@ TOOLS: list[dict[str, Any]] = [
     {"id": "zigzag-eval", "role": "stage", "title": "Cycles and energy (ZigZag)",
      "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. "
              "No area: add a stage of yours for it (as applications/npu_gemm).",
-     "stage": {"evaluator": "zigzag"}, "document": {"workload": "{workload}"},
+     "run": "{python} {home}/evaluate.py {artifact} {workload} --backend zigzag",
+     "document": {"workload": "{workload}"},
      "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
      "metrics": _m("latency_cycles", "energy_pj"), "needs": [], "languages": ["yaml"], "kinds": ["zigzag"]},
     {"id": "timeloop-eval", "role": "stage", "title": "Cycles, energy and area (Timeloop)",
      "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. "
              "Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper "
              "on PATH the stage is skipped.",
-     "stage": {"evaluator": "timeloop", "needs": ["timeloop-mapper"]}, "document": {"workload": "{workload}"},
+     "run": "{python} {home}/evaluate.py {artifact} {workload} --backend timeloop",
+     "document": {"workload": "{workload}"},
      "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
      "metrics": _m("latency_cycles", "energy_pj"), "needs": ["timeloop-mapper"],
      "languages": ["yaml"], "kinds": ["zigzag"]},

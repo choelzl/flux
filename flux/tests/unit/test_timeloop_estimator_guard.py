@@ -9,7 +9,7 @@ negative case has a placeholder plug-in named.
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_timeloop.adapter import estimators_used, reject_placeholder_estimators
+from timeloop_tools.adapter import estimators_used, reject_placeholder_estimators
 
 # output from the Docker image, trimmed -- `CactiSRAM`/`CactiDRAM`/`Library` carry physical numbers
 _REAL_ERT = """version: 0.4

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flux_evaluator_champsim.traces import is_slow_mount, scratch_root
-from flux_evaluator_champsim.traces import stage as stage_traces
+from champsim_tools.traces import is_slow_mount, scratch_root
+from champsim_tools.traces import stage as stage_traces
 
 
 def test_no_scratch_means_the_originals_are_used(tmp_path, monkeypatch):
@@ -20,7 +20,7 @@ def test_no_scratch_means_the_originals_are_used(tmp_path, monkeypatch):
 
 def test_a_fast_source_is_not_copied(tmp_path, monkeypatch):
     """A file already on local disk is not staged."""
-    monkeypatch.setattr("flux_evaluator_champsim.traces.is_slow_mount", lambda _p: False)   # tmp may sit on a network home
+    monkeypatch.setattr("champsim_tools.traces.is_slow_mount", lambda _p: False)   # tmp may sit on a network home
     source = tmp_path / "t.gz"
     source.write_bytes(b"x" * 64)
     scratch = tmp_path / "scratch"
@@ -34,7 +34,7 @@ def test_a_slow_source_is_copied_once_and_reused(tmp_path, monkeypatch):
     source.write_bytes(b"trace-bytes" * 100)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
-    monkeypatch.setattr("flux_evaluator_champsim.traces.is_slow_mount", lambda _p: True)
+    monkeypatch.setattr("champsim_tools.traces.is_slow_mount", lambda _p: True)
 
     first = stage_traces({"a": source}, root=scratch)
     staged = first["a"]
@@ -54,7 +54,7 @@ def test_a_changed_source_is_restaged(tmp_path, monkeypatch):
     source.write_bytes(b"short")
     scratch = tmp_path / "scratch"
     scratch.mkdir()
-    monkeypatch.setattr("flux_evaluator_champsim.traces.is_slow_mount", lambda _p: True)
+    monkeypatch.setattr("champsim_tools.traces.is_slow_mount", lambda _p: True)
     staged = stage_traces({"a": source}, root=scratch)["a"]
     assert staged.read_bytes() == b"short"
 
@@ -69,7 +69,7 @@ def test_a_failed_copy_falls_back_to_the_originals(tmp_path, monkeypatch):
     source.write_bytes(b"x" * 64)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
-    monkeypatch.setattr("flux_evaluator_champsim.traces.is_slow_mount", lambda _p: True)
+    monkeypatch.setattr("champsim_tools.traces.is_slow_mount", lambda _p: True)
 
     def _boom(*_a, **_k):
         raise OSError(28, "No space left on device")

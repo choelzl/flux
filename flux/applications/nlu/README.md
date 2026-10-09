@@ -7,7 +7,7 @@ synthesis and placement on ASAP7.
 
 **One loop per operator (D802).** `problem.yaml` is the parent: it lists the operators as
 sub-loops in folders (`subtasks: [ops/recip, ...]`) and says what they share — the language,
-the gate (`flux rtl test {artifact} --golden {home}/golden.py`, `{home}` being the operator's
+the gate (`python rtl.py test {artifact} --golden {home}/golden.py`, `{home}` being the operator's
 folder), the stages (synthesis, then placement, at 1250 ps), the objectives (at least 800 MHz,
 then the least area, then the least power), the methods sheet (`knowledge/nlu-methods.md`) and
 the budget -- and who drafts: `generate: claude`, which every operator inherits (D804). Each `ops/<op>/` holds a `problem.yaml` saying only what differs — its statement

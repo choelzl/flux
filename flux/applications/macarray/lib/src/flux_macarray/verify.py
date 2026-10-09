@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from flux_codegen_rtl_harness import Check, Golden
+    from .rtl_check import Check, Golden
 
 from .config import PeConfig, Shape
 from .rtl import Design
@@ -77,7 +77,7 @@ def golden_vectors(shape: Shape, *, seed: str, count: int = 200) -> list[dict[st
 def pe_golden(shape: Shape, cfg: PeConfig, vectors: list[dict[str, Any]]) -> "Golden":
     """The PE as a golden model for the harness's shared check: ports, the sum it must
     compute, this world's vectors and, when pipelined, the claimed latency."""
-    from flux_codegen_rtl_harness import Golden
+    from .rtl_check import Golden
 
     ports = ([{"name": f"a{i}", "dir": "in", "bits": max(2, shape.in_bits)} for i in range(shape.lanes)]
              + [{"name": f"w{i}", "dir": "in", "bits": max(2, shape.w_bits)} for i in range(shape.lanes)]
@@ -97,7 +97,7 @@ def pe_golden(shape: Shape, cfg: PeConfig, vectors: list[dict[str, Any]]) -> "Go
 def verify(design: Design, vectors: list[dict[str, Any]], *, timeout_s: float = 180.0) -> "Check":
     """Verilator on the generated PE against the golden vectors via `check_rtl`, which also
     refuses a design whose cycle count differs from its claim."""
-    from flux_codegen_rtl_harness import check_rtl
+    from .rtl_check import check_rtl
 
     return check_rtl(design.source, pe_golden(design.shape, design.config, vectors),
                      module=design.module_name, extra_sources=design.extra_sources or None,

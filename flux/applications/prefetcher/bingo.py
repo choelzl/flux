@@ -18,6 +18,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
+
 BLOCK_SIZE = 64           # LOG2_BLOCK_SIZE = 6
 PAGE_SIZE = 4096          # a region never crosses a page
 ADDR_BITS_REGION = 48     # filter/accumulation key: a 48-bit physical address
@@ -297,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             why = f"{size} B is over the {args.max_storage} B budget" if size > args.max_storage else None
         print(f"1 failing: {why}" if why else "0 failing")
         return 0
-    from flux_evaluator_champsim.study import measure
+    from champsim_tools.study import measure
 
     import tempfile
 

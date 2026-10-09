@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -41,6 +42,8 @@ def _doc(app: str, tmp_path: Path, **patch) -> Path:
         know["sheet"] = str(src.parent / sheet)  # read beside the ORIGINAL document
     out = tmp_path / f"{app}.problem.yaml"
     out.write_text(yaml.safe_dump(doc, sort_keys=False))
+    for script in (APPS / app).glob("*.py"):      # {home}/rtl.py, golden.py, gen.py: the application's own
+        shutil.copy(script, tmp_path / script.name)
     return out
 
 

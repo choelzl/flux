@@ -74,8 +74,8 @@ Measured in this project, with the hosted `qwen3.6-35b-a3b-apex` (a 35B mixture 
 
 | problem | result |
 |---|---|
-| `flux example python` (count primes) | passes on the first draft in seconds; later passes make it about 2x faster |
-| `flux example rtl` (8-bit adder) | passes on the first draft; 4378 MHz on the synthesis screen, 28 s |
+| Python count-primes loop | passes on the first draft in seconds; later passes make it about 2x faster |
+| RTL 8-bit-adder loop | passes on the first draft; 4378 MHz on the synthesis screen, 28 s |
 | `mul8` (Booth or Baugh-Wooley, `a * w` not allowed) | one pass each on two dates (26 min, 4 drafts): the best that compiled failed 22 of 49 vectors, then all 49; it needs several passes or a stronger model |
 | a combinational FP16 GELU within 1 ULP, from a plain prompt, RTL directly | after hours and about 60 attempts, no draft compiled: SystemVerilog syntax and FP16 decoding were the walls |
 | the same GELU, the model writing a Python prototype (`prototype: true`) | the first to pass was a table of the answers; under the formula rules (D616) it stalled at 24,196 of 65,536 inputs wrong: one fixed-point format for every input, then x/2 across the middle range |
@@ -91,7 +91,7 @@ turns every failure into the next prompt. For hard numeric RTL:
   For the GELU, the note covered not putting a float into one fixed-point format, the function
   factored as x times a smooth h(x), the regions where the answer is x, -0 or a short Taylor
   series, and a polynomial per segment;
-- hand the prototype to a coding agent; the loop checks each draft with `flux rtl proto` and
+- hand the prototype to a coding agent; the loop checks each draft with `python rtl.py proto` and
   tells the agent where it fails.
 
 ## Coding agents
@@ -103,7 +103,7 @@ limit, and records every agent turn (see `flux log`). The agent writes; it does 
 synthesize or test. The loop runs the gate and the stages, and a failure goes back to the agent's
 session with the exact output (D673). The agent keeps a shell for reading, searching and
 computing (`python3`, `pdftotext`), and simulating its draft with Icarus (`iverilog`, `vvp`, D685). The presets deny the design tools (verilator,
-yosys, openroad, sta, the C compilers, make, `flux rtl`, `flux task`, ...) and `bash`/`sh` (D674).
+yosys, openroad, sta, the C compilers, make, `python rtl.py`, `flux task`, ...) and `bash`/`sh` (D674).
 Claude Code gets them as `--disallowedTools "Bash(yosys:*)" ...`. OpenCode gets them as
 `permission.bash` rules merged into `OPENCODE_CONFIG_CONTENT`; an `--agent` of your own with
 its own `bash` rules may override them. Codex has only the brief's word. A deny list is best
@@ -119,7 +119,7 @@ see, and is on the record with the agent's turn. A budget per turn bounds them: 
 (the defaults are 20 and 3; `probe: false` turns it off). `allow: [verilator, yosys]` gives
 denied commands back to one agent, and `allow: all` lifts the deny list for it. With
 `budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with
-`flux rtl proto` and spells the RTL (D618). An agent that
+`python rtl.py proto` and spells the RTL (D618). An agent that
 ends a turn without writing its file is nudged to write it, twice at most. An agent whose
 session outgrew the model's context window continues in a fresh session from the brief and its
 last file.

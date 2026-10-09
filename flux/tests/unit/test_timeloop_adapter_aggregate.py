@@ -4,7 +4,7 @@ stats, no Docker/Timeloop call."""
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_timeloop import TimeloopEvaluator
+from timeloop_tools import TimeloopEvaluator
 
 
 @pytest.fixture

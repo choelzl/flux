@@ -11,7 +11,8 @@ import yaml
 import pytest
 
 from flux_cli.main import main
-from flux_codegen_rtl_harness import golden_vectors
+from tests.loop_fixtures import write_loop
+from rtl import golden_vectors
 from flux_llm import ScriptedProposer
 from flux_loop import TaskSpec, load_task
 from flux_loop.author import write_golden
@@ -19,7 +20,7 @@ from flux_loop.golden_proto import capability, check, exhaustive, golden_path, l
 
 
 def _rtl(tmp_path: Path, **budget) -> Path:
-    assert main(["example", "rtl", "add8", "--dir", str(tmp_path / "p")]) == 0
+    write_loop("rtl", "add8", tmp_path / "p")
     doc = tmp_path / "p" / "add8" / "problem.yaml"
     if budget:
         d = yaml.safe_load(doc.read_text())
@@ -144,7 +145,7 @@ def test_a_small_input_space_is_checked_exhaustively():
 
 def test_the_prototype_tables_are_spelled_by_the_loop_and_compile(tmp_path):
     """A verified prototype's module-level tables become SystemVerilog functions after the port list, shown folded in the prompt (D606)."""
-    from flux_codegen_rtl_harness import Golden, check_rtl
+    from rtl import Golden, check_rtl
     from flux_loop.golden_proto import TABLES_MARK, fold_tables, insert_tables, table_functions
 
     code = "T = [-3, 5, 7, -8]\nU = [i * i for i in range(10)]\ndef design(i):\n    return {'y': T[i]}\n"
@@ -183,7 +184,7 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
     from flux_loop import PromptProblem, request_for, run_loop
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "rtl", "sq", "--dir", str(tmp_path / "p")])
+    write_loop("rtl", "sq", tmp_path / "p")
     doc = tmp_path / "p" / "sq" / "problem.yaml"
     (tmp_path / "p" / "sq" / "golden.py").write_text(
         "PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"
@@ -213,7 +214,7 @@ def test_a_spelled_design_sent_back_gets_a_cost_pass_on_its_prototype(tmp_path, 
 
 
 def _sq_doc(tmp_path, measures=True, **budget):
-    main(["example", "rtl", "sq", "--dir", str(tmp_path / "p")])
+    write_loop("rtl", "sq", tmp_path / "p")
     doc = tmp_path / "p" / "sq" / "problem.yaml"
     (tmp_path / "p" / "sq" / "golden.py").write_text(
         "PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"

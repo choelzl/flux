@@ -471,14 +471,14 @@ def test_a_command_is_a_string_or_a_list_and_a_flux_head_runs_this_flux():
 
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
-                               "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py",
-                                        "measure": {"s": {"command": "flux rtl measure {artifact} --stage synth",
+                               "flow": {"test": "flux probe gate {artifact}",
+                                        "measure": {"s": {"command": "{python} {home}/rtl.py measure {artifact} --stage synth",
                                                           "metrics": ["fmax_mhz", "area_um2"]},
                                                     "r": {"command": ["{python}", "-c", "print('k=1')"],
                                                           "metrics_re": {"k": 'k=(\\d+)'}}}}})
-    assert task.gate.named("test").run == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "rtl", "test", "{artifact}", "--golden", "{home}/golden.py")
+    assert task.gate.named("test").run == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "probe", "gate", "{artifact}")
     s, r = task.stages
-    assert s.command[:5] == ("{python}", "-W", "ignore", "-m", "flux_cli.main") and s.metrics == ("fmax_mhz", "area_um2")
+    assert s.command[:2] == ("{python}", "{home}/rtl.py") and s.metrics == ("fmax_mhz", "area_um2")
     import re
 
     out = ("warning: x_area_um2=9\n"               # not a token of its own: never read
@@ -637,15 +637,14 @@ def test_every_turn_is_in_the_transcript_and_flux_log_reads_it(tmp_path, capsys,
     assert ops.run_dir  # the record's pointer found the run directory
 
 
-def test_what_flux_rtl_runs_is_checked_like_any_tool():
+def test_application_commands_do_not_invent_tool_dependencies():
     """A command's tools are checked like any command's; a stage that declares `needs:` is skipped on them, not refused (D600)."""
-    from flux_loop.document import _flux_rtl_tools
+    from flux_loop.document import _flux_program_tools
 
     py = ["{python}", "-W", "ignore", "-m", "flux_cli.main"]
-    assert _flux_rtl_tools(py + ["rtl", "test", "{artifact}", "--golden", "g.py"]) == ["verilator"]
-    assert _flux_rtl_tools(py + ["rtl", "measure", "{artifact}", "--stage", "synth"]) == ["yosys", "openroad"]   # its timing is OpenROAD's OpenSTA
-    assert _flux_rtl_tools(py + ["rtl", "measure", "{artifact}", "--stage", "place"]) == ["yosys", "openroad"]
-    assert _flux_rtl_tools(["{python}", "{home}/check.py", "{artifact}"]) == []
+    assert _flux_program_tools(py + ["prog", "count"]) == ["valgrind"]
+    assert _flux_program_tools(["{python}", "{home}/rtl.py", "measure", "{artifact}"]) == []
+    assert _flux_program_tools(["{python}", "{home}/check.py", "{artifact}"]) == []
 
 
 def test_a_stage_that_does_not_measure_an_objective_is_refused():
@@ -678,21 +677,19 @@ def test_a_world_or_a_hook_is_no_key_of_a_document(key, value):
         TaskSpec.from_dict({"id": "t", "statement": "x", "flow": {"test": "true"}, key: value})
 
 
-def test_the_language_is_inferred_from_the_tools_when_not_said():
-    """D832: `language:` is optional -- `flux rtl ...` checks make a SystemVerilog design (.sv), a
-    ChampSim build a C++ one; a script of one's own decides nothing (text); said, it wins; an
-    inferred language is not written back."""
+def test_app_local_scripts_require_an_explicit_design_language():
+    """The name of an app script decides no language; explicit language controls the artifact."""
     from flux_loop import TaskSpec
 
     def doc(test, **extra):
         return {"id": "t", "statement": "s", "objectives": [], "flow": {"test": {"t": test}}, **extra}
 
-    rtl = TaskSpec.from_dict(doc("flux rtl test {artifact} --golden {home}/golden.py"))
-    assert (rtl.language, rtl.extension, rtl.language_inferred) == ("systemverilog", ".sv", True)
-    assert "language" not in rtl.to_dict()
-    assert TaskSpec.from_dict(doc("flux champsim build {artifact}")).language == "cpp"
+    rtl = TaskSpec.from_dict(doc("{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"))
+    assert (rtl.language, rtl.extension, rtl.language_inferred) == ("text", ".txt", False)
+    assert rtl.to_dict()["language"] == "text"
+    assert TaskSpec.from_dict(doc("{python} {home}/champsim.py build {artifact}", language="cpp")).language == "cpp"
     own = TaskSpec.from_dict(doc("{python} {home}/check.py {artifact}"))
     assert (own.language, own.language_inferred) == ("text", False)
-    said = TaskSpec.from_dict(doc("flux rtl test {artifact} --golden g.py", language="verilog"))
+    said = TaskSpec.from_dict(doc("{python} {home}/rtl.py test {artifact} --golden g.py", language="verilog"))
     assert (said.language, said.extension, said.language_inferred) == ("verilog", ".v", False)
     assert said.to_dict()["language"] == "verilog"

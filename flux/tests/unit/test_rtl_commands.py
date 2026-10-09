@@ -1,4 +1,4 @@
-"""`flux rtl test` and `flux rtl measure` (D579): an RTL problem with no code of its own."""
+"""An RTL application's own `rtl.py test|lint|measure` (D579, D948): an RTL problem with no code of its own."""
 
 from __future__ import annotations
 
@@ -21,12 +21,11 @@ endmodule
 
 
 def _rtl(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "flux_cli.main", "rtl", *args], capture_output=True, text=True, timeout=900, cwd=str(FLUX))
+    return subprocess.run([sys.executable, str(EXAMPLE / "rtl.py"), *args], capture_output=True, text=True, timeout=900, cwd=str(FLUX))
 
 
 def test_the_golden_model_gives_the_vectors():
-    from flux_cli.rtl import load_golden
-    from flux_codegen_rtl_harness import golden_vectors
+    from rtl import golden_vectors, load_golden
 
     g = load_golden(EXAMPLE / "golden.py")
     rows = golden_vectors(g)
@@ -46,7 +45,7 @@ def test_the_example_document_loads_and_names_the_two_commands():
     from flux_loop.document import describe_flow
 
     task = load_task(EXAMPLE / "problem.yaml")
-    assert task.gate.named("test").run[:8] == ("{python}", "-W", "ignore", "-m", "flux_cli.main", "rtl", "test", "{artifact}")
+    assert task.gate.named("test").run[:4] == ("{python}", "{home}/rtl.py", "test", "{artifact}")
     assert "{home}/golden.py" in task.gate.named("test").run and task.home.endswith("mul8")
     assert [s.name for s in task.stages] == ["screen", "confirm"]
     prob = PromptProblem(task)
@@ -83,26 +82,17 @@ def test_rtl_test_passes_the_right_module_and_names_the_wrong_ones_vectors(tmp_p
     assert r.returncode == 3 and "did not compile" in r.stdout and "line 2 of your module" in r.stdout   # D594: 3 = not built
 
 
-def test_a_long_vector_list_is_a_table_the_testbench_reads():
-    """D865: from TABLE_VECTORS a combinational design's vectors are a `$readmemh` table, inputs
-    then expected outputs at their widths, not tens of thousands of unrolled lines."""
-    from flux_cli.rtl import load_golden
-    from flux_codegen_harness_spec import design_spec_from_dict
-    from flux_codegen_rtl_harness import golden_vectors
-    from flux_codegen_rtl_harness.driver_gen import generate_testbench_sv, vector_table
-    from flux_codegen_rtl_harness.golden import _harness_port
+def test_the_vectors_are_a_table_the_testbench_reads():
+    """D865: the vectors are a `$readmemh` table of the packed inputs, never unrolled lines; the
+    test bench prints each row's outputs and Python compares them (D948)."""
+    import rtl
 
-    g = load_golden(EXAMPLE / "golden.py")
-    doc = {"schema_version": "0.1.0", "id": "golden/mul8", "module_name": "mul8",
-           "ports": [_harness_port(p) for p in g.ports], "behavior": "a * w"}
-    spec = design_spec_from_dict({**doc, "test_vectors": golden_vectors(g)})
-    table = vector_table(spec).splitlines()
-    assert len(table) == 65536 and table[0] == "80804000", "a=-128, w=-128, p=16384"
-    tb = generate_testbench_sv(spec, vcd_path="t.vcd", table_path="v.hex")
-    assert '$readmemh("v.hex", __flux_tab);' in tb and "{a, w, __flux_exp_p} = __flux_tab[__flux_v];" in tb
-    assert tb.count("\n") < 100
-    few = design_spec_from_dict({**doc, "test_vectors": golden_vectors(replace(g, exhaustive=False))})
-    assert vector_table(few) is None and "__flux_tab" not in generate_testbench_sv(few, vcd_path="t.vcd", table_path="v.hex")
+    g = rtl.load_golden(EXAMPLE / "golden.py")
+    tb = rtl._testbench(g, "mul8", 65536)
+    assert '$readmemh("vectors.hex", tab);' in tb and "{a, w} = tab[v];" in tb and tb.count("\n") < 40
+    assert "clk" not in tb and "mul8 dut (.a(a), .w(w), .p(p));" in tb
+    clocked = rtl._testbench(replace(g, clocked=True, latency=2, exhaustive=False), "mul8", 10)
+    assert ".clk(clk), .rst_n(rst_n), .start(start), .done(done)" in clocked and "while (done !== 1'b1" in clocked
 
 
 @pytest.mark.heavy
@@ -148,19 +138,14 @@ def test_rtl_measure_prints_the_screens_numbers(tmp_path):
     assert line.startswith("fmax_mhz=") and "area_um2=" in line and "cell_count=" in line and "stage=synth" in line
 
 
-def test_an_unsigned_port_reaches_the_harness_as_the_same_bits_and_comes_back_unsigned():
-    """D581: the harness's testbench reads every int port signed; an unsigned value with its
-    top bit set goes over as those bits read signed, and a FAIL line is read back unsigned."""
-    from flux_cli.rtl import load_golden
-    from flux_codegen_rtl_harness.golden import _as_harness, _from_harness
+def test_an_output_is_read_back_at_its_width_signed_or_not():
+    """D581: the bits that came out, read as the golden declares the port: signed unless
+    `unsigned: true`; an x or z bit is no value."""
+    import rtl
 
-    g = load_golden(FLUX / "applications" / "adder16" / "golden.py")
-    rows = [{"inputs": {"a": 65535, "b": 1}, "expected": {"s": 65536}},
-            {"inputs": {"a": 3, "b": 4}, "expected": {"s": 7}}]
-    got = _as_harness(g, rows)
-    assert got[0] == {"inputs": {"a": -1, "b": 1}, "expected": {"s": -65536}} and got[1] == rows[1]
-    assert _from_harness(g, "VECTOR 0 FAIL s=-65536") == "VECTOR 0 FAIL s=65536"
-    assert _from_harness(g, "VECTOR 0 FAIL q=-3") == "VECTOR 0 FAIL q=-3"      # not a port of it
+    assert rtl._value("ffff", 16, False) == 65535 and rtl._value("ffff", 16, True) == -1
+    assert rtl._value("10000", 17, False) == 65536 and rtl._value("1", 1, False) == 1
+    assert rtl._value("x", 1, False) is None and rtl._value("0z3f", 16, True) is None
 
 
 def test_the_clock_port_is_found_in_the_modules_header():
@@ -175,7 +160,7 @@ def test_the_clock_port_is_found_in_the_modules_header():
 
 def test_the_ulp_distance_of_ieee_patterns():
     """D589: representable values apart; +0/-0 equal; two NaNs equal; a NaN against a number never."""
-    from flux_codegen_rtl_harness.golden import ulp_distance
+    from rtl import ulp_distance
 
     assert ulp_distance(0x3C00, 0x3C01, 16) == 1 and ulp_distance(0x3C00, 0x3BFF, 16) == 1
     assert ulp_distance(0x0000, 0x8000, 16) == 0 and ulp_distance(0x0001, 0x8001, 16) == 2
@@ -219,3 +204,69 @@ def test_a_clock_the_golden_does_not_declare_is_explained(tmp_path):
                    "            output logic signed [15:0] p);\n  always_ff @(posedge clk) p <= a * w;\nendmodule\n")
     r = _rtl("test", str(art), "--golden", str(EXAMPLE / "golden.py"))
     assert r.returncode == 3 and "golden model declares no CLOCK" in r.stdout, r.stdout
+
+
+PIPE = """module pipe(input logic clk, input logic rst_n, input logic start, output logic done,
+            input logic signed [7:0] a, input logic signed [7:0] b, output logic signed [8:0] y);
+  logic signed [8:0] r1; logic v1;
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin v1 <= 0; done <= 0; end
+    else begin r1 <= a + b; v1 <= start; y <= r1; done <= v1; end
+  end
+endmodule
+"""
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs verilator")
+def test_a_clocked_design_is_checked_and_its_latency_measured(tmp_path):
+    """CLOCK and LATENCY: clk/rst_n/start/done driven by the test bench, the cycles from the
+    edge that took the inputs counted; a wrong claim is refused with what was measured."""
+    art = tmp_path / "pipe.sv"
+    art.write_text(PIPE)
+    golden = "PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8}, {'name': 'b', 'dir': 'in', 'bits': 8}, {'name': 'y', 'dir': 'out', 'bits': 9}]\n" \
+             "CLOCK = True\nLATENCY = @LAT@\nCOUNT = 20\n\ndef golden(a, b):\n    return {'y': a + b}\n"
+    (tmp_path / "g2.py").write_text(golden.replace("@LAT@", "2"))
+    (tmp_path / "g3.py").write_text(golden.replace("@LAT@", "3"))
+    r = _rtl("test", str(art), "--golden", str(tmp_path / "g2.py"))
+    assert r.returncode == 0 and "latency=2" in r.stdout and r.stdout.strip().splitlines()[-1].startswith("0 failing of "), r.stdout + r.stderr
+    r = _rtl("test", str(art), "--golden", str(tmp_path / "g3.py"))
+    assert r.returncode == 1 and "claims 3 cycle(s) of latency, measured 2" in r.stdout, r.stdout
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs verilator")
+def test_lint_says_each_defect_and_a_parse_error(tmp_path):
+    good = tmp_path / "good.sv"
+    good.write_text(GOOD)
+    r = _rtl("lint", str(good))
+    assert r.returncode == 0 and r.stdout.strip() == "0 failing", r.stdout + r.stderr
+    broken = tmp_path / "broken.sv"
+    broken.write_text("module mul8(input logic [7:0] a, output logic [15:0] p)\nassign p = a;\nendmodule\n")
+    r = _rtl("lint", str(broken))
+    assert r.returncode == 3 and "did not parse" in r.stdout and "line 2 of your module" in r.stdout, r.stdout
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(shutil.which("openroad") is None or shutil.which("yosys") is None, reason="needs yosys and openroad")
+def test_measure_on_asap7_from_orfs_at_each_stage(tmp_path):
+    """D948: Yosys and OpenROAD read ASAP7 from OpenROAD-flow-scripts, no PDK bundled: stat is
+    Yosys alone; synth times the signed multiplier's netlist (OpenROAD refuses `input signed`
+    until it is stripped); place times it placed, slower than unplaced; a clocked design's clock is its own."""
+    import rtl
+
+    try:
+        rtl.platform()
+    except SystemExit:
+        pytest.skip("OpenROAD-flow-scripts' ASAP7 is not here (FLOW_HOME)")
+    stat = rtl.measure(GOOD, stage="stat")
+    assert set(stat) == {"area_um2", "cell_count"} and stat["area_um2"] > 0
+    synth = rtl.measure(GOOD, stage="synth", clock_ps=625)
+    place = rtl.measure(GOOD, stage="place", clock_ps=625)
+    assert 1000 < synth["fmax_mhz"] < 4000 and synth["power_w"] > 0 and synth["cell_count"] == stat["cell_count"]
+    assert place["fmax_mhz"] < synth["fmax_mhz"] and place["critical_path"].endswith(("]", "_"))
+    assert abs(synth["path_ps"] - (625 - synth["slack_ps"])) < 1e-6
+    piped = rtl.measure(PIPE, stage="synth", clock_ps=400)
+    assert piped["fmax_mhz"] > 1000 and piped["cell_count"] > 0
+    r = _rtl("measure", str(tmp_path / "x.sv"), "--stage", "stat") if (tmp_path / "x.sv").write_text(GOOD) else None
+    assert r.returncode == 0 and r.stdout.startswith("area_um2=") and "stage=stat" in r.stdout, r.stdout + r.stderr

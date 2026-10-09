@@ -10,6 +10,8 @@ statement: >-
   multiplier, reducer and pipeline depth the generator can spell, plus every multiplier the
   invention problem kept.
 
+language: systemverilog
+
 objectives:
   - {metric: fmax_mhz, direction: maximize, goal: 1000}      # the clock it must make
   - {metric: area_um2, direction: minimize}                  # then the smallest
@@ -26,8 +28,15 @@ flow:
   test:
     verify: {run: "{python} -m flux_macarray.steps check {artifact} {pipeline}", timeout_s: 300}
   measure:
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 1000 --module mac_pe
-    confirm: {command: "flux rtl measure {artifact} --stage place --clock-ps 1000 --module mac_pe --repair-design", timeout_s: 1800}
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000 --module mac_pe"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000 --module mac_pe --repair-design"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1800
   select: {finalists: 4}
 
 budget:

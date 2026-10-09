@@ -24,11 +24,10 @@ it tried. Website: <https://choelzl.github.io/flux/>.
    python3 -m venv .venv && .venv/bin/pip install -e ./flux
    ```
 
-2. Write a ready-to-run problem, then run it:
+2. Check that a command-driven loop runs without a model or hardware tools:
 
    ```bash
-   .venv/bin/flux example sweep primes
-   .venv/bin/flux task run primes --passes 6    # a pass a point
+   .venv/bin/flux selftest --no-model
    ```
 
 Extras: `pip install -e "./flux[web]"` (`flux serve`: FastAPI, uvicorn, cryptography), `[bankmap]` (z3), `[zigzag]`, `[all]`.
@@ -89,7 +88,7 @@ To set them once for this machine, put the same lines (without `export`) in
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer
   any box that does not establish facts.
 - **Real measurements.** Yosys and OpenROAD on ASAP7 (speed, area, power), ChampSim prefetcher
-  studies (`flux champsim`), ZigZag accelerator sizing, or any command of yours.
+  studies (the app's `champsim.py`), ZigZag accelerator sizing, or any command of yours.
 - **Calibration.** Cheap stages are compared with costly ones; a quick estimate is never
   reported as a measurement.
 - **An honest report.** The design to build first, then the trade-offs, measured vs modelled,
@@ -127,8 +126,8 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 
 | application | what it finds | AI model? |
 |---|---|---|
-| [`adder16`](flux/applications/adder16/) | the smallest 16-bit adder at 3000 MHz, from 12 generated designs | no |
-| [`mul8`](flux/applications/mul8/) | a signed 8x8 multiplier at 1000 MHz, written by a model | yes |
+| [`adder16`](flux/applications/adder16/) | the smallest 16-bit adder at 2900 MHz, from six generated designs | no |
+| [`mul8`](flux/applications/mul8/) | a signed 8x8 multiplier at 1600 MHz, written by a model | yes |
 | [`primes`](flux/applications/primes/) | the fastest Python `count_primes(n)` (not hardware) | yes |
 | [`npu_gemm`](flux/applications/npu_gemm/) | the smallest accelerator that runs a workload in 500 cycles (ZigZag) | no |
 | [`gelu_fp16`](flux/applications/gelu_fp16/) | an FP16 GELU within 1 ULP, invented as a formula by a coding agent | yes |
@@ -141,12 +140,14 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 ## Your own problem
 
 ```bash
-flux example rtl myproblem        # or python, sweep, rtl-sweep, tune
+flux new myproblem
+# Fill in problem.yaml and add your check/measurement scripts.
 flux task check myproblem
 flux task run myproblem --passes 1
 ```
 
-Edit the statement, the contract and the golden model (or `check.py`) to make it yours. Prefer a
+You can also copy a folder from `flux/applications/`, including its local tool commands. Edit
+the statement, contract and scripts to make it yours. Prefer a
 form? The [Loop crafter](https://choelzl.github.io/flux/guide/loop-crafter/): fill in a form, get
 a `problem.yaml`. Step by step: [docs/tutorial.md](docs/tutorial.md). Every key:
 [author reference](flux/core/loop/src/flux_loop/author_reference.md).

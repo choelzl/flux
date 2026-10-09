@@ -9,7 +9,6 @@ dependencies = [
     "flux-ir",
     "flux-evaluator-abi",
     "flux-evaluator-rtl",
-    "flux-codegen-rtl-harness",
     "flux-codegen-harness-spec",
 ]
 

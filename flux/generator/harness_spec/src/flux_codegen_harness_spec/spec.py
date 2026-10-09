@@ -9,7 +9,7 @@ behaviour is left to a model: the checker is never the thing being checked.
 
 Dtypes are `"int"` and `"bool"` only; wider types (structs, packed unions) are not supported.
 How a dtype and width spell in a language belongs to that language's harness
-(`flux_codegen_rtl_harness.compose._verilog_type`).
+(its own type spelling).
 """
 
 from __future__ import annotations

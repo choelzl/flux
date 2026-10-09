@@ -3,8 +3,8 @@
   "id": "rtl-lint",
   "role": "check",
   "title": "Lint for hardware defects",
-  "what": "Verilator lint: latches, multiple drivers, combinational loops, `<=` in combinational logic, implicit nets.",
-  "run": "flux rtl lint {artifact}",
+  "what": "Copy rtl.py and tools/ from applications/mul8: Verilator lint for latches, multiple drivers and combinational loops.",
+  "run": "{python} {home}/rtl.py lint {artifact}",
   "params": {},
   "needs": [
    "verilator"
@@ -23,7 +23,7 @@
   "role": "check",
   "title": "Test against a golden model",
   "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-  "run": "flux rtl test {artifact} --golden {golden}",
+  "run": "{python} {home}/rtl.py test {artifact} --golden {golden}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -47,8 +47,8 @@
   "id": "champsim-build",
   "role": "check",
   "title": "Build the prefetcher into ChampSim",
-  "what": "Compiles a prefetcher header into ChampSim; the first compiler error is the report.",
-  "run": "flux champsim build {artifact}",
+  "what": "Copy champsim.py and tools/ from applications/prefetcher: compiles a prefetcher header; reports the first compiler error.",
+  "run": "{python} {home}/champsim.py build {artifact}",
   "params": {},
   "needs": [
    "pythia"
@@ -66,7 +66,7 @@
   "role": "check",
   "title": "Smoke-run the prefetcher",
   "what": "Builds the prefetcher and runs it on one trace; refused when it issues no prefetches.",
-  "run": "flux champsim check {artifact} --traces {traces}",
+  "run": "{python} {home}/champsim.py check {artifact} --traces {traces}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -141,7 +141,7 @@
   "role": "stage",
   "title": "Area and cells, Yosys alone (ASAP7)",
   "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
-  "run": "flux rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+  "run": "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period (the mapper's target)",
@@ -169,7 +169,7 @@
   "role": "stage",
   "title": "Synthesise and time (ASAP7)",
   "what": "Yosys synthesis, timed by OpenROAD's OpenSTA: seconds per design.",
-  "run": "flux rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
+  "run": "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -201,7 +201,7 @@
   "role": "stage",
   "title": "Place and time (ASAP7)",
   "what": "OpenROAD placement, timed with wire estimates: tens of seconds.",
-  "run": "flux rtl measure {artifact} --stage place --clock-ps {clock_ps}",
+  "run": "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -233,7 +233,7 @@
   "role": "stage",
   "title": "Route and time (ASAP7)",
   "what": "OpenROAD placement and routing, the signoff numbers: minutes.",
-  "run": "flux rtl measure {artifact} --stage route --clock-ps {clock_ps}",
+  "run": "{python} {home}/rtl.py measure {artifact} --stage route --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -265,7 +265,7 @@
   "role": "stage",
   "title": "Simulate on your traces (ChampSim)",
   "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
-  "run": "flux champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "run": "{python} {home}/champsim.py run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -471,9 +471,7 @@
   "role": "stage",
   "title": "Cycles and energy (ZigZag)",
   "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. No area: add a stage of yours for it (as applications/npu_gemm).",
-  "stage": {
-   "evaluator": "zigzag"
-  },
+  "run": "{python} {home}/evaluate.py {artifact} {workload} --backend zigzag",
   "document": {
    "workload": "{workload}"
   },
@@ -501,12 +499,7 @@
   "role": "stage",
   "title": "Cycles, energy and area (Timeloop)",
   "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper on PATH the stage is skipped.",
-  "stage": {
-   "evaluator": "timeloop",
-   "needs": [
-    "timeloop-mapper"
-   ]
-  },
+  "run": "{python} {home}/evaluate.py {artifact} {workload} --backend timeloop",
   "document": {
    "workload": "{workload}"
   },

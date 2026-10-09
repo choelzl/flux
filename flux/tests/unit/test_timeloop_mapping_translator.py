@@ -8,7 +8,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_timeloop import (
+from timeloop_tools import (
     NotExpressibleError,
     mapping_ir_to_timeloop_constraints,
     spatial_dim_for_timeloop_architecture,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import flux_ir
 import pytest
-from flux_evaluator_zigzag import NotExpressibleError, mapping_ir_to_zigzag_mapping
+from zigzag_tools import NotExpressibleError, mapping_ir_to_zigzag_mapping
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 MAPPING = FLUX_ROOT / "core/ir/mapping/examples/mlp-gemm0-simple-npu-1d-map0.yaml"

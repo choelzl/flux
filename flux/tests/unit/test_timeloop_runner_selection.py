@@ -8,8 +8,8 @@ without either backend installed.
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_timeloop.adapter import _driver_script, local_timeloop_available
-from flux_evaluator_timeloop import TimeloopEvaluator
+from timeloop_tools.adapter import _driver_script, local_timeloop_available
+from timeloop_tools import TimeloopEvaluator
 
 
 def test_the_default_is_docker_with_no_environment_set(monkeypatch):
@@ -29,14 +29,14 @@ def test_the_off_spellings_stay_on_docker(monkeypatch, value):
 def test_asking_for_local_without_one_installed_fails_loudly(monkeypatch):
     """Opting in without a local build is an error, not a silent Docker fallback."""
     monkeypatch.setattr(
-        "flux_evaluator_timeloop.adapter.local_timeloop_available", lambda: False
+        "timeloop_tools.adapter.local_timeloop_available", lambda: False
     )
     with pytest.raises(RuntimeError, match="hermetic Timeloop"):
         TimeloopEvaluator(use_local=True)
 
 
 def test_the_environment_selects_local_when_one_is_available(monkeypatch):
-    monkeypatch.setattr("flux_evaluator_timeloop.adapter.local_timeloop_available", lambda: True)
+    monkeypatch.setattr("timeloop_tools.adapter.local_timeloop_available", lambda: True)
     monkeypatch.setenv("FLUX_TIMELOOP_LOCAL", "1")
     ev = TimeloopEvaluator()
     assert ev.use_local is True

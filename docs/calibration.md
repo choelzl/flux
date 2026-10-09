@@ -104,7 +104,7 @@ Consequences: pooling residuals is sound *within* either region and unsound *acr
 this is a **workload x architecture interaction**, not a property of either alone, which is why
 the earlier width-only and shape-only sweeps each looked stable in isolation.
 
-**Handled since [decisions.md D110](decisions.md)**: `flux_evaluator_zigzag.caveat_for(workload,
+**Handled since [decisions.md D110](decisions.md)**: `zigzag_tools.caveat_for(workload,
 arch)` detects the diagonal, and the architecture-generation loop passes the result to `record_conformance_residuals(caveat=...)`. The store's
 `residual_stats` already excludes caveated records by default, so the anomaly stops polluting the
 pool. Measured on a real four-point sweep: `std` **0.496 → 0.010** and the mean corrected from a

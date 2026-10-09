@@ -15,7 +15,7 @@ Registered today:
 | `rtl` | `rtl/` | the hand-written `mac_array.sv` reference through Verilator: the first simulated, not analytic, stage (a 529-cycle measurement against ZigZag's 1554 and Timeloop's 512) |
 | `zigzag` | `zigzag/` | the ZigZag cost model (`zigzag-dse`), translating Workload, Architecture and Mapping IR |
 | `timeloop` | `timeloop/` | Timeloop + Accelergy (Docker by default, `FLUX_TIMELOOP_LOCAL=1` for the hermetic shell), translating the same IR |
-| `champsim` | `champsim/` | ChampSim (Pythia) on a trace: an `.ini` or a C++ prefetcher header built in; `flux champsim run\|build\|check`. The prefetcher documents' stages. |
+| `champsim` | `champsim/` | ChampSim (Pythia) on a trace: an `.ini` or a C++ prefetcher header built in; `python champsim.py run\|build\|check`. The prefetcher documents' stages. |
 
 Beside the adapters: `abi/` (the types, the `Evaluator` protocol, the registry, `run_tool`,
 the toolchain fingerprint), `calibration/` (predicted-vs-reference residuals, escalation,

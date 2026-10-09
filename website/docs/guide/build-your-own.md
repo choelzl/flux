@@ -1,6 +1,6 @@
 # Configure a loop
 
-Start with the [working loop](tutorial.md), a `flux example`, or `flux new NAME`.
+Start with the [working loop](tutorial.md), copy a bundled application, or use `flux new NAME`.
 The document describes the experiment; the scripts beside it define how to generate, check,
 and measure a design. Use the [parameter reference](parameters.md) for defaults and allowed values.
 
@@ -86,8 +86,8 @@ For RTL, define the ports and reference function in `golden.py`, then use:
 ```yaml
 flow:
   test:
-    lint: "flux rtl lint {artifact}"
-    golden: "flux rtl test {artifact} --golden {home}/golden.py"
+    lint: "{python} {home}/rtl.py lint {artifact}"
+    golden: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
 ```
 
 The [RTL reference](parameters.md#rtl-golden-model) describes vectors, clocked designs, and
@@ -116,15 +116,21 @@ The `--quick` and `--full` flags here are flags your benchmark must implement. I
 for example, `time_ms=2.31 bytes=2048`. Metrics can appear on stdout or stderr; a nonzero
 measurement command exit rejects its numbers. Use `metrics_re` for a different output format.
 
-Every stage must provide the metrics required by the objectives. Known RTL measurement
-commands infer their metrics and tool requirements:
+Every stage must declare the metrics required by its objectives. The command belongs to the
+application: copy `rtl.py` and `tools/` from a bundled RTL application, or write your own script. Declare
+the tools it requires too:
 
 ```yaml
 flow:
   measure:
-    screen: "flux rtl measure {artifact} --stage synth --clock-ps 1000"
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
     confirm:
-      command: "flux rtl measure {artifact} --stage place --clock-ps 1000"
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
       timeout_s: 1800
   select: {finalists: 2}
 ```

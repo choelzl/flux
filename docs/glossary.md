@@ -59,7 +59,7 @@ build and notes they keep, shared by every agent of the problem and kept across 
 provides it and never reads it.
 
 **Golden model.** A short Python file, `golden.py`, that says what a design must compute
-(`PORTS` and a `golden(**inputs)` function), not how. `flux rtl test` checks RTL against it.
+(`PORTS` and a `golden(**inputs)` function), not how. `python rtl.py test` checks RTL against it.
 
 **ULP tolerance.** ULP is a "unit in the last place": the gap between two neighbouring
 floating-point numbers. "Within 1 ULP" means the design's answer is at most one step away

@@ -170,5 +170,5 @@ or override it with `--passes 3`. You can replace the generator with an agent, c
 benchmark, add a second measurement stage, or introduce a limit alongside the speed objective.
 
 Continue with [Configure a loop](build-your-own.md), then [Search and agents](loop-shape.md).
-For ready-made starting points, `flux example python|rtl|sweep|tune|rtl-sweep NAME` writes a
-worked loop and its scripts.
+For another starting point, copy a folder from `flux/applications/`, including its scripts,
+or use `flux new NAME` for a blank loop.

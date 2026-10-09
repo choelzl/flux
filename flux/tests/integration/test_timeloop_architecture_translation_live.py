@@ -9,7 +9,7 @@ from pathlib import Path
 import flux_ir
 import pytest
 from flux_evaluator_abi import Budget, Candidate, Method
-from flux_evaluator_timeloop import NotExpressibleError, TimeloopEvaluator
+from timeloop_tools import NotExpressibleError, TimeloopEvaluator
 
 logging.getLogger("zigzag").setLevel(logging.WARNING)
 

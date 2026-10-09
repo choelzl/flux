@@ -30,10 +30,10 @@ def test_a_confidential_pdk_is_refused_and_the_error_names_the_reason(monkeypatc
         require_not_confidential("test-confidential-pdk-d94")
 
 
-def test_the_raw_engine_entry_point_itself_refuses_for_a_confidential_pdk(monkeypatch):
-    """A direct call to `synthesize_with_asap7` is guarded too, and refuses before creating a work dir (no Yosys needed)."""
-    from flux_codegen_rtl_harness.asap7 import synthesize_with_asap7
+def test_an_rtl_applications_measure_refuses_a_confidential_asap7(monkeypatch):
+    """`rtl.py measure` asks the policy before Yosys runs (D94, D948): no tool is needed to see it refuse."""
+    import rtl
 
     monkeypatch.setitem(policy_module._REGISTRY, "asap7", _confidential("asap7"))
     with pytest.raises(ConfidentialPdkError, match="asap7"):
-        synthesize_with_asap7("module m(); endmodule", "m")
+        rtl.measure("module m(input a, output y); assign y = a; endmodule\n")

@@ -12,12 +12,13 @@ from fastapi.testclient import TestClient
 from flux_cli.main import main
 from flux_loop import TaskError, load_task
 from flux_loop.document import ManyDocuments, documents_in, record_name
+from tests.loop_fixtures import write_loop
 
 H = {"X-Flux": "1"}
 
 
 def _loop(tmp_path, bad: bool = False):
-    assert main(["example", "sweep", "sw", "--dir", str(tmp_path)]) == 0
+    write_loop("sweep", "sw", tmp_path)
     home = tmp_path / "sw"
     text = (home / "problem.yaml").read_text()
     (home / "fast.problem.yaml").write_text("statment: a typo\n" if bad else text)

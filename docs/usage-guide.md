@@ -28,28 +28,35 @@ The model's variables are in [models.md](models.md). The others:
 flux selftest [--full] [--no-model] [--model NAME]
 ```
 
-Runs, in a temporary directory, what a newcomer would: the tools on PATH, a `sweep`, an
-`rtl-sweep`, the model server, a problem the model writes, a coding agent on PATH; `--full`
+Runs, in a temporary directory: a command-driven sweep, the tools on PATH, the model server,
+a problem the model writes, and a coding agent on PATH; `--full`
 adds the README's first run. Prints PASS, FAIL or SKIP per check; exits 1 when one fails.
 
 ## Start a problem
 
 ```bash
-flux example python|rtl|sweep|tune|rtl-sweep NAME     # a working problem to start from
+flux new NAME                                           # a blank loop to configure
 flux ask "what you want" --file spec.pdf                 # an author writes the problem for you
 flux ask --tui                                           # the same, from a setup screen
 ```
 
 - `flux new NAME` writes a loop's baseline (D825): `NAME/problem.yaml` with every part present and what goes there,
   a README of what each part of the folder is for, an empty `library/` (`--dir D`: into `D/NAME/`) -- nothing of a case.
-  `flux example KIND NAME` writes a worked example that runs (sweep, tune, python, rtl, rtl-sweep); the
-  [cookbook](cookbook.md) says which fits which problem.
+  Copy a folder from `flux/applications/` for an existing application, including its check and
+  measurement scripts. The [cookbook](cookbook.md) explains the different loop shapes.
 - `flux ask` has an author (the model by default, or `--author opencode|claude|codex`) write
   the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
   gives the author the report to revise for the next pass. Options: `--no-run` (write and
   check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`. The setup screen
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
   "review first" on, you read the checked problem and type `run`, `stop`, or a note.
+
+Existing loops using the removed `flux rtl` or `flux champsim` commands need an app-local
+script and its tool sources. Copy `rtl.py` and `tools/` from `flux/applications/mul8/`,
+or `champsim.py` and `tools/` from `flux/applications/prefetcher/`, and replace the command prefix with
+`{python} {home}/rtl.py` or `{python} {home}/champsim.py`. Declare each measurement stage's
+`metrics` and `needs` explicitly, and set the design `language`. The bundled applications
+already use this layout; copying them includes their scripts.
 
 ## The problem document
 
@@ -63,15 +70,23 @@ the file to run one), and the web's Start dialog has a picker, each choice check
 works it and its own settings (D775):
 
 ```yaml
+language: systemverilog
 flow:
   orchestrate:                                   # the search, its space and where it starts
     policy: sweep
     space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  test: flux rtl test {artifact} --golden {home}/golden.py            # the gate
+  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # the gate
   measure:                               # the stages, by name, cheapest first
-    screen: flux rtl measure {artifact} --stage synth --clock-ps 300
-    confirm: {command: "flux rtl measure {artifact} --stage place --clock-ps 300", timeout_s: 1800}
+    screen:
+      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 300"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1800
   knowledge: {files: [spec.md], agent: opencode}   # what is read; who digests the papers
   select: {finalists: 2}
 ```
@@ -761,7 +776,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   gets none of the server's values of that group. Keys are stored encrypted (`secret.key` beside
   the server's data) and never shown again. With nothing set, runs use the machine's own
   configuration (flux.env, OpenCode's and Claude Code's own).
-- **`language:` is optional** (D832): unsaid, the tools the checks and stages name tell it (`flux rtl ...`: SystemVerilog, a ChampSim build: C++); say it when they do not -- a script of your own, `flux prog` -- or the design is a `.txt` file.
+- **`language:` is optional:** set it explicitly for application commands (`systemverilog` for RTL, `cpp` for C++). An arbitrary script does not imply a language; without one the design is a `.txt` file.
 - **On a phone** (D856): the account items are in the ☰ menu; a loop's Overview opens on its decision; Results opens on its designs, the charts below.
 - **Evidence follows its inputs** (D853): editing a file beside the document (a checker's helper, a data file, a bench script) or the params re-checks what was admitted and measures again on resume; the document's objectives do not. After this update a resumed search re-measures once.
 - **Files stay in their loop** (D852): the server never follows a link out of a loop's folders -- a raw log, a record, a run pointer, an inbox that leads elsewhere is refused; a replaced file is replaced, never written through a link.
@@ -920,12 +935,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 The commands an RTL document names as its gate and stages:
 
 ```bash
-flux rtl test design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
-flux rtl proto prototype.py --golden golden.py    # a Python prototype, checked on every input up to 20 bits
-flux rtl measure design.sv --stage synth --clock-ps 1000   # or place, route: ASAP7 metric=value lines
+python rtl.py test design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
+python rtl.py proto prototype.py --golden golden.py    # a Python prototype, checked on every input up to 20 bits
+python rtl.py measure design.sv --stage synth --clock-ps 1000   # or place, route: ASAP7 metric=value lines
 ```
 
-`flux rtl test` exits 1 when the design fails and 3 when it does not compile. `flux rtl
+Run these from an application's folder: its `rtl.py` wraps the shared evaluator libraries.
+Copy that script from a bundled RTL app when creating your own. `python rtl.py test` exits 1
+when the design fails and 3 when it does not compile. `python rtl.py
 proto` prints where a prototype fails, grouped by the input's sign and exponent. A prototype that
 passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper

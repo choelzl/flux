@@ -23,7 +23,7 @@ drawing in words. Everything another module imports is re-exported here.
 from __future__ import annotations
 
 from .keys import TaskError, DOCUMENT_KEYS, EXTENSIONS, DOCUMENT_FILE, ALT_SUFFIXES  # noqa: F401
-from .commands import BUILTIN_SUBS, RTL_METRICS, RTL_STAT_METRICS, rtl_tools_kind, _flux_rtl_tools, _digest_of, _command, _knob_subs, _substitute  # noqa: F401
+from .commands import BUILTIN_SUBS, _flux_program_tools, _digest_of, _command, _knob_subs, _substitute  # noqa: F401
 from .gate import BUILD_FAILED, Check, Gate, DEFAULT_COUNT_RE, _gate  # noqa: F401
 from .stages import Stage  # noqa: F401
 from .space import point_doc, _point_name, _write_point  # noqa: F401

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import flux_ir
-from flux_codegen_rtl_harness import generate_tiled_wrapper, leaf_port_spec, sequential_spec
+from ._rtl import generate_tiled_wrapper, leaf_port_spec, sequential_spec
 from flux_codegen_harness_spec import design_spec_from_dict
 from flux_evaluator_rtl import architecture_ir_to_lanes
 
@@ -325,8 +325,8 @@ def derive_gemm_design(workload: dict[str, Any], arch: dict[str, Any]) -> Derive
     Raises `DerivationError` before any model call for anything outside scope, including a `K`
     that is not whole K-groups (a partial group is a different design).
     """
-    from flux_codegen_rtl_harness import gemm_cycles, gemm_leaf_port_spec, gemm_spec, generate_gemm_wrapper
-    from flux_codegen_rtl_harness.errors import InvalidSpecError as _HarnessInvalidSpec
+    from ._rtl import gemm_cycles, gemm_leaf_port_spec, gemm_spec, generate_gemm_wrapper
+    from ._rtl.errors import InvalidSpecError as _HarnessInvalidSpec
     from flux_evaluator_rtl import einsum_op_to_mac_array_shape
 
     ops = [op for op in workload.get("ops", []) if op.get("kind") == "einsum"]

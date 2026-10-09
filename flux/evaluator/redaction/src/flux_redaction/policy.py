@@ -1,8 +1,7 @@
 """PDK confidentiality policy enforcement (D94, D96).
 
-The raw engine entry point (`flux_codegen_rtl_harness.asap7.synthesize_with_asap7`) calls
-`require_not_confidential` before any synthesis; the guarantee is "the public raw path refuses",
-not "no code can obtain the number" (the private `_synthesize_with_asap7_unchecked` does not check).
+An RTL application's `rtl.py measure` calls `require_not_confidential("asap7")` before any
+synthesis; the guarantee is "the public path refuses", not "no code can obtain the number".
 
 Only `asap7` (BSD-3-Clause, non-confidential) is registered; tests exercise enforcement with a
 synthetic confidential entry (D92).

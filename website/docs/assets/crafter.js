@@ -263,8 +263,6 @@
   }
   function isCustom(id) { return id === "custom-check" || id === "custom-stage"; }
 
-  /** flux_loop.document RTL_METRICS: what the loader infers for a `flux rtl measure` stage. */
-  var LOADER_RTL = ["fmax_mhz", "area_um2", "power_w", "cell_count"];
   /** objective.py UNITS: the units Flux knows; any other known unit is written as `unit:`. */
   var UNITS = { fmax_mhz: "MHz", area_um2: "um2", area_mm2: "mm2", power_w: "W", power_mw: "mW", time_ms: "ms",
                 latency_cycles: "cycles", energy_pj: "pJ", cell_count: "cells" };
@@ -272,7 +270,7 @@
 
   /** A check's type, and the catalog tools that do it. `any`: offered whatever the language
       (a script of yours runs on any file); the others only for the languages they list. For
-      HDL, "Compile" is the lint's parse step (`flux rtl lint` exits 3 when the source does not
+      HDL, "Compile" is the app lint's parse step (`rtl.py lint` exits 3 when the source does not
       parse): Flux has no separate compile command for RTL. */
   var CHECK_TYPES = [
     { key: "lint", title: "Lint", tools: ["rtl-lint"] },
@@ -679,24 +677,21 @@
       var t = toolOf(st.tool, cat), custom = !t || isCustom(st.tool), cmd = fillRun(st, cat, auto), rep = reports(st, cat);
       var shape = t && !custom && (t.run === undefined || t.run === null) && t.stage ? fillShape(t.stage, t, st, auto) : null;
       var gates = (st.gates || []).map(gateOf).filter(Boolean);
-      var used = objectives.map(function (o) { return o.metric; }).concat(gates.map(function (g) { return g.metric; }));
-      var rtlMeasure = /^flux rtl measure\s/.test(cmd);
-      var write = custom || !rtlMeasure || used.some(function (m) { return LOADER_RTL.indexOf(m) < 0 && rep.indexOf(m) >= 0; });
-      var needs = custom ? list(st.needs) : /^flux rtl\s/.test(cmd) ? [] : (t.needs || []).slice();
-      if (shape) { write = true; if ("needs" in shape) needs = []; }       // the shape says its own needs
+      var needs = custom ? list(st.needs) : (t.needs || []).slice();
+      if (shape && "needs" in shape) needs = [];       // the shape says its own needs
       if (t && !custom && t.document) {
         var d = fillShape(t.document, t, st, auto);
         for (var key in d) if ((state.kept || []).indexOf(key) < 0) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
       }
       return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
-               metrics: write ? rep.map(function (name) {
+               metrics: rep.map(function (name) {
                  var dictionary = (st.dictMetrics || []).find(function (m) { return m.name.trim() === name; });
                  if (!dictionary) return (st.metricSpecs || []).find(function (m) { return m.name === name; }) || name;
                  var metric = {name: name, type: "dict", direction: dictionary.direction || "minimize"};
                  if (dictionary.unit) metric.unit = dictionary.unit;
                  metric.aggregate = dictionary.aggregate || "mean";
                  return metric;
-               }) : [], needs: needs, gates: gates, estimate: estimateOf(st),
+               }), needs: needs, gates: gates, estimate: estimateOf(st),
                clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null,
                timeout: String(st.timeout || "").trim() };
     });
@@ -772,7 +767,8 @@
       if (basepass.mode === "only") config.only = true;
       out += "\nbaseline: " + (Object.keys(config).length ? inline(config, false) : "true") + "\n";
     }
-    if (language(state, true)) out += "language: " + q(language(state, true)) + "\n";
+    var chosenLanguage = language(state, true) || impliedLanguage(state, cat);
+    if (chosenLanguage) out += "language: " + q(chosenLanguage) + "\n";
 
     if (!own("parts")) { /* kept */ }
     else if (state.partsMode === "decompose") out += "\nparts: decompose\n";
@@ -1466,12 +1462,12 @@
       var row = null;
       if (st.command) {
         var argv = argvOf(st.command), m = matchTool(argv, "stage", cat);
-        // D880: a document that reads more numbers than its tool's entry reports keeps them all --
-        // matched to the tool, the stage's other metrics were dropped on the way back
-        if (m && (st.metrics || []).some(function (x) { return !(m.tool.metrics && x in m.tool.metrics); })) m = null;
+        // A template must preserve exactly the declared metrics, including their order.
+        // A subset or an extended list is an ordinary custom stage, not the catalog default.
+        if (m && JSON.stringify(st.metrics || []) !== JSON.stringify(Object.keys(m.tool.metrics || {}))) m = null;
         // D910: likewise a `needs` of its own: matched to the tool, the requirement was dropped
         if (m && said.needs !== undefined) {
-          var own = /^flux rtl\s/.test(fillRun({ tool: m.tool.id, params: m.params }, cat)) ? [] : (m.tool.needs || []);
+          var own = m.tool.needs || [];
           var saidNeeds = Array.isArray(said.needs) ? said.needs : [said.needs];
           if (JSON.stringify(saidNeeds) !== JSON.stringify(own)) m = null;
         }

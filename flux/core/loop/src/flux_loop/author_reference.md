@@ -29,16 +29,16 @@ Say only what is yours; the rest is inferred.
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
     prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
-    `measure`: `test: {lint: "flux rtl lint {artifact}", golden: {run: "flux rtl test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    `measure`: `test: {lint: "{python} {home}/rtl.py lint {artifact}", golden: {run: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
     They run in the order written; the first that reports failures refuses the design ("failed at
     lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
     check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
     group) or `fail_re` (one match per failure) for a checker that prints something else. A check
     named `build` refuses on any non-zero exit (did not build). Never an agent: it establishes the facts.
   - `measure`: the costed measurements, cheapest first, a map from each stage's name to its
-    command (`screen: flux rtl measure {artifact} --stage synth --clock-ps 1000`) or its
-    settings. A `flux rtl measure` stage needs nothing more: its metrics and tools are known, and
-    it is skipped where a tool is missing. A command of your own prints `name=value` tokens and
+    settings, including `command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"`,
+    `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad]`.
+    All measurement commands print `name=value` tokens and
     says `metrics:` (the names to read) and `needs:` (tools on PATH it requires), so it is
     `bench: {command: "...", metrics: [time_ms]}`. Every stage must measure every objective.
     `timeout_s` optional.
@@ -137,19 +137,29 @@ Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the 
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command
 starting with `flux` runs this Flux.
 
-## The RTL tools
+## Application-local RTL tools
 
-- `flux rtl lint {artifact}` -- Verilator lint for hardware defects (latches, multiple drivers,
+There are no `flux rtl` or `flux champsim` commands. Put each tool command inside the loop's
+folder and call it with `{python} {home}/rtl.py` or `{python} {home}/champsim.py`.
+The bundled RTL applications include one file, `rtl.py` (ASAP7 comes from OpenROAD-flow-scripts); the
+prefetcher includes `champsim.py` and `tools/champsim_tools/`. Copy the whole application
+to reuse these commands. They are not installed as global Flux packages: a wrapper alone
+does not provide its tool code. For a new application, write its own tool commands or include
+the complete tool bundle it uses. All scripts and tool files belong in the application.
+Set `language: systemverilog` or `language: cpp` explicitly;
+an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.
+
+- `python rtl.py lint {artifact}` -- Verilator lint for hardware defects (latches, multiple drivers,
   combinational loops, `<=` in combinational logic, mixed `=`/`<=`, implicit nets); prints each and
   `N failing`; exits 3 when it does not parse. Put it before the golden test.
-- `flux rtl test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
+- `python rtl.py test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
   prints `N failing of M`; exits 3 when the module does not compile (the loop then treats it as
   a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
-- `flux rtl measure {artifact} --stage synth|place|route --clock-ps P` -- Yosys and OpenROAD
+- `python rtl.py measure {artifact} --stage synth|place|route --clock-ps P` -- Yosys and OpenROAD
   on ASAP7 (`synth` times the netlist with OpenROAD's OpenSTA; `place`, `route` lay it out); prints `fmax_mhz= area_um2= power_w=
   cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its
   reset); `--repair-design` buffers long wires after placement.
-- `flux rtl measure {artifact} --stage stat` -- Yosys alone: `area_um2= cell_count=`, nothing
+- `python rtl.py measure {artifact} --stage stat` -- Yosys alone: `area_um2= cell_count=`, nothing
   timed; the cheapest screen before `synth`.
 - `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
   `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),
@@ -188,9 +198,10 @@ A program (C, C++, Python) is measured by `flux prog`; `--build` is one quoted c
 - `flux prog count --build "c++ -O2 -o {out} {artifact}"` -- Valgrind cachegrind, the same every run:
   `instructions= d1_misses= ll_misses= branch_mispredicts=`.
 - `flux prog size --build "c++ -O2 -o {out} {artifact}"` -- `text_bytes= data_bytes= bss_bytes=`.
-- An architecture (`language: yaml`, Architecture IR) is costed by an evaluator stage:
-  `{name: model, evaluator: zigzag, metrics: [latency_cycles, energy_pj]}` with a top-level
-  `workload: "{home}/workload.yaml"` (Workload IR); `evaluator: timeloop` adds `area_mm2`.
+- An architecture (`language: yaml`, Architecture IR) is costed by an app-local command:
+  a stage calling `{python} {home}/evaluate.py {artifact} {home}/workload.yaml
+  --backend zigzag` with `metrics: [latency_cycles, energy_pj]`; `--backend timeloop`
+  also reports `area_mm2`. Copy `evaluate.py` and `tools/` from `applications/npu_gemm/`.
 
 ## Rules
 

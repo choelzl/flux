@@ -388,7 +388,9 @@ def flows(r: Run) -> None:
         r.check(f"{where}: each sort's arrow inside its header, no column widened (D938)", n > 0 and not bad, f"{n} table(s): {bad}")
         return n
     # a loop to upload: a sweep, no model needed
-    subprocess.run(["flux", "example", "sweep", "sw", "--dir", str(r.files)], check=True, stdout=subprocess.DEVNULL)
+    from tests.loop_fixtures import write_loop
+
+    write_loop("sweep", "sw", r.files)
 
     def login_refused():
         b.go(f"{r.url}/#/login")
@@ -1770,13 +1772,13 @@ def flows(r: Run) -> None:
         how many of its tasks failed or stopped."""
         import signal
 
-        from flux_cli.commands import example_files
+        from tests.loop_fixtures import loop_files
         from flux_web.store import Store
 
         r.login("bob")
         b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
         # a sweep whose bench takes a while: a measurement is under way when the run is killed
-        files = [[rel, "import time; time.sleep(60)\n" + text if rel.endswith("bench.py") else text] for rel, text in example_files("slow", "sweep")]
+        files = [[rel, "import time; time.sleep(60)\n" + text if rel.endswith("bench.py") else text] for rel, text in loop_files("slow", "sweep")]
         made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'slow');
             for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
             fetch('/api/apps', {method: 'POST', headers: {'X-Flux': '1'}, body: f}).then(async r => done({status: r.status, body: await r.text()}));""", files)
@@ -2247,12 +2249,12 @@ def flows(r: Run) -> None:
     def passes_at_once():
         """D747, D752: two passes at once, each its own branch, "with" the other; then the Conclusion."""
         r.login("bob")
-        from flux_cli.commands import example_files
+        from tests.loop_fixtures import loop_files
 
         made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'fromex');
             for (const [rel, text] of files) f.append('files', new Blob([text]), rel);
             fetch('/api/apps', {method: 'POST', headers: {'X-Flux': '1'}, body: f}).then(async r => done({status: r.status, body: await r.text()}));""",
-                     [[rel, text] for rel, text in example_files("fromex", "sweep")])
+                     [[rel, text] for rel, text in loop_files("fromex", "sweep")])
         assert made["status"] == 200, f"the loop uploaded: {made}"
         info = r.api("/apps/fromex")
         assert info["status"] == 200, f"the loop: {info}"

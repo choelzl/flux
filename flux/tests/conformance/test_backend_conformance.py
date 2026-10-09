@@ -24,15 +24,15 @@ ARCHITECTURES = ["generic-riscv-soc-v1", "my-npu-v3", "simple-npu-1d-v1", "simpl
 
 
 def _zigzag_backend():
-    from flux_evaluator_zigzag import ZigZagEvaluator
-    from flux_evaluator_zigzag.errors import NotExpressibleError
+    from zigzag_tools import ZigZagEvaluator
+    from zigzag_tools.errors import NotExpressibleError
 
     return ZigZagEvaluator(), NotExpressibleError
 
 
 def _timeloop_backend():
-    from flux_evaluator_timeloop import TimeloopEvaluator
-    from flux_evaluator_timeloop.errors import NotExpressibleError
+    from timeloop_tools import TimeloopEvaluator
+    from timeloop_tools.errors import NotExpressibleError
 
     return TimeloopEvaluator(), NotExpressibleError
 

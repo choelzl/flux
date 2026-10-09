@@ -194,7 +194,7 @@ class DraftMixin:
     def prototype_agent_turn(self, agent: Any, prompt: str, code: str | None, failure: str,
                              subgoal: str | None, state: LoopState) -> str:
         """One agent turn on the prototype (D618): it edits a file; the loop runs the stage's own
-        check (`flux rtl proto`) and comes back with what failed (D673). Returns the file as a
+        prototype check and comes back with what failed (D673). Returns the file as a
         `{"prototype": ...}` reply, or "" when nothing new was written."""
         from .agent import DENIED, agent_brief, converse, library_section, workbench_link, workbench_section
         from .document import _command

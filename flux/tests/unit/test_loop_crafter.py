@@ -21,7 +21,7 @@ from flux_loop import TaskError, load_task
 
 REPO = Path(__file__).resolve().parents[3]
 ASSETS = REPO / "website/docs/assets"
-TEMPLATES = REPO / "flux/interfaces/cli/src/flux_cli/examples"
+TEMPLATES = REPO / "flux/tests/fixtures/loops"
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
@@ -29,7 +29,7 @@ LOOP_PENDING = "needs the loop's cutoff lists / objective limits"
 
 #: files a case's document names -> where they come from
 FILES = {
-    "rtl": (TEMPLATES / "rtl", ["golden.py"]),
+    "rtl": (TEMPLATES / "rtl", ["golden.py", "rtl.py"]),
     "python": (TEMPLATES / "python", ["check.py", "bench.py"]),
     "none": (TEMPLATES, []),
     "zigzag": (REPO / "flux/applications/npu_gemm", ["check.py", "workload.yaml"]),
@@ -482,9 +482,11 @@ def test_a_catalog_stage_without_run_writes_its_stage_shape(tmp_path):
 
 def test_the_real_catalogs_newer_tools_load(tmp_path):
     case = BUILT["zigzag_eval"]
-    assert 'workload: "{home}/workload.yaml"' in case["yaml"] and "evaluator: zigzag" in case["yaml"]
+    assert 'workload: "{home}/workload.yaml"' in case["yaml"] and "evaluate.py" in case["yaml"]
     t = _load(tmp_path, case)
-    assert t.stages[0].evaluator == "zigzag" and t.workload == "{home}/workload.yaml"
+    assert t.stages[0].evaluator is None and t.workload == "{home}/workload.yaml"
+    assert t.stages[0].command == ("{python}", "{home}/evaluate.py", "{artifact}",
+                                    "{home}/workload.yaml", "--backend", "zigzag")
     t = _load(tmp_path, BUILT["prog_timed"])
     assert t.stages[0].command[-9:-6] == ("time", "--build", "c++ -O2 -o {out} {artifact}")
     t = _load(tmp_path, BUILT["stat_then_synth"])

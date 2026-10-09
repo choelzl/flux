@@ -9,12 +9,12 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from flux_codegen_rtl_harness import sv_refusal
+from .rtl_check import sv_refusal
 
 from .config import Shape
 
 if TYPE_CHECKING:
-    from flux_codegen_rtl_harness import Golden
+    from .rtl_check import Golden
 
 
 def refusal_reason(source: str) -> str | None:
@@ -32,7 +32,7 @@ def multiplier_golden(shape: Shape) -> "Golden":
     """The multiplier as a golden model: signed a x w -> p, checked on every input when the
     operands total at most the harness's EXHAUSTIVE_MAX_BITS (D868, D882), else with its shared vectors
     (every corner pairwise, since sign combinations break multipliers, then random)."""
-    from flux_codegen_rtl_harness import Golden
+    from .rtl_check import Golden
 
     return Golden(ports=({"name": "a", "dir": "in", "bits": max(2, shape.in_bits)},
                          {"name": "w", "dir": "in", "bits": max(2, shape.w_bits)},

@@ -144,7 +144,8 @@ endmodule
 
 
 def _lint(path: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "flux_cli.main", "rtl", "lint", str(path)],
+    app = Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py"
+    return subprocess.run([sys.executable, str(app), "lint", str(path)],
                           capture_output=True, text=True, timeout=120)
 
 
@@ -180,7 +181,7 @@ def test_flux_tools_lists_checks_then_stages(capsys):
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
             "champsim-run", "python-test-script", "bench-script", "zigzag-model", "custom-check", "custom-stage"} <= ids
     assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in TOOLS)
-    assert fill("rtl-synth", clock_ps=300) == "flux rtl measure {artifact} --stage synth --clock-ps 300"
+    assert fill("rtl-synth", clock_ps=300) == "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
 
 
 def test_every_catalog_command_loads_as_a_document(tmp_path):

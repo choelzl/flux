@@ -53,7 +53,7 @@ uses its own model, tools and skills; the loop then reads the artifact and runs 
 check and gate around it, exactly as around a model's reply. When a headless agent stops to ask
 a question, `questions:` says who answers: nobody (`decide`, the default), the loop's `model`,
 or the `operator` at the TUI ([D585](decisions.md)). With `budget.prototype: true` the agent
-writes the Python prototype instead; the loop checks it with `flux rtl proto` and spells the
+writes the Python prototype instead; the loop checks it with `python rtl.py proto` and spells the
 RTL ([D618](decisions.md)). The agent writes and never runs: the loop compiles, tests and
 measures, and brings a failure back to the agent's session ([D673](decisions.md)). [models.md](models.md) covers the agents' own configuration.
 

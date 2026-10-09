@@ -1,4 +1,4 @@
-"""`flux example KIND NAME` (D598, D825: the worked examples; `flux new NAME` writes the baseline alone). Every kind
+"""`flux new NAME` and test-only command-driven loops. Every fixture
 must load under `flux task check`; the sweep, which needs no model and no EDA tool, must run to
 a decision."""
 
@@ -9,11 +9,12 @@ import json
 import pytest
 
 from flux_cli.main import main
+from tests.loop_fixtures import write_loop
 
 
 @pytest.mark.parametrize("kind", ["python", "rtl", "sweep", "tune"])
 def test_every_kind_writes_a_document_that_loads(tmp_path, capsys, kind):
-    assert main(["example", kind, "demo", "--dir", str(tmp_path / kind)]) == 0
+    write_loop(kind, "demo", tmp_path / kind)
     doc = tmp_path / kind / "demo/problem.yaml"
     assert doc.is_file() and (doc.parent / "README.md").is_file()
     text = doc.read_text()
@@ -25,7 +26,7 @@ def test_every_kind_writes_a_document_that_loads(tmp_path, capsys, kind):
 
 def test_the_sweep_runs_to_a_decision_without_a_model(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "sweep", "primes", "--dir", str(tmp_path / "p")])
+    write_loop("sweep", "primes", tmp_path / "p")
     answer = tmp_path / "answer.json"
     rc = main(["task", "run", str(tmp_path / "p/primes/problem.yaml"), "--passes", "20", "--json", str(answer)])
     got = json.loads(answer.read_text())
@@ -46,9 +47,6 @@ def test_leading_hyphen_names_work_and_next_commands_use_unambiguous_paths(tmp_p
     assert main(["new", "--", "-Loop_09"]) == 0
     assert (tmp_path / "-Loop_09/problem.yaml").is_file()
     assert "flux task check ./-Loop_09" in capsys.readouterr().out
-    assert main(["example", "rtl-sweep", "--", "-Example_09"]) == 0
-    assert (tmp_path / "-Example_09/gen.py").is_file()
-    assert "flux task run ./-Example_09" in capsys.readouterr().out
 
 
 def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monkeypatch):
@@ -56,7 +54,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
     import yaml
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "sweep", "mine", "--dir", str(tmp_path / "m")])
+    write_loop("sweep", "mine", tmp_path / "m")
     (tmp_path / "m" / "mine" / "every_other.py").write_text(
         "from dataclasses import dataclass\n"
         "from flux_loop.dse import Policy, points\n\n\n"
@@ -88,7 +86,7 @@ def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monke
 def test_the_tune_kind_runs_to_a_decision_without_a_model(tmp_path, monkeypatch):
     """Knobs go straight into the gate's and stage's commands, measured one at a time (D608)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
+    write_loop("tune", "mm", tmp_path / "t")
     doc = (tmp_path / "t" / "mm/problem.yaml").read_text()
     assert "workers: 1" in doc and "{block}" in doc
     answer = tmp_path / "answer.json"
@@ -103,7 +101,7 @@ def test_the_banner_says_when_no_model_is_needed(tmp_path, capsys, monkeypatch):
     from flux_loop.task import model_use
 
     for kind, needs in (("tune", False), ("sweep", False), ("python", True), ("rtl", True)):
-        main(["example", kind, f"k_{kind}", "--dir", str(tmp_path / kind)])
+        write_loop(kind, f"k_{kind}", tmp_path / kind)
         task = load_task(str(tmp_path / kind / f"k_{kind}/problem.yaml"))
         assert bool(model_use(task)) is needs, (kind, model_use(task))
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
@@ -117,7 +115,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
     import yaml
 
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
+    write_loop("tune", "mm", tmp_path / "t")
     doc_path = tmp_path / "t" / "mm/problem.yaml"
     doc = yaml.safe_load(doc_path.read_text())
     doc["flow"]["orchestrate"]["policy"] = [{"name": "coarse", "policy": "sweep", "knobs": ["block"]},
@@ -136,7 +134,7 @@ def test_a_sweep_phase_moves_only_its_knobs(tmp_path, monkeypatch):
 def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tmp_path, capsys, monkeypatch):
     """D695: its pass ended on "nothing left to do", not a rest, so pass after pass began at once."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "sweep", "primes", "--dir", str(tmp_path / "p")])
+    write_loop("sweep", "primes", tmp_path / "p")
     doc, db = str(tmp_path / "p/primes/problem.yaml"), str(tmp_path / "p.db")
     assert main(["task", "run", doc, "--passes", "20", "--db", db]) == 0
     capsys.readouterr()
@@ -149,7 +147,7 @@ def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tm
 def test_the_report_of_a_tuning_ranks_every_point_with_its_knobs(tmp_path, monkeypatch):
     """A DSE's report is read from its points, ranked by the decision's rule; one objective gets no front, saying why (D609)."""
     monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
-    main(["example", "tune", "mm", "--dir", str(tmp_path / "t")])
+    write_loop("tune", "mm", tmp_path / "t")
     answer, db = tmp_path / "a.json", str(tmp_path / "mm.db")
     main(["task", "run", str(tmp_path / "t/mm/problem.yaml"), "--passes", "20", "--json", str(answer), "--db", db])
     out = tmp_path / "r.html"

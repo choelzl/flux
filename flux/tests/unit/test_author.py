@@ -51,7 +51,7 @@ def _run(problem_task, loop_replies):
 
 def test_the_reference_carries_the_guide_and_the_live_examples():
     ref = reference()
-    assert "YOU WRITE" not in ref and "## Keys" in ref and "flux rtl test" in ref
+    assert "YOU WRITE" not in ref and "## Keys" in ref and "rtl.py test" in ref
     assert "`mul8/problem.yaml`" in ref and "`adder16/gen.py`" in ref
 
 
@@ -172,14 +172,15 @@ def test_a_golden_model_that_cannot_run_is_refused_before_the_loop(tmp_path):
     import shutil
 
     if shutil.which("verilator") is None:
-        pytest.skip("the rtl tools are needed for `flux rtl test` to be on the tool list")
+        pytest.skip("the RTL tools are needed for the application's checks")
     work = tmp_path / "w"
     work.mkdir()
     doc = {"statement": "negate",
            "language": "verilog",
            "budget": {"steps": 1, "prototype": False},
-           "flow": {"test": "flux rtl test {artifact} --golden {home}/golden.py"}}
+           "flow": {"test": "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"}}
     (work / "problem.yaml").write_text(yaml.safe_dump(doc))
+    (work / "rtl.py").write_text((Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py").read_text())
     (work / "golden.py").write_text("PORTS = [{'name': 'a', 'dir': 'in', 'bits': 8}, {'name': 'y', 'dir': 'out', 'bits': 8}]\n"
                                     "def golden(a):\n    return -a\n")
     task, problem, why = check_document(work)
@@ -207,7 +208,7 @@ def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
             "         {'name': 'b', 'dir': 'in', 'bits': 8, 'unsigned': True},\n"
             "         {'name': 's', 'dir': 'out', 'bits': 9, 'unsigned': True}]\n"
             f"COUNT = 16\n\ndef golden(a, b):\n    return {{'s': {ret}}}\n")
-        task = SimpleNamespace(gate=_gate("flux rtl test {artifact} --golden {home}/golden.py"))
+        task = SimpleNamespace(gate=_gate("{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"))
         return _golden_fault(task, tmp_path)
 
     assert "never sets the top bit of output `s` (9 bits)" in check("(a + b) & 0xFF")

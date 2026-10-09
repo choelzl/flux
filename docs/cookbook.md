@@ -1,7 +1,7 @@
 # Cookbook: which recipe for which problem
 
-Each recipe says which `flux example` to start from and which lines of the problem document to
-change. The document keys are in
+Each recipe describes a loop shape and the commands it needs. Start with `flux new NAME`, or
+copy a bundled application including its scripts. The document keys are in
 [author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md), and the extension
 points in [extending.md](extending.md).
 
@@ -9,11 +9,11 @@ points in [extending.md](extending.md).
 
 | you have | start from | a model? |
 |---|---|---|
-| a program with settings to tune (flags, block sizes, hyperparameters) | `flux example tune NAME` | no |
-| a script that writes a design from knobs (any language) | `flux example sweep NAME` | no |
-| a hardware family you can spell from knobs | `flux example rtl-sweep NAME` | no |
-| a function you want written and made fast | `flux example python NAME` | yes |
-| a hardware module you want written | `flux example rtl NAME` | yes |
+| a program with settings to tune (flags, block sizes, hyperparameters) | `flux new NAME` + commands using knob placeholders | no |
+| a script that writes a design from knobs (any language) | `flux new NAME` + a generator command and search space | no |
+| a hardware family you can spell from knobs | copy `applications/adder16/` | no |
+| a function you want written and made fast | copy `applications/primes/` | yes |
+| a hardware module you want written | copy `applications/mul8/`, including `rtl.py` | yes |
 | only a description, a spec, some files | `flux ask "..." --file spec.pdf` | yes |
 
 ## Tuning: knobs into your own commands
@@ -96,7 +96,7 @@ A policy of your own is a class in a file beside the document: `orchestrate: my_
 - **A coding agent instead of a model turn**: `flow.generate: {by: opencode|claude|codex}`.
   It gets a work directory and writes the file; the loop runs the gate and brings a failure back
   to the same session. With `budget.prototype: true` it writes the Python prototype instead, which
-  the loop checks with `flux rtl proto` (every input in seconds). The loop spells the RTL. For hard numeric functions this
+  the loop checks against the golden model (every input in seconds). The loop spells the RTL. For hard numeric functions this
   works better than asking an agent for the RTL itself.
 
 ## Reading the results

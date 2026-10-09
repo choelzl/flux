@@ -120,8 +120,6 @@
           localSrcDirs = [
             "core/ir/src"
             "evaluator/abi/src"
-            "evaluator/zigzag/src"
-            "evaluator/timeloop/src"
             "core/stores/src"
             "interfaces/cli/src"
             "interfaces/web/src"
@@ -136,13 +134,11 @@
             "core/tui/src"
             "core/frontier/src"
             "evaluator/cache/src"
-            "evaluator/champsim/src"
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
             "applications/interconnect_mapping/lib/src"
             "evaluator/openroad/src"
             "generator/harness_spec/src"
-            "generator/harness_rtl/src"
             "evaluator/redaction/src"
           ];
 
@@ -200,7 +196,7 @@
               pkgs.ripgrep     # `rg`: the coding agents search with it first (Codex) -- in the sandbox via the PATH (D848)
             ]
             # Verilator, Yosys, Icarus, sv-lang; CMU-SAFARI/Pythia: ChampSim, with its source
-            # tree under $out/share/pythia so `flux champsim build` can rebuild it; on linux
+            # tree under $out/share/pythia so an app's `champsim.py build` can rebuild it; on linux
             # OpenROAD + yosys-slang, Timeloop v4, ICSC (SystemC -> SystemVerilog, D645, D656)
             ++ builtins.attrValues chipTools
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [

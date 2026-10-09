@@ -21,11 +21,8 @@ DEFAULT_METRICS = frozenset({"latency_cycles", "energy_pj"})
 
 # name -> (module, class). The order is irrelevant; `available_evaluators` sorts.
 _DEFAULTS: dict[str, tuple[str, str]] = {
-    "zigzag": ("flux_evaluator_zigzag", "ZigZagEvaluator"),
-    "timeloop": ("flux_evaluator_timeloop", "TimeloopEvaluator"),
     "rtl": ("flux_evaluator_rtl", "RTLEvaluator"),
     "openroad": ("flux_evaluator_openroad", "OpenRoadEvaluator"),
-    "champsim": ("flux_evaluator_champsim", "ChampSimEvaluator"),
 }
 
 _FACTORIES: dict[str, Callable[[], Any]] = {}
