@@ -86,10 +86,10 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         if self._skills:                               # every prompt's static part names the skills (D588)
             base_prefix = self.prompt_prefix
 
-            def prefixed(subgoal: Any, state: Any, _base=base_prefix) -> str:
+            def prefixed(subgoal: Any, state: Any, _base=base_prefix, *, agent: bool = False) -> str:
                 tools = bool(getattr(getattr(state, "request", None), "tools", True))
                 index = skill_index(self._skills, tools=tools)
-                head = _base(subgoal, state) or ""
+                head = _base(subgoal, state, agent=agent) or ""
                 # before the reply shape: models skip what follows "reply with ONLY JSON"
                 i = head.find("REPLY SHAPE")
                 if i > 0:

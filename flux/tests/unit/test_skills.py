@@ -97,6 +97,29 @@ def test_a_coding_agent_finds_the_skills_where_it_looks(tmp_path):
     assert out.decision is not None, out.refused
 
 
+def test_skills_preserve_agent_specific_prefix_context(tmp_path, monkeypatch):
+    from flux_loop import LoopRequest, LoopState
+
+    make_skill(tmp_path / "skills", "digits")
+    task = TaskSpec.from_dict({"id": "digits", "statement": "Write digits", "language": "text",
+                              "contract": "Keep all ten digits", "skills": ["skills"], "flow": {"test": "true"}}, base=tmp_path)
+    prob = PromptProblem(task)
+    state = LoopState(request=LoopRequest(), say=lambda _: None, proposer=None, feedback=None)
+
+    def knowledge(_state, _subgoal, *, exclude=()):
+        return "\n\n".join(text for kind, text in (("sheet", "MENTOR_SHEET"), ("library", "LEXICAL_EXCERPT"),
+                                                  ("papers", "PAPER_INDEX"), ("digest", "ALL_PAPER_DIGESTS")) if kind not in exclude)
+
+    monkeypatch.setattr(prob, "_role_knowledge", knowledge)
+    model = prob.prompt_prefix(None, state)
+    agent = prob.prompt_prefix(None, state, agent=True)
+    for text in ("LEXICAL_EXCERPT", "PAPER_INDEX", "ALL_PAPER_DIGESTS"):
+        assert text in model and text not in agent, "agents get ranked digests in LIBRARY instead of duplicated static context"
+    for prefix in (model, agent):
+        assert "TASK digits:" in prefix and "Keep all ten digits" in prefix and "MENTOR_SHEET" in prefix
+        assert "Write one digit per line." in prefix and prefix.index("SKILLS") < prefix.index("REPLY SHAPE")
+
+
 def test_the_asks_skills_go_to_the_author_and_into_the_problem(tmp_path):
     from flux_llm import ScriptedProposer
     from flux_loop.author import Ask, drive, workspace_skills
