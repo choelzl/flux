@@ -19,6 +19,10 @@ FLUX_E2E_STEPS="reload and browser history,delayed files and retry,concurrent fi
 For Snap Firefox, use a path that Firefox can access, such as one under
 `~/snap/firefox/common/`. No model or coding agent is needed by these flows.
 
+`FLUX_E2E_STEPS="login refused,login,upload,run history,live scroll"` checks agent prompt
+viewers for live tasks and older runs, including fullscreen text and retained scroll positions.
+`test_agent_live.py` checks that fresh and resumed agent inputs are saved in full at task start.
+
 `e2e/web_ui_lifecycle.py` also covers fullscreen drafts (selection, scroll, Escape and navigation),
 raw file output, reset warnings/cancellation and retained inputs/settings, and older starts'
 logs, complete agent turns, design source, reloads and delayed responses. It uses real loop

@@ -356,6 +356,10 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Timeline and the Agents tab read their files as they grow (D779). A resumed loop keeps a design its
     judge already admitted -- the gate, the files it names, the tools and Flux unchanged -- instead of
     re-verifying it every pass (D778); any of them changed, it is re-verified once.
+    Select an agent task in **Live › Tasks**, then **Prompt**, to read its input while it runs.
+    New runs retain the full prompt in the task journal, including continuation messages for resumed
+    agents. In **Agents**, select a turn and click **Prompt** to open its recorded input in fullscreen.
+    These controls also work in older run views when their retained data includes the prompt.
     The first look is also never more than 24 MB (D762): a start of a few passes of hours each opens on the
     oldest whole pass that fits, or on the newest pass's tail ("Earlier" says what was left out). `marks.jsonl`
     beside the journal says where each pass begins; a journal from before it is read back at most 88 MB.

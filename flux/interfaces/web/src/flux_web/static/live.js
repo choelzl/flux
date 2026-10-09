@@ -580,6 +580,8 @@ function liveTree(base, qs, onQuestion, stream) {
       if (running(n) && has(n.fields)) tabs.push(["Live", () => block("So far", n.fields)]);
       if (has(n.output)) tabs.push(["Output", () => block("Output", n.output)]);
     }
+    if (isAgent && typeof n.params?.prompt === "string") tabs.push(["Prompt", () => h("div", { class: "blk" },
+      h("h3", {}, "Prompt given to the agent"), h("pre", { class: "val tall", "data-k": "prompt" }, n.params.prompt))]);
     if (has(n.params)) tabs.push(["Input", () => block("Given", n.params)]);
     if (isAgent && logText) tabs.push(["Log", () => h("pre", { class: "val astream-body", "data-k": "log" }, logText)]);
     if ((isAgent || isTool) && (has(n.fields) || has(n.output))) tabs.push(["Every field", () => h("div", {}, block("Fields", n.fields), block("Output", n.output))]);
@@ -619,7 +621,7 @@ function liveTree(base, qs, onQuestion, stream) {
       const saved = place?.blocks.get(el.dataset.k);
       const restore = () => {
         if (saved) restoreScroll(el, saved, { follow: el.matches("pre, .cv") });
-        else if (el.matches("pre.val")) el.scrollTop = el.scrollHeight;
+        else if (el.matches("pre.val") && el.dataset.k !== "prompt") el.scrollTop = el.scrollHeight;
       };
       if (visible(el)) restore();
       else el.closest("details")?.addEventListener("toggle", () => { if (visible(el)) restore(); }, { once: true });

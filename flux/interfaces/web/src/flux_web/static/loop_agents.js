@@ -2,9 +2,9 @@
 // (D892: out of loopPage).
 
 import { proseBlock } from "./highlight.js";
-import { ago, api, card, dur, empty, enc, fmtTok, h, skeleton } from "./ui.js";
+import { act, ago, api, card, dur, empty, enc, fmtTok, h, skeleton } from "./ui.js";
 import { conversation } from "./loops.js";
-import { viewerTools } from "./viewer.js";
+import { fullscreen, viewerTools } from "./viewer.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
@@ -41,7 +41,7 @@ async function agentsView(ctx) {
     for (const x of tr.parentNode.children) x.classList.remove("sel"); tr.classList.add("sel");
     const my = ++picked;
     const full = (await api(`/apps/${enc(name)}/turns?k=${t.k}${q}`)).turns[0] || {};
-    if (my !== picked) return;
+    if (my !== picked || !ok()) return;
     const nt = full.notes && typeof full.notes === "object" ? full.notes : {};
     const facts = [["kind", full.kind], ["model", full.about || nt.model || full.model], ["server", full.server],
       ["session", full.session ? `${full.session}${full.session_id ? " · " + full.session_id : ""}` : null], ["exit", full.rc],
@@ -55,7 +55,8 @@ async function agentsView(ctx) {
     const factEl = ([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 && v !== "0" ? " bad" : ""}` }, h("small", {}, k), h("span", { class: k === "folder" ? "mono small" : "mono" }, String(v)));
     const more = facts.filter(([k]) => !MAIN.has(k));
     one.replaceChildren(h("div", { class: "detail-head" }, h("h2", {}, full.agent || full.model || full.kind), h("span", { class: "muted" }, ago(full.ts), " · ", dur(full.seconds))),
-      h("div", { class: "actions" }, ...viewerTools(one, { title: "Agent turn", rawText: JSON.stringify(full, null, 2) })),
+      h("div", { class: "actions" }, full.prompt ? act("Prompt", () => fullscreen(h("pre", { class: "raw-content" }, String(full.prompt)), "Agent prompt"), { cls: "small agent-prompt-button" }) : "",
+        ...viewerTools(one, { title: "Agent turn", rawText: JSON.stringify(full, null, 2) })),
       h("div", { class: "facts" }, facts.filter(([k]) => MAIN.has(k)).map(factEl)),
       more.length ? h("details", { class: "facts-more" }, h("summary", {}, `More: ${more.map(([k]) => k).join(", ")}`), h("div", { class: "facts" }, more.map(factEl))) : "",
       ...(Array.isArray(full.steps) && full.steps.length

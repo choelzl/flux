@@ -133,8 +133,12 @@ class Journal:
             stack = self._stacks.setdefault(threading.get_ident(), [])
             parent = stack[-1] if stack else self._adopted.get(threading.get_ident())
             stack.append(pid)
-        self._write({"ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why),
-                     "params": _cut(params or {})})
+        given = _cut(params or {})
+        # The agent's exact input is saved once at start, before it can time out or be interrupted.
+        # Output updates remain bounded; shortening a prompt would hide its original instructions.
+        if name.startswith("agent:") and isinstance((params or {}).get("prompt"), str):
+            given["prompt"] = params["prompt"]
+        self._write({"ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given})
         return pid
 
     def phase_update(self, token: int, name: str, output: dict) -> None:

@@ -777,7 +777,7 @@ def flows(r: Run) -> None:
     def run_history():
         events = [{"ev": "hello", "t": 1001}, {"ev": "mark", "name": "pass", "n": 1, "t": 1002},
                   {"ev": "start", "id": 1, "name": "generation: old design", "parent": None, "t": 1003},
-                  {"ev": "start", "id": 2, "name": "agent: claude", "parent": 1, "t": 1004},
+                  {"ev": "start", "id": 2, "name": "agent: claude", "parent": 1, "t": 1004, "params": {"prompt": "old full prompt"}},
                   {"ev": "end", "id": 2, "t": 1005, "seconds": 1, "output": {"reply": "old reply", "steps": [{"k": "tool", "name": "bash", "out": "old compiler output"}]}},
                   {"ev": "start", "id": 3, "name": "tool: old compiler", "parent": 1, "t": 1006, "params": {"command": "old build"}},
                   {"ev": "end", "id": 3, "t": 1007, "seconds": 1, "output": {"stdout": "old compiler output"}},
@@ -807,6 +807,8 @@ def flows(r: Run) -> None:
             b.click(".history-tasks .node.leaf")
             b.wait("document.querySelector('.history-tasks .detail').textContent.includes('agent: claude')", what="older design's agent")
             r.check("history replays the agent conversation inside its pass", b.js("return document.querySelector('.history-tasks .detail').textContent.includes('old compiler output')"))
+            r.button("Prompt", ".history-tasks .dtabs")
+            r.check("historical tasks expose their agent prompt", b.js("return document.querySelector('.history-tasks [data-k=prompt]').textContent === 'old full prompt'"))
             # Inspect the raw link in this tab; complete streamed content is covered by the API tests.
             r.check("raw historical journal is scoped to the old start", b.js("return document.querySelector('.history-tasks > .actions a').getAttribute('href').includes('start_id=910')"))
             r.button("Log", ".history-controls + p + .subtabs")
@@ -816,6 +818,11 @@ def flows(r: Run) -> None:
             b.wait("document.querySelector('button.open-turn')", what="older agent turn")
             b.click("button.open-turn")
             b.wait("document.querySelector('.detail').textContent.includes('old compiler output')", what="old agent's complete conversation")
+            r.button("Prompt", ".detail .actions")
+            b.wait("document.querySelector('dialog[open] .raw-content')", what="agent prompt viewer")
+            r.check("agent prompt opens directly as plain text", b.js("return document.querySelector('dialog[open] .raw-content').textContent === 'old full prompt'"))
+            b.keys(b.ESCAPE)
+            b.wait("!document.querySelector('dialog[open]')", what="agent prompt returned")
             r.button("Raw", ".detail .actions")
             b.wait("document.querySelector('dialog.raw-content') || document.querySelector('dialog .raw-content')", what="raw agent turn")
             r.check("historical agent raw output keeps its prompt and tool calls", b.js("return document.querySelector('dialog .raw-content').textContent.includes('old full prompt') && document.querySelector('dialog .raw-content').textContent.includes('old compiler output')"))
@@ -865,6 +872,13 @@ def flows(r: Run) -> None:
           }).catch(e => done(String(e)));""")
         try:
             r.check("running agent diagnostics are visible without failure coloring", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.textContent.includes('DEBUG') && !el.closest('.err')"))
+            r.button("Prompt", ".scroll-fixture .dtabs")
+            b.wait("document.querySelector('.scroll-fixture [data-k=prompt]')", what="live agent prompt")
+            r.check("live prompt is complete and opens at the beginning", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]'); return el.textContent === window.__scrollFixture.text('prompt') && el.scrollTop === 0"))
+            b.js("window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]').scrollTop = 160; return 1")
+            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: 'unrelated prompt update'}}}); f.tree.draw(); return 1")
+            r.check("live prompt scrolling survives unrelated updates", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]').scrollTop === 160"))
+            r.button("Live", ".scroll-fixture .dtabs")
             b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}}}); f.tree.draw(); return 1")
             b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-step').forEach(el => el.open = true); return 1")
             b.wait("(() => { const d = window.__scrollFixture.tree.detail; return [...d.querySelectorAll('details.cv-step')].every(el => el.open) && d.scrollHeight > d.clientHeight + 500; })()", what="opened thinking and tool output")

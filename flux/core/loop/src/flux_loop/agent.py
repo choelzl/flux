@@ -1073,7 +1073,9 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     t0 = time.monotonic()
     timed_out = False
     shown = 0.0
-    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "") as row, contextlib.ExitStack() as cleanup:
+    resumed = spec.resume is not None and argv == spec.resume
+    prompt = subs.get("answer", "") if resumed else subs.get("prompt", "")
+    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "", prompt=prompt) as row, contextlib.ExitStack() as cleanup:
         cleanup.callback(end_group, proc)             # manual interruption also reaps the old process
         ended, exited = False, None
         while True:

@@ -8,7 +8,9 @@ import json
 import sys
 
 import flux_profile
+import pytest
 from flux_loop.agent import AgentSpec, _Live, _parse, run_turn
+from flux_loop.journal import Journal
 
 SLOW = r'''import json, sys, time
 for ev in [{"type": "tool_use", "part": {"tool": "bash", "state": {"input": {"command": "python3 -c 'print(42)'"}, "output": "42"}}},
@@ -23,10 +25,12 @@ for ev in [{"type": "tool_use", "part": {"tool": "bash", "state": {"input": {"co
 
 class _Listener:
     def __init__(self):
+        self.starts: list[dict] = []
         self.updates: list[dict] = []
         self.ends: list[dict] = []
 
     def phase_start(self, name, why, params):
+        self.starts.append({"name": name, "params": dict(params)})
         return name
 
     def phase_update(self, token, name, fields):
@@ -47,6 +51,7 @@ def test_the_running_agent_streams_its_tools_and_words(tmp_path):
     finally:
         flux_profile.clear_listener()
     assert turn.ok and "wrote the file" in turn.text
+    assert lis.starts[-1]["params"]["prompt"] == "p"
     mid = [u for u in lis.updates if "tool calls" in u]
     # an update at most once a second: under load the first may already count both tools
     assert mid and mid[0]["tool calls"].startswith("1. bash: python3 -c 'print(42)'"), "the row updated while the agent ran"
@@ -54,6 +59,30 @@ def test_the_running_agent_streams_its_tools_and_words(tmp_path):
     assert lis.ends and lis.ends[-1]["name"] == "agent: fake" and lis.ends[-1]["tool calls"].endswith("2. edit: draft.sv")
     end = lis.ends[-1]
     assert end["last tool output"] == "42" and "ripple" in end["thinking (live tail)"] and "wrote the file" in end["reply (live tail)"]
+
+
+@pytest.mark.parametrize("resumed", [False, True])
+def test_full_prompt_is_saved_at_start_for_fresh_and_resumed_agents(tmp_path, resumed):
+    fake = tmp_path / "echo_agent.py"
+    fake.write_text("import sys\nprint(sys.stdin.read(), end='')\n")
+    argv = (sys.executable, str(fake))
+    spec = AgentSpec("fake", argv, argv + ("--resume",), "text", timeout_s=30)
+    brief, answer = "Initial instructions\n" + "x" * 20_000, "Continue instructions\n" + "y" * 20_000
+    expected = answer if resumed else brief
+    path = tmp_path / "events.jsonl"
+    lis = _Listener()
+    flux_profile.set_listener(lis)
+    flux_profile.add_listener(Journal(str(path)))
+    try:
+        subs = {"prompt": brief, **({"answer": answer} if resumed else {})}
+        turn = run_turn(spec, spec.resume if resumed else spec.argv, subs, workdir=tmp_path)
+    finally:
+        flux_profile.clear_listener()
+    assert turn.ok and turn.text == expected, "the displayed prompt matches the input sent to the process"
+    assert lis.starts[-1]["params"]["prompt"] == expected
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    assert events[0]["ev"] == "start" and events[0]["params"]["prompt"] == expected
+    assert events[-1]["ev"] == "end", "the prompt is available before the final output event"
 
 
 def test_claude_stream_json_is_read_live_and_its_result_is_the_answer():
@@ -234,8 +263,6 @@ def test_an_added_agent_runs_as_its_kind_with_its_own_set(tmp_path, monkeypatch)
     """D807: a server adds `nga`, an OpenCode of its own -- its kind's arguments, its program, its
     own variables (`FLUX_NGA_ENV`), none of another agent's set; a variable the run was given for
     every agent (`FLUX_SHARED_VARS`) reaches it whatever its name."""
-    import os
-
     from flux_loop.agent import agent_kinds, agent_spec
     from flux_loop.document import TaskError, TaskSpec
 
