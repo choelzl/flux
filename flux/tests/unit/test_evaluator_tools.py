@@ -136,6 +136,7 @@ def test_a_tool_task_says_what_ran_and_how_it_went(tmp_path, seen):
     assert name == "tool:" + sys.executable.rsplit("/", 1)[-1] and why == "stage bench x-1"
     assert params["command"].startswith(sys.executable) and "SystemExit(4)" in params["command"]
     assert params["folder"] == str(tmp_path)
+    assert params["stdin"] == "hello"
     assert any(u.get("stdout (live tail)") == "HELLO\n" for u in seen.updates), "what it printed, while it runs"
     _n, failed, out = seen.ends[-1]
     assert not failed and out == {"exit": 4, "stdout": "HELLO\ndone\n", "stderr": "warned\n"}
@@ -148,6 +149,14 @@ def test_a_timed_out_tool_keeps_what_it_printed_and_odd_bytes_are_replaced(seen)
     assert failed and out["exit"] == "timed out" and out["stdout"] == "started\n"
     run = run_tool([sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'a\\xffb\\r\\nc')"], timeout_s=30)
     assert run.stdout == "a�b\nc", "never an exception for a byte that is not UTF-8; newlines as text mode reads them"
+
+
+def test_recorded_stdin_is_bounded_without_truncating_the_tools_input(seen):
+    text = "x" * 50001
+    run = run_tool([sys.executable, "-c", "import sys; print(len(sys.stdin.read()))"], stdin=text, timeout_s=30)
+    assert run.stdout.strip() == "50001"
+    recorded = seen.starts[-1][2]["stdin"]
+    assert recorded.startswith("x" * 48000) and "truncated after 48000 characters" in recorded
 
 
 def test_a_tool_whose_child_holds_its_output_is_bounded_and_its_group_ends(tmp_path):

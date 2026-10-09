@@ -30,6 +30,56 @@ WORK = ".author-work"                                   # the agent's copy of th
 _NOT_THE_PROBLEMS = {"out", "runs", "workbench", ATTACHED, WORK, ".git", "__pycache__", ".flux-app.json"}
 
 
+def _progress(app_dir: Path, work: Path | None = None) -> dict[str, Any] | None:
+    """Bounded, confined journal reads: live agent output and the current author/check phase."""
+    from .confine import open_read
+
+    root = (work or app_dir / WORK) / "runs" / "author"
+
+    def tail(path, limit):
+        try:
+            with open_read(path, app_dir) as fh:
+                fh.seek(0, os.SEEK_END)
+                fh.seek(max(0, fh.tell() - limit))
+                return fh.read().decode("utf-8", "replace")
+        except (OSError, ValueError):
+            return ""
+
+    active, latest, fields = {}, None, {}
+    for line in tail(root / "events.jsonl", 512 * 1024).splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if row.get("ev") == "start":
+            active[str(row.get("id"))] = row
+            latest = row
+        elif row.get("ev") == "end":
+            active.pop(str(row.get("id")), None)
+            latest = row
+            if isinstance(row.get("output"), dict) and row["output"]:
+                fields = row["output"]
+    if latest is None:
+        return None
+    phase = next(reversed(active.values())) if active else latest
+    updated = latest.get("t")
+    try:
+        live = json.loads(tail(root / "live.json", 512 * 1024))
+        updates = live.get("updates", {})
+        for ident in active:
+            if isinstance(updates.get(ident), dict):
+                fields = updates[ident]
+                updated = live.get("t", updated)
+    except (ValueError, AttributeError):
+        pass
+    allowed = {"elapsed", "agent", "output", "status", "rate limit", "stderr", "tool calls", "last tool output",
+               "thinking (live tail)", "thinking", "reply (live tail)", "steps", "steps total", "tokens (reported)"}
+    return {"phase": str(phase.get("name") or "author"), "updated": updated,
+            "fields": {k: v for k, v in fields.items() if k in allowed}}
+
+
 def available(env: dict[str, str], agents: dict[str, Any]) -> list[dict[str, Any]]:
     """Each author: the agents the server offers (D807: their program found), and Flux's own
     model, available when one is set."""
@@ -63,6 +113,8 @@ class Authoring:
 
     def state(self, app_dir: Path, workspace: Any = None, name: str = "") -> dict[str, Any]:
         """The job: running or not, how it ended, the log's last lines."""
+        from .confine import open_read
+
         f = self.files(app_dir)
         try:
             st = json.loads(f["state"].read_text())
@@ -72,12 +124,19 @@ class Authoring:
         if st.get("ended") is None and not st["running"] and workspace is not None:
             st = self._finish(app_dir, workspace, name, None)           # it ended while the server was away
         try:
-            with open(f["log"], "rb") as fh:
-                fh.seek(max(0, os.path.getsize(f["log"]) - 48 * 1024))
+            with open_read(f["log"], app_dir) as fh:
+                info = os.fstat(fh.fileno())
+                st["log_at"] = info.st_mtime
+                fh.seek(max(0, info.st_size - 48 * 1024))
                 st["log"] = fh.read().decode("utf-8", "replace").splitlines()[-80:]
-        except OSError:
+        except (OSError, ValueError):
             st["log"] = []
+            st["log_at"] = None
         st["ever"] = True
+        work = app_dir / WORK / "loop" if st.get("work_directory") == "loop" else app_dir / WORK
+        st["progress"] = _progress(app_dir, work) or st.get("progress")
+        st["observed"] = time.time()
+        st["elapsed_s"] = max(0, (st.get("ended") or st["observed"]) - st.get("started", st["observed"]))
         return st
 
     def start(self, *, app_dir: Path, workspace: Any, name: str, prompt: str, author: str, env: dict[str, str],
@@ -99,9 +158,10 @@ class Authoring:
                        f"THE INSTRUCTION:\n{prompt.strip()}\n\nTHE CURRENT `{revise}`:\n```yaml\n{before}\n```")
             # the agent works on a copy of the loop's own files: only that copy is writable in the
             # sandbox -- the record (out/), the log (runs/) and the workbench stay out of its reach
-            work = app_dir / WORK
-            shutil.rmtree(work, ignore_errors=True)
-            work.mkdir()
+            root = app_dir / WORK
+            shutil.rmtree(root, ignore_errors=True)
+            work = root / "loop"  # a valid task-folder ID when the author runs without a sandbox
+            work.mkdir(parents=True)
             for p in app_dir.iterdir():
                 if p.name in _NOT_THE_PROBLEMS:
                     continue
@@ -121,7 +181,8 @@ class Authoring:
                                     env=env, start_new_session=True)
             log.close()
             f["state"].write_text(json.dumps({"pid": proc.pid, "started": time.time(), "ended": None, "author": author,
-                                              "prompt": prompt.strip()[:4000], "by": by, "revise": revise, "before": before}))
+                                              "prompt": prompt.strip()[:4000], "by": by, "revise": revise, "before": before,
+                                              "work_directory": "loop"}))
         threading.Thread(target=self._wait, args=(proc, app_dir, workspace, name), daemon=True).start()
 
     def _wait(self, proc: subprocess.Popen, app_dir: Path, workspace: Any, name: str) -> None:
@@ -143,7 +204,8 @@ class Authoring:
         if st.get("ended") is not None:                 # done already, by the other
             st["running"] = False
             return st
-        work = app_dir / WORK
+        work = app_dir / WORK / "loop" if st.get("work_directory") == "loop" else app_dir / WORK
+        st["progress"] = _progress(app_dir, work) or st.get("progress")  # keep the last evidence after work is removed
         if work.is_dir():
             doc = document_path(work)
             revise = st.get("revise")
@@ -160,7 +222,7 @@ class Authoring:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.unlink(missing_ok=True)                       # a linked file is replaced, not written through
                 shutil.copy2(p, target)
-            shutil.rmtree(work, ignore_errors=True)
+            shutil.rmtree(app_dir / WORK, ignore_errors=True)
         doc = document_path(app_dir)
         revise = st.get("revise")
         if revise and (app_dir / revise).is_file():

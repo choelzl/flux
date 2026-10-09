@@ -652,6 +652,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
         review = bool(settings["review"])
     slug = _re.sub(r"[^a-z0-9]+", "_", args.prompt.lower()).strip("_")[:40] or "ask"
     workdir = Path(args.dir or Path("out") / f"ask_{slug}").resolve()       # D786: its name is the problem's id
+    if args.no_run:
+        from flux_loop.journal import attach
+
+        attach(str(workdir / "runs" / "author"))  # creation/revision streams before a loop exists
     from flux_loop.author import workspace_skills
     from flux_loop.skills import SkillError
 

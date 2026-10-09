@@ -4,7 +4,7 @@
 
 import { codeBlock, codeEditor } from "./highlight.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
+import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { flushResultPreferences, mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
@@ -440,17 +440,35 @@ function attachBox({ items = [], onChange = null } = {}) {
 function authoringCard(name, st, { onStop } = {}) {
   if (!st || !st.ever) return "";
   const running = st.running;
-  const head = running ? h("span", { class: "pill live" }, h("i", { class: "dot" }), "writing")
+  const progress = st.progress, fields = progress?.fields || {};
+  const elapsed = st.elapsed_s ?? Math.max(0, (st.ended || Date.now() / 1000) - (st.started || Date.now() / 1000));
+  const head = st.connection_error ? h("span", { class: "pill warn" }, "status unavailable")
+    : running ? h("span", { class: "pill live" }, h("i", { class: "dot" }), "running")
     : st.ok ? h("span", { class: "pill ok" }, "done") : h("span", { class: "pill bad" }, "failed");
+  const steps = fields.steps || [fields["thinking (live tail)"] ? { k: "think", text: fields["thinking (live tail)"] } : null,
+    fields["reply (live tail)"] ? { k: "text", text: fields["reply (live tail)"] } : null].filter(Boolean);
   const diff = !running && st.revise && st.before && st.after && st.before !== st.after ? h("details", { class: "blk", open: true },
     h("summary", {}, `What it changed in ${st.revise}`), diffView(lineDiff(st.before, st.after))) : "";
   return card(`Agent ${st.revise ? "revising" : "writing"} the problem`, [
-    h("div", { class: "row" }, head, h("span", { class: "muted" }, `${st.author} · by ${st.by} · started `, ago(st.started),
+    h("div", { class: "row" }, head, h("span", { class: "muted" }, st.author || "Agent", st.by ? ` · by ${st.by}` : "", st.started ? [" · started ", ago(st.started)] : "",
       st.ended ? [" · ended ", ago(st.ended)] : "")),
-    st.prompt ? h("details", {}, h("summary", { class: "muted" }, "What it was asked"), h("pre", { class: "val small" }, st.prompt)) : "",
-    h("pre", { class: "log small author-log" }, (st.log || []).join("\n") || "…"),
+    h("div", { class: "author-activity" }, h("strong", {}, st.connection_error ? "Reconnecting to agent status…" : running ? progress?.phase || "Starting the agent" : st.ok ? "Document checked and saved" : "Agent ended"),
+      h("span", { class: "mono muted" }, dur(elapsed) || "0s")),
+    st.connection_error ? h("p", { class: "callout warn author-connection" }, `Cannot refresh the agent's status: ${st.connection_error}. Retrying…`)
+      : running ? h("p", { class: "muted small author-heartbeat" }, "Agent process is alive · status checked ", ago(st.observed || Date.now() / 1000)) : "",
+    running ? h("p", { class: "muted small author-output-age" }, fields.output ? `Agent output: ${fields.output}`
+      : st.log_at ? ["Log last updated ", ago(st.log_at), ". Waiting for streamed agent output."] : "Waiting for the first agent output.") : "",
+    fields.status ? h("p", { class: "callout author-agent-status" }, fields.status) : "",
+    fields["rate limit"] ? h("p", { class: "callout warn" }, "Rate limit: ", fields["rate limit"]) : "",
+    fields.agent || fields["tokens (reported)"] ? h("p", { class: "muted small" }, [fields.agent, fields["tokens (reported)"]].filter(Boolean).join(" · ")) : "",
+    steps.length ? conversation(steps, { key: `author-${name}-${st.started}`, offset: Math.max(0, (fields["steps total"] || steps.length) - steps.length), live: running, scroll: true })
+      : fields["tool calls"] ? h("pre", { class: "val small" }, fields["tool calls"]) : "",
+    fields.stderr ? h("details", { "data-author-section": "stderr" }, h("summary", {}, "Agent stderr"), h("pre", { class: "log small", "data-k": "author-stderr" }, fields.stderr)) : "",
+    st.prompt ? h("details", { "data-author-section": "prompt" }, h("summary", { class: "muted" }, "What it was asked"), h("pre", { class: "val small" }, st.prompt)) : "",
+    h("details", { "data-author-section": "log", open: !progress }, h("summary", {}, "Creation log"),
+      h("pre", { class: "log small author-log", "data-k": "author-log" }, (st.log || []).join("\n") || "No log output received yet.")),
     diff,
-    !running && !st.ok ? h("p", { class: "callout bad" }, "The agent did not leave a document that passes its checks: read its log above, then try again or write the document yourself.") : "",
+    !running && !st.ok && !st.connection_error ? h("p", { class: "callout bad" }, "The agent did not leave a document that passes its checks: read its log above, then try again or write the document yourself.") : "",
     running && onStop ? h("div", { class: "form-actions" }, act("Stop the agent", onStop, { cls: "danger" })) : ""], { cls: "authoring" });
 }
 

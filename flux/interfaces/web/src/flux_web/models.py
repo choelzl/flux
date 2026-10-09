@@ -233,10 +233,16 @@ OVERVIEW_SMALL_CARDS = {
     "state": "State", "designs": "Designs measured", "passes": "Passes on record",
     "usage": "Models and agents", "objective": "Objective",
     "tokens_in": "Tokens in", "tokens_out": "Tokens out", "cost": "Model and agent cost",
+    "primary_metric": "Main metric", "reference_change": "Change vs reference", "acceptance": "Acceptance rate",
+    "runtime": "Active run time", "model_time": "Model and agent time", "goals": "Goals met",
+    "ideas": "Ideas",
 }
 OVERVIEW_LARGE_CARDS = {
     "decision": "Decision", "best": "Best so far", "last_pass": "Last pass",
     "notes": "Latest notes", "workbench": "Agents' workbench", "usage": "Models and agents",
+    "pareto": "Pareto front", "references": "Reference comparison", "goals": "Goal status",
+    "recent_designs": "Recent designs", "pass_history": "Recent passes", "usage_breakdown": "Usage by model and agent",
+    "ideas": "Ideas",
 }
 OVERVIEW_DEFAULT = {
     "stats": ["state", "designs", "passes", "usage", "objective"],
@@ -246,8 +252,10 @@ OVERVIEW_DEFAULT = {
 
 class OverviewLayout(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    stats: list[Literal["state", "designs", "passes", "usage", "objective", "tokens_in", "tokens_out", "cost"]] = Field(min_length=3, max_length=5)
-    columns: list[list[Literal["decision", "best", "last_pass", "notes", "workbench", "usage"]]] = Field(min_length=2, max_length=2)
+    stats: list[Literal["state", "designs", "passes", "usage", "objective", "tokens_in", "tokens_out", "cost",
+                        "primary_metric", "reference_change", "acceptance", "runtime", "model_time", "goals", "ideas"]] = Field(min_length=3, max_length=5)
+    columns: list[list[Literal["decision", "best", "last_pass", "notes", "workbench", "usage",
+                               "pareto", "references", "goals", "recent_designs", "pass_history", "usage_breakdown", "ideas"]]] = Field(min_length=2, max_length=2)
 
     @field_validator("stats", "columns")
     @classmethod

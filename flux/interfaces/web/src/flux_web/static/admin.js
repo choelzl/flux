@@ -206,14 +206,15 @@ async function adminResources(body) {
       : cs.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Container", "Loop", "State", "CPU", "Memory", "PIDs", ""].map((x, i) => h("th", { class: i >= 3 && i <= 5 ? "num" : "" }, x)))),
           h("tbody", {}, cs.map(c => h("tr", {},
             h("td", { class: "mono" }, c.name), h("td", {}, loopLink(c.user, c.loop)),
-            h("td", {}, h("span", { class: `pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}` }, c.orphan && c.state === "running" ? "left behind" : c.state), " ", h("small", { class: "muted" }, c.status)),
+            h("td", {}, h("span", { class: `pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}` }, c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state), " ", h("small", { class: "muted" }, c.status)),
             h("td", { class: "num mono" }, c.cpu != null ? `${c.cpu.toFixed(1)}%` : ""),
             h("td", { class: "num mono" }, c.mem != null ? bytes(Math.round(c.mem)) : ""),
             h("td", { class: "num mono" }, c.pids != null ? String(c.pids) : ""),
             h("td", { class: "right" }, c.orphan ? act("Kill", async () => {
-                if (!await confirmDialog(`Kill ${c.name}?`, "No running loop owns it; it is removed.", { ok: "Kill", danger: true })) return;
+                if (!await confirmDialog(`Kill ${c.name}?`, "No active task owns it; it is removed.", { ok: "Kill", danger: true })) return;
                 toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
               }, { cls: "small danger" })
+              : c.activity && c.activity !== "loop" ? (c.user ? h("a", { class: "btn small", href: appHref(c.user, c.loop) }, "View") : null)
               : act("Stop", async () => { await stopLoop(c.loop, false, c.user); load(); }, { cls: "small", title: "Stop the loop after this pass" }))))))) : empty("No sandbox container."),
       { actions: r.containers_at ? [h("span", { class: "muted small" }, "asked ", ago(r.containers_at))] : null });   // D921: a sample, said with its time
     const loops = r.loops.slice().sort((a, b) => b.total - a.total);

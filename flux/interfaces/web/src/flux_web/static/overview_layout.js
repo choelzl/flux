@@ -75,7 +75,7 @@ async function editOverviewLayout() {
           h("p", { class: "muted small overview-layout-mobile-note" }, "On phones, the left column appears first.")));
       renderOverview({ name: "sample", owner: "__overview_mock_data__", qs: "", body: preview, mine: false,
         st: example.state, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} },
-        example.results, example.notes, example.workbench, example.usage, { layout: draft });
+        example.results, example.notes, example.workbench, example.usage, { layout: draft }, example.ideas);
       if (focused) {
         const row = [...content.querySelectorAll("[data-layout-card]")].find(el => el.dataset.layoutCard === card && (el.closest("[data-layout-list]").dataset.layoutList === "stats") === small);
         const action = [...(row || content).querySelectorAll("button, select")].find(el => el.getAttribute("aria-label") === label && !el.disabled);

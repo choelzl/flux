@@ -82,6 +82,9 @@ def test_full_prompt_is_saved_at_start_for_fresh_and_resumed_agents(tmp_path, re
     assert lis.starts[-1]["params"]["prompt"] == expected
     events = [json.loads(line) for line in path.read_text().splitlines()]
     assert events[0]["ev"] == "start" and events[0]["params"]["prompt"] == expected
+    assert str(fake) in events[0]["params"]["command"]
+    assert events[0]["params"]["folder"] == str(tmp_path)
+    assert events[0]["params"]["stdin"] == "The prompt above (sent on stdin)"
     assert events[-1]["ev"] == "end", "the prompt is available before the final output event"
 
 

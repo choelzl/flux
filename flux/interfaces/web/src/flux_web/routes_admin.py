@@ -85,11 +85,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                "mem_used": (m["memory"]["total"] or 0) - (m["memory"]["available"] or 0), "mem_total": m["memory"]["total"] or 0,
                                "disks": {d["label"]: d["used"] / d["total"] for d in m["disks"] if not d.get("same_as") and d["total"]},
                                "loops": len(live)}
-        if live:                                     # the containers' own use, when there are any
-            cs = [c for c in adm.containers_seen()[0]["containers"] if c.get("state") == "running"]   # D921: shared with Resources
-            out.update(containers=len(cs), cpu=sum(c.get("cpu") or 0 for c in cs), cmem=sum(c.get("mem") or 0 for c in cs))
-        else:
-            out.update(containers=0, cpu=0.0, cmem=0.0)
+        # Authors and other agent tasks use containers even before a loop has a run.
+        cs = [c for c in adm.containers_seen()[0]["containers"] if c.get("state") == "running"]
+        out.update(containers=len(cs), cpu=sum(c.get("cpu") or 0 for c in cs), cmem=sum(c.get("mem") or 0 for c in cs))
         return out
 
     @app.get("/api/admin/history")
@@ -116,7 +114,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
         live = _live_loops()
         users = store.users()
-        loops, pairs = [], set()
+        loops, pairs, authors = [], set(), {}
         for u in users:
             w = Workspace(store.data, u.name)
             for a in w.apps():
@@ -126,16 +124,32 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 except WorkspaceError:
                     continue
                 st = runs.state(u, a["name"])
+                author = ctx.authoring.state(w.app(a["name"]))
+                if author.get("running"):
+                    authors[adm._key(u.name, a["name"])] = author
                 loops.append({"user": u.name, "app": a["name"], "running": (u.name, a["name"]) in live,
                               "container": st.get("container"), "last_active": st.get("last_active"), **disk})
         by_key = {adm._key(x["user"], x["app"]): x for x in loops}
         cont, seen_at = adm.containers_seen()                # D921: asked at most every 15 s, its time said
         cont = {**cont, "containers": [dict(c) for c in cont["containers"]]}
+        held = adm.attached()
+        ancestors = {}
         for c in cont["containers"]:
             owner = by_key.get(adm._key(*c["app"].split(".", 1))) if c.get("app") and "." in c["app"] else None
             owner = owner or next((x for x in loops if x.get("container") == c["name"]), None)
             c["user"], c["loop"] = (owner["user"], owner["app"]) if owner else (None, None)
-            c["orphan"] = c["state"] != "running" or not (owner and owner["running"])
+            client = held.get(c["name"].removesuffix("-network"))
+            author = authors.get(adm._key(owner["user"], owner["app"])) if owner else None
+            c["activity"] = None
+            if c["state"] == "running":
+                if client and author:
+                    if client not in ancestors:
+                        ancestors[client] = adm._ancestors(client)
+                    if author.get("pid") in ancestors[client]:
+                        c["activity"] = "revising loop" if author.get("revise") else "creating loop"
+                if not c["activity"]:
+                    c["activity"] = "loop" if owner and owner["running"] else "active task" if client else None
+            c["orphan"] = c["activity"] is None
         caches = [c for c in adm.caches(pairs, {u.name for u in users}) if c["kind"] != "loop"]
         paths = {"server data": str(store.data), "sandbox caches": str(adm.cache_root().parent), "sandbox storage": str(_local())}
         return {"machine": adm.machine({k: v for k, v in paths.items() if os.path.exists(v)}), **cont, "loops": loops,
@@ -151,6 +165,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             container = runs.state(store.user(name=_u), _app).get("container")
             if container and cname in (container, container + "-network"):
                 raise HTTPException(409, f"{cname} is {_u}'s {_app}, running: stop the loop instead")
+        if cname.removesuffix("-network") in adm.attached():
+            raise HTTPException(409, f"{cname} has an active sandbox client: stop its task instead")
         try:
             said = adm.kill_container(cname)
         except ValueError as exc:

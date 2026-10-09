@@ -153,6 +153,46 @@ def general_flows(r, watch):
                 r.check("configuration sections have counts, numbered rows and stacked full-width columns", b.js("const e=document.querySelector('.overview-layout-editor'); return e.querySelectorAll(':scope > .overview-layout-section').length===2 && e.querySelectorAll('.overview-layout-column').length===2 && e.querySelector('.overview-layout-count').textContent==='5 / 5' && e.querySelectorAll('[data-layout-list=stats] .overview-layout-index').length===5 && [...e.querySelectorAll('.overview-layout-column select')].every(s => s.getBoundingClientRect().width>=120)"))
                 r.check("the editor explains its account-wide scope", b.js("return document.querySelector('dialog').textContent.includes('every loop in your account, across browsers')"))
                 r.check("the editor previews real cards and charts with clearly marked mock data", b.js("const d=document.querySelector('dialog'); return d.textContent.includes('Mock Data') && d.querySelectorAll('.overview-layout-preview .ov-stats > .stat').length===5 && d.querySelector('.overview-layout-preview .decision-nums') && d.querySelector('.overview-layout-preview svg.best-chart') && d.querySelector('.overview-layout-preview [data-overview-card=notes]') && d.querySelector('.overview-layout-preview [data-overview-card=workbench]')"))
+                for card, value in (("primary_metric", "7.6"), ("reference_change", "-24%"), ("acceptance", "100%"),
+                                    ("runtime", None), ("model_time", None), ("goals", "1 / 1"), ("ideas", "3")):
+                    b.js("const s=document.querySelector('[data-layout-list=stats] li select'); s.value=arguments[0]; s.dispatchEvent(new Event('change')); return 1", card)
+                    shown = b.js("return document.querySelector('dialog .overview-layout-preview .ov-stats > [data-overview-card='+arguments[0]+'] .big').textContent", card)
+                    r.check(f"{card}: top-card preview has mock values", shown == value if value else shown not in ("", "—"), shown)
+                b.js("const s=document.querySelector('[data-layout-list=stats] li select'); s.value='state'; s.dispatchEvent(new Event('change')); return 1")
+                for card, selector, text in (("pareto", "svg.pareto", "feasible front"),
+                                             ("references", "tbody tr", "-24%"), ("goals", "tbody .pill.ok", "met"),
+                                             ("recent_designs", "tbody tr", "#3"), ("pass_history", "li", "sample#3"),
+                                             ("usage_breakdown", "tbody tr", "Coding agent"), ("ideas", "li", "Compare cache layouts")):
+                    b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value=arguments[0]; s.dispatchEvent(new Event('change')); return 1", card)
+                    r.check(f"{card}: main-card preview has real content", b.js("const c=document.querySelector('dialog .overview-layout-preview .grid-2.ov [data-overview-card='+arguments[0]+']'); return !!c?.querySelector(arguments[1]) && c.textContent.includes(arguments[2])", card, selector, text))
+                r.check("recent search designs exclude the baseline and show the newest first", b.js("const p=document.querySelector('dialog .overview-layout-preview'); const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='recent_designs'; s.dispatchEvent(new Event('change')); const rows=document.querySelectorAll('dialog [data-overview-card=recent_designs] tbody tr'); return rows.length===3 && rows[0].textContent.includes('#3') && ![...rows].some(r=>r.textContent.includes('#0'))"))
+                b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='decision'; s.dispatchEvent(new Event('change')); return 1")
+                sparse = b.ajs("""const done=arguments[arguments.length-1]; Promise.all([import('/static/loop_overview.js'),import('/static/overview_mock.js')]).then(([{renderOverview},{overviewMockData}])=>{
+                  const sample=overviewMockData(), body=document.createElement('div');
+                  const ctx={name:'sample',owner:'__mock__',qs:'',body,mine:false,st:{running:false},tab:'Overview',still:()=>()=>true,goTab:()=>{},drawBody:()=>{},
+                    result_preferences:{graphs:{x:'latency',y:'area',paretoStage:'timing',scope:'whole',paretoFocus:true}}};
+                  const prefs={layout:{stats:['primary_metric','reference_change','goals'],columns:[['references','goals','pareto'],['recent_designs','pass_history','usage_breakdown']]}};
+                  ctx.result_preferences.mainMetrics=['latency','area']; ctx.result_preferences.relativeMetrics={latency:true};
+                  renderOverview(ctx,sample.results,[],[],sample.usage,prefs);
+                  const formats=body.querySelector('[data-overview-small][data-overview-card=primary_metric] .big').textContent==='-24%' &&
+                    [...body.querySelector('[data-overview-card=recent_designs] tbody tr').cells].slice(-2).map(c=>c.textContent).join('|')==='-24%|81';
+                  sample.results.designs=sample.results.designs.filter(d=>!d.baseline);
+                  renderOverview(ctx,sample.results,[],[],sample.usage,prefs);
+                  const fallback=body.querySelector('[data-overview-small][data-overview-card=reference_change]').textContent.includes('P10');
+                  sample.results.designs=overviewMockData().results.designs;
+                  sample.results.designs[0].stages.timing.latency=0;
+                  sample.results.limits.push({metric:'missing',direction:'maximize',goal:1,stage:'early'});
+                  renderOverview(ctx,sample.results,[],[],sample.usage,prefs);
+                  const zero=body.querySelector('[data-overview-small][data-overview-card=reference_change] .big').textContent==='—';
+                  const missing=body.querySelector('[data-overview-column] [data-overview-card=goals] tbody tr:last-child').textContent.includes('unmeasured');
+                  const axes=body.querySelector('svg.pareto')?.getAttribute('aria-label').startsWith('area against latency') && body.querySelector('.pareto-focus-said')?.textContent.includes('focused on front');
+                  sample.results.designs=[]; sample.results.passes=[]; sample.results.metrics=[]; sample.results.limits=[];
+                  sample.results.counts={accepted:0,pending:0,failed:0}; prefs.layout.stats=['acceptance','runtime','model_time'];
+                  renderOverview(ctx,sample.results,[],[],null,prefs);
+                  const empty=[...body.querySelectorAll('.ov-stats .big')].every(e=>e.textContent==='—') && body.querySelectorAll('.grid-2.ov .empty').length===6;
+                  done({formats,fallback,zero,missing,axes,empty});
+                }).catch(e=>done({error:e.message}));""")
+                r.check("new cards honor metric formats, percentile fallback, zero references, missing stage measurements, saved Pareto choices and empty loops", sparse == {"formats": True, "fallback": True, "zero": True, "missing": True, "axes": True, "empty": True}, sparse)
                 if shots := os.environ.get("FLUX_E2E_SHOTS"):
                     Path(shots).mkdir(parents=True, exist_ok=True)
                     b.shot(Path(shots) / "overview-layout-preview.png")
@@ -215,11 +255,22 @@ def general_flows(r, watch):
                 r.check("Defaults restores five cards and prevents adding a sixth", b.js("return document.querySelectorAll('[data-layout-list=stats] li').length===5 && document.querySelector('button[aria-label=\"Add small card\"]').disabled"))
                 r.dialog_button("Cancel")
                 r.check("Defaults can be cancelled without overwriting saved choices", json.loads(r.api(path)["body"])["layout"] == expected)
+                expanded = {"stats": ["primary_metric", "reference_change", "ideas", "runtime", "goals"],
+                            "columns": [["ideas", "references", "goals", "recent_designs"], ["pareto", "pass_history", "usage_breakdown"]]}
+                r.api(path, "PUT", expanded)
                 page()
+                r.check("saved new card options render even when loop data is empty", layout() == expanded)
+                page(other)
+                r.check("new card options apply across loops in the account", layout() == expanded)
+                open_editor()
+                b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
+                if shots := os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(shots) / "overview-layout-options.png")
+                r.dialog_button("Cancel")
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
-                r.check("the editor fits narrow screens", b.js("const d=document.querySelector('dialog.overview-layout-dialog'); const e=d.querySelector('.overview-layout-editor'); return d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().right<=innerWidth && e.scrollWidth<=e.clientWidth+1 && [...e.querySelectorAll('select')].every(s=>s.getBoundingClientRect().width>80)"))
+                r.check("the editor fits narrow screens", b.js("const d=document.querySelector('dialog.overview-layout-dialog'); const e=d.querySelector('.overview-layout-editor'); const p=d.querySelector('.overview-layout-preview'); return d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().right<=innerWidth && e.scrollWidth<=e.clientWidth+1 && p.scrollWidth<=p.clientWidth+1 && [...e.querySelectorAll('select')].every(s=>s.getBoundingClientRect().width>80)"))
                 r.dialog_button("Cancel")
                 page()
                 r.check("custom cards fit narrow screens", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
@@ -252,6 +303,236 @@ def general_flows(r, watch):
                 r.check("second Overview fixture removed", deleted["status"] == 200, deleted["body"])
 
     r.step("overview layout", overview_layout)
+
+    def overview_ideas():
+        with loop(r, "ui-overview-ideas") as name:
+            path = "/preferences/overview"
+            before = json.loads(r.api(path)["body"])["layout"]
+            r.api(path, "DELETE")
+            data = {"ideas": [{"id": f"i{i}", "title": "<img src=x onerror=alert(1)>" if i == 5 else f"Idea {i}",
+                               "hypothesis": "A useful hypothesis " + "long" * 100 if i == 5 else "Explore a distinct approach",
+                               "status": "measured" if i == 5 else "failed" if i == 4 else "proposed", "evaluations": []}
+                              for i in range(6)]}
+            data["ideas"][5]["evaluations"] = [{"pass": 0, "stage": "bench", "status": "ok", "metrics": {"cycles": 0},
+                                               "at": "2026-10-09T10:00:00Z"}]
+            data["ideas"][4]["evaluations"] = [{"pass": 2, "stage": "gate", "status": "refused", "metrics": {},
+                                               "error": "Memory limit exceeded", "at": "2026-10-09T09:00:00Z"}]
+            b.js("""window.__overviewIdeasFetch=window.fetch; window.__overviewIdeasData=arguments[1]; window.__overviewIdeasFailed=false; window.__overviewIdeasCalls=[];
+              const path='/api/apps/'+arguments[0]+'/ideas'; window.fetch=(u,o)=>{
+                if(new URL(String(u),location.href).pathname!==path) return window.__overviewIdeasFetch(u,o);
+                window.__overviewIdeasCalls.push(String(u));
+                return Promise.resolve(new Response(JSON.stringify(window.__overviewIdeasFailed?{detail:'Notebook unavailable'}:window.__overviewIdeasData),
+                  {status:window.__overviewIdeasFailed?503:200,headers:{'Content-Type':'application/json'}}));
+              }; return 1;""", name, data)
+            page = lambda: r.page(f"#/app/{name}", "document.querySelector('.ov-stats')", "Overview Ideas")
+            try:
+                page()
+                r.check("Overview does not fetch an unselected Ideas card", b.js("return window.__overviewIdeasCalls.length===0"))
+                layout = {"stats": ["ideas", "state", "designs"], "columns": [["ideas"], []]}
+                r.api(path, "PUT", layout)
+                page()
+                r.check("top and main Ideas cards share one notebook request", b.js("return window.__overviewIdeasCalls.length===1 && document.querySelector('.ov-stats [data-overview-card=ideas] .big').textContent==='6'"))
+                r.check("Ideas shows recent proposals and evidence without calling measurements improvements", b.js("const c=document.querySelector('.grid-2.ov [data-overview-card=ideas]'); return c.querySelectorAll('li').length===5 && c.querySelector('li').textContent.includes('Pass 0 · bench · ok · cycles=0') && c.textContent.includes('Memory limit exceeded') && c.textContent.includes('Not tested yet') && !c.querySelector('.pill.ok')"))
+                r.check("idea text remains literal in Overview", b.js("const c=document.querySelector('.grid-2.ov [data-overview-card=ideas]'); return !c.querySelector('img') && c.textContent.includes('<img src=x onerror=alert(1)>')"))
+                r.button("All ideas")
+                b.wait("document.querySelector('.ideas-table')", what="full notebook from Overview")
+                r.check("All ideas opens the complete notebook", b.js("return document.querySelector('.subtabs .on').textContent==='Ideas' && document.querySelectorAll('.ideas-table > tbody > tr').length===6"))
+                page()
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                r.check("Overview Ideas fits a phone with long hypotheses", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                b.js("window.__overviewIdeasFailed=true; return 1")
+                page()
+                r.check("a failed notebook request is unavailable rather than zero ideas", b.js("return document.querySelector('.ov-stats [data-overview-card=ideas] .big').textContent==='—' && document.querySelector('.grid-2.ov [data-overview-card=ideas]').textContent.includes('could not be loaded')"))
+                b.js("window.__overviewIdeasFailed=false; window.__overviewIdeasData={ideas:[]}; return 1")
+                page()
+                r.check("an empty notebook is distinct from a loading failure", b.js("return document.querySelector('.ov-stats [data-overview-card=ideas] .big').textContent==='0' && document.querySelector('.grid-2.ov [data-overview-card=ideas]').textContent.includes('No ideas recorded yet')"))
+                r.api(path, "PUT", {**layout, "stats": ["state", "designs", "passes"]})
+                page()
+                r.check("main Ideas can be selected without its top card", b.js("return !document.querySelector('.ov-stats [data-overview-card=ideas]') && !!document.querySelector('.grid-2.ov [data-overview-card=ideas]')"))
+                r.api(path, "PUT", {**layout, "columns": [[], []]})
+                page()
+                r.check("top Ideas can be selected without its main card", b.js("return document.querySelector('.ov-stats [data-overview-card=ideas] .big').textContent==='0' && !document.querySelector('.grid-2.ov [data-overview-card=ideas]')"))
+                r.clean("Overview Ideas")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.fetch=window.__overviewIdeasFetch; return 1")
+                r.api(path, "PUT", before)
+
+    r.step("overview ideas", overview_ideas)
+
+    def author_progress():
+        with loop(r, "ui-author-progress") as name:
+            now = b.js("return Date.now()/1000")
+            state = {"ever": True, "running": True, "started": now - 90, "observed": now, "elapsed_s": 90,
+                     "author": "claude", "by": "bob", "revise": "problem.yaml", "prompt": "Create reliable timing tests",
+                     "log_at": now, "log": [f"Creation log line {i}" for i in range(100)],
+                     "progress": {"phase": "agent: claude", "updated": now, "fields": {"output": "10 lines, the last 2s ago",
+                         "status": "Reading the input specification", "stderr": "DEBUG: connection ready", "steps total": 2,
+                         "steps": [{"k": "think", "text": "\n".join(f"Considering test case {i}" for i in range(200))},
+                                   {"k": "tool", "name": "Write", "call": "Write: check.py", "input": {"file_path": "check.py"}}]}}}
+            b.js("""window.__authorFetch=window.fetch; window.__authorState=arguments[1]; window.__authorCalls=0; window.__authorFailed=false;
+              const base='/api/apps/'+arguments[0], reply=data=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+              window.fetch=async(u,o)=>{
+                const path=new URL(String(u),location.href).pathname;
+                if(path===base+'/author'){
+                  window.__authorCalls++;
+                  if(window.__authorDeferred) return new Promise(resolve=>{window.__authorRelease=()=>resolve(reply(window.__authorState));});
+                  if(window.__authorFailed) return new Response(JSON.stringify({detail:'Status temporarily unavailable'}),{status:503,headers:{'Content-Type':'application/json'}});
+                  return reply(window.__authorState);
+                }
+                const response=await window.__authorFetch(u,o);
+                if(path!==base && path!==base+'/state') return response;
+                const data=await response.json(), state=path===base?data.state:data;
+                state.last_active=1000; return reply(data);
+              }; return 1;""", name, state)
+            try:
+                r.page(f"#/app/{name}", "document.querySelector('.author-agent-status')", "creation agent progress")
+                r.check("a revision stays visible after earlier loop runs", b.js("return !!document.querySelector('.card.authoring') && document.querySelector('.author-activity').textContent.includes('agent: claude')"))
+                r.check("author status distinguishes process life, runtime and agent output age", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.author-heartbeat').textContent.includes('process is alive') && c.querySelector('.author-activity').textContent.includes('1m 30s') && c.querySelector('.author-output-age').textContent.includes('last 2s ago')"))
+                r.check("live author tools and debug stderr are shown without a failure", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-tool').textContent.includes('check.py') && c.textContent.includes('DEBUG: connection ready') && !c.querySelector('.callout.bad')"))
+                b.click(".authoring .cv-think summary")
+                b.click(".authoring [data-author-section=log] summary")
+                b.click(".authoring [data-author-section=prompt] summary")
+                b.js("document.querySelector('.authoring .cv-thought').scrollTop=53; document.querySelector('.author-log').scrollTop=36; window.__authorState.progress.fields.steps[0].text+='\\nAnother test case'; window.__authorState.progress.fields.status='Writing checker and measurement scripts'; return 1")
+                b.wait("document.querySelector('.author-agent-status')?.textContent==='Writing checker and measurement scripts'", timeout=15, what="author live update")
+                r.check("author polling preserves thinking/log scroll and open details", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-think').open && Math.abs(c.querySelector('.cv-thought').scrollTop-53)<=2 && c.querySelector('[data-author-section=log]').open && Math.abs(c.querySelector('.author-log').scrollTop-36)<=2 && c.querySelector('[data-author-section=prompt]').open"))
+                b.js("window.__authorFailed=true; return 1")
+                b.wait("document.querySelector('.author-connection')", timeout=15, what="author status outage")
+                r.check("a failed status read warns and keeps prior output without claiming a fresh heartbeat", b.js("return document.querySelector('.author-connection').textContent.includes('Retrying') && !!document.querySelector('.authoring .cv-tool') && !document.querySelector('.author-heartbeat')"))
+                b.js("window.__authorFailed=false; window.__authorState.progress.fields.status='Model endpoint unavailable; retrying HTTP 502'; return 1")
+                b.wait("document.querySelector('.author-agent-status')?.textContent.includes('HTTP 502') && !document.querySelector('.author-connection')", timeout=15, what="author status recovery")
+                r.check("polling resumes automatically and surfaces endpoint retries", True)
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                r.check("creation feedback fits a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                b.js("window.__authorState.running=false; window.__authorState.ok=false; window.__authorState.rc=1; window.__authorState.ended=Date.now()/1000; return 1")
+                b.wait("document.querySelector('.authoring .pill.bad')", timeout=15, what="failed author remains visible")
+                r.check("a failed revision is retained even when an older problem document exists", b.js("return document.querySelector('.card.authoring').textContent.includes('did not leave a document') && !document.querySelector('.author-heartbeat')"))
+                b.js("window.__authorState.running=true; window.__authorState.ended=null; window.__authorState.ok=false; return 1")
+                r.page(f"#/app/{name}", "document.querySelector('.author-heartbeat')", "agent restarted fixture")
+                b.js("window.__authorDeferred=true; return 1")
+                b.wait("typeof window.__authorRelease==='function'", timeout=15, what="pending author poll")
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave agent progress")
+                b.ajs("const done=arguments[arguments.length-1]; window.__authorRelease(); requestAnimationFrame(()=>requestAnimationFrame(()=>done(true)))")
+                r.check("a late author status cannot change another page", b.js("return document.querySelector('#main h1').textContent==='Account' && !document.querySelector('.card.authoring')"))
+                r.clean("creation agent progress")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.fetch=window.__authorFetch; return 1")
+
+    r.step("author progress", author_progress)
+
+    def live_alt():
+        with loop(r, "ui-live-alt") as name:
+            now = b.js("return Date.now()/1000")
+            def task(id, t, name, parent=None, **params):
+                return {"ev": "start", "id": id, "t": t, "name": name, "parent": parent, "params": params}
+
+            def end(id, t, **output):
+                return {"ev": "end", "id": id, "t": t, "seconds": 1, "output": output}
+
+            events = [{"ev": "hello", "t": now - 30},
+                      {"ev": "mark", "name": "pass", "t": now - 29, "why": '{"n":0}'},
+                      task(10, now - 28, "test: baseline"), end(10, now - 27, verdict="passed"),
+                      {"ev": "mark", "name": "pass", "t": now - 26, "why": '{"n":1}'},
+                      task(1, now - 25, "generation: first", **{"pass": 1}),
+                      task(2, now - 24, "tool:python3", 1, command="python3 check.py", stdin="case one", folder="/sandbox"),
+                      end(2, now - 23, exit=0, stdout="CHECK OK", stderr="DEBUG diagnostic"), end(1, now - 22),
+                      {"ev": "mark", "name": "pass", "t": now - 21, "why": '{"n":2}'},
+                      task(3, now - 20, "generation: current", **{"pass": 2}),
+                      task(4, now - 19, "agent: claude", 3, prompt="FULL live prompt", command="claude --print", stdin="The prompt above (sent on stdin)")]
+            older = [task(21, 101, "generation: old", **{"pass": 7}),
+                     task(22, 102, "agent: codex", 21, prompt="FULL retained prompt"),
+                     end(22, 103, steps=[{"k": "text", "text": "Retained answer"}]), end(21, 104)]
+            history = {"starts": [{"id": 31, "record_id": 31, "started": now - 30, "running": True},
+                                  {"id": 21, "record_id": 21, "started": 100, "ended": 105, "rc": 0},
+                                  {"id": 11, "record_id": 11, "started": 50, "ended": 60, "rc": 0}],
+                       "campaigns": [{"run_id": 21, "campaign_id": "old", "created_at": "1970-01-01T00:01:40Z"}]}
+            b.js("""const base='/api/apps/'+arguments[0]; window.__altFetch=window.fetch; window.__altES=window.EventSource;
+              window.__altStreams=[]; window.__altTraceRequests=[];
+              const history=arguments[1], events=arguments[2], trace=arguments[3];
+              const reply=data=>new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}});
+              window.fetch=async(u,o)=>{
+                const url=new URL(String(u),location.href);
+                if(url.pathname===base+'/runs') return reply(history);
+                if(url.pathname===base+'/run-data') {
+                  window.__altTraceRequests.push(String(u));
+                  if(window.__altDeferred) return new Promise(resolve=>{window.__altRelease=()=>resolve(new Response(trace));});
+                  if(window.__altTraceError) return new Response(JSON.stringify({detail:'journal offline'}),{status:503,headers:{'Content-Type':'application/json'}});
+                  return new Response(trace);
+                }
+                const response=await window.__altFetch(u,o);
+                if(url.pathname!==base && url.pathname!==base+'/state') return response;
+                const data=await response.json(), state=url.pathname===base?data.state:data;
+                state.running=true; state.last_active=Date.now()/1000; return reply(data);
+              };
+              window.EventSource=class extends EventTarget {
+                static CLOSED=2;
+                constructor(url){super();this.url=url;this.readyState=1;this.closed=false;window.__altStreams.push(this);
+                  setTimeout(()=>{if(this.closed)return;this.onopen?.();this.emit('events',events);this.emit('ready',{});
+                    this.emit('live',{updates:{4:{stdout:'RAW agent output',steps:[{k:'think',text:'Considering a faster design'},{k:'text',text:'Writing the second candidate'}]}}});},0);}
+                emit(kind,data){if(!this.closed)this.dispatchEvent(new MessageEvent(kind,{data:JSON.stringify(data)}));}
+                close(){this.closed=true;this.readyState=2;}
+              }; return 1;""", name, history, events, "".join(json.dumps(e) + "\n" for e in older))
+            def choose(label, value):
+                b.js("const s=document.querySelector('[aria-label=\"'+arguments[0]+'\"]');s.value=arguments[1];s.dispatchEvent(new Event('change'));return 1", label, value)
+
+            try:
+                r.page(f"#/app/{name}/live-alt", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "LiveAlt current activity")
+                r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
+                r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree button').length===2"))
+                r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
+                choose("LiveAlt pass", "all")
+                b.click('.alt-tree [data-task="2"]')
+                r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-tree.png")
+                r.button("Graph", ".subrow .subtabs")
+                b.wait("document.querySelector('.alt-graph')", what="alternate graph")
+                r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='2' && !!document.querySelector('.alt-graph [data-task=\"2\"].sel')"))
+                b.js("document.querySelector('.alt-graph [data-task=\"4\"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1")
+                r.check("graph keyboard selection opens the same task inspector", b.js("return document.querySelector('.alt-detail').dataset.task==='4'"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-graph.png")
+                r.button("Timeline", ".subrow .subtabs")
+                b.wait("document.querySelector('.alt-timeline')", what="alternate timeline")
+                b.click('.alt-timeline [data-task="2"] rect')
+                r.check("timeline bars select their actual task", b.js("return document.querySelector('.alt-detail').dataset.task==='2'"))
+                b.js("window.__altStreams.at(-1).emit('live',{updates:{4:{steps:[{k:'text',text:'A new reply'}]}}});return 1")
+                b.wait("document.querySelector('.alt-status').textContent.includes('selection pinned')", what="pinned update")
+                r.check("new live output does not replace a pinned task", b.js("return document.querySelector('.alt-detail').dataset.task==='2'"))
+                r.button("Current", ".alt-controls")
+                b.wait("document.querySelector('.alt-detail')?.textContent.includes('A new reply')", what="following restored")
+                choose("LiveAlt pass", "0")
+                r.check("pass zero can be selected independently", b.js("return document.querySelector('.alt-detail').dataset.task==='10' && document.querySelectorAll('.alt-timeline [data-task]').length===1"))
+                choose("LiveAlt start", "21")
+                b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
+                r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
+                r.check("leaving current start closes its live stream", b.js("return window.__altStreams.every(s=>s.closed)"))
+                choose("LiveAlt start", "11")
+                b.wait("document.querySelector('.alt-visual').textContent.includes('No task journal retained')", what="missing historical data")
+                r.check("missing retained data is explicit and points to historical logs", "History › Log" in b.js("return document.querySelector('.alt-visual').textContent"))
+                b.js("window.__altTraceError=true;return 1")
+                choose("LiveAlt start", "21")
+                b.wait("document.querySelector('.alt-notice').textContent.includes('journal offline')", what="retained read failure")
+                b.js("window.__altTraceError=false;return 1")
+                r.button("Retry", ".alt-notice")
+                b.wait("document.querySelector('.alt-detail')?.textContent.includes('Retained answer')", what="retained read retry")
+                r.check("historical errors can be retried without leaving the tab", True)
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                r.check("LiveAlt controls and inspector fit a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                b.js("window.__altDeferred=true;return 1")
+                choose("LiveAlt start", "21")
+                b.wait("typeof window.__altRelease==='function'", what="pending historical journal")
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave LiveAlt")
+                b.ajs("const done=arguments[arguments.length-1];window.__altRelease();requestAnimationFrame(()=>requestAnimationFrame(()=>done(true)))")
+                r.check("late historical output cannot alter another page", b.js("return document.querySelector('#main h1').textContent==='Account' && !document.querySelector('.live-alt')"))
+                r.clean("LiveAlt")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.fetch=window.__altFetch;window.EventSource=window.__altES;return 1")
+
+    r.step("live alt", live_alt)
 
     def main_measurements():
         from flux_web.results import measurement_summary
@@ -1268,6 +1549,31 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.js("window.fetch = window.__restartFetch; return 1")
 
     r.step("admin restart all", admin_restart)
+
+    def admin_author_containers():
+        r.login("ada")
+        b.js("""window.__containerFetch = window.fetch; window.fetch = async (u, o) => {
+          const response = await window.__containerFetch(u, o);
+          if (new URL(String(u), location.href).pathname !== '/api/admin/resources') return response;
+          const body = await response.json(); body.error = null; body.engine = 'podman';
+          body.containers = ['creating loop', 'revising loop', 'active task', null].map((activity, i) => ({
+            name: 'flux-00000' + i, state: 'running', status: 'Up', user: 'bob', loop: 'example',
+            activity, orphan: !activity, cpu: 1, mem: 1024, pids: 2}));
+          return new Response(JSON.stringify(body), {headers:{'Content-Type':'application/json'}});
+        }; return 1;""")
+        try:
+            r.page("#/admin/resources", "[...document.querySelectorAll('tr')].some(tr => tr.textContent.includes('creating loop'))", "author containers")
+            rows = b.js("""return [...document.querySelectorAll('tr')].filter(tr => tr.textContent.includes('flux-00000'))
+              .map(tr => ({state:tr.querySelector('.pill').textContent, actions:[...tr.querySelectorAll('button, a.btn')].map(b => b.textContent)}));""")
+            r.check("Admin identifies creation, revision and other live agent containers", [row["state"] for row in rows] ==
+                    ["creating loop", "revising loop", "active task", "left behind"], rows)
+            r.check("active agent containers offer View instead of leftover Kill or after-pass Stop", all(row["actions"] == ["View"] for row in rows[:3]), rows)
+            r.check("only a container without an active task offers Kill", rows[3]["actions"] == ["Kill"], rows)
+            r.clean("admin author containers")
+        finally:
+            b.js("window.fetch = window.__containerFetch; return 1")
+
+    r.step("admin author containers", admin_author_containers)
 
     def admin_token_rates():
         r.login("ada")

@@ -123,8 +123,32 @@ placement, 3–5 small-card limits, cancellation, save errors and retries, persi
 and browser reloads, defaults, account isolation, always-visible alerts and phone layouts.
 It also verifies that the mock-data preview uses real cards/charts and follows selection,
 ordering and column changes before saving.
+The expanded card catalog is checked with populated mock previews, saved layouts on empty loops,
+main metrics and percentage formats, percentile fallback, zero references, missing goal-stage
+measurements, shared Pareto preferences and narrow screens.
 `test_web_overview_layout.py` covers validation, authentication, session/server persistence,
-read-only impersonation and accounts without loop permissions.
+every available top/main card, read-only impersonation and accounts without loop permissions.
+`FLUX_E2E_STEPS="overview ideas"` checks optional notebook loading, shared top/main data, recent
+proposals and evidence, literal text, zero/pass-0 values, full-notebook navigation, loading failures,
+empty notebooks, independent top/main selection and narrow screens.
+
+`FLUX_E2E_STEPS="author progress"` checks creation/revision activity, live thinking and tool calls,
+process liveness versus output age, endpoint retries, recovery after status-read failures,
+preserved scroll positions/details, failed revisions with an existing document, navigation races
+and phone layouts. `test_web_author_progress.py` runs a real author CLI with a controlled agent
+that streams before completing, checks no-sandbox document validation and retained progress,
+and refuses escaping log/journal links and malformed records.
+`FLUX_E2E_STEPS="admin author containers"` checks creation/revision labels, active agent tasks
+and View versus leftover Kill controls. `test_web_admin.py` checks authors without loop runs,
+network helpers, stale containers for the same loop and refusal to kill attached tasks.
+
+`FLUX_E2E_STEPS="live alt"` checks the optional Tree/Graph/Timeline layout, shared start/pass
+selectors, baseline pass 0, command/stdin/stdout/stderr and prompt/conversation inspectors,
+keyboard selection, pinned tasks across updates and view changes, returning to current activity,
+older-start replay, missing data, retry, stream cleanup, narrow screens and navigation races.
+`test_live_alt_model.py` checks sparse and parallel pass membership, root/child attribution,
+current-task selection, setup, empty scopes and campaign selection across resumed starts.
+Agent/tool unit tests check recorded commands and stdin delivery without duplicating large prompts.
 
 `FLUX_E2E_STEPS="loop controls,admin restart all"` checks the two active-loop controls,
 after-pass first presses, red NOW buttons, abandonment warnings/cancellation, and ordinary

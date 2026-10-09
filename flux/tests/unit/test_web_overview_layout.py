@@ -6,12 +6,32 @@ import pytest
 from fastapi.testclient import TestClient
 
 from flux_web import create_app
-from flux_web.models import OVERVIEW_DEFAULT
+from flux_web.models import OVERVIEW_DEFAULT, OVERVIEW_LARGE_CARDS, OVERVIEW_SMALL_CARDS
 
 from test_web_admin import H, _client, server  # noqa: F401
 
 PATH = "/api/preferences/overview"
 CUSTOM = {"stats": ["tokens_out", "state", "cost"], "columns": [["best", "usage"], ["decision"]]}
+
+
+@pytest.mark.parametrize("card", OVERVIEW_SMALL_CARDS)
+def test_every_top_card_can_be_saved_and_restored(server, card):  # noqa: F811
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    other = [c for c in OVERVIEW_DEFAULT["stats"] if c != card][:2]
+    layout = {**CUSTOM, "stats": [card, *other]}
+    assert bob.put(PATH, json=layout, headers=H).json() == {"layout": layout}
+    assert _client(app, "bob", "another long secret").get(PATH).json()["layout"] == layout
+
+
+@pytest.mark.parametrize("card", OVERVIEW_LARGE_CARDS)
+def test_every_main_card_can_be_saved_in_either_column(server, card):  # noqa: F811
+    app, _ = server
+    bob = _client(app, "bob", "another long secret")
+    for columns in ([[card], []], [[], [card]]):
+        layout = {**CUSTOM, "columns": columns}
+        assert bob.put(PATH, json=layout, headers=H).json() == {"layout": layout}
+        assert bob.get(PATH).json()["layout"] == layout
 
 
 def test_layout_persists_across_sessions_and_server_restarts(server):  # noqa: F811

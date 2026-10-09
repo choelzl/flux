@@ -110,7 +110,8 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
     shown = shlex.join(str(c) for c in cmd)
     shown = shown if len(shown) <= 2000 else shown[:2000] + " ..."
     try:
-        with phase(f"tool:{binary}", why=what, command=shown, folder=str(cwd or os.getcwd())) as out:
+        with phase(f"tool:{binary}", why=what, command=shown, folder=str(cwd or os.getcwd()),
+                   **({"stdin": stdin[:48000] + ("\n… stdin truncated after 48000 characters" if len(stdin) > 48000 else "")} if stdin is not None else {})) as out:
             # D854: the tool and everything it starts are one process group of their own: the whole
             # call is bounded by `timeout_s` -- its output drained too -- and the group goes with it
             proc = subprocess.Popen(

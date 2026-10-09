@@ -13,6 +13,7 @@ import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
 import { historyTab } from "./loop_history.js";
+import { liveAltTab } from "./loop_live_alt.js";
 import { ideasView } from "./loop_ideas.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { flushResultPreferences } from "./result_table.js";
@@ -35,8 +36,8 @@ async function loopPage(name, owner, path = "") {
   // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
   // (the configurator, direct edit, an agent) under Settings, Delete at Settings' end; Ask a panel
   // that opens over any tab. The old addresses lead to their new places.
-  const tabs = ["Overview", "Live", "Results", "Agents", "Files", "Settings"];
-  const SLUG = { Overview: "", Live: "live", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
+  const tabs = ["Overview", "Live", "LiveAlt", "Results", "Agents", "Files", "Settings"];
+  const SLUG = { Overview: "", Live: "live", LiveAlt: "live-alt", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
   const TAB_OF = Object.fromEntries(Object.entries(SLUG).map(([t, k]) => [k, t]));
   const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem" };
   let parts = String(path || "").split("/").filter(Boolean);
@@ -44,7 +45,7 @@ async function loopPage(name, owner, path = "") {
   let askOpen = parts[0] === "ask";
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
-  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], LiveAlt: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
@@ -221,12 +222,13 @@ async function loopPage(name, owner, path = "") {
   // whether it is still the latest after it, so a slow answer never draws over the tab chosen since
   let drawn = 0;
   const still = () => { const mine = drawn; return () => mine === drawn && !show.stale(); };
-  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, body, curSub, goTab, drawBody, refresh, still,
+  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, body, subHolder, curSub, goTab, drawBody, refresh, still,
     get historyId() { return Number(mode); }, selectHistory: (id) => { mode = String(id); setUrl(); },
     get st() { return st; }, get tab() { return tab; } };
   const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
   const past = historyTab(ctx);
-  cleanup.push(past.close);
+  const alt = liveAltTab(ctx);
+  cleanup.push(past.close, alt.close);
   // Conversations keep their own reply context; loop notes still join the next design prompt.
   let askTimer = null, askWho = null, askReply = null, askBusy = false, askSending = false;
   const collapsedAsks = new Set();
@@ -394,6 +396,7 @@ async function loopPage(name, owner, path = "") {
     const ok = still();
     drawBanner(); drawSubs();
     if (tab !== "Live" || curSub() !== "history") past.close();
+    if (tab !== "LiveAlt") alt.close();
     // D917: the stream carries what the view shows -- Tasks: the journal, the live state and the
     // log's card; the Log: the log; any other tab: nothing (each part resumes where it was)
     const ran = st.running || st.last_active;
@@ -417,9 +420,9 @@ async function loopPage(name, owner, path = "") {
       return settingsView(ctx);
     }
     if (tab === "Overview") {
+      const ab = await authorBox();
+      if (!ok()) return;
       if (!st.running && !st.last_active) {
-        const ab = await authorBox();
-        if (!ok()) return;
         await overview(ctx);
         if (!ok()) return;
         body.prepend(...[ab, card(null, info.document ? empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
@@ -428,9 +431,12 @@ async function loopPage(name, owner, path = "") {
       }
       body.replaceChildren(card(null, skeleton(7)));
       await overview(ctx);
+      if (ok() && ab) body.prepend(ab);
       return;
     }
-    if (tab === "Live" && !curSub()) {
+    if (tab === "LiveAlt") {
+      await alt.show();
+    } else if (tab === "Live" && !curSub()) {
       if (!st.running && !st.last_active) {
         body.replaceChildren(card(null, empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
         return;

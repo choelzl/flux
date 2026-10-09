@@ -7,6 +7,8 @@ from __future__ import annotations
 import subprocess
 import sys
 import json
+import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -211,3 +213,49 @@ def test_an_admin_cannot_remove_a_running_loops_network_helper(server, monkeypat
     finally:
         proc.kill()
         proc.wait(timeout=5)
+
+
+@pytest.mark.parametrize("revise", [None, "x.problem.yaml"])
+def test_author_containers_are_active_without_a_loop_run(server, monkeypatch, revise):
+    from flux_web import admin
+
+    app, tmp = server
+    bob, ada = _client(app, "bob", "another long secret"), _client(app, "ada", "correct horse battery")
+    _loop(bob, "x")
+    directory = tmp / "data/users/bob/apps/x"
+    state = app.state.authoring.files(directory)["state"]
+    state.parent.mkdir(exist_ok=True)
+    state.write_text(json.dumps({"pid": os.getpid(), "started": time.time(), "ended": None, "revise": revise}))
+    names = ["flux-abcdef", "flux-abcdef-network", "flux-123456", "flux-654321", "flux-fedcba"]
+    containers = [{"name": name, "state": "running", "status": "Up", "app": "bob.x", "cpu": 2, "mem": 1024} for name in names]
+    containers[-1]["state"] = "exited"
+    # A stale container for the same loop must not inherit the active author's state.
+    monkeypatch.setattr(admin, "containers_seen", lambda: ({"engine": "podman", "containers": containers, "error": None}, 1))
+    monkeypatch.setattr(admin, "attached", lambda: {"flux-abcdef": 9001, "flux-123456": 9002})
+    monkeypatch.setattr(admin, "_ancestors", lambda pid: {pid, os.getpid()} if pid == 9001 else {pid})
+    removed = []
+    monkeypatch.setattr(admin, "kill_container", lambda name: removed.append(name) or "removed")
+    response = ada.get("/api/admin/resources")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["running"] == [] and not result["loops"][0]["running"]
+    rows = {c["name"]: c for c in result["containers"]}
+    for name in names[:2]:
+        assert rows[name]["activity"] == ("revising loop" if revise else "creating loop")
+        assert not rows[name]["orphan"] and rows[name]["user"] == "bob" and rows[name]["loop"] == "x"
+    assert rows["flux-123456"]["activity"] == "active task" and not rows["flux-123456"]["orphan"]
+    assert rows["flux-654321"]["orphan"] and rows["flux-fedcba"]["orphan"]
+    for name in names[:3]:
+        denied = ada.post(f"/api/admin/containers/{name}/kill", headers=H)
+        assert denied.status_code == 409 and "stop its task" in denied.json()["detail"]
+    assert not removed
+    assert ada.post("/api/admin/containers/flux-654321/kill", headers=H).status_code == 200
+    assert removed == ["flux-654321"]
+    # The creation containers remain attached across a brief gap in the saved job state.
+    state.write_text(json.dumps({"pid": os.getpid(), "started": time.time(), "ended": time.time()}))
+    rows = {c["name"]: c for c in ada.get("/api/admin/resources").json()["containers"]}
+    assert rows["flux-abcdef"]["activity"] == "active task" and not rows["flux-abcdef"]["orphan"]
+    monkeypatch.setattr(app.state.maintenance, "tick", lambda: None)
+    sample = app.state.sample()
+    assert sample["loops"] == 0 and sample["containers"] == 4
+    assert sample["cpu"] == 8 and sample["cmem"] == 4096

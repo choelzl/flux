@@ -412,15 +412,19 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
         error = ""
         for attempt in range(ask.checks + 1):
             if n == 0 and attempt == 0:
+                say("author: writing the initial problem document and supporting files…")
                 done, what = turn(brief(ask, inline=inline))
                 history.append({"pass": 1, "turn": "write", "what": what})
                 say(f"author: {what}")
             elif error:
+                say(f"author: repairing the refused document (attempt {attempt}/{ask.checks})…")
                 current = document_path(ask.workdir).read_text() if document_path(ask.workdir).is_file() else ""
                 done, what = turn(brief(ask, inline=inline, error=error, current=current))
                 history.append({"pass": n + 1, "turn": "repair", "what": what, "refused": error})
                 say(f"author (repair): {what}")
-            task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+            say("author: checking the document, required files and tools…")
+            with _phase("check: problem document", "validate the authored document, files and tools"):
+                task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
             if not error:
                 break
             say(f"document refused: {error}")

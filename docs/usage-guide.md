@@ -290,7 +290,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   a reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex or Flux's own
   model; one not installed says so). The agent writes the problem document and the files it names
   -- `flux ask --no-run` in the sandbox, with your model settings -- and the document is checked;
-  nothing runs. The loop's Overview follows it (its log, Stop), and you review it before starting.
+  nothing runs. The loop's Overview follows creation and revisions: elapsed time, the current
+  writing/repair/check phase, live thinking, replies and tool calls, endpoint retries and the
+  creation log. Process liveness and time since the agent's last output are shown separately;
+  a quiet agent is not automatically called failed. Temporary status-read errors keep the last
+  output visible and retry automatically, preserving scroll positions and open details.
+  **Stop** ends the author; review the document before starting the loop.
   **Clone a loop** copies an existing loop's problem without its runs.
 - **Configure**, three ways: **Configurator**; **Direct edit** (the document's YAML as written,
   saved with its diff shown, its files beside); **Agent**: say what should change, and the agent
@@ -397,6 +402,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     **Account → Overview layout → Customize** sets the Overview for your entire account,
     across loops and browsers.
     Select and reorder 3–5 small cards, then choose and arrange larger cards in two columns.
+    Top cards also offer the main metric, change versus its baseline/reference, acceptance rate,
+    active run time, total model/agent time and goals met. Larger cards also offer the Pareto front,
+    reference comparisons, goal status, recent search designs, recent passes and usage by model/agent.
+    The Pareto card follows the project's saved axes, stage, scope and focus. Metric cards use the
+    project's main measurements; main-metric and recent-design values honor percentage preferences.
+    Reference comparisons show both absolute values and percent changes; missing values stay unmeasured.
+    **Ideas** is available as a top count/state summary and as a main card showing the five most
+    recently active proposals, hypotheses and latest evaluation evidence. **All ideas** opens the
+    complete notebook in Results → Ideas. Measured means evidence exists, not that an idea improved
+    the design. Failed notebook requests show unavailable, rather than an empty notebook.
     Use the up/down arrows to reorder and the left/right arrows to move between columns.
     The live preview uses **Mock Data** and the same cards and charts as a real Overview,
     updating immediately as you select, reorder, hide or move cards.
@@ -457,6 +472,18 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     docked at the bottom sends notes to the loop (Enter sends, Shift+Enter breaks the line); when
     the agent asks, it shows the question and answers it. Standings show as counts, the frontier and the parts. It shows the
     latest start's tree.
+  - **LiveAlt:** an alternative Live layout for comparison. **Tree**, **Graph** and **Timeline**
+    show the same task journal as a hierarchy, connected task boxes or time bars. The selectors
+    on the right choose the current or a recorded **Start**, and **Current**, **All passes** or a
+    numbered **Pass**, including baseline pass 0. With concurrent passes, Current includes the
+    active passes. Selecting a task pins its inspector across view changes and live updates;
+    **Current** returns to following activity. Inputs (including prompts, commands and recorded
+    stdin), live output and agent conversations appear together, with Raw and Fullscreen controls.
+    New agent turns record their command and stdin delivery; tools record up to 48,000 characters
+    of supplied stdin, with an explicit truncation notice for longer input. Older journals can only
+    show what was recorded. **Earlier passes** loads beyond the initial 30-pass live window;
+    **Show more** expands large task lists. Missing retained journals point to the historical log.
+    The original **Live** tab remains available.
   - **Log:** the loop's output as it grows, numbered, problems highlighted, each start marked.
     Only the lines in view are drawn, so a log of a hundred thousand lines scrolls as a short one
     (with wrap on, the last 3000).
@@ -840,7 +867,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     appear when they finish. Interrupted turns include only their reported usage and can
     undercount unreported tokens. Flat steps and hover intervals show those averages explicitly.
     Hovering a chart shows the sample under the pointer, its time and values. The sandbox's containers with CPU, memory and PIDs, each with its
-    loop (a `flux.app` label); a container no running loop owns is "left behind" and can be killed.
+    loop (a `flux.app` label). Containers with a live author show **creating loop** or
+    **revising loop**, with **View** opening the loop's progress. Other attached agent tasks
+    show **active task**. A running container with no active task is **left behind** and can
+    be killed; stopped leftovers can also be removed. Active task containers and their network
+    helpers cannot be killed through the leftover-container action. Resource samples include
+    author containers even before the loop's first run.
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no
     loop owns (a deleted loop's, or a `flux task run` of this machine's user).
