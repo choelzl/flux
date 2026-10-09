@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from flux_frontier import best_within, frontier, spread
+from flux_frontier import frontier, spread
 
 
 class P(NamedTuple):
@@ -51,14 +51,6 @@ def test_spread_always_keeps_what_it_is_told_and_never_invents_points():
     assert front[1] in picked and len(picked) == 2
     assert len(_spread(front[:2], 6)) == 2
 
-
-def test_best_within_a_budget_is_the_fastest_that_fits():
-    pts = [P(1.0439, 35_096, "incumbent"), P(1.0626, 97_208, "b"), P(1.0671, 206_496, "c")]
-    best = lambda budget: best_within(pts, budget, better=lambda p: p.speed, cost=lambda p: p.cost)  # noqa: E731
-    assert best(100_000).who == "b" and best(None).who == "c" and best(1_000) is None
-
-
-# ---- in the loop, on the toy document -----------------------------------------------------
 
 def test_a_shrink_under_a_relative_floor_refuses_and_the_goal_keeps_a_share_of_the_gain():
     """Climb the table, then shrink bytes holding 90% of the gain over 1.0: the table cannot

@@ -109,14 +109,15 @@ def mult_check(args: argparse.Namespace) -> int:
 
 
 def mult_screen(args: argparse.Namespace) -> int:
-    from flux_evaluator_openroad import measure_rtl
-
     from .rtl import generate
+    from .rtl_check import measure
 
     name, source = _renamed(Path(args.artifact).read_text())
     design = generate(PeConfig(name, "tree", 0), _shape(args), invented={name: source})
-    got = measure_rtl(design.all_sources, design.module_name, stage="synth", clock_period_ps=args.clock_ps,
-                      timeout_s=600.0)
+    try:
+        got = measure(design.all_sources, design.module_name, stage="synth", clock_ps=args.clock_ps, timeout_s=600.0)
+    except SystemExit as exc:
+        got = {"error": str(exc)}
     if not isinstance(got, dict) or "error" in got:
         print(f"screen failed: {(got or {}).get('error', 'no result')}", file=sys.stderr)
         return 1

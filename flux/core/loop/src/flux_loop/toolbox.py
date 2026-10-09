@@ -7,10 +7,7 @@ command template: the loop's placeholders `{artifact}`, `{home}`, `{python}`, an
 own `params` by name, which the author fills), `params` (name -> label, default, unit),
 `metrics` (a stage's, name -> unit), `needs` (tools on PATH), `pass` (a check's pass rule),
 `languages` (the artifacts it fits) and `kinds` (the crafter's kinds of problem it belongs to).
-
-An evaluator stage (D663) has `stage` instead of `run`: the stage's keys besides `name` and
-`metrics` (`{"evaluator": "openroad"}`), and `document`: the top-level keys the document then
-carries (`{"workload": "{workload}"}`), their `{param}`s filled as `run`'s are.
+Every stage is a command (D954: no evaluator stages).
 """
 
 from __future__ import annotations
@@ -123,7 +120,6 @@ TOOLS: list[dict[str, Any]] = [
      "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. "
              "No area: add a stage of yours for it (as applications/npu_gemm).",
      "run": "{python} {home}/evaluate.py {artifact} {workload} --backend zigzag",
-     "document": {"workload": "{workload}"},
      "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
      "metrics": _m("latency_cycles", "energy_pj"), "needs": [], "languages": ["yaml"], "kinds": ["zigzag"]},
     {"id": "timeloop-eval", "role": "stage", "title": "Cycles, energy and area (Timeloop)",
@@ -131,7 +127,6 @@ TOOLS: list[dict[str, Any]] = [
              "Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper "
              "on PATH the stage is skipped.",
      "run": "{python} {home}/evaluate.py {artifact} {workload} --backend timeloop",
-     "document": {"workload": "{workload}"},
      "params": {"workload": _p("Workload (Workload IR)", "{home}/workload.yaml")},
      "metrics": _m("latency_cycles", "energy_pj"), "needs": ["timeloop-mapper"],
      "languages": ["yaml"], "kinds": ["zigzag"]},

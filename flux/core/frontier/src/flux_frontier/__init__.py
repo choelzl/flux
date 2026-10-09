@@ -2,7 +2,7 @@
 and the decision arithmetic (`decide`).
 
 A frontier is the set of points no other point beats on both axes. `spread` picks which of
-them to confirm on an expensive stage; `best_within` applies a budget on the cost axis.
+them to confirm on an expensive stage.
 
 `better` is the quality axis (higher is better), `cost` the cost axis (lower is better); both
 are accessor callables so the points can be whatever the study measures.
@@ -15,13 +15,13 @@ from typing import Callable, TypeVar
 
 from . import pareto_uct  # noqa: F401  (the tree policy, reachable from the package)
 from .decide import cheapest_meeting, corner, knee_ranked, normalizer  # noqa: F401
-from .dominance import dominates, interval_dominates, overlaps, pareto  # noqa: F401
+from .dominance import dominates, pareto  # noqa: F401
 from .pareto_uct import ParetoUCT, hypervolume  # noqa: F401
 
 T = TypeVar("T")
 
-__all__ = ["ParetoUCT", "best_within", "cheapest_meeting", "corner", "dominates", "frontier",
-           "hypervolume", "interval_dominates", "knee_ranked", "normalizer", "overlaps", "pareto",
+__all__ = ["ParetoUCT", "cheapest_meeting", "corner", "dominates", "frontier",
+           "hypervolume", "knee_ranked", "normalizer", "pareto",
            "pareto_uct", "spread"]
 
 
@@ -67,10 +67,3 @@ def spread(front: list[T], count: int, *, keep: list[T] | tuple[T, ...] = (),
         chosen.append(pick)
         rest.remove(pick)
     return sorted(chosen, key=cost)
-
-
-def best_within(points: list[T], budget: float | None, *, better: Callable[[T], float],
-                cost: Callable[[T], float]) -> T | None:
-    """The best point whose cost fits `budget`, or None. No budget: the best of all."""
-    fit = [p for p in points if budget is None or cost(p) <= budget]
-    return max(fit, key=better) if fit else None

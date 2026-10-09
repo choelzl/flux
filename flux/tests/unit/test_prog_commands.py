@@ -1,4 +1,4 @@
-"""`flux prog time|count|size` (D661), `flux rtl measure --stage stat` (D662) and the catalog's
+"""`flux prog time|count|size` (D661), `rtl.py measure --stage stat` (D662, D948) and the catalog's
 evaluator stages (D663): each prints `name=value` lines a document's stage reads."""
 
 from __future__ import annotations
@@ -117,34 +117,6 @@ def test_documents_name_what_the_new_stages_need():
     assert prog.stages[0].needs == ("valgrind",)
 
 
-def test_an_evaluator_stage_reads_the_workload_beside_the_document(tmp_path):
-    """D663: `workload: "{home}/w.yaml"` (or `w.yaml`) is read from the document's folder."""
-    from types import SimpleNamespace
-
-    from flux_evaluator_abi import register_evaluator
-    from flux_loop import Candidate, LoopRequest, LoopState, PromptProblem, load_task
-
-    seen: list = []
-
-    class Fake:
-        def evaluate(self, cand, _budget, _metrics):
-            seen.append((cand.workload, cand.arch))
-            return SimpleNamespace(metrics={"latency_cycles": SimpleNamespace(value=7.0)}, validity=SimpleNamespace(ok=True, violations=()))
-
-    register_evaluator("fake-d663", Fake, replace=True)
-    (tmp_path / "w.yaml").write_text("id: w\nops: []\n")
-    for workload in ("{home}/w.yaml", "w.yaml"):
-        (tmp_path / "t.problem.yaml").write_text(
-            f'statement: x\nlanguage: yaml\nworkload: "{workload}"\n'
-            "flow: {test: 'true', measure: {m: {evaluator: fake-d663, metrics: [latency_cycles]}}}\n"
-            "objectives: [{metric: latency_cycles, direction: minimize}]\n")
-        task = load_task(str(tmp_path / "t.problem.yaml"))
-        st = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None)
-        st.workdir = str(tmp_path)
-        assert PromptProblem(task).measure(Candidate(name="a", artifact="level: 1\n"), "m", st) == {"latency_cycles": 7.0}
-    assert seen[-1] == ({"id": "w", "ops": []}, {"level": 1})
-
-
 def test_the_catalog_carries_the_new_tools():
     from flux_loop.objective import UNITS
     from flux_loop.toolbox import TOOLS, fill, tool
@@ -158,5 +130,5 @@ def test_the_catalog_carries_the_new_tools():
     for backend in ("zigzag", "timeloop"):
         assert fill(backend + "-eval").endswith("--backend " + backend)
         assert "{home}/evaluate.py" in fill(backend + "-eval")
-        assert tool(backend + "-eval")["document"] == {"workload": "{workload}"}
+        assert "document" not in tool(backend + "-eval")          # D954: the command carries the workload
     assert all(("run" in t) != ("stage" in t) for t in TOOLS)

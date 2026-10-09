@@ -315,9 +315,6 @@ def measure(source: str, module: str | None = None, *, stage: str = "synth", clo
     `synth` the netlist as mapped (nothing placed), `place` after placement with estimated
     wires. fmax_mhz, area_um2 (cells), power_w, cell_count, path_ps (the period less the worst
     slack) and critical_path ("start -> end"). A module without `clk` is timed input to output."""
-    from flux_redaction.policy import require_not_confidential
-
-    require_not_confidential("asap7")       # D94: a PDK registered confidential is refused before anything runs
     module = module_of(source, module)
     pdk = platform()
     ports = _ports(source, module)
@@ -377,7 +374,8 @@ def measure(source: str, module: str | None = None, *, stage: str = "synth", clo
     return {"fmax_mhz": 1e6 / path if path > 0 else float("inf"),
             "area_um2": float(cells[-1][1]) if stage == "synth" or not area else float(area.group(1)),
             "power_w": float(power.group(1)) if power else float("nan"),
-            "cell_count": int(cells[-1][0]), "path_ps": path, "slack_ps": ws, "clock_period_ps": clock_ps,
+            "cell_count": int(cells[-1][0]), "path_ps": path, "worst_slack_ps": ws, "clock_period_ps": clock_ps,
+            "flow_depth": "synthesis" if stage == "synth" else "placement",
             "critical_path": f"{start.group(1)} -> {end.group(1)}" if start and end else ""}
 
 
@@ -430,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     got = measure(source, a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout,
                   utilization=a.utilization, repair_design=a.repair_design)
     print(" ".join(f"{k}={v:.6g}" if isinstance(v, float) else f"{k}={v}" for k, v in got.items()
-                   if k != "critical_path") + f" stage={a.stage}")
+                   if k not in ("critical_path", "flow_depth")) + f" stage={a.stage}")
     if got.get("critical_path"):
         print("critical_path=" + got["critical_path"])
     return 0

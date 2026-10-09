@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flux_evaluator_openroad import parse_critical_path
+from flux_loop.timing import parse_critical_path
 from flux_loop import LoopRequest, LoopState
 from flux_loop.timing import describe
 

@@ -95,8 +95,9 @@ There is no `world:` or `hooks:` (D803): what a document cannot say is a command
 only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
 document does not have, and `budget` takes no `finalists` or `calibrate`. A document of an earlier form
 is brought to this one by `flux task migrate FOLDER [--write]`, or by an admin from Admin › Loops' "Migrate documents of an earlier form" (D811, D816):
-each change said, a result written only when it loads, the original kept as `<file>.orig`; a `world:`
-or `hooks:` is said for a person to rewrite as commands.
+each change said, a result written only when it loads, the original kept as `<file>.orig`; a `world:`,
+`hooks:` or an `evaluator:` stage is said for a person to rewrite as commands, and a `workload:` key
+or a mined `calibration:` source is dropped (D954).
 
 ## Check and run a problem
 
@@ -175,8 +176,6 @@ flux attach DB                    # follow its log
 flux stop DB                      # stop at the end of the pass (--now interrupts)
 flux report DB                    # an HTML report beside the record: the front per pass, the best so far
 flux log DB                       # every model and agent turn: prompt, reply, tool calls, errors
-flux gc --db DB --keep-days 7 --apply   # remove trace directories no record names
-flux knowledge digest --db DB     # the library's key points, digested once by the model
 ```
 
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
@@ -936,14 +935,14 @@ The commands an RTL document names as its gate and stages:
 
 ```bash
 python rtl.py test design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
-python rtl.py proto prototype.py --golden golden.py    # a Python prototype, checked on every input up to 20 bits
+python -m flux_loop.golden_proto prototype.py --golden golden.py   # a Python prototype against the golden model (D951)
 python rtl.py measure design.sv --stage synth --clock-ps 1000   # or place, route: ASAP7 metric=value lines
 ```
 
-Run these from an application's folder: its `rtl.py` wraps the shared evaluator libraries.
-Copy that script from a bundled RTL app when creating your own. `python rtl.py test` exits 1
-when the design fails and 3 when it does not compile. `python rtl.py
-proto` prints where a prototype fails, grouped by the input's sign and exponent. A prototype that
+Run these from an application's folder: its `rtl.py` is one file, reading ASAP7 from
+OpenROAD-flow-scripts' platform folder (D948, D950). Copy that script from a bundled RTL app
+when creating your own. `python rtl.py test` exits 1 when the design fails and 3 when it does
+not compile. The prototype check is core's, not RTL tooling (D951). A prototype that
 passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper
 returning several values, `s, m, k = unpack(x)`, `(a, b) if c else (d, e)`, `len(T)`, a tuple read
@@ -955,34 +954,12 @@ admitted design from its verified prototype at the next pass.
 
 ## The IR and the evaluators
 
-The accelerator-era path, kept for the evaluator backends: a workload, an architecture and a
-mapping as documents ([ir.md](ir.md)), evaluated through the evaluator ABI
-([evaluator-abi.md](evaluator-abi.md)). These commands are left out of `flux --help`.
-
-```bash
-flux import core/ir/workload/examples/mlp-gemm0.yaml            # validate and hash (--store DB keeps it)
-flux eval --workload core/ir/workload/examples/mlp-gemm0.yaml \
-          --arch core/ir/architecture/examples/simple-npu-1d-v1.yaml --backend zigzag
-flux replay RESULT_ID --store DB                                # re-run a stored result and compare
-```
-
-`flux eval` prints a `Result`: an estimate per metric (value, interval, method), a validity
-check, the bottleneck and the provenance. The backends are `zigzag`, `timeloop`, `rtl`,
-`openroad` and `champsim`. In Python:
-
-```python
-import yaml
-from flux_evaluator_abi import Budget, Candidate, make_evaluator
-
-workload = yaml.safe_load(open("core/ir/workload/examples/mlp-gemm0.yaml"))
-arch = yaml.safe_load(open("core/ir/architecture/examples/simple-npu-1d-v1.yaml"))
-result = make_evaluator("zigzag").evaluate(Candidate(workload=workload, arch=arch), Budget(),
-                                           frozenset({"latency_cycles", "energy_pj"}))
-```
-
-`flux_store.CachingEvaluator(inner, ResultStore("results.db"), evaluator_prefix="zigzag")`
-serves a repeated call from the store. [calibration.md](calibration.md) covers the intervals
-and conformance; [stores.md](stores.md) covers the record and the result store.
+The accelerator era's `flux import`, `flux eval` and `flux replay`, the evaluator registry and
+the loop document's `evaluator:` stages are gone (D954): every stage is a command printing
+`name=value`. An adapter is called by its application's own script, as `npu_gemm`'s
+`measure.py` calls `ZigZagEvaluator` ([evaluator-abi.md](evaluator-abi.md), [ir.md](ir.md)). A
+document still naming `evaluator:` is refused with an explanation; `flux task migrate` drops a
+`workload:` key and a mined `calibration:` and flags evaluator stages for a person.
 
 ## From Python
 

@@ -38,9 +38,6 @@ FILES = {
 SCRIPT = r"""
 const c = require(process.argv[1]);
 const catalog = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
-// a stage the catalog may list without `run`: its stage shape is written instead of a command
-catalog.push({id: "test-evaluator", role: "stage", title: "An evaluator stage", what: "", stage: {evaluator: "zigzag"},
-              params: {}, metrics: {latency_cycles: "cycles", energy_pj: "pJ"}, needs: [], languages: []});
 c.setCatalog(catalog);
 const out = {};
 const add = (name, files, s, extra) => { out[name] = Object.assign({files, state: s}, extra || {}); };
@@ -115,12 +112,8 @@ s = JSON.parse(JSON.stringify(s)); s.id = "fastest_searched"; s.stages[0].params
 s.space = [{knob: "clock_ps", choices: "250, 333, 500"}]; s.flow.dse = "sweep";
 add("fastest_searched", "rtl", s);
 
-// an evaluator stage from the catalog
-s = fresh("evaluated", "yaml"); s.checks.push(c.newCheck(s, "custom")); s.checks[0].params.command = "{python} {home}/check.py {artifact}";
-s.stages.push(c.newStage(s, "test-evaluator")); s.objectives = [obj("latency_cycles", "min")];
-add("evaluated", "python", s);
 
-// the real catalog's newer tools: an evaluator stage, a program timer, a Yosys-only area step
+// the real catalog's newer tools: ZigZag through the application's script, a program timer, a Yosys-only area step
 s = fresh("zigzag_eval", "yaml"); s.checks.push(c.newCheck(s, "test"));
 s.stages.push(c.newStage(s, "zigzag-eval")); s.objectives = [obj("latency_cycles", "min"), obj("energy_pj", "min")];
 add("zigzag_eval", "zigzag", s);
@@ -191,8 +184,6 @@ s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives[0].value = ""; s.sta
 
 s = JSON.parse(JSON.stringify(out.stat_then_synth.state)); s.objectives.unshift(obj("fmax_mhz", "atleast", "1000"));
 bad("bad_partly_reported", s);
-s = JSON.parse(JSON.stringify(out.zigzag_eval.state)); s.stages.push(c.newStage(s, "timeloop-eval"));
-s.stages[1].params.workload = "other.yaml"; bad("bad_two_workloads", s);
 
 s = JSON.parse(JSON.stringify(out.python.state)); s.flow.dse = "pareto"; s.space = [{knob: "n", choices: "1, 2"}];
 bad("bad_pareto_one_objective", s);
@@ -472,19 +463,10 @@ def test_maximising_fmax_at_a_fixed_clock_warns_unless_the_clock_is_searched(tmp
     assert t.stages[0].command[-1] == "{clock_ps}" and t.space["clock_ps"] == [250, 333, 500]
 
 
-def test_a_catalog_stage_without_run_writes_its_stage_shape(tmp_path):
-    y = BUILT["evaluated"]["yaml"]
-    assert "evaluator: zigzag" in y and "command:" not in y.split("measure:")[1]
-    t = _load(tmp_path, BUILT["evaluated"])
-    assert t.stages[0].evaluator == "zigzag" and t.stages[0].command is None
-    assert set(t.stages[0].metrics) == {"latency_cycles", "energy_pj"}
-
-
 def test_the_real_catalogs_newer_tools_load(tmp_path):
     case = BUILT["zigzag_eval"]
-    assert 'workload: "{home}/workload.yaml"' in case["yaml"] and "evaluate.py" in case["yaml"]
+    assert "workload:" not in case["yaml"] and "evaluate.py" in case["yaml"]     # D954: the command carries it
     t = _load(tmp_path, case)
-    assert t.stages[0].evaluator is None and t.workload == "{home}/workload.yaml"
     assert t.stages[0].command == ("{python}", "{home}/evaluate.py", "{artifact}",
                                     "{home}/workload.yaml", "--backend", "zigzag")
     t = _load(tmp_path, BUILT["prog_timed"])
@@ -496,7 +478,6 @@ def test_the_real_catalogs_newer_tools_load(tmp_path):
 def test_an_objective_every_measurement_does_not_report_is_an_error():
     e = _errors(BUILT["bad_partly_reported"])
     assert "fmax_mhz, which stat does not report" in e and "every measurement must report every objective" in e
-    assert "one workload per document" in _errors(BUILT["bad_two_workloads"])
 
 
 @pytest.mark.parametrize("kind", ["surrogate", "command", "model"])

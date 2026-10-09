@@ -95,8 +95,7 @@ def describe_orchestrate(task: "TaskSpec") -> str:
 
 def describe_stage(stage: "Stage", modelled: bool = False) -> str:
     """One stage's line: how it is measured, its cutoffs and its estimator (D665)."""
-    how = ("its command" if stage.command else f"evaluator {stage.evaluator}" if stage.evaluator
-           else "nothing")
+    how = "its command" if stage.command else "nothing"
     cut = "; ".join(f"{c['metric']} " + (f">= {c['at']:g}" if "at" in c else f"<= {c['below']:g}" if "below" in c
                                         else f"within {c['within']:.0%} of the best") for c in stage.cutoffs if c)
     return (f"stage {stage.name}: {how}" + (", modelled" if modelled else "")

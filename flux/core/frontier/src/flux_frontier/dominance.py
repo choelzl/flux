@@ -9,7 +9,7 @@ from typing import Callable, Iterable, Sequence, TypeVar
 
 T = TypeVar("T")
 
-__all__ = ["dominates", "interval_dominates", "overlaps", "pareto"]
+__all__ = ["dominates", "pareto"]
 
 
 def dominates(a: Sequence[float], b: Sequence[float], *, minimize: bool = True) -> bool:
@@ -32,26 +32,3 @@ def pareto(points: Iterable[T], *, key: Callable[[T], Sequence[float]],
     return [p for i, p in enumerate(items)
             if not any(j != i and dominates(keys[j], keys[i], minimize=minimize)
                        for j in range(len(items)))]
-
-
-def overlaps(a: Sequence[float], b: Sequence[float]) -> bool:
-    """Closed-interval overlap of `(lo, hi)` pairs: neither strictly above nor strictly below
-    the other. Touching intervals overlap."""
-    return a[0] <= b[1] and b[0] <= a[1]
-
-
-def interval_dominates(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]) -> bool:
-    """`a` rules `b` out under uncertainty, minimise form, each objective a `(lo, value, hi)`
-    triple (D218): interval-better on at least one objective (`a.hi <
-    b.lo`), interval-worse on none (`a.lo > b.hi`), and point-worse on none -- the last clause
-    is what keeps elimination safe under overlap: an interval can strictly beat another on one
-    objective while its point value quietly loses on another inside overlapping intervals."""
-    if len(a) != len(b):
-        raise ValueError(f"interval dominance needs equal lengths, got {len(a)} and {len(b)}")
-    better = False
-    for (a_lo, a_v, a_hi), (b_lo, b_v, b_hi) in zip(a, b):
-        if a_lo > b_hi or a_v > b_v:
-            return False
-        if a_hi < b_lo:
-            better = True
-    return better

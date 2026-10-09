@@ -22,7 +22,8 @@ def targets() -> list[Path]:
     out += sorted((apps / "nlu/ops").glob("*/rtl.py"))
     out += [FLUX.parent / "docs/tutorial/isqrt/rtl.py"]
     out += [FLUX / "tests/fixtures/loops" / kind / "rtl.py" for kind in ("rtl", "rtl-sweep")]
-    out += [apps / "bankmap/lib/src/flux_bankmap/rtl_check.py", apps / "macarray/lib/src/flux_macarray/rtl_check.py"]
+    out += [apps / "bankmap/lib/src/flux_bankmap/rtl_check.py", apps / "macarray/lib/src/flux_macarray/rtl_check.py",
+            apps / "interconnect_mapping/lib/src/flux_imapping/rtl_check.py"]
     return out
 
 

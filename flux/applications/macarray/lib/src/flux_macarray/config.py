@@ -76,7 +76,7 @@ class PeConfig:
         return self.pipeline > 0
 
 
-#: The incumbent: `flux_evaluator_openroad.derive.derive_design_spec`'s canonical datapath (the `*` operator
+#: The incumbent: the canonical datapath (the `*` operator
 #: and a sum, combinational; D225). Every gain is quoted against it.
 DEFAULT = PeConfig(multiplier="behavioral", reducer="tree", pipeline=0)
 

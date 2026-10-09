@@ -3,8 +3,8 @@
 Lives in the ResultStore's SQLite file on the same connection, so a trial row can foreign-key
 its result row and both land in one transaction. The database is the checkpoint.
 
-Derived, never stored: the budget ledger (sum over trials + top-up events) and the Pareto
-frontier (a function of the ok trials), so they can never disagree with the trials.
+Derived, never stored: the Pareto frontier (a function of the ok trials), so it can never
+disagree with the trials.
 """
 
 from __future__ import annotations
@@ -19,15 +19,6 @@ from flux_evaluator_abi import Result
 
 from .store import ResultStore
 
-
-@dataclass(frozen=True, slots=True)
-class BudgetGrant:
-    """What a campaign may spend: evaluations, wall-clock seconds, dollars; None = unbounded.
-    The store answers `remaining()` against it."""
-
-    evaluations: int | None = None
-    wall_clock_s: float | None = None
-    usd: float | None = None
 
 _CAMPAIGN_SCHEMA = """
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -113,33 +104,6 @@ class Trial:
             "error": self.error,
             "cache_hit": self.cache_hit,
             "wall_clock_s": self.wall_clock_s,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class RemainingBudget:
-    """Granted minus derived spend, per dimension; None = that dimension is ungoverned."""
-
-    evaluations: int | None
-    wall_clock_s: float | None
-    usd: float | None
-
-    @property
-    def exhausted(self) -> bool:
-        if self.evaluations is not None and self.evaluations <= 0:
-            return True
-        if self.wall_clock_s is not None and self.wall_clock_s <= 0:
-            return True
-        if self.usd is not None and self.usd <= 0:
-            return True
-        return False
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "evaluations": self.evaluations,
-            "wall_clock_s": self.wall_clock_s,
-            "usd": self.usd,
-            "exhausted": self.exhausted,
         }
 
 
@@ -383,56 +347,6 @@ class CampaignStore:
                 created_at=r[12] or "",
             ))
         return out
-
-    def ok_trials(self, campaign_id: str, *, phase: str = "screen") -> list[Trial]:
-        return self.trials(campaign_id, phase=phase, status="ok")
-
-    def visited_keys(self, campaign_id: str) -> set[str]:
-        """Candidate keys of every non-interrupted trial; an interrupted candidate was never
-        measured and may be proposed again."""
-        rows = self._conn.execute(
-            "SELECT candidate_key FROM trials "
-            "WHERE campaign_id = ? AND status != 'interrupted'",
-            (campaign_id,),
-        ).fetchall()
-        return {r[0] for r in rows}
-
-
-    # -- derived ledger ----------------------------------------------------------------------
-
-    def spent(self, campaign_id: str) -> dict[str, Any]:
-        evals, wall, usd = self._conn.execute(
-            "SELECT "
-            "  SUM(CASE WHEN phase = 'screen' AND cache_hit = 0 "
-            "           AND status IN ('ok', 'error', 'refused', 'constraint_violated') "
-            "      THEN 1 ELSE 0 END), "
-            "  COALESCE(SUM(wall_clock_s), 0.0), "
-            "  SUM(usd_cost) "
-            "FROM trials WHERE campaign_id = ?",
-            (campaign_id,),
-        ).fetchone()
-        # usd stays None (unknown), not 0.0, when no backend reported a cost.
-        return {"evaluations": int(evals or 0), "wall_clock_s": float(wall), "usd": usd}
-
-    def remaining(self, campaign_id: str, budget: BudgetGrant) -> RemainingBudget:
-        spent = self.spent(campaign_id)
-        top_ups = {"evaluations": 0, "wall_clock_s": 0.0, "usd": 0.0}
-        for event in self.events(campaign_id):
-            if event["kind"] == "topped_up":
-                for k, v in event["detail"].get("added", {}).items():
-                    if k in top_ups and v:
-                        top_ups[k] += v
-
-        def _rem(granted, spent_v, top_up):
-            if granted is None:
-                return None
-            return granted + top_up - (spent_v or 0)
-
-        return RemainingBudget(
-            evaluations=_rem(budget.evaluations, spent["evaluations"], top_ups["evaluations"]),
-            wall_clock_s=_rem(budget.wall_clock_s, spent["wall_clock_s"], top_ups["wall_clock_s"]),
-            usd=_rem(budget.usd, spent["usd"], top_ups["usd"]),
-        )
 
 
 def _now() -> str:

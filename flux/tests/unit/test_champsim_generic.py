@@ -220,9 +220,10 @@ def test_a_header_run_takes_its_partners_knobs_from_config(fake):
 
 
 def test_the_abi_adapter_runs_an_ini_or_a_header(fake):
-    from flux_evaluator_abi import Budget, Candidate, make_evaluator
+    from champsim_tools import ChampSimEvaluator
+    from flux_evaluator_abi import Budget, Candidate
 
-    ev = make_evaluator("champsim")
+    ev = ChampSimEvaluator()           # the prefetcher's own adapter (no registry names it, D954)
     wl = {"trace": str(fake["traces"] / "alpha.champsim.gz"), "warmup_instructions": 100, "simulation_instructions": 1000}
     got = ev.evaluate(Candidate(workload=wl, arch={"ini": "x = 1\nl2c_prefetcher_types = stride\n"}, mapping=None),
                       Budget(), frozenset({"ipc"}))

@@ -240,7 +240,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         A stage with undeclared metrics (an `evaluator` stage without `metrics`) could produce
         anything, so it silences the objective check rather than failing it."""
         wrong: list[str] = []
-        unknown = any((r.evaluator or not r.command) and not r.metrics for r in self.task.stages)
+        unknown = any(not r.command and not r.metrics for r in self.task.stages)
         produced = {m for r in self.task.stages for m in (*r.metrics_re, *r.metrics)}
         if self.task.stages and not unknown:
             for objective in self.task.objectives:

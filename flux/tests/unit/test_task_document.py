@@ -50,7 +50,7 @@ def test_the_example_task_loads_and_round_trips():
     ({"id": "t", "statement": "x", "flow": {"test": {"test": 42}}}, "flow.test.test: a command"),
     ({"id": "t", "statement": "x", "flow": {"test": {"test": {"run": ["a"], "count_re": "("}}}}, "not a regex"),
     ({"id": "t", "statement": "x", "parts": ["p", "p"], "flow": {"test": {"test": ["a"]}}}, "unique"),
-    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": None}}}, "exactly one of"),
+    ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": None}}}, "needs a `command`"),
     ({"id": "t", "statement": "x", "flow": {"test": {"test": ["a"]}, "measure": {"r": ["m"]}}},
      "needs `metrics`"),
     ({"id": "t",

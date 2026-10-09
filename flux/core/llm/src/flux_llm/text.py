@@ -15,13 +15,6 @@ _FENCE_RE = re.compile(r"```\w*\s*(.*?)\s*```", re.DOTALL)
 _THINK_RE = re.compile(r"<think>.*?(?:</think>|\Z)", re.DOTALL | re.IGNORECASE)
 
 
-class InvalidLLMProposal(Exception):
-    """Raised when a model's raw text cannot be turned into a valid candidate for the caller —
-    malformed JSON, a value outside the valid set, a shape wrong for the search space, or a repeat
-    of something already tried. Each caller raises it with its own specific reason.
-    """
-
-
 def strip_markdown_fence(text: str) -> str:
     """Return the contents of the first fenced block in `text`, or `text` unchanged if it has none.
 

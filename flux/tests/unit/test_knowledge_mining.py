@@ -24,7 +24,6 @@ from flux_evaluator_abi import (
     Validity,
 )
 from flux_records.mining import (
-    mine_estimator_bias,
     mine_knowledge,
     mine_observed_ratios,
     mine_refusal_patterns,
@@ -48,62 +47,6 @@ def _result(value: float, *, metric="latency_cycles", unit="cycles",
 
 
 # -- estimator bias -------------------------------------------------------------------------
-
-
-def test_bias_facts_report_ranges_with_pointers_and_never_pool_caveated_records(tmp_path):
-    from flux_calibration import CalibrationStore
-
-    path = str(tmp_path / "cal.db")
-    with CalibrationStore(path) as cal:
-        ids = [
-            cal.add_record(workload_hash=f"w{i}", arch_hash=f"a{i}", evaluator="zigzag@9",
-                           metric="latency_cycles", predicted_value=p, reference_value=r,
-                           reference_source="rtl_sim")
-            for i, (p, r) in enumerate([(300.0, 100.0), (150.0, 50.0), (90.0, 30.1)])
-        ]
-        caveated_id = cal.add_record(
-            workload_hash="wX", arch_hash="aX", evaluator="zigzag@9",
-            metric="latency_cycles", predicted_value=1000.0, reference_value=10.0,
-            reference_source="rtl_sim", caveat="pool does not describe this point")
-
-    (fact,) = mine_estimator_bias(path)
-    # measured language with the exact observed range; the 100x caveated outlier not pooled
-    assert "over-predicted" in fact.statement
-    assert "2.990x-3.000x" in fact.statement
-    assert "3 measured (workload, arch) point(s)" in fact.statement
-    assert fact.pointers["record_ids"] == ids
-    assert fact.pointers["excluded_caveated_record_ids"] == [caveated_id]
-    assert any("caveated" in c for c in fact.caveats)
-    # the anti-overgeneralization line is a field, not documentation
-    assert "unmeasured point" in fact.not_established
-
-
-def test_below_threshold_families_carry_the_d106_caveat(tmp_path):
-    from flux_calibration import CalibrationStore
-
-    path = str(tmp_path / "cal.db")
-    with CalibrationStore(path) as cal:
-        cal.add_record(workload_hash="w", arch_hash="a", evaluator="e@1", metric="m",
-                       predicted_value=2.0, reference_value=1.0, reference_source="rtl_sim")
-    (fact,) = mine_estimator_bias(path)
-    assert any("below the correction threshold" in c for c in fact.caveats)
-
-
-def test_a_range_spanning_one_makes_no_direction_claim(tmp_path):
-    from flux_calibration import CalibrationStore
-
-    path = str(tmp_path / "cal.db")
-    with CalibrationStore(path) as cal:
-        for i, (p, r) in enumerate([(90.0, 100.0), (110.0, 100.0)]):
-            cal.add_record(workload_hash=f"w{i}", arch_hash=f"a{i}", evaluator="e@1",
-                           metric="m", predicted_value=p, reference_value=r,
-                           reference_source="rtl_sim")
-    (fact,) = mine_estimator_bias(path)
-    assert "predicted within" in fact.statement
-    assert "over-predicted" not in fact.statement and "under-predicted" not in fact.statement
-
-
-# -- campaign miners ------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -177,23 +120,6 @@ def test_refusals_group_by_the_exact_message(campaign):
     assert "2 trial(s)" in fact.statement
 
 
-def test_non_done_campaigns_are_counted_not_silently_dropped(campaign, tmp_path):
-    path, cid, _ = campaign
-    with CampaignStore(path) as store:
-        store.set_status(cid, "paused")
-    mined = mine_knowledge(campaign_db_paths=[path])
-    assert not [f for f in mined.facts if f.kind == "frontier_outcome"]
-    assert any("status 'paused'" in s for s in mined.skipped)
-
-
-def test_a_done_campaign_without_a_frontier_reader_is_counted_as_skipped(campaign):
-    """A done campaign is an outcome only through an injected reader; without one it is skipped, saying so (D521)."""
-    path, cid, _ = campaign
-    mined = mine_knowledge(campaign_db_paths=[path])
-    assert not [f for f in mined.facts if f.kind == "frontier_outcome"]
-    assert any("no frontier reader" in s and cid in s for s in mined.skipped)
-
-
 def test_measured_points_are_mined_whatever_phase_the_writer_used(tmp_path):
     """Measured points are found by the estimate's ABI `Method`, not the phase name."""
     from flux_records import Records
@@ -208,23 +134,3 @@ def test_measured_points_are_mined_whatever_phase_the_writer_used(tmp_path):
     points = [f for f in mined.facts if f.kind == "measured_point"]
     assert [(f.pointers["stage"], f.pointers["metric"]) for f in points] == [("admit", "error_rate")]
     assert points[0].evidence["points"][0]["method"] == "simulated"
-
-
-def test_frontier_outcomes_read_through_an_injected_reader(campaign):
-    """The campaign reader is injected (D428); without one the campaign is counted as skipped."""
-    from flux_records.mining.mining import FrontierOutcome, mine_frontier_outcomes
-
-    path, cid, _ = campaign
-
-    def reader(store, campaign_id):
-        assert campaign_id == cid
-        return FrontierOutcome(
-            entries=[{"candidate": {"width": 16}, "metrics": {"latency_cycles": {"value": 165.0, "fidelity": "rtl"}}}],
-            fidelity_note="injected", objective_id="obj/1", mode="pareto",
-            objectives=[("minimize", "latency_cycles")])
-
-    facts, skipped = mine_frontier_outcomes(path, frontier_reader=reader)
-    (fact,) = facts
-    assert "'obj/1'" in fact.statement and "[injected]" in fact.statement and not skipped
-    facts, skipped = mine_frontier_outcomes(path, frontier_reader=lambda s, c: None)
-    assert not facts and any("declined" in s for s in skipped)

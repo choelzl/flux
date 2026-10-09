@@ -80,7 +80,6 @@ class TaskSpec:
     when: dict[str, dict[str, list]] = field(default_factory=dict)   # knob -> {knob: choices} it moves under
     seeds: tuple[dict[str, Any], ...] = ()     # points measured before the walk; the rest from the first choices
     skills: tuple[str, ...] = ()                  # D588: skill folders (absolute), for the model and the agents
-    workload: Any = None                 # for evaluator stages: a Workload IR document or path
     #: The flow (D542): one key per box of the drawing naming its half, normalised; what it
     #: implies is folded into `roles`, `generator`, `critique`, `budget.calibrate`.
     flow: dict[str, Any] = field(default_factory=dict)
@@ -373,7 +372,7 @@ class TaskSpec:
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
             budget=budget, baseline=baseline, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
-            workload=doc.get("workload"), home=str(Path(base).resolve()) if base is not None else "",
+            home=str(Path(base).resolve()) if base is not None else "",
             record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
             skills=skills, workbench=workbench, language_inferred=bool(inferred),
@@ -394,7 +393,6 @@ class TaskSpec:
             "stages": [{"name": r.name,
                        **({"command": list(r.command)} if r.command else {}),
                        **({"metrics_re": dict(r.metrics_re)} if r.metrics_re else {}),
-                       **({"evaluator": r.evaluator} if r.evaluator else {}),
                      **({"cutoff": dict(r.cutoff) if isinstance(r.cutoff, dict) else [dict(c) for c in r.cutoff]}
                         if r.cutoff else {}),
                        **({"metrics": r.metric_doc()} if r.metrics else {}),
@@ -406,7 +404,6 @@ class TaskSpec:
             "budget": dict(self.budget), "params": dict(self.params), "space": {k: _knob_doc(k, v, self.when.get(k), self.space_from.get(k)) for k, v in self.space.items()},
             **({"baseline": dict(self.baseline) or True} if self.baseline is not None else {}),
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
-            **({"workload": self.workload} if self.workload is not None else {}),
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),

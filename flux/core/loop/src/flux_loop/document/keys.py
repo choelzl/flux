@@ -10,7 +10,7 @@ class TaskError(ValueError):
 #: What a nested sub-task takes from its parent when it does not say (D455). `subtasks` is
 #: deliberately absent: a child that inherited it would divide again, forever.
 _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
-              "params", "workload", "budget", "space", "ladder",
+              "params", "budget", "space", "ladder",
               "flow")
 
 
@@ -19,7 +19,7 @@ _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge
 DOCUMENT_KEYS = frozenset({
     "statement", "contract", "language", "parts",
     "flow", "subtasks", "max_subtasks", "objectives",
-    "budget", "params", "workload", "ladder",
+    "budget", "params", "ladder",
     "skills", "baseline"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})

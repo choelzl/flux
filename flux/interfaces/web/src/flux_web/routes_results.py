@@ -366,28 +366,6 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             preface += said
         return _sse(_multiplex(request, lambda: runs.latest(whose, name), readers, preface))
 
-    @app.get("/api/apps/{name}/events")
-    def events(name: str, request: Request, offset: str = "0", window: int = 0, owner: str | None = None,
-               user: User = Depends(user_of)):
-        """The latest start's journal alone (the page's is in /stream, D917)."""
-        _w, whose, _d, _run = loop_of(name, user, owner)
-        look, preface = _events_part(whose, name, _cursors(request, {"events": offset}, "events")["events"], window)
-        return _sse(_multiplex(request, lambda: runs.latest(whose, name), {"events": look}, preface, bare=True))
-
-    @app.get("/api/apps/{name}/live")
-    def live(name: str, request: Request, owner: str | None = None, user: User = Depends(user_of)):
-        """The latest start's live state alone (D761; the page's is in /stream, D917)."""
-        _w, whose, _d, _run = loop_of(name, user, owner)
-        return _sse(_multiplex(request, lambda: runs.latest(whose, name), {"live": _live_look(whose, name)}))
-
-    @app.get("/api/apps/{name}/log")
-    def log(name: str, request: Request, offset: str = "0", tail: int = 0, owner: str | None = None,
-            user: User = Depends(user_of)):
-        """The loop's log alone (the page's is in /stream, D917)."""
-        _w, _whose, d, _run = loop_of(name, user, owner)
-        look, preface = _log_part(d, _cursors(request, {"log": offset}, "log")["log"], tail)
-        return _sse(_multiplex(request, lambda: None, {"log": look}, preface, bare=True))
-
     @app.get("/api/apps/{name}/log/raw")
     def log_raw(name: str, owner: str | None = None, run_id: int | None = None, download: bool = True,
                 preview: bool = False, user: User = Depends(user_of)):

@@ -17,29 +17,17 @@ def test_a_record_written_without_a_cost_model_claims_no_bottleneck(tmp_path):
     assert Limiter("none") is Limiter.NONE
 
 
-def test_ppa_report_projects_its_metrics_once():
-    from flux_evaluator_openroad.flow import PpaReport
-
-    rep = PpaReport(area_um2=431.0, utilization_pct=55.0, power_total_w=0.012, power_breakdown_w={},
-                    worst_slack_ps=200.0, clock_period_ps=1000.0, cell_count=321, flow_depth="placement",
-                    yosys_log_tail="", openroad_log_tail="")
-    m = rep.metrics()
-    assert m["fmax_mhz"] == 1e6 / 800 and m["area_um2"] == 431.0 and m["power_w"] == 0.012
-    assert m["cell_count"] == 321 and m["clock_period_ps"] == 1000.0 and m["worst_slack_ps"] == 200.0
-    import dataclasses
-    assert dataclasses.replace(rep, worst_slack_ps=1000.0).fmax_mhz == float("inf")
-
-
 def test_every_adapter_declares_the_abi_batch_base():
-    """The sequential batch body lives once, in `SequentialBatch`, which every registered adapter inherits (D441)."""
+    """The sequential batch body lives once, in `SequentialBatch`, which every application adapter
+    inherits (D441; no registry names them since D954)."""
+    from champsim_tools import ChampSimEvaluator
+    from flux_evaluator_abi import SequentialBatch
+    from timeloop_tools import TimeloopEvaluator
+    from zigzag_tools import ZigZagEvaluator
 
-    from flux_evaluator_abi import SequentialBatch, evaluator_class
-    from flux_evaluator_abi.registry import _DEFAULTS
-
-    for name in _DEFAULTS:
-        cls = evaluator_class(name)
-        assert issubclass(cls, SequentialBatch), name
-        assert "evaluate_batch" not in cls.__dict__, name
+    for cls in (ZigZagEvaluator, TimeloopEvaluator, ChampSimEvaluator):
+        assert issubclass(cls, SequentialBatch), cls.__name__
+        assert "evaluate_batch" not in cls.__dict__, cls.__name__
 
 
 def test_the_loops_log_words_are_role_words():

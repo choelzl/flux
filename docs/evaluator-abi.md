@@ -39,8 +39,7 @@ Four things here are new relative to every existing DSE tool:
 - `Estimate` carries an interval, not a scalar.
 - `domain.in_domain` says whether the model is extrapolating.
 - `bottleneck` is **structured**, so both a human and an agent get *why*, not just *what*.
-- `validity` is the evaluator's own report: the RTL backend's comes from its golden-vector check;
-  ZigZag's and Timeloop's is `Validity(ok=True, checker_version="none-v0.1")`, a placeholder. In a
+- `validity` is the evaluator's own report: ZigZag's and Timeloop's is `Validity(ok=True, checker_version="none-v0.1")`, a placeholder. In a
   problem document, correctness is the gate's, never an evaluator's.
 
 ## Batch mode
@@ -65,10 +64,7 @@ still a plain dict for serialisation, but a missing key now raises `MissingMetri
 **`arch=None` is a real input:** it means "use the evaluator's own default architecture", the same
 shape `mapping=None` already had ("the evaluator may choose one, and must declare that it did").
 An adapter either honours it or refuses with `NotExpressibleError` — never silently substitutes an
-architecture the caller didn't ask for. Measured across the registered backends: `rtl`,
-`timeloop` and `zigzag` fall back to their own default; the other nine refuse and name the
-requirement ([decisions.md D173](decisions.md), checked by
-`tests/integration/test_arch_none_conformance.py`).
+architecture the caller didn't ask for ([decisions.md D173](decisions.md)).
 
 **Length is part of the contract:** if `evaluate_batch` returns, it returns exactly one `Result`
 per candidate, in the order given. An implementation that cannot evaluate a candidate raises for
@@ -80,17 +76,16 @@ produced a confidently wrong DSE winner from a sweep that reported no errors.
 
 ## Backends
 
-Only `rtl` and `openroad` are registered by core Flux. ZigZag and Timeloop are owned by
-`applications/npu_gemm/`; use its `evaluate.py --backend zigzag|timeloop` command. ChampSim
-is owned by `applications/prefetcher/`; use its `champsim.py` or `bingo.py` commands. Their
-adapter classes remain inside those applications for reuse or explicit plugin registration.
+Core Flux registers no backend: the registry and the loop document's evaluator stages are gone
+([D954](decisions.md)). Each adapter lives in the application that uses it and is called by that
+application's own scripts. ZigZag and Timeloop are owned by `applications/npu_gemm/` (its
+`evaluate.py --backend zigzag|timeloop` and `measure.py`); ChampSim is owned by
+`applications/prefetcher/` (its `champsim.py` or `bingo.py` commands).
 
 | Backend | Package | Status |
 |---|---|---|
 | `zigzag` | `applications/npu_gemm/tools/zigzag_tools/` | Real. Translates a two-operand einsum + N-dimensional compute array + flat mapping into native ZigZag, runs the real `zigzag-dse` PyPI package. |
 | `timeloop` | `applications/npu_gemm/tools/timeloop_tools/` | Real. Same class of einsum op via the real `timeloopaccelergy/accelergy-timeloop-infrastructure` Docker image or the hermetic nix runner ([decisions.md D206](decisions.md)); 1-D and 2-D compute arrays (D215); sparsity via Timeloop's own `densities`/`sparse_optimizations` (D78). |
-| `rtl` | `evaluator/rtl/` | Real. A hand-written `mac_array.sv`, compiled/run through real Verilator, self-checked against a Python golden reference every run. The first *measured*, not analytic, evaluator. |
-| `openroad` | `evaluator/openroad/` | Real. Yosys maps the candidate's derived datapath onto ASAP7 and OpenROAD places (optionally routes, D229) it — measured `area_mm2`/`power_w`/`worst_slack_ps` from placed silicon ([decisions.md D225](decisions.md)–[D230](decisions.md)). |
 | `champsim` | `applications/prefetcher/tools/champsim_tools/` | Real. ChampSim (Pythia) on one trace: an `.ini` of knobs for the prebuilt binary or a C++ prefetcher header built in; IPC, cycles and the L2 prefetch counters, simulated. |
 
 ## Two faces of one measurement
@@ -98,16 +93,17 @@ adapter classes remain inside those applications for reuse or explicit plugin re
 The ABI is the interface for a candidate **the IR can express** — a Workload IR document, an
 Architecture IR document, an optional Mapping IR — which is what makes backends
 interchangeable: a search can swap `zigzag` for `timeloop` because both read the same
-documents. It is reached by NAME, from a problem document's `flow.measure`
-(`evaluator: openroad`, [decisions.md D430](decisions.md)) or `flux eval` for registered adapters.
+documents. A loop document never names an adapter: every stage is a command printing
+`name=value`, and the command (npu_gemm's `measure.py`) constructs the adapter itself
+([D954](decisions.md)).
 
 Several studies here measure something else. The macarray's candidate is generated
 SystemVerilog plus a clock constraint; the NLU's is an FP16 operator module; the prefetcher's is
 an `.ini` or a C++ header against a directory of traces; the interconnect mapping's is a hash
 and a fabric under a cycle law. None of those is an Architecture IR document, and inventing an IR encoding for each of them purely to pass
 through `evaluate` would add a translation layer between a study and its own artifact, with
-nothing on the other side able to interpret it. So they call the tool wrapper directly:
-`run_synthesis_flow` / `run_ppa_flow` (`evaluator/openroad`), `simulate` / `measure`
+nothing on the other side able to interpret it. So they call the tool directly: Yosys and
+OpenROAD through each RTL application's own `rtl.py` (`measure`, D948), `simulate` / `measure`
 (`applications/prefetcher/tools/champsim_tools`, the prefetcher's stages through `python champsim.py run` and `bingo.py measure`).
 
 **The rule, and it is a one-implementation rule** ([decisions.md D451](decisions.md)): where a
@@ -116,19 +112,14 @@ adapter's job on top of it is exactly two things — translating an IR document 
 inputs, and wrapping the numbers in a `Result` (method, provenance, validity, escalation). What
 must never happen is a second implementation of the measurement itself, because then the same
 design measured through the two faces can disagree and nothing says which number is the silicon.
-`tests/unit/test_one_measurement_two_faces.py` pins it for the two tools that have both faces:
-`openroad` (`OpenRoadEvaluator.evaluate` and macarray/NLU/interconnect_mapping all reach
-`run_ppa_flow`/`run_synthesis_flow`) and `champsim` (`ChampSimEvaluator.evaluate`, `measure` and
-the no-prefetcher baseline all reach `simulate`).
+`tests/unit/test_one_measurement_two_faces.py` pins it for the tool that has both faces:
+`champsim` (`ChampSimEvaluator.evaluate`, `measure` and the no-prefetcher baseline all reach
+`simulate`). OpenROAD has one face since D948: an RTL application's `rtl.py`.
 
 **Adapters, not forks.** Each adapter translates Flux IR to the tool's native config and parses
 its output back into `Result`. Where a mapping is inexpressible, the adapter fails loudly with
 `NotExpressibleError` (surfaced as `not_expressible_in` in Mapping IR's `compatibility` block) —
 never silently approximates. `NotExpressibleError` is the ABI's own class
 (`flux_evaluator_abi.NotExpressibleError`); every adapter's `errors.py` re-exports it, so one
-`except` written against the ABI catches every backend (D426). Every adapter carries its
-registry name as `.name`, and the name-to-evaluator map is the ABI's too:
-`evaluator/abi/src/flux_evaluator_abi/registry.py` (`make_evaluator`, `available_evaluators`,
-`register_evaluator`, `evaluator_name_for`). A backend
-must be registered there to be reachable from a task document or `flux eval`,
-regardless of the adapter's own correctness ([decisions.md D6](decisions.md)).
+`except` written against the ABI catches every backend (D426). Every adapter carries its name as
+`.name`, which goes into the `Result`'s provenance.

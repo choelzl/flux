@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"), *REPO.glob("flux/applications/*/*.problem.yaml"),
                *REPO.glob("flux/tests/fixtures/loops/*/problem.yaml"),
                REPO / "flux/core/loop/examples/digits/problem.json"])
-COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts", "workload")
+COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts")
 
 JS = r"""
 const c = require(process.argv[1]);
@@ -121,7 +121,6 @@ _BASE = {"statement": "Make valid source with the smallest time.", "language": "
          "flow": {"test": "{python} {home}/check.py {artifact}",
                   "measure": {"bench": {"command": "{python} {home}/bench.py {artifact}", "metrics": ["time_ms"]}}},
          "objectives": [{"metric": "time_ms", "direction": "minimize"}]}
-_WORKLOAD = {"id": "tiny", "ops": [{"id": "mm", "kind": "einsum", "expr": "b c, c k -> b k", "bounds": {"b": 2, "c": 8, "k": 16}}]}
 
 
 def _variant(name: str) -> dict:
@@ -129,9 +128,6 @@ def _variant(name: str) -> dict:
     if name == "scalar_choices":
         d["flow"]["orchestrate"] = {"policy": "sweep", "space": {"mode": ["01", "true", "fast,wide", 2, True, 0.5, 1e-07]}}
         d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
-    elif name == "inline_workload":
-        d.update(language="yaml", workload=_WORKLOAD, objectives=[{"metric": "latency_cycles", "direction": "minimize"}])
-        d["flow"]["measure"] = {"cost": {"evaluator": "zigzag", "metrics": ["latency_cycles", "energy_pj"]}}
     elif name == "needs_override":
         d["flow"]["measure"]["bench"]["needs"] = ["a-required-tool"]
     elif name == "spaced_script":
@@ -142,7 +138,7 @@ def _variant(name: str) -> dict:
     return d
 
 
-@pytest.mark.parametrize("name", ["scalar_choices", "inline_workload", "needs_override", "spaced_script", "params_placeholder"])
+@pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)

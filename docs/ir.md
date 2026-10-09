@@ -83,7 +83,7 @@ Key decisions:
   serve area, leakage, latency, and thermal.
 - **Constraints are part of the architecture document**, machine-checkable and independent of the
   cost model — a direct anti-reward-hacking measure.
-- Thermal and NoC have declared schema slots; no evaluator in the registry fills them.
+- Thermal and NoC have declared schema slots; no evaluator fills them.
 
 v0.1 scope was a single spatial compute dimension and a single compute node; it has widened
 unevenly since: ZigZag's translator accepts an N-dimensional compute array, Timeloop's accepts
@@ -138,8 +138,8 @@ document. Multi-level tiling, placement and `fusion` are schema-representable an
 
 Every IR document is canonicalized and content-addressed. `arch_hash`, `workload_hash`,
 `mapping_hash` are the cache keys for everything downstream and the lineage keys for everything
-upstream (`core/stores/`, see [stores.md](stores.md)) — real today, used by the stores, `flux eval`/`flux replay`
-and every evaluator's `Result.provenance.inputs`.
+upstream (`core/stores/`, see [stores.md](stores.md)) — real today, used by the result store's
+content-addressed documents and every evaluator's `Result.provenance.inputs`.
 
 ## Objective IR (accelerator era)
 

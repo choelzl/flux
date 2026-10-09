@@ -114,14 +114,10 @@ the rules half; every turn is on the record ([design-agent-loop.md](design-agent
 Two boundaries:
 
 1. **Agent and evaluator.** A model or agent proposes designs and documents; it never writes the
-   gate, the stages' tools, the calibration store or the benchmark holdout. The holdout
-   partition of the benchmark corpus is not visible to search or to any agent
-   (`CorpusStore.public_entries()`, [stores.md](stores.md)).
-2. **Evaluator and model context.** A PDK confidentiality policy ([decisions.md D94](decisions.md),
-   `evaluator/redaction/`): the raw ASAP7 synthesis entry point refuses outright
-   (`ConfidentialPdkError`) if its PDK is registered confidential. Only ASAP7 is registered, and it
-   is BSD-3-Clause, not confidential, so the refusal is a tested guard rather than a live filter;
-   nothing yet turns absolute numbers into relative ones.
+   gate, the stages' tools or the record ([stores.md](stores.md)).
+2. **Evaluator and model context.** ASAP7, the only PDK in use, is BSD-3-Clause; the PDK
+   confidentiality guard (D94) was removed with nothing to guard (D952). Nothing turns absolute
+   numbers into relative ones.
 
 ## Knowledge layer
 
@@ -132,7 +128,7 @@ from the upstream AsciiDoc) and the curated `design-guidance` corpus (original p
 [D244](decisions.md)/[D267](decisions.md): memory implementation, multi-port composition,
 datapath PPA, interconnect fabric selection). A document's `flow.knowledge` and the
 `knowledge` tool reach it. The sibling `mentor/records/` package (`flux_records.mining`)
-computes typed facts from the campaign and calibration stores, never ingested into the BM25
+computes typed facts from the campaign store, never ingested into the BM25
 index ([D243](decisions.md)), and renders them into prompts ([D245](decisions.md)). Not
 implemented: any licensed standard beyond `riscv-unpriv`, an embedding backend, connectors for
 formats other than AsciiDoc (AMBA/JEDEC/PCIe/I2C need a paid licence, [D31](decisions.md)).

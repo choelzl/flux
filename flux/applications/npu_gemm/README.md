@@ -13,7 +13,7 @@ No model is needed.
 | `workload.yaml` | what runs on the accelerator, as Workload IR |
 | `render.py` | writes one architecture from `pe_x` and `gbuf_kb` |
 | `check.py` | the gate: the architecture is valid Architecture IR |
-| `measure.py` | the stage: ZigZag's cycles and energy through the evaluator registry, plus a first-order area estimate at 28 nm |
+| `measure.py` | the stage: ZigZag's cycles and energy through the app's own `tools/zigzag_tools`, plus a first-order area estimate at 28 nm |
 
 ## Run it
 
@@ -48,5 +48,5 @@ mapping at all and 1 KB is the floor. The space is 1, 2, 4 and 8 KB around it; t
   memory level).
 - **A bigger space:** `flow: {orchestrate: gradient}` or a list of phases, or `llm` to let a model
   propose points ([docs/cookbook.md](../../../docs/cookbook.md)).
-- **Another cost model:** `make_evaluator("timeloop")` in `measure.py` (it needs Docker, or
+- **Another cost model:** `TimeloopEvaluator` from `tools/timeloop_tools` in `measure.py` (it needs Docker, or
   `nix develop` with `FLUX_TIMELOOP_LOCAL=1`).

@@ -34,7 +34,7 @@ See `tests/integration/test_knowledge_riscv_corpus.py` for retrieval against the
 and AsciiDoc parsing on synthetic input.
 
 Mining (`flux_records.mining` in [mentor/records](../records/), [decisions.md D243](../../../docs/decisions.md))
-computes typed facts from the campaign/calibration stores — deliberately *not* ingested into this
+computes typed facts from the campaign store — deliberately *not* ingested into this
 BM25 index (mined measured facts and licensed spec text have different provenance classes) — and
 renders them into proposer/authoring prompts via `render_facts_for_prompt`
 ([D245](../../../docs/decisions.md)).

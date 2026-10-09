@@ -212,7 +212,7 @@ class DraftMixin:
             path.unlink(missing_ok=True)
         budget = dict(agent.probe) if agent.probe is not None else None          # D678: the prototype's check
         proto = list(_substitute(_command(
-            ["flux", "rtl", "proto", "{artifact}", "--golden", str(golden_path(self.task)),
+            ["{python}", "-m", "flux_loop.golden_proto", "{artifact}", "--golden", str(golden_path(self.task)),   # D951: `flux rtl` is gone
              "--table-max", str(int(self.task.budget.get("prototype_table_max") or TABLE_MAX))], "the prototype check") or (),
             {"python": sys.executable}))
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",

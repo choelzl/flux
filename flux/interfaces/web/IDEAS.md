@@ -23,7 +23,7 @@ Not built yet, roughly in the order they would help. D683-D684 hold what is buil
 - Quotas: CPU-hours, runs and storage per user; the admin sees usage.
 - A server policy that users bring their own model key (`--user-model-required`).
 - A "test the endpoint" button (with care: the server would fetch a URL a user names).
-- Clean-up: old runs' logs and traces, per user and per age (`flux gc` for the server).
+- Clean-up: old runs' logs and traces, per user and per age (the admin's Maintenance tasks).
 - Backups of the server's data and every record.
 
 ## Presentation

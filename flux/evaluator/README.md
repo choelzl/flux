@@ -1,37 +1,30 @@
-# evaluator/ — the Evaluator ABI and the backend adapters
+# evaluator/ — the Evaluator ABI and the measurement cache
 
-The contract: `evaluate(workload, arch, mapping, budget) -> Result`. One directory per backend,
-each independently installable; `evaluator/abi/src/flux_evaluator_abi/registry.py` is the
-authoritative list of registered names (`available_evaluators()`), and an application's own
-adapter registers there too. Adapters translate Flux IR to and from the backend's native format
-and fail loudly (`not_expressible_in`) rather than silently approximate. See
-[docs/evaluator-abi.md](../../docs/evaluator-abi.md).
+The contract: `evaluate(workload, arch, mapping, budget) -> Result`. `abi/` holds the types, the
+`Evaluator` protocol, `SequentialBatch`, `NotExpressibleError`, `run_tool`, the toolchain
+fingerprint and preflight; `cache/` holds the loop's measurement cache keyed by tool fingerprints
+(D340). See [docs/evaluator-abi.md](../../docs/evaluator-abi.md).
 
-Registered today:
+No backend lives here and nothing registers one by name (D954). Each adapter belongs to the
+application that uses it and is called by that application's own scripts:
 
-| name | package | what it is |
+| adapter | where | called by |
 |---|---|---|
-| `openroad` | `openroad/` | Yosys + OpenSTA synthesis, OpenROAD placement and full place-and-route on ASAP7 (D225-D230); the critical path as data (D526). The measurement stage of the NLU and the macarray worlds. |
-| `rtl` | `rtl/` | the hand-written `mac_array.sv` reference through Verilator: the first simulated, not analytic, stage (a 529-cycle measurement against ZigZag's 1554 and Timeloop's 512) |
-| `zigzag` | `zigzag/` | the ZigZag cost model (`zigzag-dse`), translating Workload, Architecture and Mapping IR |
-| `timeloop` | `timeloop/` | Timeloop + Accelergy (Docker by default, `FLUX_TIMELOOP_LOCAL=1` for the hermetic shell), translating the same IR |
-| `champsim` | `champsim/` | ChampSim (Pythia) on a trace: an `.ini` or a C++ prefetcher header built in; `python champsim.py run\|build\|check`. The prefetcher documents' stages. |
+| ZigZag (`zigzag-dse`), translating Workload, Architecture and Mapping IR | `applications/npu_gemm/tools/zigzag_tools/` | `evaluate.py`, `measure.py` |
+| Timeloop + Accelergy (Docker by default, `FLUX_TIMELOOP_LOCAL=1` for the hermetic shell), the same IR | `applications/npu_gemm/tools/timeloop_tools/` | `evaluate.py --backend timeloop` |
+| ChampSim (Pythia) on a trace: an `.ini` or a C++ prefetcher header built in | `applications/prefetcher/tools/champsim_tools/` | `champsim.py run\|build\|check`, `bingo.py` |
 
-Beside the adapters: `abi/` (the types, the `Evaluator` protocol, the registry, `run_tool`,
-the toolchain fingerprint), `calibration/` (predicted-vs-reference residuals, escalation,
-conformance, drift; [docs/calibration.md](../../docs/calibration.md)), `validity/` (an
-independent first-principles check that shares no code with any adapter), `redaction/` (what
-an evaluator's output may say to a model) and `cache/` (the loop's measurement cache keyed by
-tool fingerprints, D340).
+Adapters translate Flux IR to and from the backend's native format and fail loudly
+(`not_expressible_in`) rather than silently approximate. RTL measurement on ASAP7 is each RTL
+application's own one-file `rtl.py` (D948, D950).
 
-The nine adapters of the accelerator era that nothing on the one loop reached (booksim, cacti,
-dramsim3, gem5, native, noxim, stream, systemc, thermal) and the placeholder directories were
-removed in D540.
+Removed: the nine accelerator-era adapters nothing on the one loop reached (D540); the
+`openroad` evaluator (D950); the redaction guard (D952); the registry, the Verilator
+`mac_array.sv` reference (`rtl/`) and the calibration package (D954).
 
 ## Wrapping a tool
 
-Every adapter wraps its tool directly (D347): Yosys, OpenROAD, Verilator, ZigZag, Timeloop and
-ChampSim are called through `run_tool` with a timeout. What does not vary is the
-outside: every evaluator implements the same `Evaluator` protocol and returns the same
-`Result` with its metrics, validity, domain and provenance, which is what makes them
-interchangeable at a stage of the loop's chain.
+Every adapter wraps its tool directly (D347): ZigZag, Timeloop and ChampSim are called through
+`run_tool` with a timeout. What does not vary is the outside: every evaluator implements the same
+`Evaluator` protocol and returns the same `Result` with its metrics, validity, domain and
+provenance.

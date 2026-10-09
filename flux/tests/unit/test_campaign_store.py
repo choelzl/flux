@@ -88,7 +88,8 @@ def test_trial_completion_is_one_transaction_with_the_result(store):
     # the trial references a result row that genuinely exists in the SAME database
     trial = store.trials(cid)[0]
     assert trial.result_id == result_id
-    assert store.results.get_result(result_id)["evaluator"] == "test@0"
+    row = store._conn.execute("SELECT evaluator FROM results WHERE id = ?", (result_id,)).fetchone()
+    assert row[0] == "test@0"
     assert trial.result is not None and trial.result.value_of("latency_cycles") == 100.0
 
 
@@ -108,64 +109,9 @@ def test_running_rows_classify_as_interrupted_and_free_their_candidate(store):
 
     assert store.classify_interrupted(cid) == 1
     # the interrupted candidate is re-proposable; the completed one is not
-    assert store.visited_keys(cid) == {"w8"}
     assert any(e["kind"] == "interrupted_trials_found" for e in store.events(cid))
     # idempotent: a second pass finds nothing
     assert store.classify_interrupted(cid) == 0
-
-
-def test_the_ledger_is_derived_and_cache_hits_are_free(store):
-    from flux_store import BudgetGrant
-
-    budget = BudgetGrant(evaluations=4)
-    cid = _start(store)
-
-    for i, (status, hit) in enumerate(
-        [("ok", False), ("ok", True), ("error", False), ("refused", False)]
-    ):
-        seq = _begin(store, cid, key=f"k{i}")
-        store.complete_trial(
-            cid, seq, status=status, result=_result() if status == "ok" else None,
-            error=None if status == "ok" else "x", wall_clock_s=2.0, cache_hit=hit,
-        )
-
-    spent = store.spent(cid)
-    # 4 trials, but the cache hit spent no real evaluator call: 3 evaluations
-    assert spent["evaluations"] == 3
-    assert spent["wall_clock_s"] == pytest.approx(8.0)
-    # no backend reported usd: unknown stays None, never 0.0
-    assert spent["usd"] is None
-
-    remaining = store.remaining(cid, budget)
-    assert remaining.evaluations == 4 - 3
-    assert not remaining.exhausted
-
-    # top-up arrives as an event, and the derived ledger sees it without any stored counter
-    store.append_event(cid, "topped_up", {"added": {"evaluations": 10}})
-    assert store.remaining(cid, budget).evaluations == 11
-
-
-def test_budget_exhaustion_latches_at_zero(store):
-    from flux_store import BudgetGrant
-
-    cid = _start(store)
-    seq = _begin(store, cid)
-    store.complete_trial(cid, seq, status="ok", result=_result(), error=None, wall_clock_s=1.0)
-    remaining = store.remaining(cid, BudgetGrant(evaluations=1))
-    assert remaining.evaluations == 0 and remaining.exhausted
-
-
-def test_usd_spend_is_charged_when_a_backend_reports_it(store):
-    from flux_store import BudgetGrant
-
-    cid = _start(store)
-    seq = _begin(store, cid)
-    store.complete_trial(
-        cid, seq, status="ok", result=_result(usd=0.75), error=None, wall_clock_s=1.0
-    )
-    remaining = store.remaining(cid, BudgetGrant(usd=1.0))
-    assert remaining.usd == pytest.approx(0.25)
-    assert not remaining.exhausted
 
 
 def test_a_campaign_is_keyed_by_its_document_name(tmp_path):

@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import flux_ir
-from flux_evaluator_abi import Result
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -99,11 +98,8 @@ class _LockedConnection:
 
 
 class ResultStore:
-    """A content-addressed store for Flux IR documents and Evaluator results (docs/stores.md).
-
-    `get_result`/`find_results` return plain dicts (`Result.to_dict()`'s shape), not `Result`
-    objects, so the store stays decoupled from any evaluator's types.
-    """
+    """A content-addressed store for documents (docs/stores.md), and the `results` table a
+    campaign's trials write their measurements into (`CampaignStore.complete_trial`)."""
 
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = str(db_path)
@@ -147,81 +143,6 @@ class ResultStore:
             "SELECT canonical_json FROM documents WHERE hash = ?", (content_hash,)
         ).fetchone()
         return json.loads(row[0]) if row else None
-
-    def put_result(
-        self,
-        result: Result,
-        *,
-        workload_hash: str,
-        arch_hash: str | None = None,
-        mapping_hash: str | None = None,
-    ) -> int:
-        """Store a Result, tagged with the lineage that produced it. Returns the row id."""
-        cursor = self._conn.execute(
-            "INSERT INTO results "
-            "(workload_hash, arch_hash, mapping_hash, evaluator, result_json, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                workload_hash,
-                arch_hash,
-                mapping_hash,
-                result.provenance.evaluator,
-                json.dumps(result.to_dict()),
-                _now(),
-            ),
-        )
-        self._conn.commit()
-        assert cursor.lastrowid is not None
-        return cursor.lastrowid
-
-    def get_result(self, result_id: int) -> dict[str, Any] | None:
-        row = self._conn.execute(
-            "SELECT id, workload_hash, arch_hash, mapping_hash, evaluator, result_json, "
-            "created_at FROM results WHERE id = ?",
-            (result_id,),
-        ).fetchone()
-        return _row_to_dict(row) if row else None
-
-    def find_results(
-        self,
-        *,
-        workload_hash: str | None = None,
-        arch_hash: str | None = None,
-        mapping_hash: str | None = None,
-        evaluator: str | None = None,
-        evaluator_prefix: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Query stored results by any combination of lineage fields (all optional; None means
-        'do not filter on this'): the warm-start query surface; `flux_store.CachingEvaluator`
-        wraps it as an Evaluator.
-
-        `evaluator` matches exactly (e.g. `"zigzag@3.8.5"`); `evaluator_prefix` matches a leading
-        substring (e.g. `"zigzag@"`, tolerant of version drift). Pass at most one: both would AND.
-        """
-        if evaluator is not None and evaluator_prefix is not None:
-            raise ValueError("pass at most one of evaluator, evaluator_prefix, not both")
-        clauses: list[str] = []
-        params: list[Any] = []
-        for column, value in (
-            ("workload_hash", workload_hash),
-            ("arch_hash", arch_hash),
-            ("mapping_hash", mapping_hash),
-            ("evaluator", evaluator),
-        ):
-            if value is not None:
-                clauses.append(f"{column} = ?")
-                params.append(value)
-        if evaluator_prefix is not None:
-            clauses.append("evaluator LIKE ? ESCAPE '\\'")
-            params.append(evaluator_prefix.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_") + "%")
-        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        rows = self._conn.execute(
-            "SELECT id, workload_hash, arch_hash, mapping_hash, evaluator, result_json, "
-            f"created_at FROM results {where} ORDER BY id",
-            params,
-        ).fetchall()
-        return [_row_to_dict(row) for row in rows]
-
 
 def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
     result_id, workload_hash, arch_hash, mapping_hash, evaluator, result_json, created_at = row

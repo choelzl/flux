@@ -76,27 +76,27 @@ def test_partial_metrics_then_failure_are_refused_and_a_clean_exit_is_the_contro
     assert ok.decision is not None and ok.decision.metrics["time_ms"] == 3.0
 
 
-def test_an_invalid_evaluator_result_is_refused_with_its_violations(tmp_path):
-    """The review's MacArray reproduction: the simulator reports three mismatches, `validity.ok=False`;
-    the loop scored `latency_cycles=1`. Now it is refused, the checker's reason kept."""
-    from flux_evaluator_rtl.mac_array import MacArrayHarness
+def test_an_evaluator_stage_is_refused_and_the_migration_says_what_to_do(tmp_path):
+    """D954: no evaluator stages -- a document naming one is refused with what to use instead, and
+    the migration drops what only they read (`workload:`, a mined `calibration`) and hands the stage
+    to a person."""
+    import pytest
 
-    class Broken(MacArrayHarness):
-        def _run(self, *args):
-            return 1, False, 3
+    from flux_loop.document import TaskError
+    from flux_loop.migrate import migrate
 
-    workload = {"id": "w0", "ops": [{"id": "op0", "kind": "einsum", "expr": "b c, c k -> b k",
-                                     "bounds": {"b": 2, "c": 8, "k": 16}}]}
-    doc = {"id": "bad", "statement": "valid latency", "language": "text", "workload": workload,
-           "flow": {"test": ["true"], "measure": {"bench": {"evaluator": "rtl", "metrics": ["latency_cycles"]}}},
+    doc = {"id": "bad", "statement": "valid latency", "language": "text", "workload": "{home}/w.yaml",
+           "flow": {"test": ["true"], "measure": {"bench": {"evaluator": "rtl", "metrics": ["latency_cycles"]}},
+                    "knowledge": {"mined": {"calibration": "c.db"}}},
            "objectives": [{"metric": "latency_cycles", "direction": "minimize"}]}
-    problem = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))
-    state = LoopState(request=LoopRequest(), proposer=None, feedback=None, say=lambda _m: None)
-    state.workdir = str(tmp_path)
-    with patch("flux_evaluator_abi.make_evaluator", return_value=Broken()):
-        scored = measure_many(problem, state, [Candidate("broken", "null")], "bench")
-    assert scored == []
-    assert state.refused and "not valid" in state.refused[0][1], state.refused
+    new, said, manual = migrate(doc)
+    assert "workload" not in new and "calibration" not in new["flow"]["knowledge"]["mined"]
+    assert any(x.startswith("D954: workload") for x in said) and any("mined.calibration" in x for x in said)
+    assert manual and "flow.measure.bench.evaluator" in manual[0] and "a command" in manual[0]
+    plain = {k: v for k, v in doc.items() if k != "workload"}
+    plain["flow"] = {k: v for k, v in doc["flow"].items() if k != "knowledge"}
+    with pytest.raises(TaskError, match="evaluator stages are gone"):
+        TaskSpec.from_dict(plain, base=tmp_path)
 
 
 class Keyed(Problem):

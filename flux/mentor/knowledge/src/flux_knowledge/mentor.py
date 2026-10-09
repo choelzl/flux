@@ -145,7 +145,6 @@ class Mined:
     """
 
     db: str = ""
-    calibration: tuple[str, ...] = ()
     max_facts: int = 12           # the facts a prompt carries (D671)
     max_chars: int = 3000         # and at most this many characters of them
     key: str = "mined"
@@ -159,7 +158,7 @@ class Mined:
         from flux_records.mining import (lessons_digest, mine_knowledge,
                                             render_facts_for_prompt)
 
-        mined = mine_knowledge([db], list(self.calibration) or None)
+        mined = mine_knowledge([db])
         blocks = []
         if mined.facts:
             # The statistical half: what the stored measurements THEMSELVES say, each with the

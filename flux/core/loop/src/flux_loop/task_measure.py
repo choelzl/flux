@@ -110,17 +110,6 @@ class MeasureMixin:
             self.__dict__["_inputs"] = got
         return got[1]
 
-    def _workload(self) -> Any:
-        """The workload as a stage reads it: a file's content when the document names one (D663) --
-        `{home}/w.yaml`, or a path beside the document -- else the document's own value."""
-        workload = self.task.workload
-        if isinstance(workload, str):
-            path = Path(workload.replace("{home}", self.task.home or "."))
-            path = path if path.is_absolute() or path.exists() else Path(self.task.home or ".") / path
-            if path.exists():
-                return _document(path.read_text())
-        return workload
-
     def cutoff(self, stage: str, scored, state):
         """The stage's declared cutoff (D454): a floor, a budget or a band around this run's best,
         or several of them applied in order, the words naming which cut whom (D657). Without
@@ -175,43 +164,24 @@ class MeasureMixin:
         spec = next((r for r in self.task.stages if r.name == stage), None)
         if spec is None:
             return {"failures": 0.0} if stage == StageNames.GATE else None
-        if not spec.command and not spec.evaluator:
-            state.say(f"  stage {stage}: the world names no way to measure it")
+        if not spec.command:
+            state.say(f"  stage {stage}: the document names no command to measure it")
             return None
         over = self._over_ceiling(cand, state)
         if over:
             return {"error": over}            # over the cost ceiling: not synthesised (D615)
-        if spec.command:
-            subs = self._subs(cand, None, state)
-            run = self._run(spec.command, subs, spec.timeout_s, f"stage {stage}")
-            if not run.ok:
-                # D897: a command that failed measured nothing, whatever it printed before it failed
-                tail = ((run.stderr or "").strip() or (run.stdout or "").strip())[-160:]
-                state.say(f"  stage {stage}: the command exited {run.returncode}; its numbers are not taken")
-                return {"error": f"the command exited {run.returncode}" + (f": {tail}" if tail else "")}
-            got = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))
-            if not numeric_metrics(got):
-                state.say(f"  stage {stage}: no metric matched in the output")
-                return {"error": "no metric matched in the output"}
-            return got
-        try:
-            from flux_evaluator_abi import Budget, Candidate as AbiCandidate, make_evaluator
-
-            ev = make_evaluator(spec.evaluator or "")
-            arch = _document(cand.artifact)
-            workload = self._workload()
-            result = ev.evaluate(AbiCandidate(workload=workload, arch=arch), Budget(),
-                                 frozenset(spec.metrics) if spec.metrics else frozenset())
-        except Exception as exc:  # noqa: BLE001
-            state.say(f"  stage {stage} ({spec.evaluator}) could not measure: {exc!s:.120}")
-            return {"error": f"{spec.evaluator} could not measure: {exc!s:.200}"}
-        if not result.validity.ok:
-            # D897: the evaluator's independent checker refused the design: its numbers are not evidence
-            said = "; ".join(f"{v.kind}{': ' + v.detail if v.detail else ''}" for v in result.validity.violations)
-            state.say(f"  stage {stage} ({spec.evaluator}): not valid ({said or 'no reason given'}); its numbers are not taken")
-            return {"error": f"{spec.evaluator} found the design not valid: {said or 'no reason given'}"[:300]}
-        return {k: float(v.value) for k, v in result.metrics.items()
-                if not spec.metrics or k in spec.metrics}
+        subs = self._subs(cand, None, state)
+        run = self._run(spec.command, subs, spec.timeout_s, f"stage {stage}")
+        if not run.ok:
+            # D897: a command that failed measured nothing, whatever it printed before it failed
+            tail = ((run.stderr or "").strip() or (run.stdout or "").strip())[-160:]
+            state.say(f"  stage {stage}: the command exited {run.returncode}; its numbers are not taken")
+            return {"error": f"the command exited {run.returncode}" + (f": {tail}" if tail else "")}
+        got = _metrics_in(spec, (run.stdout or "") + "\n" + (run.stderr or ""))
+        if not numeric_metrics(got):
+            state.say(f"  stage {stage}: no metric matched in the output")
+            return {"error": "no metric matched in the output"}
+        return got
 
     def estimated(self, cands: list[Candidate], stage: str, state: LoopState
                   ) -> list[tuple[dict[str, float] | None, str]]:
@@ -287,8 +257,8 @@ class MeasureMixin:
 
     def cache_key(self, cand: Candidate, stage: str, state: LoopState) -> str:
         """What makes a measurement the same one (D567, D790, D898): the candidate, and what
-        measures it -- the stage's command or evaluator, the files under `{home}` the command
-        names, the document's params and workload. A changed clock, script or parameter measures
+        measures it -- the stage's command, the files under `{home}` the command names and the
+        document's params. A changed clock, script or parameter measures
         again; a world with its own key replaces this.
 
         D898: the one evidence identity -- the disk cache's key and every row's `measured_as`, so
@@ -298,7 +268,7 @@ class MeasureMixin:
         runs or `needs`. `Candidate.key` stays the design's content, for telling designs apart."""
         import hashlib
 
-        from flux_evaluator_abi import tool_fingerprint, toolchain_fingerprint
+        from flux_evaluator_abi import tool_fingerprint
 
         from .document.commands import _PLACEHOLDER
 
@@ -312,12 +282,11 @@ class MeasureMixin:
             seen["{part}"] = cand.subgoal or ""
         tools = [t for t in (*spec.needs, *(spec.command or ())[:1]) if not _PLACEHOLDER.search(t)]
         builds = {t: tool_fingerprint(t) or "absent" for t in dict.fromkeys(tools)}
-        if spec.evaluator:
-            builds.update(toolchain_fingerprint())      # an evaluator runs the measuring tools
-        # D853: the workload as read (its file's content, not its name) and the loop's inputs -- a
-        # helper or a data file a stage reads changed, the measurement is not the same one
-        signature = [list(spec.command or ()), spec.evaluator or "", sorted(spec.metrics),
-                     self.task.params, self._workload(), self.inputs(), sorted(spec.metrics_re.items()), seen, builds]
+        # D853: the loop's inputs -- a helper or a data file a stage reads changed, the measurement is
+        # not the same one. D954: "" and None hold the places of the evaluator and the workload that
+        # evaluator stages had, so every key a record already holds stays the same
+        signature = [list(spec.command or ()), "", sorted(spec.metrics),
+                     self.task.params, None, self.inputs(), sorted(spec.metrics_re.items()), seen, builds]
         if spec.metric_specs:
             signature.append(spec.metric_specs)
         h = hashlib.sha256(json.dumps(signature,
@@ -330,15 +299,6 @@ class MeasureMixin:
                 if f.is_file():
                     h.update(f.read_bytes())
         return f"{cand.key()}@{h.hexdigest()[:16]}"
-
-
-def _document(text: str) -> Any:
-    try:
-        return json.loads(text)
-    except ValueError:
-        import yaml
-
-        return yaml.safe_load(text)
 
 
 def _metrics_in(spec: Any, out: str) -> dict[str, Any]:

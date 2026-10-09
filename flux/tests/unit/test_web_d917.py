@@ -84,18 +84,3 @@ def test_one_stream_carries_the_three_and_resumes_each_where_it_was(server):  # 
     # only the parts asked for; the cursors from the query when no header
     only = _read(app, "/api/apps/{name}/stream", user, parts="log", log=last.split("log:")[1])
     assert [m["event"] for m in only] == ["log"] and json.loads(only[0]["data"]) == "three\n"
-
-
-def test_the_one_file_routes_keep_their_bare_ids(server):  # noqa: F811
-    app, _ = server
-    user, d = _loop(app)
-    msgs = _read(app, "/api/apps/{name}/log", user)
-    (m,) = msgs
-    assert json.loads(m["data"]) == "one\ntwo\n" and ":" not in m["id"], m
-    with (d / "runs" / "loop.log").open("a") as fh:
-        fh.write("three\n")
-    (again,) = _read(app, "/api/apps/{name}/log", user, last=m["id"])
-    assert json.loads(again["data"]) == "three\n"
-    ev = _read(app, "/api/apps/{name}/events", user)
-    assert ev[0]["event"] == "events" and ":" not in ev[0]["id"]
-    assert [m["event"] for m in _read(app, "/api/apps/{name}/live", user)] == ["live"]

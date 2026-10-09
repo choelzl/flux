@@ -74,18 +74,15 @@ def test_core_imports_and_registry_do_not_depend_on_removed_tool_packages(tmp_pa
     code = """
 import importlib.util, json
 import flux_cli.main, flux_web.app, flux_loop.golden_proto
-from flux_evaluator_abi import available_evaluators
-names = ['flux_evaluator_champsim', 'flux_evaluator_timeloop',
-         'flux_evaluator_zigzag', 'flux_codegen_rtl_harness']
-print(json.dumps({'packages': {name: importlib.util.find_spec(name) is not None for name in names},
-                  'evaluators': available_evaluators()}))
+names = ['flux_evaluator_champsim', 'flux_evaluator_timeloop', 'flux_evaluator_zigzag', 'flux_codegen_rtl_harness',
+         'flux_evaluator_openroad', 'flux_evaluator_rtl', 'flux_calibration', 'flux_redaction', 'flux_codegen_harness_spec']
+print(json.dumps({'packages': {name: importlib.util.find_spec(name) is not None for name in names}}))
 """
     run = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env=_core_env(),
                          capture_output=True, text=True, timeout=30)
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout)
     assert not any(result["packages"].values()), result
-    assert result["evaluators"] == ["openroad", "rtl"]
 
 
 def test_bundled_rtl_sources_stay_consistent():

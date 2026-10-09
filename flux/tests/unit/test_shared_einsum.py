@@ -56,31 +56,11 @@ def test_every_caller_uses_it_and_nobody_keeps_a_copy():
         if "parse_einsum" in text:
             callers.append(str(path.relative_to(FLUX)))
     assert not copies, f"a second einsum parser lives in: {copies}"
-    assert len(callers) >= 5, callers
-
-
-@pytest.mark.parametrize("expr,wanted", [
-    ("b c, c k -> b k", ("b", "c", "k")),
-    ("m n, n p -> m p", ("m", "n", "p")),
-])
-def test_the_rtl_translator_still_reads_a_shape_the_same_way(expr, wanted):
-    from flux_evaluator_rtl import einsum_op_to_mac_array_shape
-
-    batch, reduction, output = wanted
-    op = {"id": "op0", "kind": "einsum", "expr": expr,
-          "bounds": {batch: 4, reduction: 8, output: 16}}
-    assert einsum_op_to_mac_array_shape(op) == {"B": 4, "C": 8, "K": 16}
+    assert len(callers) >= 4, callers
 
 
 def test_each_backend_still_refuses_in_its_own_words():
     from flux_evaluator_abi import NotExpressibleError
-    from flux_evaluator_rtl import einsum_op_to_mac_array_shape
-
-    op = {"id": "op0", "kind": "einsum", "expr": "b c, c k -> k b", "bounds": {}}
-    with pytest.raises(NotExpressibleError, match="no transposed output"):
-        einsum_op_to_mac_array_shape(op)
-    with pytest.raises(NotExpressibleError, match="mac_array.sv is bilinear"):
-        einsum_op_to_mac_array_shape({"id": "op0", "kind": "einsum", "expr": "junk"})
 
     from zigzag_tools.workload_translator import einsum_op_to_zigzag_layer
 

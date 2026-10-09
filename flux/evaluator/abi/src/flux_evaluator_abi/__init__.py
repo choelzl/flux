@@ -1,23 +1,13 @@
 """Flux Evaluator ABI v0.1 (docs/evaluator-abi.md): the narrow contract that makes ZigZag, Timeloop,
 RTL simulation, synthesis and every other backend interchangeable behind one interface -- the types, the
-`Evaluator` protocol, the one refusal (`NotExpressibleError`), and the registry that resolves an
-evaluator by name (D426).
+`Evaluator` protocol and the one refusal (`NotExpressibleError`). An application's own adapter
+implements the protocol; no registry names one (D954).
 """
 
 from __future__ import annotations
 
 from .errors import NotExpressibleError
 from .protocol import Evaluator, SequentialBatch
-from .registry import (
-    DEFAULT_METRICS,
-    available_evaluators,
-    escalation_stage,
-    evaluator_class,
-    evaluator_name_for,
-    make_evaluator,
-    register_evaluator,
-    translates,
-)
 from .types import (
     ArchRef,
     Bottleneck,
@@ -51,7 +41,6 @@ from .tools import (  # noqa: F401
 )
 
 __all__ = [
-    "DEFAULT_METRICS",
     "TAIL_CHARS",
     "ToolRun",
     "ToolSource",
@@ -66,13 +55,6 @@ __all__ = [
     "Evaluator",
     "SequentialBatch",
     "NotExpressibleError",
-    "available_evaluators",
-    "escalation_stage",
-    "evaluator_class",
-    "translates",
-    "evaluator_name_for",
-    "make_evaluator",
-    "register_evaluator",
     "ArchRef",
     "Bottleneck",
     "Budget",

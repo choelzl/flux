@@ -1,4 +1,4 @@
-"""Mine typed, provenance-carrying facts from campaign and calibration stores (D243).
+"""Mine typed, provenance-carrying facts from campaign stores (D243).
 
 A fact must never read as more than the data supports. Four rules, enforced by construction:
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 # Below this many distinct measured points, a residual family makes no direction claim; must match
 # the calibrator's own correction threshold (D106).
@@ -56,86 +56,6 @@ class MinedKnowledge:
 
     def to_dict(self) -> dict[str, Any]:
         return {"facts": [f.to_dict() for f in self.facts], "skipped": list(self.skipped)}
-
-
-# -- estimator bias (calibration stores) ----------------------------------------------------
-
-
-def mine_estimator_bias(calibration_db_path: str) -> list[Fact]:
-    """One fact per (evaluator, metric) residual family: the observed prediction/reference
-    ratio range over the exact measured points. Caveated records are counted but never pooled,
-    as the calibrator excludes them (D112)."""
-    from flux_calibration import CalibrationStore
-
-    facts: list[Fact] = []
-    with CalibrationStore(calibration_db_path) as cal:
-        for evaluator, metric in cal.evaluator_metric_pairs():
-            records = cal.records_for(evaluator, metric, exclude_caveated=True)
-            caveated = [
-                r for r in cal.records_for(evaluator, metric, exclude_caveated=False)
-                if r["caveat"] is not None
-            ]
-            if not records:
-                continue
-            ratios = [r["predicted_value"] / r["reference_value"] for r in records]
-            points = {(r["workload_hash"], r["arch_hash"]) for r in records}
-            lo, hi = min(ratios), max(ratios)
-            sources = sorted({r["reference_source"] for r in records})
-
-            if lo > 1.0:
-                direction = "over-predicted"
-            elif hi < 1.0:
-                direction = "under-predicted"
-            else:
-                direction = "predicted within"  # range spans 1.0: no direction claim
-            statement = (
-                f"{evaluator} {direction} {metric} at {lo:.3f}x-{hi:.3f}x of the reference "
-                f"({'/'.join(sources)}) across {len(points)} measured (workload, arch) "
-                f"point(s), {len(records)} record(s)."
-            )
-            caveats: list[str] = []
-            if len(points) < _MIN_TRUSTED_N:
-                caveats.append(
-                    f"only {len(points)} distinct point(s) — below the correction threshold "
-                    "(D106): range reported, no systematic-bias claim"
-                )
-            if caveated:
-                caveats.append(
-                    f"{len(caveated)} caveated record(s) excluded from the range (their own "
-                    "store entries say the pool does not describe them)"
-                )
-            facts.append(Fact(
-                kind="estimator_bias",
-                statement=statement,
-                evidence={
-                    "ratios": ratios,
-                    "mean_relative_residual": sum(r["relative_residual"] for r in records)
-                    / len(records),
-                    "records": [
-                        {k: r[k] for k in ("id", "workload_hash", "arch_hash",
-                                           "predicted_value", "reference_value",
-                                           "reference_source")}
-                        for r in records
-                    ],
-                },
-                scope=(
-                    f"the {len(points)} (workload_hash, arch_hash) point(s) listed in "
-                    "evidence.records — no other workloads, architectures, or metrics"
-                ),
-                not_established=(
-                    "behavior at any unmeasured point (other widths, shapes, workloads, or "
-                    "metrics); that the ratio is constant between or beyond the measured points"
-                ),
-                pointers={
-                    "calibration_db": calibration_db_path,
-                    "record_ids": [r["id"] for r in records],
-                    "evaluator": evaluator,
-                    "metric": metric,
-                    "excluded_caveated_record_ids": [r["id"] for r in caveated],
-                },
-                caveats=tuple(caveats),
-            ))
-    return facts
 
 
 # -- campaign-store miners ------------------------------------------------------------------
@@ -354,87 +274,6 @@ def mine_refusal_patterns(campaign_db_path: str) -> list[Fact]:
     return facts
 
 
-@dataclass(frozen=True)
-class FrontierOutcome:
-    """What a frontier reader hands mining about one finished campaign: the frontier
-    entries (each `{"candidate": ..., "metrics": {name: {"value", "fidelity"?}}}`), how
-    deep they were measured, and the objective as the fact quotes it."""
-
-    entries: list[dict[str, Any]]
-    fidelity_note: str
-    objective_id: str
-    mode: str
-    objectives: list[tuple[str, str]]          # (direction, metric)
-
-
-FrontierReader = Callable[[Any, str], "FrontierOutcome | None"]
-"""`reader(store, campaign_id) -> FrontierOutcome`, or None when the campaign's objective
-is not one the reader understands. Mining is a mentor concern (D428): the reader is
-injected by whoever knows the campaign's frontier; without one, outcome facts are reported
-as skipped (the old campaign package's reader went with it, D521)."""
-
-
-def mine_frontier_outcomes(campaign_db_path: str, *, frontier_reader: FrontierReader | None = None,
-                           ) -> tuple[list[Fact], list[str]]:
-    """One fact per DONE campaign: its final frontier at the deepest covering fidelity, with
-    per-metric fidelity labels. Campaigns in any other state are counted in `skipped`.
-    `frontier_reader` renders a campaign's frontier; None skips every campaign, saying so (D521)."""
-    from flux_store import CampaignStore
-
-    reader = frontier_reader
-    facts: list[Fact] = []
-    skipped: list[str] = []
-    with CampaignStore(campaign_db_path) as store:
-        for row in store.list_campaigns():
-            cid = row["campaign_id"]
-            if row["status"] != "done":
-                skipped.append(
-                    f"campaign {cid}: status {row['status']!r} — no outcome fact mined")
-                continue
-            if reader is None:
-                skipped.append(f"campaign {cid}: no frontier reader — no outcome fact mined")
-                continue
-            got = reader(store, cid)
-            if got is None:
-                skipped.append(f"campaign {cid}: the frontier reader declined it")
-                continue
-            entries, fidelity_note = got.entries, got.fidelity_note
-            summary = "; ".join(
-                f"{e['candidate']} -> "
-                + ", ".join(
-                    f"{m}={v['value']:g}"
-                    + (f" ({v['fidelity']})" if "fidelity" in v else " (screen estimate)")
-                    for m, v in sorted(e["metrics"].items()))
-                for e in entries[:4]
-            ) + ("; ..." if len(entries) > 4 else "")
-            objectives_text = ", ".join(f"{d} {m}" for d, m in got.objectives)
-            facts.append(Fact(
-                kind="frontier_outcome",
-                statement=(
-                    f"Campaign {got.objective_id!r} ({objectives_text}) completed with a "
-                    f"{len(entries)}-point frontier [{fidelity_note}]: {summary}"
-                ),
-                evidence={"frontier": entries, "objective_id": got.objective_id,
-                          "mode": got.mode},
-                scope=(
-                    f"campaign {cid}: its own workload, base architecture and search space "
-                    "as recorded in the objective document at the pointer"
-                ),
-                not_established=(
-                    "optimality outside the campaign's own search space and budget; screen-"
-                    "fidelity numbers are calibrated-or-raw model estimates, not measurements"
-                    if "screen" in fidelity_note else
-                    "optimality outside the campaign's own search space and budget"
-                ),
-                pointers={
-                    "campaign_db": campaign_db_path,
-                    "campaign_id": cid,
-                    "objective_hash": store.campaign_row(cid)["objective_hash"],
-                },
-            ))
-    return facts, skipped
-
-
 # -- prompt rendering -----------------------------------------------------------------------
 
 
@@ -462,29 +301,16 @@ def render_facts_for_prompt(
 
 def mine_knowledge(
     campaign_db_paths: list[str] | None = None,
-    calibration_db_paths: list[str] | None = None,
-    *,
-    frontier_reader: FrontierReader | None = None,
 ) -> MinedKnowledge:
     """Mine every fact the given stores support. Missing/empty stores contribute nothing and
-    are noted in `skipped` rather than raised — mining reports on what exists.
-    `frontier_reader` is how outcome facts read a campaign's frontier (D428)."""
+    are noted in `skipped` rather than raised — mining reports on what exists."""
     facts: list[Fact] = []
     skipped: list[str] = []
-    for path in calibration_db_paths or ():
-        try:
-            facts.extend(mine_estimator_bias(path))
-        except Exception as exc:  # noqa: BLE001 — one bad store must not hide the others
-            skipped.append(f"calibration store {path}: {type(exc).__name__}: {exc}")
     for path in campaign_db_paths or ():
         try:
             facts.extend(mine_measured_points(path))
             facts.extend(mine_observed_ratios(path))
             facts.extend(mine_refusal_patterns(path))
-            outcome_facts, outcome_skipped = mine_frontier_outcomes(
-                path, frontier_reader=frontier_reader)
-            facts.extend(outcome_facts)
-            skipped.extend(outcome_skipped)
         except Exception as exc:  # noqa: BLE001
             skipped.append(f"campaign store {path}: {type(exc).__name__}: {exc}")
     return MinedKnowledge(facts=facts, skipped=skipped)

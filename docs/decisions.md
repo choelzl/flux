@@ -548,3 +548,32 @@ the topics above.
   - **Bug 2, deleting a loop:** removal in place failed with "Directory not empty" when a poll or a stage was still writing. The folder is now moved out of the apps first (one rename), then removed.
   - **Bug 3, phone layout:** at 390 px a file's Actions menu opened off the left edge when the head wrapped; it is now kept at the end of its line. At 320 px the seven loop tabs wrapped onto three rows and pushed the configurator's first field off the first screen; narrower tab sides there give two rows.
   - **Also:** the View-as banner code now does nothing on a page without the bar.
+- **D950: `flux_evaluator_openroad` is removed; OpenROAD is reached only through an RTL application's `rtl.py`.** After D948, ASAP7 measurement lived in two places: `rtl.py measure` and core's evaluator, with its own bundled ASAP7 copy and a second copy of the old harness's test bench code.
+  - **The applications that called the evaluator:** macarray's PE screen and confirm, its multiplier screen, and interconnect_mapping's block screen now call their library's `rtl_check.measure`; interconnect_mapping gets a copy too.
+  - **`rtl.py measure`:** now also reports `worst_slack_ps` and `flow_depth`, as the evaluator did.
+  - **The ABI:** the `openroad` backend, which derived a datapath from an Architecture IR, is gone, so core registers only `rtl`.
+  - **The critical-path parser** moved into `flux_loop.timing`, which describes the path it reads.
+  - **Nightly CI:** the physical job runs the `rtl.py` measure tests instead of the deleted placement integration test.
+  - **Tests:** tests of the evaluator's own flow, derivation and parsers went with it.
+- **D951: the coding agent's prototype check runs again.** When an agent writes a prototype, its check command was still `flux rtl proto`. Since D948 that command exists nowhere, so every such check failed. The check runs the golden model against a Python `design()`, which is core's own logic in `flux_loop.golden_proto`, not RTL tooling. That module now has its own entry point, `python -m flux_loop.golden_proto PROTOTYPE --golden golden.py`, and the agent is given that command.
+- **D952: the PDK redaction guard, `flux gc` and `flux knowledge` are removed.**
+  - **`flux_redaction`:** only ASAP7 was registered, and it is BSD-3-Clause, so the guard never refused anything. It also made the one-file `rtl.py` depend on a core package. `rtl.py measure` no longer calls it.
+  - **`flux knowledge digest/show`:** the library has been digested automatically when it is on since D791.
+  - **`flux gc`:** the web's Maintenance tasks clean up old runs, caches and scratch.
+- **D953: code nothing used is removed.**
+  - **The RTL harness's spec (`flux_codegen_harness_spec`):** its last importer went with D948, which empties `generator/`.
+  - **The result store's unused modules:** the caching evaluator (the loop caches through `flux_cache`), the leaderboard, and the benchmark corpus with its data under `mentor/benchmarks`.
+  - **`CampaignStore`'s budget ledger:** `BudgetGrant`, `remaining`, `spent`, `visited_keys` and `ok_trials`.
+  - **`flux_llm`'s ask-check-repair round.**
+  - **`flux_loop.params`:** settings for the "worlds" removed in D803.
+  - **The mentor's frontier mining:** never wired, so it only ever said "skipped".
+  - **The web's one-file stream routes `/events`, `/live` and `/log`:** the page uses `/stream` (D917).
+  - **Small unused helpers:** `best_within`, `overlaps`, `interval_dominates`, `InvalidLLMProposal`, `flux_profile.seconds`/`outside`, and `flux_cache`'s `SingleFlightMemo`/`CachedBatch`.
+  - **Kept although nothing in the repo calls them:** `Corpus`, `Notes` and `Problem.good_enough`, which are part of the documented interface for embedding the loop in code.
+- **D954: the Architecture-IR evaluation world is removed; every measurement is a command.**
+  - **What it was:** `flux import/eval/replay`, the evaluator registry, the hand-written `mac_array.sv` evaluator (`flux_evaluator_rtl`), evaluator stages in documents with the `workload:` key they read, and the calibration store with its conformance, drift and escalation policies (`flux_calibration`). After D950 the registry held only `rtl`, no document used an evaluator stage, and nothing wrote a calibration store.
+  - **Stages:** every stage is a command printing name=value. A document with `evaluator:` is refused, saying what to use instead.
+  - **Migration step D954:** drops `workload:` and a mined `calibration:`, and hands evaluator stages to a person.
+  - **The record keeps its measurement keys:** the stage signature holds `""` and `None` where the evaluator and the workload were, so no existing measurement becomes stale.
+  - **What stays:** `flux_ir`, the ABI's types, the `Evaluator` protocol (npu_gemm's and the prefetcher's own adapters implement it, called from their own scripts), and `ResultStore`'s documents plus the results table the trials write.
+  - **The loop's own calibration between stages** (D464) is unchanged.

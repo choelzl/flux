@@ -96,25 +96,6 @@ def test_a_document_asks_for_digests_and_the_planner_reads_the_index(tmp_path, m
     assert off.library_index(state) == []
 
 
-def test_the_cli_digests_and_shows(tmp_path, monkeypatch, capsys):
-    import json
-
-    import flux_knowledge.digest as dg
-    from flux_cli.main import main
-
-    monkeypatch.setattr(dg, "library_documents", lambda index=None, standard_id="library": [("mentor/knowledge/library/PACE.pdf", "the paper's text")])
-    db = str(tmp_path / "d.db")
-    replies = tmp_path / "r.json"
-    replies.write_text(json.dumps(["PACE: a method\n- 1 ULP at 16 segments\n- the table size, the widths and the latency it reports, for a designer to reuse"]))
-    assert main(["knowledge", "show", "--db", db]) == 1
-    assert main(["knowledge", "digest", "--db", db, "--replies", str(replies)]) == 0
-    out = capsys.readouterr().out
-    assert "1 library document(s) to digest" in out and "1 digest(s) made" in out
-    assert main(["knowledge", "show", "--db", db]) == 0
-    out = capsys.readouterr().out
-    assert "== mentor/knowledge/library/PACE.pdf" in out and "PACE: a method" in out and "1 digest(s)" in out
-
-
 def test_a_setup_digests_a_few_its_own_papers_first_and_stops_when_the_digester_fails(tmp_path, monkeypatch):
     """D782: a library of hundreds of files is digested a few a pass -- the loop's own papers
     first, papers before sources -- and a digester that keeps failing ends the pass's share,
@@ -175,4 +156,3 @@ def test_a_digest_is_kept_for_the_next_loop_and_never_asked_twice(tmp_path, monk
     assert any("2 document(s) taken from the digests kept before" in m for m in said), said
     changed = digest_library(str(tmp_path / "two.db"), second, documents=[("b/other.pdf", "another paper, revised")])
     assert len(second.prompts) == 1 and not changed[0].get("reused"), "new content is digested"
-

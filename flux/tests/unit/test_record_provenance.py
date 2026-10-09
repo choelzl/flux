@@ -191,35 +191,3 @@ def test_a_row_without_its_prototypes_digest_is_not_matched_by_guessing(tmp_path
     assert st2.admitted["n"].artifact == "7" and "n" not in st2.prototypes
     assert Num.spelled == 0 and Num.judged == 1, "re-judged (no versions on the row), never re-spelled by a guess"
     rec2.close("paused")
-
-
-@pytest.mark.parametrize("mapped", [False, True])
-def test_flux_gc_keeps_what_a_record_names(tmp_path, monkeypatch, mapped):
-    import argparse
-
-    from flux_cli.commands import cmd_gc
-
-    root = tmp_path / "traces"
-    if mapped:
-        host = tmp_path / "host-traces"
-        host.symlink_to(root, target_is_directory=True)
-        monkeypatch.setenv("FLUX_SANDBOXED", "1")
-        monkeypatch.setenv("FLUX_SANDBOX_PATH_MAP", json.dumps([[str(host), str(root)]]))
-    kept, doomed, young = root / "abc123" / "20260101T000000", root / "abc123" / "20260102T000000", root / "abc123" / "20260103T000000"
-    for d in (kept, doomed, young):
-        d.mkdir(parents=True)
-        (d / "x.txt").write_text("trace")
-    old = time.time() - 30 * 86400
-    os.utime(kept, (old, old)); os.utime(doomed, (old, old))
-    db = str(tmp_path / "g.db")
-    rec = Records(db, objective={"n": 1})
-    _p, st = _state(db, rec, str(kept))
-    from flux_loop.prototype import _record_prototype
-
-    _record_prototype(st, "n", "x", Verdict(False, 1.0, "1"), ok=False)          # names <kept>/prototypes/n/pass1
-    rec.close("paused")
-    args = argparse.Namespace(db=[db], root=str(root), keep_days=7.0, apply=False)
-    assert cmd_gc(args) == 0 and kept.exists() and doomed.exists() and young.exists()
-    args.apply = True
-    assert cmd_gc(args) == 0
-    assert kept.exists() and young.exists() and not doomed.exists()

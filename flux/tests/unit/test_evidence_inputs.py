@@ -99,11 +99,12 @@ def test_a_checker_whose_helper_changed_rechecks_its_admission(tmp_path):
 
 
 def test_a_workloads_content_is_in_the_measurement_key(tmp_path):
-    """The review's reproduction (#7): a workload rewritten under the same name was a cache hit."""
+    """The review's reproduction (#7): a workload rewritten under the same name was a cache hit. A
+    file beside the document is among the loop's inputs (D853), so it counts without `workload:`."""
     from flux_loop.types import Candidate
 
     (tmp_path / "w.yaml").write_text("n: 1\n")
-    doc = {"id": "wk", "statement": "s", "language": "text", "workload": "{home}/w.yaml",
+    doc = {"id": "wk", "statement": "s", "language": "text",
            "flow": {"test": {"test": ["true"]}, "measure": {"m": {"command": "true", "metrics": ["cycles"]}}},
            "objectives": [{"metric": "cycles", "direction": "minimize"}]}
     problem = PromptProblem(TaskSpec.from_dict(doc, base=tmp_path))

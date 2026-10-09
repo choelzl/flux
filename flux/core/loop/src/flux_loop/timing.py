@@ -1,7 +1,7 @@
 """A placed critical path described in words (D526), for the depth pass, the route and the
 `timing` tool.
 
-The path comes from `flux_evaluator_openroad.parse_critical_path`. Synthesis (`abc`) renames
+The path comes from OpenROAD's `report_checks`, read by `parse_critical_path` below. Synthesis (`abc`) renames
 most nets, so steps are usually cells; a net that kept an RTL name is named.
 """
 
@@ -10,7 +10,63 @@ from __future__ import annotations
 import re
 from typing import Any
 
-__all__ = ["describe"]
+
+# The critical path as data (D526): the `full_clock_expanded` report parsed into its steps.
+# Format (openroad 26Q2):
+#     Fanout      Cap     Slew    Delay     Time   Description
+#     ---------------------------------------------------------------------------------
+#          2    1.550   25.734   49.502   49.502 v _6597_/QN (DFFHQNx1_ASAP7_75t_R)
+#                                       2035.062   data arrival time
+#                                       -792.996   slack (VIOLATED)
+_PATH_STEP_RE = re.compile(
+    r"^\s*(?:(?P<fanout>\d+)\s+)?(?:(?P<cap>[\d.]+)\s+)?(?:(?P<slew>[\d.]+)\s+)?(?P<delay>-?[\d.]+)\s+(?P<time>-?[\d.]+)\s+"
+    r"(?P<edge>[v^])\s+(?P<pin>\S+)\s+\((?P<cell>[^)]+)\)\s*$", re.MULTILINE)
+_PATH_NET_RE = re.compile(r"^\s+(?P<net>\S+) \(net\)\s*$", re.MULTILINE)   # `-fields {net}`: the line after its pin
+_PATH_START_RE = re.compile(r"^Startpoint: (\S+)", re.MULTILINE)
+_PATH_END_RE = re.compile(r"^Endpoint: (\S+)", re.MULTILINE)
+_PATH_SLACK_RE = re.compile(r"^\s*(-?[\d.]+)\s+slack \((MET|VIOLATED)\)", re.MULTILINE)
+_PATH_ARRIVAL_RE = re.compile(r"^\s*(-?[\d.]+)\s+data arrival time", re.MULTILINE)
+_PATH_REQUIRED_RE = re.compile(r"^\s*(-?[\d.]+)\s+data required time", re.MULTILINE)
+
+
+def parse_critical_path(log: str) -> dict[str, Any] | None:
+    """The worst path of an OpenSTA `report_checks -format full_clock_expanded` report, from
+    the log that holds it: `{startpoint, endpoint, slack_ps, met, arrival_ps, required_ps,
+    steps}` with one step per pin `{pin, cell, net, delay_ps, time_ps, edge, fanout}` in
+    path order (the clock pin and the endpoint's D pin included), or None when the log has
+    no path. Times are the report's units (picoseconds on ASAP7)."""
+    i = log.rfind("Startpoint:")
+    if i < 0:
+        return None
+    text = log[i:]
+    start, end = _PATH_START_RE.search(text), _PATH_END_RE.search(text)
+    steps: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        m = _PATH_STEP_RE.match(line)
+        if m:
+            steps.append({"pin": m.group("pin"), "cell": m.group("cell"), "net": None,
+                          "delay_ps": float(m.group("delay")), "time_ps": float(m.group("time")),
+                          "edge": m.group("edge"),
+                          "fanout": int(m.group("fanout")) if m.group("fanout") else None})
+            continue
+        n = _PATH_NET_RE.match(line)
+        if n and steps:
+            steps[-1]["net"] = n.group("net")
+        if "data arrival time" in line:
+            break
+    slack = _PATH_SLACK_RE.search(text)
+    arrival = _PATH_ARRIVAL_RE.search(text)
+    required = _PATH_REQUIRED_RE.search(text)
+    if not steps and slack is None:
+        return None
+    return {"startpoint": start.group(1) if start else None, "endpoint": end.group(1) if end else None,
+            "slack_ps": float(slack.group(1)) if slack else None,
+            "met": (slack.group(2) == "MET") if slack else None,
+            "arrival_ps": float(arrival.group(1)) if arrival else None,
+            "required_ps": float(required.group(1)) if required else None,
+            "steps": steps}
+
+__all__ = ["describe", "parse_critical_path"]
 
 _ANON = re.compile(r"^_\d+_$")
 

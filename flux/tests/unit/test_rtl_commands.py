@@ -149,13 +149,13 @@ def test_an_output_is_read_back_at_its_width_signed_or_not():
 
 
 def test_the_clock_port_is_found_in_the_modules_header():
-    """D582: `measure_rtl`'s "auto" takes clk / rst_n when the module declares them."""
-    from flux_evaluator_openroad.flow import _port_of
+    """D582: `measure` takes clk / rst_n when the module declares them."""
+    import rtl
 
     src = "module other(input clk);\nendmodule\nmodule pe(input logic clk, input logic rst_n,\n  input [7:0] a, output [7:0] y);\nendmodule\n"
-    assert _port_of(src, "pe", "clk") == "clk" and _port_of(src, "pe", "rst_n") == "rst_n"
-    assert _port_of("module m(input [7:0] a, output [7:0] y);\nendmodule\n", "m", "clk") is None
-    assert _port_of(src, "other", "rst_n") is None
+    assert {"clk", "rst_n"} <= rtl._ports(src, "pe") and "clk" in rtl._ports(src, "other")
+    assert "clk" not in rtl._ports("module m(input [7:0] a, output [7:0] y);\nendmodule\n", "m")
+    assert "rst_n" not in rtl._ports(src, "other")
 
 
 def test_the_ulp_distance_of_ieee_patterns():
@@ -265,7 +265,7 @@ def test_measure_on_asap7_from_orfs_at_each_stage(tmp_path):
     place = rtl.measure(GOOD, stage="place", clock_ps=625)
     assert 1000 < synth["fmax_mhz"] < 4000 and synth["power_w"] > 0 and synth["cell_count"] == stat["cell_count"]
     assert place["fmax_mhz"] < synth["fmax_mhz"] and place["critical_path"].endswith(("]", "_"))
-    assert abs(synth["path_ps"] - (625 - synth["slack_ps"])) < 1e-6
+    assert abs(synth["path_ps"] - (625 - synth["worst_slack_ps"])) < 1e-6 and place["flow_depth"] == "placement"
     piped = rtl.measure(PIPE, stage="synth", clock_ps=400)
     assert piped["fmax_mhz"] > 1000 and piped["cell_count"] > 0
     r = _rtl("measure", str(tmp_path / "x.sv"), "--stage", "stat") if (tmp_path / "x.sv").write_text(GOOD) else None

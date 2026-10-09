@@ -104,19 +104,18 @@ class PairScreen:
 
 def screen_block(source: str, top: str, label: str,
                  timeout_s: float = 300.0) -> PhysReport:
-    from flux_evaluator_openroad import run_synthesis_flow
+    from .rtl_check import measure
 
     try:
-        rep = run_synthesis_flow(source, top, clock_port=None, reset_port=None,
-                                 clock_period_ps=_CLOCK_600MHZ_PS, timeout_s=timeout_s)
-    except Exception as exc:  # noqa: BLE001 -- a screen failure is a report, not a crash
+        rep = measure(source, top, stage="synth", clock_ps=_CLOCK_600MHZ_PS, timeout_s=timeout_s)
+    except (Exception, SystemExit) as exc:  # noqa: BLE001 -- a screen failure is a report, not a crash
         return PhysReport(block=label, area_um2=float("nan"),
                           worst_slack_ps=float("nan"), meets_600mhz=False,
                           detail=f"{type(exc).__name__}: {str(exc)[:200]}")
     # a combinational block with no path reports infinite slack; clamp to the clock so the
     # number stays finite in JSON
-    slack = min(rep.worst_slack_ps, _CLOCK_600MHZ_PS)
-    return PhysReport(block=label, area_um2=rep.area_um2, worst_slack_ps=slack,
+    slack = min(rep["worst_slack_ps"], _CLOCK_600MHZ_PS)
+    return PhysReport(block=label, area_um2=rep["area_um2"], worst_slack_ps=slack,
                       meets_600mhz=slack >= 0)
 
 

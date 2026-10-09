@@ -1,7 +1,6 @@
 # Stores
 
-Packages: `core/stores` (`flux_store`: the campaign store, the result store, the caching
-wrapper, the benchmark corpus, the leaderboard), `mentor/records` (`flux_records`: the
+Packages: `core/stores` (`flux_store`: the campaign store, the result store), `mentor/records` (`flux_records`: the
 record's semantics over the store). Part of [architecture.md](architecture.md)'s layering.
 
 ## The campaign store: the record
@@ -32,34 +31,17 @@ writes under the trace root ([D513](decisions.md)).
 
 ## The result store
 
-`ResultStore` (SQLite): content-addressed IR documents (idempotent on re-insert) and
-evaluator `Result`s tagged with full lineage (`workload_hash`, `arch_hash`, `mapping_hash`,
-`evaluator`), queryable by any combination; `flux import`, `flux eval --store`, `flux replay`
-use it, and `get_result` / `find_results` read it back. Deterministic
-replay is `flux replay <id> --store DB` ([D18](decisions.md)).
+`ResultStore` (SQLite): content-addressed IR documents (`put_document`/`get_document`/`documents`,
+idempotent on re-insert) and the `results` table that `CampaignStore`'s trials point into. Its
+per-result API (`put_result`/`get_result`/`find_results`), the `CachingEvaluator` warm-start, and
+the `flux import`/`eval`/`replay` commands that used them are gone ([D953](decisions.md),
+[D954](decisions.md)).
 
-**Warm-start** ([D19](decisions.md)): `CachingEvaluator` wraps any ABI evaluator with a
-store-backed cache keyed on the exact `(workload_hash, arch_hash, mapping_hash)` triple plus an
-explicit `evaluator_prefix` (never inferred). A hit also requires the stored result to cover
-every requested metric. `Result.from_dict()` is the exact inverse of `to_dict()`.
-
-**The loop's own cache** is different: `flux_cache.MeasurementCache` (`evaluator/cache`) is a
+**The loop's own cache** is `flux_cache.MeasurementCache` (`evaluator/cache`): a
 JSON sidecar beside the record, always on, keyed by the candidate's source, what the stage runs
 (its command, the scripts it names, the params) and the tool fingerprints
-([D340](decisions.md), [D361](decisions.md), [D790](decisions.md)). The RTL harness keeps a third, `ToolResultCache`, keyed by a
-content hash over exactly what Yosys reads ([D89](decisions.md)).
+([D340](decisions.md), [D361](decisions.md), [D790](decisions.md)).
 
-## The calibration store
-
-Ground-truth measurements and residual models, versioned and CI-tested: see
-[calibration.md](calibration.md).
-
-## The benchmark corpus
-
-`CorpusStore` (`corpus.py`) loads `mentor/benchmarks/public/` and `mentor/benchmarks/holdout/`:
-workload IR documents with reference architectures, split into public and **holdout**
-partitions enforced by a two-method surface (`public_entries()` structurally cannot return a
-holdout entry; `all_entries()` requires `acknowledge_holdout_access=True`). `CorpusEntry.
-objective` names what "best" means for an entry and `flux_store.leaderboard` ranks stored
-results against it ([D58](decisions.md), [D59](decisions.md)). The corpus is modest (one
-workload family across architecture widths); growing it is open-ended work.
+The calibration store, the benchmark corpus (`CorpusStore`, `mentor/benchmarks/`) and the
+leaderboard are removed ([D953](decisions.md), [D954](decisions.md)); what calibration remains is
+the loop's own between stages, see [calibration.md](calibration.md).

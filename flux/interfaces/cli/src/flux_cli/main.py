@@ -3,7 +3,7 @@
 `flux task run|check` runs or validates a problem document (`--json FILE` writes the answer for a
 script), `flux ask` drives the loop from a prompt. Applications provide their own check and
 measurement commands. `flux report` reads a campaign's record, and `flux run/status/stop/attach` manage a
-detached run; `flux eval`, `flux import` and `flux replay` are the IR evaluator commands.
+detached run.
 """
 
 from __future__ import annotations
@@ -13,9 +13,8 @@ import sys
 
 from .selftest import cmd_selftest
 from .tools import cmd_tools
-from .commands import (cmd_knowledge_digest, cmd_knowledge_show, cmd_attach, cmd_eval, cmd_gc, cmd_import, cmd_replay, cmd_report, cmd_run, cmd_status,
+from .commands import (cmd_attach, cmd_report, cmd_run, cmd_status,
                        cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
-from flux_evaluator_abi import available_evaluators
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,37 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",
-        # Older IR entry points remain callable but have no prominent help entry.
-        metavar="{new,ask,consult,task,probe,tools,prog,report,log,run,status,stop,attach,serve,user,login,agent,knowledge,gc,selftest}")
-
-    import_p = subparsers.add_parser("import"
-    )
-    import_p.add_argument("file", help="Path to a YAML/JSON IR document.")
-    import_p.add_argument(
-        "--kind",
-        choices=["workload", "architecture", "mapping"],
-        default=None,
-        help="IR kind (auto-detected from document shape if omitted).",
-    )
-    import_p.add_argument("--store", default=None, help="SQLite ResultStore path to store into.")
-    import_p.set_defaults(func=cmd_import)
-
-    eval_p = subparsers.add_parser("eval"
-    )
-    eval_p.add_argument("--workload", required=True, help="Path to a Workload IR document.")
-    eval_p.add_argument("--arch", default=None, help="Path to an Architecture IR document.")
-    eval_p.add_argument("--backend", required=True, choices=available_evaluators())
-    eval_p.add_argument(
-        "--metrics", default=None, help="Comma-separated metric names (default: latency_cycles,energy_pj)."
-    )
-    eval_p.add_argument("--store", default=None, help="SQLite ResultStore path to store into.")
-    eval_p.set_defaults(func=cmd_eval)
-
-    replay_p = subparsers.add_parser("replay"
-    )
-    replay_p.add_argument("result_id", type=int)
-    replay_p.add_argument("--store", required=True, help="SQLite ResultStore path.")
-    replay_p.set_defaults(func=cmd_replay)
+        metavar="{new,ask,consult,task,probe,tools,prog,report,log,run,status,stop,attach,serve,user,login,agent,selftest}")
 
     log_p = subparsers.add_parser(
         "log", help="Every model and coding-agent turn of a campaign's runs: prompts, replies, tool calls, errors.")
@@ -220,13 +189,6 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Run on this machine, not in the Docker sandbox (also FLUX_SANDBOX=0).")
     run_p.set_defaults(func=cmd_task_run)
 
-    gc_p = subparsers.add_parser("gc", help="Remove trace directories no campaign record names.")
-    gc_p.add_argument("--db", action="append", metavar="DB", help="A campaign record whose rows name traces to keep (repeatable).")
-    gc_p.add_argument("--root", default=None, help="The trace root (default: FLUX_TRACE_ROOT or <tmp>/flux-traces).")
-    gc_p.add_argument("--keep-days", type=float, default=7.0, help="Keep everything younger than this (default 7).")
-    gc_p.add_argument("--apply", action="store_true", help="Remove; without it, only say what would go.")
-    gc_p.set_defaults(func=cmd_gc)
-
     rep_p = subparsers.add_parser("report", help="How a campaign moved: frontier evolution, hypervolume, best-so-far, the parts.")
     rep_p.add_argument("db", help="The campaign record.")
     rep_p.add_argument("--campaign", default=None, help="A campaign id prefix (default: the latest in the record).")
@@ -248,17 +210,6 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--now", action="store_true", help="SIGINT the run now instead of waiting for the pass boundary.")
             sp.add_argument("--why", default=None, help="A word on why, kept with the request.")
         sp.set_defaults(func=fn)
-    kn_p = subparsers.add_parser("knowledge", help="The library's digests in a campaign record.")
-    kn_sub = kn_p.add_subparsers(dest="knowledge_command", required=True)
-    dig_p = kn_sub.add_parser("digest", help="Digest every library document the record does not hold yet, one model call each.")
-    dig_p.add_argument("--db", required=True, help="The campaign record (the digests live in its store).")
-    dig_p.add_argument("--model", default=None, help="The model; default as `flux task run`.")
-    dig_p.add_argument("--num-predict", type=int, default=None, help="Output tokens per digest (default 2000).")
-    dig_p.add_argument("--replies", default=None, help="A JSON list of scripted replies: runs without a model.")
-    dig_p.set_defaults(func=cmd_knowledge_digest)
-    show_p = kn_sub.add_parser("show", help="Print the digests the record holds.")
-    show_p.add_argument("--db", required=True)
-    show_p.set_defaults(func=cmd_knowledge_show)
 
     tools_p = subparsers.add_parser("tools", help="The checks a gate may run and the stages a document may measure with.")
     tools_p.add_argument("--json", action="store_true", help="The catalog as JSON (what the loop crafter reads).")

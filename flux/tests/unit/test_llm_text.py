@@ -6,7 +6,7 @@ The cases are habits observed from this repo's own backends.
 from __future__ import annotations
 
 import pytest
-from flux_llm import InvalidLLMProposal, strip_markdown_fence
+from flux_llm import strip_markdown_fence
 
 
 @pytest.mark.parametrize(
@@ -69,8 +69,3 @@ def test_any_object_with_propose_satisfies_the_protocol():
 
     assert isinstance(_Stub(), Proposer) and isinstance(ScriptedProposer(["a"]), Proposer)
     assert ScriptedProposer(["a"]).propose("q").text == "a" and str(Reply("b")) == "b"
-
-
-def test_invalid_proposal_is_an_exception_callers_can_catch():
-    with pytest.raises(InvalidLLMProposal):
-        raise InvalidLLMProposal("a caller's own specific reason")

@@ -29,7 +29,6 @@ class Stage:
     name: str
     command: tuple[str, ...] | None = None
     metrics_re: dict[str, str] = field(default_factory=dict)
-    evaluator: str | None = None
     metrics: tuple[str, ...] = ()
     timeout_s: float = 600.0
     cutoff: dict[str, Any] | tuple[dict[str, Any], ...] = field(default_factory=dict)   # one gate, or several
@@ -57,11 +56,13 @@ def _stage(i: int, doc: Any) -> Stage:
     if not isinstance(doc, dict) or not isinstance(doc.get("name"), str) or not doc["name"]:
         raise TaskError(f"flow.measure: stage {i + 1} needs a name")
     at = f"flow.measure.{doc['name']}"                 # D775: a stage is said by its name
-    cmd, ev = doc.get("command"), doc.get("evaluator")
-    if cmd and ev:
-        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`, not both")
-    if not cmd and not ev:
-        raise TaskError(f"{at} needs exactly one of `command` or `evaluator`")
+    if "evaluator" in doc:                             # D954: no evaluator stages
+        raise TaskError(f"{at}.evaluator: evaluator stages are gone (D954); measure with a command that prints "
+                        "name=value, e.g. an application's own script (applications/npu_gemm's evaluate.py "
+                        "--backend zigzag|timeloop)")
+    cmd = doc.get("command")
+    if not cmd:
+        raise TaskError(f"{at} needs a `command`")
     needs = doc.get("needs")
     if needs is not None and (not isinstance(needs, list) or not all(isinstance(t, str) for t in needs)):
         raise TaskError(f"{at}.needs is a list of tool names")
@@ -136,7 +137,7 @@ def _stage(i: int, doc: Any) -> Stage:
         if rules[0] == "within" and not 0 < float(rule["within"]) <= 1:
             raise TaskError(f"{where}.within must be a fraction in (0, 1]")
     return Stage(name=doc["name"], command=cmd, metrics_re=metrics_re,
-                evaluator=ev, metrics=metrics or tuple(metrics_re),
+                metrics=metrics or tuple(metrics_re),
                 timeout_s=float(doc.get("timeout_s") or 600.0), cutoff=cutoff, needs=tuple(needs),
                 estimate=_estimator(at, doc.get("estimate")), metric_specs=metric_specs)
 

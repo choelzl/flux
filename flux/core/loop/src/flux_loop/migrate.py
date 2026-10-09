@@ -240,6 +240,31 @@ def _d803(doc: dict[str, Any], say: Say, manual: Say) -> None:
                    "{command}, orchestrate: {command} -- with the scripts beside the document")
 
 
+def _d954(doc: dict[str, Any], say: Say, manual: Say) -> None:
+    """No evaluator stages, so no `workload:` for them and no `calibration:` in a `mined` source."""
+    if "workload" in doc:
+        doc.pop("workload")
+        say("workload: dropped (it was read by evaluator stages only, gone in D954)")
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            mined = node.get("mined")
+            if isinstance(mined, dict) and "calibration" in mined:
+                mined.pop("calibration")
+                say("mined.calibration: dropped (the calibration store is gone, D954)")
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(doc.get("flow"))
+    measure = (doc.get("flow") or {}).get("measure") if isinstance(doc.get("flow"), dict) else None
+    for name, st in (measure.items() if isinstance(measure, dict) else ()):
+        if isinstance(st, dict) and "evaluator" in st:
+            manual(f"flow.measure.{name}.evaluator: evaluator stages are gone (D954); measure with a command "
+                   "(e.g. applications/npu_gemm's evaluate.py --backend zigzag|timeloop)")
+
+
 #: Each change the format went through, in order: (decision, what it does, the step).
 STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D775", "each box's settings under flow", _d775),
@@ -250,6 +275,7 @@ STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D795-D797", "who works a box, said the same way; the search under orchestrate", _d795_d797),
     ("D803", "no world, no hooks", _d803),
     ("D830", "who digests the papers is knowledge.digest", _d830),
+    ("D954", "no evaluator stages: no workload, no mined calibration", _d954),
 ]
 
 
@@ -266,7 +292,7 @@ def migrate(doc: Any) -> tuple[Any, list[str], list[str]]:
     for code, _what, step in STEPS:
         say = lambda text, code=code: said.append(f"{code}: {text}")            # noqa: E731
         hand = lambda text, code=code: manual.append(f"{code}: {text}")         # noqa: E731
-        if step in (_d791, _d803):
+        if step in (_d791, _d803, _d954):
             step(out, say, hand)
         else:
             step(out, say)

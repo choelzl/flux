@@ -1,7 +1,7 @@
 """What produced a row (D510): the code, the tools, the model turn's cost, where its traces went.
 
 Every row the loop writes carries a `provenance` document in its candidate's `meta`, and the
-trace directory is named by campaign and pass so `flux gc` can tell what a record points at.
+trace directory is named by campaign and pass, so a clean-up can tell what a record points at.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def trace_root() -> str:
 def trace_dir(campaign_id: str | None, problem: str) -> str:
     """A pass's trace directory, made: `<root>/<campaign>/<UTC stamp>` -- by the campaign
     (its first twelve characters) and the moment the pass began, so a row can point at it
-    and `flux gc` can keep what the record still names. A run without a record traces
+    and a clean-up can keep what the record still names. A run without a record traces
     under the problem's name."""
     who = (campaign_id or "")[:12] or problem
     stamp_ = time.strftime("%Y%m%dT%H%M%S", time.gmtime())

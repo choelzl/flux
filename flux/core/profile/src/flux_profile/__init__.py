@@ -464,22 +464,3 @@ def report_lines(*, derived: dict[str, float] | None = None,
                  total_s: float | None = None) -> list[str]:
     """The timing table as plain text (no fold markers): `report_rows` flattened."""
     return [r["text"] for r in report_rows(derived=derived, total_s=total_s)]
-
-
-def seconds(name: str) -> float:
-    """Measured seconds recorded under `name`, or 0."""
-    return snapshot().get(name, (0, 0.0))[1]
-
-
-def outside(total_phase: str, *inner_prefixes: str) -> float:
-    """Seconds a phase spent NOT inside the phases named by these prefixes.
-
-    A difference of two measurements, so callers label it derived, not measured (e.g.
-    "proposing, outside the model").
-    """
-    total = seconds(total_phase)
-    if not total:
-        return 0.0
-    inner = sum(secs for name, (_, secs) in snapshot().items()
-                if any(name.startswith(p) for p in inner_prefixes))
-    return max(0.0, total - inner)

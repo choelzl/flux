@@ -475,15 +475,11 @@ def _mined(config: dict[str, Any]) -> Any:
     run's own campaign store, so switching it on needs no configuration."""
     from flux_knowledge import Mentor, Mined
 
-    known = {"db", "calibration", "max_facts", "max_chars", "static"}
+    known = {"db", "max_facts", "max_chars", "static"}
     unknown = sorted(set(config) - known - {"value"})
     if unknown:
         raise ValueError(f"a `mined` knowledge source takes {sorted(known)}, not {unknown}")
     kw = {k: v for k, v in config.items() if k in known}
-    if isinstance(kw.get("calibration"), str):
-        kw["calibration"] = (kw["calibration"],)
-    elif "calibration" in kw:
-        kw["calibration"] = tuple(kw["calibration"])
     if isinstance(config.get("value"), str):
         kw.setdefault("db", config["value"])
     return Mentor([Mined(**kw)])

@@ -123,8 +123,6 @@
             "core/stores/src"
             "interfaces/cli/src"
             "interfaces/web/src"
-            "evaluator/calibration/src"
-            "evaluator/rtl/src"
             "mentor/knowledge/src"
             "mentor/records/src"
             "core/loop/src"
@@ -137,9 +135,6 @@
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
             "applications/interconnect_mapping/lib/src"
-            "evaluator/openroad/src"
-            "generator/harness_spec/src"
-            "evaluator/redaction/src"
           ];
 
           shellHook = ''

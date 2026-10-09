@@ -133,5 +133,7 @@ def test_a_problem_can_declare_both_sources_in_code(tmp_path):
 def test_a_mined_source_the_document_cannot_mean_is_refused():
     with pytest.raises(ValueError, match="takes"):
         make_role("knowledge", {"mined": {"trained_on": "nothing"}})
-    mentor = make_role("knowledge", {"mined": {"max_facts": 3, "calibration": "cal.db"}})
-    assert mentor.sources[0].max_facts == 3 and mentor.sources[0].calibration == ("cal.db",)
+    mentor = make_role("knowledge", {"mined": {"max_facts": 3}})
+    assert mentor.sources[0].max_facts == 3
+    with pytest.raises(ValueError, match="calibration"):          # D954: no calibration store to read
+        make_role("knowledge", {"mined": {"calibration": "cal.db"}})

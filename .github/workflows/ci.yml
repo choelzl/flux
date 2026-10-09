@@ -222,12 +222,12 @@ jobs:
           fi
           df -h /
 
-      - name: OpenROAD PPA + mixed-fidelity campaign (docs/decisions.md D225-D229)
+      - name: ASAP7 measure through an RTL application's rtl.py (Yosys + OpenROAD on ORFS's platform, D948)
         working-directory: flux
         run: |
           set -o pipefail
           nix develop --command python3 -m pytest \
-            tests/integration/test_openroad_ppa_live.py \
+            tests/unit/test_rtl_commands.py -m heavy -k measure \
             -q --tb=short -rs \
             | tee "$RUNNER_TEMP/physical.txt"
           if grep -q "skipped" "$RUNNER_TEMP/physical.txt"; then

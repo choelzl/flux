@@ -11,7 +11,7 @@ as stages a document names. Each prints `name=value` lines.
 must write there (`<dir>/prog`). `--run` is the command measured, `{out}` again the built program;
 empty, it is the built program alone. A Python artifact needs no build:
 `--run "{python} {artifact}"`. A build that fails prints the compiler's first lines and exits 3
-(did not build, as `flux rtl test`); a run that fails exits 1.
+(did not build, as an RTL application's `rtl.py test`); a run that fails exits 1.
 """
 
 from __future__ import annotations

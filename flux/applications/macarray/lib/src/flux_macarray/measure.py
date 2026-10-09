@@ -22,15 +22,14 @@ SCREEN, CONFIRM = "synthesis", "placement"
 
 def measure_one(design: Design, *, stage: str, clock_period_ps: float,
                 timeout_s: float = 600.0) -> dict[str, Any]:
-    """One PE through one stage via the shared `measure_rtl` (clock and reset from the PE's
-    header, placement repaired). A plain dict (cacheable), or `{"error": ...}`."""
-    from flux_evaluator_openroad import measure_rtl
+    """One PE through one stage via the application's `rtl.py` measure (clock and reset from the
+    PE's header, placement repaired). A plain dict (cacheable), or `{"error": ...}`."""
+    from .rtl_check import measure
 
     try:
-        return measure_rtl(design.all_sources, design.module_name,
-                           stage="synth" if stage == SCREEN else "place", clock_period_ps=clock_period_ps,
-                           repair_design=stage == CONFIRM, timeout_s=timeout_s)
-    except Exception as exc:                                              # noqa: BLE001
+        return measure(design.all_sources, design.module_name, stage="synth" if stage == SCREEN else "place",
+                       clock_ps=clock_period_ps, repair_design=stage == CONFIRM, timeout_s=timeout_s)
+    except (Exception, SystemExit) as exc:                                # noqa: BLE001 -- rtl.py says why by SystemExit
         return {"error": f"{type(exc).__name__}: {str(exc)[:400]}"}
 
 

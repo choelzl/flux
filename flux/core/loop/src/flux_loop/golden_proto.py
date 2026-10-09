@@ -618,3 +618,27 @@ def judge(code: str, part: str | None, state: Any, g: Any, rows: list[dict[str, 
     ok = c <= goal["target"]
     return Verdict(ok, c, f"passes every input; {why} -- it was {goal['cost']:,.0f} when this pass began, the goal "
                    f"is <= {goal['target']:,.0f} ({'REACHED' if ok else 'not yet'}). {CHEAPER}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The prototype's check as a command a coding agent runs (D618, D951):
+    `python -m flux_loop.golden_proto PROTOTYPE.py --golden golden.py [--table-max N]` -- why, then
+    `N failing of M`; exit 0 when every input passes."""
+    import argparse
+
+    ap = argparse.ArgumentParser(prog="python -m flux_loop.golden_proto", description="Check a Python prototype against golden.py")
+    ap.add_argument("prototype")
+    ap.add_argument("--golden", required=True)
+    ap.add_argument("--table-max", type=int, default=TABLE_MAX)
+    ap.add_argument("--timeout", type=float, default=120.0)
+    a = ap.parse_args(argv)
+    g = load(Path(a.golden))
+    rows = exhaustive(g) or golden_vectors_of(g)
+    v = check(Path(a.prototype).read_text(), g, rows, timeout_s=a.timeout, table_max=a.table_max)
+    print(v.why)
+    print(f"{0 if v.ok else int(v.score)} failing of {len(rows)}")
+    return 0 if v.ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

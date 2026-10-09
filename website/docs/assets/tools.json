@@ -472,9 +472,6 @@
   "title": "Cycles and energy (ZigZag)",
   "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. No area: add a stage of yours for it (as applications/npu_gemm).",
   "run": "{python} {home}/evaluate.py {artifact} {workload} --backend zigzag",
-  "document": {
-   "workload": "{workload}"
-  },
   "params": {
    "workload": {
     "label": "Workload (Workload IR)",
@@ -500,9 +497,6 @@
   "title": "Cycles, energy and area (Timeloop)",
   "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper on PATH the stage is skipped.",
   "run": "{python} {home}/evaluate.py {artifact} {workload} --backend timeloop",
-  "document": {
-   "workload": "{workload}"
-  },
   "params": {
    "workload": {
     "label": "Workload (Workload IR)",

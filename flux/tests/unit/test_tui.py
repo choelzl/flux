@@ -140,7 +140,7 @@ def test_profile_phases_become_task_rows_through_the_listener():
             pass
     finally:
         flux_profile.clear_listener()
-    assert flux_profile.seconds("still-times") >= 0
+    assert flux_profile.snapshot().get("still-times", (0, 0.0))[1] >= 0
 
 
 def test_a_phases_output_reaches_the_task_details_pane():
