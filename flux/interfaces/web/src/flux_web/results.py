@@ -33,7 +33,7 @@ _NOT_MEASURED = ("gate", "admit", "prototype")
 def measurement_summary(result: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
     """Compact decision values and the same scoped references as measurementdata.js.
 
-    Display choices stay in the browser; every metric is available without fetching full results
+    Display choices are saved separately; every metric is available without fetching full results
     for every loop in a list. Baselines win over P90 performance of accepted designs.
     """
     def finite(value: Any) -> bool:
@@ -244,10 +244,17 @@ def _decided(out: list[dict[str, Any]], decision: Any) -> dict[str, Any] | None:
     not meet every requirement, or a conclusion with no decision, leaves no design marked; the closest
     is returned instead -- the one the conclusion names, else that old decision, else the best ranked
     -- and marked `closest`."""
+    doc = decision if isinstance(decision, dict) else {"name": decision}
+    old_pick = _find(out, doc) if doc.get("name") else None
+    reference_pick = old_pick is not None and old_pick.get("reference_only")
     out = [d for d in out if not d.get("reference_only")]
+    if reference_pick:
+        ranked = [d for d in out if d["eligible"] and d["rank"] is not None]
+        if ranked:
+            min(ranked, key=lambda d: d["rank"])["decision"] = True
+        return None
     if not decision:
         return None                                             # no pass ended yet: nothing decided, nothing closest
-    doc = decision if isinstance(decision, dict) else {"name": decision}
     picked = _find(out, doc) if doc.get("name") else None
     if picked is not None and picked["eligible"]:
         picked["decision"] = True
@@ -392,7 +399,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                 group = "whole" if composed else (part or (name.split("#", 1)[0] if "#" in name else ""))
                 d = by.setdefault((part, name, ck), {"name": name, "base": name, "key": ck, "part": part, "group": group,
                                                      "baseline": bool((c.get("meta") or {}).get("baseline")),
-                                                     "reference_only": bool((c.get("meta") or {}).get("baseline_metrics")),
+                                                     "reference_only": bool((c.get("meta") or {}).get("baseline") or (c.get("meta") or {}).get("baseline_metrics")),
                                                      "stages": {}, "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]
@@ -484,10 +491,13 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
+    # Goal-free objectives drive ranking; constraints should not displace that metric in summaries.
+    main = next((o.metric for o in vector if o.goal is None), metrics[0] if metrics else None)
     result = {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
-            "metrics": metrics, "limits": limits, "stages": [st.get("name") for st in stages],
+            "metrics": metrics, "main_metrics": [main] if main else [],
+            "limits": limits, "stages": [st.get("name") for st in stages],
             "metric_groups": groups,
             "metric_info": {m: definitions.get(m) or next(({k: v for k, v in g.items() if k not in ("metrics", "type")}
                             for parent, g in groups.items() if m in g["metrics"]), {}) for m in metrics}}

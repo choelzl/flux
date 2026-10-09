@@ -89,7 +89,8 @@ def _front_points(problem: Problem, state: LoopState) -> tuple[list[dict], list[
     if len(objs) < 2:
         return [], []
     o1, o2 = objs[0], objs[1]
-    wholes = [sc for sc in (state.scored or []) if (sc.candidate.meta or {}).get("composed")
+    evidence = [sc for rows in state.on_stage.values() for sc in rows] if state.on_stage else state.scored or []
+    wholes = [sc for sc in evidence if not sc.candidate.meta.get("baseline") and (sc.candidate.meta or {}).get("composed")
               and o1.value(sc.metrics) is not None and o2.value(sc.metrics) is not None]
     if not wholes:
         return [], [o1.metric, o2.metric]
@@ -110,7 +111,8 @@ def _design_rows(problem: Problem, state: LoopState, cap: int = 120_000, top: in
     anything, best first by the objectives, the top `top` per deliverable (the part a design
     is for, or the problem itself), each with its numbers and its text; the decision marked;
     the frontier as front points for the chart."""
-    scored = list(state.scored or [])
+    evidence = [sc for rows in state.on_stage.values() for sc in rows] if state.on_stage else state.scored or []
+    scored = [sc for sc in evidence if not sc.candidate.meta.get("baseline") and not sc.candidate.meta.get("baseline_metrics")]
     if not scored:
         return [], [], []
     try:

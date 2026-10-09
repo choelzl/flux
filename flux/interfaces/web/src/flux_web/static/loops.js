@@ -213,7 +213,7 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
       h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
         sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
       h("td", { class: "mono loop-main-measurements" }, sm.best ? mainMeasurements({ name, owner, result_preferences: l.result_preferences },
-        sm.metrics || Object.keys(sm.best.measurements || { [sm.best.metric]: sm.best.value }), [sm.best.metric]).map(metric => {
+        sm.metrics || Object.keys(sm.best.measurements || { [sm.best.metric]: sm.best.value }), sm.main_metrics || [sm.best.metric]).map(metric => {
           const measurement = sm.best.measurements?.[metric] || (metric === sm.best.metric ? sm.best : { value: null });
           const display = measurementText({ shown: sm.best.stage || "" }, metric, () => measurement, num4, relativeMeasurement({ name, owner, result_preferences: l.result_preferences }, metric));
           return h("div", { class: measurement.meets === false ? "misses" : measurement.meets === true ? "meets" : "",

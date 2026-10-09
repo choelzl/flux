@@ -27,7 +27,7 @@ async function editOverviewLayout() {
     const cancel = () => finish(false);
     cleanup.push(cancel);
     const button = (label, title, fn, disabled = false) => h("button", {
-      type: "button", class: "small", title, "aria-label": title, disabled,
+      type: "button", class: label === "Add" ? "small overview-layout-add-button" : "small overview-layout-control", title, "aria-label": title, disabled,
       onclick: () => { fn(); draw(); },
     }, label);
     const shift = (list, index, offset) => {
@@ -40,7 +40,8 @@ async function editOverviewLayout() {
           Object.entries(catalog).filter(([key]) => key === id || !used.includes(key)).map(([key, label]) => h("option", { value: key }, label)));
         select.value = id;
         select.addEventListener("change", () => { ids[index] = select.value; draw(); });
-        return h("li", { class: "overview-layout-row", "data-layout-card": id }, select,
+        return h("li", { class: "overview-layout-row", "data-layout-card": id },
+          h("span", { class: "overview-layout-index", "aria-hidden": true }, index + 1), select,
           h("div", { class: "overview-layout-actions" },
             button("↑", `Move ${catalog[id]} up`, () => shift(ids, index, -1), index === 0),
             button("↓", `Move ${catalog[id]} down`, () => shift(ids, index, 1), index === ids.length - 1),
@@ -50,7 +51,8 @@ async function editOverviewLayout() {
       const available = Object.entries(catalog).filter(([id]) => !used.includes(id));
       const add = h("select", { "aria-label": small ? "Add small card" : `Add card to column ${column + 1}` }, available.map(([id, label]) => h("option", { value: id }, label)));
       return h("div", { class: "overview-layout-list", "data-layout-list": small ? "stats" : column },
-        h("ol", {}, rows), h("div", { class: "overview-layout-row" }, add,
+        h("ol", {}, rows.length ? rows : h("li", { class: "overview-layout-empty muted small" }, "No cards in this column.")),
+        h("div", { class: "overview-layout-row overview-layout-add" }, add,
           button("Add", small ? "Add small card" : `Add card to column ${column + 1}`, () => ids.push(add.value), !available.length || small && ids.length >= 5)));
     }
     function draw() {
@@ -58,10 +60,19 @@ async function editOverviewLayout() {
       const card = focused?.matches("select") ? focused.value : focused?.closest("[data-layout-card]")?.dataset.layoutCard;
       const small = focused?.closest("[data-layout-list]")?.dataset.layoutList === "stats";
       const label = focused?.getAttribute("aria-label");
-      content.replaceChildren(h("h3", {}, "Small cards"), h("p", { class: "muted small" }, "Choose 3–5 cards. Their order runs left to right."),
-        list(draft.stats, prefs.small_cards), h("h3", {}, "Larger cards"),
-        h("p", { class: "muted small" }, "Choose cards, reorder them, or move them between columns. On narrow screens, column 1 comes first."),
-        h("div", { class: "grid-2" }, draft.columns.map((ids, column) => h("div", {}, h("h4", {}, `Column ${column + 1}`), list(ids, prefs.large_cards, column)))));
+      const heading = (title, count) => h("div", { class: "overview-layout-heading" }, h("h3", {}, title), h("span", { class: "overview-layout-count" }, count));
+      content.replaceChildren(
+        h("section", { class: "overview-layout-section", "aria-label": "Top cards" },
+          heading("Top cards", `${draft.stats.length} / 5`),
+          h("p", { class: "muted small" }, "Choose 3–5 cards, ordered left to right."), list(draft.stats, prefs.small_cards)),
+        h("section", { class: "overview-layout-section", "aria-label": "Main cards" },
+          heading("Main cards", `${draft.columns.flat().length} selected`),
+          h("p", { class: "muted small" }, "Order top to bottom. Use ← / → to move between columns."),
+          h("div", { class: "overview-layout-columns" }, draft.columns.map((ids, column) =>
+            h("section", { class: "overview-layout-column", "aria-label": `${column === 0 ? "Left" : "Right"} column` },
+              h("div", { class: "overview-layout-heading" }, h("h4", {}, column === 0 ? "Left column" : "Right column"),
+                h("span", { class: "overview-layout-count" }, ids.length)), list(ids, prefs.large_cards, column)))),
+          h("p", { class: "muted small overview-layout-mobile-note" }, "On phones, the left column appears first.")));
       renderOverview({ name: "sample", owner: "__overview_mock_data__", qs: "", body: preview, mine: false,
         st: example.state, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} },
         example.results, example.notes, example.workbench, example.usage, { layout: draft });

@@ -39,6 +39,13 @@ export function resultPreferences(ctx) {
   } };
 }
 
+/** Goal-free objectives drive ranking; goals are eligibility constraints. */
+export function defaultMainMeasurements(results, metrics = results.metrics || []) {
+  const preferred = results.main_metrics || (results.objective_list || []).filter(o => o.goal == null).map(o => o.metric).slice(0, 1);
+  const selected = preferred.filter(m => metrics.includes(m)).slice(0, 1);
+  return selected.length ? selected : metrics.slice(0, 1);
+}
+
 /** Main summary metrics and individual display choices share the loop's server preferences. */
 export function mainMeasurements(ctx, metrics, defaults = metrics) {
   const saved = resultPreferences(ctx).read().mainMetrics;
@@ -52,9 +59,9 @@ export function relativeMeasurement(ctx, metric, fallback = false, preferences =
   return typeof saved?.[metric] === "boolean" ? saved[metric] : fallback;
 }
 
-export function measurementPreferences(ctx, metrics, groups = {}) {
+export function measurementPreferences(ctx, metrics, groups = {}, defaults = metrics.slice(0, 1)) {
   const prefs = resultPreferences(ctx), columns = measurementColumns(ctx, metrics, () => {}, groups);
-  const main = new Set(mainMeasurements(ctx, metrics, metrics.slice(0, 1)));
+  const main = new Set(mainMeasurements(ctx, metrics, defaults));
   const table = h("table", { class: "list compact measurement-options" },
     h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"))),
     h("tbody", {}, metrics.map(metric => {

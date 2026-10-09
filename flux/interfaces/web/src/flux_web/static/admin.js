@@ -240,8 +240,7 @@ async function adminResources(body) {
             if (!await confirmDialog(`Delete the cache ${c.key}?`, `${bytes(c.size)}: its scratch, the agents' sessions and the tools' cache.`, { ok: "Delete", danger: true })) return;
             const x = await api(`/admin/caches/${enc(c.key)}/clean`, { method: "POST", body: { what: "all" } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
           }, { cls: "small danger" }))))))]) : "";
-    body.replaceChildren(h("div", { class: "row end" }, h("span", { class: "muted" }, "measured ", ago(Date.now() / 1000)),
-        act("Measure again", load, { cls: "small" })), machineCard, overTime, contCard, diskCard, cacheCard);
+    body.replaceChildren(machineCard, overTime, contCard, diskCard, cacheCard);
     drawHistory();
   }
   // D699: the machine over time, a sample a minute while `flux serve` runs

@@ -394,13 +394,14 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     While the loop runs, it redraws once a minute. A figure gives the model and agent turns, their
     time and tokens. Under the decision, the best three designs: the decision, then accepted
     before failed, the deepest stage, then each objective without a limit.
-    **Layout** customizes the Overview for your entire account, across loops and browsers.
+    **Account → Overview layout → Customize** sets the Overview for your entire account,
+    across loops and browsers.
     Select and reorder 3–5 small cards, then choose and arrange larger cards in two columns.
     Use the up/down arrows to reorder and the left/right arrows to move between columns.
     The live preview uses **Mock Data** and the same cards and charts as a real Overview,
     updating immediately as you select, reorder, hide or move cards.
     Save applies the layout; Cancel discards edits; Defaults restores the original arrangement
-    when saved. You can also open the editor from Account → Overview layout. On narrow screens,
+    when saved. On narrow screens,
     column 1 comes before column 2. Empty notes, workbench and last-pass cards stay hidden;
     failure notices and unanswered agent questions always remain visible.
   - **Long runs** (D759): Live › Tasks opens on the last 30 passes ("Earlier" loads the rest), the log on its
@@ -488,7 +489,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Decision and saved with the project on the server. Tests omitted or reported as null, empty or NaN
     stay unmeasured; they do not become zero.
   - **Main measurements:** in the same settings table, check **Main** for the metrics shown in
-    loop lists and decision summaries. The first metric is the default; select several, or none.
+    loop lists and decision summaries. The first objective without a goal is the default, since
+    it drives ranking; when there is none, the first metric is used. Select several, or none.
     Main metrics also seed new chart selections; manually selected graphs keep their saved choices.
     Check **%** to show a metric as percent change from its baseline/reference instead of an
     absolute value. These preferences are saved with the project on the server, across browsers and do not
@@ -500,6 +502,11 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     project preferences; viewers can explore chart controls temporarily. Preferences follow
     renames, transfers and clones, and remain when results are reset. Old browser preferences
     are ignored.
+  - **Baseline / pass 0:** measured baselines and provided values are references, never the
+    selected design or a starting design for later search passes. Running pass 0 preserves the
+    best eligible search design using its fresh retained measurements; if those measurements
+    are stale, it leaves the saved decision unchanged. With no search designs, no design is selected.
+    Checks and measurements still run normally, and unchanged successful baselines are reused.
   - **Provided baseline:** in the configurator's Extra step, enable **Baseline / pass 0** and
     choose **Provided metrics and values**. Add metric/value rows and optionally select a stage;
     the default is the deepest measurement stage. This writes, for example,

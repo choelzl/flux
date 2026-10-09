@@ -1167,8 +1167,8 @@ def _merge_decision_history(problem: Problem, state: LoopState) -> None:
     for st in stages:
         latest: dict[str, Scored] = {}
         for s in [*recalled, *state.scored]:
-            if s.candidate.meta.get("baseline_metrics"):
-                continue  # supplied values are references, without a design to select
+            if s.candidate.meta.get("baseline") or s.candidate.meta.get("baseline_metrics"):
+                continue  # pass 0 measures references; it never selects a search design
             if s.stage == st:
                 latest.pop(s.candidate.key(), None)
                 latest[s.candidate.key()] = s
@@ -1176,7 +1176,7 @@ def _merge_decision_history(problem: Problem, state: LoopState) -> None:
             pools[st] = list(latest.values())
             reached = st
     state.reached = reached
-    state.on_stage = {**state.on_stage, **pools}
+    state.on_stage = pools
     # D895: a design of parts decides on the whole only -- a part measured alone climbs, so it can
     # be improved, but is never the loop's answer (the NLU's decision was one operator, pass after pass)
     if _of_parts(problem, state, [*recalled, *state.scored]):
@@ -1303,7 +1303,8 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     reached = state.reached or stages[0]
     parts = _of_parts(problem, state, state.scored)
     on_stage = state.on_stage or ({} if parts else {reached: [s for s in state.scored if s.stage == reached]})
-    pool = on_stage.get(reached) or []
+    pool = [s for s in on_stage.get(reached, []) if not s.candidate.meta.get("baseline")
+            and not s.candidate.meta.get("baseline_metrics")]
     if parts and not pool:
         # D895: parts measured, no whole yet: no decision -- a part is not the answer
         _note_once(state, "no whole design measured yet: the parts are measured, the decision waits for their composition")

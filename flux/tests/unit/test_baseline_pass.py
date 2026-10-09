@@ -62,8 +62,18 @@ def test_supplied_baseline_records_values_without_tools_models_or_a_decision(tmp
 def test_changed_supplied_metrics_get_a_new_reference_and_preserve_the_real_decision(tmp_path):
     task = _task(tmp_path, {"file": "design.py", "only": True})
     req = request_for(task, db=str(tmp_path / "out.db"))
-    measured = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
-    assert measured.decision.metrics == {"cost": 7}
+    from flux_loop.measure import cached_measure
+    from flux_loop.types import Candidate, Scored
+
+    problem = PromptProblem(dataclasses.replace(task, baseline=None))
+    records = problem.open_records(req, lambda m: None)
+    seed = LoopState(request=dataclasses.replace(req, baseline=False), workdir=str(tmp_path / "out"),
+                     say=lambda m: None, proposer=None, feedback=None, records=records)
+    cand = Candidate("existing-design", artifact=(tmp_path / "design.py").read_text())
+    for stage in problem.stages():
+        metrics = cached_measure(problem, seed, cand, stage, record=True)
+    records.conclude(problem.conclusion(Scored(cand, "fine", metrics, {}), "search pass"))
+    records.close("paused")
     for value in (1, 2):  # an external reference is numerically better, but has no design to choose
         doc = task.to_dict()
         doc["baseline"] = {"only": True, "metrics": [{"metric": "cost", "value": value}]}
@@ -73,7 +83,7 @@ def test_changed_supplied_metrics_get_a_new_reference_and_preserve_the_real_deci
         assert out.decision.metrics == {"cost": 7}
         assert out.decision.candidate.artifact.strip().endswith("answer = 42")
         assert out.scored[0].metrics == {"cost": value}
-    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
+    assert not (tmp_path / "out/checks.txt").exists()
 
 
 @pytest.mark.parametrize("rows", [[], {}, [1], [{"metric": "cost"}], [{"metric": "", "value": 1}],
@@ -140,13 +150,13 @@ def test_baseline_runs_real_checks_and_every_stage_without_agents_or_edits(tmp_p
     for start in range(2):
         out = run_passes(lambda r, f: run_loop(problem, r, proposer=NoModel(), log=lambda m: None), req, say=lambda m: None)
         assert out.stopped == "baseline checked and measured", out.refused
-        assert out.decision.metrics == {"cost": 7.0}
+        assert out.decision is None
         assert [s.stage for s in out.scored] == ["coarse", "fine"]
         assert out.provenance["cache_hits"] == 0
         assert out.provenance.get("baseline_reused", False) == bool(start)
-        assert bool(out.admitted) == (source != "project")
+        assert not out.admitted
         if source != "project":
-            assert out.decision.candidate.artifact.encode() == original
+            assert out.scored[0].candidate.artifact.encode() == original
     assert (tmp_path / "design.py").read_bytes() == original
     assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
     assert (tmp_path / "out/tools.txt").read_text().splitlines() == ["coarse", "fine"]
@@ -195,7 +205,7 @@ def test_failed_baseline_recovers_with_unchanged_inputs_then_reuses_success(tmp_
     recovered = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
     assert not recovered.provenance.get("baseline_reused")
     assert recovered.stopped == "baseline checked and measured" and not recovered.refused
-    assert recovered.decision.metrics == {"cost": 7.0}
+    assert recovered.decision is None
     assert [s.stage for s in recovered.scored] == ["coarse", "fine"]
     records = problem.open_records(req, lambda m: None)
     snapshots = records.recall("baseline")
@@ -205,7 +215,7 @@ def test_failed_baseline_recovers_with_unchanged_inputs_then_reuses_success(tmp_
     reused = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
     assert reused.provenance["baseline_reused"]
     assert reused.stopped == recovered.stopped and not reused.refused
-    assert reused.decision.metrics == recovered.decision.metrics
+    assert reused.decision is None
     assert [s.stage for s in reused.scored] == ["coarse", "fine"]
     assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
     assert (tmp_path / "out/tools.txt").read_text().splitlines() == stages + ["coarse", "fine"]
@@ -246,9 +256,38 @@ def test_late_baseline_decides_against_retained_designs_on_fresh_and_reused_runs
         out = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
         assert bool(out.provenance.get("baseline_reused")) == (reuse and not fail_baseline)
         assert [s.metrics for s in out.scored] == [{"cost": 58.0}] * (1 if fail_baseline else 2)
-        assert out.decision.metrics == {"cost": 100.0 - best_answer if fail_baseline else min(58.0, 100.0 - best_answer)}
-        assert (out.decision.name == "earlier-design") == (fail_baseline or best_answer > 42)
+        assert out.decision.metrics == {"cost": 100.0 - best_answer}
+        assert out.decision.name == "earlier-design"
         assert decision_doc(req.db)["name"] == out.decision.name
+
+
+@pytest.mark.parametrize("changed_inputs", [False, True])
+def test_baseline_with_the_same_source_does_not_rename_the_retained_decision(tmp_path, changed_inputs):
+    from flux_loop.measure import cached_measure
+    from flux_loop.types import Candidate, Scored
+    from flux_web.results import decision_doc
+
+    task = _task(tmp_path, {"file": "design.py", "only": True})
+    earlier = PromptProblem(dataclasses.replace(task, baseline=None))
+    req = request_for(earlier.task, db=str(tmp_path / "out.db"))
+    records = earlier.open_records(req, lambda m: None)
+    seed = LoopState(request=req, workdir=str(tmp_path / "out"), say=lambda m: None,
+                     proposer=None, feedback=None, records=records)
+    cand = Candidate("existing-design", artifact=(tmp_path / "design.py").read_text())
+    for stage in earlier.stages():
+        metrics = cached_measure(earlier, seed, cand, stage, record=True)
+    records.conclude(earlier.conclusion(Scored(cand, "fine", metrics, {}), "earlier pass"))
+    records.close("paused")
+    if changed_inputs:
+        checker = tmp_path / "check.py"
+        checker.write_text(checker.read_text() + "\n# updated checks invalidate older evidence\n")
+    for _ in range(2):
+        out = run_loop(PromptProblem(task), request_for(task, db=req.db), proposer=NoModel(), log=lambda m: None)
+        if changed_inputs:
+            assert out.decision is None  # stale search evidence cannot be newly selected
+        else:
+            assert out.decision is not None and out.decision.name == "existing-design"
+        assert decision_doc(req.db)["name"] == "existing-design"
 
 
 @pytest.mark.parametrize("change", ["source", "checker", "measurement", "params", "settings", "tools", "environment", "external"])
@@ -279,7 +318,7 @@ def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, chan
         monkeypatch.setattr("flux_evaluator_abi.toolchain_fingerprint", lambda tools: {"yosys": "new-build"})
     changed = run()
     assert not changed.provenance.get("baseline_reused")
-    assert changed.decision.metrics == {"cost": 7.0}
+    assert changed.decision is None
     assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
     assert run().provenance["baseline_reused"]
 
@@ -360,7 +399,8 @@ def test_baseline_precedes_parallel_work_without_spending_a_normal_pass(tmp_path
 
 
 @pytest.mark.parametrize("baseline_source", ["project", "failed", "provided"])
-def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_path, baseline_source):
+@pytest.mark.parametrize("answer", [20, 43])
+def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_path, baseline_source, answer):
     from flux_llm import ScriptedProposer
 
     base = _task(tmp_path, {"file": "design.py"})
@@ -381,15 +421,19 @@ def test_normal_generation_starts_after_baseline_even_when_baseline_fails(tmp_pa
     elif baseline_source == "provided":
         doc["baseline"] = {"metrics": [{"metric": "cost", "value": 0}]}
     task = TaskSpec.from_dict(doc, base=tmp_path)
-    proposer = ScriptedProposer([json.dumps({"artifact": "answer = 43\n", "why": "a useful improvement"})])
+    artifact = f"answer = {answer}\n"
+    proposer = ScriptedProposer([json.dumps({"artifact": artifact, "why": "an alternative"})])
     out = run_passes(lambda r, f: run_loop(PromptProblem(task), r, proposer=proposer, log=lambda m: None),
                      request_for(task, db=str(tmp_path / "out.db")), passes=1, say=lambda m: None)
     assert proposer.prompts  # normal work follows pass 0, rather than ending with its result
     assert out.provenance["request"]["baseline"] is False
-    assert any(s.candidate.artifact.strip() == "answer = 43" for s in out.scored), (out.refused, out.scored)
-    if baseline_source == "provided":
-        assert out.decision.candidate.artifact.strip() == "answer = 43"
-        assert not any(s.candidate.meta.get("baseline_metrics") for s in out.scored)
+    assert any(s.candidate.artifact.strip() == artifact.strip() for s in out.scored), (out.refused, out.scored)
+    assert out.decision.candidate.artifact.strip() == artifact.strip()
+    assert not any(s.candidate.meta.get("baseline") for s in out.scored)
+    resumed = run_loop(PromptProblem(task), dataclasses.replace(request_for(task, db=str(tmp_path / "out.db")),
+                       baseline=False, baseline_only=False, steps=0), proposer=NoModel(), log=lambda m: None)
+    assert resumed.decision.candidate.artifact.strip() == artifact.strip()
+    assert not any(s.candidate.meta.get("baseline") for s in resumed.scored)
     assert (tmp_path / "design.py").read_text() == "# unchanged design\nanswer = 42\n"
 
 

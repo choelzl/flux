@@ -63,7 +63,8 @@ def _restore(state, saved):
     """Restore the outcome without writing duplicate trials or running any tools."""
     scored = [Scored(Candidate.from_record(row["candidate"]), row["stage"], row["metrics"], row["payload"])
               for row in saved["scored"]]
-    admitted = {key: Candidate.from_record(doc) for key, doc in saved["admitted"].items()}
+    admitted = {key: Candidate.from_record(doc) for key, doc in saved["admitted"].items()
+                if not (doc.get("meta") or {}).get("baseline")}
     refused = [tuple(row) for row in saved["failures"]]
     reached, stopped = saved["reached"], saved["stopped"]
     state.scored = scored
@@ -72,7 +73,7 @@ def _restore(state, saved):
     state.reached = reached
     state.stopped = stopped
     for row in scored:
-        if row.candidate.meta.get("baseline_metrics"):
+        if row.candidate.meta.get("baseline"):
             continue
         state.on_stage.setdefault(row.stage, []).append(row)
 
@@ -108,7 +109,7 @@ def run_baseline(problem, state):
     provided = "metrics" in (getattr(getattr(problem, "task", None), "baseline", None) or {})
 
     def outcome():
-        return (_conclude(problem, state, []) if state.scored and (not provided or state.on_stage)
+        return (_conclude(problem, state, []) if state.scored and state.on_stage
                 else _result(problem, state, None, state.stopped, [], []))
 
     fingerprint = _fingerprint(problem)
@@ -147,11 +148,7 @@ def run_baseline(problem, state):
                 _record_trial(state, cand, None, verdict)
                 state.refused.append((cand.name, verdict.why))
             else:
-                if not cand.meta.get("baseline_workspace"):
-                    state.admitted["*"] = cand
-                    _record_trial(state, cand, None, verdict, admitted=True)
-                else:
-                    _record_trial(state, cand, None, verdict, gate_passed=True)
+                _record_trial(state, cand, None, verdict, gate_passed=True)
                 for stage in problem.stages():
                     rows = measure_many(problem, state, [cand], stage)
                     if not rows:
@@ -171,9 +168,9 @@ def run_baseline(problem, state):
                                            "fingerprint": fingerprint, "stopped": state.stopped,
                                            "reached": state.reached, "scored": [dataclasses.asdict(s) for s in state.scored],
                                            "admitted": {k: c.to_record() for k, c in state.admitted.items()}})
-    # Save only pass 0 in its reusable snapshot, then rank against the campaign's evidence.
+    # Save pass 0 as a reference, then retain the campaign's search decision.
     _merge_decision_history(problem, state)
-    with _phase("decide: baseline", why="compare the unchanged design with retained measurements"):
+    with _phase("decide: baseline", why="retain the best measured search design; pass 0 is a reference"):
         result = outcome()
     if state.depth == 0:
         _publish(problem, state, [], [], state.stopped, searching=False)

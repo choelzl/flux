@@ -5,7 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
+import { defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 import { loadOverviewLayout } from "./overview_layout.js";
 
@@ -86,7 +86,7 @@ function closestCard(ctx, r) {
     h("p", { class: "decision-head" }, h("strong", {}, "No feasible design yet"), h("span", { class: "pill warn" }, "no design meets every requirement")),
     h("div", { class: "decision-head" }, h("small", { class: "muted" }, "Closest candidate "), h("span", { class: "mono strong" }, c.name),
       h("span", { class: "muted" }, `measured at ${c.shown}`)),
-    h("div", { class: "decision-nums" }, mainMeasurements(ctx, r.metrics || [], (r.metrics || []).slice(0, 1)).map(m => {
+    h("div", { class: "decision-nums" }, mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r)).map(m => {
       const lim = (r.limits || []).find(l => l.metric === m);
       const display = measurementText(candidate, m, comparison, num4, relativeMeasurement(ctx, m));
       return h("div", { class: "num-cell", "data-summary-metric": m, title: display.title }, h("small", {}, m), h("div", { class: "big mono" }, display.text || "—"),
@@ -113,7 +113,7 @@ function renderOverview(ctx, r, notes, bench, use, prefs) {
   const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
   const unit = measurementUnitsFor(r);
   const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
-  const main = mainMeasurements(ctx, r.metrics || [], (r.metrics || []).slice(0, 1));
+  const main = mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r));
   const comparison = measurementComparison(designs, directions);
   const objs = main.map(metric => ({ ...directions.find(o => o.metric === metric), metric, direction: directionOf(metric, directions) }));
   const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },

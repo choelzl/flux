@@ -16,7 +16,6 @@ import { historyTab } from "./loop_history.js";
 import { ideasView } from "./loop_ideas.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { flushResultPreferences } from "./result_table.js";
-import { editOverviewLayout } from "./overview_layout.js";
 
 async function loopPage(name, owner, path = "") {
   const show = pageShow();
@@ -389,9 +388,6 @@ async function loopPage(name, owner, path = "") {
     const o = subsOf(tab), cur = curSub();
     subHolder.replaceChildren(o.length > 1 ? h("div", { class: "subtabs views", role: "tablist" }, o.map(([k, label]) => h("button", { role: "tab", type: "button",
       class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false", onclick: () => { sub = k; mode = ""; setUrl(); drawCrumbs(); drawBody(); } }, label))) : "");
-    if (tab === "Overview" && !me?.impersonator) subHolder.append(h("div", { class: "overview-layout-toolbar" },
-      act("Layout", async () => { if (await editOverviewLayout() && tab === "Overview" && !show.stale()) drawBody(); },
-        { cls: "small", title: "Customize the Overview for every loop in your account" })));
   }
   async function drawBody() {
     drawn++;

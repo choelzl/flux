@@ -66,12 +66,12 @@ def test_baseline_with_equal_timestamp_matches_browser_order():
     assert got["reference"]["name"] == "last" and got["percent"] == -60
 
 
-def _record(directory):
+def _record(directory, objectives=None):
     path = directory / "out/measurements.db"
     path.parent.mkdir(exist_ok=True)
     record = Records(str(path), objective={"study": "summaries"}, name="summaries")
-    record.remember("objectives", {"objectives": [{"metric": "latency", "direction": "minimize"},
-                                                {"metric": "score", "direction": "maximize"}]})
+    record.remember("objectives", {"objectives": objectives if objectives is not None else [
+        {"metric": "latency", "direction": "minimize"}, {"metric": "score", "direction": "maximize"}]})
     for name, numbers, baseline in (("initial", {"latency": 10, "score": 100}, True),
                                     ("winner", {"latency": 8, "score": 120}, False)):
         record.trial({"name": name, "artifact": name, "meta": {"baseline": baseline, "baseline_metrics": baseline}},
@@ -111,3 +111,34 @@ def test_loop_and_admin_lists_expose_all_decision_measurements(server):  # noqa:
         assert summary["best"]["measurements"]["latency"]["percent"] == -20
         assert summary["best"]["measurements"]["score"]["value"] == 120
         assert summary["best"]["measurements"]["score"]["percent"] == 20
+
+
+@pytest.mark.parametrize("objectives, primary", [
+    ([{"metric": "score", "direction": "maximize", "goal": 100},
+      {"metric": "latency", "direction": "minimize"}], "latency"),
+    ([{"metric": "latency", "direction": "maximize", "goal": 0},
+      {"metric": "score", "direction": "maximize"}], "score"),
+    ([{"metric": "latency", "direction": "minimize", "goal": 10},
+      {"metric": "score", "direction": "maximize", "goal": 100}], "latency"),
+    ([], "latency"),
+])
+def test_default_main_metric_is_the_ranking_objective_not_a_goal(server, objectives, primary):  # noqa: F811
+    app, _tmp = server
+    bob = _client(app, "bob", "another long secret")
+    ada = _client(app, "ada", "correct horse battery")
+    _loop(bob, "summaries")
+    directory = app.state.store.data / "users/bob/apps/summaries"
+    path = _record(directory, objectives)
+    files = loop_files(directory)
+    files["answer"].parent.mkdir(exist_ok=True)
+    files["answer"].write_text(json.dumps({"decision": {"name": "winner"}}))
+    ident = app.state.store.add_run(app.state.store.user(name="bob"), "summaries", str(path), str(files["log"]), ["flux"], {})
+    app.state.store.set_run(ident, ended=time.time(), rc=0)
+    result = designs(str(path), [{"name": "bench"}], decision="winner")
+    assert result["main_metrics"] == [primary]
+    assert result["metrics"][0] == (objectives[0]["metric"] if objectives else "latency")
+    for summary in (bob.get("/api/apps").json()[0]["summary"], ada.get("/api/admin/apps").json()[0]["summary"]):
+        assert summary["main_metrics"] == [primary]
+        assert summary["best"]["metric"] == primary
+        assert summary["best"]["value"] == (8 if primary == "latency" else 120)
+        assert set(summary["best"]["measurements"]) == {"latency", "score"}

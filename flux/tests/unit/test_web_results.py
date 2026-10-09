@@ -4,6 +4,8 @@ A draft the gate refused is not a result."""
 
 from __future__ import annotations
 
+import pytest
+
 from flux_records import Records
 from flux_web.results import designs
 
@@ -24,6 +26,43 @@ def test_supplied_baseline_is_a_reference_even_when_better_than_every_design(tmp
     assert rows["t#baseline"]["reference_only"] and rows["t#baseline"]["baseline"]
     assert rows["t#baseline"]["rank"] is None and not rows["t#baseline"]["decision"] and not rows["t#baseline"]["closest"]
     assert rows["t#1"]["rank"] == 1  # the reference's deeper stage must not suppress real candidates
+    assert rows["t#1"]["decision"]
+
+
+@pytest.mark.parametrize("baseline_cost", [1, 100])
+@pytest.mark.parametrize("decision_document", [False, True])
+def test_old_measured_baseline_decision_selects_the_best_search_design(tmp_path, baseline_cost, decision_document):
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.remember("objectives", {"objectives": [{"metric": "cost", "direction": "minimize"}]})
+    for name, cost in (("best", 10), ("worse", 20), ("baseline", baseline_cost)):
+        stage = "confirm" if name == "baseline" else "screen"
+        rec.trial({"name": name, "artifact": name, "meta": {"baseline": name == "baseline"}},
+                  f"{name}@{stage}", stage=stage, strategy="loop", metrics={"cost": cost}, evaluator=stage)
+    rec.close("paused")
+    decision = {"name": "baseline", "metrics": {"cost": baseline_cost}} if decision_document else "baseline"
+    got = designs(db, [{"name": "screen"}, {"name": "confirm"}], decision=decision)
+    rows = {d["name"]: d for d in got["designs"]}
+    assert rows["best"]["decision"] and rows["best"]["rank"] == 1
+    assert not rows["worse"]["decision"]
+    assert rows["baseline"]["reference_only"] and rows["baseline"]["rank"] is None
+    assert not rows["baseline"]["decision"] and not rows["baseline"]["closest"]
+
+
+@pytest.mark.parametrize("failed_design", [False, True])
+def test_baseline_is_not_selected_when_no_search_design_is_feasible(tmp_path, failed_design):
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.remember("objectives", {"objectives": [{"metric": "cost", "direction": "minimize", "goal": 5}]})
+    rec.trial({"name": "baseline", "meta": {"baseline": True}}, "baseline@screen",
+              stage="screen", strategy="baseline", metrics={"cost": 1}, evaluator="screen")
+    if failed_design:
+        rec.trial({"name": "failed"}, "failed@screen", stage="screen", strategy="loop",
+                  metrics={"cost": 10}, evaluator="screen")
+    rec.close("paused")
+    got = designs(db, [{"name": "screen"}], decision="baseline")
+    assert not any(d["decision"] for d in got["designs"])
+    assert not next(d for d in got["designs"] if d["name"] == "baseline")["closest"]
 
 
 def test_baseline_measurements_are_identified_for_graphs(tmp_path):

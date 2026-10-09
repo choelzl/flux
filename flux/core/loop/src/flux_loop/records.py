@@ -137,8 +137,8 @@ def history(problem: Problem, state: LoopState) -> list[Scored]:
                 if t.stage not in stages or t.result is None:
                     continue
                 cand = Candidate.from_record(dict(t.candidate or {}))
-                if cand.meta.get("baseline_workspace"):
-                    continue  # project measurements have no reproducible candidate to resume
+                if cand.meta.get("baseline") or cand.meta.get("baseline_workspace"):
+                    continue  # baseline measurements are references, not search candidates
                 if not fresh(problem, cand, t.stage, state):
                     continue                             # D853: numbers of other inputs are not today's
                 latest[(cand.key(), t.stage)] = Scored(cand, t.stage, {k: float(e.value) for k, e in t.result.metrics.items()},
@@ -166,7 +166,7 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
             if t.stage not in stages or t.result is None:
                 continue
             cand = Candidate.from_record(dict(t.candidate or {}))
-            if cand.meta.get("baseline_workspace"):
+            if cand.meta.get("baseline") or cand.meta.get("baseline_workspace"):
                 continue
             k = (cand.name, cand.key(), t.stage)
             # D853: a row stands only for what measured it; a stale row stays on the record, out of
@@ -216,6 +216,8 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     stages_all = list(problem.stages() or [])
     try:
         for t in state.records.store.trials(state.records.campaign_id):
+            if ((t.candidate or {}).get("meta") or {}).get("baseline"):
+                continue
             if t.stage == StageNames.PROTOTYPE:
                 # A prototype's score is not the target's: it is reloaded below, on its own
                 # (D471), so RTL turns never resume by patching Python.

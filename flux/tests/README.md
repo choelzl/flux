@@ -103,15 +103,22 @@ baseline and percentile references against the browser calculation, zero/negativ
 nonfinite values, references outside a paged result set, and owner/admin loop summaries.
 
 Graph and measurement preferences belong to the project and are saved on the server.
+`test_baseline_pass.py`, `test_baseline_selection.py` and `test_web_results.py` check that
+pass 0 stays a reference: fresh and reused baselines cannot replace retained search decisions,
+even with identical source, stale historical evidence or better baseline numbers. Legacy snapshots
+and conclusions cannot select baselines, and live standings use retained search measurements.
 `FLUX_E2E_STEPS="login refused,login,upload,compact tables,graphs,main measurements,dictionary metrics"`
 checks shared Results/Decision settings, Pareto axes and focus, selected charts, hidden columns,
 main metrics and percentage formats, including restoration after clearing browser storage.
+The main-metric flow also checks that goal-free ranking objectives take precedence over earlier
+goal constraints in summaries, settings and default charts; explicit selections still override them.
 `test_web_result_preferences.py` covers sessions/server restarts, owner/editor/viewer/admin
 permissions, concurrent partial updates, validation, CSRF, impersonation, isolation and
 rename/transfer/clone/reset/delete behavior. `test_web_result_preferences_js.py` checks queued
 saves, captured owner and choices, read-only exploration and recovery after failed saves.
 
-`FLUX_E2E_STEPS="overview layout"` checks account-wide card selection, ordering and column
+`FLUX_E2E_STEPS="overview layout"` checks customization through Account settings only,
+configuration section counts, full-width column controls, card selection, ordering and column
 placement, 3–5 small-card limits, cancellation, save errors and retries, persistence across loops
 and browser reloads, defaults, account isolation, always-visible alerts and phone layouts.
 It also verifies that the mock-data preview uses real cards/charts and follows selection,

@@ -132,6 +132,10 @@ def general_flows(r, watch):
             def page(selected=name):
                 r.page(f"#/app/{selected}", "document.querySelector('.ov-stats')", "Overview layout")
 
+            def open_editor():
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "account layout settings")
+                r.button("Customize")
+
             def layout():
                 return b.js("""return {stats:[...document.querySelectorAll('.ov-stats > [data-overview-card]')].map(x=>x.dataset.overviewCard),
                   columns:[...document.querySelectorAll('.grid-2.ov > .col')].map(c=>[...c.children].map(x=>x.dataset.overviewCard))};""")
@@ -143,8 +147,10 @@ def general_flows(r, watch):
                 # Real API and account storage; only loop result/state fixtures are synthetic.
                 page()
                 r.check("new loops render the account's five default small cards", layout()["stats"] == ["state", "designs", "passes", "usage", "objective"])
-                r.button("Layout", ".overview-layout-toolbar")
+                r.check("loop views have no overview layout setup button", b.js("return !document.querySelector('.overview-layout-toolbar') && ![...document.querySelectorAll('#main button')].some(b => b.textContent === 'Layout')"))
+                open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')", what="layout editor")
+                r.check("configuration sections have counts, numbered rows and stacked full-width columns", b.js("const e=document.querySelector('.overview-layout-editor'); return e.querySelectorAll(':scope > .overview-layout-section').length===2 && e.querySelectorAll('.overview-layout-column').length===2 && e.querySelector('.overview-layout-count').textContent==='5 / 5' && e.querySelectorAll('[data-layout-list=stats] .overview-layout-index').length===5 && [...e.querySelectorAll('.overview-layout-column select')].every(s => s.getBoundingClientRect().width>=120)"))
                 r.check("the editor explains its account-wide scope", b.js("return document.querySelector('dialog').textContent.includes('every loop in your account, across browsers')"))
                 r.check("the editor previews real cards and charts with clearly marked mock data", b.js("const d=document.querySelector('dialog'); return d.textContent.includes('Mock Data') && d.querySelectorAll('.overview-layout-preview .ov-stats > .stat').length===5 && d.querySelector('.overview-layout-preview .decision-nums') && d.querySelector('.overview-layout-preview svg.best-chart') && d.querySelector('.overview-layout-preview [data-overview-card=notes]') && d.querySelector('.overview-layout-preview [data-overview-card=workbench]')"))
                 if shots := os.environ.get("FLUX_E2E_SHOTS"):
@@ -158,10 +164,11 @@ def general_flows(r, watch):
                 b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
                 r.check("the mock preview follows card selection and ordering immediately", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .ov-stats > .stat')].map(el=>el.dataset.overviewCard).join()==='tokens_out,state,designs' && document.querySelector('dialog .overview-layout-preview [data-overview-card=tokens_out] .big').textContent!=='—'"))
                 r.dialog_button("Cancel")
+                page()
                 r.check("Cancel leaves saved and displayed layout untouched", json.loads(r.api(path)["body"])["layout"] == defaults and len(layout()["stats"]) == 5)
                 b.js(stub, [name, other])
                 page()
-                r.button("Layout", ".overview-layout-toolbar")
+                open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
                 action("Remove Objective")
                 action("Remove Models and agents")
@@ -183,7 +190,8 @@ def general_flows(r, watch):
                 r.check("a failed save keeps the editor and draft open", b.js("return document.querySelector('dialog.overview-layout-dialog[open] [data-layout-list=stats] li select').value === 'tokens_out'") and json.loads(r.api(path)["body"])["layout"] == defaults)
                 b.js("window.__overviewSaveFails=false; return 1")
                 r.dialog_button("Save")
-                b.wait("!document.querySelector('dialog.overview-layout-dialog') && document.querySelector('.ov-stats > [data-overview-card=tokens_out]')", what="saved custom Overview")
+                b.wait("!document.querySelector('dialog.overview-layout-dialog')", what="saved custom Overview")
+                page()
                 r.check("Save applies selected cards in their chosen columns and order", layout() == expected)
                 r.check("hiding and moving cards keeps failure notices visible", b.js("return document.querySelector('.why-failed')?.textContent.includes('Fixture failure notice')"))
                 page(other)
@@ -209,26 +217,28 @@ def general_flows(r, watch):
                 r.check("Defaults can be cancelled without overwriting saved choices", json.loads(r.api(path)["body"])["layout"] == expected)
                 page()
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
-                r.button("Layout", ".overview-layout-toolbar")
+                open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
-                r.check("the editor fits narrow screens", b.js("const d=document.querySelector('dialog.overview-layout-dialog'); return d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().right<=innerWidth"))
+                r.check("the editor fits narrow screens", b.js("const d=document.querySelector('dialog.overview-layout-dialog'); const e=d.querySelector('.overview-layout-editor'); return d.scrollWidth<=d.clientWidth+1 && d.getBoundingClientRect().right<=innerWidth && e.scrollWidth<=e.clientWidth+1 && [...e.querySelectorAll('select')].every(s=>s.getBoundingClientRect().width>80)"))
                 r.dialog_button("Cancel")
+                page()
                 r.check("custom cards fit narrow screens", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
-                r.button("Layout", ".overview-layout-toolbar")
+                open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
                 r.dialog_button("Defaults")
                 r.dialog_button("Save")
-                b.wait("!document.querySelector('dialog.overview-layout-dialog') && document.querySelector('.ov-stats > [data-overview-card=objective]')", what="default layout saved")
+                b.wait("!document.querySelector('dialog.overview-layout-dialog')", what="default layout saved")
+                page()
                 r.check("saved Defaults restores the original arrangement", json.loads(r.api(path)["body"])["layout"] == defaults)
                 b.js("""const normal = window.fetch;
                   window.fetch=(u,o)=>new URL(String(u),location.href).pathname==='/api/preferences/overview' && (!o?.method || o.method==='GET')
                     ? new Promise(resolve=>{window.__releaseOverview=()=>normal(u,o).then(response=>{resolve(response);});}) : normal(u,o); return 1;""")
-                r.button("Layout", ".overview-layout-toolbar")
+                open_editor()
                 b.wait("typeof window.__releaseOverview==='function'", what="delayed layout load")
-                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave a pending layout request")
+                r.page("#/", "document.querySelector('#main h1')?.textContent==='Loops'", "leave a pending layout request")
                 b.ajs("const done=arguments[arguments.length-1]; window.__releaseOverview().then(()=>setTimeout(()=>done(true),50))")
-                r.check("a late layout request cannot open an editor on another page", b.js("return !document.querySelector('dialog.overview-layout-dialog') && document.querySelector('#main h1').textContent==='Account'"))
+                r.check("a late layout request cannot open an editor on another page", b.js("return !document.querySelector('dialog.overview-layout-dialog') && document.querySelector('#main h1').textContent==='Loops'"))
                 r.clean("Overview layout")
                 b.js("window.fetch=window.__overviewFetch; return 1")
                 r.login("cy")
@@ -256,8 +266,10 @@ def general_flows(r, watch):
             data = {"campaign": "fixture", "objectives": "Minimize latency", "stages": ["bench"], "passes": [], "notes": [],
                     "designs": [design(1, {"latency": 8, "score": 120}), design(2, {"latency": 9, "score": 110}),
                                 design(0, {"latency": 10, "score": 100}, True)],
-                    "metrics": ["latency", "score", "missing"], "total": 3, "counts": {"accepted": 2, "pending": 0, "failed": 0},
-                    "limits": [], "objective_list": [{"metric": "latency", "direction": "minimize"}], "metric_info": {}, "metric_groups": {}}
+                    "metrics": ["score", "latency", "missing"], "total": 3, "counts": {"accepted": 2, "pending": 0, "failed": 0},
+                    "limits": [{"metric": "score", "direction": "maximize", "goal": 100}],
+                    "objective_list": [{"metric": "score", "direction": "maximize", "goal": 100},
+                                       {"metric": "latency", "direction": "minimize"}], "metric_info": {}, "metric_groups": {}}
             data["decision_measurements"] = measurement_summary(data, data["designs"][0])
             summary = {"designs": 3, "accepted": 2, "metrics": data["metrics"], "best": {"design": f"{name}#1", "metric": "latency",
                        "value": 8, "stage": "bench", "measurements": data["decision_measurements"]}}
@@ -276,6 +288,12 @@ def general_flows(r, watch):
             try:
                 def page(path, ready):
                     r.page(f"#/app/{name}" + (f"/{path}" if path else ""), ready, path or "Overview")
+                page("", "document.querySelector('.decision-nums')")
+                r.check("Overview defaults to the goal-free ranking metric instead of an earlier constraint", b.js("return document.querySelectorAll('.decision-nums [data-summary-metric]').length === 1 && document.querySelector('.decision-nums [data-summary-metric=latency] .big').textContent === '8'"))
+                page("results", "document.querySelector('.decision-line')")
+                r.check("Results summary defaults to the goal-free ranking metric", b.js("return document.querySelectorAll('.decision-line [data-summary-metric]').length === 1 && document.querySelector('.decision-line [data-summary-metric=latency]').textContent === 'latency 8'"))
+                page("results/graphs", "document.querySelector('svg.best-chart')")
+                r.check("default chart follows the ranking metric without a goal", b.js("return [...document.querySelectorAll('.chips button.on')].some(b => b.textContent === 'latency') && ![...document.querySelectorAll('.chips button.on')].some(b => b.textContent === 'score')"))
                 page("settings", "document.querySelector('.measurement-options')")
                 r.check("Measurements distinguishes visible, main and percentage choices", b.js("return document.querySelectorAll('.measurement-options tbody tr').length === 3 && document.querySelector('input[data-main-metric=latency]').checked && !document.querySelector('input[data-main-metric=score]').checked"))
                 b.click("input[data-main-metric=latency]")

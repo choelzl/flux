@@ -6,7 +6,7 @@ import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
+import { defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -168,7 +168,7 @@ function resultsView(ctx, r) {
   let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
   let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
   const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
-  let tMetrics = new Set(restoredMetrics && (!graphPrefs.metrics.length || restoredMetrics.length) ? restoredMetrics : mainMeasurements(ctx, nums, nums.slice(0, 1)));
+  let tMetrics = new Set(restoredMetrics && (!graphPrefs.metrics.length || restoredMetrics.length) ? restoredMetrics : mainMeasurements(ctx, nums, defaultMainMeasurements(r, nums)));
   let view = "results";
   const paretoBox = h("div", {}), timeBox = h("div", {});
   const resultsDetail = h("div", {}, detail), graphsDetail = h("div", {});
@@ -233,7 +233,7 @@ function resultsView(ctx, r) {
   const decisionLine = h("div", { class: "decision-line" }, dec
     ? [h("span", { class: "pill ok" }, "★ decision"), nameBtn(dec), dec.part ? h("span", { class: "muted" }, `part ${dec.part}`) : "",
       h("span", { class: "muted" }, `measured at ${dec.shown}`),
-      ...mainMeasurements(ctx, r.metrics, r.metrics.slice(0, 1)).map(m => {
+      ...mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
         return h("span", { class: "mono small", "data-summary-metric": m, title: display.title }, `${m} ${display.text || "—"}`);
       })]
