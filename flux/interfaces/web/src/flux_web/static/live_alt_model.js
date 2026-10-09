@@ -33,9 +33,35 @@ export function taskScope(model, pass = "current") {
 
 export function currentTask(rows) {
   const nodes = rows.map(r => r.node), active = nodes.filter(n => n.t1 == null);
-  return active.filter(n => /^agent:/.test(n.name)).at(-1)
-    || active.filter(n => !n.kids.some(k => k.t1 == null)).at(-1)
-    || active.at(-1) || nodes.filter(n => !n.kids.length).at(-1) || nodes.at(-1) || null;
+  const latest = (items, ended = false) => items.reduce((best, n) => !best || (ended ? n.t1 ?? n.t0 : n.t0) >= (ended ? best.t1 ?? best.t0 : best.t0) ? n : best, null);
+  return latest(active.filter(n => /^agent:/i.test(n.name)))
+    || latest(active.filter(n => !n.kids.some(k => k.t1 == null)))
+    || latest(active) || latest(nodes.filter(n => !n.kids.length), true) || latest(nodes, true);
+}
+
+export const taskState = n => n.t1 == null ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done";
+
+// Keep the ancestry of matches so a tool or agent still has a readable work context.
+export function filterTasks(rows, query = "", status = "all") {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean), included = new Set(), matches = new Set();
+  const ids = new Set(rows.map(r => r.node.id));
+  for (const { node } of rows) {
+    const text = [node.name, node.why, node.params?.command].filter(Boolean).join(" ").toLowerCase();
+    if ((status === "all" || taskState(node) === status) && words.every(w => text.includes(w))) {
+      matches.add(node.id);
+      for (let p = node; p && ids.has(p.id); p = p.parent) included.add(p.id);
+    }
+  }
+  return rows.filter(r => included.has(r.node.id)).map(r => ({ ...r, context: !matches.has(r.node.id) }));
+}
+
+// Recent tasks first in long journals, without dropping the selected task or its ancestors.
+export function taskWindow(rows, limit, selected) {
+  const recent = rows.slice().sort((a, b) => a.node.t0 - b.node.t0 || Number(a.node.id) - Number(b.node.id)).slice(-limit);
+  const included = new Set(recent.map(r => r.node.id));
+  if (rows.some(r => r.node.id === selected)) included.add(selected);
+  for (let i = rows.length - 1; i >= 0; i--) if (included.has(rows[i].node.id) && rows[i].parent != null) included.add(rows[i].parent);
+  return rows.filter(r => included.has(r.node.id));
 }
 
 export function campaignForStart(history, start) {

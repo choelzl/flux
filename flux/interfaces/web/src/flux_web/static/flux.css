@@ -751,8 +751,22 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-selectors select { max-width: 15em; min-width: 0; }
 .alt-split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
 .alt-split > .card { min-width: 0; }
+.alt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; }
+.alt-count { font-size: 11px; color: var(--muted); }
+.alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.interrupted { color: var(--warn); }
+.alt-task-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.alt-task-tools input { flex: 1 1 180px; min-width: 0; width: 100%; }
+.alt-task-tools select { max-width: 100%; }
+.alt-detail-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.alt-task-position { flex: 1; text-align: center; }
 .alt-visual { overflow: auto; max-height: 74vh; }
-.alt-task { display: flex; width: 100%; align-items: center; gap: 8px; padding: 9px 8px 9px calc(8px + min(var(--depth), 8) * 14px); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; }
+.alt-pass-heading { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 10px 8px 6px; margin: 0; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.alt-tree-row { display: flex; align-items: stretch; padding-left: calc(min(var(--depth), 8) * 14px); border-bottom: 1px solid var(--line); }
+.alt-fold, .alt-fold-space { flex: 0 0 24px; width: 24px; }
+.alt-fold { border: 0; padding: 4px; border-radius: 0; background: transparent; color: var(--muted); }
+.alt-task { display: flex; width: 100%; align-items: center; gap: 8px; padding: 9px 8px; border: 0; border-radius: 0; text-align: left; }
+.alt-tree-row.context .alt-task-name, .alt-graph .rg-row.context .rg-nm { color: var(--muted); }
+.alt-tree-row .alt-task { min-width: 0; }
 .alt-task.sel { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 3px 0 var(--accent); }
 .alt-task-state { color: var(--ok); }
 .alt-task.failed .alt-task-state { color: var(--bad); }
@@ -761,12 +775,22 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-task-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .alt-task-name small { display: block; font-weight: normal; }
 .alt-task > .mono { flex-shrink: 0; }
+.alt-graph .tasks-drawing { padding: 10px; box-shadow: none; margin-bottom: 10px; }
+.alt-graph .rg-nm { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.alt-graph .rg-branch, .alt-graph .rg-st, .alt-graph .rg-dur { flex-shrink: 0; }
+.alt-graph .rg-row.interrupted .rg-st { color: var(--warn); }
 .alt-time-task { cursor: pointer; }
-.alt-time-task.sel .bar, .alt-time-task:focus .bar { stroke: var(--ink); stroke-width: 2; }
+.alt-time-task:focus { outline: none; }
+.alt-time-task.sel .bar, .alt-time-task:focus-visible .bar { stroke: var(--ink); stroke-width: 2; }
+.alt-time-task.context { opacity: .45; }
+.alt-bar-label { fill: white; font: 11px var(--mono); pointer-events: none; paint-order: stroke; stroke: #0005; stroke-width: 2px; }
+.alt-more { margin-top: 10px; }
+svg.gantt .bar.interrupted { stroke: var(--warn); stroke-dasharray: 4 3; }
 .alt-detail { max-height: 74vh; padding-bottom: 12px; }
 .alt-detail .facts:empty { display: none; }
 .alt-detail .task-inspector .kv { grid-template-columns: minmax(70px, 100px) minmax(0, 1fr); }
 .alt-detail .task-inspector .val { overflow-wrap: anywhere; }
+.alt-detail .inspector-input { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 12px; }
 @media (max-width: 960px) { .alt-split { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .alt-selectors { width: 100%; margin-left: 0; } .alt-selectors label { flex: 1 1 100%; } .alt-selectors select { flex: 1; width: 100%; } }
 .attach { display: grid; gap: 8px; }

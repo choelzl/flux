@@ -17,7 +17,7 @@ def evaluate(events, expression):
     script = """const LT = require(process.argv[1]);
 const events = JSON.parse(require('fs').readFileSync(0, 'utf8')), model=LT.model();
 for (const event of events) LT.apply(model, event);
-import(process.argv[2]).then(({taskScope, currentTask, taskPass, campaignForStart}) => {
+import(process.argv[2]).then(({taskScope, currentTask, taskPass, campaignForStart, filterTasks, taskState, taskWindow}) => {
   process.stdout.write(JSON.stringify(EXPRESSION));
 });""".replace("EXPRESSION", expression)
     result = subprocess.run(["node", "-e", script, str(STATIC / "looptree.js"), uri],
@@ -75,3 +75,37 @@ def test_resumed_start_does_not_select_a_future_or_other_records_campaign():
     history["campaigns"].append({"run_id": 1, "campaign_id": "slow-setup", "created_at": "1970-01-01T00:02:10Z"})
     literal = json.dumps(history)
     assert evaluate([], f"campaignForStart({literal}, {literal}.starts[0]).campaign_id") == "slow-setup"
+
+
+def test_task_filters_keep_context_and_match_commands_without_searching_large_prompts():
+    events = [start(1, 1), start(2, 2, parent=1, name="agent: claude", prompt="secret unrelated prompt"),
+              start(3, 3, parent=2, name="tool:python3", command="python3 check.py"), end(3, 4),
+              start(4, 5, name="test: other")]
+    got = evaluate(events, "filterTasks(taskScope(model,'all').rows, 'PYTHON3 check.py', 'done').map(r=>[r.node.id,r.depth,r.context])")
+    assert got == [[1, 0, True], [2, 1, True], [3, 2, False]]
+    assert evaluate(events, "filterTasks(taskScope(model,'all').rows,'unrelated').length") == 0
+    assert evaluate(events, "filterTasks(taskScope(model,'all').rows,'python3','failed').length") == 0
+
+
+def test_interrupted_is_a_separate_filter_from_failed_and_stderr_does_not_fail_a_tool():
+    events = [start(1, 1, name="tool: good"), {**end(1, 2), "output": {"exit": 0, "stderr": "DEBUG diagnostic"}},
+              start(2, 3, name="tool: bad"), {**end(2, 4), "output": {"exit": 1}},
+              start(3, 5, name="tool: interrupted")]
+    got = evaluate(events, "(() => { LT.settle(model,6); const rows=taskScope(model,'all').rows; return {states:rows.map(r=>taskState(r.node)),failed:filterTasks(rows,'','failed').map(r=>r.node.id),interrupted:filterTasks(rows,'','interrupted').map(r=>r.node.id)}; })()")
+    assert got == {"states": ["done", "failed", "interrupted"], "failed": [2], "interrupted": [3]}
+
+
+def test_recent_task_window_retains_ancestors_and_an_older_pinned_task():
+    events = [start(1, 1), start(2, 2, parent=1), start(3, 3, parent=2)]
+    events += [start(i, i, parent=1, name="tool: test") for i in range(4, 250)]
+    got = evaluate(events, "(() => { const rows=taskScope(model,'all').rows; return {recent:taskWindow(rows,2).map(r=>r.node.id),pinned:taskWindow(rows,2,3).map(r=>r.node.id),all:taskWindow(rows,300,3).length}; })()")
+    assert got == {"recent": [1, 248, 249], "pinned": [1, 2, 3, 248, 249], "all": 249}
+
+
+def test_parallel_branches_use_time_rather_than_tree_order_for_recent_and_current_tasks():
+    events = [start(1, 1), start(2, 2, name="tool: old"), end(2, 3),
+              start(3, 10, parent=1, name="agent: older"), start(4, 12, parent=1, name="agent: latest")]
+    got = evaluate(events, "(() => { const rows=taskScope(model,'all').rows; return {recent:taskWindow(rows,2).map(r=>r.node.id),current:currentTask(rows).id}; })()")
+    assert got == {"recent": [1, 3, 4], "current": 4}
+    events += [end(4, 15), end(3, 20), end(1, 21)]
+    assert evaluate(events, "currentTask(taskScope(model,'all').rows).id") == 3

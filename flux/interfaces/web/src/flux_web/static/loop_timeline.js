@@ -2,12 +2,8 @@
 
 import { api, card, dur, empty, enc, h } from "./ui.js";
 import { sv } from "./charts.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel as label } from "./work_style.js";
 
-// Stable work colours; one colour is reserved for agent activity in every category.
-const COLORS = { setup: "#8f9aa6", plan: "#c98a56", search: "#d9b440", design: "#5b8def",
-  check: "#4fb286", measure: "#48b3c9", choose: "#e8804f", critic: "#a3c956" };
-const AGENT_COLOR = "#d45eae";
-const label = (kind) => kind[0].toUpperCase() + kind.slice(1);
 const percent = (share) => `${(share * 100).toFixed(share < 0.1 ? 1 : 0)}%`;
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).

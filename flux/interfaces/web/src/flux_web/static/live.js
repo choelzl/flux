@@ -545,7 +545,6 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
   }
   let detailTab = "";
   function drawDetail(now) {
-    if (!selected) { detail.replaceChildren(empty("Select a task.")); return; }
     const n = selected;
     const fullscreen = detail.closest(".fullscreen-content");
     const visible = el => el.getClientRects().length && !el.closest("details:not([open])");
@@ -557,9 +556,11 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       for (const el of detail.querySelectorAll("[data-k]")) {
         if (visible(el)) place.blocks.set(el.dataset.k, scrollState(el));
       }
+      place.folds = new Map([...detail.querySelectorAll("details[data-fold]")].map(el => [el.dataset.fold, el.open]));
       detailPlaces.set(detail.dataset.view, place);
       if (detailPlaces.size > 40) detailPlaces.delete(detailPlaces.keys().next().value);
     }
+    if (!selected) { delete detail.dataset.view; delete detail.dataset.task; detail.replaceChildren(empty("Select a task.")); return; }
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
       const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
@@ -617,10 +618,12 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
       ...(unifiedDetail ? [h("div", { class: "task-inspector" },
-        block("Input", n.params),
+        !isAgent ? block("Input", n.params) : "",
         isAgent ? agentView(n, now) : isTool ? toolView(n, now) : h("div", {}, block("Live output", n.fields), block("Output", n.output)),
         isAgent && (f.stdout ?? f["stdout (live tail)"]) ? h("section", { class: "astream" }, h("h3", {}, "stdout"),
           h("pre", { class: "val astream-body", "data-k": "stdout" }, f.stdout ?? f["stdout (live tail)"])) : "",
+        isAgent && has(n.params) ? h("details", { class: "inspector-input", "data-fold": "input", open: place?.folds?.get("input") || false },
+          h("summary", {}, "Prompt & input"), block("Input", n.params)) : "",
         !has(n.params) && !has(n.fields) && !has(n.output) ? h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "No additional task data recorded.") : "")]
         : [leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more.")]));
     for (const el of detail.querySelectorAll("[data-k]")) {
