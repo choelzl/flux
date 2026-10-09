@@ -3,9 +3,9 @@
 
 import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
-import { bestChart, designPoints, groupList, num4 } from "./charts.js";
+import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { designLabels, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeToggle, verdictBadge } from "./result_table.js";
+import { designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -65,10 +65,10 @@ function topDesigns(ctx, r, n) {
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
-        ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
+        ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "configured" ? relativeMeasurement(ctx, m) : surface.dataset.values === "relative");
           return h("td", { class: `num mono${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
   }
-  const relative = relativeToggle(surface, drawRows);
+  const relative = relativeToggle(surface, drawRows, ctx);
   surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), columns.controls, relative),
     h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, head, rows)));
   drawRows();
@@ -78,13 +78,17 @@ function topDesigns(ctx, r, n) {
     does not meet; it is what the next pass can refine, not the answer. */
 function closestCard(ctx, r) {
   const c = r.closest;
+  const candidate = r.designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } };
+  const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
+  const comparison = measurementComparison(r.designs, directions);
   return card("Decision", [
     h("p", { class: "decision-head" }, h("strong", {}, "No feasible design yet"), h("span", { class: "pill warn" }, "no design meets every requirement")),
     h("div", { class: "decision-head" }, h("small", { class: "muted" }, "Closest candidate "), h("span", { class: "mono strong" }, c.name),
       h("span", { class: "muted" }, `measured at ${c.shown}`)),
-    h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => c.numbers[m] != null).slice(0, 6).map(m => {
+    h("div", { class: "decision-nums" }, mainMeasurements(ctx, r.metrics || [], (r.metrics || []).slice(0, 1)).map(m => {
       const lim = (r.limits || []).find(l => l.metric === m);
-      return h("div", { class: "num-cell" }, h("small", {}, m), h("div", { class: "big mono" }, num4(c.numbers[m])),
+      const display = measurementText(candidate, m, comparison, num4, relativeMeasurement(ctx, m));
+      return h("div", { class: "num-cell", "data-summary-metric": m, title: display.title }, h("small", {}, m), h("div", { class: "big mono" }, display.text || "—"),
         lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
     })),
     c.reasons.length ? h("ul", { class: "misses" }, c.reasons.map(w => h("li", {}, w))) : "",
@@ -100,7 +104,10 @@ async function overview(ctx) {
     api(`/apps/${enc(name)}/workbench${qs}`).catch(() => []), api(`/apps/${enc(name)}/usage${qs}`).catch(() => null)]);
   const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
   const unit = measurementUnitsFor(r);
-  const objs = (r.objective_list || []).slice(0, 2);
+  const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
+  const main = mainMeasurements(ctx, r.metrics || [], (r.metrics || []).slice(0, 1));
+  const comparison = measurementComparison(designs, directions);
+  const objs = main.map(metric => ({ ...directions.find(o => o.metric === metric), metric, direction: directionOf(metric, directions) }));
   const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
     h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
   const decisionCard = dec ? card("Decision", [
@@ -108,11 +115,12 @@ async function overview(ctx) {
         h("span", { class: "muted" }, `measured at ${dec.shown}`)),
       // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
       r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Chosen as "), r.decided_by, ".") : "",
-      h("div", { class: "decision-nums" }, (r.metrics || []).filter(m => dec.numbers[m] != null).slice(0, 6).map(m => {
+      h("div", { class: "decision-nums" }, main.map(m => {
         const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
+        const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num4, relativeMeasurement(ctx, m));
         return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : ""),
-          title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, m),
-          h("div", { class: "big mono" }, num4(dec.numbers[m])), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
+          "data-summary-metric": m, title: `${display.title}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, m),
+          h("div", { class: "big mono" }, display.text || "—"), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
       })),
       dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
       topDesigns(ctx, r, 3)],
@@ -148,7 +156,7 @@ async function overview(ctx) {
       bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
         h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
         b.first ? h("div", { class: "first" }, b.first) : "")))) : ""),
-      h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("The objective has no number to chart.")),
+      h("div", { class: "col" }, card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("Select a main metric in Settings → Measurements to chart.")),
         lastPass(ctx, r))));
 }
 

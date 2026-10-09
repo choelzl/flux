@@ -6,7 +6,7 @@ import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { designLabels, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
+import { designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -48,7 +48,7 @@ function resultsView(ctx, r) {
   const comparison = measurementComparison(r.designs, directions);
   const labels = measurementLabels(r.metrics, metricGroups);
   const names = designLabels(r.designs, name);
-  const relativeButton = relativeToggle(table, () => drawTable());
+  const relativeButton = relativeToggle(table, () => drawTable(), ctx);
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
   const columns = measurementColumns(ctx, r.metrics, () => {
     if (r.metrics.includes(sortKey) && !columns.visible().includes(sortKey)) sortKey = null;
@@ -113,6 +113,7 @@ function resultsView(ctx, r) {
       sortFocus = key; drawTable();
     } }, labels.get(key) || label, h("span", { class: "th-arrow", "aria-hidden": "true" }, sortKey === key ? (sortDir > 0 ? "▴" : "▾") : ""));
   function drawTable() {
+    const formats = preferences.read();
     const all = sorted(visibleRows());
     const metrics = columns.visible();
     const shown = all.slice(0, pageN);
@@ -143,7 +144,7 @@ function resultsView(ctx, r) {
           d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...metrics.map(m => { const ok = d.meets[m];
-          const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
+          const display = measurementText(d, m, comparison, fmt, table.dataset.values === "configured" ? relativeMeasurement(ctx, m, false, formats) : table.dataset.values === "relative");
           return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
@@ -168,7 +169,7 @@ function resultsView(ctx, r) {
   let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
   let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
   const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
-  let tMetrics = new Set(restoredMetrics && (!graphPrefs.metrics.length || restoredMetrics.length) ? restoredMetrics : nums.slice(0, 2));
+  let tMetrics = new Set(restoredMetrics && (!graphPrefs.metrics.length || restoredMetrics.length) ? restoredMetrics : mainMeasurements(ctx, nums, nums.slice(0, 1)));
   let view = "results";
   const paretoBox = h("div", {}), timeBox = h("div", {});
   const resultsDetail = h("div", {}, detail), graphsDetail = h("div", {});
@@ -233,7 +234,10 @@ function resultsView(ctx, r) {
   const decisionLine = h("div", { class: "decision-line" }, dec
     ? [h("span", { class: "pill ok" }, "★ decision"), nameBtn(dec), dec.part ? h("span", { class: "muted" }, `part ${dec.part}`) : "",
       h("span", { class: "muted" }, `measured at ${dec.shown}`),
-      ...r.metrics.filter(m => dec.numbers[m] != null).slice(0, 4).map(m => h("span", { class: "mono small" }, `${m} ${fmt(dec.numbers[m])}`))]
+      ...mainMeasurements(ctx, r.metrics, r.metrics.slice(0, 1)).map(m => {
+        const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
+        return h("span", { class: "mono small", "data-summary-metric": m, title: display.title }, `${m} ${display.text || "—"}`);
+      })]
     : r.closest ? [h("strong", {}, "No feasible design yet"), h("span", { class: "muted" }, "· closest"), near ? nameBtn(near) : h("span", { class: "mono" }, r.closest.name),
       (r.closest.reasons || []).length ? h("span", { class: "muted small" }, `not met: ${r.closest.reasons.join("; ")}`) : ""]
     : h("span", { class: "muted" }, "No decision yet."));

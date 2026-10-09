@@ -463,7 +463,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     measurements use green/red text for limits, without extra checkmarks. Full names, stages, times, units and limit status
     remain on hover. Measurement headers use short diagonal labels that preserve the start and end
     of long names, with edge space to prevent clipping; Results headers still sort.
-    Open **Settings › Preferences › Measurements** and uncheck metrics to hide their columns.
+    Open **Settings › Preferences › Measurements** and uncheck **Visible** to hide metric columns.
     **Hidden N** at the top toggles the ignored columns into view, dimmed, without changing
     your selections. Check a metric to restore it permanently. Column visibility and the toggle
     are shared between Results and Decision and
@@ -473,6 +473,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     to unroll every test into grouped subcolumns. These choices are shared between Results and
     Decision and remembered in this browser. Tests omitted or reported as null, empty or NaN
     stay unmeasured; they do not become zero.
+  - **Main measurements:** in the same settings table, check **Main** for the metrics shown in
+    loop lists and decision summaries. The first metric is the default; select several, or none.
+    Main metrics also seed new chart selections; manually selected graphs keep their saved choices.
+    Check **%** to show a metric as percent change from its baseline/reference instead of an
+    absolute value. These preferences are saved per account and loop in this browser and do not
+    change objectives, limits or ranking. Dictionary tests and parent aggregates can be selected
+    independently. Missing values or an undefined percentage display as —.
   - **Graph preferences:** selected measurements, Pareto x/y axes, measurement stages and design
     scope are remembered per account and loop in this browser. If a saved metric or stage is no
     longer available, the view uses its defaults.
@@ -483,6 +490,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     running tools. They supply graph and relative-value references and are never selected as a
     design. Unchanged values are reused on restart; edited values create a new reference.
   - **Absolute / Relative (%):** Results and Overview's Decision table share a remembered toggle.
+    After setting individual percentages, **Per metric** uses those choices; cycle the button to
+    temporarily show all values as **Absolute** or **Relative (%)**, then back to **Per metric**.
     Relative shows percent change from the latest baseline for the same metric, stage and design
     group (baseline = 0%; a value 30% lower = −30%). Without a matching baseline, it uses that
     group's P90 performance at that stage, using accepted designs across the full results set:

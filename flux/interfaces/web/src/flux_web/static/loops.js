@@ -6,6 +6,7 @@ import { codeBlock, codeEditor } from "./highlight.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
 import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
+import { mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
@@ -200,9 +201,14 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
       h("td", { class: "muted" }, lastSaid(l)),
       h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
         sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
-      h("td", { class: "mono" }, sm.best ? h("span", { class: sm.best.meets === false ? "misses" : sm.best.meets === true ? "meets" : "",
-        title: `the decision, ${sm.best.design}` }, h("span", { class: "muted" }, sm.best.metric + " "), num4(sm.best.value),
-        sm.best.meets === true ? " ✓" : sm.best.meets === false ? " ✗" : "") : ""),
+      h("td", { class: "mono loop-main-measurements" }, sm.best ? mainMeasurements({ name, owner },
+        sm.metrics || Object.keys(sm.best.measurements || { [sm.best.metric]: sm.best.value }), [sm.best.metric]).map(metric => {
+          const measurement = sm.best.measurements?.[metric] || (metric === sm.best.metric ? sm.best : { value: null });
+          const display = measurementText({ shown: sm.best.stage || "" }, metric, () => measurement, num4, relativeMeasurement({ name, owner }, metric));
+          return h("div", { class: measurement.meets === false ? "misses" : measurement.meets === true ? "meets" : "",
+            "data-summary-metric": metric, title: `the decision, ${sm.best.design} · ${display.title}` },
+            h("span", { class: "muted" }, metric + " "), display.text || "—");
+        }) : ""),
       h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
   }, who ? 3 : 2, { cls: "list" });                     // newest activity first (D926)
   return h("div", {}, t.strip, t);

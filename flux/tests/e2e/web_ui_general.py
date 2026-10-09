@@ -56,6 +56,126 @@ def edit(r, text):
 def general_flows(r, watch):
     b = r.b
 
+    def selected_problem():
+        with loop(r, "ui-selected-problem") as name:
+            put(r, name, "alternate.problem.yaml", DOCUMENT.replace("General browser regression", "Alternate problem"))
+            b.js("""window.__problemFetch = window.fetch; window.__selectedProblem = 'problem.yaml';
+              window.__problemStarts = [];
+              const base = '/api/apps/' + arguments[0];
+              window.fetch = async (u, o) => {
+                const path = new URL(String(u), location.href).pathname;
+                const reply = data => new Response(JSON.stringify(data), {headers:{'Content-Type':'application/json'}});
+                if (path === base + '/check') return reply({ok:true, output:''});
+                if (path === base + '/start') {
+                  const options = JSON.parse(o.body); window.__problemStarts.push(options);
+                  window.__selectedProblem = options.document; return reply({ok:'Started'});
+                }
+                const response = await window.__problemFetch(u, o);
+                if (path === base + '/state' || path === base + '/preflight') {
+                  const data = await response.json(); data.document = window.__selectedProblem; return reply(data);
+                }
+                return response;
+              }; return 1;""", name)
+            try:
+                r.page(f"#/app/{name}", "document.querySelector('.page-head .sub .mono')", "selected problem")
+                r.check("the task header initially shows its saved problem", b.js("return document.querySelector('.page-head .sub .mono').textContent === 'problem.yaml'"))
+                r.button("Start", ".page-head")
+                b.wait("document.querySelector('dialog.dlg[open] select')", what="problem picker")
+                r.check("Start defaults to the current problem", b.js("return document.querySelector('dialog.dlg select').value === 'problem.yaml'"))
+                b.js("const pick = document.querySelector('dialog.dlg select'); pick.value = 'alternate.problem.yaml'; pick.dispatchEvent(new Event('change')); return 1")
+                r.dialog_button("Start")
+                b.wait("document.querySelector('.page-head .sub .mono')?.textContent === 'alternate.problem.yaml'", what="new problem in the task header")
+                r.check("starting another problem updates the header without reloading", b.js("return window.__problemStarts.length === 1 && window.__problemStarts[0].document === 'alternate.problem.yaml' && location.hash.endsWith('/live')"))
+                r.button("Start", ".page-head")
+                b.wait("document.querySelector('dialog.dlg[open] select')", what="next problem picker")
+                r.check("the next Start defaults to the newly selected problem", b.js("return document.querySelector('dialog.dlg select').value === 'alternate.problem.yaml'"))
+                r.dialog_button("Cancel")
+                b.js("window.__selectedProblem = 'problem.yaml'; document.dispatchEvent(new Event('visibilitychange')); return 1")
+                b.wait("document.querySelector('.page-head .sub .mono')?.textContent === 'problem.yaml'", what="problem changed by another view")
+                r.check("state refresh also follows problem changes from another view", True)
+                r.clean("selected problem")
+            finally:
+                b.js("window.fetch = window.__problemFetch; return 1")
+
+    r.step("selected problem", selected_problem)
+
+    def main_measurements():
+        from flux_web.results import measurement_summary
+
+        with loop(r, "ui-main-measurements") as name:
+            def design(index, numbers, baseline=False):
+                return {"name": f"{name}#{index}", "base": f"{name}#{index}", "key": str(index), "part": "", "group": "whole",
+                        "baseline": baseline, "decision": index == 1, "closest": False, "rank": index or 3,
+                        "eligible": not baseline, "verdict": "accepted", "pending": False, "why": [], "reasons": [],
+                        "shown": "bench", "stages": {"bench": numbers}, "numbers": numbers, "meets": {},
+                        "first": "2026-10-01T10:00:00Z", "last": "2026-10-01T10:00:00Z"}
+            data = {"campaign": "fixture", "objectives": "Minimize latency", "stages": ["bench"], "passes": [], "notes": [],
+                    "designs": [design(1, {"latency": 8, "score": 120}), design(2, {"latency": 9, "score": 110}),
+                                design(0, {"latency": 10, "score": 100}, True)],
+                    "metrics": ["latency", "score", "missing"], "total": 3, "counts": {"accepted": 2, "pending": 0, "failed": 0},
+                    "limits": [], "objective_list": [{"metric": "latency", "direction": "minimize"}], "metric_info": {}, "metric_groups": {}}
+            data["decision_measurements"] = measurement_summary(data, data["designs"][0])
+            summary = {"designs": 3, "accepted": 2, "metrics": data["metrics"], "best": {"design": f"{name}#1", "metric": "latency",
+                       "value": 8, "stage": "bench", "measurements": data["decision_measurements"]}}
+            b.js("""window.__mainMetricFetch = window.fetch; window.__mainMetricRelative = localStorage.getItem('flux-results-relative');
+              localStorage.setItem('flux-results-relative', 'false');
+              const name = arguments[0], data = arguments[1], summary = arguments[2], app = '/api/apps/' + name;
+              const reply = body => new Response(JSON.stringify(body), {headers:{'Content-Type':'application/json'}});
+              window.fetch = async (u, o) => {
+                const path = new URL(String(u), location.href).pathname;
+                if (path === app + '/results') return reply(data);
+                const response = await window.__mainMetricFetch(u, o);
+                if (path === '/api/apps') return reply((await response.json()).map(row => row.name === name ? {...row, summary} : row));
+                if (path !== app && path !== app + '/state') return response;
+                const body = await response.json();
+                return reply(path === app ? {...body, state:{...body.state, last_active:1000}} : {...body, last_active:1000});
+              }; return 1;""", name, data, summary)
+            try:
+                def page(path, ready):
+                    r.page(f"#/app/{name}" + (f"/{path}" if path else ""), ready, path or "Overview")
+                page("settings", "document.querySelector('.measurement-options')")
+                r.check("Measurements distinguishes visible, main and percentage choices", b.js("return document.querySelectorAll('.measurement-options tbody tr').length === 3 && document.querySelector('input[data-main-metric=latency]').checked && !document.querySelector('input[data-main-metric=score]').checked"))
+                b.click("input[data-main-metric=latency]")
+                b.click("input[data-main-metric=score]")
+                b.click("input[data-relative-metric=score]")
+                page("", "document.querySelector('.decision-nums')")
+                r.check("Overview shows only selected main metrics with baseline percentages", b.js("const nums = document.querySelector('.decision-nums'); return nums.querySelectorAll('[data-summary-metric]').length === 1 && nums.querySelector('[data-summary-metric=score] .big').textContent === '+20%'"))
+                page("results", "document.querySelector('table.designs')")
+                b.wait("document.querySelector('table.designs tbody td[data-label=score]')", what="metric cell labels")
+                r.check("Results keeps all columns while respecting each metric's display", b.js("return document.querySelectorAll('th.measurement-head').length === 3 && document.querySelector('.decision-line [data-summary-metric=score]').textContent === 'score +20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '+20%'"))
+                b.click(".relative-values")
+                r.check("Absolute temporarily overrides per-metric percentages", b.js("return document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120'"))
+                b.click(".relative-values")
+                b.click(".relative-values")
+                r.check("Per metric restores the individual display settings", b.js("return document.querySelector('.relative-values').textContent === 'Per metric' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '+20%' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8'"))
+                page("results/graphs", "document.querySelector('svg.best-chart')")
+                r.check("new graph selections default to the chosen main metric", b.js("const card = [...document.querySelectorAll('.card')].find(c => c.querySelector('h2')?.textContent === 'Improvement by design'); return [...card.querySelectorAll('.chips button.on')].map(b => b.textContent).join() === 'score'"))
+                r.page("#/", "document.querySelector('.loop-main-measurements [data-summary-metric=score]')", "loop list metrics")
+                r.check("loop lists use the same main metrics and reference", b.js("const row = [...document.querySelectorAll('table.list tbody tr')].find(row => row.querySelector('a')?.textContent === arguments[0]); return row.querySelectorAll('[data-summary-metric]').length === 1 && row.querySelector('[data-summary-metric=score]').textContent === 'score +20%'", name))
+                page("settings", "document.querySelector('.measurement-options')")
+                r.check("main and percentage preferences survive navigation", b.js("return document.querySelector('input[data-main-metric=score]').checked && document.querySelector('input[data-relative-metric=score]').checked && !document.querySelector('input[data-main-metric=latency]').checked"))
+                b.click("input[data-main-metric=latency]")
+                b.click("input[data-relative-metric=latency]")
+                b.click("input[data-main-metric=missing]")
+                page("", "document.querySelector('.decision-nums')")
+                r.check("multiple main metrics support percentage drops and missing values", b.js("const nums = document.querySelector('.decision-nums'); return nums.querySelectorAll('[data-summary-metric]').length === 3 && nums.querySelector('[data-summary-metric=latency] .big').textContent === '-20%' && nums.querySelector('[data-summary-metric=missing] .big').textContent === '—'"))
+                page("settings", "document.querySelector('.measurement-options')")
+                for metric in data["metrics"]:
+                    b.click(f'input[data-main-metric="{metric}"]')
+                page("", "document.querySelector('.decision-nums')")
+                r.check("all main metrics can be disabled without hiding result columns", b.js("return !document.querySelector('.decision-nums [data-summary-metric]') && document.querySelectorAll('.best-n th.measurement-head').length === 3"))
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                page("settings", "document.querySelector('.measurement-options')")
+                r.check("measurement preferences fit phone screens", b.js("return document.documentElement.scrollWidth <= innerWidth + 1 && document.querySelector('.measurement-options').scrollWidth <= document.querySelector('.measurement-options').clientWidth + 1"))
+                r.clean("main measurements")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("""window.fetch = window.__mainMetricFetch;
+                  if (window.__mainMetricRelative === null) localStorage.removeItem('flux-results-relative');
+                  else localStorage.setItem('flux-results-relative', window.__mainMetricRelative); return 1;""")
+
+    r.step("main measurements", main_measurements)
+
     def ideas_notebook():
         with loop(r, "ui-ideas-notebook") as name:
             title = "<img src=x onerror=alert(1)>"
@@ -99,6 +219,96 @@ def general_flows(r, watch):
                 b.js("window.fetch = window.__ideasFetch; return 1")
 
     r.step("ideas notebook", ideas_notebook)
+
+    def ideas_navigation():
+        with loop(r, "ui-ideas-navigation") as name:
+            stub = """window.__ideasNavigationFetch = window.fetch;
+              window.__ideasNavigationData = {campaign:null, ideas:[]}; window.__ideasNavigationDeferred = false;
+              const path = '/api/apps/' + arguments[0] + '/ideas';
+              window.fetch = async (u, o) => {
+                if (new URL(String(u), location.href).pathname !== path) return window.__ideasNavigationFetch(u, o);
+                if (window.__ideasNavigationDeferred) await new Promise(resolve => {window.__ideasNavigationRelease = resolve;});
+                return new Response(JSON.stringify(window.__ideasNavigationData), {headers:{'Content-Type':'application/json'}});
+              }; return 1;"""
+            b.js(stub, name)
+            try:
+                r.page(f"#/app/{name}/results/ideas", "document.querySelector('.ideas-view .empty')", "empty Ideas")
+                r.check("an empty notebook explains how to collect ideas", "No ideas recorded yet" in r.text())
+                b.click(".raw-view")
+                b.wait("document.querySelector('dialog .raw-content')", what="empty raw notebook")
+                r.check("empty Raw is valid JSON", b.js("return JSON.parse(document.querySelector('dialog .raw-content').textContent).ideas.length === 0"))
+                r.button("Close", "dialog.fullscreen-view")
+                b.js("""window.__ideasNavigationData = {campaign:'fixture', ideas:[{id:'idea-zero', part:'', title:'Zero cycles',
+                  hypothesis:'Check a zero-cost candidate', test:'', status:'measured', evaluations:[{pass:null, design:'d#1',
+                  stage:'bench', status:'ok', metrics:{cycles:0}, error:'', at:'2026-10-09T10:00:00Z'}]}]}; return 1;""")
+                r.button("Refresh")
+                b.wait("document.querySelector('.ideas-table')", what="first recorded idea")
+                b.click(".ideas-table summary")
+                r.check("zero measurements display and older trials tolerate missing pass numbers", b.js("return document.querySelector('.idea-evaluations tbody tr').cells[0].textContent === '—' && document.querySelector('.idea-evaluations').textContent.includes('cycles=0')"))
+                b.js("window.__ideasNavigationDeferred = true; return 1")
+                r.button("Refresh")
+                b.wait("!!window.__ideasNavigationRelease", what="delayed notebook request")
+                r.button("Files", "#main .tabs")
+                b.wait("document.querySelector('.files-card')", what="Files while Ideas is delayed")
+                b.ajs("const done = arguments[arguments.length-1]; window.__ideasNavigationRelease(); window.__ideasNavigationDeferred = false; requestAnimationFrame(() => requestAnimationFrame(() => done(true)))")
+                r.check("late notebook responses cannot replace another tab", b.js("return !!document.querySelector('.files-card') && !document.querySelector('.ideas-view')"))
+                r.button("Results", "#main .tabs")
+                b.wait("document.querySelector('.subtabs button')", what="Results subtabs")
+                r.button("Ideas", "#main .subtabs")
+                b.wait("document.querySelector('.ideas-table')", what="return to Ideas")
+                b.click(".fullscreen-button")
+                b.wait("document.querySelector('dialog.fullscreen-view[open]')", what="Ideas fullscreen")
+                r.page(f"#/app/{name}/files", "document.querySelector('.files-card')", "Files from fullscreen")
+                r.check("leaving Ideas closes its fullscreen viewer", b.js("return !document.querySelector('dialog.fullscreen-view')"))
+                r.page(f"#/app/{name}/results/ideas", "document.querySelector('.ideas-table')", "Ideas before reload")
+                b.js("window.__ideasNavigationReload = true; location.reload(); return 1")
+                b.wait("!window.__ideasNavigationReload && document.querySelector('.ideas-view')", what="Ideas deep-link reload")
+                b.js(watch)
+                r.check("Ideas deep links survive a full browser reload", b.js("return location.hash.endsWith('/results/ideas') && document.querySelector('.subtabs .on').textContent === 'Ideas' && !!document.querySelector('.ideas-view .empty')"))
+                r.clean("ideas navigation")
+            finally:
+                b.js("if(window.__ideasNavigationRelease) window.__ideasNavigationRelease(); if(window.__ideasNavigationFetch) window.fetch=window.__ideasNavigationFetch; return 1")
+
+    r.step("ideas navigation", ideas_navigation)
+
+    def ideas_sharing():
+        with loop(r, "UI_Ideas-Shared") as name:
+            shared = r.api(f"/apps/{name}/shares", "PUT", {"user": "cy", "perm": "watch"})
+            r.check("notebook fixture is shared for watching", shared["status"] == 200, shared["body"])
+            r.login("cy")
+            b.js("""window.__sharedIdeasFetch=window.fetch; window.__sharedIdeasCalls=[]; window.__sharedIdeasFail=false;
+              window.__sharedIdeasData={campaign:'fixture',ideas:[{id:'idea-owner',part:'',title:'Owner hypothesis',
+                hypothesis:'Compare two approaches',test:'',status:'proposed',evaluations:[]}]};
+              const path='/api/apps/'+arguments[0]+'/ideas';
+              window.fetch=async(u,o={})=>{
+                const url=new URL(String(u),location.href);
+                if(url.pathname!==path) return window.__sharedIdeasFetch(u,o);
+                window.__sharedIdeasCalls.push({owner:url.searchParams.get('owner'),method:o.method||'GET'});
+                return new Response(JSON.stringify(window.__sharedIdeasFail?{detail:'Temporary notebook error'}:window.__sharedIdeasData),
+                  {status:window.__sharedIdeasFail?503:200,headers:{'Content-Type':'application/json'}});
+              }; return 1;""", name)
+            try:
+                r.page(f"#/u/bob/app/{name}/results/ideas", "document.querySelector('.ideas-table')", "shared Ideas")
+                r.check("watchers' notebook requests name the owner", b.js("return window.__sharedIdeasCalls.length===1 && window.__sharedIdeasCalls[0].owner==='bob' && window.__sharedIdeasCalls[0].method==='GET'"))
+                b.click(".raw-view")
+                b.wait("document.querySelector('dialog .raw-content')", what="shared raw notebook")
+                r.check("watchers can inspect raw owner data", b.js("return JSON.parse(document.querySelector('dialog .raw-content').textContent).ideas[0].id==='idea-owner'"))
+                r.button("Close", "dialog.fullscreen-view")
+                b.js("window.__sharedIdeasFail=true; return 1")
+                r.button("Refresh")
+                b.wait("[...document.querySelectorAll('.toast.bad')].some(t=>t.textContent.includes('Temporary notebook error'))", what="failed notebook refresh")
+                r.check("a failed refresh keeps the current notebook and allows retry", b.js("return document.querySelector('.ideas-table').textContent.includes('Owner hypothesis') && [...document.querySelectorAll('#main button')].some(b=>b.textContent==='Refresh'&&!b.disabled)"))
+                expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad').forEach(t=>t.remove());
+                  window.__sharedIdeasFail=false; window.__sharedIdeasData.ideas[0].title='Updated owner hypothesis'; return bad;""")
+                r.check("the failed refresh produces one clear error notice", expected == ["Temporary notebook error"], expected)
+                r.button("Refresh")
+                b.wait("document.querySelector('.ideas-table').textContent.includes('Updated owner hypothesis')", what="recovered notebook refresh")
+                r.check("refresh recovery keeps all requests scoped to the owner", b.js("return window.__sharedIdeasCalls.length===3 && window.__sharedIdeasCalls.every(c=>c.owner==='bob'&&c.method==='GET')"))
+                r.clean("ideas sharing and refresh recovery")
+            finally:
+                b.js("window.fetch=window.__sharedIdeasFetch; return 1")
+
+    r.step("ideas sharing", ideas_sharing)
 
     def dictionary_metrics():
         with loop(r, "ui-dictionary-metrics") as name:
@@ -157,9 +367,9 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings.fast')", what="grouped table column labels")
                 page("", "document.querySelector('.best-n')")
                 r.check("Decision shares dictionary selection and expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && document.querySelector('.dictionary-select').value === 'timings.slow'"))
-                page("settings", "document.querySelector('.measurement-preferences .column-options')")
+                page("settings", "document.querySelector('.measurement-preferences .measurement-options')")
                 r.check("existing loops open Settings on Preferences", b.js("return document.querySelector('.subtabs [role=tab].on').textContent") == "Preferences")
-                b.click('.column-options input[data-metric="timings.fast"]')
+                b.click('.measurement-options input[data-metric="timings.fast"]')
                 page()
                 r.check("Preferences hides dictionary columns in Results", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 4 && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
                 b.click(".show-hidden-columns")

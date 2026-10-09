@@ -19,6 +19,12 @@ FLUX_E2E_STEPS="reload and browser history,delayed files and retry,concurrent fi
 For Snap Firefox, use a path that Firefox can access, such as one under
 `~/snap/firefox/common/`. No model or coding agent is needed by these flows.
 
+`FLUX_E2E_STEPS="selected problem"` checks the problem picker, the filename below the task
+name after starting another problem, the next start's default, and selections refreshed from
+another view. `test_web_document_selection.py` verifies owner/admin starts use the selected
+YAML and its matching record, update polled state while running and stopped, and leave other
+problem files intact.
+
 `FLUX_E2E_STEPS="login refused,login,upload,run history,live scroll"` checks agent prompt
 viewers for live tasks and older runs, including fullscreen text and retained scroll positions.
 `test_agent_live.py` checks that fresh and resumed agent inputs are saved in full at task start.
@@ -90,11 +96,27 @@ the crafter's dictionary fields. `test_dictionary_metrics.py` covers parsing, in
 configurable aggregates, recording, historical metadata and real loops that rank by a named test
 or the parent mean.
 
+`FLUX_E2E_STEPS="main measurements"` checks Settings' Visible/Main/% choices, loop-list and
+decision summaries, mixed absolute/relative tables, navigation persistence, missing values,
+multiple or no main metrics, and phone layouts. `test_web_measurement_summary.py` verifies
+baseline and percentile references against the browser calculation, zero/negative references,
+nonfinite values, references outside a paged result set, and owner/admin loop summaries.
+
 `FLUX_E2E_STEPS="ideas notebook"` checks the Ideas subtab before measurements exist, literal
 note rendering, pass histories, failed attempts, Raw JSON, fullscreen, narrow screens and refresh.
+`FLUX_E2E_STEPS="ideas navigation"` checks empty notebooks, zero values, missing pass numbers,
+late fetches after navigation, fullscreen cleanup and deep-link reloads.
+`FLUX_E2E_STEPS="ideas sharing"` checks watchers' owner-scoped requests, Raw access, a failed
+refresh that preserves the current view, and a successful retry.
 `test_ideas.py` covers persistence across passes/restarts, pending hypotheses, tool selection,
 agent sidecars and repairs, prototype-to-design links, and real checks and measurements.
-`test_web_ideas.py` checks loop permissions and historical campaign/start boundaries.
+`test_ideas_resilience.py` covers parallel parts, build failures, interruption states, bounded
+prompt memory, baseline exclusion, malformed agent files, and memory fallback when storage fails.
+It also checks durable write retries, read recovery and removal of stale agent sidecars before repairs.
+`test_web_ideas.py` checks read-only access, sharing and revocation, authentication, run isolation,
+historical campaign/start boundaries, and preserving or clearing the notebook on reset.
+`test_web_ideas_lifecycle.py` covers notebook preservation through rename/transfer, independent
+clones, view-as access, share revocation and disabled accounts with existing sessions.
 
 `FLUX_E2E_STEPS="partial agent usage,admin token rates"` also checks that interrupted-agent
 usage is visibly partial and wholly missing usage is shown as unavailable. `test_agent_usage.py`

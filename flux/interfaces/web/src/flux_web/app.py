@@ -212,14 +212,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return {"designs": 0, "accepted": 0}
         # D901: every design, not the first page's -- 1,200 designs were said as 1,000, 1,000 this start
         out: dict[str, Any] = {"designs": got["total"], "accepted": got["counts"]["accepted"],
-                               "this_run": got["this_start"], "feasible": got["feasible"]}
+                               "this_run": got["this_start"], "feasible": got["feasible"], "metrics": got["metrics"]}
         dec = next((d for d in got["designs"] if d["decision"]), None)
         if dec is not None:
             lim = got["limits"][0] if got["limits"] else None
             metric = lim["metric"] if lim else (got["metrics"][0] if got["metrics"] else None)
+            if metric not in dec["numbers"]:
+                metric = next((m for m in got["metrics"] if m in dec["numbers"]), None)
             if metric and metric in dec["numbers"]:
                 out["best"] = {"design": dec["name"], "metric": metric, "value": dec["numbers"][metric],
-                               "meets": dec["meets"].get(metric)}
+                               "meets": dec["meets"].get(metric), "stage": dec["shown"],
+                               "measurements": got["decision_measurements"]}
         return out
 
     def _stages(w: Workspace, name: str) -> list[dict[str, Any]]:

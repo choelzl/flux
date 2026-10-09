@@ -24,6 +24,42 @@ export function resultPreferences(ctx) {
   } };
 }
 
+/** Main summary metrics and individual display choices share the loop's browser preferences. */
+export function mainMeasurements(ctx, metrics, defaults = metrics) {
+  const saved = resultPreferences(ctx).read().mainMetrics;
+  if (!Array.isArray(saved)) return defaults.filter(m => metrics.includes(m));
+  const selected = [...new Set(saved)].filter(m => metrics.includes(m));
+  return saved.length && !selected.length ? defaults.filter(m => metrics.includes(m)) : selected;
+}
+
+export function relativeMeasurement(ctx, metric, fallback = false, preferences = null) {
+  const saved = (preferences || resultPreferences(ctx).read()).relativeMetrics;
+  return typeof saved?.[metric] === "boolean" ? saved[metric] : fallback;
+}
+
+export function measurementPreferences(ctx, metrics, groups = {}) {
+  const prefs = resultPreferences(ctx), columns = measurementColumns(ctx, metrics, () => {}, groups);
+  const main = new Set(mainMeasurements(ctx, metrics, metrics.slice(0, 1)));
+  const table = h("table", { class: "list compact measurement-options" },
+    h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"))),
+    h("tbody", {}, metrics.map(metric => {
+      const visible = columns.picker.querySelector(`input[data-metric="${CSS.escape(metric)}"]`);
+      visible.setAttribute("aria-label", `Show ${metric} column`);
+      const primary = h("input", { type: "checkbox", checked: main.has(metric), "data-main-metric": metric,
+        "aria-label": `Main metric ${metric}`, onchange: () => {
+          if (primary.checked) main.add(metric); else main.delete(metric);
+          prefs.save({ mainMetrics: metrics.filter(m => main.has(m)) });
+        } });
+      const relative = h("input", { type: "checkbox", checked: relativeMeasurement(ctx, metric), "data-relative-metric": metric,
+        "aria-label": `Percent change for ${metric}`, onchange: () => {
+          const saved = prefs.read().relativeMetrics;
+          prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked }, valuesMode: "configured" });
+        } });
+      return h("tr", {}, h("td", { class: "mono", title: metric }, metric), h("td", {}, visible), h("td", {}, primary), h("td", {}, relative));
+    })));
+  return h("div", { class: "scroll-x" }, table);
+}
+
 /** A shared per-loop measurement picker for Results and the Decision table. */
 export function measurementColumns(ctx, metrics, redraw, groups = {}) {
   const prefs = resultPreferences(ctx), preferences = prefs.read(), saved = preferences.hiddenMetrics;
@@ -134,20 +170,25 @@ export function designLabels(designs, appName) {
   }));
 }
 
-export function relativeToggle(surface, redraw) {
+export function relativeToggle(surface, redraw, ctx = null) {
   let relative = false;
   try { relative = localStorage.getItem("flux-results-relative") === "true"; } catch (_) { /* storage may be disabled */ }
+  const prefs = ctx && resultPreferences(ctx), saved = prefs?.read() || {};
+  const configured = saved.relativeMetrics && Object.values(saved.relativeMetrics).some(v => typeof v === "boolean");
+  const modes = configured ? ["configured", "absolute", "relative"] : ["absolute", "relative"];
+  let mode = modes.includes(saved.valuesMode) ? saved.valuesMode : configured ? "configured" : relative ? "relative" : "absolute";
   const button = h("button", { type: "button", class: "small relative-values", "aria-label": "Relative measurements",
-    title: "Percent change from a matching baseline, otherwise P90 performance of accepted designs in the same group and stage (P90 for higher-is-better, P10 for lower-is-better). Hover for the reference and absolute measurement.",
+    title: "Switch between metric settings, absolute values and percent changes. Percent change uses a matching baseline, otherwise P90 performance of accepted designs in the same group and stage. Hover for the reference and absolute measurement.",
     onclick: () => {
-      relative = !relative;
+      mode = modes[(modes.indexOf(mode) + 1) % modes.length]; relative = mode === "relative";
       try { localStorage.setItem("flux-results-relative", String(relative)); } catch (_) { /* use this view */ }
+      if (configured) prefs.save({ valuesMode: mode });
       draw(); redraw();
     } });
   function draw() {
-    surface.dataset.values = relative ? "relative" : "absolute";
-    button.textContent = relative ? "Relative (%)" : "Absolute";
-    button.setAttribute("aria-pressed", String(relative));
+    surface.dataset.values = mode;
+    button.textContent = mode === "configured" ? "Per metric" : mode === "relative" ? "Relative (%)" : "Absolute";
+    button.setAttribute("aria-pressed", String(mode !== "absolute"));
   }
   draw(); return button;
 }

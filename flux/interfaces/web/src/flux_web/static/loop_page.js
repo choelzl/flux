@@ -85,15 +85,6 @@ async function loopPage(name, owner, path = "") {
     } else if (!st.running && canRun && info.document) {
       acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }));
     }
-    if (canRun) {
-      acts.push(act("Check", async () => {
-        const out = h("pre", { class: "log small" }, "Checking in the sandbox…");
-        const d = dialog("Check the document", out, [["Close", null]]);
-        const r = await api(`/apps/${enc(name)}/check`, { method: "POST" });
-        out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
-        await d;
-      }));
-    }
     if (canLeave) acts.push(leaveBtn());
     const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title:
       `You may view this loop${mine ? " and edit it" : ""}${canRun ? " and run it using its owner's credentials and limits" : ""}.` },
@@ -111,6 +102,8 @@ async function loopPage(name, owner, path = "") {
     try { got = await p; } finally { if (refreshing === p) refreshing = null; }
     if (mine !== asked || show.stale()) return;
     st = got;
+    // A start can select another problem; the header and tabs must use its current filename.
+    if ("document" in st) info.document = st.document;
     question = st.question || null;                       // the state says whether the agent still asks
     runEnd();
     drawHead(); drawBanner();
@@ -235,12 +228,51 @@ async function loopPage(name, owner, path = "") {
   cleanup.push(() => clearTimeout(askTimer));
   const askHistory = h("div", { class: "ask-history" });
   const askBox = h("div", { class: "drawer-body" });
+  const askResize = h("div", { class: "drawer-resize", role: "separator", tabindex: -1,
+    "aria-label": "Resize Talk panel", "aria-orientation": "vertical",
+    title: "Drag to resize. Arrow keys resize; Home restores the minimum width." });
   const drawer = h("aside", { class: "drawer", "aria-label": "Talk to this loop" },
-    h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
+    askResize, h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
+  let askWidth = 520, askDrag = null;
+  const resizeAsk = (width = askWidth) => {
+    askWidth = Math.max(520, Math.min(width, window.innerWidth));
+    drawer.style.setProperty("--talk-width", `${askWidth}px`);
+    askResize.setAttribute("aria-valuemin", Math.min(520, window.innerWidth));
+    askResize.setAttribute("aria-valuemax", window.innerWidth);
+    askResize.setAttribute("aria-valuenow", Math.min(askWidth, window.innerWidth));
+  };
+  const endAskDrag = () => {
+    const drag = askDrag;
+    askDrag = null;
+    document.body.classList.remove("resizing-drawer");
+    if (drag && askResize.hasPointerCapture(drag.id)) askResize.releasePointerCapture(drag.id);
+  };
+  askResize.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    e.preventDefault(); askResize.focus({ preventScroll: true });
+    askDrag = { id: e.pointerId, x: e.clientX, width: drawer.getBoundingClientRect().width };
+    askResize.setPointerCapture(e.pointerId);
+    document.body.classList.add("resizing-drawer");
+  });
+  askResize.addEventListener("pointermove", e => {
+    if (askDrag?.id === e.pointerId) resizeAsk(askDrag.width + askDrag.x - e.clientX);
+  });
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) askResize.addEventListener(event, endAskDrag);
+  askResize.addEventListener("keydown", e => {
+    const width = drawer.getBoundingClientRect().width, step = e.shiftKey ? 100 : 40;
+    const sizes = { ArrowLeft: width + step, ArrowRight: width - step, Home: 520, End: window.innerWidth };
+    if (!(e.key in sizes)) return;
+    e.preventDefault(); resizeAsk(sizes[e.key]);
+  });
+  const onAskResize = () => resizeAsk();
+  window.addEventListener("resize", onAskResize);
+  cleanup.push(() => { endAskDrag(); window.removeEventListener("resize", onAskResize); });
+  resizeAsk();
   const askFab = h("button", { class: "ask-fab", type: "button", onclick: () => setAsk(!askOpen) }, "Talk");
   function setAsk(open) {
     askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
-    if (open) askView(); else { clearTimeout(askTimer); askSeq++; }
+    askResize.tabIndex = open ? 0 : -1;
+    if (open) askView(); else { endAskDrag(); clearTimeout(askTimer); askSeq++; }
   }
   const onKey = (e) => { if (e.key === "Escape" && askOpen && !document.querySelector("dialog[open]")) setAsk(false); };
   document.addEventListener("keydown", onKey);
@@ -357,7 +389,21 @@ async function loopPage(name, owner, path = "") {
     const ran = st.running || st.last_active;
     stream.want(tab !== "Live" ? [] : curSub() === "log" ? ["log"] : !curSub() && ran ? ["events", "live", "log"] : []);
     if (tab === "Settings") {
-      if (curSub() === "problem") { configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder }); return; }
+      if (curSub() === "problem") {
+        configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder });
+        if (canRun && info.document) {
+          const check = act("Check", async () => {
+            const out = h("pre", { class: "log small" }, "Checking in the sandbox…");
+            const d = dialog("Check the saved document", out, [["Close", null]]);
+            const r = await api(`/apps/${enc(name)}/check${qs}`, { method: "POST" });
+            out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
+            await d;
+          }, { cls: "small", title: "Check the saved problem and inputs. Starting the loop also runs this check." });
+          check.style.marginBottom = "12px";
+          subHolder.append(check);
+        }
+        return;
+      }
       return settingsView(ctx);
     }
     if (tab === "Overview") {

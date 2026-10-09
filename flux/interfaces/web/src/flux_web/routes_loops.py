@@ -788,8 +788,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     # ---- the loop: running or not; a start resumes it from its record (D689)
     @app.get("/api/apps/{name}/state")
     def loop_state(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        _w, whose, _d, _run = loop_of(name, user, owner)
-        return runs.state(whose, name)
+        w, whose, _d, run = loop_of(name, user, owner)
+        return {**runs.state(whose, name, run), "document": w.meta(name).get("document")}
 
     @app.get("/api/loops")
     def loops_state(user: User = Depends(user_of)) -> list[dict[str, Any]]:

@@ -16,16 +16,61 @@ from __future__ import annotations
 
 import bisect
 import json
+import math
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
 from collections import OrderedDict
 from typing import Any
 
-__all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "designs", "thin"]
+__all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "designs", "measurement_summary", "thin"]
 
 _NOT_MEASURED = ("gate", "admit", "prototype")
+
+
+def measurement_summary(result: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    """Compact decision values and the same scoped references as measurementdata.js.
+
+    Display choices stay in the browser; every metric is available without fetching full results
+    for every loop in a list. Baselines win over P90 performance of accepted designs.
+    """
+    def finite(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    def measured_when(design: dict[str, Any]) -> int:
+        # Browser Date.parse uses milliseconds; the last baseline wins equal timestamps.
+        return int(_when(design.get("last") or design.get("first") or "") * 1000)
+
+    stage, group = decision["shown"], decision.get("group") or ""
+    peers = [d for d in result["designs"] if (d.get("group") or "") == group]
+    out = {}
+    for metric in result["metrics"]:
+        value = decision.get("stages", {}).get(stage, {}).get(metric)
+        measured = [(d, d.get("stages", {}).get(stage, {}).get(metric)) for d in peers]
+        measured = [(d, v) for d, v in measured if finite(v)]
+        baseline = [(d, v) for d, v in measured if d.get("baseline")]
+        reference = None
+        if baseline:
+            d, v = max(reversed(baseline), key=lambda pair: measured_when(pair[0]))
+            reference = {"kind": "baseline", "name": d["name"], "value": v, "when": measured_when(d)}
+        else:
+            values = sorted(v for d, v in measured if (d["eligible"] if d.get("eligible") is not None else d.get("verdict") == "accepted"))
+            if values:
+                objective = next((o for o in result.get("limits", []) if o["metric"] == metric), {})
+                direction = objective.get("direction") or result.get("metric_info", {}).get(metric, {}).get("direction")
+                if not direction:
+                    direction = "minimize" if re.search(r"area|power|energy|delay|latency|time|cells?|count|luts?|ffs?|error|loss|slack_viol|cost|size|bytes|cycles", metric, re.I) else "maximize"
+                q = .1 if direction == "minimize" else .9
+                pos = (len(values) - 1) * q
+                lo, hi = math.floor(pos), math.ceil(pos)
+                reference = {"kind": "P10" if q == .1 else "P90", "count": len(values),
+                             "value": values[lo] * (1 - (pos - lo)) + values[hi] * (pos - lo)}
+        percent = (value - reference["value"]) / abs(reference["value"]) * 100 if finite(value) and reference and reference["value"] != 0 else None
+        out[metric] = {"value": value if finite(value) else None, "meets": decision.get("meets", {}).get(metric),
+                       "percent": percent if finite(percent) else None, "reference": reference}
+    return out
 
 
 def _at(until: float) -> str:
@@ -439,13 +484,16 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         if m not in metrics:
             metrics.append(m)
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
-    return {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
+    result = {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
             "metrics": metrics, "limits": limits, "stages": [st.get("name") for st in stages],
             "metric_groups": groups,
             "metric_info": {m: definitions.get(m) or next(({k: v for k, v in g.items() if k not in ("metrics", "type")}
                             for parent, g in groups.items() if m in g["metrics"]), {}) for m in metrics}}
+    chosen = next((d for d in out if d["decision"]), None)
+    result["decision_measurements"] = measurement_summary({**result, "designs": out}, chosen) if chosen else {}
+    return result
 
 
 def thin(all_rows: list[Any], objectives: list[tuple[str, str]], cap: int = 3000) -> list[dict[str, Any]]:

@@ -55,6 +55,17 @@ def proposals(state: Any) -> dict[str, dict]:
     return _memory(state)
 
 
+def _persist(state: Any, idea: dict) -> None:
+    """Retry an in-memory proposal when storage recovers, without duplicating saved notes."""
+    rec = _record(state)
+    if rec is not None:
+        try:
+            if idea["id"] not in _proposals(rec.store, rec.campaign_id):
+                rec.store.append_event(rec.campaign_id, EVENT, idea)
+        except Exception:  # noqa: BLE001 -- keep the in-memory idea if the record cannot be written
+            pass
+
+
 def propose(state: Any, part: str | None, value: Any) -> str:
     """Save a hypothesis, deduplicated by its content and part; return its stable ID."""
     if not isinstance(value, dict):
@@ -63,6 +74,7 @@ def propose(state: Any, part: str | None, value: Any) -> str:
         idea = proposals(state).get(str(value["id"]))
         if idea is None or idea.get("part") != (part or ""):
             raise ValueError("unknown idea for this part")
+        _persist(state, idea)
         return idea["id"]
     title = str(value.get("title") or "").strip()[:160]
     hypothesis = str(value.get("hypothesis") or "").strip()[:2000]
@@ -74,12 +86,7 @@ def propose(state: Any, part: str | None, value: Any) -> str:
     if ident not in proposals(state):
         doc = {"id": ident, "part": part or "", "title": title, "hypothesis": hypothesis, "test": test}
         _memory(state)[ident] = doc
-        rec = _record(state)
-        if rec is not None:
-            try:
-                rec.store.append_event(rec.campaign_id, EVENT, doc)
-            except Exception:  # noqa: BLE001 -- keep the in-memory idea if the record cannot be written
-                pass
+    _persist(state, _memory(state).get(ident) or proposals(state)[ident])
     return ident
 
 
@@ -209,6 +216,8 @@ def context(state: Any, part: str | None, limit: int = 8) -> str:
     rec = _record(state)
     try:
         rows = notebook(rec.store, rec.campaign_id)["ideas"] if rec else list(_memory(state).values())
+        saved = {row["id"] for row in rows}
+        rows.extend(row for ident, row in _memory(state).items() if ident not in saved)
     except Exception:  # noqa: BLE001
         rows = list(_memory(state).values())
     rows = [r for r in rows if r.get("part") == (part or "")]

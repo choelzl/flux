@@ -370,6 +370,9 @@ table.designs td { white-space: nowrap; }
 .column-option { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; cursor: pointer; }
 .column-option span { overflow-wrap: anywhere; min-width: 0; }
 .column-option input { flex: none; }
+.measurement-options td:first-child { overflow-wrap: anywhere; }
+.measurement-options { table-layout: fixed; width: 100%; }
+.measurement-options th:not(:first-child), .measurement-options td:not(:first-child) { text-align: center; width: 60px; }
 .show-hidden-columns[hidden] { display: none; }
 .show-hidden-columns[aria-pressed=true] { background: var(--soft); border-color: var(--accent); }
 .result-table-surface .hidden-measurement { opacity: .55; }
@@ -752,10 +755,15 @@ td.bad { color: var(--bad); }
   background: var(--accent); color: var(--accent-ink); border: 0; box-shadow: 0 4px 14px rgb(0 0 0 / .18); cursor: pointer; }
 .ask-fab.on { background: var(--ink); color: var(--panel); }
 main:has(.composer) .ask-fab { bottom: 96px; }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 50; background: var(--bg);
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(var(--talk-width, 520px), 100vw); min-width: min(520px, 100vw); z-index: 50; background: var(--bg);
   border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgb(0 0 0 / .12); transform: translateX(105%); transition: transform .18s ease;
   display: flex; flex-direction: column; pointer-events: none; }
 .drawer.open { transform: none; pointer-events: auto; }
+.drawer-resize { position: absolute; top: 0; bottom: 0; left: 0; width: 10px; cursor: ew-resize; touch-action: none; z-index: 1; }
+.drawer-resize::after { content: ""; position: absolute; top: calc(50% - 18px); left: 2px; width: 3px; height: 36px; border-radius: 3px; background: var(--line); }
+.drawer-resize:hover::after, .drawer-resize:focus-visible::after { background: var(--accent); }
+.drawer-resize:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+body.resizing-drawer, body.resizing-drawer * { cursor: ew-resize !important; user-select: none !important; }
 .drawer-head { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .drawer-head h2 { margin: 0; font-size: 16px; }
 .drawer-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
