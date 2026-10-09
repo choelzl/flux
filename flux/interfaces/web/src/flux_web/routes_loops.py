@@ -33,6 +33,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     user_of, admin_of, ws, access, reader, editor, fail, loop_of = (ctx.user_of, ctx.admin_of, ctx.ws, ctx.access, ctx.reader,
                                                                      ctx.editor, ctx.fail, ctx.loop_of)
     _env_list, _set_env, _rules, _summary = ctx.env_list, ctx.set_env, ctx.rules, ctx.summary
+    creator, runner = ctx.creator, ctx.runner
     agents_gate, author_agent, check_author = ctx.agents_gate, ctx.author_agent, ctx.check_author
     from .maintenance import TASKS
 
@@ -108,13 +109,13 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         _w, whose, _perm = access(user, owner, name)
         return {"shares": [{"user": u, "perm": p} for u, p in sorted(store.shares(whose.name, name).items())],
                 "users": [u.name for u in store.users() if u.name != whose.name and not u.disabled],
-                "can_share": user.id == whose.id or user.admin}
+                "can_share": store.can_share(user, whose)}
 
     @app.put("/api/apps/{name}/shares")
     def put_share(name: str, body: ShareIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         _w, whose, _d, _run = loop_of(name, user, owner)
-        if user.id != whose.id and not user.admin:
-            raise HTTPException(403, "only the owner or an admin may share this loop")
+        if not store.can_share(user, whose):
+            raise HTTPException(403, "you may not manage sharing of this loop")
         other = store.user(name=body.user)
         if other is None or other.id == whose.id:
             raise HTTPException(400, "share with another user of this server")
@@ -143,6 +144,29 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         store.audit(user.name, "left a share", f"{o.name}/{name}")
         return {"ok": f"you left {o.name}'s {name}"}
 
+    def group_loops(user: User, *, summaries: bool = True) -> list[dict[str, Any]]:
+        if not any(user.can(k) for k in ("view_others", "edit_others", "run_others", "share_others")):
+            return []
+        out = []
+        for member in store.users():
+            if member.id == user.id or not store.same_group(user, member):
+                continue
+            w = ws(member)
+            last = store.latest_runs(member)
+            for meta in w.apps():
+                name = meta["name"]
+                perm = store.loop_access(user, member, name)
+                if perm:
+                    out.append({**meta, "name": name, "owner": member.name, "perm": perm,
+                                **runs.state(member, name, last.get(name)),
+                                "summary": _summary(w, member, name, last.get(name)) if summaries else {},
+                                "can_run": store.can_run(user, member, name)})
+        return out
+
+    @app.get("/api/group-loops")
+    def group_apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
+        return [row for row in group_loops(user) if not store.shares(row["owner"], row["name"]).get(user.name)]
+
     @app.get("/api/shared")
     def shared(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """The loops other users shared with this one, with what they may do (D701)."""
@@ -153,8 +177,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             if o is None or not (w.root / app_name).is_dir():
                 continue
             meta = w.meta(app_name)
-            out.append({"name": app_name, "owner": owner, "perm": perm, "document": meta.get("document"),
-                        **runs.state(o, app_name), "summary": _summary(w, o, app_name)})
+            out.append({"name": app_name, "owner": owner, "perm": store.loop_access(user, o, app_name), "document": meta.get("document"),
+                        **runs.state(o, app_name), "summary": _summary(w, o, app_name), "can_run": store.can_run(user, o, app_name)})
         return out
 
     # ---- applications
@@ -225,7 +249,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """The user's loops, each running or not (D689), the most recently active first."""
         w = ws(user)
         last = store.latest_runs(user)                    # D918: every loop's latest start in one query
-        out = [{**a, **runs.state(user, a["name"], last.get(a["name"])), "summary": _summary(w, user, a["name"], last.get(a["name"]))}
+        out = [{**a, **runs.state(user, a["name"], last.get(a["name"])), "summary": _summary(w, user, a["name"], last.get(a["name"])),
+                "can_run": user.can("run_loops")}
                for a in w.apps()]
         out.sort(key=lambda a: (not a["running"], -(a.get("last_active") or 0), a["name"]))
         return out
@@ -233,6 +258,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.post("/api/apps")
     async def upload(name: str = Form(...), files: list[UploadFile] = File(...),
                      replace: bool = Form(False), user: User = Depends(user_of)) -> dict[str, Any]:
+        creator(user)
         got = [(f.filename or "file", await f.read()) for f in files]
         try:
             meta = ws(user).create(name, got, replace=replace)
@@ -311,6 +337,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"),
                            files: list[UploadFile] | None = File(None), user: User = Depends(user_of)) -> dict[str, Any]:
         """A new loop whose problem an agent writes from a description and files (D704)."""
+        creator(user)
+        if not user.can("run_loops"):
+            raise HTTPException(403, "you may not run agents")
         if not prompt.strip():
             raise HTTPException(400, "say what the loop should do")
         check_author(author)
@@ -334,7 +363,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                               files: list[UploadFile] | None = File(None), owner: str | None = None,
                               user: User = Depends(user_of)) -> dict[str, Any]:
         """An agent revises the loop's problem as told (D704); not while the loop runs."""
-        w, whose, d, run = loop_of(name, user, owner, edit=True)
+        w, whose, d, run = loop_of(name, user, owner, edit=True, run=True)
         if run and runs.live(run):
             raise HTTPException(409, "stop the loop first: its problem is in use")
         if not prompt.strip():
@@ -373,7 +402,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.post("/api/apps/{name}/asks")
     def ask_about(name: str, body: AskIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """An agent reads the loop (its files, its record, its log) and answers; it changes nothing."""
-        _w, whose, d, _run = loop_of(name, user, owner, edit=True)
+        _w, whose, d, _run = loop_of(name, user, owner, edit=True, run=True)
         if not body.question.strip():
             raise HTTPException(400, "ask something")
         check_author(body.author)
@@ -447,6 +476,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.post("/api/apps/from-text")
     def from_text(body: DocText, user: User = Depends(user_of)) -> dict[str, Any]:
+        creator(user)
         try:
             meta = ws(user).create_from_text(body.name, body.filename, body.text)
         except Exists as exc:                              # D906: a name taken is a conflict, never replaced
@@ -536,7 +566,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, str(exc)) from exc
         perm = access(user, owner, name)[2]
         return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
-                "state": runs.state(whose, name)}
+                "state": runs.state(whose, name), "can_run": store.can_run(user, whose, name),
+                "can_edit": perm in ("owner", "edit", "admin"), "can_leave": user.name in store.shares(whose.name, name)}
 
     @app.get("/api/apps/{name}/files")
     def app_files(name: str, path: str = "", ignored: bool = False, owner: str | None = None,
@@ -649,7 +680,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.post("/api/apps/{name}/check")
     def check(name: str, owner: str | None = None, document: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        w, whose = editor(user, owner, name)
+        w, whose = runner(user, owner, name)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
@@ -676,6 +707,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def new_empty(body: EmptyIn, user: User = Depends(user_of)) -> dict[str, Any]:
         """A loop's baseline (D825) -- the skeleton problem.yaml, the README of the folder's parts, an
         empty library/ -- to fill in with the configurator. Nothing of a case."""
+        creator(user)
         from flux_cli.commands import baseline_files
 
         name = body.name.strip()
@@ -691,6 +723,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def clone_loop(name: str, body: CloneIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """A loop cloned (D824) into the caller's own: any loop they can see -- their own, one shared with
         them, for an admin anyone's. Its problem, never its runs'; its workbench when asked."""
+        creator(user)
         _w, whose, d, _run = loop_of(name, user, owner)
         if body.keep_permissions and not user.admin:
             raise HTTPException(403, "only an admin may keep special permissions")
@@ -734,7 +767,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def preflight(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Before a start (D693): did the inputs change since the last start, and was the check
         run on them as they are now -- with what result."""
-        w, _whose = editor(user, owner, name)
+        w, _whose = runner(user, owner, name)
         try:
             w.app(name)
         except WorkspaceError as exc:
@@ -764,11 +797,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             o = store.user(name=owner)
             if o is not None and (Workspace(store.data, owner).root / app_name).is_dir():
                 out.append({**runs.state(o, app_name), "owner": owner})
+        seen = {(row.get("owner", user.name), row["app"]) for row in out}
+        for row in group_loops(user, summaries=False):
+            if (row["owner"], row["app"]) not in seen:
+                out.append(row)
         return out
 
     def prepare_start(name: str, body: RunOptions, owner: str | None, user: User):
         """The same document and agent checks for a normal start or an admin restart."""
-        w, whose, d, _run = loop_of(name, user, owner, edit=True)
+        w, whose, d, _run = loop_of(name, user, owner, run=True)
         meta = w.meta(name)
         if authoring.state(d).get("running"):
             raise HTTPException(409, "an agent is writing this loop's problem: start it once it is done")
@@ -820,9 +857,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.post("/api/apps/{name}/stop")
     def stop(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
-        if access(user, owner, name)[2] == "watch":             # the owner, an editor or an admin may stop it
-            raise HTTPException(403, "you may watch this loop, not stop it")
         _w, whose, _d, run = loop_of(name, user, owner)
+        if user.id != whose.id:
+            runner(user, owner, name)
         said = runs.stop(run, now=body.now)
         store.audit(user.name, "stop", f"{whose.name}/{name}: {said}")
         return {"ok": said}

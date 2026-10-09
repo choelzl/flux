@@ -11,3 +11,7 @@ export function setPageRefresh(f) { pageRefresh = f; }
 export function setPageOwner(o) { pageOwner = o; }
 export function setNavSeq(n) { navSeq = n; }
 export function setCrafterCatalog(c) { crafterCatalog = c; }
+export function can(permission) {
+  return !!me && (me.role === "admin" || (me.permissions ? me.permissions[permission] === true
+    : ["create_loops", "run_loops"].includes(permission)));
+}

@@ -114,11 +114,9 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         other = store.user(name=owner)
         if other is None:
             raise HTTPException(404, "no such user")
-        perm = store.shares(other.name, name).get(user.name) if name else None
+        perm = store.loop_access(user, other, name)
         if perm:
             return Workspace(store.data, other.name), other, perm
-        if user.admin:
-            return Workspace(store.data, other.name), other, "admin"
         raise HTTPException(403, "this loop is not shared with you")
 
     def reader(user: User, owner: str | None, name: str | None = None) -> tuple[Workspace, User]:
@@ -134,14 +132,27 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             raise HTTPException(403, "you may watch this loop, not change it")
         return w, whose
 
+    def runner(user: User, owner: str | None, name: str) -> tuple[Workspace, User]:
+        w, whose = reader(user, owner, name)
+        if not store.can_run(user, whose, name):
+            raise HTTPException(403, "you may not run loops or agents here")
+        return w, whose
+
+    def creator(user: User) -> None:
+        if not user.can("create_loops"):
+            raise HTTPException(403, "you may not create, upload or clone loops")
+
     def fail(exc: Exception) -> HTTPException:
         return HTTPException(400, str(exc))
 
     # ---- shared by the route groups (D888): the loop a call names, the variables' lists, the host
     # rules, the stderr masks, a loop in a line -- the groups' routes are in routes_*.py
-    def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
+    def loop_of(name: str, user: User, owner: str | None = None, edit: bool = False,
+                run: bool = False) -> tuple[Workspace, User, Path, dict[str, Any] | None]:
         """(workspace, whose, the application's folder, its latest start or None); `edit`: a change."""
         w, whose = editor(user, owner, name) if edit else reader(user, owner, name)
+        if run:
+            runner(user, owner, name)
         try:
             d = w.app(name)
         except WorkspaceError as exc:
@@ -220,7 +231,8 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     ctx = SimpleNamespace(store=store, runs=runs, sandbox=sandbox, secure_cookie=secure_cookie, cookie=COOKIE, authoring=authoring,
                           asks=asks, history=history, maintenance=maintenance, user_of=user_of, admin_of=admin_of, ws=ws,
-                          access=access, reader=reader, editor=editor, fail=fail, loop_of=loop_of, env_list=_env_list,
+                          access=access, reader=reader, editor=editor, runner=runner, creator=creator,
+                          fail=fail, loop_of=loop_of, env_list=_env_list,
                           set_env=_set_env, rules=_rules, masks=_masks, summary=_summary, stages=_stages, all_loops=_all_loops)
     # the route groups (D888); agents first: it puts the readiness gates and the retest into ctx
     routes_accounts.register(app, ctx)

@@ -426,6 +426,76 @@ objectives: [{metric: timings.fast, goal: 15}]
 
     r.step("admin sharing", admin_sharing)
 
+    def user_groups():
+        def login(user):
+            b.go(f"{r.url}/#/login")
+            b.cmd("WebDriver:Refresh", {})
+            r.login(user)
+
+        with loop(r, "ui-group-access") as name:
+            login("ada")
+            original = {u["name"]: u for u in json.loads(r.api("/users")["body"]) if u["name"] in ("bob", "cy")}
+            try:
+                r.page("#/admin/users", "document.querySelector('#users-subtabs')", "users and groups administration")
+                r.button("Users", "#users-subtabs")
+                b.wait("document.querySelector('table.users')", what="users subtab")
+                r.check("user controls have a separate subtab", b.js("return document.querySelector('#main .tabs .on').textContent === 'Users and groups' && document.querySelectorAll('#users-subtabs [role=tab]').length === 2 && !document.querySelector('.user-groups')"))
+                r.button("Groups", "#users-subtabs")
+                b.wait("document.querySelector('.user-groups #group-name')", what="groups subtab")
+                r.check("groups subtab contains no user table", b.js("return !document.querySelector('table.users') && document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups'"))
+                b.type("#group-name", "E2E Team")
+                r.button("Add group", ".user-groups")
+                b.wait("document.querySelector('.user-groups button[title=\"Rename E2E Team\"]')", what="group created")
+                group = next(g for g in json.loads(r.api("/groups")["body"])["groups"] if g["name"] == "E2E Team")
+                r.check("new groups have no members or admin powers", group["members"] == 0 and not group["admin"])
+                b.click('.user-groups button[title="Rename E2E Team"]')
+                b.wait("document.querySelector('dialog[open] #group-rename')", what="group rename dialog")
+                b.type("#group-rename", "E2E Research")
+                r.dialog_button("Rename")
+                b.wait("document.querySelector('.user-groups button[title=\"Rename E2E Research\"]')", what="group renamed")
+                renamed = next(g for g in json.loads(r.api("/groups")["body"])["groups"] if g["name"] == "E2E Research")
+                r.check("group rename preserves its ID", renamed["id"] == group["id"])
+                r.page("#/admin", "document.querySelector('.ctl-grid')", "admin loops")
+                r.page("#/admin/users", "document.querySelector('.user-groups #group-name')", "remembered groups subtab")
+                r.check("groups selection survives navigation and group updates", b.js("return document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups' && !document.querySelector('table.users')"))
+                r.button("Users", "#users-subtabs")
+                b.wait("document.querySelector('table.users')", what="member administration")
+                for user in ("bob", "cy"):
+                    b.js("const s = document.querySelector(`tr[data-user=${arguments[0]}] select[aria-label=\"${arguments[0]}'s group\"]`); window.__groupSelect = s; s.value = String(arguments[1]); s.dispatchEvent(new Event('change')); return 1", user, group["id"])
+                    b.wait("!window.__groupSelect.isConnected && document.querySelector('table.users')", what=f"{user} membership saved")
+                r.button("Permissions…", "tr[data-user=cy]")
+                b.wait("document.querySelector('dialog[open] input[data-permission=view_others]')", what="member permissions")
+                r.check("members start with own-loop permissions only", b.js("return document.querySelector('[data-permission=create_loops]').checked && document.querySelector('[data-permission=run_loops]').checked && !document.querySelector('[data-permission=view_others]').checked && !document.querySelector('[data-permission=edit_others]').checked"))
+                b.click("[data-permission=view_others]")
+                b.click("[data-permission=create_loops]")
+                r.dialog_button("Save")
+                b.wait("!document.querySelector('dialog[open]') && !document.querySelector('tr[data-user=cy] button[disabled]')", what="permissions saved")
+                saved = next(u for u in json.loads(r.api("/users")["body"]) if u["name"] == "cy")
+                r.check("per-user permissions save without changing credentials", saved["permissions"]["view_others"] and not saved["permissions"]["create_loops"] and saved["credential_mode"] == original["cy"]["credential_mode"])
+                r.clean("groups administration")
+                login("cy")
+                r.page("#/", "document.querySelector('.group-loops table')", "group loop discovery")
+                r.check("group loops show the owner and authorized source", b.js("return document.querySelector('.group-loops').textContent.includes('bob') && document.querySelector('.group-loops').textContent.includes(arguments[0])", name))
+                r.check("accounts without create permission have no New loop button", b.js("return !document.querySelector('#main a[href=\"#/configure\"]')"))
+                r.page(f"#/u/bob/app/{name}", "document.querySelector('#main .tabs')", "group viewer")
+                r.check("view permission does not show Start, Check or Leave", b.js("return ![...document.querySelectorAll('#main .page-head button')].some(b => /^(Start|Check|Leave)/.test(b.textContent))"))
+                r.page(f"#/u/bob/app/{name}/settings", "document.querySelector('.loop-sharing')", "group viewer settings")
+                r.check("view-only group members cannot share or transfer", b.js("return !document.querySelector('#share-user, #loop-transfer')"))
+                r.clean("group viewer")
+                login("ada")
+                r.api("/users/cy", "PATCH", {"permissions": {"run_others": True}})
+                login("cy")
+                r.page(f"#/u/bob/app/{name}", "document.querySelector('#main .tabs')", "group runner")
+                r.check("run permission shows Start while editing stays disabled", b.js("return [...document.querySelectorAll('#main .page-head button')].some(b => b.textContent.startsWith('Start'))") and not json.loads(r.api(f"/apps/{name}?owner=bob")["body"])["can_edit"])
+                r.clean("group runner")
+            finally:
+                login("ada")
+                for user, settings in original.items():
+                    restored = r.api(f"/users/{user}", "PATCH", {"group_id": settings["group_id"], "permissions": settings["permissions"]})
+                    r.check(f"{user}: group fixture permissions restored", restored["status"] == 200, restored["body"])
+
+    r.step("user groups", user_groups)
+
     def loop_names():
         name = "_Ui-loop-A09"
         r.login("bob")

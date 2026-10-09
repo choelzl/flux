@@ -35,7 +35,7 @@ async function sharingCard(name, qs = "") {
     sh.shares.length ? "" : none,
     h("div", { class: "share-grid" }, rows, h("div", { class: "share-add-sep" }), who, how, add),
     h("p", { class: "muted small share-note" }, h("strong", {}, "Watch"), ": view only. ",
-      h("strong", {}, "Edit"), ": also change, start and stop it (runs use the owner's keys).")], { cls: "loop-sharing" });
+      h("strong", {}, "Edit"), ": change it; also start/stop when allowed to run (uses the owner's keys).")], { cls: "loop-sharing" });
 }
 
 /** The loop's settings (D697): its environment variables over the user's and the server's, and

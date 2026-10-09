@@ -12,12 +12,14 @@ import secrets
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 SESSION_DAYS = 7
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS user_groups (
+    id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, kind TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, pw TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
     created REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0);
@@ -89,6 +91,22 @@ def check_env_name(name: str, agent: bool = False) -> str:
 #: agent and environment settings; external users bring their own, and their agents' logins live
 #: in a home folder of their own. An admin is internal. The old "user" reads as internal.
 ROLES = ("admin", "internal", "external")
+PERMISSIONS = {
+    "create_loops": "Create loops (including upload and clone)",
+    "run_loops": "Run loops and agents",
+    "view_others": "View other group members' loops",
+    "edit_others": "Edit other group members' loops",
+    "run_others": "Run/stop other group members' loops",
+    "share_others": "Manage sharing of other group members' loops",
+}
+DEFAULT_PERMISSIONS = {k: k in ("create_loops", "run_loops") for k in PERMISSIONS}
+_USERS = "SELECT u.*, g.name AS group_name, g.kind AS group_kind FROM users u JOIN user_groups g ON g.id = u.group_id"
+
+
+def _permissions(values: dict[str, bool]) -> dict[str, bool]:
+    if not isinstance(values, dict) or any(k not in PERMISSIONS or type(v) is not bool for k, v in values.items()):
+        raise ValueError("permissions must be known permission names with true/false values")
+    return values
 
 
 def _role(r: str | None) -> str:
@@ -101,6 +119,10 @@ class User:
     name: str
     role: str
     disabled: bool
+    group_id: int | None = None
+    group: str = ""
+    permissions: dict[str, bool] = field(default_factory=lambda: dict(DEFAULT_PERMISSIONS))
+    credential_mode: str | None = None
 
     def __post_init__(self) -> None:
         self.role = _role(self.role)
@@ -111,7 +133,22 @@ class User:
 
     @property
     def external(self) -> bool:
-        return self.role == "external"
+        return (self.credential_mode or self.role) == "external"
+
+    def can(self, permission: str) -> bool:
+        return permission in PERMISSIONS and (self.admin or self.permissions.get(permission, False))
+
+    def identity(self) -> dict[str, Any]:
+        return {"name": self.name, "role": self.role, "group_id": self.group_id, "group": self.group,
+                "permissions": {k: self.can(k) for k in PERMISSIONS}, "credential_mode": self.credential_mode}
+
+
+def _user(row: sqlite3.Row | None) -> User | None:
+    if row is None:
+        return None
+    role = "admin" if row["group_kind"] == "admin" else row["credential_mode"]
+    return User(row["id"], row["name"], role, bool(row["disabled"]), row["group_id"], row["group_name"],
+                {**DEFAULT_PERMISSIONS, **json.loads(row["permissions"])}, row["credential_mode"])
 
 
 def _record_checked(run: dict[str, Any]) -> dict[str, Any]:
@@ -146,10 +183,23 @@ class Store:
             cols = [r[1] for r in db.execute("PRAGMA table_info(failures)")]
             if "ip" not in cols:                      # D702: failures by name and address
                 db.execute("ALTER TABLE failures ADD COLUMN ip TEXT NOT NULL DEFAULT ''")
+            cols = {r[1] for r in db.execute("PRAGMA table_info(users)")}
+            for name, spec in (("group_id", "INTEGER REFERENCES user_groups(id)"),
+                               ("permissions", "TEXT NOT NULL DEFAULT '{}'"), ("credential_mode", "TEXT")):
+                if name not in cols:
+                    db.execute(f"ALTER TABLE users ADD COLUMN {name} {spec}")
+            for kind in ROLES:
+                if not db.execute("SELECT id FROM user_groups WHERE kind = ?", (kind,)).fetchone():
+                    db.execute("INSERT INTO user_groups(name, kind) VALUES (?, ?)", (kind.title(), kind))
+            db.execute("UPDATE users SET group_id = (SELECT id FROM user_groups WHERE kind = "
+                       "CASE WHEN users.role IN ('admin', 'external') THEN users.role ELSE 'internal' END) WHERE group_id IS NULL")
+            db.execute("UPDATE users SET credential_mode = CASE WHEN role = 'external' THEN 'external' ELSE 'internal' END "
+                       "WHERE credential_mode IS NULL")
 
     def _db(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30)
         con.row_factory = sqlite3.Row
+        con.execute("PRAGMA foreign_keys = ON")
         return con
 
     # ---- users
@@ -168,7 +218,8 @@ class Store:
         got = Store.hash_password(password, bytes.fromhex(salt)).split("$")[2]
         return hmac.compare_digest(got, want)
 
-    def add_user(self, name: str, password: str | None, role: str = "internal") -> User:
+    def add_user(self, name: str, password: str | None, role: str = "internal", *, group_id: int | None = None,
+                 permissions: dict[str, bool] | None = None, credential_mode: str | None = None) -> User:
         """`password` None (D818): the account is unusable until its invitation is used."""
         name = (name or "").strip()
         if self.user(name=name) is not None:              # D699: names are one whatever their case
@@ -180,13 +231,22 @@ class Store:
         role = _role(role)
         if role not in ROLES:
             raise ValueError("a user is admin, internal or external")
+        credential_mode = credential_mode or ("external" if role == "external" else "internal")
+        if credential_mode not in ("internal", "external"):
+            raise ValueError("credentials are internal (server settings) or external (own settings)")
+        values = _permissions({} if permissions is None else permissions)
         with self._db() as db:
+            group = db.execute("SELECT id FROM user_groups WHERE id = ?", (group_id,)).fetchone() if group_id is not None \
+                else db.execute("SELECT id FROM user_groups WHERE kind = ?", (role,)).fetchone()
+            if group is None:
+                raise ValueError("no such group")
             try:
-                cur = db.execute("INSERT INTO users(name, pw, role, created) VALUES (?, ?, ?, ?)",
-                                 (name, self.hash_password(password) if password is not None else _UNSET, role, time.time()))
+                db.execute("INSERT INTO users(name, pw, role, created, group_id, permissions, credential_mode) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           (name, self.hash_password(password) if password is not None else _UNSET, role, time.time(),
+                            group["id"], json.dumps(values), credential_mode))
             except sqlite3.IntegrityError as exc:
                 raise ValueError(f"user {name!r} exists") from exc
-            return User(cur.lastrowid, name, role, False)
+        return self.user(name=name)
 
     def home_of(self, user: User) -> Path:
         """An external user's own home (D734): what their runs mount and copy from, where their
@@ -198,22 +258,45 @@ class Store:
 
     def users(self) -> list[User]:
         with self._db() as db:
-            return [User(r["id"], r["name"], r["role"], bool(r["disabled"]))
-                    for r in db.execute("SELECT * FROM users ORDER BY name")]
+            return [_user(r) for r in db.execute(_USERS + " ORDER BY u.name")]
 
     def user(self, user_id: int | None = None, name: str | None = None) -> User | None:
         with self._db() as db:
-            r = (db.execute("SELECT * FROM users WHERE id = ?", (user_id,)) if user_id is not None
-                 else db.execute("SELECT * FROM users WHERE name = ? COLLATE NOCASE", ((name or "").strip(),))).fetchone()
-        return User(r["id"], r["name"], r["role"], bool(r["disabled"])) if r else None
+            r = (db.execute(_USERS + " WHERE u.id = ?", (user_id,)) if user_id is not None
+                 else db.execute(_USERS + " WHERE u.name = ? COLLATE NOCASE", ((name or "").strip(),))).fetchone()
+        return _user(r)
 
     def set_user(self, name: str, *, password: str | None = None, disabled: bool | None = None,
-                 role: str | None = None) -> None:
+                 role: str | None = None, group_id: int | None = None, permissions: dict[str, bool] | None = None,
+                 credential_mode: str | None = None) -> None:
         found = self.user(name=name)
         if found is None:
             raise ValueError(f"no user {name!r}")
         name = found.name
         with self._db() as db:
+            if role is not None:
+                if _role(role) not in ROLES:
+                    raise ValueError("a user is admin, internal or external")
+                if group_id is not None:
+                    raise ValueError("choose a group or a legacy role, not both")
+                group_id = db.execute("SELECT id FROM user_groups WHERE kind = ?", (_role(role),)).fetchone()["id"]
+                credential_mode = credential_mode or ("external" if role == "external" else "internal")
+            group = db.execute("SELECT * FROM user_groups WHERE id = ?", (found.group_id if group_id is None else group_id,)).fetchone()
+            if group is None:
+                raise ValueError("no such group")
+            if found.admin and (disabled or group["kind"] != "admin"):
+                others = db.execute(_USERS + " WHERE g.kind = 'admin' AND u.disabled = 0 AND u.id != ?", (found.id,)).fetchone()
+                if others is None:
+                    raise ValueError("keep at least one enabled admin")
+            if credential_mode is not None:
+                if credential_mode not in ("internal", "external"):
+                    raise ValueError("credentials are internal (server settings) or external (own settings)")
+                db.execute("UPDATE users SET credential_mode = ? WHERE name = ?", (credential_mode, name))
+            if permissions is not None:
+                values = {**found.permissions, **_permissions(permissions)}
+                db.execute("UPDATE users SET permissions = ? WHERE name = ?", (json.dumps(values), name))
+            if group_id is not None:
+                db.execute("UPDATE users SET group_id = ? WHERE name = ?", (group_id, name))
             if password is not None:
                 if len(password) < 6:
                     raise ValueError("a password has at least 6 characters")
@@ -223,9 +306,52 @@ class Store:
                 if disabled:
                     db.execute("DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE name = ?)", (name,))
             if role is not None:
-                if _role(role) not in ROLES:
-                    raise ValueError("a user is admin, internal or external")
                 db.execute("UPDATE users SET role = ? WHERE name = ?", (_role(role), name))
+
+    def groups(self) -> list[dict[str, Any]]:
+        with self._db() as db:
+            return [{"id": r["id"], "name": r["name"], "builtin": r["kind"], "admin": r["kind"] == "admin", "members": r["members"]}
+                    for r in db.execute("SELECT g.*, COUNT(u.id) AS members FROM user_groups g LEFT JOIN users u ON u.group_id = g.id "
+                                        "GROUP BY g.id ORDER BY g.name COLLATE NOCASE")]
+
+    def save_group(self, name: str, group_id: int | None = None) -> dict[str, Any]:
+        name = name.strip()
+        if not 1 <= len(name) <= 60 or any(ord(c) < 32 for c in name):
+            raise ValueError("a group name is 1–60 characters, without control characters")
+        with self._db() as db:
+            try:
+                if group_id is None:
+                    group_id = db.execute("INSERT INTO user_groups(name) VALUES (?)", (name,)).lastrowid
+                elif not db.execute("UPDATE user_groups SET name = ? WHERE id = ?", (name, group_id)).rowcount:
+                    raise ValueError("no such group")
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("a group with this name already exists") from exc
+        return next(g for g in self.groups() if g["id"] == group_id)
+
+    @staticmethod
+    def same_group(user: User, owner: User) -> bool:
+        return user.group_id is not None and user.group_id == owner.group_id
+
+    def loop_access(self, user: User, owner: User, name: str | None) -> str | None:
+        if user.id == owner.id:
+            return "owner"
+        if user.admin:
+            return "admin"
+        shared = self.shares(owner.name, name).get(user.name) if name else None
+        group = self.same_group(user, owner)
+        if shared == "edit" or (group and user.can("edit_others")):
+            return "edit"
+        if shared == "watch" or (group and any(user.can(k) for k in ("view_others", "run_others", "share_others"))):
+            return "watch"
+        return None
+
+    def can_run(self, user: User, owner: User, name: str) -> bool:
+        return user.can("run_loops") and (user.id == owner.id or user.admin
+                or (self.same_group(user, owner) and user.can("run_others"))
+                or self.shares(owner.name, name).get(user.name) == "edit")
+
+    def can_share(self, user: User, owner: User) -> bool:
+        return user.id == owner.id or user.admin or (self.same_group(user, owner) and user.can("share_others"))
 
     # ---- invitations and reset links (D818): one-time, kept as a digest, a week long
     def invite(self, name: str) -> tuple[str, str]:
@@ -302,10 +428,10 @@ class Store:
         if not token:
             return None
         with self._db() as db:
-            r = db.execute("SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id "
+            r = db.execute(_USERS + " JOIN sessions s ON u.id = s.user_id "
                            "WHERE s.token = ? AND s.expires > ? AND u.disabled = 0",
                            (_digest(token), time.time())).fetchone()
-        return User(r["id"], r["name"], r["role"], False) if r else None
+        return _user(r)
 
     def logout(self, token: str) -> None:
         with self._db() as db:

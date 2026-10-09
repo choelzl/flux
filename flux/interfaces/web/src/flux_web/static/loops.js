@@ -3,7 +3,7 @@
 // configure.js; D892: a loop's page in loop_page.js, each of its tabs in a loop_*.js).
 
 import { codeBlock, codeEditor } from "./highlight.js";
-import { me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
+import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
 import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
@@ -186,11 +186,12 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
   const t = sortableTable(memo, cols, loops, l => {
     const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
-    const acts = owner ? (l.perm === "watch" ? [h("span", { class: "pill" }, "watching")]
+    const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
+    const acts = owner ? (!canRun ? [h("span", { class: "pill" }, l.perm === "edit" ? "can edit" : "watching")]
         : l.running ? [act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
-        : l.perm === "edit" ? [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })] : [])
+        : [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })])
       : l.running ? [act("Stop", () => stopLoop(name, false).then(() => pageRefresh && pageRefresh()), { cls: "small" })]
-      : [act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }),
+      : [canRun ? act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }) : "",
          h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
     return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
       who ? h("td", {}, l.owner) : "",
@@ -438,22 +439,30 @@ function authoringCard(name, st, { onStop } = {}) {
 
 async function appsPage() {
   const show = pageShow();
-  const [loops, shared] = await Promise.all([api("/apps"), api("/shared").catch(() => [])]);
+  const [loops, shared, group] = await Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]);
   const box = h("div", {}, loopsBrowser(loops));
   const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true, memo: "flux-sort-shared" }) : "");
+  const groupBox = h("div", {}, group.length ? loopsTable(group, { who: true, memo: "flux-sort-group" }) : "");
+  const sharedCard = card("Shared with me", sharedBox), groupCard = card("Group loops", groupBox, { cls: "group-loops" });
+  sharedCard.hidden = !shared.length; groupCard.hidden = !group.length;
   show(
     head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
-      h("a", { class: "btn primary", href: "#/configure" }, "New loop")),
-    card(null, box), shared.length ? card("Shared with me", sharedBox) : "");
+      can("create_loops") ? h("a", { class: "btn primary", href: "#/configure" }, "New loop") : ""),
+    card(null, box), sharedCard, groupCard);
   setPageRefresh(async () => {
     if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps")));
     const sh = await api("/shared").catch(() => []);
     sharedBox.replaceChildren(sh.length ? loopsTable(sh, { who: true, memo: "flux-sort-shared" }) : "");
+    sharedCard.hidden = !sh.length;
+    const gr = await api("/group-loops");
+    groupBox.replaceChildren(gr.length ? loopsTable(gr, { who: true, memo: "flux-sort-group" }) : "");
+    groupCard.hidden = !gr.length;
   });
 }
 
 async function newPage() {
   const show = pageShow();
+  if (!can("create_loops")) { show(card("New loop", "Your account cannot create, upload or clone loops.")); return; }
   const name = h("input", { placeholder: "application name", required: true });
   const file = h("input", { value: "problem.yaml", size: 28 });
   const ed = codeEditor("", "yaml");

@@ -9,7 +9,7 @@ import { route } from "./app.js";
 // ================================================================ admin and account
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users and groups" };
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
 const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
@@ -29,7 +29,25 @@ async function adminPage(sub = "") {
     head("Admin"), tabBar, body);
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
-  if (tab === "users") return adminUsers(body);
+  if (tab === "users") {
+    const PARTS = [["users", "Users"], ["groups", "Groups"]];
+    let cur;
+    try { cur = localStorage.getItem("flux-users-part"); } catch (_) { /* per viewer */ }
+    if (!PARTS.some(([k]) => k === cur)) cur = "users";
+    const bar = h("div", { id: "users-subtabs", class: "subtabs", role: "tablist", "aria-label": "Users and groups" });
+    const part = h("div", { id: "users-part" });
+    let shown = 0;
+    const draw = async () => {
+      const my = ++shown, ok = () => my === shown && !show.stale();
+      bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
+        onclick: () => { cur = k; try { localStorage.setItem("flux-users-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
+      part.replaceChildren(skeleton(6));
+      if (cur === "groups") await adminGroups(part, ok); else await adminUsers(part, ok);
+    };
+    body.replaceChildren(bar, part);
+    await draw();
+    return;
+  }
   if (tab === "sandbox") return adminSandbox(body);
   if (tab === "maintenance") return adminMaintenance(body);
   if (tab === "agents") return adminAgents(body);
@@ -66,7 +84,7 @@ async function adminAudit(body, ok = () => true) {
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
   // D724: the kinds in groups; a kind not listed is Other
   const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password",
-      "invite user", "password set from a link"]],
+      "invite user", "password set from a link", "create group", "rename group"]],
     ["Runs", ["start", "stop", "note", "note removed", "stop all", "restart all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
       "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "clone loop", "empty loop",
@@ -707,16 +725,34 @@ async function adminAgents(body) {
       save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
 }
 
-async function adminUsers(body) {
-  const [users, use, res] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/controls").catch(() => null)]);   // D921
+async function adminUsers(body, ok = () => true) {
+  const [users, use, res, catalog] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/controls").catch(() => null), api("/groups")]);
+  if (!ok()) return;
   const name = h("input", { placeholder: "name", autocomplete: "off", "data-lpignore": "true" }); const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "password (empty: send an invitation link)", style: "min-width:280px" });
-  // D734: the kinds -- internal users' runs inherit the server's settings, external ones bring their own
-  const KINDS = [["internal", "internal"], ["external", "external"], ["admin", "admin"]];
-  const kindSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, KINDS.map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
-  const newKind = kindSel("internal", null, "Kind of the new user");
+  const groupSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, catalog.groups.map(g =>
+    h("option", { value: g.id, selected: g.id === value }, g.name + (g.admin ? " (server admin)" : ""))));
+  const credentialSel = (value, onchange, label) => h("select", { "aria-label": label, onchange },
+    h("option", { value: "internal", selected: value === "internal" }, "Server settings"),
+    h("option", { value: "external", selected: value === "external" }, "Own settings only"));
+  const initial = catalog.groups.find(g => g.builtin === "internal");
+  const newGroup = groupSel(initial?.id, null, "Group of the new user");
+  const newCredentials = credentialSel("internal", null, "Credentials of the new user");
+  const permissionsButton = (u) => act("Permissions…", async () => {
+    const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
+      h("input", { type: "checkbox", "data-permission": key, checked: u.permissions[key], disabled: u.role === "admin" }), label]);
+    const choice = await dialog(`${u.name}'s permissions`, h("div", { class: "stack" },
+      h("p", {}, u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
+        : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."),
+      inputs.map(([, input, label]) => h("label", { class: "check" }, input, label)),
+      h("p", { class: "muted small" }, "Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.")),
+      [["Cancel", null], ...(u.role === "admin" ? [] : [["Save", () => Object.fromEntries(inputs.map(([key, input]) => [key, input.checked])), "primary"]])]);
+    if (!choice) return;
+    await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
+    u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
+  }, { cls: "small", title: "Permissions within this user's group" });
   const useOf = (n) => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4;
-  // D926: the rows sort by what was saved -- a role or a limit saved is written back here
+  // D926: rows sort by saved group, credential access and running limit.
   const limits = Object.assign({}, res && res.limits);
   const limitCell = (u) => {
     const cur = limits[u.name];
@@ -731,7 +767,8 @@ async function adminUsers(body) {
   };
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
   const cols = [
-    { label: "User", key: u => u.name, asc: true }, { label: "Role", key: u => u.role, asc: true },
+    { label: "User", key: u => u.name, asc: true }, { label: "Group", key: u => u.group, asc: true },
+    { label: "Credentials", key: u => u.credential_mode, asc: true }, { label: "Permissions" },
     { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
     { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
     { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
@@ -741,12 +778,15 @@ async function adminUsers(body) {
     { label: "" }];
   const table = sortableTable("flux-sort-users", cols, users, u => { const x = useOf(u.name); return h("tr", { "data-user": u.name },
         h("td", { class: "strong" }, u.name, u.pending ? h("span", { class: "pill live small", title: "Invited: their password is not set yet" }, "invited") : ""),
-        h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.role)
-          : kindSel(u.role, async (e) => {
-              const to = e.target.value;
-              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { role: to } }); u.role = to; toast(`${u.name} is ${to} now`, "ok"); }
-              catch (_) { e.target.value = u.role; }
-            }, `${u.name}'s kind`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
+        h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.group)
+          : groupSel(u.group_id, async (e) => {
+              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { group_id: +e.target.value } }); route(); }
+              catch (x) { e.target.value = u.group_id; toast(x.message, "bad"); }
+            }, `${u.name}'s group`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
+        h("td", {}, credentialSel(u.credential_mode, async (e) => {
+          try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { credential_mode: e.target.value } }); u.credential_mode = e.target.value; toast("Credential access saved", "ok"); }
+          catch (x) { e.target.value = u.credential_mode; toast(x.message, "bad"); }
+        }, `${u.name}'s credentials`)), h("td", {}, permissionsButton(u)),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
         h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
@@ -761,14 +801,34 @@ async function adminUsers(body) {
             await linkDialog(u.name, got.token, got.kind);
           }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); }, 0, { cls: "list users" });
   body.replaceChildren(card("Users", [table.strip, h("div", { class: "scroll-x" }, table),
-    h("div", { class: "row add-user" }, name, pw, newKind,
+    h("div", { class: "row add-user" }, name, pw, newGroup, newCredentials,
       act("Add user", async () => {
-        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, role: newKind.value } });
+        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, group_id: +newGroup.value, credential_mode: newCredentials.value } });
         if (got.token) await linkDialog(got.ok, got.token, got.kind);           // D818: an invitation to send
         else toast(`${name.value} added`, "ok");
         route();
       }, { cls: "primary" })),
-    h("p", { class: "muted small" }, "Internal: the server's settings. External: their own (Account).")]));
+    h("p", { class: "muted small" }, "Credential access is separate from group membership. New users can create and run their own loops; other members' loops need permission or individual sharing.")]));
+}
+
+async function adminGroups(body, ok = () => true) {
+  const catalog = await api("/groups");
+  if (!ok()) return;
+  const groupName = h("input", { id: "group-name", placeholder: "New group name", maxlength: 60, autocomplete: "off" });
+  body.replaceChildren(card("Groups", [
+    h("p", { class: "muted" }, "Each user belongs to one group, with their own permission checkboxes. Renaming keeps memberships and permissions; the group marked server admin keeps its server powers."),
+    h("ul", { class: "files" }, catalog.groups.map(g => h("li", {}, h("span", { class: "strong" }, g.name),
+      h("span", { class: "muted small" }, `${g.members} member(s)${g.admin ? " · server administration" : ""}`),
+      act("Rename…", async () => {
+        const input = h("input", { id: "group-rename", value: g.name, maxlength: 60 });
+        const renamed = await dialog("Rename group", h("label", { class: "stack" }, "Group name", input),
+          [["Cancel", null], ["Rename", () => input.value.trim(), "primary"]]);
+        if (!renamed) return;
+        await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
+      }, { cls: "small", title: `Rename ${g.name}` })))),
+    h("div", { class: "row" }, groupName, act("Add group", async () => {
+      await api("/groups", { method: "POST", body: { name: groupName.value.trim() } }); route();
+    }, { cls: "primary small" }))], { cls: "user-groups" }));
 }
 
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:

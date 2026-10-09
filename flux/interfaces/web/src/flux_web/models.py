@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StrictBool, StringConstraints, field_validator
 
 from flux_cli.sandbox_packages import PACKAGE_ATTRIBUTE
 
@@ -20,12 +20,22 @@ class NewUser(BaseModel):
     name: str
     password: str | None = None              # D818: none -- an invitation link to set it
     role: str = "internal"
+    group_id: int | None = Field(default=None, ge=1)
+    permissions: dict[str, StrictBool] | None = None
+    credential_mode: Literal["internal", "external"] | None = None
 
 
 class UserChange(BaseModel):
     password: str | None = None
     disabled: bool | None = None
     role: str | None = None
+    group_id: int | None = Field(default=None, ge=1)
+    permissions: dict[str, StrictBool] | None = None
+    credential_mode: Literal["internal", "external"] | None = None
+
+
+class GroupIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
 
 
 class DocText(BaseModel):

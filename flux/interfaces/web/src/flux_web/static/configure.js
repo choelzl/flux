@@ -2,7 +2,7 @@
 // (D889: split out of app.js).
 
 import { codeEditor, langOf } from "./highlight.js";
-import { cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
+import { can, cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
 import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm, permissionChoice } from "./loops.js";
 
@@ -161,6 +161,7 @@ async function cloneForm(body) {
 async function configurePage(name, owner, mode = "configurator") {
   const show = pageShow();
   const isNew = !name;
+  if (isNew && !can("create_loops")) { show(card("New loop", "Your account cannot create, upload or clone loops.")); return; }
   const host = h("div", {});
   const sub = isNew ? "Start empty, upload a loop, build it with the configurator, or have an agent write it."
     : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";

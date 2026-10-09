@@ -10,8 +10,8 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 
-from .models import Login, NewUser, UserChange, FileText, EnvVar, Settings
-from .store import SESSION_DAYS, User
+from .models import Login, NewUser, UserChange, GroupIn, FileText, EnvVar, Settings
+from .store import SESSION_DAYS, PERMISSIONS, DEFAULT_PERMISSIONS, User
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -35,7 +35,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                             max_age=SESSION_DAYS * 86400, path="/")
         u = store.user(name=body.name)
         store.audit(u.name, "login")
-        return {"name": u.name, "role": u.role}
+        return u.identity()
 
     @app.post("/api/logout")
     def logout(request: Request, response: Response) -> dict[str, str]:
@@ -46,19 +46,20 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/me")
     def me(user: User = Depends(user_of)) -> dict[str, Any]:
-        return {"name": user.name, "role": user.role}
+        return user.identity()
 
     @app.get("/api/users")
     def users(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         seen = store.last_activity()                     # D942: a column to sort by
-        return [{"name": u.name, "role": u.role, "disabled": u.disabled, "pending": store.pending(u.name),
+        return [{**u.identity(), "disabled": u.disabled, "pending": store.pending(u.name),
                  "last_active": seen.get(u.name)} for u in store.users()]
 
     @app.post("/api/users")
     def add_user(body: NewUser, a: User = Depends(admin_of)) -> dict[str, Any]:
         """A user (D818: with no password, an invitation to set it -- the link's token, for the admin to send)."""
         try:
-            u = store.add_user(body.name, body.password, body.role)
+            u = store.add_user(body.name, body.password, body.role, group_id=body.group_id,
+                               permissions=body.permissions, credential_mode=body.credential_mode)
         except ValueError as exc:
             raise fail(exc) from exc
         store.audit(a.name, "add user", body.name)
@@ -97,20 +98,47 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         response.set_cookie(COOKIE, session, httponly=True, samesite="strict", secure=secure_cookie,
                             max_age=SESSION_DAYS * 86400, path="/")
         store.audit(u.name, "password set from a link")
-        return {"name": u.name, "role": u.role}
+        return u.identity()
 
     @app.patch("/api/users/{name}")
     def change_user(name: str, body: UserChange, a: User = Depends(admin_of)) -> dict[str, str]:
-        if store.user(name=name) is None:
+        target = store.user(name=name)
+        if target is None:
             raise HTTPException(404, "no such user")
-        if name == a.name and (body.disabled or (body.role and body.role != "admin")):
+        if target.id == a.id and (body.disabled or (body.role and body.role != "admin")
+                                 or (body.group_id is not None and body.group_id != a.group_id)):
             raise HTTPException(400, "an admin does not disable or demote themselves")
         try:
-            store.set_user(name, password=body.password, disabled=body.disabled, role=body.role)
+            store.set_user(name, **body.model_dump(exclude_none=True))
         except ValueError as exc:
             raise fail(exc) from exc
         store.audit(a.name, "change user", f"{name}: " + ", ".join(k for k, v in body.model_dump().items() if v is not None))
         return {"ok": name}
+
+    @app.get("/api/groups")
+    def groups(_a: User = Depends(admin_of)) -> dict[str, Any]:
+        return {"groups": store.groups(), "permissions": PERMISSIONS, "defaults": DEFAULT_PERMISSIONS}
+
+    @app.post("/api/groups")
+    def create_group(body: GroupIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        try:
+            group = store.save_group(body.name)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "create group", f"{group['id']}: {group['name']}")
+        return group
+
+    @app.patch("/api/groups/{group_id}")
+    def rename_group(group_id: int, body: GroupIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+        old = next((g for g in store.groups() if g["id"] == group_id), None)
+        if old is None:
+            raise HTTPException(404, "no such group")
+        try:
+            group = store.save_group(body.name, group_id)
+        except ValueError as exc:
+            raise fail(exc) from exc
+        store.audit(a.name, "rename group", f"{group_id}: {old['name']} -> {group['name']}")
+        return group
 
     @app.post("/api/password")
     def own_password(body: FileText, user: User = Depends(user_of)) -> dict[str, str]:

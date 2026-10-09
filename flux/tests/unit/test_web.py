@@ -7,7 +7,6 @@ import io
 import json
 import time
 import zipfile
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -41,7 +40,9 @@ def test_login_sessions_csrf_and_the_lock(server):
     assert c.post("/api/login", json={"name": "ada", "password": "correct horse battery"}).status_code == 403, "no X-Flux header"
     r = c.post("/api/login", json={"name": "ada", "password": "correct horse battery"}, headers=H)
     assert r.status_code == 200 and "httponly" in r.headers["set-cookie"].lower() and "samesite=strict" in r.headers["set-cookie"].lower()
-    assert c.get("/api/me").json() == {"name": "ada", "role": "admin"}
+    identity = c.get("/api/me").json()
+    assert identity["name"] == "ada" and identity["role"] == "admin" and identity["group"] == "Admin"
+    assert all(identity["permissions"].values())
     assert c.post("/api/logout").status_code == 403, "a change needs the header"
     c.post("/api/logout", headers=H)
     assert c.get("/api/me").status_code == 401

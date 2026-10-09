@@ -24,7 +24,9 @@ async function loopPage(name, owner, path = "") {
   if (show.stale()) return;                         // D719: the user went elsewhere while it loaded
   // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
   const perm = info.perm || (info.mine ? "owner" : "admin");
-  const mine = perm === "owner" || perm === "edit" || perm === "admin", isOwner = perm === "owner";   // D812: an admin edits anyone's
+  const mine = info.can_edit ?? (perm === "owner" || perm === "edit" || perm === "admin"), isOwner = perm === "owner";
+  const canRun = info.can_run ?? mine;
+  const canLeave = info.can_leave ?? (perm === "edit" || perm === "watch");
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
   // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
@@ -77,12 +79,12 @@ async function loopPage(name, owner, path = "") {
   }
   function drawHead() {
     const acts = [];
-    if (st.running && perm !== "watch") {
+    if (st.running && (canRun || isOwner)) {
       acts.push(act("Stop after this pass", () => stopLoop(name, false, owner)), act("Stop now", () => stopLoop(name, true, owner), { cls: "danger" }));
-    } else if (!st.running && mine && info.document) {
+    } else if (!st.running && canRun && info.document) {
       acts.push(act(st.last_active ? "Start (resume)" : "Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }));
     }
-    if (mine) {
+    if (canRun) {
       acts.push(act("Check", async () => {
         const out = h("pre", { class: "log small" }, "Checking in the sandbox…");
         const d = dialog("Check the document", out, [["Close", null]]);
@@ -90,12 +92,11 @@ async function loopPage(name, owner, path = "") {
         out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
         await d;
       }));
-      if (perm === "edit") acts.push(leaveBtn());
     }
-    if (perm === "watch") acts.push(leaveBtn());
-    const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title: perm === "edit" ? "Shared with you: you may change and run it"
-      : perm === "watch" ? "Shared with you: you may see its runs and outputs" : "An admin: you may change and run it; it runs on its owner's agents and settings" },
-      `${info.owner}'s · ${perm === "edit" ? "you may edit" : perm === "watch" ? "watching" : "an admin's edit"}`);
+    if (canLeave) acts.push(leaveBtn());
+    const whose = perm === "owner" ? "" : h("span", { class: `pill ${perm === "edit" || perm === "admin" ? "live" : ""}`, title:
+      `You may view this loop${mine ? " and edit it" : ""}${canRun ? " and run it using its owner's credentials and limits" : ""}.` },
+      `${info.owner}'s · ${perm === "admin" ? "an admin's edit" : mine ? "you may edit" : canRun ? "you may run" : "watching"}`);
     header.replaceChildren(head(h("span", {}, name, " ", statePill(st), whose),
       h("span", {}, info.document ? h("span", { class: "mono" }, info.document) : "", " · ", lastSaid(st),
         st.container ? h("span", { class: "muted" }, ` · sandbox ${st.container}`) : ""), ...acts));
@@ -216,7 +217,7 @@ async function loopPage(name, owner, path = "") {
   // whether it is still the latest after it, so a slow answer never draws over the tab chosen since
   let drawn = 0;
   const still = () => { const mine = drawn; return () => mine === drawn && !show.stale(); };
-  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, body, curSub, goTab, drawBody, refresh, still,
+  const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, body, curSub, goTab, drawBody, refresh, still,
     get historyId() { return Number(mode); }, selectHistory: (id) => { mode = String(id); setUrl(); },
     get st() { return st; }, get tab() { return tab; } };
   const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
@@ -245,7 +246,7 @@ async function loopPage(name, owner, path = "") {
   cleanup.push(() => document.removeEventListener("keydown", onKey));
   let askSeq = 0;
   async function sendAsk() {
-    if (!mine || askBusy || askSending) return;
+    if (!mine || !canRun || askBusy || askSending) return;
     const text = askQ.value.trim();
     if (!text) { askQ.focus(); return; }
     askSending = true;
@@ -266,7 +267,7 @@ async function loopPage(name, owner, path = "") {
     if (askBusy) askTimer = setTimeout(askView, 3000);
     const reply = list.find(a => a.id === askReply);
     if (!reply) askReply = null;
-    if (mine) askWho = askWho || await agentSelect("ask-who");
+    if (mine && canRun) askWho = askWho || await agentSelect("ask-who");
     if (!askOpen || show.stale() || my !== askSeq) return;
     const place = scrollState(askHistory), active = document.activeElement;
     const selection = active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : null;
@@ -292,7 +293,7 @@ async function loopPage(name, owner, path = "") {
           : a.answer ? markdown(a.answer) : h("p", { class: "muted" }, "No answer was returned."),
         (a.log || []).length ? h("details", { class: "ask-output", "data-ask-output": a.id, open: details.get(a.id) || false }, h("summary", {}, "Activity"),
           h("pre", { class: "log small author-log", "data-ask-log": a.id }, a.log.join("\n"))) : "",
-        mine && !a.running && a.answer ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-reply", disabled: askBusy || askSending,
+        mine && canRun && !a.running && a.answer ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-reply", disabled: askBusy || askSending,
           "data-reply-to": a.id, onclick: () => replyTo(a) }, "Reply")) : ""));
     const threads = new Map();
     for (const a of [...list].sort((a, b) => a.started - b.started || a.id.localeCompare(b.id))) {
@@ -321,7 +322,7 @@ async function loopPage(name, owner, path = "") {
     });
     askHistory.replaceChildren(steer, ...(conversations.length ? conversations : [card(null, empty("No conversations yet."))]));
     let form = "";
-    if (mine) {
+    if (mine && canRun) {
       const send = act(askBusy ? "Answering…" : "Send", sendAsk, { cls: "primary ask-send", title: "Ctrl+Enter or ⌘+Enter to send" });
       send.disabled = askBusy;
       form = h("div", { class: "ask-compose" },
@@ -362,7 +363,7 @@ async function loopPage(name, owner, path = "") {
       if (!st.running && !st.last_active) {
         const ab = await authorBox();
         if (!ok()) return;
-        body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
+        body.replaceChildren(ab, card(null, info.document ? empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
           : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : "")));
         return;
       }
@@ -372,7 +373,7 @@ async function loopPage(name, owner, path = "") {
     }
     if (tab === "Live" && !curSub()) {
       if (!st.running && !st.last_active) {
-        body.replaceChildren(card(null, empty("This loop has not run yet.", mine ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
+        body.replaceChildren(card(null, empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
         return;
       }
       body.replaceChildren(h("div", { class: "live-wrap" },

@@ -493,8 +493,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     runs, log, results, turns, files and settings) or to **edit** (also change its files, document
     and variables, start, stop and send it notes). An editor's runs are the owner's loop: its record,
     the owner's model settings, keys and limits; the log line of each start says who started it.
-    Admins can also add, change or remove sharing on other users' loops. Editors cannot manage
-    sharing, and deleting stays the owner's. Loops shared with you are listed under **Shared with
+    Admins can also add, change or remove sharing on other users' loops, as can group members
+    explicitly allowed to manage sharing within their group. Editing alone does not grant sharing;
+    deleting stays the owner's. Loops shared with you are listed under **Shared with
     me**, with what you may do; you are told in the bell when a loop is shared with you or no longer
     is, and **Leave** takes one off your list (its owner is told). The bell watches shared loops too,
     and is each user's own.
@@ -502,7 +503,7 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     to try next -- answered by an agent (or Flux's own model) that reads it: its document and
     files, a copy of its record (to query as it likes), its log. It runs in the sandbox with the
     loop's folder read-only and the run's network; it changes nothing. Answers are kept with the
-    loop, newest first, in Markdown; one is answered at a time. Anyone who may edit the loop asks;
+    loop, newest first, in Markdown; one is answered at a time. Anyone who may edit the loop and run agents asks;
     a watcher reads. From the command line: `flux consult "<question>" --loop <folder> --out
     <folder> --author opencode`.
   - **Settings:** the loop's environment variables (over the user's and the server's, which are
@@ -661,7 +662,32 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 - **The configurator** (D826) is seven steps -- the problem, checks, measurements, objectives, who does each step, more (budget, search, parts), review and save -- one at a time, Back and Next, Save on every step when editing a loop.
 - **Cloning** (D824, D828): "Clone…" on a loop (or New loop › Clone a loop) makes a new loop of yours with its problem and none of its runs, its workbench when asked.
 - **Invitations** (D818): an admin adds a user without a password (Users, or `flux user add NAME --invite --url https://flux.example`) and gets a link to send them -- it lets them choose their password (10 or more characters) and logs them in; until then the account cannot be used. **Password reset link** (Users, or `flux user link NAME`) is the same for an existing user: their password works until the link is used, and their sessions end then. A link works once, for a week; a new one replaces it. There is no mail: the admin sends it.
-- **Kinds of user** (D734; the Users tab, or `flux user add NAME --role internal|external|admin`, `flux user role NAME --role ...`):
+- **Groups and permissions** (Admin › Users and groups): the **Users** subtab assigns memberships
+  and per-user permissions; **Groups** creates and renames groups. The last subtab is remembered.
+  Each user belongs to one group and has their own
+  permission checkboxes. Admins can create groups, rename them and assign members. Existing
+  accounts migrate to **Admin**, **Internal** or **External**, keeping credentials, files and
+  individual sharing. The built-in Admin group has server administration powers, even after
+  renaming; a custom group with the same name does not. Migration enables creating and running
+  one's own loops, without granting access to other members' loops.
+  - **Create loops:** create, upload or clone a loop; an agent-created loop also needs Run.
+  - **Run loops and agents:** start loops, check their tools, ask questions or invoke an author.
+    Owners can still stop their own active loops after this permission is revoked.
+  - **View other members' loops:** discover them in **Group loops** and read their files,
+    results, logs and settings, with the same secret masking as individually shared loops.
+  - **Edit other members' loops:** change their files and settings; this does not grant Run or Sharing.
+  - **Run/stop other members' loops:** start or stop them using the owner's credentials and limits,
+    without granting file editing. Run loops and agents must also be enabled.
+  - **Manage sharing of other members' loops:** grant, change or remove individual sharing.
+    Reset/delete and rename/transfer remain owner/admin operations; group management remains admin-only.
+  Access to other members' loops applies within the group. Individual watch/edit shares still grant
+  access across groups; explicit Edit shares allow running when Run loops and agents is enabled.
+  Changing groups removes automatic access to the former group's loops, while explicit shares stay.
+  Permissions are checked on every API request, including existing sessions.
+- **Credential access** (Admin › Users and groups › Users, separately from group membership): changing or renaming
+  a group does not change whether a user's runs inherit server model and agent settings.
+  Legacy CLI `--role internal|external|admin` commands still assign the corresponding built-in group
+  and its original credential mode:
   - **internal** (the default): their runs use the server's model, agent and environment settings, under their own.
   - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
     environment variables -- only their own (Account) and the admin's agent programs; the network rules apply to
@@ -678,8 +704,8 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     agent only once its test passed for whoever starts it; `task check` says which agents a document needs.
     **Each day** (D807) an agent a user tested is tested again, one at a time: an answer keeps its login fresh;
     a failure is told to the user (the bell) and their loops that need it wait until a Test passes again.
-  - **admin**: internal, and the admin pages.
-- **Admin** (tabs: Loops, Insights and audit, Applications, Resources, Sandbox, Agents and models, Users):
+  - **admin**: the built-in Admin group, with internal credentials by default.
+- **Admin** (tabs: Loops, Insights and audit, Applications, Resources, Sandbox, Agents and models, Users and groups):
   - **Loops' "Migrate documents of an earlier form…"** (D811, D816): every loop's documents of an earlier form -- what each would change (the steps, the
     result), where it goes (`<id>.problem.yaml` with an `id:` becomes `problem.yaml`; the record follows a
     renamed id) -- migrated one loop at a time or all at once; a running loop is left until stopped; a loop's
@@ -724,7 +750,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     Every loop's disk: inputs, record, log, workbench, sandbox cache. Clear a loop's tools' cache
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no
     loop owns (a deleted loop's, or a `flux task run` of this machine's user).
-  - **Users:** role, a running limit per user (empty: the server's `--max-running`), and usage.
+  - **Users and groups:** two subtabs. **Users** has group membership, per-user permissions,
+    credential access, a running limit per user (empty: the server's `--max-running`), and usage.
+    **Groups** has group creation and renaming, member counts and server administration status.
 - **Files and the configurator follow `.gitignore`:** the loop's `.gitignore` files, read as git
   reads them, hide what they ignore; **show ignored files** on the Files tab lists it greyed. `.git`
   is never listed nor read.

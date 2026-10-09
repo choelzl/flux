@@ -52,6 +52,11 @@ unchecked default, opt-in preservation and regular-user restrictions. API tests 
 forged opt-ins, preserve only execution permissions, and roll back failed permission saves.
 `FLUX_E2E_STEPS="admin sharing"` checks admins adding, changing and removing other owners'
 shares, same-name loop isolation and read-only sharing views for watchers and editors.
+`FLUX_E2E_STEPS="user groups"` checks Users/Groups subtabs and remembered selection,
+group creation/rename, member assignment, permission
+checkboxes, group loop discovery and controls for viewers and runners. `test_web_groups.py`
+checks legacy migration, stable group IDs, live revocation, separate credential access,
+cross-group sharing, independent permissions and all loop creation/execution entry points.
 
 `FLUX_E2E_STEPS="loop names"` checks configurator creation and upload validation. Naming tests
 also cover the loader, CLI examples, rename and clone, and invalid paths and characters.
