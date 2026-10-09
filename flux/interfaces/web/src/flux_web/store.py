@@ -19,7 +19,7 @@ from typing import Any
 SESSION_DAYS = 7
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS user_groups (
-    id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, kind TEXT UNIQUE);
+    id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, kind TEXT UNIQUE, server_access INTEGER);
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, pw TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
     created REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0);
@@ -100,7 +100,8 @@ PERMISSIONS = {
     "share_others": "Manage sharing of other group members' loops",
 }
 DEFAULT_PERMISSIONS = {k: k in ("create_loops", "run_loops") for k in PERMISSIONS}
-_USERS = "SELECT u.*, g.name AS group_name, g.kind AS group_kind FROM users u JOIN user_groups g ON g.id = u.group_id"
+_USERS = ("SELECT u.*, g.name AS group_name, g.kind AS group_kind, g.server_access AS group_server_access "
+          "FROM users u JOIN user_groups g ON g.id = u.group_id")
 
 
 def _permissions(values: dict[str, bool]) -> dict[str, bool]:
@@ -146,9 +147,12 @@ class User:
 def _user(row: sqlite3.Row | None) -> User | None:
     if row is None:
         return None
-    role = "admin" if row["group_kind"] == "admin" else row["credential_mode"]
+    access = row["group_server_access"]
+    # An unset legacy group preserves its members' existing access until an admin chooses a policy.
+    mode = row["credential_mode"] if access is None else "internal" if access else "external"
+    role = "admin" if row["group_kind"] == "admin" else mode
     return User(row["id"], row["name"], role, bool(row["disabled"]), row["group_id"], row["group_name"],
-                {**DEFAULT_PERMISSIONS, **json.loads(row["permissions"])}, row["credential_mode"])
+                {**DEFAULT_PERMISSIONS, **json.loads(row["permissions"])}, mode)
 
 
 def _record_checked(run: dict[str, Any]) -> dict[str, Any]:
@@ -188,13 +192,22 @@ class Store:
                                ("permissions", "TEXT NOT NULL DEFAULT '{}'"), ("credential_mode", "TEXT")):
                 if name not in cols:
                     db.execute(f"ALTER TABLE users ADD COLUMN {name} {spec}")
+            migrate_access = "server_access" not in {r[1] for r in db.execute("PRAGMA table_info(user_groups)")}
+            if migrate_access:
+                db.execute("ALTER TABLE user_groups ADD COLUMN server_access INTEGER")
             for kind in ROLES:
                 if not db.execute("SELECT id FROM user_groups WHERE kind = ?", (kind,)).fetchone():
-                    db.execute("INSERT INTO user_groups(name, kind) VALUES (?, ?)", (kind.title(), kind))
+                    db.execute("INSERT INTO user_groups(name, kind, server_access) VALUES (?, ?, ?)",
+                               (kind.title(), kind, int(kind != "external")))
             db.execute("UPDATE users SET group_id = (SELECT id FROM user_groups WHERE kind = "
                        "CASE WHEN users.role IN ('admin', 'external') THEN users.role ELSE 'internal' END) WHERE group_id IS NULL")
             db.execute("UPDATE users SET credential_mode = CASE WHEN role = 'external' THEN 'external' ELSE 'internal' END "
                        "WHERE credential_mode IS NULL")
+            if migrate_access:
+                # Only consolidate identical settings. Mixed/empty groups stay unchanged until explicit admin action.
+                db.execute("UPDATE user_groups SET server_access = (SELECT MIN(credential_mode = 'internal') "
+                           "FROM users WHERE group_id = user_groups.id) WHERE server_access IS NULL AND "
+                           "(SELECT COUNT(DISTINCT credential_mode) FROM users WHERE group_id = user_groups.id) = 1")
 
     def _db(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30)
@@ -219,7 +232,7 @@ class Store:
         return hmac.compare_digest(got, want)
 
     def add_user(self, name: str, password: str | None, role: str = "internal", *, group_id: int | None = None,
-                 permissions: dict[str, bool] | None = None, credential_mode: str | None = None) -> User:
+                 permissions: dict[str, bool] | None = None) -> User:
         """`password` None (D818): the account is unusable until its invitation is used."""
         name = (name or "").strip()
         if self.user(name=name) is not None:              # D699: names are one whatever their case
@@ -231,9 +244,7 @@ class Store:
         role = _role(role)
         if role not in ROLES:
             raise ValueError("a user is admin, internal or external")
-        credential_mode = credential_mode or ("external" if role == "external" else "internal")
-        if credential_mode not in ("internal", "external"):
-            raise ValueError("credentials are internal (server settings) or external (own settings)")
+        credential_mode = "external" if role == "external" else "internal"  # fallback for unset legacy groups only
         values = _permissions({} if permissions is None else permissions)
         with self._db() as db:
             group = db.execute("SELECT id FROM user_groups WHERE id = ?", (group_id,)).fetchone() if group_id is not None \
@@ -267,8 +278,7 @@ class Store:
         return _user(r)
 
     def set_user(self, name: str, *, password: str | None = None, disabled: bool | None = None,
-                 role: str | None = None, group_id: int | None = None, permissions: dict[str, bool] | None = None,
-                 credential_mode: str | None = None) -> None:
+                 role: str | None = None, group_id: int | None = None, permissions: dict[str, bool] | None = None) -> None:
         found = self.user(name=name)
         if found is None:
             raise ValueError(f"no user {name!r}")
@@ -280,7 +290,6 @@ class Store:
                 if group_id is not None:
                     raise ValueError("choose a group or a legacy role, not both")
                 group_id = db.execute("SELECT id FROM user_groups WHERE kind = ?", (_role(role),)).fetchone()["id"]
-                credential_mode = credential_mode or ("external" if role == "external" else "internal")
             group = db.execute("SELECT * FROM user_groups WHERE id = ?", (found.group_id if group_id is None else group_id,)).fetchone()
             if group is None:
                 raise ValueError("no such group")
@@ -288,10 +297,6 @@ class Store:
                 others = db.execute(_USERS + " WHERE g.kind = 'admin' AND u.disabled = 0 AND u.id != ?", (found.id,)).fetchone()
                 if others is None:
                     raise ValueError("keep at least one enabled admin")
-            if credential_mode is not None:
-                if credential_mode not in ("internal", "external"):
-                    raise ValueError("credentials are internal (server settings) or external (own settings)")
-                db.execute("UPDATE users SET credential_mode = ? WHERE name = ?", (credential_mode, name))
             if permissions is not None:
                 values = {**found.permissions, **_permissions(permissions)}
                 db.execute("UPDATE users SET permissions = ? WHERE name = ?", (json.dumps(values), name))
@@ -310,20 +315,32 @@ class Store:
 
     def groups(self) -> list[dict[str, Any]]:
         with self._db() as db:
-            return [{"id": r["id"], "name": r["name"], "builtin": r["kind"], "admin": r["kind"] == "admin", "members": r["members"]}
+            return [{"id": r["id"], "name": r["name"], "builtin": r["kind"], "admin": r["kind"] == "admin", "members": r["members"],
+                     "server_access": None if r["server_access"] is None else bool(r["server_access"])}
                     for r in db.execute("SELECT g.*, COUNT(u.id) AS members FROM user_groups g LEFT JOIN users u ON u.group_id = g.id "
                                         "GROUP BY g.id ORDER BY g.name COLLATE NOCASE")]
 
-    def save_group(self, name: str, group_id: int | None = None) -> dict[str, Any]:
-        name = name.strip()
-        if not 1 <= len(name) <= 60 or any(ord(c) < 32 for c in name):
-            raise ValueError("a group name is 1–60 characters, without control characters")
+    def save_group(self, name: str | None, group_id: int | None = None, *, server_access: bool | None = None) -> dict[str, Any]:
+        if name is not None:
+            name = name.strip()
+            if not 1 <= len(name) <= 60 or any(ord(c) < 32 for c in name):
+                raise ValueError("a group name is 1–60 characters, without control characters")
+        if server_access is not None and type(server_access) is not bool:
+            raise ValueError("server access must be true or false")
         with self._db() as db:
             try:
                 if group_id is None:
-                    group_id = db.execute("INSERT INTO user_groups(name) VALUES (?)", (name,)).lastrowid
-                elif not db.execute("UPDATE user_groups SET name = ? WHERE id = ?", (name, group_id)).rowcount:
+                    if name is None or server_access is None:
+                        raise ValueError("choose a group name and server access setting")
+                    group_id = db.execute("INSERT INTO user_groups(name, server_access) VALUES (?, ?)",
+                                         (name, int(server_access))).lastrowid
+                elif not db.execute("SELECT id FROM user_groups WHERE id = ?", (group_id,)).fetchone():
                     raise ValueError("no such group")
+                else:
+                    if name is not None:
+                        db.execute("UPDATE user_groups SET name = ? WHERE id = ?", (name, group_id))
+                    if server_access is not None:
+                        db.execute("UPDATE user_groups SET server_access = ? WHERE id = ?", (int(server_access), group_id))
             except sqlite3.IntegrityError as exc:
                 raise ValueError("a group with this name already exists") from exc
         return next(g for g in self.groups() if g["id"] == group_id)

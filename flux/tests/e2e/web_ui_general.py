@@ -440,10 +440,13 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.button("Users", "#users-subtabs")
                 b.wait("document.querySelector('table.users')", what="users subtab")
                 r.check("user controls have a separate subtab", b.js("return document.querySelector('#main .tabs .on').textContent === 'Users and groups' && document.querySelectorAll('#users-subtabs [role=tab]').length === 2 && !document.querySelector('.user-groups')"))
+                r.check("Server access controls are absent from Users", b.js("return ![...document.querySelectorAll('table.users th')].some(th => th.textContent === 'Server access') && ![...document.querySelectorAll('#users-part select')].some(s => (s.getAttribute('aria-label') || '').includes('Server access'))"))
                 r.button("Groups", "#users-subtabs")
                 b.wait("document.querySelector('.user-groups #group-name')", what="groups subtab")
                 r.check("groups subtab contains no user table", b.js("return !document.querySelector('table.users') && document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups'"))
                 b.type("#group-name", "E2E Team")
+                r.check("new groups require an explicit Server access choice", b.js("return document.querySelector('#group-server-access').value === ''"))
+                b.js("const select = document.querySelector('#group-server-access'); select.value = 'server'; select.dispatchEvent(new Event('change')); return 1")
                 r.button("Add group", ".user-groups")
                 b.wait("document.querySelector('.user-groups button[title=\"Rename E2E Team\"]')", what="group created")
                 group = next(g for g in json.loads(r.api("/groups")["body"])["groups"] if g["name"] == "E2E Team")
@@ -463,6 +466,16 @@ objectives: [{metric: timings.fast, goal: 15}]
                 for user in ("bob", "cy"):
                     b.js("const s = document.querySelector(`tr[data-user=${arguments[0]}] select[aria-label=\"${arguments[0]}'s group\"]`); window.__groupSelect = s; s.value = String(arguments[1]); s.dispatchEvent(new Event('change')); return 1", user, group["id"])
                     b.wait("!window.__groupSelect.isConnected && document.querySelector('table.users')", what=f"{user} membership saved")
+                r.button("Groups", "#users-subtabs")
+                b.wait("document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]')", what="group server access")
+                for value, expected in (("own", "external"), ("server", "internal")):
+                    b.js("const select = document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]'); window.__groupAccess = select; select.value = arguments[0]; select.dispatchEvent(new Event('change')); return 1", value)
+                    b.wait("!window.__groupAccess.isConnected && document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]')", what="group policy saved")
+                    members = {u["name"]: u["credential_mode"] for u in json.loads(r.api("/users")["body"]) if u["name"] in ("bob", "cy")}
+                    r.check(f"group {value} access applies to every member", members == {"bob": expected, "cy": expected}, members)
+                    r.check(f"group {value} access survives refresh", b.js("return document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]').value") == value)
+                r.button("Users", "#users-subtabs")
+                b.wait("document.querySelector('table.users')", what="user permissions after group access")
                 r.check("user permissions use a compact labelled Select button", b.js("const button = [...document.querySelectorAll('tr[data-user=cy] button')].find(b => b.getAttribute('aria-label') === \"Select cy's permissions\"); return button && button.textContent === 'Select'"))
                 r.button("Select", "tr[data-user=cy]")
                 b.wait("document.querySelector('dialog[open] input[data-permission=view_others]')", what="member permissions")
@@ -810,6 +823,59 @@ objectives: [{metric: timings.fast, goal: 15}]
             r.page("#/admin", "document.querySelector('.ctl-grid')", "leave resource fixture")
 
     r.step("admin token rates", admin_token_rates)
+
+    def admin_usage_totals():
+        r.login("ada")
+        b.js("""window.__usageFetch = window.fetch;
+          localStorage.setItem('flux-insights-part', 'usage'); localStorage.setItem('flux-insights-days', '7');
+          window.fetch = async (u, o) => {
+            const url = new URL(String(u), location.href);
+            const response = body => new Response(JSON.stringify(body), {status: 200, headers: {'Content-Type': 'application/json'}});
+            if (url.pathname === '/api/admin/insights/disk') return response({at: 1, disk: [
+              {user: 'ada', home: 100, loops: 200, count: 2, total: 300, largest: null},
+              {user: 'bob', home: 50, loops: 100, count: 1, total: 150, largest: null}]});
+            if (url.pathname !== '/api/admin/insights' || url.searchParams.get('part') !== 'usage') return window.__usageFetch(u, o);
+            const days = Number(url.searchParams.get('days')), zero = {turns: [0], tokens: [0], cost: [0]};
+            const usage = days === 7 ? {bucket: 'day', days: ['2026-10-01', '2026-10-02'], users: {
+              ada: {turns: [1, 0], tokens: [100, 0], cost: [0.104, 0]},
+              bob: {turns: [0, 2], tokens: [0, 250], cost: [0, 0.104]}}, agents: {
+              claude: {turns: [1, 1], tokens: [100, 150], cost: [0.104, 0.052]},
+              codex: {turns: [0, 1], tokens: [0, 100], cost: [0, 0.052]}}, top: [
+              {user: 'ada', app: 'alpha', turns: 1, tokens: 100, cost: 0.104, seconds: 3},
+              {user: 'bob', app: 'beta', turns: 1, tokens: 50, cost: 0.052, seconds: 7}]} :
+              {bucket: 'hour', days: ['00:00'], users: days === 1 ? {ada: zero} : {},
+                agents: days === 1 ? {claude: zero} : {}, top: []};
+            return response({range: {start: 1, end: 2}, usage});
+          }; return 1;""")
+        try:
+            r.page("#/admin/insights", "document.querySelectorAll('#insights-part tfoot.usage-total').length === 4", "usage totals")
+            footers = b.js("return [...document.querySelectorAll('#insights-part tfoot.usage-total tr')].map(tr => [...tr.cells].map(c => c.textContent.trim()))")
+            r.check("user and agent totals sum raw costs before rounding", footers[:2] == [
+                    ["Total", "3", "350", "$0.21", ""], ["Total", "3", "350", "$0.21", ""]], footers)
+            r.check("highest-usage loop totals cover only the displayed loops", footers[2] == ["Total shown", "2", "150", "$0.16", "10s"], footers[2])
+            r.check("disk totals include home, loop sizes, loop counts and total size", footers[3] == ["Total", "150 B", "300 B (3)", "", "450 B", ""], footers[3])
+            r.check("total sparklines sum matching time buckets", b.js("return [...document.querySelectorAll('#insights-part tfoot .spark')].map(s => [...s.children].map(i => i.style.height))")
+                    == [["6px", "16px"], ["6px", "16px"]])
+            b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+            r.check("usage totals retain column labels and fit a phone", b.js("""const c = document.querySelector('tfoot.usage-total td[data-label="Tokens"]');
+              return getComputedStyle(c).textAlign === 'left' && getComputedStyle(c, '::before').content === '"Tokens"'
+                && document.documentElement.scrollWidth <= innerWidth + 1;"""))
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            pick = "const s = document.querySelector('#insights-range'); s.value = arguments[0]; s.dispatchEvent(new Event('change')); return 1"
+            b.js(pick, "1")
+            b.wait("document.querySelectorAll('#insights-part .card:first-child tfoot').length === 2 && document.querySelector('#insights-part tfoot td[data-label=Tokens]')?.textContent === '0'", what="zero-usage range totals")
+            r.check("changing the range recomputes zero-valued totals", b.js("return [...document.querySelectorAll('#insights-part .card:first-child tfoot tr')].map(tr => [...tr.cells].map(c => c.textContent.trim()))")
+                    == [["Total", "0", "0", "$0.00", ""], ["Total", "0", "0", "$0.00", ""]])
+            b.js(pick, "30")
+            b.wait("document.querySelector('#insights-part .card:first-child')?.textContent.includes('No model or agent turn')", what="empty usage range")
+            r.check("an empty range has no stale usage totals", b.js("return document.querySelectorAll('#insights-part .card:first-child tfoot').length") == 0)
+            r.clean("admin usage totals")
+        finally:
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            b.js("window.fetch = window.__usageFetch; return 1")
+            r.page("#/admin", "document.querySelector('.ctl-grid')", "leave usage fixture")
+
+    r.step("admin usage totals", admin_usage_totals)
 
     def partial_agent_usage():
         with loop(r, "ui-partial-usage") as name:

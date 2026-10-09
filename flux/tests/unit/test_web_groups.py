@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+import sys
 from contextlib import closing
 from unittest.mock import patch
 
@@ -48,7 +50,7 @@ def test_legacy_roles_migrate_once_and_group_renames_do_not_change_powers_or_cre
     store.save_group("Operations", before["ada"].group_id)
     store.save_group("Research", before["bob"].group_id)
     # A new group can use a former built-in label; reopening must not recreate the built-in.
-    custom = store.save_group("Internal")
+    custom = store.save_group("Internal", server_access=False)
     reopened = Store(data)
     assert len(reopened.groups()) == 4
     assert reopened.session_user(token).admin and reopened.session_user(token).group == "Operations"
@@ -63,21 +65,21 @@ def test_groups_are_admin_managed_and_memberships_preserve_account_settings(team
     app, store, c, _tmp = team
     catalog = c["ada"].get("/api/groups").json()
     assert len(catalog["groups"]) == 3 and catalog["defaults"] == DEFAULT_PERMISSIONS
-    for method, url, body in (("get", "/api/groups", None), ("post", "/api/groups", {"name": "Team"}),
+    for method, url, body in (("get", "/api/groups", None), ("post", "/api/groups", {"name": "Team", "server_access": False}),
                               ("patch", "/api/groups/1", {"name": "Changed"})):
         args = {"headers": H, **({"json": body} if body else {})}
         assert getattr(c["bob"], method)(url, **args).status_code == 403
-    created = c["ada"].post("/api/groups", json={"name": "Team"}, headers=H).json()
+    created = c["ada"].post("/api/groups", json={"name": "Team", "server_access": False}, headers=H).json()
     assert created["members"] == 0 and created["admin"] is False
     added = c["ada"].post("/api/users", json={"name": "invited", "group_id": created["id"],
-                                              "credential_mode": "external", "permissions": {"create_loops": False}}, headers=H)
+                                              "permissions": {"create_loops": False}}, headers=H)
     assert added.status_code == 200 and added.json()["kind"] == "invite"
     invitation = c["bob"].post("/api/invite/" + added.json()["token"], json={"text": "an invited user's secret"}, headers=H)
     assert invitation.status_code == 200 and invitation.json()["group_id"] == created["id"]
     assert invitation.json()["credential_mode"] == "external" and not invitation.json()["permissions"]["create_loops"]
     # The invitation changes this client's session; return it to its fixture account.
     c["bob"] = _client(app, "bob", "another long secret")
-    assert c["ada"].post("/api/groups", json={"name": " team "}, headers=H).status_code == 400
+    assert c["ada"].post("/api/groups", json={"name": " team ", "server_access": True}, headers=H).status_code == 400
     assert c["ada"].patch("/api/groups/99999", json={"name": "Absent"}, headers=H).status_code == 404
     store.set_setting(store.user(name="dee"), "FLUX_REMOTE_MODEL", "personal-model")
     group_id = created["id"]
@@ -101,6 +103,80 @@ def test_groups_are_admin_managed_and_memberships_preserve_account_settings(team
     with pytest.raises(ValueError, match="enabled admin"):
         store.set_user("ada", group_id=group_id)
     assert app.state.store.user(name="ada").admin
+
+
+def test_group_server_access_applies_to_every_member_and_existing_sessions(team, monkeypatch):
+    from flux_web.runs import run_env
+
+    _app, store, c, _tmp = team
+    group = store.save_group("Shared configuration", server_access=False)
+    for name in ("bob", "cy"):
+        store.set_user(name, group_id=group["id"])
+    store.set_server_setting("FLUX_REMOTE_MODEL", "group-server-model")
+    store.set_server_setting("FLUX_CLAUDE_MODEL", "group-agent-model")
+    store.set_env("global", "GROUP_SERVER_FLAG", "server-variable", False)
+    store.set_setting(store.user(name="cy"), "FLUX_REMOTE_MODEL", "personal-model")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-machine-key")
+    monkeypatch.setattr("flux_web.agents.found", lambda agent, _store: sys.executable if agent.name == "claude" else "")
+    url = f"/api/groups/{group['id']}"
+    assert c["bob"].patch(url, json={"server_access": True}, headers=H).status_code == 403
+    assert c["ada"].patch(url, json={"server_access": "false"}, headers=H).status_code == 422
+    for enabled in (True, False, True):
+        response = c["ada"].patch(url, json={"server_access": enabled}, headers=H)
+        assert response.status_code == 200 and response.json()["server_access"] is enabled
+        for name in ("bob", "cy"):
+            assert c[name].get("/api/me").json()["credential_mode"] == ("internal" if enabled else "external")
+            assert c[name].get("/api/settings").json()["external"] is not enabled
+            env = run_env(store, store.user(name=name))
+            assert env.get("FLUX_REMOTE_MODEL") == ("personal-model" if name == "cy" else "group-server-model" if enabled else None)
+            agent_env = json.loads(env.get("FLUX_CLAUDE_ENV", "{}"))
+            assert agent_env.get("FLUX_CLAUDE_MODEL") == ("group-agent-model" if enabled else None)
+            assert env.get("GROUP_SERVER_FLAG") == ("server-variable" if enabled else None)
+            assert env.get("ANTHROPIC_API_KEY") == ("test-machine-key" if enabled else None)
+        # Moving a member and adding one both take the group's policy, regardless of legacy role.
+        store.set_user("dee", group_id=group["id"])
+        assert store.user(name="dee").external is not enabled
+    added = c["ada"].post("/api/users", json={"name": "joining", "password": "a long secret", "group_id": group["id"]}, headers=H)
+    assert added.status_code == 200 and not store.user(name="joining").external
+    renamed = c["ada"].patch(url, json={"name": "Renamed configuration"}, headers=H).json()
+    assert renamed["server_access"] is True and not store.user(name="bob").external
+    assert Store(store.data).user(name="bob").credential_mode == "internal"
+    assert any(a["action"] == "group server access" for a in store.audit_log())
+
+
+def test_group_creation_requires_explicit_access_and_users_cannot_override_it(team):
+    _app, store, c, _tmp = team
+    assert c["ada"].post("/api/groups", json={"name": "Unspecified"}, headers=H).status_code == 422
+    assert c["ada"].post("/api/groups", json={"name": "Unspecified", "server_access": 1}, headers=H).status_code == 422
+    assert c["ada"].patch("/api/users/bob", json={"credential_mode": "external"}, headers=H).status_code == 422
+    assert c["ada"].post("/api/users", json={"name": "override", "credential_mode": "internal"}, headers=H).status_code == 422
+    assert store.user(name="override") is None and not store.user(name="bob").external
+
+
+def test_group_access_migration_preserves_consistent_and_mixed_members(tmp_path):
+    data = tmp_path / "old-groups"
+    data.mkdir()
+    with closing(sqlite3.connect(data / "flux-web.db")) as db:
+        db.execute("CREATE TABLE user_groups (id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, kind TEXT UNIQUE)")
+        db.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, pw TEXT NOT NULL, role TEXT NOT NULL, "
+                   "created REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0, group_id INTEGER, permissions TEXT, credential_mode TEXT)")
+        for ident, name in enumerate(("Shared", "Private", "Mixed", "Empty"), 1):
+            db.execute("INSERT INTO user_groups VALUES (?, ?, NULL)", (ident, name))
+        for ident, (name, gid, mode) in enumerate((("shared", 1, "internal"), ("private", 2, "external"),
+                                                  ("mixed-in", 3, "internal"), ("mixed-out", 3, "external")), 1):
+            db.execute("INSERT INTO users VALUES (?, ?, '', ?, 42, 0, ?, '{}', ?)", (ident, name, mode, gid, mode))
+        db.commit()
+    store = Store(data)
+    groups = {g["name"]: g for g in store.groups()}
+    assert groups["Shared"]["server_access"] is True and groups["Private"]["server_access"] is False
+    assert groups["Mixed"]["server_access"] is None and groups["Empty"]["server_access"] is None
+    assert not store.user(name="mixed-in").external and store.user(name="mixed-out").external
+    assert not Store(data).user(name="mixed-in").external and Store(data).user(name="mixed-out").external
+    store.save_group(None, groups["Mixed"]["id"], server_access=False)
+    store.save_group(None, groups["Shared"]["id"], server_access=False)
+    reopened = Store(data)
+    assert all(reopened.user(name=n).external for n in ("shared", "mixed-in", "mixed-out"))
+    assert {u.name: u.group_id for u in reopened.users()} == {"shared": 1, "private": 2, "mixed-in": 3, "mixed-out": 3}
 
 
 @pytest.mark.parametrize("permission", ["view_others", "edit_others", "run_others", "share_others"])
@@ -191,7 +267,7 @@ def test_group_moves_revoke_automatic_access_but_keep_shares_and_credentials(tea
     token_user = c["cy"].get("/api/me").json()
     assert token_user["permissions"]["view_others"]
     assert c["cy"].get("/api/apps/x", params={"owner": "bob"}).status_code == 200
-    new = store.save_group("Independent")
+    new = store.save_group("Independent", server_access=True)
     store.set_user("cy", group_id=new["id"])
     assert c["cy"].get("/api/apps/x", params={"owner": "bob"}).status_code == 403
     assert c["cy"].get("/api/group-loops").json() == []
@@ -201,7 +277,7 @@ def test_group_moves_revoke_automatic_access_but_keep_shares_and_credentials(tea
     # Ordinary groups named like a legacy role cannot grant server administration.
     admin = store.user(name="ada")
     store.save_group("Operators", admin.group_id)
-    impostor = store.save_group("Admin")
+    impostor = store.save_group("Admin", server_access=False)
     store.set_user("cy", group_id=impostor["id"])
     assert c["cy"].get("/api/groups").status_code == 403
     assert c["ada"].get("/api/groups").status_code == 200

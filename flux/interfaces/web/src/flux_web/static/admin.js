@@ -84,7 +84,7 @@ async function adminAudit(body, ok = () => true) {
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
   // D724: the kinds in groups; a kind not listed is Other
   const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password",
-      "invite user", "password set from a link", "create group", "rename group"]],
+      "invite user", "password set from a link", "create group", "rename group", "group server access"]],
     ["Runs", ["start", "stop", "note", "note removed", "stop all", "restart all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
       "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "clone loop", "empty loop",
@@ -475,6 +475,9 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
   const box = h("div", {}, skeleton(6)), more = h("div", {});
   const ago2 = (t) => t ? ago(t) : "—";
   const loopLink = (u, a) => h("a", { href: `#/u/${enc(u)}/app/${enc(a)}` }, `${u}/${a}`);
+  const sum = (xs) => xs.reduce((s, x) => s + x, 0);
+  const totalCell = (label, value, mono = true) => h("td", { class: `num${mono ? " mono" : ""}`, "data-label": label }, value);
+  const totals = (label, ...cells) => h("tfoot", { class: "usage-total" }, h("tr", {}, h("td", {}, label), ...cells));
   body.replaceChildren(card(TITLE[part], box, { actions: [h("div", { class: "range-pick" }, h("label", { for: "insights-range" }, "Over the last"), pick)] }),
     more, part === "usage" ? diskCard() : "");
   let seq = 0;
@@ -493,7 +496,10 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
         h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
         h("tbody", {}, d.disk.map(x => h("tr", {}, h("td", { class: "strong" }, x.user), h("td", { class: "num mono" }, bytes(x.home)),
           h("td", { class: "num mono" }, `${bytes(x.loops)} (${x.count})`), h("td", {}, x.largest ? [loopLink(x.user, x.largest.app), " ", h("span", { class: "muted mono small" }, bytes(x.largest.size))] : "—"),
-          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk)))))));
+          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk))))),
+        totals("Total", totalCell("Home", bytes(sum(d.disk.map(x => x.home)))),
+          totalCell("Loops", `${bytes(sum(d.disk.map(x => x.loops)))} (${sum(d.disk.map(x => x.count))})`), h("td", {}, ""),
+          totalCell("Total", bytes(sum(d.disk.map(x => x.total)))), h("td", {}, ""))));
     };
     fill();
     return card("Current disk usage", dbox, { actions: [at] });
@@ -528,16 +534,26 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
     if (part === "usage") {
       const u = r.usage, per = u.bucket === "hour" ? "an hour" : "a day";
       const rowsOf = (by) => Object.entries(by).sort((a, b) => b[1].tokens.reduce((s, x) => s + x, 0) - a[1].tokens.reduce((s, x) => s + x, 0));
-      const usageTable = (by, head) => h("table", { class: "list compact" },
-        h("thead", {}, h("tr", {}, h("th", {}, head), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", {}, `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)`))),
-        h("tbody", {}, rowsOf(by).map(([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
-          h("td", { class: "num" }, String(v.turns.reduce((s, x) => s + x, 0))), h("td", { class: "num mono" }, fmtTok(v.tokens.reduce((s, x) => s + x, 0))),
-          h("td", { class: "num mono" }, `$${v.cost.reduce((s, x) => s + x, 0).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))))));
+      const usageTable = (by, head) => {
+        const rows = rowsOf(by), values = rows.map(([, v]) => v);
+        const tokens = u.days.map((_, i) => sum(values.map(v => v.tokens[i] || 0)));
+        return h("table", { class: "list compact" },
+          h("thead", {}, h("tr", {}, h("th", {}, head), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", {}, `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)`))),
+          h("tbody", {}, rows.map(([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
+            h("td", { class: "num" }, String(sum(v.turns))), h("td", { class: "num mono" }, fmtTok(sum(v.tokens))),
+            h("td", { class: "num mono" }, `$${sum(v.cost).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))))),
+          totals("Total", totalCell("Turns", String(sum(values.map(v => sum(v.turns)))), false),
+            totalCell("Tokens", fmtTok(sum(tokens))), totalCell("Cost", `$${sum(values.map(v => sum(v.cost))).toFixed(2)}`),
+            h("td", { "data-label": `Tokens ${per}` }, spark(tokens, `Total: tokens ${per}`))));
+      };
       fill(...[Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
         u.top.length ? [h("h3", {}, "Highest usage loops"), h("table", { class: "list compact" },
           h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
           h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
-            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))))] : ""]
+            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))),
+          totals("Total shown", totalCell("Turns", String(sum(u.top.map(t => t.turns))), false),
+            totalCell("Tokens", fmtTok(sum(u.top.map(t => t.tokens)))), totalCell("Cost", `$${sum(u.top.map(t => t.cost)).toFixed(2)}`),
+            totalCell("Time", dur(sum(u.top.map(t => t.seconds))), false)))] : ""]
         : h("p", { class: "muted" }, "No model or agent turn in this time."),
         // D841: turns recorded before a price was set, priced once at today's prices
         h("div", { class: "row end" }, act("Price past turns…", async () => {
@@ -731,12 +747,8 @@ async function adminUsers(body, ok = () => true) {
   const name = h("input", { placeholder: "name", autocomplete: "off", "data-lpignore": "true" }); const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "password (empty: send an invitation link)", style: "min-width:280px" });
   const groupSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, catalog.groups.map(g =>
     h("option", { value: g.id, selected: g.id === value }, g.name + (g.admin ? " (server admin)" : ""))));
-  const credentialSel = (value, onchange, label) => h("select", { "aria-label": label, onchange },
-    h("option", { value: "internal", selected: value === "internal" }, "Use server settings"),
-    h("option", { value: "external", selected: value === "external" }, "Own settings only"));
   const initial = catalog.groups.find(g => g.builtin === "internal");
   const newGroup = groupSel(initial?.id, null, "Group of the new user");
-  const newCredentials = credentialSel("internal", null, "Server access of the new user");
   const permissionsButton = (u) => {
     const button = act("Select", async () => {
       const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
@@ -756,7 +768,7 @@ async function adminUsers(body, ok = () => true) {
   };
   const useOf = (n) => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4;
-  // D926: rows sort by saved group, credential access and running limit.
+  // D926: rows sort by saved group and running limit.
   const limits = Object.assign({}, res && res.limits);
   const limitCell = (u) => {
     const cur = limits[u.name];
@@ -772,7 +784,7 @@ async function adminUsers(body, ok = () => true) {
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
   const cols = [
     { label: "User", key: u => u.name, asc: true }, { label: "Group", key: u => u.group, asc: true },
-    { label: "Server access", key: u => u.credential_mode, asc: true, title: "Inherit server and machine model, agent and environment settings, or use only the user's own settings" }, { label: "Permissions" },
+    { label: "Permissions" },
     { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
     { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
     { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
@@ -787,10 +799,7 @@ async function adminUsers(body, ok = () => true) {
               try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { group_id: +e.target.value } }); route(); }
               catch (x) { e.target.value = u.group_id; toast(x.message, "bad"); }
             }, `${u.name}'s group`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
-        h("td", {}, credentialSel(u.credential_mode, async (e) => {
-          try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { credential_mode: e.target.value } }); u.credential_mode = e.target.value; toast("Server access saved", "ok"); }
-          catch (x) { e.target.value = u.credential_mode; toast(x.message, "bad"); }
-        }, `${u.name}'s server access`)), h("td", {}, permissionsButton(u)),
+        h("td", {}, permissionsButton(u)),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
         h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
@@ -805,24 +814,40 @@ async function adminUsers(body, ok = () => true) {
             await linkDialog(u.name, got.token, got.kind);
           }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); }, 0, { cls: "list users" });
   body.replaceChildren(card("Users", [table.strip, h("div", { class: "scroll-x" }, table),
-    h("div", { class: "row add-user" }, name, pw, newGroup, newCredentials,
+    h("div", { class: "row add-user" }, name, pw, newGroup,
       act("Add user", async () => {
-        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, group_id: +newGroup.value, credential_mode: newCredentials.value } });
+        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, group_id: +newGroup.value } });
         if (got.token) await linkDialog(got.ok, got.token, got.kind);           // D818: an invitation to send
         else toast(`${name.value} added`, "ok");
         route();
       }, { cls: "primary" })),
-    h("p", { class: "muted small" }, "Server access lets runs inherit server and machine model, agent and environment settings. Own settings only requires the user's own configuration. Loop creation, execution and sharing are controlled by Permissions.")]));
+    h("p", { class: "muted small" }, "Server access is set for the whole group on the Groups tab. Loop creation, execution and sharing are controlled by Permissions.")]));
 }
 
 async function adminGroups(body, ok = () => true) {
   const catalog = await api("/groups");
   if (!ok()) return;
   const groupName = h("input", { id: "group-name", placeholder: "New group name", maxlength: 60, autocomplete: "off" });
+  const accessSelect = (value, label, onchange = null, id = null) => h("select", { "aria-label": label, onchange, ...(id ? { id } : {}) },
+    h("option", { value: "", selected: value == null, disabled: true }, value == null && !id ? "Keep existing access (choose a policy)" : "Choose server access…"),
+    h("option", { value: "server", selected: value === true }, "Use server settings"),
+    h("option", { value: "own", selected: value === false }, "Own settings only"));
+  const newAccess = accessSelect(null, "Server access for the new group", null, "group-server-access");
   body.replaceChildren(card("Groups", [
     h("p", { class: "muted" }, "Each user belongs to one group, with their own permission checkboxes. Renaming keeps memberships and permissions; the group marked server admin keeps its server powers."),
+    h("p", { class: "muted" }, "Server access applies to every current and future member: inherit server and machine model, agent and environment settings, or use their own settings only. Changes take effect on the next run or agent invocation. Personal settings stay."),
+    catalog.groups.some(g => g.server_access == null) ? h("p", { class: "muted" }, "Groups showing Keep existing access preserve their members' current settings until you choose one policy for everyone.") : "",
     h("ul", { class: "files" }, catalog.groups.map(g => h("li", {}, h("span", { class: "strong" }, g.name),
       h("span", { class: "muted small" }, `${g.members} member(s)${g.admin ? " · server administration" : ""}`),
+      h("label", { class: "inline" }, "Server access", accessSelect(g.server_access, `Server access for ${g.name}`, async (e) => {
+        const select = e.target;
+        select.disabled = true;
+        try {
+          await api(`/groups/${g.id}`, { method: "PATCH", body: { server_access: select.value === "server" } });
+          toast(`Server access saved for ${g.name}`, "ok"); route();
+        } catch (x) { select.value = g.server_access == null ? "" : g.server_access ? "server" : "own"; toast(x.message, "bad"); }
+        finally { select.disabled = false; }
+      })),
       act("Rename…", async () => {
         const input = h("input", { id: "group-rename", value: g.name, maxlength: 60 });
         const renamed = await dialog("Rename group", h("label", { class: "stack" }, "Group name", input),
@@ -830,8 +855,9 @@ async function adminGroups(body, ok = () => true) {
         if (!renamed) return;
         await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
       }, { cls: "small", title: `Rename ${g.name}` })))),
-    h("div", { class: "row" }, groupName, act("Add group", async () => {
-      await api("/groups", { method: "POST", body: { name: groupName.value.trim() } }); route();
+    h("div", { class: "row" }, groupName, newAccess, act("Add group", async () => {
+      if (!newAccess.value) { toast("Choose server access for the new group.", "warn"); return; }
+      await api("/groups", { method: "POST", body: { name: groupName.value.trim(), server_access: newAccess.value === "server" } }); route();
     }, { cls: "primary small" }))], { cls: "user-groups" }));
 }
 

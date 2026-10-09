@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 
-from .models import Login, NewUser, UserChange, GroupIn, FileText, EnvVar, Settings
+from .models import Login, NewUser, UserChange, GroupIn, GroupChange, FileText, EnvVar, Settings
 from .store import SESSION_DAYS, PERMISSIONS, DEFAULT_PERMISSIONS, User
 
 
@@ -59,7 +59,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """A user (D818: with no password, an invitation to set it -- the link's token, for the admin to send)."""
         try:
             u = store.add_user(body.name, body.password, body.role, group_id=body.group_id,
-                               permissions=body.permissions, credential_mode=body.credential_mode)
+                               permissions=body.permissions)
         except ValueError as exc:
             raise fail(exc) from exc
         store.audit(a.name, "add user", body.name)
@@ -122,22 +122,27 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.post("/api/groups")
     def create_group(body: GroupIn, a: User = Depends(admin_of)) -> dict[str, Any]:
         try:
-            group = store.save_group(body.name)
+            group = store.save_group(body.name, server_access=body.server_access)
         except ValueError as exc:
             raise fail(exc) from exc
-        store.audit(a.name, "create group", f"{group['id']}: {group['name']}")
+        store.audit(a.name, "create group", f"{group['id']}: {group['name']}; server access: {group['server_access']}")
         return group
 
     @app.patch("/api/groups/{group_id}")
-    def rename_group(group_id: int, body: GroupIn, a: User = Depends(admin_of)) -> dict[str, Any]:
+    def change_group(group_id: int, body: GroupChange, a: User = Depends(admin_of)) -> dict[str, Any]:
         old = next((g for g in store.groups() if g["id"] == group_id), None)
         if old is None:
             raise HTTPException(404, "no such group")
         try:
-            group = store.save_group(body.name, group_id)
+            if body.name is None and body.server_access is None:
+                raise ValueError("choose a group name or server access setting")
+            group = store.save_group(body.name, group_id, server_access=body.server_access)
         except ValueError as exc:
             raise fail(exc) from exc
-        store.audit(a.name, "rename group", f"{group_id}: {old['name']} -> {group['name']}")
+        if body.name is not None:
+            store.audit(a.name, "rename group", f"{group_id}: {old['name']} -> {group['name']}")
+        if body.server_access is not None:
+            store.audit(a.name, "group server access", f"{group_id}: {group['name']}; {old['server_access']} -> {group['server_access']}")
         return group
 
     @app.post("/api/password")

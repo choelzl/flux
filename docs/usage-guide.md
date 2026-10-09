@@ -692,10 +692,16 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   access across groups; explicit Edit shares allow running when Run loops and agents is enabled.
   Changing groups removes automatic access to the former group's loops, while explicit shares stay.
   Permissions are checked on every API request, including existing sessions.
-- **Credential access** (Admin › Users and groups › Users, separately from group membership): changing or renaming
-  a group does not change whether a user's runs inherit server model and agent settings.
+- **Server access** (Admin › Users and groups › Groups): choose **Use server settings** or
+  **Own settings only** once for a group. This applies to every current and future member's
+  model, agent and environment configuration on their next run or agent invocation.
+  Users retain their personal settings. Assigning a user to a group applies that group's policy;
+  renaming a group preserves it. This control is absent from the Users tab.
+  Migration preserves existing access. Consistent groups keep their shared setting; mixed or
+  empty legacy groups show **Keep existing access** until an admin chooses a group-wide policy.
+  New groups require an explicit choice. Changing a group policy also affects existing sessions.
   Legacy CLI `--role internal|external|admin` commands still assign the corresponding built-in group
-  and its original credential mode:
+  and follow its configured Server access policy. The initial built-in settings are:
   - **internal** (the default): their runs use the server's model, agent and environment settings, under their own.
   - **external**: their runs get none of the server's or the machine's model and agent settings, nor the server's
     environment variables -- only their own (Account) and the admin's agent programs; the network rules apply to
@@ -759,8 +765,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     or its past passes' scratch (the journal, transcript and record stay); delete a cache no
     loop owns (a deleted loop's, or a `flux task run` of this machine's user).
   - **Users and groups:** two subtabs. **Users** has group membership, per-user permissions,
-    credential access, a running limit per user (empty: the server's `--max-running`), and usage.
-    **Groups** has group creation and renaming, member counts and server administration status.
+    a running limit per user (empty: the server's `--max-running`), and usage.
+    **Groups** has group creation and renaming, Server access for all members, member counts
+    and server administration status.
 - **Files and the configurator follow `.gitignore`:** the loop's `.gitignore` files, read as git
   reads them, hide what they ignore; **show ignored files** on the Files tab lists it greyed. `.git`
   is never listed nor read.

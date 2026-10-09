@@ -33,6 +33,9 @@ FLUX_E2E_STEPS="fullscreen draft and raw,reset confirmation,run history isolatio
   nix develop --command python3 tests/e2e/web_ui.py
 ```
 
+`FLUX_E2E_STEPS="admin usage totals"` checks the Usage tables' totals, raw-cost rounding,
+summed time buckets, the displayed-loop subtotal, disk totals, mobile labels and range changes.
+
 `FLUX_E2E_STEPS="admin token rates"` checks Admin Resources' separate input/output rates,
 agent/model totals, flat averaging intervals, hover values on either side of a boundary, and
 the interval label when switching history ranges, including 30 days for both machine and token
@@ -57,9 +60,9 @@ forged opt-ins, preserve only execution permissions, and roll back failed permis
 `FLUX_E2E_STEPS="admin sharing"` checks admins adding, changing and removing other owners'
 shares, same-name loop isolation and read-only sharing views for watchers and editors.
 `FLUX_E2E_STEPS="user groups"` checks Users/Groups subtabs and remembered selection,
-group creation/rename, member assignment, permission
+group creation/rename, group-wide Server access, member assignment, permission
 checkboxes, group loop discovery and controls for viewers and runners. `test_web_groups.py`
-checks legacy migration, stable group IDs, live revocation, separate credential access,
+checks legacy migration (including mixed access), stable group IDs, live revocation, group-wide server access,
 cross-group sharing, independent permissions and all loop creation/execution entry points.
 
 `FLUX_E2E_STEPS="login refused,login,upload,reset loop"` checks reset warnings, cancellation,
