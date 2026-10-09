@@ -16,6 +16,7 @@ export function liveAltTab(ctx) {
   let abort = null, timer = null, frame = 0, seq = 0, mounted = false, following = true, limit = 200;
   let panel, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, detailNav, logLink, locateBtn;
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
+  let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), viewPlaces = new Map();
   const close = () => {
     seq++; mounted = false;
@@ -24,15 +25,28 @@ export function liveAltTab(ctx) {
     abort?.abort(); abort = null;
     transport?.close(); transport = null;
     inspector?.close(); inspector = null;
+    resizeObserver?.disconnect(); resizeObserver = null;
+    clearTimeout(locateTimer); choice = null;
     locatedId = null; locatedUntil = 0;
   };
   const queue = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(); }); };
+  function pinPass(id) {
+    if (pass !== "current" || id == null) return;
+    const n = taskScope(inspector.model, "all").membership.get(id);
+    pass = n == null ? "all" : String(n);
+  }
   function select(id, locate = false) {
     following = false;
+    pinPass(id);
+    choice = null;
     reveal = locate;
     for (let p = inspector.model.nodes.get(id)?.parent; p; p = p.parent) folded.delete(p.id);
     inspector.inspect(id);
     render();
+    if (window.matchMedia("(max-width: 960px)").matches) {
+      detailHost.closest(".alt-inspector-card")?.scrollIntoView({ block: "start" });
+      detailHost.focus({ preventScroll: true });
+    }
   }
   function render() {
     if (!mounted || !valid() || !inspector) return;
@@ -41,17 +55,21 @@ export function liveAltTab(ctx) {
     inspector.inspect(inspector.taskId());
     const scope = taskScope(inspector.model, pass);
     const chosen = inspector.taskId();
-    if (following || !scope.rows.some(r => r.node.id === chosen)) inspector.inspect(currentTask(scope.rows)?.id);
+    if (following || !scope.rows.some(r => r.node.id === chosen)) {
+      const next = currentTask(scope.rows)?.id;
+      if (next !== chosen) inspector.inspect(next);
+    }
     const selected = inspector.taskId();
     const rows = taskWindow(scope.rows, limit, selected);
     visibleRows = scope.rows;
     passSel.replaceChildren(h("option", { value: "current" }, `Current${scope.current.length ? " · " + scope.current.join(", ") : ""}`),
-      h("option", { value: "all" }, "All passes"), scope.passes.map(n => h("option", { value: String(n) }, n === 0 ? "Pass 0 · baseline" : `Pass ${n}`)),
+      h("option", { value: "all" }, "All passes"), ...scope.passes.map(n => h("option", { value: String(n) }, n === 0 ? "Pass 0 · baseline" : `Pass ${n}`)),
       !["current", "all"].includes(pass) && !scope.passes.includes(Number(pass)) ? h("option", { value: pass }, `Pass ${pass} · unavailable`) : "");
     passSel.value = pass;
     earlier.hidden = !(inspector.model.before || inspector.model.cut) || startId !== "current";
     followBtn.textContent = following ? "Following" : "Follow";
     followBtn.classList.toggle("on", following); followBtn.setAttribute("aria-pressed", String(following));
+    followBtn.title = following ? "Pause automatic task selection" : "Follow the latest task in the current pass";
     const counts = Object.fromEntries(["running", "done", "failed", "interrupted"].map(s => [s, scope.rows.filter(r => state(r.node) === s).length]));
     const scopeName = pass === "all" ? "All passes" : pass === "current" ? scope.current.length ? `Pass ${scope.current.join(", ")}` : "Setup" : Number(pass) === 0 ? "Pass 0 · baseline" : `Pass ${pass}`;
     summary.replaceChildren(h("strong", {}, scopeName === "Pass 0" ? "Pass 0 · baseline" : scopeName),
@@ -65,8 +83,9 @@ export function liveAltTab(ctx) {
     logLink.textContent = startId === "current" ? "Full log" : "History";
     logLink.href = `${appHref(ctx.owner, ctx.name)}/live/${startId === "current" ? "log" : "history/" + startId}`;
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
-    const focusKey = active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
+    const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
+    if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
       : mode === "graph" ? [graph(scope.rows, selected)] : mode === "timeline" ? [timeline(scope.rows, selected)] : [tree(rows, selected)]),
@@ -75,9 +94,14 @@ export function liveAltTab(ctx) {
     const savedPlace = mode === lastMode ? place : viewPlaces.get(mode);
     if (savedPlace) restoreScroll(panel, savedPlace); else panel.scrollTop = panel.scrollLeft = 0;
     lastMode = mode;
-    if (reveal) { reveal = false; locatedId = selected; locatedUntil = Date.now() + 1600; revealTask(selected); }
+    const didReveal = reveal;
+    if (reveal) {
+      reveal = false; locatedId = selected; locatedUntil = Date.now() + 1600; revealTask(selected);
+      clearTimeout(locateTimer);
+      locateTimer = setTimeout(() => { locatedId = null; panel.querySelectorAll(".alt-located").forEach(el => el.classList.remove("alt-located")); }, 1600);
+    }
     if (locatedId === selected && Date.now() < locatedUntil) selectedElement(selected)?.classList.add("alt-located");
-    if (focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+    if (!didReveal && focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
   }
   function selectedElement(id) {
     if (id == null) return null;
@@ -92,6 +116,7 @@ export function liveAltTab(ctx) {
     panel.scrollTop += item.top - box.top - (box.height - item.height) / 2;
     if (item.left < box.left || item.right > box.right) panel.scrollLeft += item.left - box.left - 12;
     el.focus({ preventScroll: true });
+    if (window.matchMedia("(max-width: 960px)").matches) panel.closest(".alt-visual-card")?.scrollIntoView({ block: "start" });
   }
   function taskButton(node, attrs = {}) {
     return { "data-task": String(node.id), tabindex: "0", role: "button", "aria-label": `${node.name} · ${state(node)}`,
@@ -146,6 +171,7 @@ export function liveAltTab(ctx) {
     // As in Live: one lane per work category. Nested tasks share their phase's lane.
     // Paint shorter tasks over their parents, and keep the pinned task visible.
     const tasks = rows.slice().sort((x, y) => {
+      if (x.node.id === y.node.id) return 0;
       if (x.node.id === selected) return 1;
       if (y.node.id === selected) return -1;
       return ((y.node.t1 ?? now) - y.node.t0) - ((x.node.t1 ?? now) - x.node.t0);
@@ -160,7 +186,16 @@ export function liveAltTab(ctx) {
         sv("line", { x1: X(m.t), x2: X(m.t), y1: T, y2: H - B, class: "pass-line" }, sv("title", {}, `Pass ${m.n}`))),
       tasks.map(({ node: n }) => {
         const kind = workOf(n), y = T + lanes.indexOf(kind) * lane + 3, width = Math.max(3, X(n.t1 ?? now) - X(n.t0));
-        return taskSvg(n, { class: `alt-time-task${n.id === selected ? " sel" : ""}`, "data-kind": kind, "aria-pressed": String(n.id === selected) },
+        return taskSvg(n, { class: `alt-time-task${n.id === selected ? " sel" : ""}`, "data-kind": kind, "aria-pressed": String(n.id === selected),
+          onclick: event => {
+            const svg = event.currentTarget.ownerSVGElement, bounds = svg.getBoundingClientRect();
+            const at = a + ((event.clientX - bounds.left) * W / bounds.width - L) / (W - L - R) * (b - a);
+            const hits = rows.filter(r => workOf(r.node) === kind && r.node.t0 <= at && (r.node.t1 ?? now) >= at);
+            if (hits.length < 2) { select(n.id); return; }
+            following = false; pinPass(inspector.taskId());
+            choice = { ids: hits.slice().sort((x, y) => y.depth - x.depth || y.node.t0 - x.node.t0).map(r => r.node.id), kind };
+            render(); panel.querySelector(".alt-choice [data-task]")?.focus({ preventScroll: true });
+          } },
           sv("title", {}, `${n.name} · ${state(n)} · ${dur(n.seconds ?? now - n.t0)}`),
           sv("rect", { x: X(n.t0), y, width, height: lane - 6, rx: 2, fill: COLORS[kind], class: `bar ${state(n)}` }));
       }),
@@ -168,7 +203,13 @@ export function liveAltTab(ctx) {
         x: X(n.t0), y: T + lanes.indexOf(workOf(n)) * lane + lane - 8,
         width: Math.max(3, X(n.t1 ?? now) - X(n.t0)), height: 5, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
       h("p", { class: "muted small tl-legend" }, h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work"),
-        "Dashed: a pass begins."));
+        "Dashed: a pass begins."),
+      choice ? h("div", { class: "alt-choice", role: "group", "aria-label": "Overlapping tasks", onkeydown: event => {
+        if (event.key === "Escape") { event.preventDefault(); choice = null; reveal = true; render(); }
+      } }, h("div", { class: "alt-choice-head" }, h("strong", {}, `${workLabel(choice.kind)} · choose a task`),
+        h("button", { type: "button", class: "small", "aria-label": "Close overlapping tasks", onclick: () => { choice = null; render(); } }, "×")),
+        choice.ids.map(id => inspector.model.nodes.get(id)).filter(Boolean).map(n => h("button", {
+          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, n.name), h("small", { class: "muted" }, state(n))))) : "");
   }
   async function load(validPage) {
     close(); valid = validPage;
@@ -194,6 +235,12 @@ export function liveAltTab(ctx) {
     inspector.detail.classList.add("alt-detail");
     detailHost.replaceChildren(inspector.detail);
     mounted = true;
+    let width = panel.clientWidth;
+    resizeObserver = new ResizeObserver(entries => {
+      const next = entries[0]?.contentRect.width;
+      if (next != null && Math.abs(next - width) > .5) { width = next; queue(); }
+    });
+    resizeObserver.observe(panel);
     let observedRunning = ctx.st.running;
     if (transport) timer = setInterval(() => {
       if (current() && !document.hidden && (ctx.st.running || observedRunning !== ctx.st.running)) {
@@ -235,7 +282,7 @@ export function liveAltTab(ctx) {
       loadMessage = "This start's task journal could not be loaded."; render();
     }
   }
-  const detailHost = h("div", { class: "alt-inspector-host" });
+  const detailHost = h("div", { class: "alt-inspector-host", tabindex: "-1" });
   const earlier = h("button", { type: "button", class: "small", hidden: true, title: "Load every pass of this start", onclick: () => loadEarlier?.() }, "Earlier passes");
   async function show() {
     const validPage = ctx.still();
@@ -249,12 +296,14 @@ export function liveAltTab(ctx) {
     catch (error) { if (validPage()) ctx.body.replaceChildren(card(null, empty(`Starts unavailable: ${error.message}`), { actions: [h("button", { type: "button", onclick: show }, "Retry")] })); return; }
     if (!validPage()) return;
     history = got;
-    const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
+    const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));
     startSel.value = history.starts.some(s => !s.running && String(s.id) === startId) ? startId : "current"; startId = startSel.value;
-    passSel = h("select", { "aria-label": "LiveAlt pass", onchange: () => { pass = passSel.value; following = true; limit = 200; folded.clear(); reveal = true; render(); } }, h("option", { value: "current" }, "Current"));
+    passSel = h("select", { "aria-label": "LiveAlt pass", onchange: () => { choice = null; pass = passSel.value; following = true; limit = 200; folded.clear(); reveal = true; render(); } }, h("option", { value: "current" }, "Current"));
     notice = h("div", { class: "alt-notice" });
     followBtn = h("button", { type: "button", class: "small", title: "Follow the latest task in the current pass", onclick: () => {
+      choice = null;
+      if (following) { following = false; pinPass(inspector.taskId()); render(); return; }
       pass = "current"; following = true; folded.clear(); reveal = true; render();
     } }, "Follow");
     controls = h("div", { class: "alt-controls" },

@@ -749,7 +749,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-selectors label { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .alt-selectors select { max-width: 15em; min-width: 0; }
 .alt-split { display: grid; grid-template-columns: minmax(260px, .65fr) minmax(0, 1.35fr); gap: 16px; align-items: start; }
-.alt-split > .card { min-width: 0; }
+.alt-split > .card { min-width: 0; scroll-margin-top: 64px; }
 .alt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; }
 .alt-count { font-size: 11px; color: var(--muted); }
 .alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.interrupted { color: var(--warn); }
@@ -785,12 +785,19 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-time-task:focus { outline: none; }
 .alt-time-task.sel .bar, .alt-time-task:focus-visible .bar { stroke: var(--ink); stroke-width: 2; }
 .alt-more { margin-top: 10px; }
+.alt-choice { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.alt-choice-head, .alt-choice-task { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.alt-choice-head { font-size: 12px; margin-bottom: 6px; }
+.alt-choice-task { width: 100%; text-align: left; border: 0; padding: 8px; }
+.alt-choice-task span { min-width: 0; overflow-wrap: anywhere; }
+.alt-choice-task small { flex-shrink: 0; }
 svg.gantt .bar.interrupted { stroke: var(--warn); stroke-dasharray: 4 3; }
 .alt-detail { max-height: 74vh; padding-bottom: 12px; }
 .alt-detail .facts:empty { display: none; }
 .alt-detail .task-inspector .kv { grid-template-columns: minmax(70px, 100px) minmax(0, 1fr); }
 .alt-detail .task-inspector .val { overflow-wrap: anywhere; }
 .alt-detail .inspector-input { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 12px; }
+.alt-detail .detail-head h2, .alt-detail .crumbs, .alt-phase-name { overflow-wrap: anywhere; }
 @media (max-width: 960px) { .alt-split { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .alt-selectors { width: 100%; margin-left: 0; } .alt-selectors label { flex: 1 1 100%; } .alt-selectors select { flex: 1; width: 100%; } }
 .attach { display: grid; gap: 8px; }

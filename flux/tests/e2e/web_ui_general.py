@@ -542,6 +542,17 @@ def general_flows(r, watch):
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-timeline.png")
                 b.click('.alt-timeline [data-task="2"] rect')
+                b.wait("document.querySelector('.alt-choice')", what="overlapping task choice")
+                r.check("overlapping timeline bars offer the parent and tool without changing selection", b.js("return document.querySelector('.alt-detail').dataset.task==='10' && [...document.querySelectorAll('.alt-choice [data-choice]')].map(n=>n.dataset.choice).join(',')==='2,1'"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-overlap.png")
+                b.js("window.__altOldChoice=document.activeElement;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'unrelated chooser update'}});return 1")
+                b.wait("window.__altOldChoice!==document.querySelector('.alt-choice [data-choice=\"2\"]')", what="chooser update")
+                r.check("overlap choices keep keyboard focus during live updates", b.js("return document.activeElement.dataset.choice==='2'"))
+                b.js("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));return 1")
+                r.check("Escape dismisses overlap choices without switching task", b.js("return !document.querySelector('.alt-choice') && document.querySelector('.alt-detail').dataset.task==='10'"))
+                b.click('.alt-timeline [data-task="2"] rect')
+                b.click('.alt-choice [data-choice="2"]')
                 r.check("timeline bars select their actual task", b.js("return document.querySelector('.alt-detail').dataset.task==='2'"))
                 b.js("window.__altStreams.at(-1).emit('live',{updates:{4:{steps:[{k:'text',text:'A new reply'}]}}});return 1")
                 b.wait("document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'", what="pinned update")
@@ -565,6 +576,17 @@ def general_flows(r, watch):
                 r.button("Follow", ".alt-controls")
                 b.click('.alt-more')
                 r.check("earlier tasks can be expanded without losing the active task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelectorAll('.alt-tree [data-task]').length===207 && !document.querySelector('.alt-more')"))
+                r.button("Following", ".alt-controls")
+                r.check("pass picker offers baseline and each numbered pass", b.js("return ['0','1','2'].every(value=>Array.from(document.querySelector('[aria-label=\"LiveAlt pass\"]').options).some(option=>option.value===value))"))
+                b.js("""const s=window.__altStreams.at(-1), t=Date.now()/1000;
+                  s.emit('events',{ev:'end',id:4,t,seconds:30,output:{}});
+                  s.emit('events',{ev:'end',id:3,t,seconds:30,output:{}});
+                  s.emit('events',{ev:'mark',name:'pass',t:t+.01,why:'{"n":3}'});
+                  s.emit('events',{ev:'start',id:2000,t:t+.02,name:'agent: next',params:{pass:3,prompt:'Next agent prompt'}});return 1;""")
+                b.wait("document.querySelector('.alt-detail .pill.ok')?.textContent==='done'", what="pass completes while paused")
+                r.check("pausing Follow pins the inspected task and pass when the loop advances", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='2' && document.querySelector('.alt-controls button').textContent==='Follow' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'"))
+                r.button("Follow", ".alt-controls")
+                r.check("resuming Follow selects the newest active agent", b.js("return document.querySelector('.alt-detail').dataset.task==='2000' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='true'"))
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
@@ -593,7 +615,15 @@ def general_flows(r, watch):
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('Retained answer')", what="return to complete retained start")
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                b.wait("document.querySelector('.alt-timeline').getBoundingClientRect().width<=document.querySelector('.alt-visual').clientWidth+1", what="historical timeline resized for phone")
                 r.check("LiveAlt controls and inspector fit a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                r.button("Tree", ".subrow .subtabs")
+                b.click('.alt-tree [data-task="22"]')
+                r.check("phone task selection brings the inspector into view", b.js("const d=document.querySelector('.alt-inspector-card').getBoundingClientRect();return d.top>=-1 && d.top<innerHeight-150 && (d.bottom<=innerHeight+1 || d.top<100) && document.activeElement.matches('.alt-inspector-host') && document.querySelector('.alt-detail').dataset.task==='22'"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-phone.png")
+                r.button("Locate", ".alt-detail-nav")
+                r.check("phone Locate returns to the selected task with visible feedback", b.js("const p=document.querySelector('.alt-visual-card').getBoundingClientRect();return p.top>=-1 && p.bottom<=innerHeight+1 && !!document.querySelector('.alt-tree [data-task=\"22\"].alt-located') && document.activeElement.dataset.task==='22'"))
                 b.js("window.__altDeferred=true;return 1")
                 choose("LiveAlt start", "21")
                 b.wait("typeof window.__altRelease==='function'", what="pending historical journal")
