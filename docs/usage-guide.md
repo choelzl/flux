@@ -313,7 +313,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   configurator, Direct edit, an agent), with Advanced and, for the owner, Reset and Delete
   at the end). The header has Start/Stop and Check. **Talk** opens a panel over any tab, with
   conversations about the loop. **Reply** follows up on an answer, including earlier messages
-  from that branch as context; **New chat** starts a separate conversation. The message box
+  from that branch as context; **New chat** starts a separate conversation. **Collapse** shows
+  only the initial prompt; **Expand** restores the conversation. This choice survives live
+  refreshes and closing and reopening the panel. The message box
   stays visible while history scrolls. Ctrl+Enter (⌘+Enter on macOS) sends; Enter adds a line.
   While the loop runs, expand **Send a note to the running loop** to steer its next prompt or
   answer its open question. Escape closes the panel, keeping your draft. Removing a conversation

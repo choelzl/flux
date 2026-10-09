@@ -38,6 +38,7 @@ peaks and outages across both tiers. Unit tests in `test_web_insights.py` and
 campaigns across starts and records without counting shared transcripts twice.
 
 `FLUX_E2E_STEPS="ask conversations"` checks reply context, separate chats, retained drafts,
+conversation collapse and keyboard expansion, collapsed state across refreshes, read-only viewers,
 failed sends, long running-loop notes, activity polling without scroll/focus jumps, and the
 fixed composer at desktop and phone widths. `test_web_asks.py` checks persisted reply branches,
 model/agent prompts, permissions and complete conversation deletion.

@@ -224,6 +224,7 @@ async function loopPage(name, owner, path = "") {
   cleanup.push(past.close);
   // Conversations keep their own reply context; loop notes still join the next design prompt.
   let askTimer = null, askWho = null, askReply = null, askBusy = false, askSending = false;
+  const collapsedAsks = new Set();
   let notesOpen = false;
   const askQ = h("textarea", { rows: 2, id: "ask-q", "aria-label": "Message", placeholder: "Ask about this loop…" });
   askQ.addEventListener("keydown", e => {
@@ -301,10 +302,22 @@ async function loopPage(name, owner, path = "") {
     }
     const conversations = [...threads.values()].sort((a, b) => b.at(-1).started - a.at(-1).started).map(turns => {
       const selected = turns.some(a => a.id === askReply), running = turns.some(a => a.running);
-      return card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"),
+      const id = turns[0].thread_id || turns[0].id;
+      const toggle = h("button", { type: "button", class: "small ask-collapse", "data-ask-toggle": id,
+        onclick: () => { if (collapsedAsks.has(id)) collapsedAsks.delete(id); else collapsedAsks.add(id); updateCollapse(); } });
+      const conversation = card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"), toggle,
         mine && !running ? binButton("conversation", "Remove this conversation?", "All its messages, answers and saved reply context are removed for everyone who sees this loop.",
           async () => { await api(`/apps/${enc(name)}/asks/${turns[0].id}${qs}`, { method: "DELETE" }); askView(); }) : ""), ...turns.map(turn)],
         { cls: `ask-card has-bin${selected ? " selected-thread" : ""}` });
+      function updateCollapse() {
+        const collapsed = collapsedAsks.has(id);
+        conversation.classList.toggle("collapsed", collapsed);
+        toggle.textContent = collapsed ? "Expand" : "Collapse";
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+        toggle.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} conversation: ${turns[0].question}`);
+      }
+      updateCollapse();
+      return conversation;
     });
     askHistory.replaceChildren(steer, ...(conversations.length ? conversations : [card(null, empty("No conversations yet."))]));
     let form = "";
@@ -322,6 +335,8 @@ async function loopPage(name, owner, path = "") {
     if (active && askBox.contains(active)) {
       active.focus({ preventScroll: true });
       if (selection) active.setSelectionRange(...selection);
+    } else if (active?.dataset.askToggle) {
+      [...askHistory.querySelectorAll("[data-ask-toggle]")].find(el => el.dataset.askToggle === active.dataset.askToggle)?.focus({ preventScroll: true });
     }
   }
 
