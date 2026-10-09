@@ -97,3 +97,54 @@ def test_a_server_without_the_sandbox_says_so_to_its_runs():
     sandbox_env(env, False, {})
     assert env["FLUX_SANDBOX"] == "0", "a run's own default is the sandbox: a --no-sandbox server must say no"
     assert os.environ.get("FLUX_SANDBOX") == "0"
+
+
+def test_authoring_checks_in_the_named_loop_directory(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from flux_cli.sandbox import container_paths, path_mapping
+    from flux_cli.main import main
+    from flux_loop.author import check_document
+    from flux_web.authoring import Authoring, WORK, _work_directory
+
+    loop = tmp_path / "new-loop"
+    loop.mkdir()
+    authoring = Authoring()
+    seen = []
+
+    def launch(argv, **kwargs):
+        work = Path(argv[argv.index("--dir") + 1])
+        assert work == loop / WORK / loop.name
+        assert kwargs["cwd"] == str(work)
+        args = SimpleNamespace(dir=str(work))
+        pairs = path_mapping(args, "ask", tmp_path / "cache", tmp_path / "home")
+        inside = container_paths(argv, args, pairs, "ask")
+        assert inside[inside.index("--dir") + 1] == "/sandbox/new-loop"
+        reply = json.dumps({"files": {"problem.yaml":
+            "statement: write hello\nlanguage: text\nflow:\n  test: 'true'\n"}})
+        replies = tmp_path / "replies.json"
+        replies.write_text(json.dumps([reply]))
+        assert main(["ask", "write hello", "--dir", str(work), "--no-run", "--no-sandbox",
+                     "--author-replies", str(replies), "--replies", str(replies)]) == 0
+        task, _, error = check_document(work)
+        assert not error and task.id == loop.name
+        seen.append(work)
+        return SimpleNamespace(pid=os.getpid())
+
+    monkeypatch.setattr("flux_web.authoring.subprocess.Popen", launch)
+    monkeypatch.setattr(authoring, "_wait", lambda *_: None)
+    authoring.start(app_dir=loop, workspace=None, name=loop.name, prompt="write hello", author="model",
+                    env={}, attachments=[], revise=None, by="bob")
+    state = json.loads(authoring.files(loop)["state"].read_text())
+    assert _work_directory(loop, state) == seen[0]
+    assert _work_directory(loop, {"work_directory": "loop"}) == loop / WORK / "loop"
+    assert _work_directory(loop, {}) == loop / WORK
+    meta = []
+    finished = authoring._finish(loop, SimpleNamespace(set_meta=lambda *a, **kw: meta.append(kw)), loop.name, 0)
+    assert finished["ok"] and finished["document"] == "problem.yaml"
+    task, _, error = check_document(loop)
+    assert not error and task.id == loop.name
+    assert meta[0]["id"] == loop.name
+    assert not (loop / WORK).exists()

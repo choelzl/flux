@@ -130,6 +130,8 @@ def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current:
         "the gate you define, measure the survivors with the stages you define and decide by the objectives you "
         f"define. Your job is the problem document -- a file named exactly `{DOCUMENT}` -- and every file it names "
         "(golden model, generator, checker, tests), written in the working directory.",
+        f"WORKING DIRECTORY: {ask.workdir}. Write `{DOCUMENT}` directly in this directory, "
+        "with its supporting files beside it; do not create another project folder.\n"
         f"THE ASK:\n{ask.prompt.strip()}",
         _inputs_block(ask, inline=inline),
         reference(),

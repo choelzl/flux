@@ -30,6 +30,14 @@ WORK = ".author-work"                                   # the agent's copy of th
 _NOT_THE_PROBLEMS = {"out", "runs", "workbench", ATTACHED, WORK, ".git", "__pycache__", ".flux-app.json"}
 
 
+def _work_directory(app_dir: Path, state: dict[str, Any]) -> Path:
+    """Locate new jobs and jobs started before named authoring folders were introduced."""
+    folder = state.get("work_directory")
+    if isinstance(folder, str) and folder not in ("", ".", "..") and Path(folder).name == folder:
+        return app_dir / WORK / folder
+    return app_dir / WORK
+
+
 def _progress(app_dir: Path, work: Path | None = None) -> dict[str, Any] | None:
     """Bounded, confined journal reads: live agent output and the current author/check phase."""
     from .confine import open_read
@@ -133,7 +141,7 @@ class Authoring:
             st["log"] = []
             st["log_at"] = None
         st["ever"] = True
-        work = app_dir / WORK / "loop" if st.get("work_directory") == "loop" else app_dir / WORK
+        work = _work_directory(app_dir, st)
         st["progress"] = _progress(app_dir, work) or st.get("progress")
         st["observed"] = time.time()
         st["elapsed_s"] = max(0, (st.get("ended") or st["observed"]) - st.get("started", st["observed"]))
@@ -160,7 +168,7 @@ class Authoring:
             # sandbox -- the record (out/), the log (runs/) and the workbench stay out of its reach
             root = app_dir / WORK
             shutil.rmtree(root, ignore_errors=True)
-            work = root / "loop"  # a valid task-folder ID when the author runs without a sandbox
+            work = root / app_dir.name  # preserve the loop ID on the host and in /sandbox/<id>
             work.mkdir(parents=True)
             for p in app_dir.iterdir():
                 if p.name in _NOT_THE_PROBLEMS:
@@ -182,7 +190,7 @@ class Authoring:
             log.close()
             f["state"].write_text(json.dumps({"pid": proc.pid, "started": time.time(), "ended": None, "author": author,
                                               "prompt": prompt.strip()[:4000], "by": by, "revise": revise, "before": before,
-                                              "work_directory": "loop"}))
+                                              "work_directory": work.name}))
         threading.Thread(target=self._wait, args=(proc, app_dir, workspace, name), daemon=True).start()
 
     def _wait(self, proc: subprocess.Popen, app_dir: Path, workspace: Any, name: str) -> None:
@@ -204,7 +212,7 @@ class Authoring:
         if st.get("ended") is not None:                 # done already, by the other
             st["running"] = False
             return st
-        work = app_dir / WORK / "loop" if st.get("work_directory") == "loop" else app_dir / WORK
+        work = _work_directory(app_dir, st)
         st["progress"] = _progress(app_dir, work) or st.get("progress")  # keep the last evidence after work is removed
         if work.is_dir():
             doc = document_path(work)
