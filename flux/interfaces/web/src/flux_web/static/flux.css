@@ -1073,8 +1073,9 @@ ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; 
 /* D908: Files as a file manager -- the selected item's kind, size and time under its path; one
    Actions menu (Rename, Move, Delete) on its head (D937: not on each row), opening over the content */
 .viewer-head > .item-meta { flex: 1 1 100%; order: 3; overflow-wrap: anywhere; }
-.viewer-head > .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.viewer-head > .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: auto; }   /* wrapped, still at the right: its menu opens leftwards */
 .actions-menu { position: relative; display: inline-block; }
+.viewer-head > .actions > .actions-menu { margin-left: auto; }   /* wrapped onto its own line, still at its end: the menu opens leftwards, on the screen */
 .actions-menu > summary { list-style: none; cursor: pointer; user-select: none; }
 .actions-menu > summary::-webkit-details-marker { display: none; }
 .actions-menu .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 170px;
@@ -1214,3 +1215,9 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .ideas-table small, .idea-evaluations small { display: block; }
 .ideas-table p { margin: 0 0 .4rem; }
 .idea-evaluations pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 35rem; }
+
+/* the loop's seven tabs on a narrow phone: two rows, not three, so a page's first field stays on the
+   first screen -- the 44 px height kept, only the sides narrowed */
+@media (max-width: 400px) {
+  .tabs button, .tabs a[role=tab] { padding-left: 9px; padding-right: 9px; }
+}

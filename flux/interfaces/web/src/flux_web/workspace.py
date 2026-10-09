@@ -394,7 +394,19 @@ class Workspace:
         return [{"path": p.name, "record": record_name(p), "ok": not err, "error": err[:400]} for p, err in said]
 
     def delete(self, name: str) -> None:
-        shutil.rmtree(self.app(name))
+        """The loop's folder gone. Moved out of the apps first (one rename, so the list never shows
+        it half gone), then removed: a poll or a stage still writing into it made a removal in
+        place fail with "Directory not empty"."""
+        import uuid
+
+        trash = self.root.parent / ".trash"
+        trash.mkdir(parents=True, exist_ok=True)
+        gone = trash / f"{name}-{uuid.uuid4().hex[:8]}"
+        os.rename(self.app(name), gone)
+        for _ in range(3):
+            shutil.rmtree(gone, ignore_errors=True)
+            if not gone.exists():
+                return
 
     def path(self, name: str, rel: str) -> Path:
         """`rel` inside the application, resolved (a link pointing out is refused)."""

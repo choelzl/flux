@@ -1,7 +1,7 @@
 // Flux web's building blocks (D889: split out of app.js): h(), the server calls, notices and
 // dialogs, a page's parts and the formatting every page shares.
 
-import { me, navSeq, pageOwner, setMe, setPageOwner } from "./state.js";
+import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
 
 const main = document.getElementById("main");
 
@@ -41,10 +41,12 @@ async function request(path, { method = "GET", body, form, signal } = {}) {
   if (form) opt.body = form;
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
   let r;
+  const gen = sessionGen;
   try { r = await fetch("/api" + path, opt); }
   catch (x) { if (x.name === "AbortError") throw x; offline(true); throw new Error("The server cannot be reached."); }   // D917: a call let go is no outage
   offline(false);
   if (r.status === 401 && path !== "/login") {
+    if (gen !== sessionGen) throw new Error("log in");      // sent before a login since: not this session's end
     // D757: a session that ended (logged out elsewhere, expired) is said, not a silent jump to the login
     if (me && location.hash !== "#/login") toast("Your session ended: log in again.", "warn", { timeout: 8000 });
     setMe(null); location.hash = "#/login"; throw new Error("log in");

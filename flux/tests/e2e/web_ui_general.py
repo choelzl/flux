@@ -1539,10 +1539,12 @@ objectives: [{metric: timings.fast, goal: 15}]
                   return reply({ok:action+' requested'});
                 }
                 const response=await window.__controlFetch(u,o);
+                if(!response.ok) return response;          // a 401 between logins is passed on as it came
                 if(path===base || path===base+'/state') {
                   const data=await response.json(); return reply(path===base?{...data,state:{...data.state,...window.__controlState}}:{...data,...window.__controlState});
                 }
                 if(path==='/api/apps' || path==='/api/admin/apps') return reply((await response.json()).map(row=>row.name===name?{...row,...window.__controlState}:row));
+                if(path==='/api/loops') return reply((await response.json()).map(row=>row.app===name&&!row.owner?{...row,...window.__controlState}:row));   // the list's states
                 return response;
               }; return 1;""", name)
             try:

@@ -135,7 +135,7 @@ def lifecycle_flows(r, watch):
             r.button("Reset", ".danger-card")
             b.wait("document.querySelector('dialog.dlg[open] .reset-folders')", what="reset warning")
             warning = b.js("return document.querySelector('dialog.dlg[open]').innerText")
-            r.check("reset warns about permanent history loss and lists affected folders", "cannot be undone" in warning and "full logs and agent history" in warning
+            r.check("reset warns about permanent history loss and lists affected folders", "cannot be undone" in warning and "full run logs" in warning.lower()
                     and all(f"/{folder}/" in warning for folder in ("out", "runs", "workbench")), warning)
             r.dialog_button("Cancel")
             r.check("canceling reset leaves every generated file and recorded start intact", all((home / p).read_bytes() == content for p, content in before.items())

@@ -146,6 +146,7 @@ themeBtn.textContent = THEMES[theme()];
 
 function drawImpersonation(view) {
   const box = document.getElementById("impersonation");
+  if (!box) return;                         // a page without the bar (one replaced, as the phone checks do)
   box.hidden = !view;
   box.replaceChildren(...(view ? [h("span", {}, "Viewing as ", h("strong", {}, view.name), " · Read-only"),
     h("button", { type: "button", class: "small", onclick: async () => {

@@ -1205,7 +1205,7 @@ def flows(r: Run) -> None:
 
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("a loop has six tabs (D713)", tabs == ["Overview", "Live", "Results", "Agents", "Files", "Settings"], str(tabs))
+        r.check("a loop's tabs (D713, LiveAlt beside Live)", tabs == ["Overview", "Live", "LiveAlt", "Results", "Agents", "Files", "Settings"], str(tabs))
         head = b.js("return document.querySelector('.page-head').innerText")
         r.check("the header has no Configure or Delete: Settings has them", "Configure" not in head and "Delete" not in head, head)
         subs_of = "[...document.querySelectorAll('#main .subtabs.views [role=tab]')]"
@@ -1532,6 +1532,8 @@ def flows(r: Run) -> None:
         r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
         # D758: a note to the running loop is said in the Talk drawer, from any tab, and listed there
         b.click(".ask-fab")
+        b.wait("document.querySelector('.drawer.open details.steer-card')", timeout=15, what="the note section in the drawer")
+        b.js("document.querySelector('.drawer.open details.steer-card').open = true; return 1")   # folded until asked for
         b.wait("document.querySelector('.drawer.open .composer .composer-in')", timeout=15, what="the note line in the drawer")
         r.check("no bar docked under Live: the note line is in the Talk drawer", not b.js("return [...document.querySelectorAll('.composer')].some(c => !c.closest('.drawer'))"))
         b.type(".drawer.open .composer-in", "try a wider wheel")
@@ -1614,7 +1616,7 @@ def flows(r: Run) -> None:
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "results-sorted-desktop.png")
         # D916: Results and Graphs two views; the graphs built only when Graphs is first opened
         subs = b.js("return [...document.querySelectorAll('#main .subtabs [role=tab], .subrow .subtabs [role=tab]')].map(x => x.textContent)")
-        r.check("Results has two views, Results and Graphs (D916)", subs == ["Results", "Graphs"], str(subs))
+        r.check("Results has its views: Results, Graphs and Ideas (D916)", subs == ["Results", "Graphs", "Ideas"], str(subs))
         r.check("the graphs are not built while Results shows (D916)", b.js("return !document.querySelector('#main svg.chart') && !!document.querySelector('#main .decision-line')"))
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")
@@ -2200,9 +2202,9 @@ def flows(r: Run) -> None:
     r.step("admin", admin)
 
     def external_user():                                                   # D734
-        kind_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s kind\")"
-        r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s kind\"))", "the users and their kinds")
-        r.check("the admin sees each user's kind", b.js(f"const k = {kind_of}; return k && k.value", "bob") == "internal")
+        group_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s group\")"
+        r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s group\"))", "the users and their groups")
+        r.check("the admin sees each user's group", b.js(f"const k = {group_of}; return k && k.options[k.selectedIndex].textContent", "bob") == "Internal")
         r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "an admin's account")
         r.check("every user logs their agents in, not only an external one (D747)", True)
         made = r.api("/users", "POST", {"name": "ex", "password": "ex has a long secret", "role": "external"})
@@ -2723,9 +2725,8 @@ def flows(r: Run) -> None:
                 time.sleep(0.5)
                 (out / "loops-390px.png").write_bytes(base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
         b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-sort={time.time()}#/"})
-        b.wait("document.querySelector('#main')", timeout=20)
+        b.wait(f"{tbl} && {names}.includes('N10')", timeout=30, what="the loops listed again")   # not "Loading…"
         if os.environ.get("FLUX_E2E_SHOTS"):
-            r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops for a screenshot")
             time.sleep(0.5)
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "loops-desktop.png")
         sort_fit("Loops")
@@ -2986,6 +2987,9 @@ def flows(r: Run) -> None:
                                 d.documentElement.scrollWidth, w.innerWidth, !!d.querySelector('.fc-stepbar') && d.querySelector('.fc-stepbar').offsetParent === null];""", step)
                     ok = got[0] == f"Step {step + 1} of 6" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: the step and its first field on the first screen", ok, str(got))
+                    if not ok and shots:                          # the phone's own screen, to see what pushed the field down
+                        (shots / f"phone-wizard-{width}-step{step + 1}-{h.strip('#/').replace('/', '-')}.png").write_bytes(
+                            base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
                     cut = b.js("""const d = document.getElementById('phone').contentDocument;
                         return [...d.querySelectorAll('.fc-step .fc-label')].filter(l => l.offsetParent && l.scrollWidth > l.clientWidth + 1).map(l => l.textContent)""")
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: no label cut short (D913b)", not cut, str(cut))

@@ -542,3 +542,9 @@ the topics above.
   - **Copies:** edit `applications/mul8/rtl.py`, then `scripts/sync-app-tools.py` copies it to every application, the tutorial, the test fixtures and the two libraries (as `rtl_check.py`, since macarray already has an `rtl.py`).
   - **Tests:** tests of the removed internals went with them, replaced by heavy tests of a clocked design's latency, lint, and measure at each stage.
   - **Also fixed:** two tests broken by the move (`write_loop` refusing a folder it writes twice, and the ICSC test calling the removed `flux rtl`).
+- **D949: the e2e follows the new UI, and three bugs it exposed are fixed.**
+  - **Tests updated to today's UI:** the LiveAlt tab; Results' Ideas view; the user's group select (once "kind"); the folded "Send a note" section; the reset dialog's wording; the loops list's states from /api/loops; and a wait for the loops table rather than "Loading…". A phone-wizard failure now saves the phone's screenshot.
+  - **Bug 1, login:** a call sent before a login and answered 401 after it ended the new session and returned to the login page. Logins now carry a generation, and a 401 to an older one is ignored.
+  - **Bug 2, deleting a loop:** removal in place failed with "Directory not empty" when a poll or a stage was still writing. The folder is now moved out of the apps first (one rename), then removed.
+  - **Bug 3, phone layout:** at 390 px a file's Actions menu opened off the left edge when the head wrapped; it is now kept at the end of its line. At 320 px the seven loop tabs wrapped onto three rows and pushed the configurator's first field off the first screen; narrower tab sides there give two rows.
+  - **Also:** the View-as banner code now does nothing on a page without the bar.
