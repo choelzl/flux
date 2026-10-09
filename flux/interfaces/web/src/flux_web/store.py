@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS users (
     created REAL NOT NULL, disabled INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created REAL NOT NULL, expires REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS impersonations (
+    token TEXT PRIMARY KEY REFERENCES sessions(token) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id));
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, app TEXT NOT NULL, db TEXT NOT NULL, log TEXT NOT NULL,
     pid INTEGER, argv TEXT NOT NULL, started REAL NOT NULL, ended REAL, rc INTEGER, options TEXT NOT NULL DEFAULT '{}');
@@ -124,6 +127,7 @@ class User:
     group: str = ""
     permissions: dict[str, bool] = field(default_factory=lambda: dict(DEFAULT_PERMISSIONS))
     credential_mode: str | None = None
+    impersonator: str | None = None
 
     def __post_init__(self) -> None:
         self.role = _role(self.role)
@@ -141,7 +145,8 @@ class User:
 
     def identity(self) -> dict[str, Any]:
         return {"name": self.name, "role": self.role, "group_id": self.group_id, "group": self.group,
-                "permissions": {k: self.can(k) for k in PERMISSIONS}, "credential_mode": self.credential_mode}
+                "permissions": {k: self.can(k) for k in PERMISSIONS}, "credential_mode": self.credential_mode,
+                **({"impersonator": self.impersonator} if self.impersonator else {})}
 
 
 def _user(row: sqlite3.Row | None) -> User | None:
@@ -441,7 +446,8 @@ class Store:
                        (_digest(token), r["id"], now, now + SESSION_DAYS * 86400))
             return token
 
-    def session_user(self, token: str | None) -> User | None:
+    def session_owner(self, token: str | None) -> User | None:
+        """The authenticated account, without the session's optional view-as target."""
         if not token:
             return None
         with self._db() as db:
@@ -449,6 +455,53 @@ class Store:
                            "WHERE s.token = ? AND s.expires > ? AND u.disabled = 0",
                            (_digest(token), time.time())).fetchone()
         return _user(r)
+
+    def impersonation(self, token: str | None) -> dict[str, str] | None:
+        owner = self.session_owner(token)
+        if owner is None:
+            return None
+        with self._db() as db:
+            row = db.execute("SELECT u.name FROM impersonations i JOIN users u ON u.id = i.user_id WHERE i.token = ?",
+                             (_digest(token),)).fetchone()
+        return {"name": row["name"], "impersonator": owner.name} if row else None
+
+    def session_user(self, token: str | None) -> User | None:
+        owner = self.session_owner(token)
+        if owner is None:
+            return None
+        with self._db() as db:
+            row = db.execute(_USERS + " JOIN impersonations i ON u.id = i.user_id WHERE i.token = ?",
+                             (_digest(token),)).fetchone()
+        if row is None:
+            return owner
+        if not owner.admin:
+            return None
+        target = _user(row)
+        if target.disabled:
+            return None
+        target.impersonator = owner.name
+        return target
+
+    def start_impersonation(self, token: str, name: str) -> User:
+        owner, target = self.session_owner(token), self.user(name=name)
+        if owner is None or not owner.admin:
+            raise PermissionError("admins only")
+        if self.impersonation(token):
+            raise ValueError("return to your account before viewing another user")
+        if target is None or target.disabled or self.pending(target.name):
+            raise ValueError("choose an enabled user whose invitation has been accepted")
+        if target.id == owner.id:
+            raise ValueError("you are already using this account")
+        with self._db() as db:
+            if not db.execute("INSERT OR IGNORE INTO impersonations(token, user_id) VALUES (?, ?)",
+                              (_digest(token), target.id)).rowcount:
+                raise ValueError("return to your account before viewing another user")
+        target.impersonator = owner.name
+        return target
+
+    def stop_impersonation(self, token: str) -> None:
+        with self._db() as db:
+            db.execute("DELETE FROM impersonations WHERE token = ?", (_digest(token),))
 
     def logout(self, token: str) -> None:
         with self._db() as db:

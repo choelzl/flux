@@ -24,7 +24,8 @@ def loop(r, name):
         yield name
     finally:
         # Leave the page first to close its streams and pending refreshes before deleting it.
-        if r.b.js("return (document.querySelector('#who a.me') || {}).textContent") != "bob":
+        if r.b.js("return (document.querySelector('#who a.me') || {}).textContent") != "bob" \
+                or r.b.js("return !!document.querySelector('#impersonation:not([hidden])')"):
             r.login("bob")
         r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loop list")
         deleted = r.api(f"/apps/{name}", "DELETE")
@@ -444,6 +445,11 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.button("Groups", "#users-subtabs")
                 b.wait("document.querySelector('.user-groups #group-name')", what="groups subtab")
                 r.check("groups subtab contains no user table", b.js("return !document.querySelector('table.users') && document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups'"))
+                r.check("groups use aligned columns and a labelled creation section", b.js("""return JSON.stringify([...document.querySelectorAll('table.groups thead th')].map(t => t.textContent)) === JSON.stringify(['Group', 'Members', 'Server access', 'Actions'])
+                  && document.querySelectorAll('table.groups .pill').length === 1
+                  && document.querySelector('table.groups .pill').textContent === 'Server admin'
+                  && document.querySelector('.group-create label[for=group-name]')
+                  && document.querySelector('.group-create label[for=group-server-access]');"""))
                 b.type("#group-name", "E2E Team")
                 r.check("new groups require an explicit Server access choice", b.js("return document.querySelector('#group-server-access').value === ''"))
                 b.js("const select = document.querySelector('#group-server-access'); select.value = 'server'; select.dispatchEvent(new Event('change')); return 1")
@@ -458,6 +464,20 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.wait("document.querySelector('.user-groups button[title=\"Rename E2E Research\"]')", what="group renamed")
                 renamed = next(g for g in json.loads(r.api("/groups")["body"])["groups"] if g["name"] == "E2E Research")
                 r.check("group rename preserves its ID", renamed["id"] == group["id"])
+                r.check("group table keeps names, counts and controls in their columns", b.js("""const row = document.querySelector('table.groups tr[data-group="' + arguments[0] + '"]');
+                  return row.cells[0].textContent === 'E2E Research' && row.cells[1].textContent === '0'
+                    && row.cells[2].querySelector('select').value === 'server' && row.cells[3].querySelector('button').textContent === 'Rename…';""", group["id"]))
+                b.js("window.__longGroup = document.querySelector('table.groups tbody .strong'); window.__groupLabel = window.__longGroup.textContent; window.__longGroup.textContent = 'A'.repeat(60); return 1")
+                try:
+                    for width in (700, 390, 320):
+                        b.cmd("WebDriver:SetWindowRect", {"width": width, "height": 900})
+                        r.check(f"groups table and creation controls fit at {width}px with long names", b.js("""return document.documentElement.scrollWidth <= innerWidth + 1
+                          && [...document.querySelectorAll('.user-groups select, .user-groups input, .user-groups button')].every(e => e.getBoundingClientRect().right <= innerWidth + 1);"""))
+                    r.check("groups table shows column labels on phones", b.js("""const cell = document.querySelector('table.groups tbody tr').cells[2];
+                      return cell.dataset.label === 'Server access' && getComputedStyle(cell, '::before').content === '"Server access"';"""))
+                finally:
+                    b.js("window.__longGroup.textContent = window.__groupLabel; return 1")
+                    b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 r.page("#/admin", "document.querySelector('.ctl-grid')", "admin loops")
                 r.page("#/admin/users", "document.querySelector('.user-groups #group-name')", "remembered groups subtab")
                 r.check("groups selection survives navigation and group updates", b.js("return document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups' && !document.querySelector('table.users')"))
@@ -468,6 +488,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                     b.wait("!window.__groupSelect.isConnected && document.querySelector('table.users')", what=f"{user} membership saved")
                 r.button("Groups", "#users-subtabs")
                 b.wait("document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]')", what="group server access")
+                r.check("group table shows updated member counts", b.js("return document.querySelector('table.groups tr[data-group=\"' + arguments[0] + '\"]').cells[1].textContent === '2'", group["id"]))
                 for value, expected in (("own", "external"), ("server", "internal")):
                     b.js("const select = document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]'); window.__groupAccess = select; select.value = arguments[0]; select.dispatchEvent(new Event('change')); return 1", value)
                     b.wait("!window.__groupAccess.isConnected && document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]')", what="group policy saved")
@@ -876,6 +897,68 @@ objectives: [{metric: timings.fast, goal: 15}]
             r.page("#/admin", "document.querySelector('.ctl-grid')", "leave usage fixture")
 
     r.step("admin usage totals", admin_usage_totals)
+
+    def admin_impersonation():
+        from flux_web.store import Store
+
+        with loop(r, "ui-view-as") as name:
+            put(r, name, "visible.txt", "the user's file")
+            r.login("ada")
+            for user, password in (("ui-view-disabled", "disabled user secret"), ("ui-view-invited", None)):
+                made = r.api("/users", "POST", {"name": user, "password": password})
+                if made["status"] != 200:
+                    raise AssertionError(made)
+            r.api("/users/ui-view-disabled", "PATCH", {"disabled": True})
+            b.js("localStorage.setItem('flux-users-part', 'users'); return 1")
+            r.page("#/admin/users", "document.querySelector('tr[data-user=bob]')", "admin view-as action")
+            r.check("View as is unavailable for self, disabled and invited users", b.js("""const button = name =>
+              [...document.querySelectorAll('tr[data-user="' + name + '"] button')].find(b => b.textContent === 'View as');
+              return !button('ada') && button('ui-view-disabled').disabled && button('ui-view-invited').disabled;"""))
+            r.button("View as", "tr[data-user=bob]")
+            b.wait("document.querySelector('#who .me')?.textContent === 'bob' && !document.querySelector('#impersonation').hidden", what="bob's view")
+            b.js(watch)
+            r.check("the banner identifies the user and read-only mode", b.js("return document.querySelector('#impersonation').textContent.includes('Viewing as bob · Read-only')"))
+            b.wait(f"document.querySelector('#main a[href=\"#/app/{name}\"]')", what="viewed user's loop list")
+            r.check("viewed user has their loops and no admin navigation", name in r.text()
+                    and not b.js("return [...document.querySelectorAll('#nav a')].some(a => a.textContent === 'Admin')"))
+            r.page(f"#/app/{name}/files", "document.querySelector('.files-card')", "viewed user's files")
+            contents = file_api(r, name, "visible.txt")
+            r.check("view-as reads the user's actual files", contents["status"] == 200 and contents["body"] == "the user's file")
+            denied = file_api(r, name, "visible.txt", "PUT", "a forbidden edit")
+            r.check("view-as API changes are refused", denied["status"] == 403 and "read-only" in denied["body"]
+                    and file_api(r, name, "visible.txt")["body"] == "the user's file")
+            b.cmd("WebDriver:Refresh", {})
+            b.wait("document.querySelector('#who .me')?.textContent === 'bob' && !document.querySelector('#impersonation').hidden", what="view-as after refresh")
+            b.js(watch)
+            r.check("refresh keeps the view-as account", json.loads(r.api("/me")["body"])["impersonator"] == "ada")
+            b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+            r.check("Return to admin stays visible on a phone", b.js("""const box = document.querySelector('#impersonation'), button = box.querySelector('button');
+              return button.getBoundingClientRect().height > 0 && box.getBoundingClientRect().right <= innerWidth
+                && document.documentElement.scrollWidth <= innerWidth + 1;"""))
+            b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+            r.button("Return to admin", "#impersonation")
+            b.wait("document.querySelector('#who .me')?.textContent === 'ada' && document.querySelector('tr[data-user=bob]')", what="return to admin")
+            b.js(watch)
+            r.check("return restores admin navigation and removes the banner", b.js("return document.querySelector('#impersonation').hidden && [...document.querySelectorAll('#nav a')].some(a => a.textContent === 'Admin')"))
+            r.button("View as", "tr[data-user=bob]")
+            b.wait("document.querySelector('#who .me')?.textContent === 'bob' && !document.querySelector('#impersonation').hidden", what="view-as before revocation")
+            store = Store(r.data)
+            store.set_user("bob", disabled=True)
+            try:
+                r.page("#/account", "document.querySelector('form.login') && !document.querySelector('#impersonation').hidden", "disabled viewed account")
+                r.check("the return banner survives a disabled viewed account", b.js("return document.querySelector('#impersonation').textContent.includes('Viewing as bob')"))
+                r.button("Return to admin", "#impersonation")
+                b.wait("document.querySelector('#who .me')?.textContent === 'ada' && document.querySelector('tr[data-user=bob]')", what="return from disabled viewed account")
+                b.js(watch)
+                r.check("return recovers the original admin without a new login", json.loads(r.api("/me")["body"])["role"] == "admin")
+            finally:
+                store.set_user("bob", disabled=False)
+            audit = json.loads(r.api("/audit")["body"])
+            r.check("view-as start and return identify the real admin in audit", {(a["user"], a["action"], a["detail"]) for a in audit if "view as" in a["action"]}
+                    >= {("ada", "view as user", "bob"), ("ada", "return from view as", "bob")})
+            r.clean("admin impersonation")
+
+    r.step("admin impersonation", admin_impersonation)
 
     def partial_agent_usage():
         with loop(r, "ui-partial-usage") as name:

@@ -22,7 +22,7 @@ async function adminPage(sub = "") {
   const show = pageShow();
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
   const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
-  const tabBar = h("div", { class: "tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
+  const tabBar = h("div", { class: "tabs admin-tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
     h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
   const body = h("div", {});
   show(crumbs(["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null),
@@ -84,7 +84,7 @@ async function adminAudit(body, ok = () => true) {
     h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
   // D724: the kinds in groups; a kind not listed is Other
   const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password",
-      "invite user", "password set from a link", "create group", "rename group", "group server access"]],
+      "invite user", "password set from a link", "create group", "rename group", "group server access", "view as user", "return from view as"]],
     ["Runs", ["start", "stop", "note", "note removed", "stop all", "restart all", "starts paused", "running limit", "kill container"]],
     ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
       "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "clone loop", "empty loop",
@@ -805,6 +805,10 @@ async function adminUsers(body, ok = () => true) {
         h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
         h("td", { class: "num" }, u.last_active ? ago(u.last_active) : h("span", { class: "muted" }, "never")),
         h("td", { class: "right" }, h("div", { class: "actions end" },
+          u.name !== me.name ? Object.assign(act("View as", async () => {
+            await api(`/users/${enc(u.name)}/impersonate`, { method: "POST" });
+            location.hash = "#/"; location.reload();
+          }, { cls: "small", title: `View Flux as ${u.name} (read-only)` }), { disabled: u.disabled || u.pending }) : "",
           act(u.disabled ? "Enable" : "Disable", async () => {
             if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
             await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
@@ -827,19 +831,23 @@ async function adminUsers(body, ok = () => true) {
 async function adminGroups(body, ok = () => true) {
   const catalog = await api("/groups");
   if (!ok()) return;
-  const groupName = h("input", { id: "group-name", placeholder: "New group name", maxlength: 60, autocomplete: "off" });
+  const groupName = h("input", { id: "group-name", placeholder: "Group name", maxlength: 60, autocomplete: "off" });
   const accessSelect = (value, label, onchange = null, id = null) => h("select", { "aria-label": label, onchange, ...(id ? { id } : {}) },
-    h("option", { value: "", selected: value == null, disabled: true }, value == null && !id ? "Keep existing access (choose a policy)" : "Choose server access…"),
+    h("option", { value: "", selected: value == null, disabled: true }, value == null && !id ? "Keep existing access" : "Choose server access…"),
     h("option", { value: "server", selected: value === true }, "Use server settings"),
     h("option", { value: "own", selected: value === false }, "Own settings only"));
   const newAccess = accessSelect(null, "Server access for the new group", null, "group-server-access");
   body.replaceChildren(card("Groups", [
-    h("p", { class: "muted" }, "Each user belongs to one group, with their own permission checkboxes. Renaming keeps memberships and permissions; the group marked server admin keeps its server powers."),
-    h("p", { class: "muted" }, "Server access applies to every current and future member: inherit server and machine model, agent and environment settings, or use their own settings only. Changes take effect on the next run or agent invocation. Personal settings stay."),
-    catalog.groups.some(g => g.server_access == null) ? h("p", { class: "muted" }, "Groups showing Keep existing access preserve their members' current settings until you choose one policy for everyone.") : "",
-    h("ul", { class: "files" }, catalog.groups.map(g => h("li", {}, h("span", { class: "strong" }, g.name),
-      h("span", { class: "muted small" }, `${g.members} member(s)${g.admin ? " · server administration" : ""}`),
-      h("label", { class: "inline" }, "Server access", accessSelect(g.server_access, `Server access for ${g.name}`, async (e) => {
+    h("p", { class: "muted" }, "Server access applies to all group members on their next run or agent invocation. Personal settings and per-user permissions are preserved."),
+    catalog.groups.some(g => g.server_access == null) ? h("p", { class: "muted small" }, "Keep existing access preserves members' current settings until you choose a policy for the group.") : "",
+    h("table", { class: "list groups" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Group"), h("th", { class: "num" }, "Members"),
+        h("th", { title: "Inherit server and machine model, agent and environment settings, or use members' own settings only" }, "Server access"), h("th", {}, "Actions"))),
+      h("tbody", {}, catalog.groups.map(g => h("tr", { "data-group": g.id },
+      h("td", {}, h("div", { class: "group-label" }, h("span", { class: "strong" }, g.name),
+        g.admin ? h("span", { class: "pill small", title: "Full server administration powers, retained when this group is renamed" }, "Server admin") : "")),
+      h("td", { class: "num mono" }, String(g.members)),
+      h("td", {}, accessSelect(g.server_access, `Server access for ${g.name}`, async (e) => {
         const select = e.target;
         select.disabled = true;
         try {
@@ -848,17 +856,19 @@ async function adminGroups(body, ok = () => true) {
         } catch (x) { select.value = g.server_access == null ? "" : g.server_access ? "server" : "own"; toast(x.message, "bad"); }
         finally { select.disabled = false; }
       })),
-      act("Rename…", async () => {
+      h("td", {}, act("Rename…", async () => {
         const input = h("input", { id: "group-rename", value: g.name, maxlength: 60 });
         const renamed = await dialog("Rename group", h("label", { class: "stack" }, "Group name", input),
           [["Cancel", null], ["Rename", () => input.value.trim(), "primary"]]);
         if (!renamed) return;
         await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
-      }, { cls: "small", title: `Rename ${g.name}` })))),
-    h("div", { class: "row" }, groupName, newAccess, act("Add group", async () => {
+      }, { cls: "small", title: `Rename ${g.name}` })))))),
+    h("div", { class: "group-create" }, h("h3", {}, "New group"), h("div", { class: "row" },
+      h("label", { class: "stack", for: "group-name" }, "Group name", groupName),
+      h("label", { class: "stack", for: "group-server-access" }, "Server access", newAccess), act("Add group", async () => {
       if (!newAccess.value) { toast("Choose server access for the new group.", "warn"); return; }
       await api("/groups", { method: "POST", body: { name: groupName.value.trim(), server_access: newAccess.value === "server" } }); route();
-    }, { cls: "primary small" }))], { cls: "user-groups" }));
+    }, { cls: "primary small" })))], { cls: "user-groups" }));
 }
 
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:

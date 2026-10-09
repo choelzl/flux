@@ -109,7 +109,12 @@ async function route() {
   setPageRefresh(null);
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
   const hash = location.hash || "#/";
-  if (hash === "#/login") { drawNav(); return loginPage(); }
+  if (hash === "#/login") {
+    drawNav(); loginPage();
+    const view = await api("/impersonation").catch(() => null);
+    if (location.hash === hash) drawImpersonation(view);
+    return;
+  }
   { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return invitePage(m[1]); } }   // D818: before any login
   if (!me) { try { setMe(await api("/me")); pollLoops(); } catch (_) { return; } }
   drawNav();
@@ -139,7 +144,19 @@ const themeBtn = h("button", { class: "small theme", title: "Theme: system, ligh
 themeBtn.addEventListener("click", () => { const order = ["system", "light", "dark"]; applyTheme(order[(order.indexOf(theme()) + 1) % 3]); themeBtn.textContent = THEMES[theme()]; });
 themeBtn.textContent = THEMES[theme()];
 
+function drawImpersonation(view) {
+  const box = document.getElementById("impersonation");
+  box.hidden = !view;
+  box.replaceChildren(...(view ? [h("span", {}, "Viewing as ", h("strong", {}, view.name), " · Read-only"),
+    h("button", { type: "button", class: "small", onclick: async () => {
+      try {
+        await api("/impersonation", { method: "DELETE" });
+        location.hash = "#/admin/users"; location.reload();
+      } catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
+    } }, "Return to admin")] : []));
+}
 function drawNav() {
+  drawImpersonation(me?.impersonator ? me : null);
   bellFor(me ? me.name : null);
   const here = location.hash || "#/";
   const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);

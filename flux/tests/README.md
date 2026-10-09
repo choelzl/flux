@@ -60,10 +60,16 @@ forged opt-ins, preserve only execution permissions, and roll back failed permis
 `FLUX_E2E_STEPS="admin sharing"` checks admins adding, changing and removing other owners'
 shares, same-name loop isolation and read-only sharing views for watchers and editors.
 `FLUX_E2E_STEPS="user groups"` checks Users/Groups subtabs and remembered selection,
+aligned group tables, long names and mobile layouts,
 group creation/rename, group-wide Server access, member assignment, permission
 checkboxes, group loop discovery and controls for viewers and runners. `test_web_groups.py`
 checks legacy migration (including mixed access), stable group IDs, live revocation, group-wide server access,
 cross-group sharing, independent permissions and all loop creation/execution entry points.
+
+`FLUX_E2E_STEPS="admin impersonation"` checks View as eligibility, user navigation and files,
+read-only enforcement, refresh persistence, the mobile return banner and audit attribution.
+`test_web_impersonation.py` covers session isolation, permissions, settings, revocation,
+server restarts, logout and returning after a target is disabled or the admin demoted.
 
 `FLUX_E2E_STEPS="login refused,login,upload,reset loop"` checks reset warnings, cancellation,
 Keep checkboxes, preserved workbench files and a full reset. `test_web_reset.py` also covers

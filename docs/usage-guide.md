@@ -692,6 +692,13 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   access across groups; explicit Edit shares allow running when Run loops and agents is enabled.
   Changing groups removes automatic access to the former group's loops, while explicit shares stay.
   Permissions are checked on every API request, including existing sessions.
+- **View as user** (Admin › Users and groups › Users): **View as** opens Flux using an enabled
+  user's group, permissions, settings and loop access. The banner identifies the user and offers
+  **Return to admin**. This view is read-only: changes, starts and agent calls are refused.
+  Refreshing keeps the view; returning reloads the admin account. Other login sessions are
+  unaffected. Disabled users and pending invitations cannot be impersonated. Starting and ending
+  the view are recorded under the admin's name in the audit trail, and the view expires with the
+  admin session. Logging out ends both the view and that admin session.
 - **Server access** (Admin › Users and groups › Groups): choose **Use server settings** or
   **Own settings only** once for a group. This applies to every current and future member's
   model, agent and environment configuration on their next run or agent invocation.

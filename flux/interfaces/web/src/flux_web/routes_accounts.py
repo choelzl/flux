@@ -48,6 +48,39 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def me(user: User = Depends(user_of)) -> dict[str, Any]:
         return user.identity()
 
+    @app.get("/api/impersonation")
+    def impersonation(request: Request) -> dict[str, str] | None:
+        token = request.cookies.get(COOKIE)
+        if store.session_owner(token) is None:
+            raise HTTPException(401, "log in")
+        return store.impersonation(token)
+
+    @app.post("/api/users/{name}/impersonate")
+    def impersonate(name: str, request: Request, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if store.user(name=name) is None:
+            raise HTTPException(404, "no such user")
+        try:
+            target = store.start_impersonation(request.cookies[COOKIE], name)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        store.audit(a.name, "view as user", target.name)
+        return target.identity()
+
+    @app.delete("/api/impersonation")
+    def stop_impersonating(request: Request) -> dict[str, Any]:
+        # Authenticate the original session even if the viewed account was disabled or the admin demoted.
+        token = request.cookies.get(COOKIE)
+        owner = store.session_owner(token)
+        if owner is None:
+            raise HTTPException(401, "log in")
+        view = store.impersonation(token)
+        store.stop_impersonation(token)
+        if view:
+            store.audit(owner.name, "return from view as", view["name"])
+        return owner.identity()
+
     @app.get("/api/users")
     def users(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         seen = store.last_activity()                     # D942: a column to sort by

@@ -71,6 +71,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         if request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             if request.headers.get("x-flux") != "1":
                 return JSONResponse({"detail": "missing the X-Flux header"}, status_code=403)
+            exit_view = request.url.path == "/api/impersonation" and request.method == "DELETE"
+            if request.url.path not in ("/api/login", "/api/logout") and not exit_view \
+                    and store.impersonation(request.cookies.get(COOKIE)):
+                return JSONResponse({"detail": "View as user is read-only. Return to your account to make changes."}, status_code=403)
         t0 = time.monotonic()
         from flux_loop.agent import added_agents
 
