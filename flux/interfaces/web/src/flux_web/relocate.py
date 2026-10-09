@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -45,6 +46,76 @@ def _regular(path: Path, root: Path) -> None:
         raise WorkspaceError(f"cannot move linked or non-file metadata: {path.name}")
 
 
+def _references(old: str, new: str):
+    # A single substitution also handles subdocuments/parts and never rewrites a
+    # newly produced name a second time (e.g. x -> xx). Match identifier boundaries.
+    pattern = re.compile(rf"(?<![A-Za-z0-9_.-]){re.escape(old)}(?P<part>(?:[./][A-Za-z0-9_-]+)*)(?=[#@])")
+    return pattern, lambda value: pattern.sub(lambda m: new + m["part"], value) if value is not None else None
+
+
+def _record(db: sqlite3.Connection, old: str, new: str) -> None:
+    tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "campaigns" in tables:
+        for (cid,) in db.execute("SELECT campaign_id FROM campaigns").fetchall():
+            changed = _campaign(cid, old, new)
+            if changed != cid:
+                for table in ("campaigns", "trials", "campaign_events"):
+                    if table in tables:
+                        db.execute(f"UPDATE {table} SET campaign_id = ? WHERE campaign_id = ?", (changed, cid))
+    pattern, replace = _references(old, new)
+    db.create_function("rename_reference", 1, replace)
+    db.create_function("old_reference", 1, lambda value: bool(pattern.search(value or "")))
+    for table, columns in (
+        ("trials", ("candidate_json", "candidate_key")),
+        ("results", ("evaluator", "result_json")),
+        ("campaign_events", ("detail_json",)),
+    ):
+        if table not in tables:
+            continue
+        present = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+        for col in columns:
+            if col not in present:
+                continue
+            db.execute(f"UPDATE {table} SET {col} = rename_reference({col}) WHERE old_reference({col})")
+            if db.execute(f"SELECT count(*) FROM {table} WHERE old_reference({col})").fetchone()[0]:
+                raise WorkspaceError(f"old loop references remain in {table}.{col}")
+    if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)] or db.execute("PRAGMA foreign_key_check").fetchone():
+        raise WorkspaceError("renamed record failed its integrity check")
+
+
+def _output_name(filename: str, old: str, new: str) -> str:
+    renamed = filename
+    if filename.startswith(old + "."):
+        renamed = new + filename[len(old):]
+    elif filename.startswith("." + old + "."):
+        renamed = "." + new + filename[len(old) + 1:]
+    # The cache's task-name suffix changes too; a subdocument's record suffix stays.
+    if filename.endswith("." + old + ".json") and renamed.endswith("." + old + ".json"):
+        renamed = renamed[:-len(old + ".json")] + new + ".json"
+    return renamed
+
+
+def _output_json(value: Any, old: str, new: str, pairs: list[tuple[str, str]]) -> Any:
+    _, replace = _references(old, new)
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            return _paths(replace(v), pairs)
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        if isinstance(v, dict):
+            result = {}
+            for k, x in v.items():
+                key = new + k[len(old):] if k.startswith(old + "/") else replace(k)
+                if key in result:
+                    raise WorkspaceError(f"renaming output metadata would overwrite key {key!r}")
+                result[key] = walk(x)
+            return result
+        return v
+
+    return walk(value)
+
+
 def move_loop(store: Store, source: User, name: str, target: User, to: str, *, keep_permissions: bool = False) -> dict[str, str]:
     old = Workspace(store.data, source.name).app(name)
     new = Workspace(store.data, target.name).root / check_name(to)
@@ -74,8 +145,10 @@ def move_loop(store: Store, source: User, name: str, target: User, to: str, *, k
     within(out, old)
     if out.is_symlink():
         raise WorkspaceError("cannot move a linked results folder")
-    renames = {p.name: to + p.name[len(name):] for p in out.iterdir()
-               if to != name and p.name.startswith(name + ".")} if out.is_dir() else {}
+    renames = {p.name: _output_name(p.name, name, to) for p in out.iterdir()
+               if to != name and _output_name(p.name, name, to) != p.name} if out.is_dir() else {}
+    if len(set(renames.values())) != len(renames):
+        raise Exists("multiple output files would have the same name after renaming")
     for before, after in renames.items():
         if os.path.lexists(out / after):
             raise Exists(f"out/{after} already exists")
@@ -100,7 +173,7 @@ def move_loop(store: Store, source: User, name: str, target: User, to: str, *, k
         metadata.pop("last_start_digest", None)
         prepare(Path(meta.name), metadata)
         for p in sorted(out.iterdir()) if out.is_dir() else []:
-            if p.suffix == ".db" and p.name in renames:
+            if p.suffix == ".db" and to != name:
                 _regular(p, old)
                 for suffix in ("-wal", "-shm", "-journal"):
                     if os.path.lexists(str(p) + suffix):
@@ -108,34 +181,38 @@ def move_loop(store: Store, source: User, name: str, target: User, to: str, *, k
                 prepared = stage / f"prepared-{len(replacements)}"
                 with closing(sqlite3.connect(f"{p.as_uri()}?mode=ro", uri=True)) as src, closing(sqlite3.connect(prepared)) as dst, dst:
                     src.backup(dst)
-                    tables = {row[0] for row in dst.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                    if "campaigns" in tables:
-                        for (cid,) in dst.execute("SELECT campaign_id FROM campaigns").fetchall():
-                            changed = _campaign(cid, name, to)
-                            if changed != cid:
-                                for table in ("campaigns", "trials", "campaign_events"):
-                                    if table in tables:
-                                        dst.execute(f"UPDATE {table} SET campaign_id = ? WHERE campaign_id = ?", (changed, cid))
+                    _record(dst, name, to)
                 shutil.copymode(p, prepared)
-                replacements.append((Path("out") / renames[p.name], prepared, stage / f"backup-{len(replacements)}"))
+                after = renames.get(p.name, p.name)
+                replacements.append((Path("out") / after, prepared, stage / f"backup-{len(replacements)}"))
                 for suffix in ("-wal", "-shm", "-journal"):
                     if os.path.lexists(str(p) + suffix):
-                        replacements.append((Path("out") / (renames[p.name] + suffix), None, stage / f"backup-{len(replacements)}"))
-            elif p.name.endswith(".runs.json"):
+                        replacements.append((Path("out") / (after + suffix), None, stage / f"backup-{len(replacements)}"))
+            elif p.suffix == ".json":
                 _regular(p, old)
-                pointer = json.loads(p.read_text())
-                pointer = {_campaign(k, name, to): _paths(v, pairs) for k, v in pointer.items()}
+                value = json.loads(p.read_text())
+                changed = _output_json(value, name, to, pairs)
+                if p.name.endswith(".runs.json"):
+                    pointer = {}
+                    for k, v in changed.items():
+                        key = _campaign(k, name, to)
+                        if key in pointer:
+                            raise WorkspaceError(f"renaming run pointers would overwrite campaign {key!r}")
+                        pointer[key] = v
+                    changed = pointer
+                if value == changed:
+                    continue
                 # The file will already have its new name when installed.
                 rel = Path("out") / renames.get(p.name, p.name)
                 prepared = stage / f"prepared-{len(replacements)}"
-                prepared.write_text(json.dumps(pointer))
+                prepared.write_text(json.dumps(changed))
                 shutil.copymode(p, prepared)
                 replacements.append((rel, prepared, stage / f"backup-{len(replacements)}"))
 
         # SQLite can create WAL/SHM sidecars while reading the source. Include them too.
         for p in out.iterdir() if out.is_dir() else []:
-            if to != name and p.name.startswith(name + ".") and p.name not in renames:
-                after = to + p.name[len(name):]
+            if to != name and _output_name(p.name, name, to) != p.name and p.name not in renames:
+                after = _output_name(p.name, name, to)
                 if os.path.lexists(out / after):
                     raise Exists(f"out/{after} already exists")
                 renames[p.name] = after

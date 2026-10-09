@@ -376,6 +376,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
     or transfer it to another enabled user, optionally changing its name. Stop its agents too.
     Names use 1–60 characters from `A–Z`, `a–z`, `0–9`, `-` and `_`, in any position.
     Rename keeps files, results, full run history, caches, variables, sharing and admin settings.
+    Stored design and evaluator references, output sidecar names and metadata keys follow the
+    new name. Records are checked for stale references and SQLite integrity before installation;
+    a failed update restores the original files and settings.
     Transfer moves files, history, caches and loop variables (including secrets), clears sharing
     and by default all loop-specific admin overrides, and uses the recipient's account settings. Account
     model keys and agent logins stay with their accounts. The former owner loses access unless

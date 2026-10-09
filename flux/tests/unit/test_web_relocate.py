@@ -42,7 +42,7 @@ def moving_loop(server, monkeypatch):  # noqa: F811
     for index, record in enumerate(("x", "x.alt")):
         db = d / "out" / f"{record}.db"
         rec = Records(str(db), {"study": record}, name=record)
-        rec.trial({"name": "kept design", "artifact": "design source"}, "key", stage="bench", strategy="loop", metrics={"time_ms": 42})
+        rec.trial({"name": "kept design", "artifact": "design source"}, "key", stage="bench", strategy="loop", metrics={"time_ms": 42}, evaluator="tool@records")
         rec.conclude({"decision": "kept design"})
         rec.close("paused")
         rec.store.close()
@@ -91,6 +91,151 @@ def test_rename_keeps_settings_records_results_logs_and_cached_transcripts(movin
     assert cy.get("/api/apps/renamed", params={"owner": "bob"}).status_code == 200
     assert w.meta("renamed")["id"] == "renamed" and "last_check" not in w.meta("renamed")
     assert w.meta("renamed")["last_options"] == {"passes": 10}
+
+
+@pytest.fixture()
+def named_history(moving_loop):
+    app, _bob, _cy, _ada, _w, d, _cache, ids = moving_loop
+    for rid, record in zip(ids, ("x", "x.alt")):
+        rec = Records(app.state.store.run(rid)["db"], {"study": record}, name=record)
+        try:
+            for suffix in ("", "/part"):
+                design = record + suffix + "#2"
+                rec.trial({"name": design, "artifact": "unchanged source", "meta": {"previous": record + "#1", "evaluator": record + "@bench"}},
+                          design + "@bench", stage="bench", strategy="loop", metrics={"time_ms": 30}, evaluator=record + "@bench")
+            rec.conclude({"decision": record + "#2", "previous": record + "#1", "evaluator": record + "@bench"})
+        finally:
+            rec.close("paused")
+            rec.store.close()
+    value = {"x/bench": {"name": "x#2", "evaluator": "x@bench", "nested": [{"x/part": "x/part#2"}],
+                           "folder": str(d / "workbench"), "cache": str(d / "out/x.x.json"), "number": 30}}
+    for filename in (".x.json", "x.x.json", "x.alt.x.json", "metadata.json"):
+        p = d / "out" / filename
+        p.write_text(json.dumps(value))
+        p.chmod(0o640)
+    return moving_loop
+
+
+@pytest.mark.parametrize("action", ["rename", "transfer"])
+def test_move_rewrites_designs_evaluators_events_and_output_metadata(named_history, action):
+    app, bob, cy, _ada, w, d, _cache, ids = named_history
+    before = {}
+    for rid in ids:
+        with closing(sqlite3.connect(app.state.store.run(rid)["db"])) as db:
+            before[rid] = db.execute("SELECT id, result_id, workload_hash, arch_hash FROM trials").fetchall()
+    response = bob.post(f"/api/apps/x/{action}", json={"to": "Renamed_2", **({"user": "cy"} if action == "transfer" else {})}, headers=H)
+    assert response.status_code == 200, response.text
+    client = cy if action == "transfer" else bob
+    new = Workspace(app.state.store.data, "cy").app("Renamed_2") if action == "transfer" else w.app("Renamed_2")
+    for rid, old, record in zip(ids, ("x", "x.alt"), ("Renamed_2", "Renamed_2.alt")):
+        with closing(sqlite3.connect(app.state.store.run(rid)["db"])) as db:
+            assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+            assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+            assert db.execute("SELECT id, result_id, workload_hash, arch_hash FROM trials").fetchall() == before[rid]
+            for table, columns in (("trials", ("candidate_json", "candidate_key")), ("results", ("evaluator", "result_json")),
+                                   ("campaign_events", ("detail_json",))):
+                for col in columns:
+                    assert db.execute(f"SELECT count(*) FROM {table} WHERE {col} LIKE ? OR {col} LIKE ?",
+                                      ("%" + old + "#%", "%" + old + "@%")).fetchone()[0] == 0
+            candidate, key = db.execute("SELECT candidate_json, candidate_key FROM trials WHERE seq = 2").fetchone()
+            assert json.loads(candidate)["name"] == record + "#2" and key == record + "#2@bench"
+            assert json.loads(candidate)["artifact"] == "unchanged source"
+            assert db.execute("SELECT evaluator FROM results ORDER BY id DESC LIMIT 1").fetchone()[0] == record + "@bench"
+            assert record + "/part#2" in db.execute("SELECT candidate_json FROM trials ORDER BY id DESC LIMIT 1").fetchone()[0]
+            conclusion = json.loads(db.execute("SELECT detail_json FROM campaign_events WHERE kind='conclusion' ORDER BY id DESC LIMIT 1").fetchone()[0])
+            assert conclusion["decision"] == record + "#2" and conclusion["evaluator"] == record + "@bench"
+        rec = Records(app.state.store.run(rid)["db"], {"study": old}, name=record)
+        try:
+            assert rec.resumed
+            assert {row.candidate["name"] for row in rec.known_rows()} == {"kept design", record + "#2", record + "/part#2"}
+        finally:
+            rec.store.close()
+        results = client.get("/api/apps/Renamed_2/results", params={"run_id": rid, "campaign": record})
+        assert results.status_code == 200 and record + "#2" in results.text
+    expected = {"Renamed_2/bench": {"name": "Renamed_2#2", "evaluator": "Renamed_2@bench", "nested": [{"Renamed_2/part": "Renamed_2/part#2"}],
+                                  "folder": str(new / "workbench"), "cache": str(new / "out/Renamed_2.Renamed_2.json"), "number": 30}}
+    for filename in (".Renamed_2.json", "Renamed_2.Renamed_2.json", "Renamed_2.alt.Renamed_2.json", "metadata.json"):
+        p = new / "out" / filename
+        assert json.loads(p.read_text()) == expected
+        assert p.stat().st_mode & 0o777 == 0o640
+    assert not any((new / "out" / filename).exists() for filename in (".x.json", "x.x.json", "x.alt.x.json"))
+    assert not d.exists()
+
+
+def test_rename_does_not_rewrite_other_names_or_rewrite_the_new_name_twice(named_history):
+    app, bob, _cy, _ada, _w, _d, _cache, ids = named_history
+    with closing(sqlite3.connect(app.state.store.run(ids[0])["db"])) as db:
+        db.execute("UPDATE trials SET candidate_json = ? WHERE seq = 2", (json.dumps({"name": "x#2", "other": ["prefixx#2", "other.x@bench"]}),))
+        db.commit()
+    response = bob.post("/api/apps/x/rename", json={"to": "xx"}, headers=H)
+    assert response.status_code == 200, response.text
+    with closing(sqlite3.connect(app.state.store.run(ids[0])["db"])) as db:
+        value = json.loads(db.execute("SELECT candidate_json FROM trials WHERE seq = 2").fetchone()[0])
+        assert value == {"name": "xx#2", "other": ["prefixx#2", "other.x@bench"]}
+
+
+def test_repeated_rename_with_underscore_updates_an_archive_with_a_custom_filename(named_history):
+    app, bob, _cy, _ada, w, _d, _cache, ids = named_history
+    # A subdocument can share the loop's original name: only the loop prefix changes.
+    rec = Records(str(w.app("x") / "out/x.x.db"), {"study": "subdocument"}, name="x.x")
+    rec.trial({"name": "x.x#1"}, "x.x#1@bench", stage="bench", strategy="loop", metrics={"time_ms": 1})
+    rec.close("paused")
+    rec.store.close()
+    assert bob.post("/api/apps/x/rename", json={"to": "Old_Name-1"}, headers=H).status_code == 200
+    old = w.app("Old_Name-1")
+    archive = old / "out/archive.db"
+    with closing(sqlite3.connect(app.state.store.run(ids[0])["db"])) as src, closing(sqlite3.connect(archive)) as dst:
+        src.backup(dst)
+        # An underscore must be literal, never the single-character wildcard in LIKE.
+        dst.execute("UPDATE trials SET candidate_json = ? WHERE seq = 2",
+                    (json.dumps({"name": "Old_Name-1#2", "other": "OldXName-1#2"}),))
+        dst.commit()
+    response = bob.post("/api/apps/Old_Name-1/rename", json={"to": "Final"}, headers=H)
+    assert response.status_code == 200, response.text
+    with closing(sqlite3.connect(w.app("Final") / "out/archive.db")) as db:
+        assert db.execute("SELECT campaign_id FROM campaigns").fetchone()[0] == "Final"
+        candidate, key = db.execute("SELECT candidate_json, candidate_key FROM trials WHERE seq = 2").fetchone()
+        assert json.loads(candidate) == {"name": "Final#2", "other": "OldXName-1#2"}
+        assert key == "Final#2@bench"
+        assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+    assert (w.app("Final") / "out/Final.Final.json").is_file()
+    assert not (w.app("Final") / "out/Final.Final.db").exists()
+    with closing(sqlite3.connect(w.app("Final") / "out/Final.x.db")) as db:
+        assert db.execute("SELECT campaign_id FROM campaigns").fetchone()[0] == "Final.x"
+        assert db.execute("SELECT candidate_key FROM trials").fetchone()[0] == "Final.x#1@bench"
+
+
+@pytest.mark.parametrize("collision", ["file", "two files", "key", "pointer"])
+def test_output_collisions_abort_before_moving_anything(named_history, collision):
+    app, bob, _cy, _ada, w, d, cache, ids = named_history
+    if collision == "file":
+        (d / "out/.new.json").write_text("{}")
+    elif collision == "two files":
+        (d / "out/x.new.json").write_text("{}")  # collides with x.x.json -> new.new.json
+    elif collision == "key":
+        (d / "out/.x.json").write_text('{"x/bench": 1, "new/bench": 2}')
+    else:
+        (d / "out/x.db.runs.json").write_text('{"x": "old trace", "new": "other trace"}')
+    originals = {p.name: p.read_bytes() for p in (d / "out").iterdir()}
+    response = bob.post("/api/apps/x/rename", json={"to": "new"}, headers=H)
+    assert response.status_code in (400, 409), response.text
+    assert w.app("x").exists() and not (w.root / "new").exists() and cache.exists()
+    # Read-only SQLite backups may leave newly created WAL/SHM bookkeeping files.
+    assert {name: (d / "out" / name).read_bytes() for name in originals} == originals
+    assert all(p.name in originals or p.name.endswith((".db-wal", ".db-shm")) for p in (d / "out").iterdir())
+    assert app.state.store.run(ids[0])["app"] == "x"
+
+
+def test_invalid_record_references_abort_before_installing_prepared_files(named_history):
+    _app, bob, _cy, _ada, w, d, cache, _ids = named_history
+    with closing(sqlite3.connect(d / "out/x.db")) as db:
+        db.execute("UPDATE trials SET result_id = 999999 WHERE seq = 2")
+        db.commit()
+    original = (d / "out/x.db").read_bytes()
+    response = bob.post("/api/apps/x/rename", json={"to": "new"}, headers=H)
+    assert response.status_code == 400 and "integrity check" in response.text
+    assert w.app("x").exists() and not (w.root / "new").exists() and cache.exists()
+    assert (d / "out/x.db").read_bytes() == original
 
 
 def test_transfer_moves_history_and_variables_but_clears_admin_overrides_and_shares(moving_loop):
@@ -156,7 +301,8 @@ def test_move_rejects_invalid_names_collisions_and_disabled_recipients(moving_lo
     assert w.app("x").exists()
 
 
-@pytest.mark.parametrize("linked", [".flux-app.json", "out", "out/x.db", "out/x.db-wal", "out/x.db.runs.json"])
+@pytest.mark.parametrize("linked", [".flux-app.json", "out", "out/x.db", "out/x.db-wal", "out/x.db.runs.json",
+                                    "out/.x.json", "out/x.x.json", "out/archive.db"])
 def test_move_never_writes_through_a_metadata_link(moving_loop, linked):
     _app, bob, _cy, _ada, w, d, _cache, _ids = moving_loop
     sentinel = d.parent / "private"
@@ -172,10 +318,10 @@ def test_move_never_writes_through_a_metadata_link(moving_loop, linked):
     assert sentinel.read_text() == "do not change" and w.app("x").exists()
 
 
-def test_failed_server_transaction_restores_original_folder_records_cache_and_settings(moving_loop):
-    app, _bob, _cy, _ada, w, d, cache, ids = moving_loop
+def test_failed_server_transaction_restores_original_folder_records_cache_and_settings(named_history):
+    app, _bob, _cy, _ada, w, d, cache, ids = named_history
     store = app.state.store
-    original = (d / "out/x.db").read_bytes()
+    original = {p.name: p.read_bytes() for p in (d / "out").iterdir()}
     # A failed settings update occurs after the files and run rows have been changed.
     with closing(store._db()) as con:
         con.execute("CREATE TRIGGER refuse_move BEFORE UPDATE OF key ON server BEGIN SELECT RAISE(ABORT, 'refuse move'); END")
@@ -183,7 +329,8 @@ def test_failed_server_transaction_restores_original_folder_records_cache_and_se
     with pytest.raises(sqlite3.IntegrityError, match="refuse move"):
         move_loop(store, store.user(name="bob"), "x", store.user(name="bob"), "new")
     assert w.app("x").exists() and not (w.root / "new").exists()
-    assert (d / "out/x.db").read_bytes() == original and cache.exists()
+    assert {name: (d / "out" / name).read_bytes() for name in original} == original and cache.exists()
+    assert all(p.name in original or p.name.endswith((".db-wal", ".db-shm")) for p in (d / "out").iterdir())
     assert store.server_get("adv:bob:x")["sandbox"] is False
     assert store.run(ids[0])["app"] == "x" and store.run(ids[0])["db"] == str(d / "out/x.db")
 
