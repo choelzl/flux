@@ -463,7 +463,8 @@ objectives: [{metric: timings.fast, goal: 15}]
                 for user in ("bob", "cy"):
                     b.js("const s = document.querySelector(`tr[data-user=${arguments[0]}] select[aria-label=\"${arguments[0]}'s group\"]`); window.__groupSelect = s; s.value = String(arguments[1]); s.dispatchEvent(new Event('change')); return 1", user, group["id"])
                     b.wait("!window.__groupSelect.isConnected && document.querySelector('table.users')", what=f"{user} membership saved")
-                r.button("Permissions…", "tr[data-user=cy]")
+                r.check("user permissions use a compact labelled Select button", b.js("const button = [...document.querySelectorAll('tr[data-user=cy] button')].find(b => b.getAttribute('aria-label') === \"Select cy's permissions\"); return button && button.textContent === 'Select'"))
+                r.button("Select", "tr[data-user=cy]")
                 b.wait("document.querySelector('dialog[open] input[data-permission=view_others]')", what="member permissions")
                 r.check("members start with own-loop permissions only", b.js("return document.querySelector('[data-permission=create_loops]').checked && document.querySelector('[data-permission=run_loops]').checked && !document.querySelector('[data-permission=view_others]').checked && !document.querySelector('[data-permission=edit_others]').checked"))
                 b.click("[data-permission=view_others]")

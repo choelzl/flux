@@ -737,19 +737,23 @@ async function adminUsers(body, ok = () => true) {
   const initial = catalog.groups.find(g => g.builtin === "internal");
   const newGroup = groupSel(initial?.id, null, "Group of the new user");
   const newCredentials = credentialSel("internal", null, "Server access of the new user");
-  const permissionsButton = (u) => act("Permissions…", async () => {
-    const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
-      h("input", { type: "checkbox", "data-permission": key, checked: u.permissions[key], disabled: u.role === "admin" }), label]);
-    const choice = await dialog(`${u.name}'s permissions`, h("div", { class: "stack" },
-      h("p", {}, u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
-        : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."),
-      inputs.map(([, input, label]) => h("label", { class: "check" }, input, label)),
-      h("p", { class: "muted small" }, "Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.")),
-      [["Cancel", null], ...(u.role === "admin" ? [] : [["Save", () => Object.fromEntries(inputs.map(([key, input]) => [key, input.checked])), "primary"]])]);
-    if (!choice) return;
-    await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
-    u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
-  }, { cls: "small", title: "Permissions within this user's group" });
+  const permissionsButton = (u) => {
+    const button = act("Select", async () => {
+      const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
+        h("input", { type: "checkbox", "data-permission": key, checked: u.permissions[key], disabled: u.role === "admin" }), label]);
+      const choice = await dialog(`${u.name}'s permissions`, h("div", { class: "stack" },
+        h("p", {}, u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
+          : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."),
+        inputs.map(([, input, label]) => h("label", { class: "check" }, input, label)),
+        h("p", { class: "muted small" }, "Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.")),
+        [["Cancel", null], ...(u.role === "admin" ? [] : [["Save", () => Object.fromEntries(inputs.map(([key, input]) => [key, input.checked])), "primary"]])]);
+      if (!choice) return;
+      await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
+      u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
+    }, { cls: "small", title: `Select ${u.name}'s permissions` });
+    button.setAttribute("aria-label", `Select ${u.name}'s permissions`);
+    return button;
+  };
   const useOf = (n) => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4;
   // D926: rows sort by saved group, credential access and running limit.
