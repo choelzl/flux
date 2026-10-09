@@ -1,5 +1,5 @@
 """D701: a loop shared with another user, to watch (its runs and outputs) or to edit (also change,
-start and stop it); only its owner shares it; a start by an editor is the owner's loop."""
+start and stop it); owners and admins share it; a start by an editor is the owner's loop."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _c(app, n):
     return c
 
 
-def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
+def test_watch_sees_edit_changes_and_shared_users_cannot_share(server, monkeypatch):
     app, tmp = server
     bob, cy, dee, ada = _c(app, "bob"), _c(app, "cy"), _c(app, "dee"), _c(app, "ada")
     files = [("files", ("x.problem.yaml", b"statement: s\n")), ("files", ("check.py", b"print(1)\n"))]
@@ -79,3 +79,45 @@ def test_watch_sees_edit_changes_and_only_the_owner_shares(server, monkeypatch):
     assert cy.get("/api/apps/x", params=O).status_code == 403
     assert bob.delete("/api/apps/x", headers=H).status_code == 200
     assert app.state.store.shares("bob", "x") == {} and dee.get("/api/shared").json() == []
+
+
+def test_admin_manages_other_owners_sharing_without_touching_same_named_loop(server):
+    app, _tmp = server
+    bob, cy, dee, ada = (_c(app, n) for n in ("bob", "cy", "dee", "ada"))
+    for client in (bob, ada):
+        assert client.post("/api/apps/new-empty", json={"name": "x"}, headers=H).status_code == 200
+    params = {"owner": "bob"}
+    store = app.state.store
+    preview = ada.get("/api/apps/x/shares", params=params).json()
+    assert preview["can_share"] is True and "bob" not in preview["users"]
+    # The acting admin can also be a recipient; the owner cannot.
+    assert "ada" in preview["users"]
+    for target in ("bob", "missing"):
+        assert ada.put("/api/apps/x/shares", params=params, json={"user": target, "perm": "watch"}, headers=H).status_code == 400
+    assert ada.put("/api/apps/x/shares", params=params, json={"user": "cy", "perm": "admin"}, headers=H).status_code == 400
+    assert not store.shares("bob", "x")
+
+    for permission in ("watch", "edit"):
+        response = ada.put("/api/apps/x/shares", params=params, json={"user": "cy", "perm": permission}, headers=H)
+        assert response.status_code == 200, response.text
+        assert response.json()["shares"] == [{"user": "cy", "perm": permission}]
+        assert cy.get("/api/apps/x", params=params).json()["perm"] == permission
+        assert cy.get("/api/apps/x/shares", params=params).json()["can_share"] is False
+        assert cy.put("/api/apps/x/shares", params=params, json={"user": "dee", "perm": "edit"}, headers=H).status_code == 403
+        notice = store.take_notices("cy")[-1]
+        assert notice["text"] == f"ada shared bob's x with you to {permission}"
+        assert notice["href"] == "#/u/bob/app/x"
+        audit = store.audit_log()[0]
+        assert audit["user"] == "ada" and audit["action"] == "share"
+        assert audit["detail"] == f"bob/x with cy: {permission}"
+    assert not store.shares("ada", "x")
+    assert ada.put("/api/apps/x/shares", params=params, json={"user": "ada", "perm": "watch"}, headers=H).status_code == 200
+    # An explicit watch share must not remove the admin's ability to manage sharing.
+    assert ada.get("/api/apps/x/shares", params=params).json()["can_share"] is True
+    assert ada.put("/api/apps/x/shares", params=params, json={"user": "cy", "perm": None}, headers=H).status_code == 200
+    assert store.shares("bob", "x") == {"ada": "watch"} and not store.shares("ada", "x")
+    assert cy.get("/api/apps/x", params=params).status_code == 403
+    assert dee.put("/api/apps/x/shares", params=params, json={"user": "dee", "perm": "edit"}, headers=H).status_code == 403
+    notice = store.take_notices("cy")[-1]
+    assert notice["text"] == "ada stopped sharing bob's x with you"
+    assert store.audit_log()[0]["action"] == "unshare"

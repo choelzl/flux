@@ -12,5 +12,5 @@ A loop for Flux: this folder is the problem, and what its runs keep.
 | `runs/` | (on a server) the log, the answer, notes and questions |
 | a folder with a `problem.yaml` | a sub-loop: it says only what differs from this one |
 
-    flux task check __NAME__           # what is missing, what it needs
-    flux task run __NAME__ --passes 1
+    flux task check ./__NAME__           # what is missing, what it needs
+    flux task run ./__NAME__ --passes 1

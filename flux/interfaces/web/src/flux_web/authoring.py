@@ -84,6 +84,8 @@ class Authoring:
               attachments: list[Path], revise: str | None, by: str) -> None:
         """`revise`: the loop's document name, when it has one to revise."""
         with self._lock:
+            if not app_dir.is_dir():
+                raise ValueError("this loop has moved or been removed; reload it before starting an agent")
             if self.state(app_dir).get("running"):
                 raise ValueError("an agent is writing this loop's problem already")
             f = self.files(app_dir)

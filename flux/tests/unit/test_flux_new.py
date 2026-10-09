@@ -34,11 +34,21 @@ def test_the_sweep_runs_to_a_decision_without_a_model(tmp_path, capsys, monkeypa
 
 
 def test_a_bad_name_or_a_used_folder_is_refused(tmp_path, capsys):
-    assert main(["new", "9lives", "--dir", str(tmp_path / "a")]) == 2
+    assert main(["new", "bad/name", "--dir", str(tmp_path / "a")]) == 2
     (tmp_path / "b" / "ok").mkdir(parents=True)
     (tmp_path / "b" / "ok" / "x").write_text("mine")
     assert main(["new", "ok", "--dir", str(tmp_path / "b")]) == 2
     assert "not empty" in capsys.readouterr().out
+
+
+def test_leading_hyphen_names_work_and_next_commands_use_unambiguous_paths(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert main(["new", "--", "-Loop_09"]) == 0
+    assert (tmp_path / "-Loop_09/problem.yaml").is_file()
+    assert "flux task check ./-Loop_09" in capsys.readouterr().out
+    assert main(["example", "rtl-sweep", "--", "-Example_09"]) == 0
+    assert (tmp_path / "-Example_09/gen.py").is_file()
+    assert "flux task run ./-Example_09" in capsys.readouterr().out
 
 
 def test_a_search_policy_of_your_own_beside_the_document(tmp_path, capsys, monkeypatch):

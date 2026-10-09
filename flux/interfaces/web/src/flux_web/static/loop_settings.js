@@ -2,27 +2,29 @@
 // the admin's advanced settings, its maintenance, Reset and Delete (D892: out of loopPage).
 
 import { act, ago, api, card, confirmDialog, dialog, enc, h, skeleton, toast } from "./ui.js";
-import { advancedCard, envEditor, envTable } from "./loops.js";
+import { advancedCard, envEditor, envTable, permissionChoice } from "./loops.js";
 import { route } from "./app.js";
 import { measurementColumns } from "./result_table.js";
+import { me } from "./state.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
-/** Who else sees or edits a loop (D701): the owner shares it with a user to watch (its runs and
+/** Who else sees or edits a loop (D701): the owner or admin shares it with a user to watch (its runs and
     outputs) or to edit (change and run it too); everyone else with it sees the list. */
-async function sharingCard(name, isOwner) {
-  const sh = await api(`/apps/${enc(name)}/shares`).catch(() => null);
+async function sharingCard(name, qs = "") {
+  const sh = await api(`/apps/${enc(name)}/shares${qs}`).catch(() => null);
   if (!sh) return "";
-  const set = async (user, perm) => { await api(`/apps/${enc(name)}/shares`, { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
+  const canShare = sh.can_share;
+  const set = async (user, perm) => { await api(`/apps/${enc(name)}/shares${qs}`, { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
   // D723: one grid -- who, what they may do, the action -- the row to add in the same columns
   const CAN = { watch: "Can watch", edit: "Can edit" };
   const access = (attrs, cur) => h("select", attrs, Object.entries(CAN).map(([p, label]) => h("option", { value: p, selected: cur === p }, label)));
   const person = (u) => h("div", { class: "share-who" }, h("span", { class: "share-av", "aria-hidden": "true" }, u.slice(0, 1).toUpperCase()), h("span", { class: "strong" }, u));
   const rows = sh.shares.flatMap(x => [person(x.user),
-    isOwner ? access({ "aria-label": `What ${x.user} may do`, onchange: (e) => set(x.user, e.target.value) }, x.perm) : h("span", { class: "pill" }, CAN[x.perm] || x.perm),
-    isOwner ? h("button", { type: "button", class: "small", onclick: () => set(x.user, null) }, "Remove") : h("span", {})]);
-  const none = h("p", { class: "muted share-none" }, isOwner ? "Not shared." : "Shared with nobody else.");
-  if (!isOwner) return card("Sharing", sh.shares.length ? h("div", { class: "share-grid" }, rows) : none);
+    canShare ? access({ "aria-label": `What ${x.user} may do`, onchange: (e) => set(x.user, e.target.value) }, x.perm) : h("span", { class: "pill" }, CAN[x.perm] || x.perm),
+    canShare ? h("button", { type: "button", class: "small", onclick: () => set(x.user, null) }, "Remove") : h("span", {})]);
+  const none = h("p", { class: "muted share-none" }, canShare ? "Not shared." : "Shared with nobody else.");
+  if (!canShare) return card("Sharing", sh.shares.length ? h("div", { class: "share-grid" }, rows) : none, { cls: "loop-sharing" });
   const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
   const who = h("select", { id: "share-user", "aria-label": "Share with" }, h("option", { value: "" }, free.length ? "Choose a user…" : "No other user"), free.map(u => h("option", { value: u }, u)));
   const how = access({ id: "share-perm", "aria-label": "What they may do" }, "watch");
@@ -33,7 +35,7 @@ async function sharingCard(name, isOwner) {
     sh.shares.length ? "" : none,
     h("div", { class: "share-grid" }, rows, h("div", { class: "share-add-sep" }), who, how, add),
     h("p", { class: "muted small share-note" }, h("strong", {}, "Watch"), ": view only. ",
-      h("strong", {}, "Edit"), ": also change, start and stop it (runs use your keys).")]);
+      h("strong", {}, "Edit"), ": also change, start and stop it (runs use the owner's keys).")], { cls: "loop-sharing" });
 }
 
 /** The loop's settings (D697): its environment variables over the user's and the server's, and
@@ -85,14 +87,57 @@ async function settingsView(ctx) {
         run.disabled = !!ctx.st.running;
         return h("tr", {}, h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)), last, h("td", { class: "right mt-acts" }, run));
       }))))]) : "";
-  const shares = await sharingCard(name, isOwner);
+  const shares = await sharingCard(name, qs);
   if (!ok()) return;
   const columns = measurementColumns(ctx, results.metrics || [], () => {}, results.metric_groups || {});
+  const ownership = isOwner || me.role === "admin" ? await ownershipCard(ctx) : "";
+  if (!ok()) return;
   const measurements = card("Measurements", [h("p", { class: "muted" }, "Choose the columns shown in Results and Decision. Saved for this browser and loop; calculations still use every measured metric."),
     results.metrics?.length ? columns.picker : h("p", { class: "muted" }, "No measurements yet.")], { cls: "measurement-preferences" });
-  body.replaceChildren(measurements, varsCard, shares, advancedCard(e, async (adv) => {
+  body.replaceChildren(measurements, varsCard, shares, ownership, advancedCard(e, async (adv) => {
     await api(`/apps/${enc(name)}/advanced${qs}`, { method: "PUT", body: adv });      // D833: quiet, as it changes
   }), mtCard, danger);
+}
+
+async function ownershipCard(ctx) {
+  const { name, qs, info } = ctx;
+  const plan = await api(`/apps/${enc(name)}/ownership${qs}`);
+  if (!plan.can_manage) return "";
+  const rename = act("Rename…", async () => {
+    const input = h("input", { id: "loop-rename-to", value: name, maxlength: 60, autocomplete: "off", required: true });
+    const to = await dialog(`Rename ${name}`, h("div", { class: "stack" },
+      h("label", { class: "stack" }, "New loop name", input),
+      h("p", { class: "muted" }, "Files, results, history, variables, sharing and admin settings are kept. Links to the old name will change.")),
+    [["Cancel", null], ["Rename", () => input.value.trim(), "primary"]]);
+    if (!to) return;
+    const got = await api(`/apps/${enc(name)}/rename${qs}`, { method: "POST", body: { to } });
+    toast(`${name} renamed to ${got.name}`, "ok");
+    location.hash = `${got.owner === me.name ? "#" : `#/u/${enc(got.owner)}`}/app/${enc(got.name)}/settings`;
+  }, { cls: "small" });
+  rename.id = "loop-rename";
+  const transfer = act("Transfer…", async () => {
+    const current = me.role === "admin" ? await api(`/apps/${enc(name)}/ownership${qs}`) : plan;
+    const keep = permissionChoice(current.permissions, "transfer-keep-permissions");
+    const who = h("select", { id: "loop-transfer-user", "aria-label": "New owner" },
+      h("option", { value: "" }, "Choose a user…"), current.users.map(u => h("option", { value: u }, u)));
+    const input = h("input", { id: "loop-transfer-to", value: name, maxlength: 60, autocomplete: "off", required: true });
+    const got = await dialog(`Transfer ${name}`, h("div", { class: "stack" },
+      h("label", { class: "stack" }, "New owner", who), h("label", { class: "stack" }, "Loop name for the new owner", input),
+      h("p", {}, "Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account."),
+      h("p", {}, keep.input ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
+        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."), keep.el),
+    [["Cancel", null], ["Transfer", () => ({ user: who.value, to: input.value.trim(), keep_permissions: !!keep.input?.checked }), "primary"]]);
+    if (!got) return;
+    if (!got.user || !got.to) { toast("Choose a user and a loop name.", "warn"); return; }
+    const moved = await api(`/apps/${enc(name)}/transfer${qs}`, { method: "POST", body: got });
+    toast(`${name} transferred to ${moved.owner}`, "ok");
+    location.hash = me.role === "admin" ? `#/u/${enc(moved.owner)}/app/${enc(moved.name)}/settings` : "#/";
+  }, { cls: "small" });
+  transfer.id = "loop-transfer";
+  rename.disabled = !!ctx.st.running;
+  transfer.disabled = !!ctx.st.running || !plan.users.length;
+  return card("Name & ownership", [h("p", { class: "muted" }, `Owned by ${info.owner}. Stop the loop and its agents before renaming or transferring it.`),
+    h("div", { class: "form-actions" }, rename, transfer)], { cls: "loop-ownership" });
 }
 
 export { settingsView, sharingCard };

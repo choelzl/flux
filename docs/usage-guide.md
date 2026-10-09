@@ -323,6 +323,22 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   names the view (`#/app/x/live/log`, `#/app/x/settings/problem/edit`, `#/app/x/ask` opens the panel), and
   the old ones (`/log`, `/timeline`, `/agent-turns`, `/workbench`, `/configure/...`) lead to their new places.
   What each view shows:
+  - **Settings › Preferences › Name & ownership:** owners and admins can rename a stopped loop
+    or transfer it to another enabled user, optionally changing its name. Stop its agents too.
+    Names use 1–60 characters from `A–Z`, `a–z`, `0–9`, `-` and `_`, in any position.
+    Rename keeps files, results, full run history, caches, variables, sharing and admin settings.
+    Transfer moves files, history, caches and loop variables (including secrets), clears sharing
+    and by default all loop-specific admin overrides, and uses the recipient's account settings. Account
+    model keys and agent logins stay with their accounts. The former owner loses access unless
+    the recipient shares it back; admins retain access. Existing links use the new owner/name.
+    Custom scripts containing absolute paths may need updating after either operation.
+    A **clone** copies source files and optionally the workbench, without runs, loop variables,
+    sharing or admin overrides by default. When an admin clones or transfers a loop with
+    special permissions, the dialog lists them and offers **Keep special permissions**,
+    unchecked by default. Checking it preserves only mounts, the sandbox override, additional
+    network allowlist and raw TCP/UDP access; resource limits, packages and parallelism reset.
+    Regular users cannot keep these overrides. A clone uses the caller's account and server
+    defaults; a server started without sandboxing also runs clones without it.
   - **Overview:** the loop's state, designs measured (accepted, failed), passes on record, the
     objective, and the decision's numbers against the limits -- the decision is the record's latest
     pass's (D809), so a loop that runs for days has one from its first pass on, with why it was chosen (D815: a limit
@@ -473,11 +489,12 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   - **Notes to the run:** each reaches the next prompt, as a note typed at the terminal would.
     When an agent asks (`questions: operator`), the page shows the question and its time left,
     and the answer goes back to the agent.
-  - **Sharing** (on Settings, the owner's): share the loop with another user to **watch** (its
+  - **Sharing** (on Settings, for owners and admins): share the loop with another user to **watch** (its
     runs, log, results, turns, files and settings) or to **edit** (also change its files, document
     and variables, start, stop and send it notes). An editor's runs are the owner's loop: its record,
     the owner's model settings, keys and limits; the log line of each start says who started it.
-    Deleting and sharing stay the owner's. Loops shared with you are listed under **Shared with
+    Admins can also add, change or remove sharing on other users' loops. Editors cannot manage
+    sharing, and deleting stays the owner's. Loops shared with you are listed under **Shared with
     me**, with what you may do; you are told in the bell when a loop is shared with you or no longer
     is, and **Leave** takes one off your list (its owner is told). The bell watches shared loops too,
     and is each user's own.

@@ -302,6 +302,14 @@ def advanced(store: Store, user_name: str, app: str) -> dict[str, Any]:
     return store.server_get(f"adv:{user_name}:{app}") or {}
 
 
+PERMISSION_KEYS = ("sandbox", "mounts", "allow", "raw_network")
+
+
+def loop_permissions(store: Store, user_name: str, app: str) -> dict[str, Any]:
+    """Only execution permissions; limits, packages and parallelism remain separate settings."""
+    return {k: v for k, v in advanced(store, user_name, app).items() if k in PERMISSION_KEYS}
+
+
 def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) -> None:
     """The sandbox as the server and the loop's advanced settings say (D697)."""
     for k in ("FLUX_SANDBOX", "FLUX_SANDBOX_MEMORY", "FLUX_SANDBOX_CPUS", "FLUX_SANDBOX_PIDS", "FLUX_SANDBOX_TMP_SIZE",
@@ -417,6 +425,8 @@ class RunManager:
               by: User | None = None) -> None:
         """`user`: whose loop (its record, settings, limits); `by`: who started it, when another (D701)."""
         with self.lifecycle_lock:
+            if not app_dir.is_dir():
+                raise ValueError("this loop has moved or been removed; reload it before starting")
             self._start(user, app, app_dir, document, doc_id, options, by)
 
     def _start(self, user: User, app: str, app_dir: Path, document: str, doc_id: str, options: dict[str, Any],

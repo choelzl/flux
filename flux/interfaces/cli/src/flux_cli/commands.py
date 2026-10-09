@@ -1171,11 +1171,15 @@ def example_files(name: str, kind: str) -> list[tuple[str, str]]:
     """A worked example of `kind` named `name` (D825): (file name, text) pairs from
     `flux_cli/examples/<kind>/`, the document as `problem.yaml`, and its README."""
     from pathlib import Path
+    import re
 
     if kind not in EXAMPLES:
         raise ValueError(f"an example is one of {', '.join(EXAMPLES)}")
     source = Path(__file__).with_name("examples") / kind
-    out = [(f.name, f.read_text().replace("__NAME__", name))
+    module = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if not re.match(r"[A-Za-z_]", module):
+        module = "_" + module
+    out = [(f.name, f.read_text().replace("__NAME__", name).replace("__MODULE__", module))
            for f in sorted(source.iterdir()) if f.is_file()]
     return [*out, ("README.md", _EXAMPLE_README[kind].format(name=name))]
 
@@ -1193,8 +1197,8 @@ def _write_folder(name: str, where: str | None, files: list[tuple[str, str]], wh
     import re as _re
     from pathlib import Path
 
-    if not _re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
-        print(f"flux {what}: {name!r} is not a name (a letter, then letters, digits or _)")
+    if not _re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        print(f"flux {what}: {name!r} is not a name (letters, digits, - and _)")
         return None
     target = Path(where) / name if where else Path(name)     # D786: the folder is the problem, its name the id
     if target.exists() and any(target.iterdir()):
@@ -1214,7 +1218,8 @@ def cmd_new(args: argparse.Namespace) -> int:
         return 2
     (target / "library").mkdir(exist_ok=True)
     print(f"wrote {target}/: problem.yaml (fill it in), README.md (what each part is for), library/")
-    print(f"next: fill in problem.yaml, then\n  flux task check {target}\n  flux task run {target} --passes 1")
+    command_target = f"./{target}" if str(target).startswith("-") else str(target)
+    print(f"next: fill in problem.yaml, then\n  flux task check {command_target}\n  flux task run {command_target} --passes 1")
     return 0
 
 
@@ -1226,7 +1231,8 @@ def cmd_example(args: argparse.Namespace) -> int:
         return 2
     print(f"wrote {target}/: {', '.join(rel for rel, _t in example_files(args.name, args.kind))}")
     points = {"sweep": 6, "rtl-sweep": 6, "tune": 15}.get(args.kind, 1)     # D738: a pass a point
-    print(f"next:\n  flux task check {target}\n  flux task run {target} --passes {points}"
+    command_target = f"./{target}" if str(target).startswith("-") else str(target)
+    print(f"next:\n  flux task check {command_target}\n  flux task run {command_target} --passes {points}"
           + (" --screen-only" if args.kind == "rtl" else ""))
     return 0
 

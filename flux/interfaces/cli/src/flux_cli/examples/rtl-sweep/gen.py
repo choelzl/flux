@@ -4,7 +4,7 @@ of the document's `flow.dse.space`. Add an architecture here and its name to the
 import sys
 
 N = 16
-HEAD = f"module __NAME__(input logic [{N - 1}:0] a, output logic [4:0] y);\n"
+HEAD = f"module __MODULE__(input logic [{N - 1}:0] a, output logic [4:0] y);\n"
 
 
 def behavioral(chunk: int) -> list[str]:

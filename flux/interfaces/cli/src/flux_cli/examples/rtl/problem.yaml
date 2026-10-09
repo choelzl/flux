@@ -1,12 +1,12 @@
 # The model writes the module; `flux rtl test` proves it against golden.py; `flux rtl measure`
 # times it on ASAP7. Change the statement, the contract and golden.py.
-#     flux task run __NAME__ --passes 1 --screen-only
+#     flux task run ./__NAME__ --passes 1 --screen-only
 
 statement: >-
-  An unsigned 8-bit adder with carry out in SystemVerilog: module `__NAME__`, inputs `a` and
+  An unsigned 8-bit adder with carry out in SystemVerilog: module `__MODULE__`, inputs `a` and
   `b` (8 bits), output `s` (9 bits), the smallest that makes 2000 MHz placed on ASAP7.
 contract: >-
-  One module named exactly `__NAME__`, purely combinational, ports `input logic [7:0] a, b`
+  One module named exactly `__MODULE__`, purely combinational, ports `input logic [7:0] a, b`
   and `output logic [8:0] s`. s must equal a + b for every input.
 language: systemverilog
 

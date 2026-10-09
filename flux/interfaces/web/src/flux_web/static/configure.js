@@ -4,7 +4,7 @@
 import { codeEditor, langOf } from "./highlight.js";
 import { cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
 import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
-import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm } from "./loops.js";
+import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm, permissionChoice } from "./loops.js";
 
 // ================================================================ the configurator (D686)
 /** A line diff (D693): the longest common subsequence of lines, as [op, text] with op " ", "-"
@@ -132,13 +132,18 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
 const CONFIG_MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 /** D824: a loop's problem cloned into a new loop of one's own. */
 async function cloneDialog(name, owner) {
+  const qs = owner ? `?owner=${enc(owner)}` : "";
+  const permissions = me.role === "admin" ? (await api(`/apps/${enc(name)}/env${qs}`)).advanced : {};
+  const keep = permissionChoice(permissions, "clone-keep-permissions");
   const to = h("input", { value: `${name}-2`, class: "mono", id: "clone-to", autocomplete: "off" });
   const wb = h("input", { type: "checkbox", id: "clone-wb" });
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, h("div", { class: "stack" },
     h("label", { class: "stack" }, "New loop name", to),
     h("label", { class: "check" }, wb, "with its workbench (the agents' notes and tools)"),
-    h("p", { class: "muted small" }, "Copies the problem, not its runs.")),
-    [["Cancel", null], ["Clone", () => ({ to: to.value.trim(), workbench: wb.checked }), "primary"]]);
+    h("p", { class: "muted small" }, "Copies the problem, not its runs, sharing or environment variables. " +
+      (keep.input ? "Special permissions reset unless you keep them below. " : "Admin overrides (mounts, sandbox exemptions and network settings) are not copied. ") +
+      "The clone uses your account and server defaults, with any permissions you choose to keep."), keep.el),
+    [["Cancel", null], ["Clone", () => ({ to: to.value.trim(), workbench: wb.checked, keep_permissions: !!keep.input?.checked }), "primary"]]);
   if (!go || !go.to) return;
   const got = await api(`/apps/${enc(name)}/clone${owner ? `?owner=${enc(owner)}` : ""}`, { method: "POST", body: go });
   toast(`${got.name}: cloned`, "ok");
@@ -311,11 +316,11 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
     onChange: () => { panel.watch(); if (onDraft) onDraft(); }, files: (paths) => panel.missing(paths),
     checked: () => ["note", "not checked yet: once created, Check runs it where it will run"],
     saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
-    nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits and _: the loop's name and its problem's id",
+    nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits, - and _ (1–60 characters): the loop's name and its problem's id",
     save: async (yaml, state) => {
       const name = String(state.id || "").trim();
       // D912: said beside the button pressed, the name's box focused
-      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw Object.assign(new Error("Give the loop a name first (Prompt › Loop name): a letter, then letters, digits or _."), { field: "id" });
+      if (!/^[A-Za-z0-9_-]{1,60}$/.test(name)) throw Object.assign(new Error("Give the loop a name first (Prompt › Loop name): letters, digits, - and _ (1–60 characters)."), { field: "id" });
       if (!await createFromText(name, "problem.yaml", yaml)) return "Not created: the name is taken.";   // D906
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });

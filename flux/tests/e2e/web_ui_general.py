@@ -253,6 +253,202 @@ objectives: [{metric: timings.fast, goal: 15}]
 
     r.step("ask conversations", ask_conversations)
 
+    def loop_ownership():
+        original, renamed, transferred = "_ui-Loop-Owner09", "-ui-Loop-Renamed09", "9_ui-loop-transferred"
+        r.login("bob")
+        made = r.api("/apps/from-text", "POST", {"name": original, "filename": "problem.yaml", "text": DOCUMENT})
+        r.check("ownership fixture created", made["status"] == 200, made["body"])
+        current_owner, current_name = "bob", original
+        try:
+            r.page(f"#/app/{original}/settings", "document.querySelector('#loop-rename')", "ownership settings")
+            r.check("owners can rename and transfer stopped loops", b.js("return !document.querySelector('#loop-rename').disabled && !document.querySelector('#loop-transfer').disabled"))
+            b.click("#loop-rename")
+            b.wait("document.querySelector('dialog[open] #loop-rename-to')", what="rename dialog")
+            b.type("#loop-rename-to", renamed)
+            b.click("dialog .dlg-actions .primary")
+            b.wait(f"location.hash === '#/app/{renamed}/settings' && document.querySelector('#loop-rename')", what="renamed loop")
+            current_name = renamed
+            r.check("rename navigates to the new name and preserves its document", r.api(f"/apps/{renamed}/file?path=problem.yaml")["body"] == DOCUMENT)
+            r.check("the old name no longer opens", r.api(f"/apps/{original}")["status"] == 404)
+            r.api(f"/apps/{renamed}/shares", "PUT", {"user": "cy", "perm": "edit"})
+            r.login("cy")
+            r.page(f"#/u/bob/app/{renamed}/settings", "document.querySelector('.measurement-preferences')", "shared editor settings")
+            r.check("shared editors cannot rename or transfer ownership", b.js("return !document.querySelector('.loop-ownership, #loop-rename, #loop-transfer')"))
+            r.login("bob")
+            r.page(f"#/app/{renamed}/settings", "document.querySelector('#loop-transfer')", "owner transfer settings")
+            b.click("#loop-transfer")
+            b.wait("document.querySelector('dialog[open] #loop-transfer-user')", what="transfer dialog")
+            r.check("regular owners cannot preserve admin permissions", b.js("return !document.querySelector('#transfer-keep-permissions')"))
+            r.check("transfer explains secrets, access and admin override changes", b.js("const text = document.querySelector('dialog').textContent; return text.includes('including secrets') && text.includes('sandbox exemptions') && text.includes('You lose access')"))
+            b.js("const who = document.querySelector('#loop-transfer-user'); who.value = 'cy'; who.dispatchEvent(new Event('change')); return 1")
+            b.type("#loop-transfer-to", transferred)
+            b.click("dialog .dlg-actions .primary")
+            b.wait("location.hash === '#/' && document.querySelector('#main table.list, #main .empty')", what="transferred away")
+            current_owner, current_name = "cy", transferred
+            r.check("former owner loses access after transfer", r.api(f"/apps/{transferred}?owner=cy")["status"] == 403)
+            r.login("cy")
+            r.page(f"#/app/{transferred}/settings", "document.querySelector('#loop-rename')", "new owner's settings")
+            r.check("recipient owns the loop with its source and no old sharing", r.api(f"/apps/{transferred}/file?path=problem.yaml")["body"] == DOCUMENT and json.loads(r.api(f"/apps/{transferred}/shares")["body"])["shares"] == [])
+            r.clean("loop ownership")
+        finally:
+            r.login(current_owner)
+            r.page("#/", "document.querySelector('#main table.list, #main .empty')", "loop list for cleanup")
+            deleted = r.api(f"/apps/{current_name}", "DELETE")
+            r.check("ownership fixture removed", deleted["status"] == 200, deleted["body"])
+            r.login("bob")
+
+    r.step("loop ownership", loop_ownership)
+
+    def admin_permissions():
+        source, kept, dropped = "ui-permission-source", "ui-permission-kept", "ui-permission-dropped"
+        mount = r.files / "special-mount"
+        mount.mkdir()
+        permissions = {"sandbox": False, "raw_network": True, "allow": ["example.com"],
+                       "mounts": [{"host": str(mount), "inside": "/mnt/special", "mode": "ro"}]}
+        r.login("ada")
+        made = r.api("/apps/from-text", "POST", {"name": source, "filename": "problem.yaml", "text": DOCUMENT})
+        r.check("admin permissions fixture created", made["status"] == 200, made["body"])
+        try:
+            saved = r.api(f"/apps/{source}/advanced", "PUT", {**permissions, "memory": "8g", "parallel": True})
+            r.check("fixture has mount, sandbox and network overrides", saved["status"] == 200, saved["body"])
+
+            def open_clone(owner=""):
+                r.page("#/configure/clone", "document.querySelector('#clone-from')", "clone picker")
+                b.js("document.querySelector('#clone-from').value = JSON.stringify([arguments[0], arguments[1]]); return 1", owner, source)
+                r.button("Clone…")
+                b.wait("document.querySelector('dialog[open] #clone-to')", what="clone dialog")
+
+            for name, keep in ((dropped, False), (kept, True)):
+                open_clone()
+                r.check(f"{name}: admin clone asks with default unchecked", b.js("const c = document.querySelector('#clone-keep-permissions'); return c && !c.checked"))
+                r.check(f"{name}: permission summary identifies overrides", b.js("const t = document.querySelector('dialog').textContent; return t.includes('/mnt/special') && t.includes('off (runs on the host)') && t.includes('example.com') && t.includes('Raw TCP/UDP: on')"))
+                b.type("#clone-to", name)
+                if keep:
+                    b.click("#clone-keep-permissions")
+                r.dialog_button("Clone")
+                b.wait(f"location.hash === '#/app/{name}' && document.querySelector('#main .tabs')", what="clone created")
+                settings = json.loads(r.api(f"/apps/{name}/env")["body"])["advanced"]
+                r.check(f"{name}: clone respects permission choice", settings == (permissions if keep else {}), str(settings))
+
+            # A loop with no overrides does not show an irrelevant permission choice.
+            r.page(f"#/app/{dropped}/settings", "document.querySelector('#loop-transfer')", "default clone settings")
+            b.click("#loop-transfer")
+            b.wait("document.querySelector('dialog[open] #loop-transfer-user')", what="default transfer dialog")
+            r.check("default loops omit the permission checkbox", b.js("return !document.querySelector('#transfer-keep-permissions')"))
+            r.dialog_button("Cancel")
+
+            # Preview fresh overrides, even after the Settings page has already loaded.
+            r.api(f"/apps/{dropped}/advanced", "PUT", permissions)
+            for name, keep in ((dropped, False), (kept, True)):
+                if name != dropped:
+                    r.page(f"#/app/{name}/settings", "document.querySelector('#loop-transfer')", "admin ownership settings")
+                b.click("#loop-transfer")
+                b.wait("document.querySelector('dialog[open] #transfer-keep-permissions')", what="admin transfer permissions")
+                r.check(f"{name}: admin transfer asks with default unchecked", b.js("return !document.querySelector('#transfer-keep-permissions').checked"))
+                b.js("document.querySelector('#loop-transfer-user').value = 'cy'; return 1")
+                if keep:
+                    b.click("#transfer-keep-permissions")
+                r.dialog_button("Transfer")
+                b.wait(f"location.hash === '#/u/cy/app/{name}/settings' && document.querySelector('#loop-transfer')", what="admin transfer completed")
+                settings = json.loads(r.api(f"/apps/{name}/env?owner=cy")["body"])["advanced"]
+                r.check(f"{name}: transfer respects permission choice", settings == (permissions if keep else {}), str(settings))
+
+            r.api(f"/apps/{source}/shares", "PUT", {"user": "bob", "perm": "watch"})
+            r.clean("admin permissions")
+            r.login("bob")
+            open_clone("ada")
+            r.check("regular clones cannot opt into special permissions", b.js("return !document.querySelector('#clone-keep-permissions')"))
+            r.dialog_button("Cancel")
+            r.clean("regular clone permissions")
+        finally:
+            for owner, names in (("ada", (source, kept, dropped)), ("cy", (kept, dropped))):
+                r.login(owner)
+                r.page("#/", "document.querySelector('#main table.list, #main .empty')", "permission fixture cleanup")
+                for name in names:
+                    if r.api(f"/apps/{name}")["status"] == 200:
+                        deleted = r.api(f"/apps/{name}", "DELETE")
+                        r.check(f"{owner}/{name}: permission fixture removed", deleted["status"] == 200, deleted["body"])
+            r.login("bob")
+
+    r.step("admin permissions", admin_permissions)
+
+    def admin_sharing():
+        def login(user):
+            # Use a fresh page for each account, closing requests from the preceding session.
+            b.go(f"{r.url}/#/login")
+            b.cmd("WebDriver:Refresh", {})
+            r.login(user)
+
+        with loop(r, "ui-admin-sharing") as name:
+            login("ada")
+            own = r.api("/apps/from-text", "POST", {"name": name, "filename": "problem.yaml", "text": DOCUMENT})
+            r.check("admin's same-named loop created", own["status"] == 200, own["body"])
+            try:
+                def settings():
+                    r.page(f"#/u/bob/app/{name}/settings", "document.querySelector('.loop-sharing #share-user')", "admin sharing on another owner's loop")
+
+                settings()
+                r.check("admin sees the owner's shares and can choose recipients", b.js("return ![...document.querySelector('#share-user').options].some(o => o.value === 'bob') && [...document.querySelector('#share-user').options].some(o => o.value === 'cy')"))
+                b.js("document.querySelector('#share-user').value = 'cy'; return 1")
+                r.button("Share", ".loop-sharing")
+                b.wait("document.querySelector('.loop-sharing select[aria-label=\"What cy may do\"]')", what="watch share saved")
+                shared = json.loads(r.api(f"/apps/{name}/shares?owner=bob")["body"])
+                r.check("admin shares the selected owner's loop", shared["shares"] == [{"user": "cy", "perm": "watch"}])
+                r.check("same-named admin loop keeps its own sharing", json.loads(r.api(f"/apps/{name}/shares")["body"])["shares"] == [])
+                r.clean("admin adds a share")
+
+                def shared_settings(permission):
+                    login("cy")
+                    r.page(f"#/u/bob/app/{name}/settings", "document.querySelector('.loop-sharing')", f"{permission} sharing view")
+                    r.check(f"{permission} recipient sees sharing without management controls", b.js("return !document.querySelector('.loop-sharing select, .loop-sharing button') && document.querySelector('.loop-sharing').textContent.includes('cy')"))
+                    r.clean(f"{permission} sharing view")
+
+                shared_settings("watch")
+                login("ada")
+                settings()
+                b.js("const s = document.querySelector('.loop-sharing select[aria-label=\"What cy may do\"]'); window.__shareBefore = s; s.value = 'edit'; s.dispatchEvent(new Event('change')); return 1")
+                b.wait("!window.__shareBefore.isConnected && document.querySelector('.loop-sharing select[aria-label=\"What cy may do\"]')?.value === 'edit'", what="edit share saved")
+                r.check("admin can change another owner's share", json.loads(r.api(f"/apps/{name}/shares?owner=bob")["body"])["shares"] == [{"user": "cy", "perm": "edit"}])
+                shared_settings("edit")
+                login("ada")
+                settings()
+                r.button("Remove", ".loop-sharing")
+                b.wait("!document.querySelector('.loop-sharing select[aria-label=\"What cy may do\"]') && document.querySelector('#share-user option[value=cy]')", what="share removed")
+                r.check("admin can revoke another owner's share", json.loads(r.api(f"/apps/{name}/shares?owner=bob")["body"])["shares"] == [])
+                r.clean("admin removes a share")
+                login("cy")
+                r.check("revoked recipient loses loop access", r.api(f"/apps/{name}?owner=bob")["status"] == 403)
+            finally:
+                login("ada")
+                r.page("#/", "document.querySelector('#main table.list, #main .empty')", "admin sharing fixture cleanup")
+                deleted = r.api(f"/apps/{name}", "DELETE")
+                r.check("admin sharing fixture removed", deleted["status"] == 200, deleted["body"])
+
+    r.step("admin sharing", admin_sharing)
+
+    def loop_names():
+        name = "_Ui-loop-A09"
+        r.login("bob")
+        try:
+            r.page("#/configure", "document.querySelector('.flux-crafter .fc-stepbar')", "new loop configurator")
+            b.js("document.querySelector('.fc-stepbar button').click(); return 1")
+            b.wait("document.querySelector('[data-fc-field=id]')", what="loop name field")
+            b.js("for (const [key, value] of [['id', arguments[0]], ['statement', 'Loop name regression']]) { const el = document.querySelector(`[data-fc-field=${key}]`); el.value = value; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); } return 1", name)
+            r.check("the configurator accepts digits, hyphens, underscores and mixed case", b.js("return ![...document.querySelectorAll('.fc-error')].some(el => /name.*(letter|character)/i.test(el.textContent))"))
+            b.click(".fc-stepnav .fc-save")
+            b.wait(f"location.hash === '#/app/{name}' && document.querySelector('#main .tabs [role=tab].on')?.textContent === 'Overview'", what="loop with its full name created")
+            r.check("configurator creation preserves the full loop name", r.api(f"/apps/{name}")["status"] == 200)
+            r.page("#/configure/upload", "document.querySelector('#up-name')", "upload name field")
+            r.check("upload validation allows either punctuation character first", b.js("const el = document.querySelector('#up-name'); return ['_Loop-A09', '-Loop_A09'].every(name => { el.value = name; return el.checkValidity(); })"))
+            r.clean("loop names")
+        finally:
+            r.page("#/", "document.querySelector('#main table.list, #main .empty')", "loop list for name cleanup")
+            if r.api(f"/apps/{name}")["status"] == 200:
+                deleted = r.api(f"/apps/{name}", "DELETE")
+                r.check("loop name fixture removed", deleted["status"] == 200, deleted["body"])
+
+    r.step("loop names", loop_names)
+
     def navigation():
         with loop(r, "ui-navigation") as name:
             for path, tab, sub in (("live/log", "Live", "Log"), ("live/history", "Live", "History"),

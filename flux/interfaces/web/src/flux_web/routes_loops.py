@@ -20,8 +20,9 @@ from fastapi.responses import StreamingResponse
 
 from .models import (
     DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn, MoveIn,
+    LoopRename, LoopTransfer,
 )
-from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env
+from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env, loop_permissions
 from .store import User
 from .workspace import Changed, Exists, Workspace, WorkspaceError
 
@@ -104,27 +105,31 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     # ---- sharing a loop (D701): watch sees its runs and outputs, edit also changes and runs it
     @app.get("/api/apps/{name}/shares")
     def get_shares(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        _w, whose, perm = access(user, owner, name)
+        _w, whose, _perm = access(user, owner, name)
         return {"shares": [{"user": u, "perm": p} for u, p in sorted(store.shares(whose.name, name).items())],
-                "users": [u.name for u in store.users() if u.name != whose.name and not u.disabled], "can_share": perm == "owner"}
+                "users": [u.name for u in store.users() if u.name != whose.name and not u.disabled],
+                "can_share": user.id == whose.id or user.admin}
 
     @app.put("/api/apps/{name}/shares")
-    def put_share(name: str, body: ShareIn, user: User = Depends(user_of)) -> dict[str, Any]:
-        loop_of(name, user)                                   # the owner's own: only they share it
+    def put_share(name: str, body: ShareIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        if user.id != whose.id and not user.admin:
+            raise HTTPException(403, "only the owner or an admin may share this loop")
         other = store.user(name=body.user)
-        if other is None or other.id == user.id:
+        if other is None or other.id == whose.id:
             raise HTTPException(400, "share with another user of this server")
-        before = store.shares(user.name, name).get(other.name)
+        before = store.shares(whose.name, name).get(other.name)
         try:
-            got = store.set_share(user.name, name, other.name, body.perm)
+            got = store.set_share(whose.name, name, other.name, body.perm)
         except ValueError as exc:
             raise fail(exc) from exc
-        href = f"#/u/{user.name}/app/{name}"
+        href = f"#/u/{whose.name}/app/{name}"
+        label = name if user.id == whose.id else f"{whose.name}'s {name}"
         if body.perm and body.perm != before:             # D702: the user is told
-            store.notify(other.name, f"{user.name} shared {name} with you to {body.perm}", href, "ok")
+            store.notify(other.name, f"{user.name} shared {label} with you to {body.perm}", href, "ok")
         elif not body.perm and before:
-            store.notify(other.name, f"{user.name} stopped sharing {name} with you", "", "warn")
-        store.audit(user.name, "share" if body.perm else "unshare", f"{name} with {other.name}: {body.perm or '-'}")
+            store.notify(other.name, f"{user.name} stopped sharing {label} with you", "", "warn")
+        store.audit(user.name, "share" if body.perm else "unshare", f"{whose.name}/{name} with {other.name}: {body.perm or '-'}")
         return {"shares": [{"user": u, "perm": p} for u, p in sorted(got.items())]}
 
     @app.delete("/api/apps/{name}/shares/me")
@@ -153,6 +158,68 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return out
 
     # ---- applications
+    @app.get("/api/apps/{name}/ownership")
+    def loop_ownership(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        _w, whose, _d, _run = loop_of(name, user, owner)
+        can_manage = user.id == whose.id or user.admin
+        return {"can_manage": can_manage,
+                **({"permissions": loop_permissions(store, whose.name, name)} if user.admin else {}),
+                "users": [u.name for u in store.users() if u.id != whose.id and not u.disabled] if can_manage else []}
+
+    def relocate_loop(name: str, to: str, target_name: str | None, owner: str | None, user: User,
+                      keep_permissions: bool = False) -> dict[str, str]:
+        from .confine import within
+        from .relocate import move_loop
+
+        if keep_permissions and not user.admin:
+            raise HTTPException(403, "only an admin may keep special permissions")
+        if not maintenance._lock.acquire(blocking=False):
+            raise HTTPException(409, "wait for maintenance to finish first")
+        try:
+            with runs.lifecycle_lock, authoring._lock, authoring._finishing, asks._lock:
+                _w, whose, d, _run = loop_of(name, user, owner)
+                if user.id != whose.id and not user.admin:
+                    raise HTTPException(403, "only the loop's owner or an admin may rename or transfer it")
+                target = store.user(name=target_name) if target_name else whose
+                if target is None or target.disabled:
+                    raise HTTPException(400, "choose an enabled user of this server")
+                if target_name and target.id == whose.id:
+                    raise HTTPException(400, "transfer to another user")
+                if any(runs.live(r) for r in store.runs(whose, name)):
+                    raise HTTPException(409, "stop the loop first")
+                within(d / "runs", d)
+                if authoring.state(d).get("running") or asks.running(d):
+                    raise HTTPException(409, "stop the loop's agents first")
+                got = move_loop(store, whose, name, target, to.strip(), keep_permissions=keep_permissions)
+                action = "transfer loop" if target.id != whose.id else "rename loop"
+                store.audit(user.name, action, f"{whose.name}/{name} -> {target.name}/{got['name']}"
+                            + (" (special permissions kept)" if keep_permissions else ""))
+                href = f"#/app/{got['name']}/settings"
+                if target.id != whose.id:
+                    store.notify(target.name, f"{user.name} transferred {whose.name}'s {name} to you as {got['name']}", href, "ok")
+                    if user.id != whose.id:
+                        store.notify(whose.name, f"{user.name} transferred {name} to {target.name}", "", "info")
+                else:
+                    for shared_user in store.shares(target.name, got["name"]):
+                        store.notify(shared_user, f"{whose.name} renamed {name} to {got['name']}", f"#/u/{whose.name}/app/{got['name']}", "info")
+                return got
+        except (Exists, FileExistsError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise fail(exc) from exc
+        except OSError as exc:
+            raise HTTPException(500, f"could not move the loop: {exc}") from exc
+        finally:
+            maintenance._lock.release()
+
+    @app.post("/api/apps/{name}/rename")
+    def rename_loop(name: str, body: LoopRename, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        return relocate_loop(name, body.to, None, owner, user)
+
+    @app.post("/api/apps/{name}/transfer")
+    def transfer_loop(name: str, body: LoopTransfer, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        return relocate_loop(name, body.to if body.to is not None else name, body.user, owner, user, body.keep_permissions)
+
     @app.get("/api/apps")
     def apps(user: User = Depends(user_of)) -> list[dict[str, Any]]:
         """The user's loops, each running or not (D689), the most recently active first."""
@@ -625,11 +692,22 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """A loop cloned (D824) into the caller's own: any loop they can see -- their own, one shared with
         them, for an admin anyone's. Its problem, never its runs'; its workbench when asked."""
         _w, whose, d, _run = loop_of(name, user, owner)
+        if body.keep_permissions and not user.admin:
+            raise HTTPException(403, "only an admin may keep special permissions")
+        kept = loop_permissions(store, whose.name, name) if body.keep_permissions else {}
+        created = False
         try:
             meta = ws(user).clone(body.to.strip(), d, workbench=body.workbench, source=f"{whose.name}/{name}")
-        except WorkspaceError as exc:
-            raise fail(exc) from exc
-        store.audit(user.name, "clone loop", f"{whose.name}/{name} -> {body.to.strip()}" + (" (with its workbench)" if body.workbench else ""))
+            created = True
+            store.server_set(f"adv:{user.name}:{body.to.strip()}", kept or None)
+        except BaseException as exc:
+            if created:
+                ws(user).delete(body.to.strip())
+            if isinstance(exc, WorkspaceError):
+                raise fail(exc) from exc
+            raise
+        store.audit(user.name, "clone loop", f"{whose.name}/{name} -> {body.to.strip()}" + (" (with its workbench)" if body.workbench else "")
+                    + (" (special permissions kept)" if body.keep_permissions else ""))
         return {"name": body.to.strip(), **meta}
 
     @app.post("/api/apps/{name}/validate")

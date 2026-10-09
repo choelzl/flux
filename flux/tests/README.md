@@ -43,6 +43,19 @@ failed sends, long running-loop notes, activity polling without scroll/focus jum
 fixed composer at desktop and phone widths. `test_web_asks.py` checks persisted reply branches,
 model/agent prompts, permissions and complete conversation deletion.
 
+`FLUX_E2E_STEPS="loop ownership"` checks rename and transfer dialogs, navigation, source retention,
+the former owner's loss of access and shared-editor restrictions. `test_web_relocate.py` covers
+records for multiple documents, retained logs and cached transcripts, variables and settings,
+active-work refusal, collisions, metadata links, rollback and cloning admin-configured loops.
+`FLUX_E2E_STEPS="admin permissions"` checks admin clone/transfer permission previews, the
+unchecked default, opt-in preservation and regular-user restrictions. API tests also reject
+forged opt-ins, preserve only execution permissions, and roll back failed permission saves.
+`FLUX_E2E_STEPS="admin sharing"` checks admins adding, changing and removing other owners'
+shares, same-name loop isolation and read-only sharing views for watchers and editors.
+
+`FLUX_E2E_STEPS="loop names"` checks configurator creation and upload validation. Naming tests
+also cover the loader, CLI examples, rename and clone, and invalid paths and characters.
+
 `FLUX_E2E_STEPS="dictionary metrics"` checks sparse dictionary columns, zero and missing
 measurements, parent aggregates, relative values, expansion, shared Decision preferences, browser reloads and
 the crafter's dictionary fields. `test_dictionary_metrics.py` covers parsing, inheritance,

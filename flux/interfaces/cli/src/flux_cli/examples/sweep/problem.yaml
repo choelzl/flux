@@ -1,5 +1,5 @@
 # No model: render.py writes one candidate per point of `space:`; the fastest wins.
-#     flux task run __NAME__ --passes 6      # a pass a point (D738)
+#     flux task run ./__NAME__ --passes 6      # a pass a point (D738)
 
 statement: >-
   The fastest way, among those render.py spells, to count the primes below n in Python.

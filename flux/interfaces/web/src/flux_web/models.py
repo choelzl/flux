@@ -178,6 +178,17 @@ class EmptyIn(BaseModel):                # D825: a loop's baseline
 class CloneIn(BaseModel):                # D824: a loop's problem into a new loop of one's own
     to: str = Field(max_length=64)
     workbench: bool = False
+    keep_permissions: bool = False
+
+
+class LoopRename(BaseModel):
+    to: str = Field(min_length=1, max_length=60)
+
+
+class LoopTransfer(BaseModel):
+    user: str = Field(min_length=1, max_length=40)
+    to: str | None = Field(default=None, min_length=1, max_length=60)
+    keep_permissions: bool = False
 
 
 class MigrateIn(BaseModel):              # D811: one loop's documents, or every loop's

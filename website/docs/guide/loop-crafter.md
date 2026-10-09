@@ -20,7 +20,8 @@ visibility is under **Settings → Preferences**, saved for your browser and loo
 Use [Create your first loop](tutorial.md) for the scripts that accompany a complete example,
 and the [parameter reference](parameters.md) to understand a field before changing it.
 The form writes the document; you still supply any custom scripts, reference models, or data
-that its commands name. Save it as `problem.yaml` inside your loop folder, add those files,
+that its commands name. Loop names use 1–60 letters, digits, hyphens or underscores, in any
+position. Save the document as `problem.yaml` inside your loop folder, add those files,
 then run `flux task check FOLDER` and a bounded first pass.
 
 <div id="flux-crafter" class="flux-crafter">

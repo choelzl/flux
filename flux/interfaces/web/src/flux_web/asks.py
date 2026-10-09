@@ -90,6 +90,8 @@ class Asks:
     def start(self, *, app_dir: Path, question: str, author: str, env: dict[str, str], by: str,
               parent_id: str | None = None) -> str:
         with self._lock:
+            if not app_dir.is_dir():
+                raise ValueError("this loop has moved or been removed; reload it before asking")
             if self.running(app_dir):
                 raise ValueError("an agent is answering a question about this loop already")
             history, thread_id = [], None

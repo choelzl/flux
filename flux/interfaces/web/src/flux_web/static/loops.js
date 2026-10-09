@@ -231,7 +231,7 @@ function loopsBrowser(loops, { who = false, memo } = {}) {
 
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 function uploadForm() {
-  const name = h("input", { placeholder: "my_loop", pattern: "[A-Za-z0-9][A-Za-z0-9_-]*", style: "width:100%", id: "up-name", autocomplete: "off" });
+  const name = h("input", { placeholder: "my_loop", pattern: "[A-Za-z0-9_\\-]{1,60}", maxlength: 60, style: "width:100%", id: "up-name", autocomplete: "off" });
   const files = h("input", { type: "file", multiple: true });
   const folder = h("input", { type: "file", webkitdirectory: true, multiple: true });
   let dropped = [];
@@ -240,7 +240,7 @@ function uploadForm() {
     files.value = ""; folder.value = ""; dropped = []; ready([]);
   } }, "Clear files");
   const ready = (got, dir = null) => {
-    if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^[^A-Za-z0-9]+/, "");
+    if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60);
     said.replaceChildren(got.length ? `${got.length} file(s) ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator.", dir ? ` from ${dir}/` : "");
     clear.hidden = !got.length;
   };
@@ -561,6 +561,22 @@ function advancedCard(e, save, saveLabel = "Save") {
     h("div", { class: "form-actions" }, mark)]);                                 // D939/D945: the check says it
 }
 
+/** Explicit admin choice when a clone or transfer would otherwise lose execution permissions. */
+function permissionChoice(settings = {}, id = "keep-permissions") {
+  if (me.role !== "admin" || !["sandbox", "mounts", "allow", "raw_network"].some(k => k in settings)) return { el: "", input: null };
+  const input = h("input", { type: "checkbox", id });
+  const rows = [];
+  if ("sandbox" in settings) rows.push(h("li", {}, `Sandbox override: ${settings.sandbox ? "on" : "off (runs on the host)"}`));
+  for (const mount of settings.mounts || []) rows.push(h("li", {}, h("code", { style: "white-space:normal" }, `${mount.host} → ${mount.inside}`),
+    ` (${mount.mode === "rw" ? "read/write" : "read-only"})`));
+  if ("allow" in settings) rows.push(h("li", {}, "Additional network allowlist: ", (settings.allow || []).join(", ") || "none"));
+  if ("raw_network" in settings) rows.push(h("li", {}, `Raw TCP/UDP: ${settings.raw_network ? "on" : "off"}`));
+  return { input, el: h("div", { class: "stack permission-choice", style: "overflow-wrap:anywhere" },
+    h("label", { class: "check" }, input, "Keep special permissions"),
+    h("ul", { class: "small" }, rows),
+    h("p", { class: "muted small" }, "If checked, these overrides also apply to the new owner or clone. Other admin settings reset.")) };
+}
+
 export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,
   envEditor, envTable, lastSaid, loopsBrowser, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop,
-  uploadForm };
+  uploadForm, permissionChoice };

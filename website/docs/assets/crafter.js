@@ -749,10 +749,11 @@
     var kept = state.kept || [];                     // kept as written: the server appends them (D686)
     function own(key) { return kept.indexOf(key) < 0; }
     var id = String(state.id || "").trim() || "my_problem";
+    var loopPath = id.charAt(0) === "-" ? "./" + id : id;
     // D786: the document is the folder's problem.yaml; the folder's name is the id, not said here
     var out = "# " + id + "/problem.yaml: made with the Flux problem builder.\n" +
-              "#     flux task check " + id + "\n" +
-              "#     flux task run " + id + "            # until stopped; --passes N for N\n\n";
+              "#     flux task check " + loopPath + "\n" +
+              "#     flux task run " + loopPath + "            # until stopped; --passes N for N\n\n";
     out += prose("statement", String(state.statement || "").trim() || "(say what you want made)");
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
     var basepass = state.baseline || {};
@@ -950,8 +951,8 @@
     function note(t) { say("note", t); }
     var id = String(state.id || "").trim(), lang = language(state, true);
     var r = resolve(state, cat), flow = state.flow || {}, knobs = knobNames(state);
-    if (!id) error("Give the problem a name (letters, digits and _).", "id");
-    else if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(id)) error("The name \"" + id + "\" should be a letter, then letters, digits or _.", "id");
+    if (!id) error("Give the problem a name (letters, digits, - and _).", "id");
+    else if (!/^[A-Za-z0-9_-]{1,60}$/.test(id)) error("The name \"" + id + "\" should use letters, digits, - and _ (1–60 characters).", "id");
     if (!String(state.statement || "").trim()) error("Say what you want made (the statement is empty).", "statement");
     var implied = impliedLanguage(state, cat);
     if (!lang && !implied) note("The language is not said and no chosen tool tells it: the design is a .txt file -- choose one if the checks need another kind.");
@@ -1850,7 +1851,7 @@
       var what = titled("1. What do you want?", [], [
         h("div", { class: "fc-line" }, [
           field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
-                { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits and _" }),
+                { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits, - and _ (1–60 characters)" }),
           field("Language", function () { return state.language; }, function (v) { state.language = v; },
                 { compact: true, options: langs, structural: true, hint: "Optional: the language the designs are written in, when the checks' tools do not tell it" }),
           state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
@@ -2466,7 +2467,8 @@
       });
       renderSummary();
       if (parts.diffFold && parts.diffFold.open) { clearTimeout(parts.diffTimer); parts.diffTimer = setTimeout(showChanges, 500); }
-      if (parts.next) parts.next.textContent = "flux task check " + file + "\nflux task run " + file + " --passes 1";
+      var commandFile = file.charAt(0) === "-" ? "./" + file : file;
+      if (parts.next) parts.next.textContent = "flux task check " + commandFile + "\nflux task run " + commandFile + " --passes 1";
     }
 
     /** D913: what runs, in words. D941: short -- what it makes, its checks and measurements, the goal,

@@ -141,7 +141,7 @@ def task_in(doc: dict[str, Any], home: Path, alt: str = "") -> TaskSpec:
     folder = Path(home).resolve().name
     if "id" in doc:
         raise TaskError(f"a document does not say its `id`: it is its folder's name ({folder}) (D786)")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", folder):
+    if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", folder):
         raise TaskError(f"the folder's name {folder!r} is the problem's id: letters, digits, _, . or - (D786)")
     return TaskSpec.from_dict({**doc, "id": folder, **({"_record": f"{folder}.{alt}"} if alt else {})}, base=home)
 

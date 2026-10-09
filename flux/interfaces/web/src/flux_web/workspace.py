@@ -25,7 +25,7 @@ _ROOM = threading.Lock()
 LOOP_FILES = 100_000
 PART_BYTES = 64 * 1024 * 1024           # one part of a file sent in parts
 TEXT_MAX = 2 * 1024 * 1024
-_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$")
+_NAME = re.compile(r"[A-Za-z0-9_-]{1,60}")
 DOCUMENT_FILE = "problem.yaml"            # D786: a loop's document; the loop's name is its id
 DOC_SUFFIXES = (".problem.yaml", ".problem.yml", ".task.json", ".task.yaml", ".yaml", ".yml", ".json")
 
@@ -111,8 +111,8 @@ class Exists(WorkspaceError):
 
 
 def check_name(name: str) -> str:
-    if not _NAME.match(name or ""):
-        raise WorkspaceError("an application name is letters, digits, - and _ (at most 60), starting with a letter or digit")
+    if not _NAME.fullmatch(name or ""):
+        raise WorkspaceError("an application name is letters, digits, - and _ (1 to 60 characters)")
     return name
 
 
@@ -746,5 +746,4 @@ def _pick_document(rels: list[str]) -> str | None:
             return sorted(hits)[0]
     hits = [r for r in top if r.endswith((".yaml", ".yml", ".json")) and r not in ("package.json",)]
     return sorted(hits)[0] if len(hits) == 1 else None
-
 
