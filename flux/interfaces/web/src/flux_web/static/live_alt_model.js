@@ -41,20 +41,6 @@ export function currentTask(rows) {
 
 export const taskState = n => n.t1 == null ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done";
 
-// Keep the ancestry of matches so a tool or agent still has a readable work context.
-export function filterTasks(rows, query = "", status = "all") {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean), included = new Set(), matches = new Set();
-  const ids = new Set(rows.map(r => r.node.id));
-  for (const { node } of rows) {
-    const text = [node.name, node.why, node.params?.command].filter(Boolean).join(" ").toLowerCase();
-    if ((status === "all" || taskState(node) === status) && words.every(w => text.includes(w))) {
-      matches.add(node.id);
-      for (let p = node; p && ids.has(p.id); p = p.parent) included.add(p.id);
-    }
-  }
-  return rows.filter(r => included.has(r.node.id)).map(r => ({ ...r, context: !matches.has(r.node.id) }));
-}
-
 // Recent tasks first in long journals, without dropping the selected task or its ancestors.
 export function taskWindow(rows, limit, selected) {
   const recent = rows.slice().sort((a, b) => a.node.t0 - b.node.t0 || Number(a.node.id) - Number(b.node.id)).slice(-limit);
