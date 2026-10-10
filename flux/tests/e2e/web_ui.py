@@ -1616,7 +1616,7 @@ def flows(r: Run) -> None:
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "results-sorted-desktop.png")
         # D916: Results and Graphs two views; the graphs built only when Graphs is first opened
         subs = b.js("return [...document.querySelectorAll('#main .subtabs [role=tab], .subrow .subtabs [role=tab]')].map(x => x.textContent)")
-        r.check("Results has its views: Results, Graphs and Ideas (D916)", subs == ["Results", "Graphs", "Ideas"], str(subs))
+        r.check("Results has its views: Results, Graphs, Ideas and Library (D916, D955)", subs == ["Results", "Graphs", "Ideas", "Library"], str(subs))
         r.check("the graphs are not built while Results shows (D916)", b.js("return !document.querySelector('#main svg.chart') && !!document.querySelector('#main .decision-line')"))
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")

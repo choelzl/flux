@@ -1221,3 +1221,8 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 @media (max-width: 400px) {
   .tabs button, .tabs a[role=tab] { padding-left: 9px; padding-right: 9px; }
 }
+
+/* D955: Results › Library -- each digested paper folded, its digest's text wrapped (a phone too) */
+.library-view details.digest { border-top: 1px solid var(--line); padding: 6px 0; }
+.library-view details.digest > summary { cursor: pointer; overflow-wrap: anywhere; }
+.library-view pre.digest-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }

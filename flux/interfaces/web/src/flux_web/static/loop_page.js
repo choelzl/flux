@@ -15,6 +15,7 @@ import { settingsView } from "./loop_settings.js";
 import { historyTab } from "./loop_history.js";
 import { liveAltTab } from "./loop_live_alt.js";
 import { ideasView } from "./loop_ideas.js";
+import { libraryView } from "./loop_library.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { flushResultPreferences } from "./result_table.js";
 
@@ -45,7 +46,7 @@ async function loopPage(name, owner, path = "") {
   let askOpen = parts[0] === "ask";
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
-  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], LiveAlt: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], LiveAlt: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
@@ -458,6 +459,8 @@ async function loopPage(name, owner, path = "") {
       await agentsView(ctx);
     } else if (tab === "Results" && curSub() === "ideas") {
       await ideasView(ctx);
+    } else if (tab === "Results" && curSub() === "library") {
+      await libraryView(ctx);
     } else if (tab === "Results") {
       // D916: Results and Graphs, two views of one fetch -- switching keeps the selection and the
       // graphs once built; the tab opened again reads the results afresh

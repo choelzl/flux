@@ -528,6 +528,20 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def all_usage(_a: User = Depends(admin_of)) -> list[dict[str, Any]]:
         return [_user_usage(u) for u in store.users()]
 
+    @app.get("/api/apps/{name}/digests")
+    def digests(name: str, owner: str | None = None, run_id: int | None = None,
+                user: User = Depends(user_of)) -> dict[str, Any]:
+        """The library's digests the loop's record holds (D955): each paper, who digested it and the
+        digest's text -- what the Setup made and the prompts read; `flux knowledge show` before D952."""
+        from flux_knowledge import digests_in
+
+        _w, _whose, _d, run = selected_run(name, user, owner, run_id)
+        db = (run or {}).get("db") or ""
+        held = digests_in(db) if db and os.path.isfile(db) else {}
+        return {"digests": [{"source": src, "digest": d.get("digest", ""), "chars": d.get("chars", 0),
+                             "model": d.get("model", ""), "reused": bool(d.get("reused"))}
+                            for src, d in sorted(held.items())]}
+
     @app.get("/api/apps/{name}/ideas")
     def ideas(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None,
               start_id: int | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
