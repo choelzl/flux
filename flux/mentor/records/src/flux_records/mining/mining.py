@@ -113,20 +113,18 @@ def mine_measured_points(campaign_db_path: str) -> list[Fact]:
                     points.append({
                         "candidate": _slim(t.candidate),
                         "value": est.value,
-                        "unit": est.unit,
                         "method": est.method.value,
                         "evaluator": t.result.provenance.evaluator,
                         "seq": t.seq,
                     })
                 values = [p["value"] for p in points]
-                unit = points[0]["unit"]
                 statement = (
                     f"Stage {stage!r} measured {metric} for {len(points)} candidate(s) of "
                     f"campaign {cid[:12]}...: "
                     + "; ".join(
-                        f"{p['candidate']} -> {p['value']:g} {p['unit']}" for p in points[:6])
+                        f"{p['candidate']} -> {p['value']:g}" for p in points[:6])
                     + ("; ..." if len(points) > 6 else "")
-                    + f" (range {min(values):g}-{max(values):g} {unit})."
+                    + f" (range {min(values):g}-{max(values):g})."
                 )
                 facts.append(Fact(
                     kind="measured_point",

@@ -1,20 +1,7 @@
-"""The small factual fixes of the trimmed review (D440): one interconnect Result builder, no
-fabricated bottleneck in the record layer, one PpaReport projection, and adapters declaring
-what they translate."""
+"""The small factual fixes of the trimmed review (D440): shared words, one renderer, one splitter,
+one scan, typed record rows."""
 
 from __future__ import annotations
-
-
-def test_a_record_written_without_a_cost_model_claims_no_bottleneck(tmp_path):
-    from flux_store.result import Limiter
-    from flux_records import Records
-
-    db = str(tmp_path / "r.db")
-    r = Records(db, objective={"s": 2})
-    r.trial({"a": 1}, "k", stage="screen", strategy="s", metrics={"m": 1.0})
-    (t,) = r.store.trials(r.campaign_id, status="ok")
-    assert t.result.bottleneck.limiter is Limiter.NONE
-    assert Limiter("none") is Limiter.NONE
 
 
 def test_the_loops_log_words_are_role_words():

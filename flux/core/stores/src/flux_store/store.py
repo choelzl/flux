@@ -1,5 +1,5 @@
-"""Content-addressed result/artifact store (docs/stores.md), SQLite-backed: every design point
-records its inputs, evaluator and lineage, so replay is one query away.
+"""The result store (docs/records.md), SQLite-backed: content-addressed documents (an objective,
+a digest) and the `results` table a campaign's trials point into.
 """
 
 from __future__ import annotations
@@ -23,16 +23,11 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE TABLE IF NOT EXISTS results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    workload_hash TEXT NOT NULL,
-    arch_hash TEXT,
-    mapping_hash TEXT,
     evaluator TEXT NOT NULL,
     result_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_results_workload ON results(workload_hash);
-CREATE INDEX IF NOT EXISTS idx_results_arch ON results(arch_hash);
 CREATE INDEX IF NOT EXISTS idx_results_evaluator ON results(evaluator);
 """
 
@@ -99,7 +94,7 @@ class _LockedConnection:
 
 
 class ResultStore:
-    """A content-addressed store for documents (docs/stores.md), and the `results` table a
+    """A content-addressed store for documents (docs/records.md), and the `results` table a
     campaign's trials write their measurements into (`CampaignStore.complete_trial`)."""
 
     def __init__(self, db_path: str | Path) -> None:
@@ -144,19 +139,6 @@ class ResultStore:
             "SELECT canonical_json FROM documents WHERE hash = ?", (content_hash,)
         ).fetchone()
         return json.loads(row[0]) if row else None
-
-def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
-    result_id, workload_hash, arch_hash, mapping_hash, evaluator, result_json, created_at = row
-    return {
-        "id": result_id,
-        "workload_hash": workload_hash,
-        "arch_hash": arch_hash,
-        "mapping_hash": mapping_hash,
-        "evaluator": evaluator,
-        "result": json.loads(result_json),
-        "created_at": created_at,
-    }
-
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()

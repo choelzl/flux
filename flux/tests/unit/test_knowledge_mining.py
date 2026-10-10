@@ -12,7 +12,7 @@ import pytest
 import yaml
 from pathlib import Path
 
-from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
+from flux_store.result import Estimate, Method, Provenance, Result
 from flux_records.mining import (
     mine_knowledge,
     mine_observed_ratios,
@@ -23,17 +23,8 @@ from flux_store import CampaignStore
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _result(value: float, *, metric="latency_cycles", unit="cycles",
-            method=Method.SIMULATED, evaluator="rtl@1") -> Result:
-    return Result(
-        metrics={metric: Estimate(value=value, ci_low=value, ci_high=value,
-                                  unit=unit, method=method)},
-        validity=Validity(ok=True, checker_version="test"),
-        domain=Domain(in_domain=True),
-        bottleneck=Bottleneck(limiter=Limiter.COMPUTE),
-        provenance=Provenance(evaluator=evaluator, inputs={}),
-        escalation=Escalation(recommended=False),
-    )
+def _result(value: float, *, metric="latency_cycles", method=Method.SIMULATED, evaluator="rtl@1") -> Result:
+    return Result(metrics={metric: Estimate(value=value, method=method)}, provenance=Provenance(evaluator=evaluator))
 
 
 # -- estimator bias -------------------------------------------------------------------------
@@ -65,7 +56,7 @@ def campaign(tmp_path):
     def _trial(phase, width, *, status="ok", result=None, error=None, stage=None):
         seq = store.begin_trial(
             cid, phase=phase, candidate={"width": width}, candidate_key=f'{{"width": {width}}}',
-            workload_hash="wh", arch_hash=f"ah{width}", strategy_kind="grid", stage=stage,
+            strategy_kind="grid", stage=stage,
         )
         store.complete_trial(cid, seq, status=status, result=result, error=error,
                              wall_clock_s=0.1)

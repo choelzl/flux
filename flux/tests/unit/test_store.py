@@ -1,4 +1,4 @@
-"""flux_store.ResultStore (docs/stores.md): content-addressed documents (an objective, a digest)."""
+"""flux_store.ResultStore (docs/records.md): content-addressed documents (an objective, a digest)."""
 
 from __future__ import annotations
 

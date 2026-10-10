@@ -122,7 +122,7 @@ def test_move_rewrites_designs_evaluators_events_and_output_metadata(named_histo
     before = {}
     for rid in ids:
         with closing(sqlite3.connect(app.state.store.run(rid)["db"])) as db:
-            before[rid] = db.execute("SELECT id, result_id, workload_hash, arch_hash FROM trials").fetchall()
+            before[rid] = db.execute("SELECT id, result_id, status FROM trials").fetchall()
     response = bob.post(f"/api/apps/x/{action}", json={"to": "Renamed_2", **({"user": "cy"} if action == "transfer" else {})}, headers=H)
     assert response.status_code == 200, response.text
     client = cy if action == "transfer" else bob
@@ -131,7 +131,7 @@ def test_move_rewrites_designs_evaluators_events_and_output_metadata(named_histo
         with closing(sqlite3.connect(app.state.store.run(rid)["db"])) as db:
             assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
             assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-            assert db.execute("SELECT id, result_id, workload_hash, arch_hash FROM trials").fetchall() == before[rid]
+            assert db.execute("SELECT id, result_id, status FROM trials").fetchall() == before[rid]
             for table, columns in (("trials", ("candidate_json", "candidate_key")), ("results", ("evaluator", "result_json")),
                                    ("campaign_events", ("detail_json",))):
                 for col in columns:

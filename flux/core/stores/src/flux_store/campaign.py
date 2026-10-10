@@ -38,15 +38,12 @@ CREATE TABLE IF NOT EXISTS trials (
     stage TEXT,
     candidate_json TEXT NOT NULL,
     candidate_key TEXT NOT NULL,
-    workload_hash TEXT NOT NULL,
-    arch_hash TEXT,
     result_id INTEGER REFERENCES results(id),
     status TEXT NOT NULL,
     error TEXT,
     strategy_kind TEXT NOT NULL,
     cache_hit INTEGER NOT NULL DEFAULT 0,
     wall_clock_s REAL NOT NULL DEFAULT 0.0,
-    usd_cost REAL,
     created_at TEXT NOT NULL,
     UNIQUE (campaign_id, seq)
 );
@@ -82,8 +79,6 @@ class Trial:
     stage: str | None
     candidate: dict[str, Any]
     candidate_key: str
-    workload_hash: str
-    arch_hash: str | None
     status: str
     result: Result | None
     result_id: int | None
@@ -120,6 +115,15 @@ class CampaignStore:
 
     def close(self) -> None:
         self.results.close()
+
+    _old: bool | None = None
+
+    def _filler(self) -> tuple[str, str]:
+        """A record written before D964 keeps its placeholder `workload_hash` column (NOT NULL):
+        a writer fills it empty rather than rewriting the table (minutes on a big record)."""
+        if self._old is None:
+            self._old = any(r[1] == "workload_hash" for r in self._conn.execute("PRAGMA table_info(trials)").fetchall())
+        return (", workload_hash", ", ''") if self._old else ("", "")
 
     def __enter__(self) -> "CampaignStore":
         return self
@@ -234,8 +238,6 @@ class CampaignStore:
         phase: str,
         candidate: dict[str, Any],
         candidate_key: str,
-        workload_hash: str,
-        arch_hash: str | None,
         strategy_kind: str,
         stage: str | None = None,
     ) -> int:
@@ -243,17 +245,18 @@ class CampaignStore:
         interrupted trial. Returns the trial seq."""
         # D747: the next seq taken in the insert itself -- one statement holds the write lock, so
         # passes at once on their own connections never take the same one (a row was lost)
+        col, val = self._filler()
         row = self._conn.execute(
             "INSERT INTO trials (campaign_id, seq, phase, stage, candidate_json, "
-            "candidate_key, workload_hash, arch_hash, status, strategy_kind, created_at) "
+            f"candidate_key, status, strategy_kind, created_at{col}) "
             "VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM trials WHERE campaign_id = ?), "
-            "?, ?, ?, ?, ?, ?, 'running', ?, ?) RETURNING seq",
+            f"?, ?, ?, ?, 'running', ?, ?{val}) RETURNING seq",
             (
                 # default=str: a non-JSON object in the candidate is recorded as text rather
                 # than failing the whole trial write.
                 campaign_id, campaign_id, phase, stage,
                 json.dumps(candidate, default=str), candidate_key,
-                workload_hash, arch_hash, strategy_kind, _now(),
+                strategy_kind, _now(),
             ),
         ).fetchone()
         self._conn.commit()
@@ -276,35 +279,30 @@ class CampaignStore:
         id, if any."""
         assert status in TRIAL_STATUSES and status != "running", status
         trial = self._conn.execute(
-            "SELECT workload_hash, arch_hash, status FROM trials "
+            "SELECT status FROM trials "
             "WHERE campaign_id = ? AND seq = ?",
             (campaign_id, seq),
         ).fetchone()
         if trial is None:
             raise CampaignStoreError(f"no trial seq={seq} in campaign {campaign_id!r}")
-        if trial[2] != "running":
+        if trial[0] != "running":
             raise CampaignStoreError(
-                f"trial seq={seq} is {trial[2]!r}, not running — double completion is a bug"
+                f"trial seq={seq} is {trial[0]!r}, not running — double completion is a bug"
             )
-        workload_hash, arch_hash, mapping_hash = trial[0], trial[1], None
 
         result_id = existing_result_id
         try:
             if result is not None and result_id is None:
+                col, val = self._filler()
                 cursor = self._conn.execute(
-                    "INSERT INTO results (workload_hash, arch_hash, mapping_hash, evaluator, "
-                    "result_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        workload_hash, arch_hash, mapping_hash,
-                        result.provenance.evaluator, json.dumps(result.to_dict()), _now(),
-                    ),
+                    f"INSERT INTO results (evaluator, result_json, created_at{col}) VALUES (?, ?, ?{val})",
+                    (result.provenance.evaluator, json.dumps(result.to_dict()), _now()),
                 )
                 result_id = cursor.lastrowid
-            usd = result.provenance.usd_cost if result is not None else None
             self._conn.execute(
                 "UPDATE trials SET status = ?, result_id = ?, error = ?, wall_clock_s = ?, "
-                "usd_cost = ?, cache_hit = ? WHERE campaign_id = ? AND seq = ?",
-                (status, result_id, error, wall_clock_s, usd, 1 if cache_hit else 0,
+                "cache_hit = ? WHERE campaign_id = ? AND seq = ?",
+                (status, result_id, error, wall_clock_s, 1 if cache_hit else 0,
                  campaign_id, seq),
             )
             self._conn.commit()
@@ -325,8 +323,8 @@ class CampaignStore:
         # D774: each trial's result in the same query -- not one query per trial (a day's record
         # of 40k trials took 126k queries)
         rows = self._conn.execute(
-            "SELECT t.seq, t.phase, t.stage, t.candidate_json, t.candidate_key, t.workload_hash, "
-            "t.arch_hash, t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json "
+            "SELECT t.seq, t.phase, t.stage, t.candidate_json, t.candidate_key, "
+            "t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json "
             f"FROM trials t LEFT JOIN results r ON r.id = t.result_id WHERE {' AND '.join('t.' + c for c in clauses)} "
             "ORDER BY t.seq",
             params,
@@ -334,17 +332,16 @@ class CampaignStore:
         out: list[Trial] = []
         for r in rows:
             result = None
-            if r[8] is not None and r[13] is not None:
+            if r[6] is not None and r[11] is not None:
                 # Any status with a stored result gets it back, not just "ok": a
                 # constraint_violated trial is still a real measurement (D264). `ok_trials`
                 # still filters by status for ranking.
-                result = Result.from_dict(json.loads(r[13]))
+                result = Result.from_dict(json.loads(r[11]))
             out.append(Trial(
                 seq=r[0], phase=r[1], stage=r[2],
-                candidate=json.loads(r[3]), candidate_key=r[4], workload_hash=r[5],
-                arch_hash=r[6], status=r[7], result=result, result_id=r[8], error=r[9],
-                cache_hit=bool(r[10]), wall_clock_s=r[11],
-                created_at=r[12] or "",
+                candidate=json.loads(r[3]), candidate_key=r[4], status=r[5], result=result,
+                result_id=r[6], error=r[7], cache_hit=bool(r[8]), wall_clock_s=r[9],
+                created_at=r[10] or "",
             ))
         return out
 

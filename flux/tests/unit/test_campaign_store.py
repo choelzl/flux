@@ -4,23 +4,13 @@ interrupted-trial classification, resume refusals. Synthetic Results only."""
 from __future__ import annotations
 
 import pytest
-from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
+from flux_store.result import Estimate, Method, Provenance, Result
 from flux_store import CampaignStore, CampaignStoreError
 
 
-def _result(cycles: float = 100.0, usd: float | None = None) -> Result:
-    return Result(
-        metrics={
-            "latency_cycles": Estimate(
-                value=cycles, ci_low=cycles, ci_high=cycles, unit="cycles", method=Method.ANALYTIC
-            )
-        },
-        validity=Validity(ok=True, checker_version="test"),
-        domain=Domain(in_domain=False),
-        bottleneck=Bottleneck(limiter=Limiter.COMPUTE),
-        provenance=Provenance(evaluator="test@0", inputs={}, usd_cost=usd),
-        escalation=Escalation(recommended=False),
-    )
+def _result(cycles: float = 100.0) -> Result:
+    return Result(metrics={"latency_cycles": Estimate(value=cycles, method=Method.ANALYTIC)},
+                  provenance=Provenance(evaluator="test@0"))
 
 
 _OBJECTIVE_DOC = {
@@ -54,7 +44,7 @@ def _start(store) -> str:
 def _begin(store, cid, key="w4", phase="screen", **kw):
     return store.begin_trial(
         cid, phase=phase, candidate={"width": 4}, candidate_key=key,
-        workload_hash="wh", arch_hash="ah", strategy_kind="grid", **kw,
+        strategy_kind="grid", **kw,
     )
 
 

@@ -99,38 +99,27 @@ class Records:
     def trial(self, candidate: dict[str, Any], key: str, *, stage: str,
               strategy: str, metrics: dict[str, float] | None,
               error: str | None = None, wall_s: float = 0.0,
-              analytic: bool | Iterable[str] = True, evaluator: str = "flux@records",
-              workload_hash: str = "") -> None:
+              analytic: bool | Iterable[str] = True, evaluator: str = "flux@records") -> None:
         """One measured or refused candidate. `metrics=None` with `error` = a refusal.
         `analytic` is the method tag: True/False for every metric, or the names of the
         metrics that are modelled while the rest are measured."""
         if self.store is None:
             return
         try:
-            from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
+            from flux_store.result import Estimate, Method, Provenance, Result
 
             seq = self.store.begin_trial(
                 self.campaign_id, phase=self._phase, candidate=candidate,
-                candidate_key=key, workload_hash=workload_hash,
-                arch_hash=hashlib.sha256(key.encode()).hexdigest()[:16],
-                strategy_kind=strategy, stage=stage)
+                candidate_key=key, strategy_kind=strategy, stage=stage)
             result = None
             if metrics is not None:
                 modelled = (set(metrics) if analytic is True else set()
                             if analytic is False else set(analytic))
                 result = Result(
-                    metrics={k: Estimate(value=float(v), ci_low=float(v),
-                                         ci_high=float(v), unit="",
-                                         method=(Method.ANALYTIC if k in modelled
-                                                 else Method.SIMULATED))
+                    metrics={k: Estimate(value=float(v), method=(Method.ANALYTIC if k in modelled
+                                                                 else Method.SIMULATED))
                              for k, v in metrics.items()},
-                    validity=Validity(ok=True, checker_version=evaluator,
-                                      violations=()),
-                    domain=Domain(in_domain=True),
-                    bottleneck=Bottleneck(limiter=Limiter.NONE),    # no claim
-                    provenance=Provenance(evaluator=evaluator,
-                                          inputs={"stage": stage}),
-                    escalation=Escalation(recommended=False))
+                    provenance=Provenance(evaluator=evaluator, inputs={"stage": stage}))
             self.store.complete_trial(
                 self.campaign_id, seq, status="ok" if error is None else "refused",
                 result=result, error=error, wall_clock_s=wall_s)

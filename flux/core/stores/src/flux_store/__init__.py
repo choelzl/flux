@@ -1,5 +1,5 @@
-"""Flux result/artifact store (docs/stores.md): content-addressed IR documents and
-Evaluator results with full lineage.
+"""The loop's record (docs/records.md): `CampaignStore` and the `ResultStore` it shares a SQLite
+file with -- content-addressed documents and the trials' measurements.
 """
 
 from __future__ import annotations

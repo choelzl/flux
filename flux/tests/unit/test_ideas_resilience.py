@@ -66,7 +66,7 @@ def test_trials_without_success_report_failure_or_interruption(st, status, expec
     bind(st, cand, {"idea": IDEA})
     store, cid = st.records.store, st.records.campaign_id
     seq = store.begin_trial(cid, phase="generate", candidate=cand.to_record(), candidate_key=cand.name,
-                            workload_hash="", arch_hash=None, strategy_kind="loop", stage="bench")
+                            strategy_kind="loop", stage="bench")
     if status != "running":
         store.complete_trial(cid, seq, status=status, result=None, error="endpoint interrupted", wall_clock_s=0)
     idea, = notebook(store, cid)["ideas"]
