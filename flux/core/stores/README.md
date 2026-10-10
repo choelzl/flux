@@ -8,7 +8,7 @@ See [docs/stores.md](../../../docs/stores.md).
 ## What's implemented
 
 `flux-store` (on `PYTHONPATH` under `nix develop`): a SQLite-backed `ResultStore` with two
-tables — `documents` (IR docs, keyed by `flux_ir.content_hash`, idempotent on re-insert;
+tables — `documents` (objectives and digests, keyed by `flux_store.canonical.content_hash`, idempotent on re-insert;
 `put_document`/`get_document`/`documents`) and `results` (the rows `CampaignStore`'s trials write
 and point into).
 

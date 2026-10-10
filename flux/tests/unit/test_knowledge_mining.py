@@ -52,8 +52,8 @@ def _result(value: float, *, metric="latency_cycles", unit="cycles",
 @pytest.fixture()
 def campaign(tmp_path):
     """A done campaign with 2 analytic screen trials, 2 escalate trials at width 8 and 16, and 2 errors sharing one message."""
-    base_arch = yaml.safe_load(
-        (FLUX_ROOT / "core/ir/architecture/examples/simple-npu-1d-v1.yaml").read_text())
+    base_arch = {"schema_version": "0.1.0", "id": "simple-npu-1d-v1",
+                 "hierarchy": [{"level": "pe_array", "class": "compute", "attrs": {"dims": {"x": 16}}}]}
     doc = {
         "schema_version": "0.1.0",
         "id": "test/mining/v1",

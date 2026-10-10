@@ -77,7 +77,6 @@ One row per installable package; the authoritative list is `flake.nix`'s `localS
 |---|---|---|
 | `flux-loop` | `core/loop/` | the loop: the document loader, the roles, the prototype stage and its language (`pyint`), the ladder, the chain, calibration between stages, the record and its reload, the report, the author behind `flux ask`, skills, `status/stop/attach` |
 | `flux-frontier` | `core/frontier/` | Pareto front, knee, cheapest-meeting, hypervolume, Pareto-UCT |
-| `flux-ir` | `core/ir/` | Workload / Architecture / Mapping IR: JSON Schemas, canonical form, content-addressed hashing, examples |
 | `flux-store` | `core/stores/` | `CampaignStore` (the record), `ResultStore` (content-addressed documents and the trials' results) |
 | `flux-llm` | `core/llm/` | the proposer protocol, the OpenAI-compatible client, tool calls inside a turn, the text-call parser |
 | `flux-profile` | `core/profile/` | the timing tree every phase reports into; the roles' colours |

@@ -603,3 +603,7 @@ the topics above.
     - the evaluator ABI's adapter side (the `Evaluator` protocol, `SequentialBatch`, `Candidate`, `Budget` and the IR reference types, `NotExpressibleError`);
     - `flux_ir`'s einsum parser.
   - **What stays:** the ABI holds what every record row stores (`Result` and its parts), `run_tool` and the toolchain fingerprints. `flux_ir` keeps canonical hashing, schemas and `load_document`, which macarray uses to read its workload.
+- **D959: the IR package is removed, along with the stale leftovers.**
+  - **`core/ir`:** with D958 nothing read Architecture or Mapping IR. What remained was 19 lines of canonical hashing, which moved into `flux_store` (its one user), and one Workload IR file macarray read for its precision. Macarray now carries that file as its own `workload.yaml`, read as plain YAML.
+  - **Gone with it:** the schemas, the IR examples, `flux_ir`, `docs/ir.md` and their tests. The store keeps only the document kinds still written (`objective`, `digest`).
+  - **Also gone:** the two unread golden simulator outputs (booksim, noxim), the four finished agent worktrees and their branches, the pre-squash backup branch, and the stale e2e servers and test containers.

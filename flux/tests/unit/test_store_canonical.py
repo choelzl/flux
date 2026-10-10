@@ -1,8 +1,8 @@
-"""Canonicalisation + content hashing (docs/ir.md)."""
+"""Canonicalisation + content hashing of the documents a record stores (flux_store.canonical, D959)."""
 
 from __future__ import annotations
 
-import flux_ir
+from flux_store import canonical as flux_ir
 
 
 def test_hash_is_independent_of_key_order():
@@ -26,9 +26,3 @@ def test_hash_is_a_64_char_hex_sha256():
     h = flux_ir.content_hash({"a": 1})
     assert len(h) == 64
     assert all(c in "0123456789abcdef" for c in h)
-
-
-def test_real_examples_hash_deterministically(ir_example):
-    _, path = ir_example
-    doc = flux_ir.load_document(path)
-    assert flux_ir.content_hash(doc) == flux_ir.content_hash(dict(doc))

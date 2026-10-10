@@ -9,12 +9,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
-# A reference is a content hash (str, see flux_ir.content_hash) into the store, or an inline IR
-# document (dict) hashed on first use. mapping=None: the evaluator chooses one and must say so.
-# arch=None: use the evaluator's own default architecture, or refuse with `NotExpressibleError`
-# (D172, D173).
-
-
 class Method(str, Enum):
     ANALYTIC = "analytic"
     SIMULATED = "simulated"

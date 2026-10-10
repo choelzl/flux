@@ -29,18 +29,6 @@ for _d in re.findall(r'"([^"]+/src)"', _block.group(1)) if _block else []:
 # makes its own, so prompts are the same on every machine.
 os.environ["FLUX_LIBRARY"] = tempfile.mkdtemp(prefix="flux-library-")
 
-# (kind, example_path) pairs covering the DNN-accelerator and general-SoC cases (D1), per IR category.
-IR_EXAMPLES = [
-    ("workload", FLUX_ROOT / "core/ir/workload/examples/llama3-8b-decode-layer0.yaml"),
-    ("workload", FLUX_ROOT / "core/ir/workload/examples/soc-dma-desc-fetch.yaml"),
-    ("workload", FLUX_ROOT / "core/ir/workload/examples/mlp-gemm0.yaml"),
-    ("architecture", FLUX_ROOT / "core/ir/architecture/examples/my-npu-v3.yaml"),
-    ("architecture", FLUX_ROOT / "core/ir/architecture/examples/generic-riscv-soc-v1.yaml"),
-    ("mapping", FLUX_ROOT / "core/ir/mapping/examples/attn-qk-map0.yaml"),
-    ("mapping", FLUX_ROOT / "core/ir/mapping/examples/dma-desc-fetch-map0.yaml"),
-]
-
-
 #: The heavy files (D531): real tools or whole studies, each taking about a minute or more.
 #: Run with `-m heavy`; the core is everything else.
 HEAVY_FILES = {
@@ -134,6 +122,3 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.heavy)
 
 
-@pytest.fixture(params=IR_EXAMPLES, ids=[p.stem for _, p in IR_EXAMPLES])
-def ir_example(request: pytest.FixtureRequest) -> tuple[str, Path]:
-    return request.param

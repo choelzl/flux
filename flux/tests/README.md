@@ -184,9 +184,8 @@ pending mutations (without changing files or starting processes), and disabling 
 
 See [docs/architecture.md](../../docs/architecture.md).
 
-`unit/` has real tests for `flux-ir`, `flux-evaluator-abi` and `flux-store` (schema validation,
-canonicalisation/hashing, record type invariants, store round-trips/idempotency) without touching
-any external tool. `integration/` holds the live checks that need a real tool or sandbox. Run with
-`nix develop --command python -m pytest -q` from `flux/`. `golden/` holds captured real simulator
-output (`booksim_congested_output.txt`, `noxim_low_traffic_output.txt`). The conformance suite,
-the ZigZag and Timeloop tests and the pinned Timeloop energy baseline went with those tools (D958).
+`unit/` has real tests for `flux-evaluator-abi` and `flux-store` (canonicalisation/hashing, record
+type invariants, store round-trips/idempotency) without touching any external tool. `integration/`
+holds the live checks that need a real tool or sandbox. Run with `nix develop --command python -m
+pytest -q` from `flux/`. The conformance suite, the ZigZag and Timeloop tests (D958), the IR schema
+tests and the unread golden simulator outputs (D959) are gone.

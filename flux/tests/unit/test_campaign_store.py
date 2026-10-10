@@ -54,9 +54,9 @@ def store(tmp_path):
 
 
 def _start(store) -> str:
-    import flux_ir
+    from flux_store.canonical import content_hash as _content_hash
 
-    cid, created = store.start_campaign(_OBJECTIVE_DOC, flux_ir.content_hash(_OBJECTIVE_DOC))
+    cid, created = store.start_campaign(_OBJECTIVE_DOC, _content_hash(_OBJECTIVE_DOC))
     assert created
     return cid
 
@@ -70,9 +70,9 @@ def _begin(store, cid, key="w4", phase="screen", **kw):
 
 def test_restarting_the_same_objective_resumes_not_forks(store):
     cid = _start(store)
-    import flux_ir
+    from flux_store.canonical import content_hash as _content_hash
 
-    cid2, created2 = store.start_campaign(_OBJECTIVE_DOC, flux_ir.content_hash(_OBJECTIVE_DOC))
+    cid2, created2 = store.start_campaign(_OBJECTIVE_DOC, _content_hash(_OBJECTIVE_DOC))
     assert cid2 == cid and not created2
     # exactly one 'started' event — the second call added nothing
     assert [e["kind"] for e in store.events(cid)] == ["started"]

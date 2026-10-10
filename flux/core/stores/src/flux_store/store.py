@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import flux_ir
+from .canonical import canonicalize, content_hash
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -35,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_results_arch ON results(arch_hash);
 CREATE INDEX IF NOT EXISTS idx_results_evaluator ON results(evaluator);
 """
 
-_VALID_KINDS = ("workload", "architecture", "mapping", "objective", "composition", "digest")   # digest: a library digest (D576)
+_VALID_KINDS = ("objective", "digest")   # a campaign's objective; a library digest
 
 
 class _Rows:
@@ -119,19 +120,19 @@ class ResultStore:
         self.close()
 
     def put_document(self, kind: str, doc: dict[str, Any]) -> str:
-        """Store an IR document, content-addressed (docs/ir.md). Returns its hash.
+        """Store a document (an objective, a digest), content-addressed. Returns its hash.
         Idempotent: storing the same document twice is a no-op, not a duplicate row.
         """
         if kind not in _VALID_KINDS:
-            raise ValueError(f"unknown IR kind {kind!r}; expected one of {_VALID_KINDS}")
-        content_hash = flux_ir.content_hash(doc)
+            raise ValueError(f"unknown document kind {kind!r}; expected one of {_VALID_KINDS}")
+        digest = content_hash(doc)
         self._conn.execute(
             "INSERT OR IGNORE INTO documents (hash, kind, canonical_json, created_at) "
             "VALUES (?, ?, ?, ?)",
-            (content_hash, kind, flux_ir.canonicalize(doc), _now()),
+            (digest, kind, canonicalize(doc), _now()),
         )
         self._conn.commit()
-        return content_hash
+        return digest
 
     def documents(self, kind: str) -> list[dict[str, Any]]:
         """Every stored document of `kind`, oldest first."""

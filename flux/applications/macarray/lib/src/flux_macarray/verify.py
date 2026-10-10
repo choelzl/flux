@@ -18,8 +18,7 @@ if TYPE_CHECKING:
 
 from .config import PeConfig, Shape
 
-DEFAULT_WORKLOAD = (Path(__file__).resolve().parents[5] / "core" / "ir" / "workload" /
-                    "examples" / "mlp-gemm0.yaml")
+DEFAULT_WORKLOAD = Path(__file__).resolve().parents[3] / "workload.yaml"      # the application's own (D959)
 
 
 def shape_from_workload(workload: dict[str, Any], lanes: int, *, accumulate: bool = True

@@ -1,7 +1,7 @@
 """Running an external tool, once (D429).
 
-Every adapter launches a real tool (yosys, Verilator, Booksim2, gem5, 3D-ICE, git, make).
-This module is the shared launcher, "not on PATH" refusal and output tail, so an adapter's error
+The loop's checks, probes and stages launch real tools (yosys, Verilator, ChampSim, make).
+This module is the shared launcher, "not on PATH" refusal and output tail, so a tool's error
 text has one shape and a tool launch is timed in the profile tree. The launch's task says what
 ran and how it went (D709): its command and folder, its output's ends while it runs, its exit.
 """

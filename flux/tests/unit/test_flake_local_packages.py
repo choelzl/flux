@@ -34,8 +34,8 @@ def _package_src_dirs() -> set[str]:
 def test_the_flake_and_the_filesystem_are_findable():
     """A moved flake or a failed glob would make every check below vacuous."""
     assert FLAKE.is_file()
-    assert len(_listed_src_dirs()) >= 17
-    assert len(_package_src_dirs()) >= 17
+    assert len(_listed_src_dirs()) >= 16
+    assert len(_package_src_dirs()) >= 16
 
 
 def test_every_local_package_is_on_the_dev_shell_pythonpath():

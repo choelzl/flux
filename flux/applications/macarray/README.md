@@ -1,7 +1,7 @@
 # macarray/ -- the MAC processing element's microarchitecture, on real ASAP7 numbers
 
 The array is given: `lanes` products summed per cycle at the precision the workload IR
-declares (int8 x int8 by default, from `core/ir/workload/examples/mlp-gemm0.yaml`). What is
+declares (int8 x int8 by default, from the application's `workload.yaml`). What is
 searched is inside the PE:
 
 | knob | values | what it changes |

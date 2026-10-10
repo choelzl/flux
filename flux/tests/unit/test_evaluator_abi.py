@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import flux_ir
 import pytest
 from flux_evaluator_abi import (
     Bottleneck,

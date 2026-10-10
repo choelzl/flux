@@ -91,10 +91,10 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 │                fingerprints) · the measurement cache                          │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ MENTOR         knowledge (corpus, library, mined facts) · records read back   │
-│                as laws · operator feedback · benchmarks                       │
+│                as laws · operator feedback                                    │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ SUBSTRATE      core/stores (the record) · core/ir · core/llm · core/frontier  │
-│                · core/profile · core/tui · generator/harness_*                │
+│ SUBSTRATE      core/stores (the record) · core/llm · core/frontier            │
+│                · core/profile · core/tui                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -102,7 +102,6 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 |---|---|---|
 | the loop | [usage-guide.md](usage-guide.md) | `core/loop` |
 | evaluators | [evaluator-abi.md](evaluator-abi.md), [calibration.md](calibration.md) | `evaluator/*` |
-| the IR | [ir.md](ir.md) | `core/ir` |
 | the stores | [stores.md](stores.md) | `core/stores`, `mentor/records` |
 | agents and scripts | [agent-surface.md](agent-surface.md) | `interfaces/cli`, `core/loop` |
 

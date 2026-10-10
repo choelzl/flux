@@ -1,4 +1,4 @@
-"""Canonicalisation and content-addressed hashing for Flux IR documents (docs/ir.md)."""
+"""Canonical JSON and content-addressed hashing for the documents a record stores (D959; flux_ir's before)."""
 
 from __future__ import annotations
 

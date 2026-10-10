@@ -28,9 +28,9 @@ INVENTED_MODULE = "mult_inv"
 
 
 def _shape(args: argparse.Namespace) -> Shape:
-    from flux_ir import load_document
+    import yaml
 
-    workload = load_document(args.workload or DEFAULT_WORKLOAD)
+    workload = yaml.safe_load(Path(args.workload or DEFAULT_WORKLOAD).read_text())
     return shape_from_workload(workload, args.lanes, accumulate=not args.no_accumulate)
 
 
