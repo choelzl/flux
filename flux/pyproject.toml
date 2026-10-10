@@ -31,7 +31,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 dev-mode-dirs = [
     "applications/bankmap/lib/src",
-    "applications/interconnect_mapping/lib/src",
     "applications/macarray/lib/src",
     "core/frontier/src",
     "core/llm/src",
@@ -49,7 +48,6 @@ dev-mode-dirs = [
 [tool.hatch.build.targets.wheel]
 packages = [
     "applications/bankmap/lib/src/flux_bankmap",
-    "applications/interconnect_mapping/lib/src/flux_imapping",
     "applications/macarray/lib/src/flux_macarray",
     "core/frontier/src/flux_frontier",
     "core/llm/src/flux_llm",

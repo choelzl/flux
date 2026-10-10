@@ -84,8 +84,8 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 │                record and its reload, the report                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ APPLICATIONS   applications/<name>: a document, and the commands it names     │
-│                -- adder16, mul8, gelu_fp16, primes, nlu, macarray,            │
-│                prefetcher, bankmap, interconnect_mapping                      │
+│                -- adder16, mul8, primes, nlu, macarray, prefetcher,           │
+│                bankmap                                                        │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ MENTOR         knowledge (corpus, library, mined facts) · records read back   │
 │                as laws · operator feedback                                    │

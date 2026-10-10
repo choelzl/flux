@@ -115,9 +115,8 @@ code is a command the document names in the box it belongs to (D798-D803):
 | settings | `params:` | `{params}`: a JSON file any command reads |
 
 The applications are worked examples: `macarray` (a generator, a check and an invention problem
-beside the study), `bankmap` (a search command: baseline, proof, z3, model rounds),
-`interconnect_mapping` (a search command over pairs written as JSON), `nlu` (seven sub-loops in
-folders). Their step commands live in a package beside the document (`python -m flux_<app>.steps`).
+beside the study), `bankmap` (a search command: baseline, proof, z3, model rounds), `nlu` (seven
+sub-loops in folders). Their step commands live in a package beside the document (`python -m flux_<app>.steps`).
 
 ## 6. Who fills a role (evolving)
 

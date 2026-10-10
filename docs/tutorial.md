@@ -165,9 +165,9 @@ Each of these is one flag or one line; mix them.
 - **Hand the writing to a coding agent:** `flow: {generate: opencode}` (or `claude`,
   `codex`). The agent writes; the loop runs the gate and brings failures back to it. With
   `prototype: true` the agent writes the Python prototype, which the loop checks with
-  `python rtl.py proto` before it writes the RTL.
+  `python -m flux_loop.golden_proto` before it writes the RTL.
 - **Give it knowledge:** `flow.knowledge: {files: [method-note.md]}`: a method, measured facts, a
-  paper. Not a design. `applications/gelu_fp16/` shows a method note for a hard function.
+  paper. Not a design. `applications/nlu/knowledge/` shows method notes for hard functions.
 - **Steer it while it runs:** type a note in the TUI (`f`); it reaches the next prompt.
 
 ## 8. Explore a space of knobs

@@ -114,7 +114,6 @@
             "core/frontier/src"
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
-            "applications/interconnect_mapping/lib/src"
           ];
 
           shellHook = ''

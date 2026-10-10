@@ -35,7 +35,7 @@ def test_removed_domain_and_example_commands_are_not_cli_entry_points(command):
     assert command not in parser._subparsers._group_actions[0].choices
 
 
-@pytest.mark.parametrize("name", ["adder16", "mul8", "gelu_fp16", "macarray", "nlu", "prefetcher"])
+@pytest.mark.parametrize("name", ["adder16", "mul8", "macarray", "nlu", "prefetcher"])
 def test_copied_application_calls_its_own_tool_scripts(name, tmp_path):
     home = tmp_path / "copied-loop"
     shutil.copytree(FLUX / "applications" / name, home,

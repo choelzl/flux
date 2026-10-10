@@ -17,7 +17,7 @@ APPLICATIONS = sorted(p.name for p in (FLUX_ROOT / "applications").iterdir() if 
 
 
 def test_every_application_is_a_document():
-    assert APPLICATIONS == ["adder16", "bankmap", "gelu_fp16", "interconnect_mapping", "macarray", "mul8", "nlu", "prefetcher", "primes"]
+    assert APPLICATIONS == ["adder16", "bankmap", "macarray", "mul8", "nlu", "prefetcher", "primes"]
     for app in APPLICATIONS:
         doc = FLUX_ROOT / "applications" / app / "problem.yaml"
         assert doc.is_file(), f"{app}: no problem document"

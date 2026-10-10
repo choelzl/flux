@@ -21,13 +21,3 @@ def test_pareto_keeps_input_order_and_coincident_points():
     front = pareto(pts, key=lambda p: p[1])
     assert [n for n, _ in front] == ["a", "b", "c", "e"]     # d is beaten by b; a == c both stay
     assert [n for n, _ in pareto(pts, key=lambda p: p[1], minimize=False)] == ["a", "c", "d", "e"]
-
-
-def test_mapping_study_front_matches_the_rule():
-    from types import SimpleNamespace
-
-    from flux_imapping.flow import pareto_front
-
-    pts = [SimpleNamespace(costs=c) for c in [(1, 1, 1, 1), (2, 2, 2, 2), (1, 1, 1, 1), (0, 5, 5, 5)]]
-    assert pareto_front(pts) == [pts[0], pts[2], pts[3]]
-

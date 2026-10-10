@@ -33,33 +33,3 @@ def test_drain_guidance_labels_accumulates_and_survives_on_note_failure():
     assert boom is not None and len(acc) == 2
     # no channel, no notes: None, so callers thread it as an optional block
     assert drain_guidance(None, []) is None
-
-
-def test_imapping_model_free_run_still_records_the_note(tmp_path):
-    from imapping_fixtures import run_study
-
-    study = run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0,
-                      feedback=FakeChannel("try banked crossbars"))
-    assert study.notes == ["try banked crossbars"]
-
-
-def test_imapping_model_round_reads_the_operators_note(monkeypatch):
-    """D800: the model round runs inside the study's search command; the operator's notes reach
-    it through the search's history."""
-    import flux_llm
-    from flux_imapping import steps
-    from flux_imapping.model import Memory
-
-    prompts: list[str] = []
-
-    class Fake:
-        def propose(self, prompt, **kw):
-            prompts.append(prompt)
-            return Reply.of("not json")
-
-    monkeypatch.setattr(flux_llm, "OpenAIChatProposer", lambda *a, **k: Fake())
-    sol, why = steps.propose(1, {"measured": [], "guidance": "HUMAN GUIDANCE: avoid deep pipelines"},
-                             Memory(m=5), [], [])
-    assert sol is None and "unparseable" in why
-    assert prompts and "avoid deep pipelines" in prompts[0]
-

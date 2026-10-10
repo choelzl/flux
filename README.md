@@ -129,12 +129,10 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 | [`adder16`](flux/applications/adder16/) | the smallest 16-bit adder at 2900 MHz, from six generated designs | no |
 | [`mul8`](flux/applications/mul8/) | a signed 8x8 multiplier at 1600 MHz, written by a model | yes |
 | [`primes`](flux/applications/primes/) | the fastest Python `count_primes(n)` (not hardware) | yes |
-| [`gelu_fp16`](flux/applications/gelu_fp16/) | an FP16 GELU within 1 ULP, invented as a formula by a coding agent | yes |
 | [`nlu`](flux/applications/nlu/) | an FP16 unit for seven math functions, each within 1 ULP, at 800 MHz | yes |
 | [`macarray`](flux/applications/macarray/) | the smallest multiply-accumulate element at 1000 MHz | for invention only |
 | [`prefetcher`](flux/applications/prefetcher/) | a ChampSim L2 prefetcher configuration, or a new prefetcher (traces not in git) | yes |
 | [`bankmap`](flux/applications/bankmap/) | a conflict-free memory-bank mapping, or a proof none exists | no with `--steps 2` |
-| [`interconnect_mapping`](flux/applications/interconnect_mapping/) | a memory bank hash and interconnect, chosen together | no |
 
 ## Your own problem
 

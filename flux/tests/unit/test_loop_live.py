@@ -103,19 +103,6 @@ def test_the_bankmap_document_runs_solver_only(tmp_path):
 
 
 @pytest.mark.heavy
-def test_the_interconnect_mapping_document_runs_screen_only(tmp_path):
-    doc = _doc("interconnect_mapping", tmp_path)
-    if not _tools_ok(doc):
-        pytest.skip("the interconnect mapping study's tools are not on PATH")
-    r = flux("task", "run", str(doc), "--db", str(tmp_path / "i.db"), "--screen-only",
-             "--replies", str(_replies(tmp_path, ["{}"])))
-    # D900: its slack limit is judged on the synth stage, which a screen-only run never reaches: no decision,
-    # the closest reported, exit 3
-    assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-3000:]
-    assert "NO FEASIBLE DESIGN YET" in r.stdout and "CLOSEST" in r.stdout and "worst_slack_ps not measured (synth)" in r.stdout
-
-
-@pytest.mark.heavy
 def test_the_macarray_document_screens_one_pe_end_to_end(tmp_path):
     """One PE of the space verified by Verilator, screened by Yosys and decided, via `dse: sweep` (D553)."""
     import yaml

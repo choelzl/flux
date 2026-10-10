@@ -26,7 +26,7 @@ yourself inside Flux's loop: you write or pick the problem, run it, and read the
 ## Pick the way in
 
 1. **An existing document** (the ask matches one): `applications/` holds adder16, mul8
-   (RTL with a golden model), bankmap, interconnect_mapping, macarray, nlu, prefetcher. Copy the
+   (RTL with a golden model), bankmap, macarray, nlu, prefetcher, primes. Copy the
    folder (its name is the copy's id) and change `params:`, `objectives:`, `budget:`, `flow:` to
    ask a different question; a changed ask opens its own record.
 2. **A prompt and files, and let Flux write the problem**:
@@ -121,7 +121,7 @@ RTL directly rarely passes.
 - A prototype whose estimated hardware cost is over `budget.prototype_cost_max` (default 2,000,
   about 650 um2 on ASAP7) is made cheaper before anything is built.
 - A method note in `flow.knowledge: {files: [...]}` (the method and measured facts, not a design)
-  helps a model most. `applications/gelu_fp16/` is a worked example.
+  helps a model most. `applications/nlu/knowledge/` holds worked examples.
 
 ## Read the answer
 

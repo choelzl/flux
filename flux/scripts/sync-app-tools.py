@@ -19,11 +19,10 @@ SOURCE = FLUX / "applications/mul8/rtl.py"
 
 def targets() -> list[Path]:
     apps = FLUX / "applications"
-    out = [apps / name / "rtl.py" for name in ("adder16", "gelu_fp16", "macarray", "nlu")]
+    out = [apps / name / "rtl.py" for name in ("adder16", "macarray", "nlu")]
     out += [FLUX.parent / "docs/tutorial/isqrt/rtl.py"]
     out += [FLUX / "tests/fixtures/loops" / kind / "rtl.py" for kind in ("rtl", "rtl-sweep")]
-    out += [apps / "bankmap/lib/src/flux_bankmap/rtl_check.py", apps / "macarray/lib/src/flux_macarray/rtl_check.py",
-            apps / "interconnect_mapping/lib/src/flux_imapping/rtl_check.py"]
+    out += [apps / "bankmap/lib/src/flux_bankmap/rtl_check.py", apps / "macarray/lib/src/flux_macarray/rtl_check.py"]
     return out
 
 
