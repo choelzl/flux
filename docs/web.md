@@ -79,9 +79,9 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 
 ## The configurator
 
-The loop crafter inside the app (D826). Seven steps, one at a time with **Back** / **Next**: the
-problem, checks, measurements, objectives, who does each step, more (budget, search, parts),
-review and save. **Save** is on every step when editing a loop. A checklist shows what is left.
+The loop crafter inside the app (D826). Six steps, one at a time with **Back** / **Next**:
+**Prompt** (the problem), **Check & Measure**, **Objective**, **Graph** (who does each step),
+**Extra** (baseline, budget, settings to search, parts) and **Save** (review and save). **Save** is on every step when editing a loop. A checklist shows what is left.
 
 - **Files that go with it** (beside the form): the loop's own files; open, edit, write new, drop
   files or folders, delete. A file named as `{home}/…` that the loop lacks is marked missing; a

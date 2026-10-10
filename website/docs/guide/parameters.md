@@ -18,7 +18,6 @@ reason behind each choice and `flux task check FOLDER` to validate the finished 
 | `parts` | List of names, map of descriptions, or `decompose`; empty | Pieces of one artifact |
 | `subtasks` | List of child folders/documents, or `decompose`; empty | Child problems, each with its own loop |
 | `max_subtasks` | `4` | Maximum children when asking for decomposition |
-| `workload` | Path or workload object; absent | Workload for evaluator-backed stages |
 | `skills` | List of skill paths; empty | Extra instructions and resources |
 | `ladder` | `true`, `false`, or settings map; absent | Enable/configure the part improvement ladder |
 

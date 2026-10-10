@@ -86,7 +86,7 @@ For RTL, define the ports and reference function in `golden.py`, then use:
 ```yaml
 flow:
   test:
-    lint: "{python} {home}/rtl.py lint {artifact}"
+    lint: "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}"
     golden: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
 ```
 
