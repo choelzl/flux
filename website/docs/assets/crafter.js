@@ -270,7 +270,7 @@
 
   /** A check's type, and the catalog tools that do it. `any`: offered whatever the language
       (a script of yours runs on any file); the others only for the languages they list. For
-      HDL, "Compile" is the app lint's parse step (`rtl.py lint` exits 3 when the source does not
+      HDL, "Compile" is the lint's parse step (Verilator exits non-zero when the source does not
       parse): Flux has no separate compile command for RTL. */
   var CHECK_TYPES = [
     { key: "lint", title: "Lint", tools: ["rtl-lint"] },

@@ -144,8 +144,10 @@ endmodule
 
 
 def _lint(path: Path) -> subprocess.CompletedProcess:
-    app = Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py"
-    return subprocess.run([sys.executable, str(app), "lint", str(path)],
+    """The catalog's lint, Verilator itself (D962)."""
+    from flux_loop.toolbox import fill
+
+    return subprocess.run(fill("rtl-lint").replace("{artifact}", str(path)).split(),
                           capture_output=True, text=True, timeout=120)
 
 
@@ -155,9 +157,9 @@ def test_rtl_lint_counts_a_latch_and_passes_a_clean_module(tmp_path):
     (tmp_path / "c.sv").write_text(_CLEAN)
     (tmp_path / "s.sv").write_text("module s(input a, output y)\n assign y = a;\nendmodule\n")
     bad, good, broken = _lint(tmp_path / "l.sv"), _lint(tmp_path / "c.sv"), _lint(tmp_path / "s.sv")
-    assert bad.returncode == 1 and "LATCH: line 2:" in bad.stdout and bad.stdout.rstrip().endswith("1 failing")
-    assert good.returncode == 0 and good.stdout.strip() == "0 failing"
-    assert broken.returncode == 3 and "did not parse" in broken.stdout
+    assert bad.returncode != 0 and "%Warning-LATCH" in bad.stderr
+    assert good.returncode == 0 and not good.stderr.strip()
+    assert broken.returncode != 0 and "syntax error" in broken.stderr
 
 
 # ---- the catalog
@@ -176,7 +178,7 @@ def test_flux_tools_lists_checks_then_stages(capsys):
     assert main(["tools"]) == 0
     out = capsys.readouterr().out
     assert out.index("CHECKS") < out.index("rtl-lint:") < out.index("STAGES") < out.index("rtl-synth:")
-    assert "gate: passes with no defect" in out and "metrics: fmax_mhz (MHz)" in out
+    assert "gate: passes when it exits 0" in out and "metrics: fmax_mhz (MHz)" in out
     ids = {t["id"] for t in TOOLS}
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
             "champsim-run", "python-test-script", "bench-script", "custom-check", "custom-stage"} <= ids

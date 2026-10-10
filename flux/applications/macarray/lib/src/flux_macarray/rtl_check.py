@@ -2,7 +2,6 @@
 OpenROAD on ASAP7 (OpenROAD-flow-scripts' platform files).
 
     python rtl.py test DESIGN.sv --golden golden.py        # "N failing of M"; exit 0, 1, or 3 (no build)
-    python rtl.py lint DESIGN.sv                            # Verilator -Wall's defects, "N failing"
     python rtl.py measure DESIGN.sv --stage synth --clock-ps 1000   # fmax_mhz=... area_um2=... power_w=...
 
 The golden model declares `PORTS` ([{name, dir, bits}], signed unless `unsigned: true`) and
@@ -238,24 +237,6 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
     return Check(len(rows), len(fails), tuple(fails[:show]), latency)
 
 
-def lint(source: str, module: str | None = None, *, extra_sources: dict[str, str] | None = None,
-         timeout_s: float = 120.0) -> tuple[list[str], str]:
-    """Verilator -Wall on the design alone: (its defects, a parse error or "")."""
-    module = module_of(source, module)
-    with tempfile.TemporaryDirectory(prefix="flux-rtl-lint-") as d:
-        work = Path(d)
-        (work / "dut.sv").write_text(_clean(source))
-        for stem, src in (extra_sources or {}).items():
-            (work / f"{stem}.sv").write_text(_clean(src))
-        r = subprocess.run(["verilator", "--lint-only", *VERILATOR_FLAGS, "--top-module", module, "dut.sv",
-                            *(f"{s}.sv" for s in (extra_sources or {}))], cwd=work, capture_output=True, text=True,
-                           timeout=timeout_s)
-    found = re.findall(r"^%(Warning|Error)(?:-(\w+))?: (?:[^:\n]*/)?dut\.sv:(\d+):(?:\d+:)? ?(.*)$", r.stderr, re.M)
-    if any(kind == "Error" and not code for kind, code, *_ in found) or (r.returncode and not found):
-        return [], explain_diagnostic(r.stderr, source)
-    return [f"{code or kind}: line {ln}: {what.strip()}" for kind, code, ln, what in found], ""
-
-
 # ---- measure: Yosys and OpenROAD on ORFS's ASAP7 platform -------------------------------------
 
 #: The platform's typical (TT) RVT cells: simple gates, inverters/buffers, flops
@@ -365,11 +346,6 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--extra", action="append", default=[], help="another module file the design instantiates")
     t.add_argument("--show", type=int, default=8)
     t.add_argument("--timeout", type=float, default=300.0)
-    li = sub.add_parser("lint", help="Verilator -Wall: the hardware defects")
-    li.add_argument("artifact")
-    li.add_argument("--module")
-    li.add_argument("--extra", action="append", default=[])
-    li.add_argument("--timeout", type=float, default=120.0)
     me = sub.add_parser("measure", help="Yosys + OpenROAD on ASAP7: fmax, area, power, cells")
     me.add_argument("artifact")
     me.add_argument("--stage", choices=STAGES, default="synth")
@@ -389,16 +365,6 @@ def main(argv: list[str] | None = None) -> int:
                         + [f"{got.failing if not got.error else got.total} failing of {got.total}"]))
         # exit 3: it did not build (a build failure to the gate); 1: it built and failed (D594)
         return 0 if got.ok else 3 if got.error.startswith(("did not compile", "the module has", "no `module")) else 1
-    if a.command == "lint":
-        try:
-            defects, error = lint(source, a.module, extra_sources=extra or None, timeout_s=a.timeout)
-        except SystemExit as exc:
-            defects, error = [], str(exc)
-        if error:
-            print(f"did not parse: {error}\n1 failing")
-            return 3
-        print("\n".join([*defects, f"{len(defects)} failing"]))
-        return 1 if defects else 0
     got = measure(source, a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout,
                   utilization=a.utilization, repair_design=a.repair_design)
     print(" ".join(f"{k}={v:.6g}" if isinstance(v, float) else f"{k}={v}" for k, v in got.items()

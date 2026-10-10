@@ -49,9 +49,10 @@ def _rtl_stage(depth: str, title: str, what: str) -> dict[str, Any]:
 TOOLS: list[dict[str, Any]] = [
     # ---- checks: a gate runs them in order, cheapest first (D652)
     {"id": "rtl-lint", "role": "check", "title": "Lint for hardware defects",
-     "what": "Copy rtl.py and tools/ from applications/mul8: Verilator lint for latches, multiple drivers and combinational loops.",
-     "run": "{python} {home}/rtl.py lint {artifact}", "params": {}, "needs": ["verilator"],
-     "pass": "passes with no defect; exit 3 = does not parse", "languages": _HDL, "kinds": ["rtl"]},
+     "what": "Verilator itself, its hardware defects only (D962): latches, multiple drivers, combinational loops, "
+             "blocking/non-blocking mixes, implicit nets; width and style warnings are not defects.",
+     "run": "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}", "params": {}, "needs": ["verilator"],
+     "pass": "passes when it exits 0 (no defect, and it parses)", "languages": _HDL, "kinds": ["rtl"]},
     {"id": "rtl-golden", "role": "check", "title": "Test against a golden model",
      "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
      "run": "{python} {home}/rtl.py test {artifact} --golden {golden}", "params": {"golden": _p("Golden model", "{home}/golden.py")},

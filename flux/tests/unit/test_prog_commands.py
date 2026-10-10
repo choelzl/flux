@@ -104,7 +104,7 @@ def test_documents_name_what_the_new_stages_need():
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
                                "language": "systemverilog",
-                               "flow": {"test": "{python} {home}/rtl.py lint {artifact}",
+                               "flow": {"test": "verilator --lint-only {artifact}",
                                         "measure": {"stat": {"command": "{python} {home}/rtl.py measure {artifact} --stage stat",
                                                              "metrics": ["area_um2", "cell_count"], "needs": ["yosys"]}}}})
     assert task.stages[0].metrics == ("area_um2", "cell_count") and task.stages[0].needs == ("yosys",)

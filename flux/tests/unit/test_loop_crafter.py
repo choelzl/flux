@@ -375,7 +375,7 @@ def test_the_crafter_writes_a_document_the_loader_takes(tmp_path, name):
 def test_rtl_checks_run_in_order_and_the_limits_are_goals(tmp_path):
     t = _load(tmp_path, BUILT["rtl_one_gate"])
     assert [c.name for c in t.gate] == ["lint", "golden"]
-    assert t.gate.named("lint").run[-2:] == ("lint", "{artifact}")
+    assert t.gate.named("lint").run[:2] == ("verilator", "--lint-only") and t.gate.named("lint").run[-1] == "{artifact}"
     assert t.gate.named("golden").run[-3:] == ("{artifact}", "--golden", "{home}/golden.py")
     assert t.stages[0].cutoff == {"metric": "fmax_mhz", "at": 800} and not t.stages[1].cutoff
     got = [(o.metric, o.direction, o.goal) for o in t.objectives]

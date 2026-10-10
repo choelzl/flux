@@ -29,7 +29,7 @@ Say only what is yours; the rest is inferred.
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
     prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
-    `measure`: `test: {lint: "{python} {home}/rtl.py lint {artifact}", golden: {run: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
     They run in the order written; the first that reports failures refuses the design ("failed at
     lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
     check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
@@ -149,9 +149,9 @@ the complete tool bundle it uses. All scripts and tool files belong in the appli
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.
 
-- `python rtl.py lint {artifact}` -- Verilator lint for hardware defects (latches, multiple drivers,
-  combinational loops, `<=` in combinational logic, mixed `=`/`<=`, implicit nets); prints each and
-  `N failing`; exits 3 when it does not parse. Put it before the golden test.
+- Lint is Verilator itself, its hardware defects only (latches, multiple drivers, combinational loops,
+  `<=` in combinational logic, mixed `=`/`<=`, implicit nets): `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}`;
+  exit 0 passes. Put it before the golden test.
 - `python rtl.py test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
   prints `N failing of M`; exits 3 when the module does not compile (the loop then treats it as
   a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.

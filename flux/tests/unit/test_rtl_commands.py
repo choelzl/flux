@@ -235,19 +235,6 @@ def test_a_clocked_design_is_checked_and_its_latency_measured(tmp_path):
 
 
 @pytest.mark.heavy
-@pytest.mark.skipif(shutil.which("verilator") is None, reason="needs verilator")
-def test_lint_says_each_defect_and_a_parse_error(tmp_path):
-    good = tmp_path / "good.sv"
-    good.write_text(GOOD)
-    r = _rtl("lint", str(good))
-    assert r.returncode == 0 and r.stdout.strip() == "0 failing", r.stdout + r.stderr
-    broken = tmp_path / "broken.sv"
-    broken.write_text("module mul8(input logic [7:0] a, output logic [15:0] p)\nassign p = a;\nendmodule\n")
-    r = _rtl("lint", str(broken))
-    assert r.returncode == 3 and "did not parse" in r.stdout and "line 2 of your module" in r.stdout, r.stdout
-
-
-@pytest.mark.heavy
 @pytest.mark.skipif(shutil.which("openroad") is None or shutil.which("yosys") is None, reason="needs yosys and openroad")
 def test_measure_on_asap7_from_orfs_at_each_stage(tmp_path):
     """D948: Yosys and OpenROAD read ASAP7 from OpenROAD-flow-scripts, no PDK bundled: stat is
