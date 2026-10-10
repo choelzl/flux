@@ -38,7 +38,7 @@ def git_revision() -> str:
 def toolchain() -> dict[str, str]:
     """`{tool: build fingerprint}` for the measuring tools on PATH (D316)."""
     try:
-        from flux_evaluator_abi import toolchain_fingerprint
+        from flux_loop.toolchain import toolchain_fingerprint
 
         return dict(toolchain_fingerprint())
     except Exception:  # noqa: BLE001

@@ -101,7 +101,6 @@
           # The local flux-* packages, src/-only — `pip install -e` equivalent for all of
           # them at once, adapters included: PYTHONPATH costs nothing until imported (D123).
           localSrcDirs = [
-            "evaluator/abi/src"
             "core/stores/src"
             "interfaces/cli/src"
             "interfaces/web/src"
@@ -113,7 +112,6 @@
             "core/profile/src"
             "core/tui/src"
             "core/frontier/src"
-            "evaluator/cache/src"
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
             "applications/interconnect_mapping/lib/src"

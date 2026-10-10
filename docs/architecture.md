@@ -63,7 +63,7 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 7. **No pre-generated designs.** The tools give the model measurements, never solutions.
    Every design on the record was made by the loop.
 8. **Contracts at the edges.** Every stage is a command printing `name=value`, recorded as a
-   `Result` keyed by the toolchain's fingerprints ([evaluator-abi.md](evaluator-abi.md)).
+   `Result` keyed by the toolchain's fingerprints ([measurement.md](measurement.md)).
    Nothing is rewritten that Verilator, Yosys, OpenROAD or ChampSim already do.
 9. **Agents are first-class callers.** A script or an agent drives Flux through the same CLI
    a person uses: `flux task run --json` hands back the answer, `flux ask` starts from a
@@ -87,9 +87,6 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 │                -- adder16, mul8, gelu_fp16, primes, nlu, macarray,            │
 │                prefetcher, bankmap, interconnect_mapping                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ EVALUATORS     evaluator/abi (the measurement record, run_tool, toolchain     │
-│                fingerprints) · the measurement cache                          │
-├──────────────────────────────────────────────────────────────────────────────┤
 │ MENTOR         knowledge (corpus, library, mined facts) · records read back   │
 │                as laws · operator feedback                                    │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -101,14 +98,12 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 | layer | doc | packages |
 |---|---|---|
 | the loop | [usage-guide.md](usage-guide.md) | `core/loop` |
-| evaluators | [evaluator-abi.md](evaluator-abi.md), [calibration.md](calibration.md) | `evaluator/*` |
+| measurement | [measurement.md](measurement.md), [calibration.md](calibration.md) | `core/loop` (run_tool, fingerprints, cache), `core/stores` (`Result`) |
 | the stores | [stores.md](stores.md) | `core/stores`, `mentor/records` |
 | agents and scripts | [agent-surface.md](agent-surface.md) | `interfaces/cli`, `core/loop` |
 
-**The dependency rule.** `core/`, `evaluator/`, `generator/` and `mentor/` never import an
-application. `interfaces/` may. An application imports whatever it needs. An evaluator lives under
-`evaluator/` and is registered by name in `flux_evaluator_abi.registry`; the domain library an
-application evaluates with lives with that application.
+**The dependency rule.** `core/` and `mentor/` never import an application. `interfaces/` may. An
+application imports whatever it needs; its tools and domain library live with it.
 
 **Five words for text that reaches a prompt.** They name different things and stay distinct.
 A *note* is what the operator typed (`flux_feedback`). A *lesson* is a line the run keeps and

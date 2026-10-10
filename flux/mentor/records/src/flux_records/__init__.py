@@ -107,10 +107,7 @@ class Records:
         if self.store is None:
             return
         try:
-            from flux_evaluator_abi import (
-                Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance,
-                Result, Validity,
-            )
+            from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
 
             seq = self.store.begin_trial(
                 self.campaign_id, phase=self._phase, candidate=candidate,

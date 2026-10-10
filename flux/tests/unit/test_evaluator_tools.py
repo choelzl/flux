@@ -1,4 +1,4 @@
-"""`flux_evaluator_abi.tools` (D429): one tool launch, one "not on PATH" refusal, one tail."""
+"""`flux_loop.toolrun` (D429): one tool launch, one "not on PATH" refusal, one tail."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from flux_evaluator_abi import ToolRun, run_tool, tails
+from flux_loop.toolrun import ToolRun, run_tool, tails
 
 
 def test_run_tool_returns_a_typed_run_and_times_it(monkeypatch):

@@ -21,7 +21,7 @@ all = ["z3-solver", "fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"
 flux = "flux_cli.main:main"
 
 # D600: one distribution of the whole workspace, for `pip install -e ./flux` without Nix. Each
-# package under core/, evaluator/, generator/, mentor/, interfaces/ and applications/ keeps its
+# package under core/, mentor/, interfaces/ and applications/ keeps its
 # own pyproject.toml; the editable install puts every src/ directory on the path, exactly as the
 # Nix dev shell's PYTHONPATH does (flake.nix).
 [build-system]
@@ -39,8 +39,6 @@ dev-mode-dirs = [
     "core/profile/src",
     "core/stores/src",
     "core/tui/src",
-    "evaluator/abi/src",
-    "evaluator/cache/src",
     "interfaces/cli/src",
     "interfaces/web/src",
     "mentor/feedback/src",
@@ -59,8 +57,6 @@ packages = [
     "core/profile/src/flux_profile",
     "core/stores/src/flux_store",
     "core/tui/src/flux_tui",
-    "evaluator/abi/src/flux_evaluator_abi",
-    "evaluator/cache/src/flux_cache",
     "interfaces/cli/src/flux_cli",
     "interfaces/web/src/flux_web",
     "mentor/feedback/src/flux_feedback",

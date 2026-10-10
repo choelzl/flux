@@ -1,7 +1,8 @@
 # Measurement records (L4)
 
-Package: `evaluator/abi/` (`flux_evaluator_abi`). Part of [architecture.md](architecture.md)'s
-layering. What is left of the Evaluator ABI: the shape a measurement is recorded in, the one
+Packages: `flux_store.result` (the record shape), `flux_loop.toolrun`, `flux_loop.toolchain` and
+`flux_loop.measure_cache` (D961; the evaluator ABI and `flux_cache` before). Part of
+[architecture.md](architecture.md)'s layering: the shape a measurement is recorded in, the one
 launcher every tool goes through, and the fingerprints a measurement is keyed by. Nothing
 evaluates through it any more: every loop stage is a command printing `name=value`
 ([D954](decisions.md)), and the record wraps those numbers.
@@ -53,7 +54,7 @@ how (D709). The loop's step commands and probes launch through it.
 else `version:<first --version line>`, else `path:<resolved path>` (D316).
 `toolchain_fingerprint()` maps each of `MEASURING_TOOLS` (openroad, yosys, verilator) present to
 its fingerprint, plus the flow recipe (D564). They key the measurement cache
-(`evaluator/cache/`, D340), a stage's evidence identity (`measured_as`, D898) and a document's
+(`flux_loop.measure_cache`, D340), a stage's evidence identity (`measured_as`, D898) and a document's
 judge versions (D778), so a tool upgrade measures again rather than reusing a number the old
 build produced.
 

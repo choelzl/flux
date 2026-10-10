@@ -200,7 +200,7 @@ def probe(kind: str, file: str, stages: str | list[str] | None = None, ctx_path:
             return 2, spent("gate")
         t0 = time.monotonic()
         if ctx.get("proto"):
-            from flux_evaluator_abi.tools import run_tool
+            from flux_loop.toolrun import run_tool
 
             cmd = [c.replace("{artifact}", str(src.resolve())) for c in ctx["proto"]]
             run = run_tool(cmd, cwd=str(src.resolve().parent), timeout_s=600, what="probe proto")

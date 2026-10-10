@@ -164,7 +164,7 @@ def test_the_record_holds_the_problems_own_stages_and_the_gates_refusals(tmp_pat
     assert rec.conclusions(limit=1)[0]["decision"] == out.decision.name
     assert {r.stage for r in rec.known_rows()} == {"coarse", "fine"}
     # the method tag: a modelled stage is ANALYTIC, a measured one SIMULATED (D446)
-    from flux_evaluator_abi import Method
+    from flux_store.result import Method
     from flux_store import CampaignStore
 
     with CampaignStore(db) as store:

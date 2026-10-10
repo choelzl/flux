@@ -1,6 +1,6 @@
-"""Evaluator ABI v0.1 types (docs/evaluator-abi.md). Any cost model that implements the `Evaluator`
-protocol (see protocol.py) becomes swappable behind these types; any search strategy that speaks
-them becomes portable across evaluators.
+"""A measurement as a record row stores it (docs/measurement.md): `Result` -- its metrics as
+`Estimate`s, validity, domain, bottleneck, provenance and escalation. The evaluator ABI's types
+before D961; every trial's result is one of these, so old records read back unchanged.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ class Limiter(str, Enum):
 
 
 class Metric(str, Enum):
-    """Well-known metric names (docs/evaluator-abi.md): a shared vocabulary, not a whitelist.
+    """Well-known metric names (docs/measurement.md): a shared vocabulary, not a whitelist.
     Metric keys are plain strings and evaluators may report others.
     """
 
@@ -272,7 +272,7 @@ class MetricOutcome:
 
 @dataclass(frozen=True, slots=True)
 class Result:
-    """The Evaluator ABI's return shape (docs/evaluator-abi.md): interval estimates, an
+    """The Evaluator ABI's return shape (docs/measurement.md): interval estimates, an
     extrapolation flag, a structured bottleneck and independently computed validity.
     """
 

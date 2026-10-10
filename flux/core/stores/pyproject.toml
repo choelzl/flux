@@ -5,7 +5,6 @@ description = "Content-addressed result/artifact store for Flux IR documents and
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
-    "flux-evaluator-abi",
     "pyyaml>=6.0",
 ]
 

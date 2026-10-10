@@ -4,17 +4,7 @@ interrupted-trial classification, resume refusals. Synthetic Results only."""
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_abi import (
-    Bottleneck,
-    Domain,
-    Escalation,
-    Estimate,
-    Limiter,
-    Method,
-    Provenance,
-    Result,
-    Validity,
-)
+from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
 from flux_store import CampaignStore, CampaignStoreError
 
 

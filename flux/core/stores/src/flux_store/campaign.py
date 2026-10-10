@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from flux_evaluator_abi import Result
+from flux_store.result import Result
 
 from .store import ResultStore
 

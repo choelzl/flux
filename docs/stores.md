@@ -37,7 +37,7 @@ per-result API (`put_result`/`get_result`/`find_results`), the `CachingEvaluator
 the `flux import`/`eval`/`replay` commands that used them are gone ([D953](decisions.md),
 [D954](decisions.md)).
 
-**The loop's own cache** is `flux_cache.MeasurementCache` (`evaluator/cache`): a
+**The loop's own cache** is `flux_loop.measure_cache.MeasurementCache`: a
 JSON sidecar beside the record, always on, keyed by the candidate's source, what the stage runs
 (its command, the scripts it names, the params) and the tool fingerprints
 ([D340](decisions.md), [D361](decisions.md), [D790](decisions.md)).

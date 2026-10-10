@@ -6,7 +6,7 @@ from __future__ import annotations
 
 
 def test_a_record_written_without_a_cost_model_claims_no_bottleneck(tmp_path):
-    from flux_evaluator_abi import Limiter
+    from flux_store.result import Limiter
     from flux_records import Records
 
     db = str(tmp_path / "r.db")

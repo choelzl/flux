@@ -315,7 +315,7 @@ def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, chan
     elif change == "environment":
         monkeypatch.setenv("PYTHONPATH", "/new/sandbox/packages")
     else:
-        monkeypatch.setattr("flux_evaluator_abi.toolchain_fingerprint", lambda tools: {"yosys": "new-build"})
+        monkeypatch.setattr("flux_loop.toolchain.toolchain_fingerprint", lambda tools: {"yosys": "new-build"})
     changed = run()
     assert not changed.provenance.get("baseline_reused")
     assert changed.decision is None

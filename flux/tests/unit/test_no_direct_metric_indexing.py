@@ -16,7 +16,7 @@ _FLUX = Path(__file__).resolve().parents[2]
 _SOURCE_ROOTS = sorted(_FLUX.glob("*/src")) + sorted(_FLUX.glob("*/*/src"))
 
 # The one legitimate subscript: the ABI defining the map itself.
-_ALLOWED = {_FLUX / "evaluator/abi/src/flux_evaluator_abi/types.py"}
+_ALLOWED = {_FLUX / "core/stores/src/flux_store/result.py"}
 
 
 def _metric_subscripts(path: Path) -> list[int]:

@@ -184,7 +184,7 @@ pending mutations (without changing files or starting processes), and disabling 
 
 See [docs/architecture.md](../../docs/architecture.md).
 
-`unit/` has real tests for `flux-evaluator-abi` and `flux-store` (canonicalisation/hashing, record
+`unit/` has real tests for `flux-store` (with the `Result` record) and `flux-loop`'s tool launcher (canonicalisation/hashing, record
 type invariants, store round-trips/idempotency) without touching any external tool. `integration/`
 holds the live checks that need a real tool or sandbox. Run with `nix develop --command python -m
 pytest -q` from `flux/`. The conformance suite, the ZigZag and Timeloop tests (D958), the IR schema

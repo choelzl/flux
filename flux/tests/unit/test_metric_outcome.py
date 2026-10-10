@@ -7,19 +7,7 @@ and the unhandled case explain itself.
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_abi import (
-    Bottleneck,
-    Domain,
-    Escalation,
-    Estimate,
-    Limiter,
-    Method,
-    MetricMap,
-    MissingMetricError,
-    Provenance,
-    Result,
-    Validity,
-)
+from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, MetricMap, MissingMetricError, Provenance, Result, Validity
 
 
 def _result(**metrics: float) -> Result:

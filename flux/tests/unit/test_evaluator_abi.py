@@ -1,19 +1,9 @@
-"""The measurement record types (docs/evaluator-abi.md): a Result round-trips exactly."""
+"""The measurement record types (docs/measurement.md): a Result round-trips exactly."""
 
 from __future__ import annotations
 
 import pytest
-from flux_evaluator_abi import (
-    Bottleneck,
-    Domain,
-    Escalation,
-    Estimate,
-    Limiter,
-    Method,
-    Provenance,
-    Result,
-    Validity,
-)
+from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
 
 
 def _sample_result() -> Result:
@@ -63,7 +53,7 @@ def test_result_from_dict_is_the_exact_inverse_of_to_dict():
 
 def test_result_from_dict_handles_a_violation_and_a_roofline():
     """A validity violation and a bottleneck roofline survive a to_dict/from_dict round trip."""
-    from flux_evaluator_abi import Constraint, Roofline
+    from flux_store.result import Constraint, Roofline
 
     original = Result(
         metrics={
@@ -90,7 +80,7 @@ def test_result_from_dict_handles_a_violation_and_a_roofline():
 
 def test_result_from_dict_keeps_metric_domains():
     """`metric_domains` survives a to_dict/from_dict round trip."""
-    from flux_evaluator_abi import Domain
+    from flux_store.result import Domain
 
     original = Result(
         metrics={"latency_cycles": Estimate(value=10, ci_low=9, ci_high=11, unit="cycles",

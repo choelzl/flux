@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from flux_cache import MeasurementCache, sidecar_path
+from flux_loop.measure_cache import MeasurementCache, sidecar_path
 
 TOOLS = {"openroad": "nix:aaa-openroad", "yosys": "nix:bbb-yosys"}
 MOVED = {"openroad": "nix:zzz-openroad", "yosys": "nix:bbb-yosys"}

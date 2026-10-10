@@ -22,7 +22,7 @@ def _fingerprint(problem):
     task = getattr(problem, "task", None)
     if task is None:
         return None  # a custom problem must not reuse evidence without an input identity
-    from flux_evaluator_abi import MEASURING_TOOLS, toolchain_fingerprint
+    from flux_loop.toolchain import MEASURING_TOOLS, toolchain_fingerprint
 
     from .provenance import git_revision
 

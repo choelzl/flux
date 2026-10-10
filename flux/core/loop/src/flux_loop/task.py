@@ -463,7 +463,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                 "part": subgoal or "", "python": sys.executable, "home": self.task.home or "."}
 
     def _run(self, cmd: tuple[str, ...], subs: dict[str, str], timeout_s: float, what: str):
-        from flux_evaluator_abi.tools import run_tool
+        from flux_loop.toolrun import run_tool
 
         if any("{params}" in t for t in cmd) and "params" not in subs:
             subs = {**subs, "params": self._params_file(subs.get("workdir") or ".")}   # D799

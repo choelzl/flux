@@ -101,8 +101,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         suffix = problem.cache_suffix()
         if suffix:
             try:
-                from flux_cache import MeasurementCache
-                from flux_evaluator_abi import MEASURING_TOOLS, toolchain_fingerprint
+                from flux_loop.measure_cache import MeasurementCache
+                from flux_loop.toolchain import MEASURING_TOOLS, toolchain_fingerprint
 
                 # a tool a stage needs is part of what a number was measured with
                 needs = [n for st in getattr(getattr(problem, "task", None), "stages", ()) for n in getattr(st, "needs", ())]

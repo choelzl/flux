@@ -23,7 +23,6 @@ The tree follows the kinds of module the architecture is built from:
 | directory | what lives there |
 |---|---|
 | `core/` | the loop (`core/loop`), the front arithmetic, the IR, the stores, the LLM layer, profiling, the TUI |
-| `evaluator/` | the measurement record (`Result`), `run_tool`, tool fingerprints and the measurement cache |
 | `mentor/` | what guides the rest: the document corpus and its retrieval, mined facts, records read back, operator feedback |
 | `applications/` | one folder per design problem: its document, its world package if it has one, its README |
 | `interfaces/` | how it is driven: the CLI |
@@ -59,15 +58,15 @@ Everything a world needs already exists as a package; building one is mostly wir
 | you need | use | from |
 |---|---|---|
 | the loop: parts, a prototype stage, the chain, the ladder, the record, the roles | `flux_loop.run_loop` over a problem document | `core/loop` |
-| a measurement cache that survives resumes and is dropped when a tool changes | `MeasurementCache`, keyed by tool fingerprints; `cache:` in the document | `evaluator/cache` |
+| a measurement cache that survives resumes and is dropped when a tool changes | `MeasurementCache`, keyed by tool fingerprints; `cache:` in the document | `core/loop` |
 | a queryable record of every trial, readable back | `CampaignStore` through `flux_records.Records` | `core/stores`, `mentor/records` |
 | the front, the knee, the cheapest point meeting a goal, the hypervolume | `flux_frontier` | `core/frontier` |
 | one model call, schema-constrained or with tools | `flux_llm.OpenAIChatProposer` -> `Reply` | `core/llm` |
 | the mentor's sources: a sheet, a library, the record read back, mined facts | `flux_knowledge.Mentor` + `Corpus`/`Library`/`RecordReadback`/`Mined` | `mentor/knowledge`, `mentor/records` |
 | operator guidance typed while the loop runs | `FeedbackChannel` | `mentor/feedback` |
 | Verilator checks of generated RTL against golden vectors, Yosys + OpenROAD on ASAP7 | `rtl.py`, one file in the application (ASAP7 from OpenROAD-flow-scripts) | bundled RTL applications |
-| a measurement as a record, one tool launch | `Result`, `run_tool` | `evaluator/abi` |
-| tool fingerprints for cache keys and provenance | `toolchain_fingerprint` | `evaluator/abi` |
+| a measurement as a record, one tool launch | `Result`, `run_tool` | `core/stores`, `core/loop` |
+| tool fingerprints for cache keys and provenance | `toolchain_fingerprint` | `core/loop` |
 
 ## The packages
 
@@ -81,8 +80,6 @@ One row per installable package; the authoritative list is `flake.nix`'s `localS
 | `flux-llm` | `core/llm/` | the proposer protocol, the OpenAI-compatible client, tool calls inside a turn, the text-call parser |
 | `flux-profile` | `core/profile/` | the timing tree every phase reports into; the roles' colours |
 | `flux-tui` | `core/tui/` | the curses screens: the `flux ask` setup screen, roles, the current turn, timing, results with the front, feedback |
-| `flux-evaluator-abi` | `evaluator/abi/` | the `Result` measurement record with intervals and provenance, `run_tool`, tool fingerprints |
-| `flux-cache` | `evaluator/cache/` | the measurement cache |
 | `flux-knowledge` | `mentor/knowledge/` | the corpus, the BM25 library, the `Mentor` bundle of sources |
 | `flux-records`, `flux-feedback` | `mentor/` | the record's meaning over the store, with laws extracted from it and facts mined from it; the operator channel |
 | `flux-nlu`, `flux-macarray`, `flux-bankmap`, `flux-imapping` | `applications/` | the four world packages (the other five applications have none) |

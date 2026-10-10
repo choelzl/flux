@@ -955,7 +955,7 @@ admitted design from its verified prototype at the next pass.
 The accelerator era's `flux import`, `flux eval` and `flux replay`, the evaluator registry and
 the loop document's `evaluator:` stages are gone (D954): every stage is a command printing
 `name=value`, and no backend adapter is left: ZigZag, Timeloop and `npu_gemm` went in D958,
-the IR package (schemas, examples, `flux_ir`) in D959 ([evaluator-abi.md](evaluator-abi.md)). A
+the IR package (schemas, examples, `flux_ir`) in D959 ([measurement.md](measurement.md)). A
 document still naming `evaluator:` is refused with an explanation; `flux task migrate` drops a
 `workload:` key and a mined `calibration:` and flags evaluator stages for a person.
 

@@ -76,7 +76,7 @@ class MeasureMixin:
         if "_judge" not in self.__dict__:
             import hashlib
 
-            from flux_evaluator_abi import toolchain_fingerprint
+            from flux_loop.toolchain import toolchain_fingerprint
 
             from .provenance import git_revision
 
@@ -268,7 +268,7 @@ class MeasureMixin:
         runs or `needs`. `Candidate.key` stays the design's content, for telling designs apart."""
         import hashlib
 
-        from flux_evaluator_abi import tool_fingerprint
+        from flux_loop.toolchain import tool_fingerprint
 
         from .document.commands import _PLACEHOLDER
 

@@ -23,7 +23,7 @@ interrupted process cannot leave it disagreeing with the trials.
 consumer).
 
 Removed ([D953](../../../docs/decisions.md)): the per-result API (`put_result`/`get_result`/
-`find_results`), the `CachingEvaluator` warm-start (the loop caches through `flux_cache`), the
+`find_results`), the `CachingEvaluator` warm-start (the loop caches through `flux_loop.measure_cache`), the
 benchmark corpus (`CorpusStore`) and its leaderboard, and `CampaignStore`'s budget ledger
 (`BudgetGrant`, `remaining`, `spent`, `visited_keys`, `ok_trials`).
 

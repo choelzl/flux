@@ -100,11 +100,11 @@ def test_a_goal_relative_to_the_best_keeps_a_share_of_its_gain():
 
 
 def test_the_cache_is_keyed_on_the_tools_a_stage_needs(tmp_path, monkeypatch):
-    import flux_evaluator_abi
+    import flux_loop.toolchain as toolchain
 
     asked: list[tuple] = []
-    real = flux_evaluator_abi.toolchain_fingerprint
-    monkeypatch.setattr(flux_evaluator_abi, "toolchain_fingerprint", lambda tools=(): asked.append(tuple(tools)) or real(tools))
+    real = toolchain.toolchain_fingerprint
+    monkeypatch.setattr(toolchain, "toolchain_fingerprint", lambda tools=(): asked.append(tuple(tools)) or real(tools))
     doc = _doc(flow={"orchestrate": "sweep"})
     doc["flow"]["measure"]["run"]["needs"] = ["sh"]
     run_loop(PromptProblem(TaskSpec.from_dict(doc)),

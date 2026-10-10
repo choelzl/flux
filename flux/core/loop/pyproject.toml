@@ -5,8 +5,6 @@ description = "The design loop: problem documents, generation, the gate, the sta
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
-    "flux-cache",
-    "flux-evaluator-abi",
     "flux-feedback",
     "flux-frontier",
     "flux-knowledge",

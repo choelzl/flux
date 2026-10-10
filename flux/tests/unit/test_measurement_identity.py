@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-from flux_evaluator_abi.toolchain import tool_fingerprint
+from flux_loop.toolchain import tool_fingerprint
 from flux_loop import PromptProblem, TaskSpec, request_for, run_loop
 from flux_loop.types import Candidate, LoopRequest, LoopState
 

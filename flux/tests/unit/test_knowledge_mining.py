@@ -12,17 +12,7 @@ import pytest
 import yaml
 from pathlib import Path
 
-from flux_evaluator_abi import (
-    Bottleneck,
-    Domain,
-    Escalation,
-    Estimate,
-    Limiter,
-    Method,
-    Provenance,
-    Result,
-    Validity,
-)
+from flux_store.result import Bottleneck, Domain, Escalation, Estimate, Limiter, Method, Provenance, Result, Validity
 from flux_records.mining import (
     mine_knowledge,
     mine_observed_ratios,

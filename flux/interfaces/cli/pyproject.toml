@@ -5,12 +5,8 @@ description = "Flux CLI: the `flux` command."
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
-    "flux-evaluator-abi",
     "flux-store",
 ]
-# The evaluator adapters (zigzag, timeloop, rtl, ...) are deliberately not listed: they are
-# resolved by name through flux-evaluator-abi's registry; an application adapter needs
-# an application registering its own adapter, same as using one directly.
 
 [project.scripts]
 flux = "flux_cli.main:main"

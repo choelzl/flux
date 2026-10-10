@@ -80,7 +80,7 @@ def _is_measured(trial: Any) -> bool:
     """A trial whose result a real tool produced (any metric simulated or measured), as
     opposed to an analytic prediction. Decided from the ABI `Method` on the estimates, not
     from phase names, which differ between writers."""
-    from flux_evaluator_abi import Method
+    from flux_store.result import Method
 
     if trial.result is None:
         return False
