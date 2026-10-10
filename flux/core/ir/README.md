@@ -1,7 +1,9 @@
 # ir/ — Flux IR
 
 Workload / Architecture / Mapping IR: schemas (JSON Schema + protobuf), canonicalisation, and
-content-addressed hashing. The contract everything else is built behind.
+content-addressed hashing (`canonicalize`, `content_hash`, `validate`, `load_document`). ZigZag,
+Timeloop and the einsum parser are gone (D958); the macarray reads a workload's precision from a
+Workload IR document.
 
 See [docs/ir.md](../../../docs/ir.md), amended by
 [docs/decisions.md D1](../../../docs/decisions.md) (general-SoC superset, not DNN-only).

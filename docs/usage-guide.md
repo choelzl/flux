@@ -279,8 +279,6 @@ machine.
     keeps its state on a local disk (`/var/tmp/flux-podman-<uid>`, or `FLUX_SANDBOX_STORAGE`).
   - **Docker's** daemon is root, and the `docker` group is root-equivalent on the machine.
 - **Stopping:** `flux status` and `flux stop --now` find a sandboxed run by its container.
-- **Not inside:** Timeloop through Docker (no Docker socket inside). Run those with
-  `--no-sandbox`.
 
 ## The web interface
 
@@ -956,8 +954,8 @@ admitted design from its verified prototype at the next pass.
 
 The accelerator era's `flux import`, `flux eval` and `flux replay`, the evaluator registry and
 the loop document's `evaluator:` stages are gone (D954): every stage is a command printing
-`name=value`. An adapter is called by its application's own script, as `npu_gemm`'s
-`measure.py` calls `ZigZagEvaluator` ([evaluator-abi.md](evaluator-abi.md), [ir.md](ir.md)). A
+`name=value`, and no backend adapter is left: ZigZag, Timeloop and `npu_gemm` went in D958
+([evaluator-abi.md](evaluator-abi.md), [ir.md](ir.md)). A
 document still naming `evaluator:` is refused with an explanation; `flux task migrate` drops a
 `workload:` key and a mined `calibration:` and flags evaluator stages for a person.
 

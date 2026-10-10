@@ -33,23 +33,22 @@ workload:
 ```
 
 Key decisions:
-- **Einsum/affine core** for everything that is affine, matching the nested-for-loop tradition —
-  preserves compatibility with ZigZag and Timeloop semantics.
+- **Einsum/affine core** for everything that is affine, matching the nested-for-loop tradition.
 - **Explicit escape hatch** (`data_dependent`) with an attached *distribution* rather than a fixed
   shape — how MoE, dynamic sequence length, and speculative decoding get modeled without
-  pretending they're static. Declared in the
-  schema; no evaluator consumes it, and an adapter refuses (or, for ZigZag, skips) an op it
-  cannot express.
+  pretending they're static. Declared in the schema; nothing consumes it.
 - **Tensor lifetime and residency** are IR-level, not inferred — how KV cache becomes modellable
   (residency/growth fields are schema-only).
 - **Symbolic dimensions with empirical distributions**, so a result can be a distribution over a
   workload corpus rather than a single number. `{dyn: [lo, hi]}` bounds and
-  `empirical@corpus/<name>` distributions are schema-level; an evaluator needs static bounds and
-  refuses a dynamic one.
+  `empirical@corpus/<name>` distributions are schema-level.
 
-Currently real: the einsum/affine core, used by every evaluator adapter. The ONNX frontend that
-produced Workload IR from an MLP graph went with the dead periphery ([D540](decisions.md)); the
-examples under `core/ir/workload/examples/` are the starting points.
+Only the macarray reads a Workload IR document now, for its precision (`load_document`): the
+einsum parser (`parse_einsum`) and the last adapters that consumed the affine core, ZigZag and
+Timeloop, went with `npu_gemm` (D958). The ONNX frontend
+that produced Workload IR from an MLP graph went with the dead periphery ([D540](decisions.md)).
+What is left is the schema, its validation, canonicalisation and hashing, and the examples under
+`core/ir/workload/examples/`.
 
 ## Architecture IR
 
@@ -83,14 +82,13 @@ Key decisions:
   serve area, leakage, latency, and thermal.
 - **Constraints are part of the architecture document**, machine-checkable and independent of the
   cost model — a direct anti-reward-hacking measure.
-- Thermal and NoC have declared schema slots; no evaluator fills them.
+- Thermal and NoC have declared schema slots; nothing fills them.
 
-v0.1 scope was a single spatial compute dimension and a single compute node; it has widened
-unevenly since: ZigZag's translator accepts an N-dimensional compute array, Timeloop's accepts
-2-D arrays ([decisions.md D215](decisions.md)), and the IR has an
-`interconnect.multi_core` block — genuinely multi-core architectures whose per-core structure is
-itself recursive Architecture IR ([D80](decisions.md)–[D82](decisions.md)). The
-adapters otherwise keep the narrower single-dim scope and refuse what they cannot express.
+v0.1 scope was a single spatial compute dimension and a single compute node; the schema has
+since gained an `interconnect.multi_core` block — genuinely multi-core architectures whose
+per-core structure is itself recursive Architecture IR ([D80](decisions.md)–[D82](decisions.md)).
+No tool reads an Architecture IR document since its last adapters, ZigZag and Timeloop, went
+(D958).
 
 ## Mapping IR
 
@@ -122,23 +120,22 @@ mapping:
     reason: uneven_operand_blocking
 ```
 
-The `compatibility` block is small and does a lot of work: it makes representation lock-in
-**visible and queryable** instead of a footnote in a paper's validation section. A search can ask
-"restrict to mappings expressible in Timeloop" when cross-validation is required, and range
-freely otherwise.
+The `compatibility` block was meant to make representation lock-in **visible and queryable**
+instead of a footnote in a paper's validation section; with no backend left (D958), nothing
+fills it.
 
 v0.1 scope actually implemented: a flat (single-level) per-operand loop order plus one spatial
 split, for a single einsum op against a single-spatial-dim architecture. The search engines that
 swept this representation went with D521, and the ZigZag and Timeloop adapters' translators of it
-with D957 (nothing passed a mapping): each tool searches its own mapping, and the applications
-measure their own artifacts (generated SystemVerilog, a prefetcher configuration). Multi-level tiling, placement and `fusion` are schema-representable and unused.
+with D957, the adapters themselves with D958: the applications measure their own artifacts
+(generated SystemVerilog, a prefetcher configuration). Multi-level tiling, placement and `fusion` are schema-representable and unused.
 
 ## Identity and hashing
 
 Every IR document is canonicalized and content-addressed. `arch_hash`, `workload_hash`,
 `mapping_hash` are the cache keys for everything downstream and the lineage keys for everything
 upstream (`core/stores/`, see [stores.md](stores.md)) — real today, used by the result store's
-content-addressed documents and every evaluator's `Result.provenance.inputs`.
+content-addressed documents.
 
 ## Objective IR (accelerator era)
 

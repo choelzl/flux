@@ -42,7 +42,7 @@ def test_every_test_file_the_workflow_names_exists(workflow):
                     named.add(token)
 
     # An extraction that found nothing would pass the loop below vacuously.
-    assert len(named) >= 4, f"expected the hermetic job to name several files, found {sorted(named)}"
+    assert named, f"expected the nightly jobs to name test files, found {sorted(named)}"
     missing = sorted(n for n in named if not (_REPO / "flux" / n).is_file())
     assert not missing, f"ci.yml names test files that do not exist: {missing}"
 
@@ -53,15 +53,6 @@ def test_the_integration_sweep_globs_test_files_and_only_test_files(workflow):
     sweep = workflow["jobs"]["integration"]["steps"][-1]["run"]
     assert "tests/integration/test_*.py" in sweep
     assert "tests/integration/*.py" not in sweep.replace("tests/integration/test_*.py", "")
-
-
-def test_the_hermetic_job_asserts_on_skips(workflow):
-    """The equivalence step fails when its tests skip (no hermetic Timeloop), since an all-skipped
-    file passes (D207)."""
-    steps = workflow["jobs"]["timeloop-hermetic"]["steps"]
-    equivalence = next(s for s in steps if "equivalence" in (s.get("name") or "").lower())
-    assert 'grep -q "skipped"' in equivalence["run"]
-    assert "exit 1" in equivalence["run"]
 
 
 def test_every_openroad_gated_file_is_in_the_physical_job_or_ollama_gated(workflow):

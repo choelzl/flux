@@ -17,18 +17,6 @@ def test_a_record_written_without_a_cost_model_claims_no_bottleneck(tmp_path):
     assert Limiter("none") is Limiter.NONE
 
 
-def test_every_adapter_declares_the_abi_batch_base():
-    """The sequential batch body lives once, in `SequentialBatch`, which every application adapter
-    inherits (D441; no registry names them since D954)."""
-    from flux_evaluator_abi import SequentialBatch
-    from timeloop_tools import TimeloopEvaluator
-    from zigzag_tools import ZigZagEvaluator
-
-    for cls in (ZigZagEvaluator, TimeloopEvaluator):
-        assert issubclass(cls, SequentialBatch), cls.__name__
-        assert "evaluate_batch" not in cls.__dict__, cls.__name__
-
-
 def test_the_loops_log_words_are_role_words():
     from flux_profile import role_of
     from flux_tui.panels import _log_role

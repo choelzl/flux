@@ -35,7 +35,7 @@ def test_removed_domain_and_example_commands_are_not_cli_entry_points(command):
     assert command not in parser._subparsers._group_actions[0].choices
 
 
-@pytest.mark.parametrize("name", ["adder16", "mul8", "gelu_fp16", "macarray", "nlu", "prefetcher", "npu_gemm"])
+@pytest.mark.parametrize("name", ["adder16", "mul8", "gelu_fp16", "macarray", "nlu", "prefetcher"])
 def test_copied_application_calls_its_own_tool_scripts(name, tmp_path):
     home = tmp_path / "copied-loop"
     shutil.copytree(FLUX / "applications" / name, home,
@@ -53,7 +53,7 @@ def test_copied_application_calls_its_own_tool_scripts(name, tmp_path):
             if stage.command and "{home}/rtl.py" in stage.command:
                 assert stage.metrics == ("fmax_mhz", "area_um2", "power_w", "cell_count")
                 assert stage.needs == ("yosys", "openroad")
-        script = home / {"prefetcher": "champsim.py", "npu_gemm": "evaluate.py"}.get(name, "rtl.py")
+        script = home / {"prefetcher": "champsim.py"}.get(name, "rtl.py")
         result = subprocess.run([sys.executable, str(script), "--help"], cwd=tmp_path,
                                 env=_core_env(), capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
@@ -89,29 +89,3 @@ def test_bundled_rtl_sources_stay_consistent():
     result = subprocess.run([sys.executable, str(FLUX / "scripts/sync-app-tools.py"), "--check"],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.parametrize("backend", ["zigzag", "timeloop"])
-def test_npu_evaluation_command_uses_local_backend_and_reports_metrics(backend, tmp_path, monkeypatch, capsys):
-    import runpy
-    from types import SimpleNamespace
-
-    calls = []
-
-    class Evaluator:
-        def evaluate(self, candidate, budget, metrics):
-            calls.append((candidate, metrics))
-            return SimpleNamespace(validity=SimpleNamespace(ok=True),
-                                   metrics={"latency_cycles": SimpleNamespace(value=42),
-                                            "energy_pj": SimpleNamespace(value=100)})
-
-    cls = "ZigZagEvaluator" if backend == "zigzag" else "TimeloopEvaluator"
-    monkeypatch.setitem(sys.modules, backend + "_tools", SimpleNamespace(**{cls: Evaluator}))
-    arch, workload = tmp_path / "arch.yaml", tmp_path / "workload.yaml"
-    arch.write_text("id: arch\n")
-    workload.write_text("id: workload\n")
-    command = runpy.run_path(str(FLUX / "applications/npu_gemm/evaluate.py"))["main"]
-    assert command([str(arch), str(workload), "--backend", backend]) == 0
-    assert calls[0][0].arch == {"id": "arch"}
-    assert calls[0][1] == frozenset({"latency_cycles", "energy_pj"})
-    assert capsys.readouterr().out.splitlines() == ["latency_cycles=42", "energy_pj=100"]

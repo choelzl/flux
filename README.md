@@ -30,7 +30,7 @@ it tried. Website: <https://choelzl.github.io/flux/>.
    .venv/bin/flux selftest --no-model
    ```
 
-Extras: `pip install -e "./flux[web]"` (`flux serve`: FastAPI, uvicorn, cryptography), `[bankmap]` (z3), `[zigzag]`, `[all]`.
+Extras: `pip install -e "./flux[web]"` (`flux serve`: FastAPI, uvicorn, cryptography), `[bankmap]` (z3), `[all]`.
 
 ### Full install (Verilator, Yosys, OpenROAD, ChampSim)
 
@@ -88,7 +88,7 @@ To set them once for this machine, put the same lines (without `export`) in
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer
   any box that does not establish facts.
 - **Real measurements.** Yosys and OpenROAD on ASAP7 (speed, area, power), ChampSim prefetcher
-  studies (the app's `champsim.py`), ZigZag accelerator sizing, or any command of yours.
+  studies (the app's `champsim.py`), or any command of yours.
 - **Calibration.** Cheap stages are compared with costly ones; a quick estimate is never
   reported as a measurement.
 - **An honest report.** The design to build first, then the trade-offs, measured vs modelled,
@@ -129,7 +129,6 @@ Each folder in [`flux/applications/`](flux/applications/) holds one document.
 | [`adder16`](flux/applications/adder16/) | the smallest 16-bit adder at 2900 MHz, from six generated designs | no |
 | [`mul8`](flux/applications/mul8/) | a signed 8x8 multiplier at 1600 MHz, written by a model | yes |
 | [`primes`](flux/applications/primes/) | the fastest Python `count_primes(n)` (not hardware) | yes |
-| [`npu_gemm`](flux/applications/npu_gemm/) | the smallest accelerator that runs a workload in 500 cycles (ZigZag) | no |
 | [`gelu_fp16`](flux/applications/gelu_fp16/) | an FP16 GELU within 1 ULP, invented as a formula by a coding agent | yes |
 | [`nlu`](flux/applications/nlu/) | an FP16 unit for seven math functions, each within 1 ULP, at 800 MHz | yes |
 | [`macarray`](flux/applications/macarray/) | the smallest multiply-accumulate element at 1000 MHz | for invention only |

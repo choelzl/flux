@@ -67,8 +67,7 @@ __all__ = ["AgentSpec", "added_agents", "agent_kinds", "DECIDE", "SESSIONS", "Ex
 #: test, and without `bash` / `sh` (a `bash -c` would pass by the list). Best effort: the brief
 #: says it too, and Codex, whose shell is its only tool, has only the brief.
 #: Not iverilog / vvp (D685): an agent may simulate its own draft with Icarus.
-DENIED = ("verilator", "yosys", "openroad", "sta", "klayout", "champsim", "timeloop-model",
-          "timeloop-mapper", "gcc", "g++", "cc", "c++", "clang", "clang++", "make", "cmake", "ninja", "pytest",
+DENIED = ("verilator", "yosys", "openroad", "sta", "klayout", "champsim", "gcc", "g++", "cc", "c++", "clang", "clang++", "make", "cmake", "ninja", "pytest",
           "flux rtl", "flux task", "flux run", "bash", "sh")
 _CLAUDE_DENY = ("--allowedTools", "Bash", "--disallowedTools", "AskUserQuestion", *(f"Bash({c}:*)" for c in DENIED))
 # D710: and paths outside its working folder -- the loop's own files, its log, an Ask's loop --

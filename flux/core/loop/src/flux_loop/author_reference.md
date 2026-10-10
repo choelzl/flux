@@ -198,10 +198,6 @@ A program (C, C++, Python) is measured by `flux prog`; `--build` is one quoted c
 - `flux prog count --build "c++ -O2 -o {out} {artifact}"` -- Valgrind cachegrind, the same every run:
   `instructions= d1_misses= ll_misses= branch_mispredicts=`.
 - `flux prog size --build "c++ -O2 -o {out} {artifact}"` -- `text_bytes= data_bytes= bss_bytes=`.
-- An architecture (`language: yaml`, Architecture IR) is costed by an app-local command:
-  a stage calling `{python} {home}/evaluate.py {artifact} {home}/workload.yaml
-  --backend zigzag` with `metrics: [latency_cycles, energy_pj]`; `--backend timeloop`
-  also reports `area_mm2`. Copy `evaluate.py` and `tools/` from `applications/npu_gemm/`.
 
 ## Rules
 

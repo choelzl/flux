@@ -112,7 +112,6 @@
    "program",
    "python",
    "champsim",
-   "zigzag",
    "own"
   ]
  },
@@ -326,37 +325,6 @@
   ]
  },
  {
-  "id": "zigzag-model",
-  "role": "stage",
-  "title": "Cost the architecture (ZigZag)",
-  "what": "ZigZag maps the workload on the architecture for cycles and energy; the script adds an area estimate (as applications/npu_gemm).",
-  "run": "{python} {script} {artifact} {workload}",
-  "params": {
-   "script": {
-    "label": "Script",
-    "default": "{home}/measure.py",
-    "unit": ""
-   },
-   "workload": {
-    "label": "Workload",
-    "default": "{home}/workload.yaml",
-    "unit": ""
-   }
-  },
-  "metrics": {
-   "latency_cycles": "cycles",
-   "energy_pj": "pJ",
-   "area_mm2": "mm2"
-  },
-  "needs": [],
-  "languages": [
-   "yaml"
-  ],
-  "kinds": [
-   "zigzag"
-  ]
- },
- {
   "id": "prog-size",
   "role": "stage",
   "title": "Size of the built program",
@@ -464,58 +432,6 @@
   "kinds": [
    "program",
    "python"
-  ]
- },
- {
-  "id": "zigzag-eval",
-  "role": "stage",
-  "title": "Cycles and energy (ZigZag)",
-  "what": "The artifact is an Architecture IR document; ZigZag maps the Workload IR on it for cycles and energy. No area: add a stage of yours for it (as applications/npu_gemm).",
-  "run": "{python} {home}/evaluate.py {artifact} {workload} --backend zigzag",
-  "params": {
-   "workload": {
-    "label": "Workload (Workload IR)",
-    "default": "{home}/workload.yaml",
-    "unit": ""
-   }
-  },
-  "metrics": {
-   "latency_cycles": "cycles",
-   "energy_pj": "pJ"
-  },
-  "needs": [],
-  "languages": [
-   "yaml"
-  ],
-  "kinds": [
-   "zigzag"
-  ]
- },
- {
-  "id": "timeloop-eval",
-  "role": "stage",
-  "title": "Cycles, energy and area (Timeloop)",
-  "what": "The artifact is an Architecture IR document; Timeloop and Accelergy map the Workload IR's einsums on it. Run in the nix shell with FLUX_TIMELOOP_LOCAL=1 (else it runs in Docker); without timeloop-mapper on PATH the stage is skipped.",
-  "run": "{python} {home}/evaluate.py {artifact} {workload} --backend timeloop",
-  "params": {
-   "workload": {
-    "label": "Workload (Workload IR)",
-    "default": "{home}/workload.yaml",
-    "unit": ""
-   }
-  },
-  "metrics": {
-   "latency_cycles": "cycles",
-   "energy_pj": "pJ"
-  },
-  "needs": [
-   "timeloop-mapper"
-  ],
-  "languages": [
-   "yaml"
-  ],
-  "kinds": [
-   "zigzag"
   ]
  },
  {

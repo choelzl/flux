@@ -113,10 +113,7 @@ s.space = [{knob: "clock_ps", choices: "250, 333, 500"}]; s.flow.dse = "sweep";
 add("fastest_searched", "rtl", s);
 
 
-// the real catalog's newer tools: ZigZag through the application's script, a program timer, a Yosys-only area step
-s = fresh("zigzag_eval", "yaml"); s.checks.push(c.newCheck(s, "test"));
-s.stages.push(c.newStage(s, "zigzag-eval")); s.objectives = [obj("latency_cycles", "min"), obj("energy_pj", "min")];
-add("zigzag_eval", "zigzag", s);
+// the real catalog's newer tools: a program timer, a Yosys-only area step
 s = fresh("prog_timed", "cpp"); s.checks.push(c.newCheck(s, "test"));
 s.stages.push(c.newStage(s, "prog-time")); s.objectives = [obj("time_ms", "min")];
 add("prog_timed", "python", s);
@@ -464,11 +461,6 @@ def test_maximising_fmax_at_a_fixed_clock_warns_unless_the_clock_is_searched(tmp
 
 
 def test_the_real_catalogs_newer_tools_load(tmp_path):
-    case = BUILT["zigzag_eval"]
-    assert "workload:" not in case["yaml"] and "evaluate.py" in case["yaml"]     # D954: the command carries it
-    t = _load(tmp_path, case)
-    assert t.stages[0].command == ("{python}", "{home}/evaluate.py", "{artifact}",
-                                    "{home}/workload.yaml", "--backend", "zigzag")
     t = _load(tmp_path, BUILT["prog_timed"])
     assert t.stages[0].command[-9:-6] == ("time", "--build", "c++ -O2 -o {out} {artifact}")
     t = _load(tmp_path, BUILT["stat_then_synth"])

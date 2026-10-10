@@ -13,10 +13,9 @@ dependencies = ["pyyaml>=6", "numpy>=1.24", "jsonschema>=4"]
 
 [project.optional-dependencies]
 bankmap = ["z3-solver"]
-zigzag = ["zigzag-dse"]
 # D930: `flux serve` -- the web app; Nix supplies these, a pip install asks for them
 web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "cryptography>=42", "pydantic>=2"]
-all = ["z3-solver", "zigzag-dse", "fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "cryptography>=42", "pydantic>=2"]
+all = ["z3-solver", "fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "cryptography>=42", "pydantic>=2"]
 
 [project.scripts]
 flux = "flux_cli.main:main"

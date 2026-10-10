@@ -593,3 +593,13 @@ the topics above.
   - **interconnect_mapping:** `simulate.py` (a cross-check no step called), the unwired record read-back, and unused `to_dict`/`describe` helpers.
   - **Core:** the ABI's unused `ensure_binary`, `clone`, `build_step` and `ToolSource`; `flux_cache`'s `ToolchainBaseline`, used by tests only; and the configurator's code for evaluator-stage catalog entries and their document keys (D954 left nothing that used it).
   - **Kept:** the adapters' fallback to the bundled reference accelerator when given no architecture, since the live and conformance tests use it as their fixed reference. Also the ABI's `Constraint` and `Roofline`, which are parts of every stored `Result`.
+- **D958: npu_gemm, ZigZag and Timeloop are removed.**
+  - **The application:** the NPU accelerator study (Architecture IR rendered from two knobs, costed by ZigZag) was the last user of ZigZag and Timeloop.
+  - **Everything that existed only for them:**
+    - the application with its adapters;
+    - `zigzag-dse`, Timeloop and Accelergy from the dev shell, which is now smaller and faster to build;
+    - the configurator's three ZigZag/Timeloop stages and its "zigzag" kind;
+    - `FLUX_TIMELOOP_LOCAL`, the nightly Timeloop CI job and the backend conformance suite;
+    - the evaluator ABI's adapter side (the `Evaluator` protocol, `SequentialBatch`, `Candidate`, `Budget` and the IR reference types, `NotExpressibleError`);
+    - `flux_ir`'s einsum parser.
+  - **What stays:** the ABI holds what every record row stores (`Result` and its parts), `run_tool` and the toolchain fingerprints. `flux_ir` keeps canonical hashing, schemas and `load_document`, which macarray uses to read its workload.

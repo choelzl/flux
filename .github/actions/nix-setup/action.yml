@@ -17,7 +17,7 @@ description: Free runner disk, install nix (single-user), restore/save /nix via 
 
 inputs:
   key-suffix:
-    description: Cache namespace per shell closure (default / physical / timeloop).
+    description: Cache namespace per shell closure (default / physical).
     required: false
     default: default
 

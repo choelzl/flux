@@ -203,6 +203,5 @@ The bundled `applications/adder16` starts from a script-driven sweep. The polici
 | a program whose settings to tune | `flux new NAME`, then add commands using knob placeholders |
 | a script that writes designs from knobs | `flux new NAME`, then add a generator command and a search space |
 | only a description and some files | `flux ask "what you want" --file spec.pdf` |
-| an accelerator architecture for a workload | `applications/npu_gemm/`: a script writes the architecture, ZigZag measures it |
 
 For a search policy, a checker or a search command of your own, see [extending.md](extending.md).

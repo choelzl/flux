@@ -10,7 +10,7 @@ FLUX_ROOT = Path(__file__).resolve().parents[1]
 
 # Application-owned tools are importable for their tests, never installed by Flux.
 # mul8 holds rtl.py, the one-file RTL tool every RTL application carries (D948)
-_app_tools = [FLUX_ROOT / "applications/mul8", *(FLUX_ROOT / "applications" / app / "tools" for app in ("prefetcher", "npu_gemm"))]
+_app_tools = [FLUX_ROOT / "applications/mul8", *(FLUX_ROOT / "applications" / app / "tools" for app in ("prefetcher",))]
 for _p in _app_tools:
     sys.path.insert(0, str(_p))
 os.environ["PYTHONPATH"] = os.pathsep.join([*(str(p) for p in _app_tools), os.environ.get("PYTHONPATH", "")])

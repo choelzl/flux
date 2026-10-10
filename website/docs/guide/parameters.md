@@ -72,8 +72,7 @@ Inside `flow.measure.<stage>`, use a known tool command or a map:
 
 | Field | Default | Purpose |
 |---|---|---|
-| `command` | One of `command` / `evaluator` required | Command string or argument list |
-| `evaluator` | Alternative to `command` | Registered backend, such as `zigzag` or `timeloop` |
+| `command` | Required | Command string or argument list |
 | `metrics` | None | Names printed as `name=value`, or typed dictionary declarations (below); required for command stages unless using `metrics_re` |
 | `metrics_re` | Derived from `metrics` | Map of metric name to regex capturing a number or, for dictionary metrics, a JSON object |
 | `needs` | Inferred for known tools; otherwise empty | Executables required on PATH; missing tools skip the stage |

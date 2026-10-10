@@ -179,7 +179,7 @@ def test_flux_tools_lists_checks_then_stages(capsys):
     assert "gate: passes with no defect" in out and "metrics: fmax_mhz (MHz)" in out
     ids = {t["id"] for t in TOOLS}
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
-            "champsim-run", "python-test-script", "bench-script", "zigzag-model", "custom-check", "custom-stage"} <= ids
+            "champsim-run", "python-test-script", "bench-script", "custom-check", "custom-stage"} <= ids
     assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in TOOLS)
     assert fill("rtl-synth", clock_ps=300) == "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
 

@@ -10,14 +10,9 @@ from typing import Any
 import yaml
 
 from .canonical import canonicalize, content_hash
-from .einsum import EXPR, Einsum, Gemm, parse_einsum
 from .schemas import SchemaValidationError, validate
 
 __all__ = [
-    "EXPR",
-    "Einsum",
-    "Gemm",
-    "parse_einsum",
     "canonicalize",
     "content_hash",
     "validate",

@@ -1,4 +1,4 @@
-# tests/ — unit, integration, conformance, golden
+# tests/ — unit, integration, e2e, golden
 
 `e2e/web_ui.py` runs the web interface in headless Firefox against its own temporary server,
 users, and loop data. Run it from `flux/` with
@@ -182,32 +182,11 @@ SIGTERM shutdown. `test_web_partial_usage.py` checks the resulting API totals an
 revoking/restoring shares across history and download endpoints, downgrading editors before
 pending mutations (without changing files or starting processes), and disabling an account.
 
-conformance/ is the load-bearing directory: any new evaluator or generation backend must pass
-this suite proving it interprets the IR the same way as the reference, or fails loudly on the
-parts it cannot express.
-
 See [docs/architecture.md](../../docs/architecture.md).
 
-`unit/` has real tests for `flux-ir`, `flux-evaluator-abi`, `flux-store`, and both the ZigZag and
-Timeloop workload/architecture translators (schema validation, canonicalisation/hashing, ABI type
-invariants, store round-trips/idempotency, translation edge cases — dynamic bounds, non-einsum
-ops, malformed einsums, 2D-vs-1D architecture mismatches — all without touching any external
-tool). `integration/` runs the ZigZag adapter against the real, installed `zigzag-dse` package and
-the Timeloop adapter against the real, Dockerized Timeloop+Accelergy (seconds, not milliseconds
-each); `test_cross_evaluator_same_architecture_report.py` is the controlled Phase 1
-exit-criterion artifact — same workload *and* architecture through both, diagnosed, not just
-reported. Run with `nix develop --command python -m pytest -q` from `flux/` (needs a working
-`docker` daemon for the Timeloop tests).
-
-`conformance/` is implemented: one shared corpus (every workload example x every architecture
-example) and one shared test function, run against every backend it lists — not a separate ad
-hoc fixture set per adapter. Its expected-outcome matrix was populated by actually running all 24
-combinations and recording what happened, not by reading the translators and guessing (this
-project's own history includes a test written from a plausible-sounding but empirically false
-assumption — see the module's docstring). A dedicated test also checks that wherever two backends
-both succeed on the same (workload, architecture) pair, their provenance confirms they saw the
-exact same content hash. `golden/` holds pinned baselines and captured real tool output:
-`timeloop_energy_baseline.json`
-(pinned Timeloop energy numbers), and `booksim_congested_output.txt`/
-`noxim_low_traffic_output.txt` (captured real simulator output the parser unit tests run
-against). The directory's `.gitkeep` is obsolete now that real files live there.
+`unit/` has real tests for `flux-ir`, `flux-evaluator-abi` and `flux-store` (schema validation,
+canonicalisation/hashing, record type invariants, store round-trips/idempotency) without touching
+any external tool. `integration/` holds the live checks that need a real tool or sandbox. Run with
+`nix develop --command python -m pytest -q` from `flux/`. `golden/` holds captured real simulator
+output (`booksim_congested_output.txt`, `noxim_low_traffic_output.txt`). The conformance suite,
+the ZigZag and Timeloop tests and the pinned Timeloop energy baseline went with those tools (D958).

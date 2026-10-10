@@ -1,13 +1,12 @@
 {
   description = ''
     Flux dev environment. No venv, no pip install step: `nix develop` alone works. One shell:
-      Python, the EDA tools and prebuilt simulators the adapters need, and on linux OpenROAD,
-      the hermetic Timeloop v4 + Accelergy and ICSC (SystemC -> SV) -- `flux serve` runs every
-      task, so every task's tools are in the one shell it is started from.
+      Python, the EDA tools and prebuilt simulators the applications need, and on linux OpenROAD
+      and ICSC (SystemC -> SV) -- `flux serve` runs every task, so every task's tools are in the
+      one shell it is started from.
 
-    Almost everything third-party comes prebuilt from nixchip — the DSE Python stack
-    (zigzag-dse), Timeloop/Accelergy, Pythia/ChampSim and the EDA tools (Verilator,
-    Yosys, OpenROAD). `nixpkgs`
+    Almost everything third-party comes prebuilt from nixchip — Pythia/ChampSim and the EDA
+    tools (Verilator, Yosys, OpenROAD and its flow scripts). `nixpkgs`
     follows nixchip's pin, so binaries substitute from the nixchip0-3 Cachix caches and
     cache.nixos.org; run nix with `--accept-flake-config`.
 
@@ -16,9 +15,6 @@
     shellHook puts each `src/` on PYTHONPATH instead — editable-install equivalent, without
     pip. `localSrcDirs` is the authoritative list;
     `tests/unit/test_flake_local_packages.py` checks it against the filesystem.
-
-    The Timeloop adapter defaults to Docker regardless of shell — `FLUX_TIMELOOP_LOCAL=1`
-    opts into the hermetic path, which reproduces the pinned Docker energy numbers (D206).
 
     `default` cherry-picks Verilator/Yosys rather than using nixchip's `simulation`/`asic`
     bundles: both pull in `cryptominisat`, whose build git-clones `cadical` at build time
@@ -42,10 +38,6 @@
 
   inputs = {
     # nixchip is PINNED and both halves of the pin matter.
-    #
-    # `zigzag-dse` comes from nixchip rather than being built here from PyPI, but nixchip only
-    # began exporting it after 179b4402 — the rev this repo used to pin, where the shell fails
-    # with "attribute 'zigzag-dse' missing".
     #
     # nixpkgs follows nixchip rather than nixos-unstable, and that is not interchangeable:
     # nixchip's own pin is the interpreter its packages are actually built against.
@@ -71,9 +63,6 @@
           pkgs = import nixpkgs { inherit system; };
           chipPkgs = nixchip.packages.${system};
 
-          # Shared by pythonEnv and the timeloop shell's env. `import onnx` comes via
-          # zigzag-dse's propagated PyPI-wheel onnx; do NOT add ps.onnx alongside — the
-          # nixpkgs build's libprotobuf clashes with ortools' vendored one and SIGSEGVs (D80).
           basePythonPackages = ps: [
             ps.pytest
             ps.pytest-xdist       # the unit core on every core (D531)
@@ -83,7 +72,6 @@
             # under conflict-freeness constraints; numpy is the exhaustive checker.
             ps.z3-solver
             ps.numpy
-            chipPkgs.zigzag-dse
             # `flux serve`, the web interface (D683): the API, its server, form uploads,
             # and httpx for FastAPI's test client
             ps.fastapi
@@ -92,12 +80,7 @@
             ps.httpx
             ps.cryptography       # users' model keys, encrypted at rest (Fernet)
           ];
-          # Timeloop/Accelergy's Python half, linux-only like the timeloop binary itself
-          pythonEnv = pkgs.python3.withPackages (ps: basePythonPackages ps
-            ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
-              chipPkgs.timeloopfe chipPkgs.accelergy
-              chipPkgs.accelergy-library-plug-in chipPkgs.accelergy-cacti-plug-in
-            ]);
+          pythonEnv = pkgs.python3.withPackages basePythonPackages;
 
           # The nixchip tools the shell carries; nixchip's hook exports <NAME>_{HOME,BIN,LIB,
           # INCLUDE} for each. Only these, not all of pkgs.nixchip: the hook's paths are the
@@ -108,7 +91,7 @@
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
             # OpenROAD-flow-scripts over this OpenROAD and Yosys (`orfs`, below); KLayout for its GDS
             # step, not the host's (D947)
-            inherit (chipPkgs) openroad openroad-flow-scripts klayout yosys-slang timeloop icsc;
+            inherit (chipPkgs) openroad openroad-flow-scripts klayout yosys-slang icsc;
           };
 
           # manylinux wheels (numpy, onnx, ...) dlopen libstdc++/zlib at import time;
@@ -192,7 +175,7 @@
             ]
             # Verilator, Yosys, Icarus, sv-lang; CMU-SAFARI/Pythia: ChampSim, with its source
             # tree under $out/share/pythia so an app's `champsim.py build` can rebuild it; on linux
-            # OpenROAD + yosys-slang, Timeloop v4, ICSC (SystemC -> SystemVerilog, D645, D656)
+            # OpenROAD + yosys-slang, ICSC (SystemC -> SystemVerilog, D645, D656)
             ++ builtins.attrValues chipTools
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
               pkgs.valgrind    # `flux prog count`: cachegrind (D661)
@@ -208,8 +191,7 @@
               # variable as the NAME of its binary and execs it -- every compile failed "Permission
               # denied". Unset, the script finds its own verilator_bin.
               unset VERILATOR_BIN
-              echo "flux dev shell: python + Verilator/Yosys/OpenROAD/ORFS, Pythia/ChampSim, SystemC/ICSC, Timeloop"
-              echo "  FLUX_TIMELOOP_LOCAL=1   # the hermetic Timeloop; the adapter defaults to Docker regardless"
+              echo "flux dev shell: python + Verilator/Yosys/OpenROAD/ORFS, Pythia/ChampSim, SystemC/ICSC"
             '' + shellHook;
           };
         });

@@ -58,8 +58,7 @@ def _stage(i: int, doc: Any) -> Stage:
     at = f"flow.measure.{doc['name']}"                 # D775: a stage is said by its name
     if "evaluator" in doc:                             # D954: no evaluator stages
         raise TaskError(f"{at}.evaluator: evaluator stages are gone (D954); measure with a command that prints "
-                        "name=value, e.g. an application's own script (applications/npu_gemm's evaluate.py "
-                        "--backend zigzag|timeloop)")
+                        "name=value, e.g. an application's own script")
     cmd = doc.get("command")
     if not cmd:
         raise TaskError(f"{at} needs a `command`")

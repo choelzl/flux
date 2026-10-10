@@ -23,20 +23,19 @@ The tree follows the kinds of module the architecture is built from:
 | directory | what lives there |
 |---|---|
 | `core/` | the loop (`core/loop`), the front arithmetic, the IR, the stores, the LLM layer, profiling, the TUI |
-| `evaluator/` | the evaluator ABI (the contract an application's adapter implements, `run_tool`, tool fingerprints) and the measurement cache |
+| `evaluator/` | the measurement record (`Result`), `run_tool`, tool fingerprints and the measurement cache |
 | `mentor/` | what guides the rest: the document corpus and its retrieval, mined facts, records read back, operator feedback |
 | `applications/` | one folder per design problem: its document, its world package if it has one, its README |
 | `interfaces/` | how it is driven: the CLI |
 | `tests/` | the unit suite (core + heavy), the integration suite |
 
-`applications/` is the part that grows. Ten today; copy one with its local commands or use `flux new` for a blank loop:
+`applications/` is the part that grows. Nine today; copy one with its local commands or use `flux new` for a blank loop:
 
 | application | the problem | the chain | the model's roles |
 |---|---|---|---|
 | [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `python rtl.py test` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
 | [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `python rtl.py test` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
 | [`gelu_fp16/`](applications/gelu_fp16/) | an FP16 GELU within 1 ULP on every input, as a formula | `python -m flux_loop.golden_proto` on the Python prototype, the loop's spelling to SystemVerilog, Yosys screen, OpenROAD placement | a coding agent writes the prototype |
-| [`npu_gemm/`](applications/npu_gemm/) | the smallest 1-D accelerator for a two-GEMM workload that makes 500 cycles | valid Architecture IR, ZigZag's cycles and energy, a first-order area | none: a sweep over PEs and buffer size |
 | [`primes/`](applications/primes/) | not hardware: the fastest Python `count_primes(n)` | `check.py` against a reference, `bench.py` timing | writes it, then makes it faster pass after pass |
 | [`nlu/`](applications/nlu/) | an FP16 non-linear unit of seven functions, each within 1 ULP on all 65536 inputs, under one mux at 800 MHz routed, with the least area and power | a Python prototype proven on every input, translated to SystemVerilog, Yosys + OpenSTA screen, OpenROAD placement, full place-and-route for the whole | writes and repairs the prototype, invents algorithms, orchestrates with tools |
 | [`macarray/`](applications/macarray/) | the multiply-accumulate element's microarchitecture at a workload's precision | Verilator on golden vectors, Yosys + OpenSTA screen, OpenROAD placement along the fmax-vs-area front | invents multiplier structures beyond the four built in |
@@ -44,12 +43,12 @@ The tree follows the kinds of module the architecture is built from:
 | [`bankmap/`](applications/bankmap/) | a conflict-free bank mapping for given strides through a given interconnect | a pigeonhole or SAT-colouring proof, z3 over XOR folds, an exhaustive checker | proposes mappings past the solver's reach |
 | [`interconnect_mapping/`](applications/interconnect_mapping/) | a banked L1's address hash and interconnect against tensor tiles: two small loops (hash per interconnect, interconnect fit per hash) under a big one | an exact GF(2) injectivity gate, a cycle model over train and holdout traffic, a four-way front | proposes hashes |
 
-An application's adapters and the domain library it evaluates live with that application
-(ZigZag and Timeloop in `npu_gemm/tools/`, ChampSim in `prefetcher/tools/`, `rtl.py` in each RTL
-application); nothing registers them by name. `mentor/knowledge/corpus/` holds documents to
+An application's measuring commands and the domain library it evaluates live with that
+application (ChampSim in `prefetcher/tools/`, `rtl.py` in each RTL application); nothing
+registers them by name. `mentor/knowledge/corpus/` holds documents to
 retrieve from.
 
-This repository builds no third-party tool itself. Timeloop, Accelergy, ZigZag, Verilator,
+This repository builds no third-party tool itself. Verilator,
 Yosys, OpenROAD and ChampSim come from the `nixchip` flake input; adding a tool means adding
 it to nixchip or to `flake.nix` from nixpkgs.
 
@@ -67,7 +66,7 @@ Everything a world needs already exists as a package; building one is mostly wir
 | the mentor's sources: a sheet, a library, the record read back, mined facts | `flux_knowledge.Mentor` + `Corpus`/`Library`/`RecordReadback`/`Mined` | `mentor/knowledge`, `mentor/records` |
 | operator guidance typed while the loop runs | `FeedbackChannel` | `mentor/feedback` |
 | Verilator checks of generated RTL against golden vectors, Yosys + OpenROAD on ASAP7 | `rtl.py`, one file in the application (ASAP7 from OpenROAD-flow-scripts) | bundled RTL applications |
-| the evaluator contract an adapter implements | the `Evaluator` ABI, `run_tool` | `evaluator/abi` |
+| a measurement as a record, one tool launch | `Result`, `run_tool` | `evaluator/abi` |
 | tool fingerprints for cache keys and provenance | `toolchain_fingerprint` | `evaluator/abi` |
 
 ## The packages
@@ -83,11 +82,11 @@ One row per installable package; the authoritative list is `flake.nix`'s `localS
 | `flux-llm` | `core/llm/` | the proposer protocol, the OpenAI-compatible client, tool calls inside a turn, the text-call parser |
 | `flux-profile` | `core/profile/` | the timing tree every phase reports into; the roles' colours |
 | `flux-tui` | `core/tui/` | the curses screens: the `flux ask` setup screen, roles, the current turn, timing, results with the front, feedback |
-| `flux-evaluator-abi` | `evaluator/abi/` | the `Evaluator` protocol, the `Result` shape with intervals and provenance, `run_tool`, tool fingerprints |
+| `flux-evaluator-abi` | `evaluator/abi/` | the `Result` measurement record with intervals and provenance, `run_tool`, tool fingerprints |
 | `flux-cache` | `evaluator/cache/` | the measurement cache |
 | `flux-knowledge` | `mentor/knowledge/` | the corpus, the BM25 library, the `Mentor` bundle of sources |
 | `flux-records`, `flux-feedback` | `mentor/` | the record's meaning over the store, with laws extracted from it and facts mined from it; the operator channel |
-| `flux-nlu`, `flux-macarray`, `flux-bankmap`, `flux-imapping` | `applications/` | the four world packages (the other six applications have none) |
+| `flux-nlu`, `flux-macarray`, `flux-bankmap`, `flux-imapping` | `applications/` | the four world packages (the other five applications have none) |
 | `flux-cli` | `interfaces/cli/` | the `flux` command |
 
 ## Development setup
@@ -104,20 +103,18 @@ nix develop --command flux --help
 ```
 
 `pytest.ini` leaves out the `heavy` tests by default; the heavy files are listed in
-`tests/unit/conftest.py`. CI runs both. `tests/integration/` needs whichever real backend
-each test targets (Docker for Timeloop, Verilator, Yosys and OpenROAD for `rtl.py`, a model for the prose
+`tests/unit/conftest.py`. CI runs both. `tests/integration/` needs whichever real tool
+each test targets (Verilator, Yosys and OpenROAD for `rtl.py`, a model for the prose
 checks); run the files relevant to what you change. Every test gets its own trace root, so a
 test run never disturbs a live campaign.
 
-`flake.nix` builds the third-party Python dependencies as Nix derivations, including
-`zigzag-dse` (not on PyPI). The local `flux-*` packages are not built: the
+`flake.nix` builds the third-party Python dependencies as Nix derivations. The local `flux-*` packages are not built: the
 shell's `PYTHONPATH` points at each package's `src/`, an editable install without a virtual
-environment. `applications/npu_gemm/tools/timeloop_tools` needs a `docker` daemon at run time and pulls its image on
-first use; `FLUX_TIMELOOP_LOCAL=1` uses the shell's own Timeloop instead (linux).
+environment.
 
 `nix develop` is one shell, the one `flux serve` runs every task from: the Python environment,
-Verilator, Yosys with the slang front end, Icarus, ChampSim, SystemC and, on linux, OpenROAD,
-Timeloop + Accelergy and ICSC; nixchip's hook exports `<TOOL>_HOME`, `_BIN`, `_LIB` and
+Verilator, Yosys with the slang front end, Icarus, ChampSim, SystemC and, on linux, OpenROAD
+and ICSC; nixchip's hook exports `<TOOL>_HOME`, `_BIN`, `_LIB` and
 `_INCLUDE` for each nixchip tool in it. The loop writes scratch files under `FLUX_TMPDIR` and traces (prompts, replies,
 checked prototypes) under `FLUX_TRACE_ROOT` (default `$TMPDIR/flux-traces`), one directory
 per campaign.

@@ -1,24 +1,17 @@
-"""Flux Evaluator ABI v0.1 (docs/evaluator-abi.md): the narrow contract that makes ZigZag, Timeloop,
-RTL simulation, synthesis and every other backend interchangeable behind one interface -- the types, the
-`Evaluator` protocol and the one refusal (`NotExpressibleError`). An application's own adapter
-implements the protocol; no registry names one (D954).
-"""
+"""Flux's measurement records (docs/evaluator-abi.md): a measurement as a `Result` with its
+method, validity, provenance and escalation -- what every record row stores -- plus `run_tool`
+and the toolchain fingerprints a measurement is keyed by. The backend adapters and their protocol
+went with ZigZag, Timeloop and npu_gemm (D958)."""
 
 from __future__ import annotations
 
-from .errors import NotExpressibleError
-from .protocol import Evaluator, SequentialBatch
 from .types import (
-    ArchRef,
     Bottleneck,
-    Budget,
-    Candidate,
     Constraint,
     Domain,
     Escalation,
     Estimate,
     Limiter,
-    MappingRef,
     Method,
     Metric,
     MetricMap,
@@ -28,7 +21,6 @@ from .types import (
     Result,
     Roofline,
     Validity,
-    WorkloadRef,
 )
 
 from .toolchain import (  # noqa: F401
@@ -48,19 +40,12 @@ __all__ = [
     "MEASURING_TOOLS",
     "tool_fingerprint",
     "toolchain_fingerprint",
-    "Evaluator",
-    "SequentialBatch",
-    "NotExpressibleError",
-    "ArchRef",
     "Bottleneck",
-    "Budget",
-    "Candidate",
     "Constraint",
     "Domain",
     "Escalation",
     "Estimate",
     "Limiter",
-    "MappingRef",
     "Method",
     "Metric",
     "MetricMap",
@@ -70,5 +55,4 @@ __all__ = [
     "Result",
     "Roofline",
     "Validity",
-    "WorkloadRef",
 ]

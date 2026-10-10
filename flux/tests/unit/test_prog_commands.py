@@ -121,14 +121,10 @@ def test_the_catalog_carries_the_new_tools():
     from flux_loop.objective import UNITS
     from flux_loop.toolbox import TOOLS, fill, tool
 
-    for tid in ("prog-time", "prog-count", "prog-size", "rtl-stat", "zigzag-eval", "timeloop-eval"):
+    for tid in ("prog-time", "prog-count", "prog-size", "rtl-stat"):
         t = tool(tid)
         assert t["role"] == "stage" and all(m in UNITS for m in t["metrics"]), tid
     assert fill("prog-count") == 'flux prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
     assert fill("rtl-stat") == "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps 1000"
     assert not [t for t in TOOLS if "stage" in t]
-    for backend in ("zigzag", "timeloop"):
-        assert fill(backend + "-eval").endswith("--backend " + backend)
-        assert "{home}/evaluate.py" in fill(backend + "-eval")
-        assert "document" not in tool(backend + "-eval")          # D954: the command carries the workload
     assert all(("run" in t) != ("stage" in t) for t in TOOLS)

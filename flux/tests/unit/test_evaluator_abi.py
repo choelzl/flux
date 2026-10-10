@@ -1,4 +1,4 @@
-"""Evaluator ABI v0.1 types and protocol (docs/evaluator-abi.md)."""
+"""The measurement record types (docs/evaluator-abi.md): a Result round-trips exactly."""
 
 from __future__ import annotations
 
@@ -6,12 +6,9 @@ import flux_ir
 import pytest
 from flux_evaluator_abi import (
     Bottleneck,
-    Budget,
-    Candidate,
     Domain,
     Escalation,
     Estimate,
-    Evaluator,
     Limiter,
     Method,
     Provenance,
@@ -90,73 +87,6 @@ def test_result_from_dict_handles_a_violation_and_a_roofline():
 
     reconstructed = Result.from_dict(original.to_dict())
     assert reconstructed == original
-
-
-class ReferenceEvaluator:
-    """Minimal stand-in backend: a fixed Result tagged with the candidate's content hashes."""
-
-    name = "reference"          # every evaluator carries its registry name (D426)
-
-    def evaluate(self, candidate: Candidate, budget: Budget, metrics: frozenset[str]) -> Result:
-        workload_hash = (
-            candidate.workload
-            if isinstance(candidate.workload, str)
-            else flux_ir.content_hash(candidate.workload)
-        )
-        arch_hash = (
-            candidate.arch if isinstance(candidate.arch, str) else flux_ir.content_hash(candidate.arch)
-        )
-        result = _sample_result()
-        return Result(
-            metrics=result.metrics,
-            validity=result.validity,
-            domain=result.domain,
-            bottleneck=result.bottleneck,
-            provenance=Provenance(
-                evaluator="reference@0.1.0",
-                inputs={"workload_hash": workload_hash, "arch_hash": arch_hash},
-            ),
-            escalation=result.escalation,
-        )
-
-    def evaluate_batch(
-        self, candidates: list[Candidate], budget: Budget, metrics: frozenset[str]
-    ) -> list[Result]:
-        return [self.evaluate(c, budget, metrics) for c in candidates]
-
-
-def test_reference_evaluator_satisfies_the_evaluator_protocol():
-    assert isinstance(ReferenceEvaluator(), Evaluator)
-
-
-def test_reference_evaluator_tags_provenance_with_real_ir_content_hashes(ir_example):
-    kind, path = ir_example
-    if kind != "workload":
-        pytest.skip("one workload example is enough to exercise the evaluator")
-    workload = flux_ir.load_document(path)
-    arch = flux_ir.load_document(
-        path.parents[2] / "architecture/examples/my-npu-v3.yaml"
-    )
-    candidate = Candidate(workload=workload, arch=arch, mapping=None)
-
-    result = ReferenceEvaluator().evaluate(candidate, Budget(), frozenset({"latency_cycles"}))
-
-    assert result.provenance.inputs["workload_hash"] == flux_ir.content_hash(workload)
-    assert result.provenance.inputs["arch_hash"] == flux_ir.content_hash(arch)
-
-
-def test_evaluate_batch_matches_sequential_evaluate(ir_example):
-    kind, path = ir_example
-    if kind != "workload":
-        pytest.skip("one workload example is enough to exercise the evaluator")
-    workload = flux_ir.load_document(path)
-    candidates = [Candidate(workload=workload, arch={"id": f"arch{i}"}) for i in range(3)]
-
-    evaluator = ReferenceEvaluator()
-    batch_results = evaluator.evaluate_batch(candidates, Budget(), frozenset({"latency_cycles"}))
-    sequential_results = [evaluator.evaluate(c, Budget(), frozenset({"latency_cycles"})) for c in candidates]
-
-    assert [r.to_dict() for r in batch_results] == [r.to_dict() for r in sequential_results]
 
 
 def test_result_from_dict_keeps_metric_domains():

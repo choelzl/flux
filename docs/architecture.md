@@ -62,9 +62,9 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
    no model, or a model in exactly one role.
 7. **No pre-generated designs.** The tools give the model measurements, never solutions.
    Every design on the record was made by the loop.
-8. **Contracts at the edges.** The evaluator ABI (`evaluate(workload, arch, mapping, budget)
-   -> Result`) and the IR are what a tool adapter is written against. Nothing is rewritten
-   that Verilator, Yosys, OpenROAD, ZigZag or Timeloop already do.
+8. **Contracts at the edges.** Every stage is a command printing `name=value`, recorded as a
+   `Result` keyed by the toolchain's fingerprints ([evaluator-abi.md](evaluator-abi.md)).
+   Nothing is rewritten that Verilator, Yosys, OpenROAD or ChampSim already do.
 9. **Agents are first-class callers.** A script or an agent drives Flux through the same CLI
    a person uses: `flux task run --json` hands back the answer, `flux ask` starts from a
    prompt, and a coding agent can be the author or the generator
@@ -84,12 +84,11 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 │                record and its reload, the report                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ APPLICATIONS   applications/<name>: a document, and the commands it names     │
-│                -- adder16, mul8, gelu_fp16, primes, npu_gemm, nlu, macarray,  │
+│                -- adder16, mul8, gelu_fp16, primes, nlu, macarray,            │
 │                prefetcher, bankmap, interconnect_mapping                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ EVALUATORS     evaluator/abi (the contract, the registry) · openroad · rtl ·  │
-│                zigzag · timeloop · champsim ·                                 │
-│                calibration · redaction · the measurement cache                │
+│ EVALUATORS     evaluator/abi (the measurement record, run_tool, toolchain     │
+│                fingerprints) · the measurement cache                          │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ MENTOR         knowledge (corpus, library, mined facts) · records read back   │
 │                as laws · operator feedback · benchmarks                       │

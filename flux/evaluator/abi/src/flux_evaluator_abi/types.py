@@ -7,15 +7,12 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Union
+from typing import Any
 
 # A reference is a content hash (str, see flux_ir.content_hash) into the store, or an inline IR
 # document (dict) hashed on first use. mapping=None: the evaluator chooses one and must say so.
-WorkloadRef = Union[str, dict[str, Any]]
 # arch=None: use the evaluator's own default architecture, or refuse with `NotExpressibleError`
 # (D172, D173).
-ArchRef = Union[str, dict[str, Any], None]
-MappingRef = Union[str, dict[str, Any], None]
 
 
 class Method(str, Enum):
@@ -44,25 +41,6 @@ class Metric(str, Enum):
     POWER_W = "power_w"
     EDP = "edp"
     TEMP_MAX_C = "temp_max_c"
-
-
-@dataclass(frozen=True, slots=True)
-class Candidate:
-    """One point to evaluate. `None` for `arch` or `mapping` means the evaluator supplies it:
-    a mapping it must declare, or its default architecture (or a `NotExpressibleError`). `arch`
-    has no default, so passing `None` is an explicit choice.
-    """
-
-    workload: WorkloadRef
-    arch: ArchRef
-    mapping: MappingRef = None
-
-
-@dataclass(frozen=True, slots=True)
-class Budget:
-    wall_clock_s: float | None = None
-    usd: float | None = None
-    fidelity_floor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@
 # upgrade that silently broke RTL generation (D119, D122, D129, D153).
 #
 # What CI genuinely covers, and what it cannot:
-#   * unit + conformance      — every push. Conformance needs Docker (Timeloop runs in it).
+#   * unit                    — every push.
 #   * integration, partial    — nightly. Tests needing a local Ollama skip themselves rather than
 #                               fail, so the generation suites are NOT covered here. That is a real
 #                               hole, stated rather than papered over: those are exactly the tests
@@ -51,7 +51,7 @@ jobs:
           "$GITHUB_WORKSPACE/.venv/bin/flux" selftest --no-model
 
   regression:
-    name: unit + conformance
+    name: unit
     runs-on: ubuntu-latest
     # Generous only for the cold-bootstrap runs: the nixchip toolchain (verilator, yosys,
     # openroad) has no public binary cache and builds from source on 4 vCPUs.
@@ -60,8 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The flake builds zigzag-dse from source (it is not packaged in nixpkgs), so a
-      # cold store is expensive; the shared setup (D242) frees the runner disk and keeps the
+      # A cold store is expensive; the shared setup (D242) frees the runner disk and keeps the
       # closure between runs in the GitHub actions cache.
       - uses: ./.github/actions/nix-setup
 
@@ -96,7 +95,7 @@ jobs:
         # job's log needs a login, and a red job without a name cost a day to guess (a flaky test)
         run: |
           set -o pipefail
-          nix develop --command python3 -m pytest tests/unit tests/conformance -q -n auto -rfE | tee "$RUNNER_TEMP/unit.txt" || {
+          nix develop --command python3 -m pytest tests/unit -q -n auto -rfE | tee "$RUNNER_TEMP/unit.txt" || {
             grep -E '^(FAILED|ERROR) ' "$RUNNER_TEMP/unit.txt" | head -30 | sed 's/^/::error title=test::/'
             exit 1
           }
@@ -197,7 +196,7 @@ jobs:
 
   physical:
     name: openroad physical stage (nightly)
-    # Same shape and reason as timeloop-hermetic below (D207/D230): the sweep runs every file
+    # Its own job for its skip assertion (D207/D230): the sweep runs every file
     # under the default shell, where the openroad-gated tests skip themselves, and a file whose
     # tests all skip exits 0 — so the from-source OpenROAD build, the D229 liberty repair and
     # the routed flow would all rot green without this job.
@@ -234,63 +233,3 @@ jobs:
             echo "::error::the dev shell provided no usable openroad — tests skipped"
             exit 1
           fi
-
-  timeloop-hermetic:
-    name: hermetic timeloop equivalence (nightly)
-    # Its own job for its skip assertion: the nightly sweep above runs every integration file
-    # too, but a skipped file exits 0 there, so a shell whose Timeloop went missing, or drift in
-    # the from-source Timeloop build, would read as a pass.
-    # That is precisely the "an unknown reads as a pass" failure D129 records.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    # Generous only for the cold-cache case: Timeloop and barvinok are from-source C++ builds. The
-    # tests themselves run in seconds once the shell exists.
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/nix-setup
-        with:
-          key-suffix: timeloop
-
-      - name: Build the dev shell (hermetic Timeloop included)
-        working-directory: flux
-        # Internal cap below the job timeout (D247).
-        run: |
-          if ! timeout 4200 nix develop --command true; then
-            echo "::error::dev shell build hit the 70-min cap — partial store is cached; re-run to resume"
-            exit 1
-          fi
-          df -h /
-
-      - name: Timeloop equivalence (docs/decisions.md D206)
-        working-directory: flux
-        run: |
-          # `| tee` makes the pipeline's status tee's, not pytest's — the exact mistake D199
-          # records, where every command in a loop reported rc=0 regardless of what happened.
-          set -o pipefail
-          nix develop --command python3 -m pytest \
-            tests/integration/test_timeloop_local_equivalence_live.py -q --tb=short -rs \
-            | tee "$RUNNER_TEMP/timeloop-equivalence.txt"
-          # A skip here means the shell did not provide what it promises — a build failure wearing
-          # a pass, since every test in that file skips itself when no hermetic Timeloop is found.
-          # Asserted on the *absence of skips* rather than on a test count, which would break
-          # confusingly the first time someone adds a case.
-          if grep -q "skipped" "$RUNNER_TEMP/timeloop-equivalence.txt"; then
-            echo "::error::the hermetic Timeloop shell provided no usable timeloop — tests skipped"
-            exit 1
-          fi
-
-      - name: The rest of the Timeloop suite, on the hermetic runner
-        working-directory: flux
-        # The equivalence check above pins three architectures; these exercise sparsity, mapping
-        # and architecture translation. All were measured to pass identically on both runners
-        # (D206), so a failure here is a real divergence rather than a known gap. No skip
-        # assertion: these files legitimately skip nothing *and* gate on nothing, so pytest's own
-        # exit code is the whole signal.
-        run: |
-          set -o pipefail
-          FLUX_TIMELOOP_LOCAL=1 nix develop --command python3 -m pytest \
-            tests/integration/test_timeloop_adapter_live.py \
-            tests/integration/test_timeloop_architecture_translation_live.py \
-            tests/integration/test_timeloop_sparsity_live.py \
-            -q --tb=short

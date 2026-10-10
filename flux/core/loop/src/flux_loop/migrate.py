@@ -262,7 +262,7 @@ def _d954(doc: dict[str, Any], say: Say, manual: Say) -> None:
     for name, st in (measure.items() if isinstance(measure, dict) else ()):
         if isinstance(st, dict) and "evaluator" in st:
             manual(f"flow.measure.{name}.evaluator: evaluator stages are gone (D954); measure with a command "
-                   "(e.g. applications/npu_gemm's evaluate.py --backend zigzag|timeloop)")
+                   "(e.g. an application's own script printing name=value)")
 
 
 #: Each change the format went through, in order: (decision, what it does, the step).

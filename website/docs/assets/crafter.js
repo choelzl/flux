@@ -283,11 +283,10 @@
 
   /** Labels by tool for the measuring tools the page knows; any other catalog stage shows its title. */
   var STAGE_LABELS = { "rtl-synth": "Yosys synthesis (timed by OpenSTA)", "rtl-place": "OpenROAD placement",
-                       "rtl-route": "OpenROAD routing", "champsim-run": "ChampSim simulation", "zigzag-model": "ZigZag model",
+                       "rtl-route": "OpenROAD routing", "champsim-run": "ChampSim simulation",
                        "bench-script": "Benchmark script", "custom-stage": "Custom command",
                        "rtl-stat": "Yosys area (no timing)", "prog-size": "Program size (size)",
-                       "prog-time": "Program run time", "prog-count": "Instruction count (Valgrind)",
-                       "zigzag-eval": "ZigZag evaluator", "timeloop-eval": "Timeloop evaluator" };
+                       "prog-time": "Program run time", "prog-count": "Instruction count (Valgrind)" };
 
   /** The measuring tools: every stage the catalog lists, custom last, as [id, label]. */
   function stageTools(cat) {
@@ -371,9 +370,8 @@
   function newStage(state, id, cat) {
     var taken = (state.stages || []).map(function (s) { return s.name; });
     var base = { "rtl-synth": "synth", "rtl-place": "place", "rtl-route": "route", "champsim-run": "sim",
-                 "zigzag-model": "model", "bench-script": "bench", "custom-stage": "measure", "rtl-stat": "stat",
-                 "prog-size": "size", "prog-time": "time", "prog-count": "count", "zigzag-eval": "zigzag",
-                 "timeloop-eval": "timeloop" }[id] || "measure";
+                 "bench-script": "bench", "custom-stage": "measure", "rtl-stat": "stat",
+                 "prog-size": "size", "prog-time": "time", "prog-count": "count" }[id] || "measure";
     var params = paramsOf(toolOf(id, cat));
     if ("clock_ps" in params) params.clock_ps = "";           // empty: from an fmax limit, else the tool's default
     return { tool: id, name: uniqueName(base, taken), params: params, metrics: "", needs: "", gates: [],
