@@ -3,7 +3,7 @@
 The loop's record (`CampaignStore`) and the content-addressed document store it shares a SQLite
 file with (`ResultStore`).
 
-See [docs/stores.md](../../../docs/stores.md).
+See [docs/records.md](../../../docs/records.md).
 
 ## What's implemented
 

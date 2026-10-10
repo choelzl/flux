@@ -63,7 +63,7 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 7. **No pre-generated designs.** The tools give the model measurements, never solutions.
    Every design on the record was made by the loop.
 8. **Contracts at the edges.** Every stage is a command printing `name=value`, recorded as a
-   `Result` keyed by the toolchain's fingerprints ([measurement.md](measurement.md)).
+   `Result` keyed by the toolchain's fingerprints ([records.md](records.md)).
    Nothing is rewritten that Verilator, Yosys, OpenROAD or ChampSim already do.
 9. **Agents are first-class callers.** A script or an agent drives Flux through the same CLI
    a person uses: `flux task run --json` hands back the answer, `flux ask` starts from a
@@ -98,8 +98,7 @@ What a document cannot say is a **command beside it**, in the box it belongs to:
 | layer | doc | packages |
 |---|---|---|
 | the loop | [usage-guide.md](usage-guide.md) | `core/loop` |
-| measurement | [measurement.md](measurement.md), [calibration.md](calibration.md) | `core/loop` (run_tool, fingerprints, cache), `core/stores` (`Result`) |
-| the stores | [stores.md](stores.md) | `core/stores`, `mentor/records` |
+| records and measurement | [records.md](records.md) | `core/stores`, `mentor/records`, `core/loop` (run_tool, fingerprints, cache, calibration) |
 | agents and scripts | [agent-surface.md](agent-surface.md) | `interfaces/cli`, `core/loop` |
 
 **The dependency rule.** `core/` and `mentor/` never import an application. `interfaces/` may. An
@@ -184,4 +183,3 @@ generators know.
   not here.
 - It does not ship hand-written designs, pre-generated RTL, or a remembered constant that
   steers a design.
-- It does not model training; the IR leaves room for it.

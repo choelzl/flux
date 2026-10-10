@@ -91,7 +91,7 @@ Say only what is yours; the rest is inferred.
     agent's options beside (`plan: {by: claude, session: pass}`, `select: {by: claude,
     finalists: 2}`, `knowledge: {digest: opencode, files: [...]}`); an agent of your own is
     `by: {command: [...], output: text}`. A coding agent answers any box but test and measure,
-    checked by the loop, falling back to the rules half (docs/design-agent-loop.md);
+    checked by the loop, falling back to the rules half (docs/agent-surface.md);
     `session: pass` keeps one agent session per box for the pass
     (resumed turn after turn), `session: turn` (the default) is a fresh agent every turn. A
     generate agent's span is fixed, not set: one session per part until the part is admitted
