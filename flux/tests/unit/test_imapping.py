@@ -264,37 +264,6 @@ def test_big_loop_coordination_never_worsens_the_front():
     assert coordinated, "coordination rounds produced no new pairs"
 
 
-def test_simulator_agrees_exactly_where_a_scheduler_cannot_help():
-    """On traffic with no scheduling freedom the simulator and the analytic law agree exactly (D394)."""
-    from flux_imapping import BankHash, simulate_traffic, xbar_full
-    from flux_imapping.conflict import run_traffic
-    mem = MEM
-    t = TensorLayout(r=8, c=16, l=1, mode=Mode.Loop_Row_Col, base=0)
-    h = BankHash(mapping=Modulo(0), bank_bits=mem.m)
-    a = TileAccess(layout=t, r0=0, c0=0, l0=0, rt=8, ct=4, lt=1, ports=4)
-    steps = [[a]]
-    analytic = run_traffic(steps, mem, lambda l: h, fabric=xbar_full(mem.banks))
-    sim = simulate_traffic(steps, mem, lambda l: h, fabric=xbar_full(mem.banks))
-    assert sim.cycles == analytic.cycles == 2      # 8 rows through 4 ports
-    assert sim.rows == analytic.rows == 8
-
-
-def test_simulator_is_never_more_optimistic_than_the_analytic_bound():
-    """sim >= analytic on real traffic: the greedy arbiter cannot beat the perfect scheduler the law assumes."""
-    from flux_imapping import cross_check
-    mem = MEM
-    train, holdout = train_holdout(3, n_train=1, n_holdout=1, ops=3)
-    fabric = next(f for f in generate_fabrics(mem.m) if f.name == "hier-4x8")
-    for sol in catalog(mem):
-        if sol.name not in ("S1-xor-global", "S9-ab-stagger"):
-            continue
-        sc = score(sol, fabric, train, holdout, mem)
-        cc = cross_check(sc, train, holdout, mem)
-        assert cc["sim_latency"] >= cc["analytic_latency"] - 1e-9, sol.name
-        assert cc["sim_throughput"] <= cc["analytic_throughput"] + 1e-9, sol.name
-        assert cc["latency_gap_pct"] < 100.0, "greedy should not be catastrophically off"
-
-
 def test_run_study_end_to_end_without_model():
     study = run_study(seed=1, ops=2, climb_rounds=5, llm_rounds=0)
     # >= 6 policies x 4 fabrics: every design point is a pair, named as one
@@ -321,16 +290,3 @@ def test_the_synth_stage_refuses_a_fabric_of_no_known_family():
         _family_of(replace(xbar_full(MEM.banks), name="mesh-4x4"))
     with pytest.raises(ValueError, match="no family"):
         _family_of(replace(xbar_full(MEM.banks), name="fly-r8"))
-
-
-def test_the_study_names_no_balanced_pick_of_its_own():
-    """One balanced pick per report: the run's decision (D878). The study's conclusion keeps the
-    corners and the consensus fabric, and its record read-back names the decision."""
-    from flux_imapping.flow import _balanced_pick, conclude
-
-    train, holdout = train_holdout(1, ops=2)
-    scored = [score(s, f, train, holdout, MEM) for s in catalog(MEM)[:3] for f in generate_fabrics(MEM.m)[:2]]
-    c = conclude(scored, pareto_front(scored))
-    assert "balanced_pick" not in c and "knee_rank" not in c and c["latency_corner"]["pair"]
-    said = _balanced_pick({"decision": "S1-xor-global + ring-16", "holdout_latency": 3.5})
-    assert said == "an earlier run's balanced pick: S1-xor-global + ring-16 (3.50 cy)"

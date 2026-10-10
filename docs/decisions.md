@@ -583,3 +583,13 @@ the topics above.
   - **Helpers out:** `fenced_module`, which only its test used, is gone. `sv_refusal`, used only by macarray, moved to macarray's `invent.py`.
   - **One NLU copy:** the NLU's seven operator folders hold a four-line launcher for the NLU's own `rtl.py` instead of seven copies of it. Their documents are unchanged, and the NLU folder stays self-contained.
   - **Why not ORFS's flow:** it would be shorter only at 15–35× the time per design (17 s / 49 s against 1.1 s). The two calls `rtl.py` makes already read ORFS's own platform files.
+- **D957: application code nothing reached is removed, and npu_gemm's two scripts share one evaluation.**
+  - **npu_gemm:**
+    - the ZigZag and Timeloop Mapping-IR translators and ZigZag's `mapping_regime`, which fed the calibration store D954 removed. Nothing passed a mapping: each tool now searches its own, and a candidate carrying one is refused saying so.
+    - Timeloop's unused `spatial_dim` argument.
+    - `measure.py` now calls `evaluate.py`'s `evaluate()` and adds only its area estimate.
+  - **prefetcher:** `ChampSimEvaluator`. `bingo.py` and `champsim.py` call the simulator directly.
+  - **macarray:** what was left of the old in-process study (`Scored`, `decide`, `frontier`, `spread`, `gmacs_per_mm2`, `measure_one`, `tools_missing`, `verify()`, `DEFAULT`, `PIPELINES`). With it went the ABI's `preflight.py`, whose only user it was.
+  - **interconnect_mapping:** `simulate.py` (a cross-check no step called), the unwired record read-back, and unused `to_dict`/`describe` helpers.
+  - **Core:** the ABI's unused `ensure_binary`, `clone`, `build_step` and `ToolSource`; `flux_cache`'s `ToolchainBaseline`, used by tests only; and the configurator's code for evaluator-stage catalog entries and their document keys (D954 left nothing that used it).
+  - **Kept:** the adapters' fallback to the bundled reference accelerator when given no architecture, since the live and conformance tests use it as their fixed reference. Also the ABI's `Constraint` and `Roofline`, which are parts of every stored `Result`.

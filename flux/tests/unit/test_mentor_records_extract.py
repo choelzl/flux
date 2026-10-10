@@ -71,22 +71,6 @@ def test_records_swallow_unwritable_logbooks(tmp_path):
     assert r.known(stage="analytic", metric="m") == []        # no record, no crash
 
 
-def test_imapping_run_records_and_reads_back(tmp_path):
-    from flux_imapping.flow import _record_context
-    from flux_records import Records
-    from imapping_fixtures import identity, run_study
-
-    db = str(tmp_path / "im.db")
-    study = run_study(seed=2, ops=2, climb_rounds=0, coordination_rounds=0, db=db)
-    r = Records(db, objective=identity(study.problem, db), name=study.problem.task.id)
-    assert r.resumed
-    known = r.known(stage="analytic", metric="holdout_throughput")
-    assert len(known) >= 24 and "fabric" in known[0][0]
-    ctx = _record_context(r)
-    assert "WHAT THE RECORD SHOWS" in ctx and "rows/cy" in ctx
-    assert "balanced pick" in ctx
-
-
 def test_records_known_honours_the_metric_direction(tmp_path):
     """`higher_is_better=False` flips both the per-key pick and the order, for latency or area."""
     db = str(tmp_path / "dir.db")

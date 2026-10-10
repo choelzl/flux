@@ -19,8 +19,7 @@ Deliberately narrow: a general translator would silently misrepresent hardware (
 - Port bandwidth comes from `attrs` (`_port_bandwidth_bits`). This matters: ZigZag caps spatial
   unrolling at (port bandwidth / operand precision), so a hardcoded bandwidth also caps the
   array and every wider array evaluates to the same latency.
-- `Candidate.mapping` may be `None` (ZigZag chooses the mapping and must say so,
-  docs/evaluator-abi.md) or an inline Mapping IR dict, translated by mapping_translator.py.
+- ZigZag chooses the mapping and must say so (docs/evaluator-abi.md); no Mapping IR (D957).
 
 Anything else -- zero or several compute nodes, an unknown hierarchy `class`, a compute node
 without `attrs.dims` -- raises NotExpressibleError.

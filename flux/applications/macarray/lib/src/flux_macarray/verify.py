@@ -14,10 +14,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .rtl_check import Check, Golden
+    from .rtl_check import Golden
 
 from .config import PeConfig, Shape
-from .rtl import Design
 
 DEFAULT_WORKLOAD = (Path(__file__).resolve().parents[5] / "core" / "ir" / "workload" /
                     "examples" / "mlp-gemm0.yaml")
@@ -94,14 +93,4 @@ def pe_golden(shape: Shape, cfg: PeConfig, vectors: list[dict[str, Any]]) -> "Go
                             + "sum_i a_i * w_i."))
 
 
-def verify(design: Design, vectors: list[dict[str, Any]], *, timeout_s: float = 180.0) -> "Check":
-    """Verilator on the generated PE against the golden vectors via `check_rtl`, which also
-    refuses a design whose cycle count differs from its claim."""
-    from .rtl_check import check_rtl
-
-    return check_rtl(design.source, pe_golden(design.shape, design.config, vectors),
-                     module=design.module_name, extra_sources=design.extra_sources or None,
-                     timeout_s=timeout_s)
-
-
-__all__ = ["DEFAULT_WORKLOAD", "golden_vectors", "pe_golden", "shape_from_workload", "verify"]
+__all__ = ["DEFAULT_WORKLOAD", "golden_vectors", "pe_golden", "shape_from_workload"]

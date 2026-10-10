@@ -11,17 +11,15 @@ from pathlib import Path
 
 
 def test_champsims_two_faces_reach_the_same_runner():
-    """`simulate` is the measurement; the ABI adapter, `flux champsim run` (`study.measure`) and
-    the no-prefetcher baseline all call it."""
+    """`simulate` is the measurement; `champsim.py run` (`study.measure`) and the no-prefetcher
+    baseline both call it (the ABI adapter went in D957: no script called it)."""
     import inspect
 
-    import champsim_tools.adapter as adapter
     import champsim_tools.baseline as baseline
     import champsim_tools.run as run
     import champsim_tools.study as study
 
-    assert adapter.simulate is run.simulate and study.simulate is run.simulate and baseline.simulate is run.simulate
-    assert "simulate(" in inspect.getsource(adapter.ChampSimEvaluator.evaluate)
+    assert study.simulate is run.simulate and baseline.simulate is run.simulate
     assert "simulate," in inspect.getsource(study.measure)
     assert "simulate(" in inspect.getsource(baseline.baseline_ipc)
 

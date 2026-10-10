@@ -408,19 +408,6 @@
     return fillText(t.run, t, row, auto, true);
   }
 
-  /** A catalog stage without `run` says its stage shape instead (e.g. `{evaluator: zigzag}`):
-      that shape, its strings filled like a command's. */
-  function fillShape(value, t, row, auto) {
-    if (typeof value === "string") return fillText(value, t, row, auto);
-    if (Array.isArray(value)) return value.map(function (v) { return fillShape(v, t, row, auto); });
-    if (value && typeof value === "object") {
-      var o = {};
-      for (var k in value) o[k] = fillShape(value[k], t, row, auto);
-      return o;
-    }
-    return value;
-  }
-
   /** The clock an RTL stage aims for when none is typed: an "at least N" on fmax_mhz, as ps. */
   function autoClock(state) {
     var lim = (state.objectives || []).filter(function (o) { return o.metric === "fmax_mhz" && o.label === "atleast"; })[0];
@@ -601,7 +588,7 @@
 
   function flowSeq(items) { return "[" + items.map(function (v) { return scalar(v, true); }).join(", ") + "]"; }
 
-  /** Any value in YAML's flow style (a stage shape's nested values). */
+  /** Any value in YAML's flow style (nested values too). */
   function inline(v, flow) {
     if (Array.isArray(v)) return "[" + v.map(function (x) { return inline(x, true); }).join(", ") + "]";
     if (v && typeof v === "object") return "{" + Object.keys(v).map(function (k) { return q(k, true) + ": " + inline(v[k], true); }).join(", ") + "}";
@@ -672,18 +659,12 @@
       return { name: String(c.name || "").trim() || "check" + (i + 1), run: fillRun(c, cat), tool: c.tool,
                count_re: isCustom(c.tool) ? String(c.count_re || "").trim() : "", timeout: String(c.timeout || "").trim() };
     });
-    var auto = { clock_ps: autoClock(state) }, docKeys = {};
+    var auto = { clock_ps: autoClock(state) };
     var stages = (state.stages || []).map(function (st, i) {
       var t = toolOf(st.tool, cat), custom = !t || isCustom(st.tool), cmd = fillRun(st, cat, auto), rep = reports(st, cat);
-      var shape = t && !custom && (t.run === undefined || t.run === null) && t.stage ? fillShape(t.stage, t, st, auto) : null;
       var gates = (st.gates || []).map(gateOf).filter(Boolean);
       var needs = custom ? list(st.needs) : (t.needs || []).slice();
-      if (shape && "needs" in shape) needs = [];       // the shape says its own needs
-      if (t && !custom && t.document) {
-        var d = fillShape(t.document, t, st, auto);
-        for (var key in d) if ((state.kept || []).indexOf(key) < 0) (docKeys[key] = docKeys[key] || []).push({ value: d[key], stage: String(st.name || "").trim() || "stage" + (i + 1) });
-      }
-      return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, shape: shape, tool: st.tool, reports: rep,
+      return { name: String(st.name || "").trim() || "stage" + (i + 1), command: cmd, tool: st.tool, reports: rep,
                metrics: rep.map(function (name) {
                  var dictionary = (st.dictMetrics || []).find(function (m) { return m.name.trim() === name; });
                  if (!dictionary) return (st.metricSpecs || []).find(function (m) { return m.name === name; }) || name;
@@ -695,7 +676,7 @@
                clock_ps: t && t.params && "clock_ps" in t.params ? paramValue(t, "clock_ps", st.params.clock_ps, auto) : null,
                timeout: String(st.timeout || "").trim() };
     });
-    return { checks: checks, stages: stages, objectives: objectives, document: docKeys };
+    return { checks: checks, stages: stages, objectives: objectives };
   }
 
   /** A box's value as the document holds it (D775: written into `flow` with its settings). */
@@ -774,7 +755,6 @@
     else if (state.partsMode === "decompose") out += "\nparts: decompose\n";
     else if (state.partsMode === "list" && list(state.parts).length) out += "\nparts: " + flowSeq(list(state.parts)) + "\n";
 
-    for (var dk in r.document) if (own(dk)) out += "\n" + q(dk) + ": " + inline(r.document[dk][0].value, false) + "\n";   // an evaluator's own keys
 
     if (r.objectives.length && own("objectives")) {
       out += "\nobjectives:                 # limits must hold; the rest decide, in order\n";
@@ -847,8 +827,7 @@
       F.push("  measure:                  # cheapest first");
       r.stages.forEach(function (st) {
         var L = [];
-        if (st.shape) for (var key in st.shape) L.push(q(key) + ": " + inline(st.shape[key], false));
-        else L.push("command: " + q(st.command || "(the command)"));
+        L.push("command: " + q(st.command || "(the command)"));
         if (st.metrics.length) L.push("metrics: " + inline(st.metrics, false));
         if (st.needs.length) L.push("needs: " + flowSeq(st.needs));
         if (st.estimate) {
@@ -905,16 +884,13 @@
     function add(f) { if (f && files.indexOf(f) < 0) files.push(f); }
     function cmd(c) { homeFiles(c).forEach(add); }
     r.checks.forEach(function (c) { cmd(c.run); });
-    r.stages.forEach(function (st) { if (!st.shape) cmd(st.command); if (st.estimate && st.estimate.command) cmd(st.estimate.command); });
+    r.stages.forEach(function (st) { cmd(st.command); if (st.estimate && st.estimate.command) cmd(st.estimate.command); });
     if ((state.flow || {}).generate === "command") cmd(state.generateCommand);
     var bp = state.baseline || {};
     if (bp.mode && bp.mode !== "off") {
       if (bp.source === "command") cmd(bp.command);
       if (bp.source === "file") add(String(bp.file || "").trim().replace(/^\{home\}\//, ""));
     }
-    for (var dkey in r.document) r.document[dkey].forEach(function (x) {
-      var m = /^\{home\}\/(.+)$/.exec(typeof x.value === "string" ? x.value : ""); if (m) add(m[1]);
-    });
     list(state.knowledgeFiles).forEach(add);
     return files;
   }
@@ -1027,13 +1003,6 @@
       if (last && (st.gates || []).length) warn("The last measurement's gate has nothing after it to hold back.");
     });
 
-    // an evaluator's document keys (its workload): one value per document
-    for (var key in r.document) {
-      var vals = r.document[key];
-      var differ = vals.filter(function (x) { return JSON.stringify(x.value) !== JSON.stringify(vals[0].value); });
-      if (differ.length) error("Measurements " + vals.map(function (x) { return "\"" + x.stage + "\""; }).join(", ") + " name different " + key + " files: one " + key + " per document.");
-    }
-
     // the clock an RTL measurement aims for
     var clocked = r.stages.filter(function (st) { return st.clock_ps !== null; });
     var fmax = (state.objectives || []).filter(function (o) { return o.metric === "fmax_mhz"; });
@@ -1112,7 +1081,7 @@
 
     var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run, STEP_OF.checks]; });
     r.stages.forEach(function (st) {
-      cmds.push(["measurement \"" + st.name + "\"", st.shape ? JSON.stringify(st.shape).replace(/[",:{}\[\]]/g, " ") : st.command, STEP_OF.measurements]);
+      cmds.push(["measurement \"" + st.name + "\"", st.command, STEP_OF.measurements]);
       if (st.estimate && st.estimate.command) cmds.push(["the estimate of \"" + st.name + "\"", st.estimate.command, STEP_OF.measurements]);
     });
     if (flow.generate === "command") cmds.push(["the design script", state.generateCommand, STEP_OF.flow]);
@@ -1452,7 +1421,7 @@
     });
     if (!gateOk) { s.checks = []; keep("gate", "a failure pattern (`fail_re`)"); }
 
-    // stages: a catalog tool, an evaluator, or a command of one's own
+    // stages: a catalog tool or a command of one's own
     var stagesOk = true;
     var rawStages = {};                          // what the document wrote: the loader adds patterns of its own
     (Array.isArray(raw.stages) ? raw.stages : []).forEach(function (x) { if (x && x.name) rawStages[x.name] = x; });
@@ -1477,17 +1446,6 @@
                      dictMetrics: (st.metrics || []).filter(function (m) { return m && m.type === "dict"; }).map(function (m) { return Object.assign({}, m); }),
                      metricSpecs: (st.metrics || []).filter(function (m) { return typeof m === "object" && m.type !== "dict"; }),
                      needs: (st.needs || []).join(", "), gates: [] };
-      } else if (st.evaluator) {
-        var ev = (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.stage && t.stage.evaluator === st.evaluator; })[0];
-        if (!ev) { stagesOk = false; return; }
-        var p = {};
-        for (var dk in ev.document || {}) {
-          var mm = /^\{([A-Za-z_]\w*)\}$/.exec(String(ev.document[dk]));
-          if (mm && typeof raw[dk] === "string") p[mm[1]] = shown(raw[dk]);
-          // D910: an inline value (a Workload IR mapping) is no file name: kept as written, never "[object Object]"
-          else if (mm && raw[dk] !== undefined && raw[dk] !== null) keep(dk, "an inline value, which the form names as a file");
-        }
-        row = { tool: ev.id, name: st.name, params: paramsOf(ev, p), metrics: "", needs: "", gates: [] };
       } else { stagesOk = false; return; }                         // measured by the world's own code
       var cuts = st.cutoff ? (Array.isArray(st.cutoff) ? st.cutoff : [st.cutoff]) : [];
       row.gates = cuts.map(function (c) {
@@ -1502,8 +1460,6 @@
       s.stages.push(row);
     });
     if (!stagesOk) { s.stages = []; keep("stages", "a stage measured by the world's code or read with its own patterns (`metrics_re`)"); }
-    if (raw.workload !== undefined && !s.stages.some(function (r) { var t = toolOf(r.tool, cat); return t && t.document && "workload" in t.document; }))
-      keep("workload", "no evaluator stage here writes it");
 
     // objectives: the labels the configurator has
     var objOk = true, rawObjs = Array.isArray(raw.objectives) ? raw.objectives : [];
@@ -1529,7 +1485,7 @@
     }
 
     Object.keys(raw).forEach(function (k) {
-      if (STATE_KEYS.indexOf(k) < 0 && k !== "workload") keep(k, k === "seeds" ? "the search's starting points" : "the configurator does not edit it");
+      if (STATE_KEYS.indexOf(k) < 0) keep(k, k === "seeds" ? "the search's starting points" : "the configurator does not edit it");
     });
     s.kept = kept;
     return { state: s, kept: kept, notes: notes };

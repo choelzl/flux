@@ -34,7 +34,7 @@ _SUPPORTED_SPARSITY_DISTRIBUTIONS = frozenset({"hypergeometric"})
 
 def flux_dims_to_timeloop_dims(op: dict[str, Any]) -> dict[str, str]:
     """The {flux_dim: timeloop_dim} mapping for one einsum op (batch -> N, reduction -> C,
-    output -> M). Shared with mapping_translator.py so both agree on dim names.
+    output -> M).
     """
     op_id = op.get("id", "<no id>")
 

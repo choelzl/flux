@@ -15,7 +15,6 @@ is labeled composed wherever it is printed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from .fabric import ROW_BITS, FabricModel
 
@@ -74,12 +73,6 @@ class PhysReport:
     meets_600mhz: bool
     detail: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
-        return {"block": self.block, "area_um2": self.area_um2,
-                "worst_slack_ps": self.worst_slack_ps,
-                "meets_600mhz": self.meets_600mhz, "detail": self.detail}
-
-
 @dataclass(frozen=True, slots=True)
 class PairScreen:
     """One pair's physical screen: its hash block, its fabric family's switching element,
@@ -92,15 +85,6 @@ class PairScreen:
     @property
     def worst_slack_ps(self) -> float:
         return min(self.hash.worst_slack_ps, self.element.worst_slack_ps)
-
-    @property
-    def meets_600mhz(self) -> bool:
-        return self.hash.meets_600mhz and self.element.meets_600mhz
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"hash": self.hash.to_dict(), "element": self.element.to_dict(),
-                "composed_um2": self.composed_um2}
-
 
 def screen_block(source: str, top: str, label: str,
                  timeout_s: float = 300.0) -> PhysReport:

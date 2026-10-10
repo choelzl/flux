@@ -13,13 +13,12 @@ from .conflict import BankHash, intra_operand, shared_cycle
 from .fabric import butterfly, generate_fabrics, xbar_full
 from .flow import certify, fit_fabric, mapping_loop, pareto_front, score
 from .model import Memory, Mode, TensorLayout, TileAccess
-from .simulate import cross_check, simulate_traffic
 from .solutions import catalog, injective, swizzle_for
 from .workloads import Workload, generate, train_holdout
 
 __all__ = [
     "BankHash", "Memory", "Mode", "TensorLayout", "TileAccess", "Workload", "butterfly", "catalog", "certify", "cross_check",
     "fit_fabric", "generate", "generate_fabrics", "injective", "intra_operand", "mapping_loop",
-    "pareto_front", "score", "shared_cycle", "simulate_traffic", "swizzle_for", "train_holdout",
+    "pareto_front", "score", "shared_cycle", "swizzle_for", "train_holdout",
     "xbar_full",
 ]

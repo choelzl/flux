@@ -10,16 +10,14 @@ from __future__ import annotations
 
 import os
 import shlex
-import shutil
 import subprocess
-import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Mapping
 
-__all__ = ["TAIL_CHARS", "ToolRun", "ToolSource", "build_step", "clone", "ensure_binary", "run_tool",
+__all__ = ["TAIL_CHARS", "ToolRun", "run_tool",
            "tails"]
 
 TAIL_CHARS = 4000
@@ -53,15 +51,6 @@ def tails(proc: Any, *, stdout: bool = True, stderr: bool = True, chars: int = T
     if stderr:
         parts.append(f"--- stderr (tail) ---\n{(proc.stderr or '')[-chars:]}")
     return "\n".join(parts)
-
-
-def ensure_binary(name: str, *, hint: str = "", error: type[Exception] = RuntimeError) -> str:
-    """The absolute path of `name` on PATH, or `error` naming what is missing and how to
-    get it -- an adapter refuses loudly before spending anything (docs/evaluator-abi.md)."""
-    found = shutil.which(name)
-    if found is None:
-        raise error(f"{name!r} not found on PATH" + (f" -- {hint}" if hint else ""))
-    return found
 
 
 def _decode(chunks: list[bytes]) -> str:
@@ -190,61 +179,3 @@ def _end_group(proc: subprocess.Popen) -> None:
         proc.wait(5)
     except (subprocess.TimeoutExpired, OSError):
         pass
-
-
-def clone(url: str, into: Path, *, what: str, timeout_s: float, ref: str | None = None,
-          shallow: bool = True) -> Path:
-    """`git clone` of `url` into `into` (shallow by default; `ref` as `--branch` when given), a
-    failure raised as RuntimeError naming `what` and quoting the tail (D437)."""
-    cmd = ["git", "clone"] + (["--depth", "1"] if shallow else []) \
-        + (["--branch", ref] if ref else []) + [url, str(into)]
-    run = run_tool(cmd, cwd=into.parent, timeout_s=timeout_s, what=f"git clone of {what}")
-    if not run.ok:
-        raise RuntimeError(f"git clone of {what} failed (exit={run.returncode}).\n"
-                           f"{run.tail(stdout=False)}")
-    return into
-
-
-def build_step(cmd: list[str], *, cwd: Path, what: str, timeout_s: float, hint: str = "",
-               env: Mapping[str, str] | None = None, expect: Path | None = None) -> ToolRun:
-    """One build command in `cwd`; a non-zero exit, or a missing `expect` artifact after a
-    zero exit, is a RuntimeError naming `what`, the `hint` (what the machine needs on PATH)
-    and the tool's tail (D437)."""
-    run = run_tool(cmd, cwd=cwd, timeout_s=timeout_s, env=env, what=what)
-    if not run.ok or (expect is not None and not expect.exists()):
-        raise RuntimeError(f"{what} failed (exit={run.returncode})"
-                           + (f" — {hint}" if hint else "") + f"\n{run.tail()}")
-    return run
-
-
-def _paths_exist(artifact: Any) -> bool:
-    items = artifact if isinstance(artifact, (tuple, list)) else (artifact,)
-    return all(p.exists() for p in items if isinstance(p, Path))
-
-
-@dataclass
-class ToolSource:
-    """A tool obtained once per process -- cloned and built, compiled, or handed over by the
-    environment -- under one lock, and reused while its artifact still exists (D437).
-    `build(work_dir)` returns the artifact: a `Path`, a tuple of
-    paths, or anything else (`valid` then says whether a memoised one still stands)."""
-
-    name: str
-    build: Callable[[Path], Any]
-    valid: Callable[[Any], bool] = _paths_exist
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
-    _artifact: Any = field(default=None, repr=False)
-    work_dir: Path | None = field(default=None, repr=False)
-
-    def ensure(self, *, provided: Callable[[], Any | None] | None = None) -> Any:
-        """The artifact: the memoised one when it still stands, else what `provided()` hands
-        over (an environment-supplied binary), else a fresh build in a new temp dir."""
-        with self._lock:
-            if self._artifact is not None and self.valid(self._artifact):
-                return self._artifact
-            got = provided() if provided is not None else None
-            if got is None:
-                self.work_dir = Path(tempfile.mkdtemp(prefix=f"flux-{self.name}-build-"))
-                got = self.build(self.work_dir)
-            self._artifact = got
-            return got

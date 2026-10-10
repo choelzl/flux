@@ -1,14 +1,12 @@
 """Timeloop+Accelergy backend adapter implementing the Flux Evaluator ABI (docs/evaluator-abi.md).
 
 Workload IR translation is unconditional. Architecture IR translation is narrow (single `meshX`
-spatial dimension, uniform memories; see architecture_translator.py). Mapping IR translation
-needs a translated Architecture IR and covers temporal loop order only; spatial mapping stays
-fixed by the architecture's `maximize_dims` constraint.
+spatial dimension, uniform memories; see architecture_translator.py). Timeloop's own mapper
+searches the mapping: `Candidate.mapping` must be `None` (D957).
 
 Multi-op workloads (D62): Timeloop has no multi-layer problem shape, so each `einsum` op is
 its own invocation against the same architecture, aggregated by `_aggregate_stats`: cycles and
 energy add up, area is asserted identical across layers, utilization is cycles-weighted.
-Explicit Mapping IR is per-op, so `Candidate.mapping` must be `None` for multi-op workloads.
 
 Sparsity (D78) uses Timeloop's `sparse_optimizations`/`densities`, from `op["sparsity"]` and a
 memory level's `attrs.sparse_optimizations`. Single-op workloads only: tensor names resolve to
@@ -50,10 +48,6 @@ from flux_evaluator_abi import (
 
 from .architecture_translator import architecture_ir_to_timeloop_architecture_yaml
 from .errors import NotExpressibleError
-from .mapping_translator import (
-    mapping_ir_to_timeloop_constraints,
-    spatial_dim_for_timeloop_architecture,
-)
 from .workload_translator import (
     einsum_op_to_timeloop_instance,
     flux_tensor_to_timeloop_dataspace,
@@ -64,12 +58,10 @@ _REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 _DEFAULT_IMAGE = "timeloopaccelergy/accelergy-timeloop-infrastructure"
 
 
-def _driver_script(*, include_mapping_constraints: bool, prefix: str = "/work") -> str:
+def _driver_script(*, prefix: str = "/work") -> str:
     """The script both runners execute. `prefix` is the container mount point for the Docker path
     and the working directory for the local one."""
     names = ["arch.yaml", "components.yaml", "variables.yaml", "mapper.yaml", "problem.yaml"]
-    if include_mapping_constraints:
-        names.append("mapping_constraints.yaml")
     files_literal = ", ".join(f'"{prefix}/{n}"' for n in names)
     return (
         "import timeloopfe.v4 as tl\n\n"
@@ -269,14 +261,9 @@ class TimeloopEvaluator(SequentialBatch):
                 f"workload {candidate.workload.get('id')!r} has no 'einsum' ops; Timeloop "
                 "cannot evaluate data_dependent or compute_kernel ops (docs/decisions.md D1)."
             )
-        if len(einsum_ops) > 1 and candidate.mapping is not None:
-            raise NotExpressibleError(
-                f"workload {candidate.workload.get('id')!r} has {len(einsum_ops)} einsum ops "
-                "and an explicit Candidate.mapping — Mapping IR is inherently per-op "
-                "(for_op: <id>), so which op an explicit mapping applies to is ambiguous across "
-                "several (docs/decisions.md D62). Pass Candidate.mapping=None for a multi-op "
-                "workload to let Timeloop's own mapper search each layer independently."
-            )
+        if candidate.mapping is not None:
+            raise NotExpressibleError("Mapping IR is not translated (D957): leave Candidate.mapping None "
+                                      "and Timeloop's mapper searches it")
         arch_declares_sparsity = isinstance(candidate.arch, dict) and _arch_declares_sparse_optimizations(
             candidate.arch
         )
@@ -299,13 +286,6 @@ class TimeloopEvaluator(SequentialBatch):
         workload_hash = flux_ir.content_hash(candidate.workload)
 
         if candidate.arch is None:
-            if candidate.mapping is not None:
-                raise NotExpressibleError(
-                    "TimeloopEvaluator v0.1 only translates Mapping IR when Candidate.arch is "
-                    "also an inline Architecture IR dict (mapping_translator.py needs it to "
-                    "validate target level names); leave Candidate.mapping as None to use the "
-                    "bound reference accelerator+mapper."
-                )
             all_stats = [
                 self._run_timeloop(overrides, workload_hash) for overrides in instance_overrides_per_op
             ]
@@ -313,15 +293,6 @@ class TimeloopEvaluator(SequentialBatch):
             arch_desc = str(_REFERENCE_DIR)
             map_desc = "timeloop-auto-generated"
         elif isinstance(candidate.arch, dict):
-            if candidate.mapping is not None and not isinstance(candidate.mapping, dict):
-                raise NotExpressibleError(
-                    "TimeloopEvaluator v0.1 requires an inline Mapping IR dict as "
-                    "Candidate.mapping (no result-store hash resolution yet), or None to let "
-                    "Timeloop's own mapper search unconstrained."
-                )
-            timeloop_spatial_dim = spatial_dim_for_timeloop_architecture(
-                candidate.mapping, candidate.arch, einsum_ops[0]
-            )
             # Only resolved when needed, so a workload whose tensor names don't resolve to
             # Inputs/Weights/Outputs still translates when it declares no sparsity.
             tensor_name_map = (
@@ -330,23 +301,16 @@ class TimeloopEvaluator(SequentialBatch):
                 else None
             )
             arch_yaml_text = architecture_ir_to_timeloop_architecture_yaml(
-                candidate.arch, spatial_dim=timeloop_spatial_dim, tensor_name_map=tensor_name_map,
+                candidate.arch, tensor_name_map=tensor_name_map,
             )
             arch_hash = flux_ir.content_hash(candidate.arch)
 
-            if candidate.mapping is None:
-                mapping_constraints = None
-                map_desc = "timeloop-auto-generated"
-            else:
-                mapping_constraints = mapping_ir_to_timeloop_constraints(
-                    candidate.mapping, candidate.arch, einsum_ops[0]
-                )
-                map_desc = f"translated:{flux_ir.content_hash(candidate.mapping)}"
+            map_desc = "timeloop-auto-generated"
 
             all_stats = [
                 self._run_timeloop(
                     overrides, workload_hash,
-                    arch_yaml_text=arch_yaml_text, mapping_constraints=mapping_constraints,
+                    arch_yaml_text=arch_yaml_text,
                 )
                 for overrides in instance_overrides_per_op
             ]
@@ -367,7 +331,6 @@ class TimeloopEvaluator(SequentialBatch):
         workload_hash: str,
         *,
         arch_yaml_text: str | None = None,
-        mapping_constraints: dict[str, Any] | None = None,
     ) -> dict[str, float]:
         with tempfile.TemporaryDirectory(prefix=f"flux-timeloop-{workload_hash[:12]}-") as tmp:
             work = Path(tmp)
@@ -383,19 +346,11 @@ class TimeloopEvaluator(SequentialBatch):
             problem["problem"]["instance"].update(instance_overrides)
             (work / "problem.yaml").write_text(yaml.safe_dump(problem, sort_keys=False))
 
-            if mapping_constraints is not None:
-                (work / "mapping_constraints.yaml").write_text(
-                    yaml.safe_dump({"mapspace_constraints": mapping_constraints}, sort_keys=False)
-                )
-
             (work / "outputs").mkdir()
 
             if self.use_local:
                 (work / "driver.py").write_text(
-                    _driver_script(
-                        include_mapping_constraints=mapping_constraints is not None,
-                        prefix=str(work),
-                    )
+                    _driver_script(prefix=str(work))
                 )
                 home = _materialise_accelergy_env(work)
                 env = dict(os.environ, HOME=str(home))
@@ -405,7 +360,7 @@ class TimeloopEvaluator(SequentialBatch):
                 )
             else:
                 (work / "driver.py").write_text(
-                    _driver_script(include_mapping_constraints=mapping_constraints is not None)
+                    _driver_script()
                 )
                 proc = subprocess.run(
                     [

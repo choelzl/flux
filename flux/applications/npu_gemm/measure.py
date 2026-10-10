@@ -1,29 +1,22 @@
-"""Measure one architecture: the app-local ZigZag tools for the cycles and energy
-of the workload on it, and a first-order area estimate at 28 nm. Prints `name=value` lines.
-`python measure.py ARCH WORKLOAD`."""
+"""Measure one architecture: ZigZag's cycles and energy of the workload on it (evaluate.py), and
+a first-order area estimate at 28 nm. Prints `name=value` lines. `python measure.py ARCH WORKLOAD`."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
-
 import yaml
-from flux_evaluator_abi import Budget, Candidate
-from zigzag_tools import ZigZagEvaluator
+
+from evaluate import evaluate
 
 MAC_MM2 = 0.004             # one int8 multiply-accumulate with its registers
 SRAM_MM2_PER_KB = 0.005     # the global buffer's SRAM
 
-arch = yaml.safe_load(open(sys.argv[1]))
-workload = yaml.safe_load(open(sys.argv[2]))
-result = ZigZagEvaluator().evaluate(Candidate(workload=workload, arch=arch), Budget(),
-                                           frozenset({"latency_cycles", "energy_pj"}))
-if not result.validity.ok:                  # D897: an invalid mapping measured nothing; the stage refuses it
-    sys.exit("not valid: " + "; ".join(f"{v.kind} {v.detail}".strip() for v in result.validity.violations))
+arch = yaml.safe_load(Path(sys.argv[1]).read_text())
+got = evaluate(arch, yaml.safe_load(Path(sys.argv[2]).read_text()))
 levels = {h["level"]: h["attrs"] for h in arch["hierarchy"]}
 macs = 1
 for n in levels["pe_array"]["dims"].values():
     macs *= int(n)
-print(f"latency_cycles={result.metrics['latency_cycles'].value:g}")
-print(f"energy_pj={result.metrics['energy_pj'].value:g}")
+print(f"latency_cycles={got['latency_cycles']:g}")
+print(f"energy_pj={got['energy_pj']:g}")
 print(f"area_mm2={macs * MAC_MM2 + levels['gbuf']['size_kb'] * SRAM_MM2_PER_KB:.4f}")

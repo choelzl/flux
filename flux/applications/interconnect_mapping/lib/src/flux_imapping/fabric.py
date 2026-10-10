@@ -56,13 +56,6 @@ class FabricModel:
                 worst = max(worst, math.ceil(need / cap))
         return worst
 
-    def describe(self) -> str:
-        if not self.levels:
-            return f"{self.name}: non-blocking"
-        lv = ", ".join(f"2^{b} groups x{c}" for b, c in self.levels)
-        return f"{self.name}: capacity tree [{lv}]"
-
-
 def xbar_full(banks: int, clients: int = CLIENT_PORTS) -> FabricModel:
     """Every client reaches every bank privately: nothing internal shared, max area."""
     # pipe_latency=4 (D383): a single-cycle 52:1 x 128b selector misses the 1667 ps clock

@@ -41,7 +41,7 @@ class Study:
     problem: Any = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"scored": [s.to_dict() for s in self.scored], "front": [s.pair_name for s in self.front],
+        return {"scored": [s.pair_name for s in self.scored], "front": [s.pair_name for s in self.front],
                 "certificates": [{"solution": c.solution, "mode": c.mode, "tile": list(c.tile), "holds": c.holds}
                                  for c in self.certificates],
                 "refused": list(self.refused), "notes": list(self.notes)}

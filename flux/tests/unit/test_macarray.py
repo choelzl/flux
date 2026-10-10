@@ -14,10 +14,7 @@ import pytest
 
 FLUX_ROOT = Path(__file__).resolve().parents[2]
 
-from flux_macarray import (  # noqa: E402
-    DEFAULT, MULTIPLIERS, PIPELINES, REDUCERS, PeConfig, Score, Scored, Shape, decide, frontier,
-    generate, golden_vectors, spread,
-)
+from flux_macarray import MULTIPLIERS, REDUCERS, PeConfig, Score, Shape, generate, golden_vectors  # noqa: E402
 from flux_macarray.invent import refusal_reason  # noqa: E402
 
 SHAPE = Shape(lanes=8, in_bits=8, w_bits=8, accumulate=True)
@@ -75,40 +72,19 @@ def test_golden_vectors_cover_the_corners_and_never_overflow():
 
 # ---- the objective -------------------------------------------------------------------------
 
-def _pt(label: str, area: float, path_ps: float, period: float = 1000.0) -> Scored:
-    m, r, p = label.split("-")
-    return Scored(config=PeConfig(m, r, int(p[1:])), provenance="t",
-                  score=Score(area_um2=area, worst_slack_ps=period - path_ps,
-                              clock_period_ps=period, power_w=0.01, cell_count=100,
-                              latency_cycles=int(p[1:]), flow_depth="synthesis"))
-
-
 def test_fmax_is_the_measured_path_not_the_constraint():
-    s = _pt("behavioral-tree-p0", 1000, 1250).score
+    s = Score(area_um2=1000, worst_slack_ps=1000 - 1250, clock_period_ps=1000, power_w=0.01, cell_count=100,
+              latency_cycles=0, flow_depth="synthesis")
     assert s.path_ps == 1250 and s.fmax_mhz == pytest.approx(800.0)
-    assert not s.meets(1000) and s.meets(800)
 
 
-def test_the_decision_is_the_smallest_pe_that_makes_the_target():
-    pts = [_pt("behavioral-tree-p0", 1000, 1250), _pt("booth4-csa-p1", 1300, 900),
-           _pt("wallace-csa-p2", 1600, 600), _pt("array-chain-p0", 900, 2000)]
-    pick, how = decide(pts, 1000.0)
-    assert pick.label == "booth4-csa-p1" and "smallest" in how
-    pick, how = decide(pts, 2000.0)
-    assert pick.label == "wallace-csa-p2" and "nothing reaches" in how
-    pick, how = decide(pts, None)
-    assert pick.label == "wallace-csa-p2"
+def verify(design, vectors):
+    """What `steps check` does: Verilator on the PE against its golden model, the latency checked."""
+    from flux_macarray.rtl_check import check_rtl
+    from flux_macarray.verify import pe_golden
 
-
-def test_the_frontier_is_fmax_against_area():
-    pts = [_pt("behavioral-tree-p0", 1000, 1250), _pt("booth4-csa-p1", 1300, 900),
-           _pt("wallace-csa-p2", 1600, 600), _pt("array-chain-p0", 900, 2000),
-           _pt("array-tree-p0", 1100, 1300)]           # dominated: bigger and slower
-    front = frontier(pts)
-    assert [p.label for p in front] == ["array-chain-p0", "behavioral-tree-p0",
-                                         "booth4-csa-p1", "wallace-csa-p2"]
-    picked = spread(front, 2)
-    assert [p.label for p in picked] == ["array-chain-p0", "wallace-csa-p2"]
+    return check_rtl(design.source, pe_golden(design.shape, design.config, vectors), module=design.module_name,
+                     extra_sources=design.extra_sources or None, timeout_s=180)
 
 
 def test_the_shape_derives_the_accumulator_width_never_chooses_it():
@@ -134,7 +110,6 @@ def test_an_invented_multiplier_s_rules_are_enforced_before_any_tool():
 @pytest.mark.parametrize("cfg", [PeConfig("array", "chain", 1), PeConfig("booth4", "csa", 2),
                                  PeConfig("wallace", "tree", 3)])
 def test_generated_designs_pass_their_golden_vectors_at_the_claimed_latency(cfg):
-    from flux_macarray import verify
 
     d = generate(cfg, SHAPE)
     v = verify(d, golden_vectors(SHAPE, seed="t"))
@@ -151,7 +126,6 @@ def test_a_pe_that_lies_about_its_latency_is_refused_and_a_wrong_multiplier_says
     from dataclasses import replace
 
     from rtl import check_rtl
-    from flux_macarray import verify
     from flux_macarray.invent import multiplier_golden
 
     cfg = PeConfig("array", "chain", 2)
@@ -169,7 +143,6 @@ def test_a_pe_wrong_on_a_sliver_of_one_lane_is_refused():
     only when a3[6:4] == 3'b101 and w3[0]; random rows with every lane its own value catch it."""
     from dataclasses import replace
 
-    from flux_macarray import verify
 
     d = generate(PeConfig("behavioral", "tree", 0), SHAPE)
     assert "  assign acc = t3_0;\n" in d.source

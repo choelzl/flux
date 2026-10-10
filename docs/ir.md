@@ -129,10 +129,9 @@ freely otherwise.
 
 v0.1 scope actually implemented: a flat (single-level) per-operand loop order plus one spatial
 split, for a single einsum op against a single-spatial-dim architecture. The search engines that
-swept this representation went with D521; today the ZigZag and Timeloop adapters read it
-(`mapping_translator.py` in each) and nothing searches it -- the applications measure their own
-artifacts (generated SystemVerilog, a prefetcher configuration) rather than a Mapping IR
-document. Multi-level tiling, placement and `fusion` are schema-representable and unused.
+swept this representation went with D521, and the ZigZag and Timeloop adapters' translators of it
+with D957 (nothing passed a mapping): each tool searches its own mapping, and the applications
+measure their own artifacts (generated SystemVerilog, a prefetcher configuration). Multi-level tiling, placement and `fusion` are schema-representable and unused.
 
 ## Identity and hashing
 

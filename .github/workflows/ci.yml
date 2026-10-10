@@ -292,6 +292,5 @@ jobs:
           FLUX_TIMELOOP_LOCAL=1 nix develop --command python3 -m pytest \
             tests/integration/test_timeloop_adapter_live.py \
             tests/integration/test_timeloop_architecture_translation_live.py \
-            tests/integration/test_timeloop_mapping_translation_live.py \
             tests/integration/test_timeloop_sparsity_live.py \
             -q --tb=short

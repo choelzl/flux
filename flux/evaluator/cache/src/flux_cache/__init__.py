@@ -1,7 +1,6 @@
 """Files that sit beside a campaign store (D344), application-agnostic.
 
-  * Sidecars: calibration residuals, lessons, toolchain baseline, caches, all at `sidecar_path`.
-  * A toolchain baseline: which binaries produced the store's numbers, recorded once (D316).
+  * Sidecars: lessons, caches, all at `sidecar_path`.
   * A measurement cache keyed by (toolchain, identity), so a tool change makes stale entries
     unreachable (D340).
 """
@@ -14,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["MeasurementCache", "ToolchainBaseline", "sidecar_path"]
+__all__ = ["MeasurementCache", "sidecar_path"]
 
 #: One writer at a time for every cache file in this process (D747: passes running at once).
 _WRITING = threading.RLock()
@@ -26,50 +25,6 @@ def sidecar_path(db: str | Path, suffix: str) -> Path:
     The single place sidecar paths are spelled, so they cannot diverge.
     """
     return Path(db).with_suffix(f".{suffix.lstrip('.')}")
-
-
-class ToolchainBaseline:
-    """The tools a store's measurements were taken with, recorded once.
-
-    Stored per store, not per result: the build is a property of the run (D316).
-    """
-
-    def __init__(self, db: str | Path, fingerprint: dict[str, str]) -> None:
-        self.path = sidecar_path(db, "toolchain.json")
-        self.fingerprint = dict(fingerprint)
-
-    def recorded(self) -> dict[str, str]:
-        """What was recorded, or {} when nothing has been (which is not agreement)."""
-        if not self.path.exists():
-            return {}
-        try:
-            got = json.loads(self.path.read_text())
-        except (OSError, ValueError):
-            return {}
-        return got if isinstance(got, dict) else {}
-
-    def drift(self) -> list[str]:
-        """Tools whose current build differs from the recorded one, or [] if none was recorded.
-
-        Records the current fingerprint on first call, so a fresh store acquires a baseline rather
-        than reporting drift against nothing.
-        """
-        previous = self.recorded()
-        if not previous:
-            try:
-                self.path.write_text(json.dumps(self.fingerprint, indent=2, sort_keys=True))
-            except OSError:
-                pass
-            return []
-        return sorted(name for name, was in previous.items()
-                      if name in self.fingerprint and self.fingerprint[name] != was)
-
-    def accept(self) -> None:
-        """Adopt the current tools as this store's baseline."""
-        try:
-            self.path.write_text(json.dumps(self.fingerprint, indent=2, sort_keys=True))
-        except OSError:
-            pass
 
 
 class MeasurementCache:

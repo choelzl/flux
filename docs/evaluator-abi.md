@@ -112,9 +112,9 @@ adapter's job on top of it is exactly two things — translating an IR document 
 inputs, and wrapping the numbers in a `Result` (method, provenance, validity, escalation). What
 must never happen is a second implementation of the measurement itself, because then the same
 design measured through the two faces can disagree and nothing says which number is the silicon.
-`tests/unit/test_one_measurement_two_faces.py` pins it for the tool that has both faces:
-`champsim` (`ChampSimEvaluator.evaluate`, `measure` and the no-prefetcher baseline all reach
-`simulate`). OpenROAD has one face since D948: an RTL application's `rtl.py`.
+`tests/unit/test_one_measurement_two_faces.py` pins it for ChampSim: `champsim.py run`
+(`study.measure`) and the no-prefetcher baseline both reach `simulate`; its ABI adapter went in
+D957, as no script called it. OpenROAD has one face since D948: an RTL application's `rtl.py`.
 
 **Adapters, not forks.** Each adapter translates Flux IR to the tool's native config and parses
 its output back into `Result`. Where a mapping is inexpressible, the adapter fails loudly with

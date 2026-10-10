@@ -27,7 +27,7 @@ from flux_bankmap.mapping import XorFold
 from .conflict import BankHash, TrafficMetrics, intra_operand, run_traffic
 from .fabric import FabricModel, xbar_full
 from .model import BLOCK_OF, Memory, Mode, TensorLayout, TileAccess, VECTOR_MODES
-from .solutions import Solution, injective, solution_to_dict
+from .solutions import Solution, injective
 from .workloads import Workload
 
 
@@ -54,22 +54,6 @@ class Scored:
         """(A, B, C, -D) -- all minimized, judged on HOLDOUT, never train."""
         return (self.area_score, self.pad_fraction,
                 self.holdout.avg_latency, -self.holdout.throughput)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            **solution_to_dict(self.solution),
-            "pair": self.pair_name,
-            "fabric": {"name": self.fabric.name, "levels": list(self.fabric.levels),
-                       "note": self.fabric.note},
-            "train": {"avg_latency": self.train.avg_latency,
-                      "throughput": self.train.throughput,
-                      "conflict_limited": self.train.conflict_limited_requests},
-            "holdout": {"avg_latency": self.holdout.avg_latency,
-                        "throughput": self.holdout.throughput,
-                        "conflict_limited": self.holdout.conflict_limited_requests},
-            "pad_fraction": self.pad_fraction, "area_score": self.area_score,
-        }
-
 
 def _apply_transform(w: Workload, transform) -> Workload:
     """Re-place every tensor through the solution's transform (padding changes sizes,
@@ -452,45 +436,3 @@ def conclude(scored: list[Scored], front: list[Scored],
         "consensus_frontier_rows": fabric_rows[consensus],
         "never_on_front": losers,
     }
-
-
-# ---------------------------------------------------------------- the conclusion on record
-
-
-def _balanced_pick(c: dict) -> str | None:
-    """An earlier run's balanced pick: its decision (D878), or the study's own knee in a record
-    from before it had none."""
-    lat = c.get("holdout_latency")
-    said = f" ({lat:.2f} cy)" if isinstance(lat, (int, float)) else ""
-    if c.get("decision"):
-        return f"an earlier run's balanced pick: {c['decision']}" + said
-    if c.get("closest"):                                # D900: none met every limit; its nearest, not a decision
-        return f"an earlier run's balanced pick, short of a limit: {c['closest']}" + said
-    bal = (c.get("conclusion") or {}).get("balanced_pick") or {}
-    return (f"an earlier run's balanced pick: {bal['pair']} ({bal.get('latency', 0):.2f} cy)"
-            if bal.get("pair") else None)
-
-
-def _measured_earlier(r) -> list[str]:
-    return [f"measured earlier: {cand.get('policy')} + {cand.get('fabric')} reached {v:.2f} rows/cy"
-            for cand, v in r.known(stage="analytic", metric="holdout_throughput")[:3]]
-
-
-def record_readback():
-    """This study's read-back as a declared knowledge source. The pair's real knobs are the
-    policy and the fabric's name; depth and area follow from the name, so they are dropped
-    before pairing or no pair would count as controlled (D400)."""
-    from flux_knowledge import RecordReadback
-
-    return RecordReadback(stage="analytic", metric="holdout_throughput",
-                          knobs=("policy", "fabric"), metric_label="rows/cy on holdout", top=4,
-                          title="record: what earlier runs measured",
-                          conclusion=_balanced_pick, extra=_measured_earlier)
-
-
-def _record_context(records) -> str:
-    """The same text, rendered straight for this study's own callers and tests."""
-    from types import SimpleNamespace
-
-    text = record_readback().render(SimpleNamespace(records=records))
-    return text + "\n" if text else ""

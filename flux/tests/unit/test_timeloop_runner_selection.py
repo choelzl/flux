@@ -57,19 +57,10 @@ def test_availability_needs_both_the_binary_and_the_front_end(monkeypatch):
 
 def test_the_two_runners_execute_the_same_driver_under_different_roots():
     """Both paths run the same script; only where the files live differs (container mount vs. working directory)."""
-    docker = _driver_script(include_mapping_constraints=False)
-    local = _driver_script(include_mapping_constraints=False, prefix="/scratch/xyz")
+    docker = _driver_script()
+    local = _driver_script(prefix="/scratch/xyz")
 
     assert docker.replace("/work/", "/scratch/xyz/") == local
     assert "/work/problem.yaml" in docker and "/scratch/xyz/problem.yaml" in local
     # guards the guard: a prefix that never appeared would make the equality trivially true
     assert docker != local
-
-
-def test_mapping_constraints_reach_both_runners():
-    for prefix in ("/work", "/scratch/xyz"):
-        script = _driver_script(include_mapping_constraints=True, prefix=prefix)
-        assert f"{prefix}/mapping_constraints.yaml" in script
-        assert f"{prefix}/mapping_constraints.yaml" not in _driver_script(
-            include_mapping_constraints=False, prefix=prefix
-        )

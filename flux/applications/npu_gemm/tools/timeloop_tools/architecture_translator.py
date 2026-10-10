@@ -13,11 +13,8 @@ Scope and conventions:
   so a wrong input order silently builds a different tree. This translator does not reorder.
 - A synthesised `mac` (`class: intmac`) sits inside the compute Container. The PE spatial
   constraint block is fixed boilerplate matched to `reference/problem_base.yaml` (a property of
-  the workload-translation convention, not the hardware), except `maximize_dims`: `[[M, C]]`
-  by default, or `[[M]]`/`[[C]]` via `spatial_dim` so a Mapping IR's spatial choice constrains
-  the architecture too (D24).
-- `Candidate.mapping` may be None (unconstrained mapper) or an inline Mapping IR, whose temporal
-  side mapping_translator.py handles; `adapter.py` threads its spatial entry into `spatial_dim`.
+  the workload-translation convention, not the hardware), `maximize_dims: [[M, C]]`.
+- Timeloop's own mapper searches the mapping (no Mapping IR, D957).
 
 Returns YAML text: the `!Container`/`!Component` tags have no clean dict representation.
 
@@ -38,33 +35,22 @@ from .errors import NotExpressibleError
 
 _DATAWIDTH = 8  # matches reference/variables.yaml's DATAWIDTH
 
-# The only choices the fixed spatial-constraint boilerplate offers (see the module docstring).
-_MAXIMIZE_CANDIDATES = ("M", "C")
-
 
 _SUPPORTED_ACTION_OPTIMIZATION_TYPES = frozenset({"gating"})
 
 
 def architecture_ir_to_timeloop_architecture_yaml(
-    arch: dict[str, Any], *, spatial_dim: str | None = None,
+    arch: dict[str, Any], *,
     tensor_name_map: dict[str, str] | None = None,
 ) -> str:
     """Translate an Flux Architecture IR document into the literal text of a Timeloop
     architecture-YAML file, to be used alongside the vendored reference/{components,variables,
     mapper,problem_base}.yaml.
 
-    `spatial_dim`, if given, must be `"M"` or `"C"` (see mapping_translator.py's
-    `spatial_dim_for_timeloop_architecture()`) and forces `maximize_dims` to that single choice.
-
     `tensor_name_map` (from `flux_tensor_to_timeloop_dataspace`) maps Flux tensor names to
     Timeloop dataspaces; required only when a memory node declares `attrs.sparse_optimizations`
     (D78).
     """
-    if spatial_dim is not None and spatial_dim not in _MAXIMIZE_CANDIDATES:
-        raise NotExpressibleError(
-            f"spatial_dim={spatial_dim!r} must be one of {_MAXIMIZE_CANDIDATES!r} — the only "
-            "candidates this translator's fixed spatial-constraint boilerplate offers."
-        )
     arch_id = arch.get("id", "<no id>")
     hierarchy = arch.get("hierarchy", [])
 
@@ -94,13 +80,6 @@ def architecture_ir_to_timeloop_architecture_yaml(
                 f"architecture {arch_id!r}: compute node {compute.get('level')!r} dim "
                 f"{dim_name!r} has a non-positive or non-integer size {dim_size!r}."
             )
-    if len(dims) == 2 and spatial_dim is not None:
-        # On a 2-D array both C and M are already spatial: refuse rather than ignore the request.
-        raise NotExpressibleError(
-            f"architecture {arch_id!r}: spatial_dim={spatial_dim!r} was requested, but a 2-D "
-            "compute array fixes both spatial dims (C on meshX, M on meshY) — there is no "
-            "remaining spatial choice for a mapping to make."
-        )
 
     memory_nodes = [n for n in hierarchy if n.get("class") == "memory"]
     if not memory_nodes:
@@ -142,7 +121,7 @@ def architecture_ir_to_timeloop_architecture_yaml(
 
     dim_sizes = list(dims.values())
     if len(dims) == 1:
-        maximize_dims = f"[[{spatial_dim}]]" if spatial_dim is not None else "[[M, C]]"
+        maximize_dims = "[[M, C]]"
         spatial_lines = [
             f"    spatial: {{meshX: {dim_sizes[0]}}}",
             "    constraints:",

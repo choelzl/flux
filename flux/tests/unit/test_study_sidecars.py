@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from flux_cache import MeasurementCache, ToolchainBaseline, sidecar_path
+from flux_cache import MeasurementCache, sidecar_path
 
 TOOLS = {"openroad": "nix:aaa-openroad", "yosys": "nix:bbb-yosys"}
 MOVED = {"openroad": "nix:zzz-openroad", "yosys": "nix:bbb-yosys"}
@@ -25,42 +25,6 @@ def test_a_sidecar_sits_next_to_its_store(tmp_path, suffix, expected):
 
 
 # -- the toolchain baseline -------------------------------------------------------------------
-
-
-def test_a_fresh_store_acquires_a_baseline_rather_than_reporting_drift(tmp_path):
-    baseline = ToolchainBaseline(tmp_path / "s.db", TOOLS)
-    assert baseline.drift() == []
-    assert baseline.recorded() == TOOLS
-
-
-def test_the_same_tools_are_not_drift(tmp_path):
-    ToolchainBaseline(tmp_path / "s.db", TOOLS).drift()
-    assert ToolchainBaseline(tmp_path / "s.db", TOOLS).drift() == []
-
-
-def test_a_moved_tool_is_named(tmp_path):
-    ToolchainBaseline(tmp_path / "s.db", TOOLS).drift()
-    assert ToolchainBaseline(tmp_path / "s.db", MOVED).drift() == ["openroad"]
-
-
-def test_nothing_recorded_is_not_agreement(tmp_path):
-    """A store from before baselines existed is unlabelled, not reported as agreeing."""
-    assert ToolchainBaseline(tmp_path / "s.db", TOOLS).recorded() == {}
-
-
-def test_a_corrupt_baseline_does_not_stop_a_run(tmp_path):
-    path = sidecar_path(tmp_path / "s.db", "toolchain.json")
-    path.write_text("{ not json")
-    assert ToolchainBaseline(tmp_path / "s.db", TOOLS).drift() == []
-
-
-def test_a_baseline_can_be_accepted(tmp_path):
-    ToolchainBaseline(tmp_path / "s.db", TOOLS).drift()
-    ToolchainBaseline(tmp_path / "s.db", MOVED).accept()
-    assert ToolchainBaseline(tmp_path / "s.db", MOVED).drift() == []
-
-
-# -- the measurement cache --------------------------------------------------------------------
 
 
 def test_the_second_call_does_not_measure_again(tmp_path):

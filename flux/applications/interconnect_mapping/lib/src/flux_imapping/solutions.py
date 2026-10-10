@@ -25,7 +25,7 @@ unit test pins it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Callable
 
 from flux_bankmap.mapping import Mapping, Modulo, XorFold, modulo_baseline
 
@@ -97,12 +97,6 @@ class Solution:
     targets: tuple[str, ...] = ()       # which conflict categories this attacks
     metadata: tuple[str, ...] = ()      # what a real system must know for it to work
     assumptions: tuple[str, ...] = ()   # restrictions imposed (compiler pass, etc.)
-
-    def describe(self) -> str:
-        return (f"{self.name}: targets {', '.join(self.targets) or 'nothing (baseline)'}"
-                f"; needs {', '.join(self.metadata) or 'no metadata'}"
-                + (f"; assumes {'; '.join(self.assumptions)}" if self.assumptions else ""))
-
 
 def _global_hash(mapping: Mapping, mem: Memory) -> Callable[[TensorLayout], BankHash]:
     h = BankHash(mapping=mapping, bank_bits=mem.m)
@@ -226,9 +220,3 @@ def catalog(mem: Memory) -> list[Solution]:
     return sols
 
 
-def solution_to_dict(s: Solution) -> dict[str, Any]:
-    return {
-        "name": s.name, "schedule": s.schedule, "buffer_bits": s.buffer_bits,
-        "targets": list(s.targets),
-        "metadata": list(s.metadata), "assumptions": list(s.assumptions),
-    }

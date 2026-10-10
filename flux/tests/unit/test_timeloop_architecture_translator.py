@@ -87,13 +87,6 @@ def test_3d_compute_node_is_rejected():
         architecture_ir_to_timeloop_architecture_yaml(arch)
 
 
-def test_spatial_dim_with_a_2d_array_is_rejected_not_ignored():
-    """On a 2-D array a `spatial_dim` is rejected rather than silently ignored."""
-    arch = flux_ir.load_document(SIMPLE_NPU_2D)
-    with pytest.raises(NotExpressibleError, match="no remaining spatial choice"):
-        architecture_ir_to_timeloop_architecture_yaml(arch, spatial_dim="M")
-
-
 def test_zero_compute_nodes_is_rejected():
     arch = {"id": "x", "hierarchy": [{"level": "buf", "class": "memory", "attrs": {"size_kb": 1}}]}
     with pytest.raises(NotExpressibleError, match="0 compute nodes"):
@@ -133,20 +126,6 @@ def test_spatial_dim_none_keeps_both_maximize_dims_candidates():
     text = architecture_ir_to_timeloop_architecture_yaml(arch)
     assert "maximize_dims: [[M, C]]" in text
 
-
-def test_spatial_dim_forces_a_single_maximize_dims_candidate():
-    arch = flux_ir.load_document(SIMPLE_NPU_1D)
-    assert "maximize_dims: [[M]]" in architecture_ir_to_timeloop_architecture_yaml(arch, spatial_dim="M")
-    assert "maximize_dims: [[C]]" in architecture_ir_to_timeloop_architecture_yaml(arch, spatial_dim="C")
-
-
-def test_invalid_spatial_dim_is_rejected():
-    arch = flux_ir.load_document(SIMPLE_NPU_1D)
-    with pytest.raises(NotExpressibleError, match=r"must be one of \('M', 'C'\)"):
-        architecture_ir_to_timeloop_architecture_yaml(arch, spatial_dim="N")
-
-
-# --- sparsity (D78) ---
 
 _TENSOR_MAP = {"I": "Inputs", "W": "Weights", "O": "Outputs"}
 
