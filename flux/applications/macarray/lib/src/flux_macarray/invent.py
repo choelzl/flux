@@ -9,12 +9,21 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .rtl_check import sv_refusal
-
 from .config import Shape
 
 if TYPE_CHECKING:
     from .rtl_check import Golden
+
+
+def sv_refusal(source: str, *, combinational: bool = True) -> str | None:
+    """What the rules forbid that the text contains, before any tool runs (D557)."""
+    if combinational and re.search(r"always\s*@\s*\(\s*posedge|always_ff|\breg\b.*<=", source):
+        return "sequential logic: the module must be combinational"
+    if re.search(r"\d+'\s*\(", source):
+        return "size casts like 8'(x) are SystemVerilog; Yosys's front end rejects them"
+    if "$" in re.sub(r"\$signed|\$unsigned", "", source):
+        return "system tasks are not synthesizable"
+    return None
 
 
 def refusal_reason(source: str) -> str | None:

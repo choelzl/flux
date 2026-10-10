@@ -578,3 +578,8 @@ the topics above.
   - **What stays:** `flux_ir`, the ABI's types, the `Evaluator` protocol (npu_gemm's and the prefetcher's own adapters implement it, called from their own scripts), and `ResultStore`'s documents plus the results table the trials write.
   - **The loop's own calibration between stages** (D464) is unchanged.
 - **D955: a loop's library digests are readable in the web.** With `flux knowledge show` gone (D952), the digest texts could be seen nowhere: Live only counted them. Results › Library lists every paper the loop's record holds a digest of: its name and path, who digested it, how much of it was read, and the digest the prompts read, each folded. It is read-only, scoped like the loop, and empty before the first run. Old trace folders, which `flux gc` cleaned, were already handled in the web by Maintenance › "Clean idle caches" and Admin › Resources.
+- **D956: `rtl.py` is slimmer, and the NLU carries one copy of it.**
+  - **No unzipping:** `measure` reads ORFS's gzipped ASAP7 libraries as they are, since Yosys, ABC and OpenSTA all read `.gz`. Same cells, area and timing, with no copies in a temp folder on every run.
+  - **Helpers out:** `fenced_module`, which only its test used, is gone. `sv_refusal`, used only by macarray, moved to macarray's `invent.py`.
+  - **One NLU copy:** the NLU's seven operator folders hold a four-line launcher for the NLU's own `rtl.py` instead of seven copies of it. Their documents are unchanged, and the NLU folder stays self-contained.
+  - **Why not ORFS's flow:** it would be shorter only at 15–35× the time per design (17 s / 49 s against 1.1 s). The two calls `rtl.py` makes already read ORFS's own platform files.

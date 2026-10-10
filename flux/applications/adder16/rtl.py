@@ -20,7 +20,6 @@ RTL application: edit applications/mul8/rtl.py, then run scripts/sync-app-tools.
 from __future__ import annotations
 
 import argparse
-import gzip
 import importlib.util
 import os
 import re
@@ -41,17 +40,6 @@ MAX_CYCLES = 10_000
 
 def lint_relaxed(source: str) -> str:
     return source if source.startswith(LINT_PRAGMA) else LINT_PRAGMA + source
-
-
-def sv_refusal(source: str, *, combinational: bool = True) -> str | None:
-    """What the rules forbid that the text contains, before any tool runs."""
-    if combinational and re.search(r"always\s*@\s*\(\s*posedge|always_ff|\breg\b.*<=", source):
-        return "sequential logic: the module must be combinational"
-    if re.search(r"\d+'\s*\(", source):
-        return "size casts like 8'(x) are SystemVerilog; Yosys's front end rejects them"
-    if "$" in re.sub(r"\$signed|\$unsigned", "", source):
-        return "system tasks are not synthesizable"
-    return None
 
 
 def module_of(source: str, given: str | None = None) -> str:
@@ -176,15 +164,6 @@ def explain_diagnostic(message: str, source: str, *, prefix_lines: int = 0, file
     out = f"{what} -- line {line_no} of your module, column {col}:\n    {text.rstrip()}\n    {' ' * max(0, col - 1)}^"
     hint = next((h for pat, on_line, h in HINTS if re.search(pat, what) and re.search(on_line, text)), None)
     return out + (f"\n  hint: {hint}" if hint else "")
-
-
-def fenced_module(name: str, reply: str) -> str | None:
-    """`module <name>` .. `endmodule` out of the first ```verilog fence (or the bare reply)."""
-    m = re.search(r"```(?:verilog|systemverilog|sv)?\s*\n(.*?)```", reply, re.S)
-    body = m.group(1) if m else reply
-    if f"module {name}" not in body or "endmodule" not in body:
-        return None
-    return body[body.index(f"module {name}"):body.rindex("endmodule") + len("endmodule")].strip() + "\n"
 
 
 def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[dict[str, Any]] | None = None,
@@ -321,12 +300,7 @@ def measure(source: str, module: str | None = None, *, stage: str = "synth", clo
     clock = "clk" if "clk" in ports else None
     with tempfile.TemporaryDirectory(prefix="flux-rtl-measure-") as d:
         work = Path(d)
-        libs = []
-        for rel in LIBS:                    # Yosys's ABC reads no .gz
-            src = pdk / rel
-            dst = work / Path(rel).name.removesuffix(".gz")
-            dst.write_bytes(gzip.decompress(src.read_bytes()) if rel.endswith(".gz") else src.read_bytes())
-            libs.append(str(dst))
+        libs = [str(pdk / rel) for rel in LIBS]        # read as they are, .gz too (Yosys, ABC, OpenSTA)
         lib = " ".join(f"-liberty {x}" for x in libs)
         (work / "design.sv").write_text(_clean(source))
         (work / "synth.ys").write_text(

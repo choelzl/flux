@@ -16,4 +16,5 @@ such as Verilator, Yosys, OpenROAD (with ORFS for ASAP7), Pythia and Timeloop mu
 Set `language`, stage `metrics` and stage `needs` explicitly in the problem document.
 
 To maintain the RTL copies, edit `mul8/rtl.py`, then run `python scripts/sync-app-tools.py`
-from `flux/`. `--check` verifies every application, library and test copy matches it. Copies are regular files so an uploaded or copied application is self-contained.
+from `flux/`. `--check` verifies every application, library and test copy matches it. The NLU's
+operators (`nlu/ops/*/rtl.py`) are launchers for the NLU's own copy, not copies (D956). Copies are regular files so an uploaded or copied application is self-contained.

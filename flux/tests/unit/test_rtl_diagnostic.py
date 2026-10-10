@@ -31,13 +31,12 @@ def test_a_diagnostic_that_maps_to_no_line_is_said_as_it_was():
     assert got.startswith("Can't find definition of variable: 'q' -- line 2 of your module") and "declare the wire" in got
 
 
-def test_the_harness_reads_a_fenced_module_and_screens_it_before_any_tool_runs():
-    """The fence reader, lint pragmas and rules screen are the harness's, not each world's (D557)."""
-    from rtl import LINT_PRAGMA, fenced_module, lint_relaxed, sv_refusal
+def test_lint_pragmas_and_macarrays_rules_screen():
+    """The lint pragmas a generated module is given (rtl.py), and the rules screen macarray's
+    invented multiplier passes before any tool runs (D557; macarray's own since D956)."""
+    from flux_macarray.invent import sv_refusal
+    from rtl import LINT_PRAGMA, lint_relaxed
 
-    reply = "IDEA: x\n```verilog\nmodule m(input a, output b);\nassign b = a;\nendmodule\n```\nthanks"
-    assert fenced_module("m", reply) == "module m(input a, output b);\nassign b = a;\nendmodule\n"
-    assert fenced_module("other", reply) is None and fenced_module("m", "module m(); no end") is None
     assert lint_relaxed("module m; endmodule").startswith(LINT_PRAGMA) and lint_relaxed(LINT_PRAGMA + "x").count("lint_off") == 2
     assert sv_refusal("always_ff @(posedge clk) q <= d;") == "sequential logic: the module must be combinational"
     assert sv_refusal("always_ff @(posedge clk) q <= d;", combinational=False) is None
