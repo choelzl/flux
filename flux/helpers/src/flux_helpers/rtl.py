@@ -1,6 +1,7 @@
 """RTL helpers on ASAP7 (D968): lint with Verilator, measure with OpenROAD-flow-scripts (ORFS).
 
     fluxhelper rtl lint DESIGN.sv                      # hardware defects: "N failing"; exit 0, 1, 3 (no parse)
+    fluxhelper rtl cycles DESIGN.sv --golden golden.py # a clocked design: latency_cycles= cycles_per_result=
     fluxhelper rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
     # one line: fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... (stat: area_um2, cell_count)
 
@@ -56,7 +57,13 @@ def catalog() -> list[dict]:
             stage("place", "Place and time (ASAP7)", "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: "
                   "tens of seconds.", timed),
             stage("route", "Route and time (ASAP7)", "OpenROAD-flow-scripts to routing: timing after global routing, minutes.",
-                  timed)]
+                  timed),
+            {"id": "rtl-cycles", "role": "stage", "title": "Clock cycles (Verilator)",
+             "what": "A clocked design run on golden.py's vectors, each started when the last is done: its latency in "
+                     "cycles (the most, the fewest) and the mean cycles per result.",
+             "run": "fluxhelper rtl cycles {artifact} --golden {golden}", "params": {"golden": param("Golden model", "{home}/golden.py")},
+             "metrics": metrics("latency_cycles", "latency_min_cycles", "cycles_per_result"), "needs": ["verilator"],
+             "languages": HDL, "kinds": ["rtl"], "short": "cycles"}]
 
 
 def flow_home() -> Path:
@@ -115,6 +122,28 @@ def measure(source: str, module: str | None = None, *, stage: str = "synth", clo
     return got
 
 
+def cycles(path: str, golden: str, module: str | None = None, timeout_s: float = 300.0) -> tuple[int, list[str]]:
+    """(exit code, the lines to print): a clocked design's cycles over the golden's vectors (D971),
+    each vector started when the last is done -- the latency, not overlapped throughput."""
+    from dataclasses import replace
+
+    from .golden import check_rtl, load_golden
+
+    g = load_golden(golden)
+    if not g.clocked:
+        return 2, ["the golden model declares no CLOCK: a design without a clock takes no cycles"]
+    # start/done driven whatever LATENCY the golden says (or none): measured, not checked
+    got = check_rtl(Path(path).read_text(), replace(g, latency=g.latency if g.latency is not None else 0),
+                    module=module, timeout_s=timeout_s, claim=False)
+    if got.error:
+        return (3 if got.error.startswith(("did not compile", "the module has", "no `module")) else 1), [got.error]
+    if not got.ok or not got.cycles:
+        return 1, [*got.lines, "a design that fails its golden vectors is not timed"]
+    n = len(got.cycles)
+    return 0, [f"latency_cycles={max(got.cycles)} latency_min_cycles={min(got.cycles)} "
+               f"cycles_per_result={sum(got.cycles) / n:.4g} vectors={n}"]
+
+
 def lint(path: str, timeout_s: float = 120.0) -> tuple[int, list[str]]:
     """(exit code, the lines to print): each defect a line, then `N failing`; 3 when it does not parse."""
     r = subprocess.run([*LINT, path], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
@@ -131,6 +160,11 @@ def lint(path: str, timeout_s: float = 120.0) -> tuple[int, list[str]]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="fluxhelper rtl", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
+    cy = sub.add_parser("cycles", help="a clocked design's cycles over golden.py's vectors (Verilator)")
+    cy.add_argument("artifact")
+    cy.add_argument("--golden", required=True)
+    cy.add_argument("--module")
+    cy.add_argument("--timeout", type=float, default=300.0)
     li = sub.add_parser("lint", help="Verilator's hardware defects only: N failing; exit 3 when it does not parse")
     li.add_argument("artifact")
     li.add_argument("--timeout", type=float, default=120.0)
@@ -142,8 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     me.add_argument("--utilization", type=float, default=40)
     me.add_argument("--timeout", type=float, default=1800.0)
     a = ap.parse_args(argv)
-    if a.command == "lint":
-        code, lines = lint(a.artifact, a.timeout)
+    if a.command in ("lint", "cycles"):
+        code, lines = lint(a.artifact, a.timeout) if a.command == "lint" else cycles(a.artifact, a.golden, a.module, a.timeout)
         print("\n".join(lines))
         return code
     got = measure(Path(a.artifact).read_text(), a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout,

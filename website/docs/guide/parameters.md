@@ -721,10 +721,14 @@ Flux's helpers, `fluxhelper NAME ...` (D968, D970): nothing to copy into the loo
 | `rtl-golden` | check | `fluxhelper golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
 | `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
 | `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
+| `python-cases` | check | `fluxhelper cases {artifact} --call {call} --reference {reference} --random {random}` | `call` (`main`), `reference` (`{home}/reference.py`), `random` (`100`) | `N failing of M` |
+| `python-pytest` | check | `fluxhelper pytest {artifact} --tests {tests}` | `tests` (`{home}/test_design.py`) | `N failing of M` |
 | `champsim-build` | check | `fluxhelper champsim build {artifact}` | | exit 3 = did not build |
 | `champsim-check` | check | `fluxhelper champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
 | `rtl-stat` | stage | `fluxhelper rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
 | `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
+| `rtl-cycles` | stage | `fluxhelper rtl cycles {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `latency_cycles`, `latency_min_cycles`, `cycles_per_result` |
+| `prog-memory` | stage | `fluxhelper prog memory --build "{build}" --run "{run}" --runs {runs}` | `runs` (`3`) | `peak_rss_kb` |
 | `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
 | `python-bench` | stage | `fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
 | `prog-size` | stage | `fluxhelper prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
@@ -745,6 +749,14 @@ placement, `route` after routing (timing from global routing). `fluxhelper prog`
 (before D969 it was `flux prog`; `flux task migrate` rewrites it). `fluxhelper bench DESIGN.py --call f --args "(1000,)"`
 loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
 `time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
+`fluxhelper cases` calls the design's function on cases -- a JSON table (`[args]` or `{"args", "kwargs",
+"expected"}`), the reference module's `CASES`, and `--random N` draws of its `inputs(rng)` -- and
+compares each result with the expected value or the reference function's (floats within `--tol`).
+`fluxhelper pytest` copies the design as `design.py` beside your tests and counts the failing ones.
+`fluxhelper rtl cycles` runs a clocked design (`CLOCK`) on the golden vectors, each started when the
+last is done, and prints its latency: the most and fewest cycles, and the mean per result (not
+overlapped throughput). `fluxhelper prog memory` prints the program's peak resident memory as the
+kernel counts it, the most over `--runs`.
 
 ## Flux helpers
 
@@ -755,8 +767,10 @@ document, or in a shell inside the dev shell. `fluxhelper` alone lists them; `fl
 | Helper | Commands |
 |---|---|
 | `golden` | `fluxhelper golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
-| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N` |
-| `prog` | `fluxhelper prog time\|count\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
+| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py` |
+| `cases` | `fluxhelper cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
+| `pytest` | `fluxhelper pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
+| `prog` | `fluxhelper prog time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
 | `bench` | `fluxhelper bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
 | `champsim` | `fluxhelper champsim build\|check\|run ARTIFACT --traces DIR [--warmup N --sim N]` |
 

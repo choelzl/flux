@@ -6,8 +6,10 @@ carries no copy of them (D968). Each is `{python} -m flux_helpers.<module> ...` 
 | Module | Commands | Prints |
 |---|---|---|
 | `golden` | `DESIGN --golden golden.py` | failing vectors, `N failing of M`; exit 0, 1, 3 (did not compile) |
-| `rtl` | `lint DESIGN`; `measure DESIGN --stage stat\|synth\|place\|route --clock-ps N` | `N failing`; `fmax_mhz= area_um2= power_w= cell_count= path_ps=` |
-| `prog` | `time\|count\|size --build "c++ -O2 -o {out} {artifact}"`  | `time_ms=`, `instructions=`, `text_bytes=` |
+| `rtl` | `lint DESIGN`; `measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `cycles DESIGN --golden g.py` | `N failing`; `fmax_mhz= area_um2= power_w= cell_count= path_ps=` |
+| `prog` | `time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}"`  | `time_ms=`, `instructions=`, `text_bytes=` |
+| `cases` | `DESIGN.py --call f --reference ref.py --random 100` | mismatches, `N failing of M` |
+| `pytest` | `DESIGN.py --tests test_design.py` | failing tests, `N failing of M` |
 | `bench` | `DESIGN.py --call f --args "(1000,)" --runs 5` | `time_ms= time_min_ms= time_spread_ms=` |
 | `champsim` | `build\|check\|run ARTIFACT --traces DIR ...` | `geomean_speedup=` |
 

@@ -1,5 +1,5 @@
 """`fluxhelper prog time|count|size` (D661, D968; `flux prog` before D969): a program's
-speed, instruction and cache counts, and size, as stages a document names. Each prints `name=value` lines.
+speed, instruction and cache counts, peak memory and size, as stages a document names. Each prints `name=value` lines.
 
     measure:
       count: {command: 'fluxhelper prog count --build "c++ -O2 -o {out} {artifact}"',
@@ -26,7 +26,7 @@ import tempfile
 import time
 from pathlib import Path
 
-__all__ = ["add_parsers", "cmd_prog_count", "cmd_prog_size", "cmd_prog_time", "main"]
+__all__ = ["add_parsers", "cmd_prog_count", "cmd_prog_memory", "cmd_prog_size", "cmd_prog_time", "main"]
 
 
 def catalog() -> list[dict]:
@@ -52,7 +52,11 @@ def catalog() -> list[dict]:
              "what": "Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic.",
              "run": prog.format(sub="count", more=""), "params": build,
              "metrics": metrics("instructions", "d1_misses", "ll_misses", "branch_mispredicts"), "needs": ["valgrind"],
-             "infer_needs": True, "languages": langs, "kinds": kinds, "short": "count"}]
+             "infer_needs": True, "languages": langs, "kinds": kinds, "short": "count"},
+            {"id": "prog-memory", "role": "stage", "title": "Program peak memory",
+             "what": "Builds the program and runs it: its peak resident memory as the kernel counts it, the most over the runs.",
+             "run": prog.format(sub="memory", more=" --runs {runs}"), "params": {**build, "runs": param("Runs", 3)},
+             "metrics": metrics("peak_rss_kb"), "needs": [], "languages": langs, "kinds": kinds, "short": "memory"}]
 
 #: exit code for "did not build" (D594)
 _DID_NOT_BUILD = 3
@@ -166,9 +170,36 @@ def _size(args: argparse.Namespace, argv: list[str], scratch: Path) -> dict[str,
     return {"text_bytes": text, "data_bytes": data, "bss_bytes": bss}
 
 
+def _memory(args: argparse.Namespace, argv: list[str], scratch: Path) -> dict[str, float | int]:
+    """The program's peak resident memory (D971): its own maximum RSS as the kernel counts it
+    (`wait4`), the most over `--runs` runs -- the build's compiler is not counted."""
+    import os
+
+    peaks = []
+    for _ in range(max(1, int(args.runs))):
+        proc = subprocess.Popen(argv, cwd=scratch, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.PIPE)
+        deadline = time.monotonic() + float(args.timeout)
+        while True:
+            pid, status, usage = os.wait4(proc.pid, os.WNOHANG)
+            if pid:
+                break
+            if time.monotonic() > deadline:
+                proc.kill()
+                raise _Failed(f"the program ran over {args.timeout:g} s", 1)
+            time.sleep(0.01)
+        proc.returncode = os.waitstatus_to_exitcode(status)
+        if proc.returncode != 0:
+            err = proc.stderr.read().decode(errors="replace").strip() if proc.stderr else ""
+            raise _Failed(f"the program exited {proc.returncode}: {err[-400:]}", 1)
+        peaks.append(int(usage.ru_maxrss))          # kilobytes on Linux
+    return {"peak_rss_kb": max(peaks), "peak_rss_kb_min": min(peaks), "runs": len(peaks)}
+
+
 cmd_prog_time = _measured(_time)
 cmd_prog_count = _measured(_count)
 cmd_prog_size = _measured(_size)
+cmd_prog_memory = _measured(_memory)
 
 
 def add_parsers(subparsers: argparse._SubParsersAction) -> None:
@@ -192,6 +223,11 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
                                      "branch_mispredicts.")
     common(c)
     c.set_defaults(func=cmd_prog_count)
+    m = sub.add_parser("memory", help="Peak resident memory over --runs runs (the kernel's own count): peak_rss_kb, "
+                                      "peak_rss_kb_min, runs.")
+    common(m)
+    m.add_argument("--runs", type=int, default=3)
+    m.set_defaults(func=cmd_prog_memory)
     s = sub.add_parser("size", help="The built program's (or BINARY's) sections: text_bytes, data_bytes, bss_bytes.")
     common(s)
     s.add_argument("binary", nargs="?", default=None, help="A program already built (instead of --build).")

@@ -172,7 +172,7 @@ for (const [name, value] of [["blank", ""], ["infinite", "Infinity"], ["text", "
 }
 s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics.push({...s.baseline.metrics[0]}); bad("bad_baseline_duplicate", s);
 s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics[0].stage = "removed"; bad("bad_baseline_stage", s);
-s = fresh("x", "python"); s.checks.push(c.newCheck(s, "helper")); bad("bad_no_lint_for_python", s);
+s = fresh("x", "rust"); s.checks.push(c.newCheck(s, "helper")); bad("bad_no_lint_for_python", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.stages[0].gates = [{metric: "energy_pj", rule: "at", value: "1"}]; bad("bad_gate_metric", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives.push(obj("latency_ns", "min")); bad("bad_objective_metric", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives = [obj("fmax_mhz", "balance")]; bad("bad_balance_one", s);
@@ -426,7 +426,7 @@ def test_balance_marks_a_knee_group(tmp_path):
 def test_check_flags_what_can_still_go_wrong():
     e = _errors(BUILT["bad_empty"])
     assert "Add a check" in e and "Add a measurement" in e and "Add an objective" in e
-    assert "no Flux helper for python" in _errors(BUILT["bad_no_lint_for_python"])
+    assert "no Flux helper for rust" in _errors(BUILT["bad_no_lint_for_python"])
     assert "does not report energy_pj" in _errors(BUILT["bad_gate_metric"])
     assert "latency_ns, which no measurement reports" in _errors(BUILT["bad_objective_metric"])
     assert "Balance needs two" in _warnings(BUILT["bad_balance_one"])

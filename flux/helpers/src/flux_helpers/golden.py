@@ -66,6 +66,7 @@ class Check:
     lines: tuple[str, ...] = ()     # the first failures: what came out, what went in, what was expected
     latency: int | None = None      # measured cycles (a design with start/done)
     error: str = ""                 # why it did not build, or the latency refused
+    cycles: tuple[int, ...] = ()    # each vector's cycles, start to done (D971: `fluxhelper rtl cycles`)
 
     @property
     def ok(self) -> bool:
@@ -155,9 +156,10 @@ def explain_diagnostic(message: str, source: str, *, prefix_lines: int = 0, file
 
 def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[dict[str, Any]] | None = None,
               extra_sources: dict[str, str] | None = None, timeout_s: float = 120.0,
-              relaxed: bool = False, show: int = 5) -> Check:
+              relaxed: bool = False, show: int = 5, claim: bool = True) -> Check:
     """Verilator on `source` against the golden's vectors (`rows` when made already). `relaxed`
-    turns width and unused warnings off: a generated module is judged on its values."""
+    turns width and unused warnings off: a generated module is judged on its values. `claim=False`
+    measures the latency rather than holding the design to the golden's LATENCY."""
     try:
         module = module_of(source, module)
     except SystemExit:
@@ -220,9 +222,10 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
     latency = None
     if g.clocked and g.latency is not None and cycles and not fails:
         latency = max(cycles) + 1        # the edges after the one that took the inputs, and that one
-        if latency != g.latency:
-            return Check(len(rows), 0, (), latency, error=f"claims {g.latency} cycle(s) of latency, measured {latency}")
-    return Check(len(rows), len(fails), tuple(fails[:show]), latency)
+        if claim and latency != g.latency:
+            return Check(len(rows), 0, (), latency, error=f"claims {g.latency} cycle(s) of latency, measured {latency}",
+                         cycles=tuple(c + 1 for c in cycles))
+    return Check(len(rows), len(fails), tuple(fails[:show]), latency, cycles=tuple(c + 1 for c in cycles))
 
 
 def main(argv: list[str] | None = None) -> int:

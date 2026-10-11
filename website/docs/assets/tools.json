@@ -135,6 +135,41 @@
   "helper": true
  },
  {
+  "id": "python-cases",
+  "role": "check",
+  "title": "Compare with a reference function",
+  "what": "Calls the design's function on cases (a JSON table, the reference's CASES, random inputs from its inputs(rng)) and compares each result with the reference function's or the expected value.",
+  "run": "fluxhelper cases {artifact} --call {call} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 100,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "cases",
+  "helper_module": "cases",
+  "helper": true
+ },
+ {
   "id": "champsim-build",
   "role": "check",
   "title": "Build the prefetcher into ChampSim",
@@ -374,6 +409,71 @@
   "helper": true
  },
  {
+  "id": "prog-memory",
+  "role": "stage",
+  "title": "Program peak memory",
+  "what": "Builds the program and runs it: its peak resident memory as the kernel counts it, the most over the runs.",
+  "run": "fluxhelper prog memory --build \"{build}\" --run \"{run}\" --runs {runs}",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   },
+   "runs": {
+    "label": "Runs",
+    "default": 3,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "peak_rss_kb": ""
+  },
+  "needs": [],
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ],
+  "short": "memory",
+  "helper_module": "prog",
+  "helper": true
+ },
+ {
+  "id": "python-pytest",
+  "role": "check",
+  "title": "Run your pytest file",
+  "what": "Runs your pytest file with the design importable as `design`; counts the failing tests.",
+  "run": "fluxhelper pytest {artifact} --tests {tests}",
+  "params": {
+   "tests": {
+    "label": "Tests",
+    "default": "{home}/test_design.py",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "pytest",
+  "helper_module": "pytest",
+  "helper": true
+ },
+ {
   "id": "rtl-lint",
   "role": "check",
   "title": "Lint for hardware defects",
@@ -536,6 +636,38 @@
    "rtl"
   ],
   "short": "route",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-cycles",
+  "role": "stage",
+  "title": "Clock cycles (Verilator)",
+  "what": "A clocked design run on golden.py's vectors, each started when the last is done: its latency in cycles (the most, the fewest) and the mean cycles per result.",
+  "run": "fluxhelper rtl cycles {artifact} --golden {golden}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "latency_cycles": "cycles",
+   "latency_min_cycles": "",
+   "cycles_per_result": ""
+  },
+  "needs": [
+   "verilator"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "cycles",
   "helper_module": "rtl",
   "helper": true
  }
