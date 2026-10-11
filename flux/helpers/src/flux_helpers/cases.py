@@ -65,23 +65,18 @@ def _short(value: Any, n: int = 120) -> str:
     return text if len(text) <= n else text[:n] + "..."
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper cases", description=__doc__.split("\n\n")[0])
-    ap.add_argument("artifact")
+def add_case_arguments(ap: argparse.ArgumentParser) -> None:
+    """The case options `cases`, `ccases` and `accuracy` share (D971, D972)."""
     ap.add_argument("--call", required=True, help="the design's function")
     ap.add_argument("--reference", default="", help="FILE.py or FILE.py:function (default: the --call name)")
     ap.add_argument("--cases", default="", help="a JSON file of cases")
     ap.add_argument("--random", type=int, default=0, help="random cases from the reference's inputs(rng)")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--tol", type=float, default=0.0, help="relative tolerance for floats")
     ap.add_argument("--show", type=int, default=8, help="mismatches printed")
-    a = ap.parse_args(argv)
-    try:
-        fn = getattr(_load(a.artifact, "design"), a.call)
-    except Exception as exc:  # noqa: BLE001 -- whatever the design does on import is its failure
-        print(f"did not load: {type(exc).__name__}: {exc}")
-        print("1 failing")
-        return 3
+
+
+def collect(a: argparse.Namespace) -> tuple[Any, list[tuple[tuple, dict, Any, bool]]] | int:
+    """(the reference function or None, the cases), or an exit code with the reason on stderr."""
     ref_fn, ref = None, None
     if a.reference:
         path, _, name = a.reference.partition(":")
@@ -113,6 +108,15 @@ def main(argv: list[str] | None = None) -> int:
     if ref_fn is None and not all(has for _, _, _, has in cases):
         print("a case without `expected` needs --reference", file=sys.stderr)
         return 2
+    return ref_fn, cases
+
+
+def compare(fn: Any, a: argparse.Namespace) -> int:
+    """`fn` on every case against the reference or the expected value; prints and returns the exit code."""
+    got_cases = collect(a)
+    if isinstance(got_cases, int):
+        return got_cases
+    ref_fn, cases = got_cases
     failing = []
     for args, kwargs, expected, has in cases:
         want = expected if has else ref_fn(*args, **kwargs)
@@ -127,6 +131,21 @@ def main(argv: list[str] | None = None) -> int:
     shown = list(dict.fromkeys(failing))[:a.show]         # a repeated case once on screen, every time in the count
     print("\n".join(shown + [f"{len(failing)} failing of {len(cases)}"]))
     return 1 if failing else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="fluxhelper cases", description=__doc__.split("\n\n")[0])
+    ap.add_argument("artifact")
+    add_case_arguments(ap)
+    ap.add_argument("--tol", type=float, default=0.0, help="relative tolerance for floats")
+    a = ap.parse_args(argv)
+    try:
+        fn = getattr(_load(a.artifact, "design"), a.call)
+    except Exception as exc:  # noqa: BLE001 -- whatever the design does on import is its failure
+        print(f"did not load: {type(exc).__name__}: {exc}")
+        print("1 failing")
+        return 3
+    return compare(fn, a)
 
 
 if __name__ == "__main__":

@@ -757,6 +757,20 @@ compares each result with the expected value or the reference function's (floats
 last is done, and prints its latency: the most and fewest cycles, and the mean per result (not
 overlapped throughput). `fluxhelper prog memory` prints the program's peak resident memory as the
 kernel counts it, the most over `--runs`.
+`fluxhelper ccases` is `cases` for a C or C++ function: built as a shared library and called through
+ctypes with a scalar `--sig`. `fluxhelper sanitize` builds a program with AddressSanitizer and
+UndefinedBehaviorSanitizer and counts the distinct errors a run hits. `fluxhelper accuracy` reports how
+far a function is from its reference: `max_abs_error`, `mean_abs_error`, `max_rel_error`,
+`mean_rel_error`, `max_ulp` (float64 steps). `fluxhelper rtl equiv` proves a design equal to a reference
+module (a Yosys miter, SAT; a clocked pair by induction from zero) or prints a counterexample.
+`fluxhelper rtl breakdown` groups the synthesised cells' area: `area_seq_um2`, `area_arith_um2`,
+`area_xor_um2`, `area_buf_um2`, `area_logic_um2`, `flop_count`. `fluxhelper rtl fmax` runs ORFS a few
+times, each at the period the last one's slack points to, and prints the fastest clock that closed:
+`fmax_closed_mhz`. `fluxhelper rtl power` records the golden vectors' switching in Verilator and has
+OpenROAD report power with it: `power_w`, `power_internal_w`, `power_switching_w`, `power_leakage_w`.
+`fluxhelper champsim stats` runs the prefetcher and the run without it on every trace: `l2_mpki`,
+`l2_mpki_baseline`, `pf_coverage` (the share of misses removed), `pf_accuracy`, `pf_late`, `pf_useless`,
+`pf_issued_pki`, `geomean_speedup`.
 
 ## Flux helpers
 
@@ -767,12 +781,15 @@ document, or in a shell inside the dev shell. `fluxhelper` alone lists them; `fl
 | Helper | Commands |
 |---|---|
 | `golden` | `fluxhelper golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
-| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py` |
+| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py`; `fluxhelper rtl equiv DESIGN --reference ref.sv`; `fluxhelper rtl breakdown DESIGN`; `fluxhelper rtl fmax DESIGN --stage synth [--steps 6]`; `fluxhelper rtl power DESIGN --golden golden.py --stage place` |
 | `cases` | `fluxhelper cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
 | `pytest` | `fluxhelper pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
+| `ccases` | `fluxhelper ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |
+| `sanitize` | `fluxhelper sanitize --build "cc -O1 -o {out} {artifact}" [--run CMD]` |
+| `accuracy` | `fluxhelper accuracy DESIGN.py --call F --reference ref.py:F --random N` |
 | `prog` | `fluxhelper prog time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
 | `bench` | `fluxhelper bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
-| `champsim` | `fluxhelper champsim build\|check\|run ARTIFACT --traces DIR [--warmup N --sim N]` |
+| `champsim` | `fluxhelper champsim build\|check\|run\|stats ARTIFACT --traces DIR [--warmup N --sim N]` |
 
 **Every helper keeps one interface** (D970; `tests/unit/test_flux_helpers.py` checks it):
 

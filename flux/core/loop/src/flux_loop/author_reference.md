@@ -143,10 +143,12 @@ starting with `flux` runs this Flux.
 ## Flux's helpers
 
 The checks and measurements Flux ships are its helpers, run as `fluxhelper NAME ...` (like `flux`, nothing on PATH needed):
-`golden` (RTL against golden.py), `rtl lint|measure|cycles` (Verilator defects; OpenROAD-flow-scripts
-on ASAP7; a clocked design's latency), `cases` (a Python function against a reference function),
-`pytest` (your pytest file on the design), `prog time|count|memory|size` (a compiled program), `bench`
-(a Python function's time) and `champsim build|check|run`. `fluxhelper` lists them. Nothing is copied into the loop's folder. Any other check or
+`golden` (RTL against golden.py), `rtl lint|measure|cycles|equiv|breakdown|fmax|power` (Verilator
+defects; OpenROAD-flow-scripts on ASAP7; latency; formal equivalence to a reference; the area by kind;
+the fastest closing clock; power from the vectors' own switching), `cases` / `ccases` (a Python or C
+function against a Python reference), `accuracy` (how far an approximation is), `pytest` (your tests on
+the design), `sanitize` (C/C++ memory and UB errors), `prog time|count|memory|size`, `bench` (a Python
+function's time) and `champsim build|check|run|stats`. `fluxhelper` lists them. Nothing is copied into the loop's folder. Any other check or
 measurement is a script of the application's own, called with `{python} {home}/script.py`.
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.

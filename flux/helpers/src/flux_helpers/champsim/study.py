@@ -70,3 +70,29 @@ def measure(artifact: str | Path, traces_dir: str | Path, warmup: int, sim: int,
     speedups = [out[f"speedup_{n}"] for n in paths]
     out["geomean_speedup"] = math.exp(sum(math.log(s) for s in speedups) / len(speedups))
     return out
+
+
+def detail(artifact: str | Path, traces_dir: str | Path, warmup: int, sim: int, with_types: Iterable[str] = (),
+           jobs: int | None = None, config: str | Path | None = None) -> dict[str, float]:
+    """Why a prefetcher wins (D972): over every trace, its L2 misses per kilo-instruction against the
+    run without it (coverage: the share of those misses it removed), how many of its prefetches
+    were used (accuracy), late, or useless, and how many it issued per kilo-instruction."""
+    binary, ini, types = prepare(artifact, with_types, config)
+    paths = tr.stage(tr.resolve(traces_dir))
+    with ThreadPoolExecutor(max_workers=jobs or 2 * len(paths)) as pool:
+        runs = {n: pool.submit(simulate, binary, ini, types, p, warmup, sim) for n, p in paths.items()}
+        bases = {n: pool.submit(simulate, binary, ini, [], p, warmup, sim) for n, p in paths.items()}
+        got = {n: (runs[n].result(), bases[n].result()) for n in paths}
+    total = lambda key, which=0: sum(r[which]["stats"].get(key, 0.0) for r in got.values())  # noqa: E731
+    instr = sum(r[0]["instructions"] for r in got.values())
+    base_instr = sum(r[1]["instructions"] for r in got.values())
+    misses, base_misses = total("L2C_load_miss"), total("L2C_load_miss", 1)
+    issued, useful = total("L2C_prefetch_issued"), total("L2C_prefetch_useful")
+    useless, late = total("L2C_prefetch_useless"), total("L2C_prefetch_late")
+    speedups = [r[0]["ipc"] / r[1]["ipc"] for r in got.values()]
+    return {"l2_mpki": 1000 * misses / instr, "l2_mpki_baseline": 1000 * base_misses / base_instr,
+            "pf_coverage": 1 - misses / base_misses if base_misses else 0.0,
+            "pf_accuracy": useful / (useful + useless) if useful + useless else 0.0,
+            "pf_late": late / issued if issued else 0.0, "pf_useless": useless / issued if issued else 0.0,
+            "pf_issued_pki": 1000 * issued / instr,
+            "geomean_speedup": math.exp(sum(math.log(x) for x in speedups) / len(speedups))}

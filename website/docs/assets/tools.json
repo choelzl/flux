@@ -98,6 +98,47 @@
   ]
  },
  {
+  "id": "python-accuracy",
+  "role": "stage",
+  "title": "Accuracy against a reference",
+  "what": "Calls the design's function and a reference on the same cases and reports how far apart they are: absolute, relative and ULP error.",
+  "run": "fluxhelper accuracy {artifact} --call {call} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 1000,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "max_abs_error": "",
+   "mean_abs_error": "",
+   "max_rel_error": "",
+   "mean_rel_error": "",
+   "max_ulp": ""
+  },
+  "needs": [],
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "accuracy",
+  "helper_module": "accuracy",
+  "helper": true
+ },
+ {
   "id": "python-bench",
   "role": "stage",
   "title": "Time a Python function",
@@ -167,6 +208,49 @@
   ],
   "short": "cases",
   "helper_module": "cases",
+  "helper": true
+ },
+ {
+  "id": "c-cases",
+  "role": "check",
+  "title": "Compare a C function with a reference",
+  "what": "Builds the design as a shared library and calls one function (a scalar signature) on cases, each result compared with a Python reference function's or the expected value.",
+  "run": "fluxhelper ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "sig": {
+    "label": "Signature",
+    "default": "int(int)",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 100,
+    "unit": ""
+   }
+  },
+  "needs": [
+   "cc"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program"
+  ],
+  "short": "cases",
+  "helper_module": "ccases",
   "helper": true
  },
  {
@@ -254,6 +338,53 @@
    "champsim"
   ],
   "short": "sim",
+  "helper_module": "champsim",
+  "helper": true
+ },
+ {
+  "id": "champsim-stats",
+  "role": "stage",
+  "title": "Why the prefetcher wins (ChampSim)",
+  "what": "Runs it and the run without it on every trace: L2 misses per kilo-instruction with and without it, the share of misses it removed (coverage), and how many of its prefetches were used, late or useless.",
+  "run": "fluxhelper champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "params": {
+   "traces": {
+    "label": "Trace folder",
+    "default": "{home}/traces",
+    "unit": ""
+   },
+   "warmup": {
+    "label": "Warm-up",
+    "default": 10000000,
+    "unit": "instructions"
+   },
+   "sim": {
+    "label": "Simulated",
+    "default": 15000000,
+    "unit": "instructions"
+   }
+  },
+  "metrics": {
+   "l2_mpki": "",
+   "l2_mpki_baseline": "",
+   "pf_coverage": "",
+   "pf_accuracy": "",
+   "pf_late": "",
+   "pf_useless": "",
+   "pf_issued_pki": "",
+   "geomean_speedup": ""
+  },
+  "needs": [
+   "pythia"
+  ],
+  "languages": [
+   "ini",
+   "cpp"
+  ],
+  "kinds": [
+   "champsim"
+  ],
+  "short": "stats",
   "helper_module": "champsim",
   "helper": true
  },
@@ -669,6 +800,196 @@
   ],
   "short": "cycles",
   "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-equiv",
+  "role": "check",
+  "title": "Equal to a reference module",
+  "what": "Formal equivalence with Yosys (a miter of the two, proved by SAT; a clocked pair by induction): passes when they are equal for every input, else prints a counterexample.",
+  "run": "fluxhelper rtl equiv {artifact} --reference {reference}",
+  "params": {
+   "reference": {
+    "label": "Reference module",
+    "default": "{home}/reference.sv",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "yosys"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not parse",
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "equiv",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-breakdown",
+  "role": "stage",
+  "title": "Where the area goes (ASAP7)",
+  "what": "OpenROAD-flow-scripts' synthesis, its cells grouped: sequential, adders, XORs, buffers and inverters, the rest of the logic; and the flops.",
+  "run": "fluxhelper rtl breakdown {artifact} --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period (the mapper's target)",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "area_seq_um2": "",
+   "area_arith_um2": "",
+   "area_xor_um2": "",
+   "area_buf_um2": "",
+   "area_logic_um2": "",
+   "flop_count": "",
+   "area_um2": "um2"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "breakdown",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-fmax",
+  "role": "stage",
+  "title": "Fastest clock that closes (ASAP7)",
+  "what": "A few OpenROAD-flow-scripts runs, each at the period the last one's slack says, until the fastest clock that closes timing at that stage is found: costly, and the honest fmax.",
+  "run": "fluxhelper rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
+  "params": {
+   "stage": {
+    "label": "Stage (synth, place, route)",
+    "default": "synth",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "First period tried",
+    "default": 1000,
+    "unit": "ps"
+   },
+   "steps": {
+    "label": "Runs at most",
+    "default": 6,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "fmax_closed_mhz": "",
+   "closed_period_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "fmax",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-power",
+  "role": "stage",
+  "title": "Power from the design's own switching (ASAP7)",
+  "what": "Verilator runs golden.py's vectors and records the switching; OpenROAD reads it on the synthesised or placed design and reports power: internal, switching, leakage.",
+  "run": "fluxhelper rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   },
+   "stage": {
+    "label": "Stage (synth, place)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "power_w": "W",
+   "power_internal_w": "",
+   "power_switching_w": "",
+   "power_leakage_w": ""
+  },
+  "needs": [
+   "verilator",
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "power",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "c-sanitize",
+  "role": "check",
+  "title": "Memory and undefined-behaviour errors",
+  "what": "Builds the program with AddressSanitizer and UndefinedBehaviorSanitizer and runs it: each memory error, leak or undefined behaviour it hits is a failure.",
+  "run": "fluxhelper sanitize --build \"{build}\" --run \"{run}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "cc -O1 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "cc"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program"
+  ],
+  "short": "sanitize",
+  "helper_module": "sanitize",
   "helper": true
  }
 ]

@@ -79,7 +79,7 @@ class Check:
         return f"{self.total - self.failing}/{self.total} vectors passed" + (f": {self.lines[0]}" if self.lines else "")
 
 
-def _testbench(g: Golden, module: str, n: int) -> str:
+def _testbench(g: Golden, module: str, n: int, vcd: bool = False) -> str:
     """Drives each row of vectors.hex (the inputs, packed) and prints `OUT <row> <cycles> <outputs in hex>`;
     Python compares. A clocked design gets `clk`/`rst_n` (held low two edges); one with LATENCY
     also `start`/`done`, its cycles counted from the edge that took the inputs."""
@@ -111,6 +111,7 @@ def _testbench(g: Golden, module: str, n: int) -> str:
         f"  {module} dut ({', '.join(pins)});",
         "  initial begin",
         '    $readmemh("vectors.hex", tab);',
+        *(['    $dumpfile("activity.vcd");', "    $dumpvars(0, dut);"] if vcd else []),
         *(["    rst_n = 1'b0; @(posedge clk); @(posedge clk); #1; rst_n = 1'b1;"] if sync else []),
         f"    for (v = 0; v < {n}; v = v + 1) begin", *body, "    end", "    $finish;", "  end", "endmodule", ""])
 
@@ -156,10 +157,11 @@ def explain_diagnostic(message: str, source: str, *, prefix_lines: int = 0, file
 
 def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[dict[str, Any]] | None = None,
               extra_sources: dict[str, str] | None = None, timeout_s: float = 120.0,
-              relaxed: bool = False, show: int = 5, claim: bool = True) -> Check:
+              relaxed: bool = False, show: int = 5, claim: bool = True, vcd: Path | None = None) -> Check:
     """Verilator on `source` against the golden's vectors (`rows` when made already). `relaxed`
     turns width and unused warnings off: a generated module is judged on its values. `claim=False`
-    measures the latency rather than holding the design to the golden's LATENCY."""
+    measures the latency rather than holding the design to the golden's LATENCY. `vcd`: the run's switching
+    activity is written there (scope `testbench/dut`, D972)."""
     try:
         module = module_of(source, module)
     except SystemExit:
@@ -175,7 +177,7 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
         (work / "dut.sv").write_text(_clean(text))
         for stem, src in (extra_sources or {}).items():
             (work / f"{stem}.sv").write_text(_clean(src))
-        (work / "testbench.sv").write_text(_testbench(g, module, len(rows)))
+        (work / "testbench.sv").write_text(_testbench(g, module, len(rows), vcd=vcd is not None))
         packed = []
         for r in rows:
             word = 0
@@ -184,7 +186,7 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
             packed.append(f"{word:x}")
         (work / "vectors.hex").write_text("\n".join(packed) + "\n")
         srcs = ["testbench.sv", "dut.sv", *(f"{s}.sv" for s in (extra_sources or {}))]
-        build = subprocess.run(["verilator", "--binary", "--timing", *VERILATOR_FLAGS, "-j", "1",
+        build = subprocess.run(["verilator", "--binary", "--timing", *(["--trace"] if vcd is not None else []), *VERILATOR_FLAGS, "-j", "1",
                                 "--top-module", "testbench", *srcs],
                                cwd=work, capture_output=True, text=True, timeout=timeout_s)
         if build.returncode != 0:
@@ -196,7 +198,11 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
                        "the golden needs CLOCK and LATENCY. " + why)
             return Check(len(rows), len(rows), error=why)
         run = subprocess.run([str(work / "obj_dir" / "Vtestbench")], cwd=work, capture_output=True, text=True,
-                             timeout=timeout_s)
+                             timeout=timeout_s, stdin=subprocess.DEVNULL)
+        if vcd is not None and (work / "activity.vcd").exists():
+            import shutil
+
+            shutil.copy(work / "activity.vcd", vcd)
     got = {int(m.group(1)): (int(m.group(2)), m.group(3).split())
            for m in re.finditer(r"^OUT (\d+) (\d+) ?(.*)$", run.stdout, re.M)}
     fails, cycles = [], []

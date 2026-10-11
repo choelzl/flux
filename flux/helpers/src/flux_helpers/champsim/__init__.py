@@ -36,4 +36,13 @@ def catalog() -> list[dict]:
              "params": {"traces": traces, "warmup": param("Warm-up", 10_000_000, "instructions"),
                         "sim": param("Simulated", 15_000_000, "instructions")},
              "metrics": metrics("geomean_speedup"), "needs": ["pythia"], "languages": ["ini", "cpp"], "kinds": ["champsim"],
-             "short": "sim"}]
+             "short": "sim"},
+            {"id": "champsim-stats", "role": "stage", "title": "Why the prefetcher wins (ChampSim)",
+             "what": "Runs it and the run without it on every trace: L2 misses per kilo-instruction with and without it, the "
+                     "share of misses it removed (coverage), and how many of its prefetches were used, late or useless.",
+             "run": "fluxhelper champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+             "params": {"traces": traces, "warmup": param("Warm-up", 10_000_000, "instructions"),
+                        "sim": param("Simulated", 15_000_000, "instructions")},
+             "metrics": metrics("l2_mpki", "l2_mpki_baseline", "pf_coverage", "pf_accuracy", "pf_late", "pf_useless",
+                                "pf_issued_pki", "geomean_speedup"),
+             "needs": ["pythia"], "languages": ["ini", "cpp"], "kinds": ["champsim"], "short": "stats"}]

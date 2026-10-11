@@ -29,7 +29,7 @@ def _fluxhelper(*args: str, stdin=subprocess.DEVNULL) -> subprocess.CompletedPro
 
 def test_the_helpers_are_the_modules_that_say_their_entries():
     helpers = _helpers()
-    assert {"golden", "rtl", "prog", "bench", "champsim", "cases", "pytest"} <= set(helpers)
+    assert {"golden", "rtl", "prog", "bench", "champsim", "cases", "pytest", "ccases", "sanitize", "accuracy"} <= set(helpers)
     for name, entries in helpers.items():
         mod = importlib.import_module(f"flux_helpers.{name}")
         assert callable(getattr(mod, "main", None)), f"{name}: main(argv)"
@@ -53,7 +53,8 @@ def test_fluxhelper_lists_describes_and_refuses_an_unknown_helper():
     listed = _fluxhelper()
     assert listed.returncode == 0 and "rtl" in listed.stdout and "golden" in listed.stdout
     described = json.loads(_fluxhelper("describe", "rtl").stdout)
-    assert {e["id"] for e in described} == {"rtl-lint", "rtl-stat", "rtl-synth", "rtl-place", "rtl-route", "rtl-cycles"}
+    assert {e["id"] for e in described} >= {"rtl-lint", "rtl-stat", "rtl-synth", "rtl-place", "rtl-route", "rtl-cycles", "rtl-equiv",
+                                            "rtl-breakdown", "rtl-fmax", "rtl-power"}
     assert _fluxhelper("nope").returncode == 2 and _fluxhelper("describe", "nope").returncode == 2
 
 
@@ -136,3 +137,53 @@ def test_rtl_cycles_measures_a_clocked_designs_latency(tmp_path):
                                    "def golden(a, b):\n    return {'y': a + b}\n")
     r = _fluxhelper("rtl", "cycles", str(tmp_path / "pipe.sv"), "--golden", str(tmp_path / "g.py"))
     assert r.returncode == 0 and "latency_cycles=2 latency_min_cycles=2 cycles_per_result=2" in r.stdout, r.stdout + r.stderr
+
+
+# ---- D972: ccases, sanitize, accuracy, rtl equiv
+def test_ccases_calls_a_c_function_against_a_python_reference(tmp_path):
+    if __import__("shutil").which("cc") is None:
+        pytest.skip("needs a C compiler")
+    (tmp_path / "add.c").write_text("long add(long a, long b) { return a == 7 ? 0 : a + b; }\n")
+    (tmp_path / "ref.py").write_text("def add(a, b):\n    return a + b\n\ndef inputs(rng):\n    return (rng.randint(0, 9), rng.randint(0, 9))\n")
+    r = _fluxhelper("ccases", str(tmp_path / "add.c"), "--call", "add", "--sig", "long(long,long)",
+                    "--reference", f"{tmp_path / 'ref.py'}:add", "--random", "60", "--seed", "2")
+    assert r.returncode == 1 and "FAIL add(7," in r.stdout and r.stdout.strip().endswith("of 60"), r.stdout + r.stderr
+    (tmp_path / "broken.c").write_text("long add(long a, long b) { return a + b }\n")
+    r = _fluxhelper("ccases", str(tmp_path / "broken.c"), "--call", "add", "--sig", "long(long,long)",
+                    "--reference", f"{tmp_path / 'ref.py'}:add", "--random", "5")
+    assert r.returncode == 3 and "did not build" in r.stdout
+    assert _fluxhelper("ccases", str(tmp_path / "add.c"), "--call", "add", "--sig", "complex(long)", "--random", "1").returncode == 2
+
+
+def test_sanitize_counts_memory_errors(tmp_path):
+    if __import__("shutil").which("cc") is None:
+        pytest.skip("needs a C compiler")
+    (tmp_path / "bad.c").write_text("#include <stdio.h>\n#include <stdlib.h>\n"     # a read past the end, used: not optimised out
+                                    "int main(){int*p=calloc(4, sizeof(int)); printf(\"%d\\n\", p[4]); free(p); return 0;}\n")
+    (tmp_path / "good.c").write_text("int main(){return 0;}\n")
+    bad = _fluxhelper("sanitize", "--build", f"cc -O1 -o {{out}} {tmp_path / 'bad.c'}")
+    good = _fluxhelper("sanitize", "--build", f"cc -O1 -o {{out}} {tmp_path / 'good.c'}")
+    assert bad.returncode == 1 and "heap-buffer-overflow" in bad.stdout, bad.stdout + bad.stderr
+    assert good.returncode == 0 and good.stdout.strip() == "0 failing"
+
+
+def test_accuracy_measures_how_far_an_approximation_is(tmp_path):
+    (tmp_path / "e.py").write_text("def e(x):\n    return 1 + x + x * x / 2\n")
+    (tmp_path / "ref.py").write_text("import math\n\ndef e(x):\n    return math.exp(x)\n\n"
+                                     "def inputs(rng):\n    return (rng.uniform(-0.5, 0.5),)\n")
+    r = _fluxhelper("accuracy", str(tmp_path / "e.py"), "--call", "e", "--reference", str(tmp_path / "ref.py"), "--random", "200")
+    got = dict(x.split("=") for x in r.stdout.split())
+    assert r.returncode == 0 and 0 < float(got["max_abs_error"]) < 0.03 and got["cases"] == "200", r.stdout + r.stderr
+
+
+@pytest.mark.heavy
+@pytest.mark.skipif(__import__("shutil").which("yosys") is None, reason="needs yosys")
+def test_rtl_equiv_proves_or_shows_a_counterexample(tmp_path):
+    ref = "module m(input logic signed [7:0] a, input logic signed [7:0] w, output logic signed [15:0] p);\n  assign p = a * w;\nendmodule\n"
+    (tmp_path / "ref.sv").write_text(ref)
+    (tmp_path / "same.sv").write_text(ref.replace("a * w", "w * a"))
+    (tmp_path / "off.sv").write_text(ref.replace("a * w", "(a == 8'sd3) ? 16'sd0 : a * w"))
+    same = _fluxhelper("rtl", "equiv", str(tmp_path / "same.sv"), "--reference", str(tmp_path / "ref.sv"))
+    off = _fluxhelper("rtl", "equiv", str(tmp_path / "off.sv"), "--reference", str(tmp_path / "ref.sv"))
+    assert same.returncode == 0 and same.stdout.strip() == "0 failing", same.stdout + same.stderr
+    assert off.returncode == 1 and "input a = 3" in off.stdout, off.stdout

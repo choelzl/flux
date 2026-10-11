@@ -45,6 +45,21 @@ def cmd_champsim_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_champsim_stats(args: argparse.Namespace) -> int:
+    from flux_helpers.champsim import BuildFailedError
+    from flux_helpers.champsim.study import detail
+
+    try:
+        got = detail(args.artifact, args.traces, int(args.warmup), int(args.sim), with_types=_types(args.with_),
+                     jobs=args.jobs, config=args.config)
+    except BuildFailedError as exc:
+        print(exc.first_error)
+        print("1 failing")
+        return 3
+    print(" ".join(f"{k}={v:.6g}" for k, v in got.items()))
+    return 0
+
+
 def _build(header: Path) -> tuple[int, object]:
     from flux_helpers.champsim import BuildError, build_header
 
@@ -103,6 +118,15 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--jobs", type=int, default=None)
     run.add_argument("--config", default=None)
     run.set_defaults(func=cmd_champsim_run)
+    stats = sub.add_parser("stats", help="Why it wins: L2 MPKI with and without it, coverage, accuracy, lateness")
+    stats.add_argument("artifact")
+    stats.add_argument("--traces", required=True)
+    stats.add_argument("--warmup", type=int, required=True)
+    stats.add_argument("--sim", type=int, required=True)
+    stats.add_argument("--with", dest="with_", default=None)
+    stats.add_argument("--jobs", type=int, default=None)
+    stats.add_argument("--config", default=None)
+    stats.set_defaults(func=cmd_champsim_stats)
     build = sub.add_parser("build", help="Build a prefetcher header")
     build.add_argument("header")
     build.set_defaults(func=cmd_champsim_build)
