@@ -45,7 +45,7 @@ in the report).
 
 ### A prototype before the target (evolving, D604)
 
-When the gate is `python -m flux_helpers.golden ... --golden golden.py` and `budget.prototype: true`, the
+When the gate is `fluxhelper golden ... --golden golden.py` and `budget.prototype: true`, the
 model first writes the algorithm as plain Python, `design(<the golden's inputs>) ->
 {output: bits}`. Integers and bits only, and a formula, not a lookup of the answers (D616):
 the range split where the function saturates or is the identity, a low-degree fixed-point

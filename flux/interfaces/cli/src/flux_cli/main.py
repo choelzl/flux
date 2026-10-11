@@ -216,11 +216,6 @@ def build_parser() -> argparse.ArgumentParser:
     tools_p.set_defaults(func=cmd_tools)
 
 
-    from flux_helpers.prog import add_parsers as add_prog
-
-    add_prog(subparsers)
-
-
     att_p = subparsers.add_parser("attach", help="Tail the log of the campaign's run (started by `flux run`).")
     att_p.add_argument("db", help="The campaign record.")
     att_p.add_argument("--campaign", default=None)

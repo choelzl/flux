@@ -57,7 +57,7 @@ TOOLS: list[dict[str, Any]] = [
 
 def helpers() -> list[dict[str, Any]]:
     """Flux's helpers as catalog entries, each marked `helper` (D968): what `flux_helpers.catalog()`
-    says it has. The loop knows the framework -- a helper is `{python} -m flux_helpers.<name>`
+    says it has. The loop knows the framework -- a helper is `fluxhelper NAME ...`
     with an entry like any tool's -- never the helpers themselves; none when it is not installed."""
     try:
         from flux_helpers import catalog as helper_catalog

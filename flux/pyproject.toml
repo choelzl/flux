@@ -19,6 +19,7 @@ all = ["z3-solver", "fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"
 
 [project.scripts]
 flux = "flux_cli.main:main"
+fluxhelper = "flux_helpers.__main__:main"
 
 # D600: one distribution of the whole workspace, for `pip install -e ./flux` without Nix. Each
 # package under core/, mentor/, interfaces/ and applications/ keeps its

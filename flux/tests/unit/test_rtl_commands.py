@@ -51,7 +51,7 @@ def test_the_example_document_loads_and_names_the_two_commands():
     from flux_loop.document import describe_flow
 
     task = load_task(EXAMPLE / "problem.yaml")
-    assert task.gate.named("test").run[:4] == ("{python}", "-m", "flux_helpers.golden", "{artifact}")
+    assert task.gate.named("test").run[:7] == ("{python}", "-W", "ignore", "-m", "flux_helpers", "golden", "{artifact}")
     assert "{home}/golden.py" in task.gate.named("test").run and task.home.endswith("mul8")
     assert [s.name for s in task.stages] == ["screen", "confirm"]
     prob = PromptProblem(task)

@@ -144,6 +144,9 @@
             mkdir -p "$FLUX_BIN"
             printf '#!/usr/bin/env bash\nexec python3 -c "import sys; from flux_cli.main import main; sys.exit(main())" "$@"\n' > "$FLUX_BIN/flux"
             chmod +x "$FLUX_BIN/flux"
+            # D970: Flux's helpers, `fluxhelper HELPER ...`
+            printf '#!/usr/bin/env bash\nexec python3 -m flux_helpers "$@"\n' > "$FLUX_BIN/fluxhelper"
+            chmod +x "$FLUX_BIN/fluxhelper"
             export PATH="$FLUX_BIN:$PATH"
             # D947: `orfs <target> DESIGN_CONFIG=...` in a copy made by `openroad-flow-scripts-init <dir>`:
             # its make run serially -- a -j (this machine's profile sets MAKEFLAGS=-j32) stops it at the

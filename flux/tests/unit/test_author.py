@@ -51,7 +51,7 @@ def _run(problem_task, loop_replies):
 
 def test_the_reference_carries_the_guide_and_the_live_examples():
     ref = reference()
-    assert "YOU WRITE" not in ref and "## Keys" in ref and "flux_helpers.golden" in ref
+    assert "YOU WRITE" not in ref and "## Keys" in ref and "fluxhelper golden" in ref
     assert "`mul8/problem.yaml`" in ref and "`adder16/gen.py`" in ref
 
 

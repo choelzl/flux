@@ -1,4 +1,4 @@
-"""`flux prog time|count|size` (D661, flux_helpers.prog), `flux_helpers.rtl measure --stage stat` (D662, D968) and the catalog's
+"""`python -m flux_helpers.prog time|count|size` (D661, D969), `flux_helpers.rtl measure --stage stat` (D662, D968) and the catalog's
 evaluator stages (D663): each prints `name=value` lines a document's stage reads."""
 
 from __future__ import annotations
@@ -19,9 +19,10 @@ CC = shutil.which("cc")
 
 
 def _flux(capsys, *argv: str) -> tuple[int, dict[str, str]]:
-    from flux_cli.main import main
+    from flux_helpers.prog import main          # D969: `python -m flux_helpers.prog`, no `flux prog`
 
-    code = main(list(argv))
+    assert argv[0] == "prog"
+    code = main(list(argv[1:]))
     out = capsys.readouterr().out
     return code, dict(re.findall(r"(?:^|(?<=\s))(\w+)=(\S+)", out)) | {"_out": out}
 
@@ -99,9 +100,9 @@ def test_documents_name_what_the_new_stages_need():
     from flux_loop import TaskSpec
     from flux_loop.document import _flux_program_tools
 
-    py = ["{python}", "-W", "ignore", "-m", "flux_cli.main"]
-    assert _flux_program_tools(py + ["prog", "count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
-    assert _flux_program_tools(py + ["prog", "size"]) == ["size"] and _flux_program_tools(py + ["prog", "time"]) == []
+    py = ["{python}", "-m", "flux_helpers.prog"]          # D968: the helper's own entry says what it needs
+    assert _flux_program_tools(py + ["count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
+    assert _flux_program_tools(py + ["size"]) == ["size"] and _flux_program_tools(py + ["time"]) == []
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
                                "language": "systemverilog",
@@ -114,7 +115,7 @@ def test_documents_name_what_the_new_stages_need():
                                "language": "c",
                                "flow": {"test": "cc -fsyntax-only {artifact}",
                                         "measure": {"count": {"metrics": ["instructions"],
-                                                              "command": 'flux prog count --build "cc -O2 -o {out} {artifact}"'}}}})
+                                                              "command": '{python} -m flux_helpers.prog count --build "cc -O2 -o {out} {artifact}"'}}}})
     assert prog.stages[0].needs == ("valgrind",)
 
 
@@ -125,7 +126,7 @@ def test_the_catalog_carries_the_new_tools():
     for tid in ("prog-time", "prog-count", "prog-size", "rtl-stat"):
         t = tool(tid)
         assert t["role"] == "stage" and all(m in UNITS for m in t["metrics"]), tid
-    assert fill("prog-count") == '{python} -m flux_helpers.prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
-    assert fill("rtl-stat") == "{python} -m flux_helpers.rtl measure {artifact} --stage stat --clock-ps 1000"
+    assert fill("prog-count") == 'fluxhelper prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
+    assert fill("rtl-stat") == "fluxhelper rtl measure {artifact} --stage stat --clock-ps 1000"
     assert not [t for t in TOOLS if "stage" in t]
     assert all(("run" in t) != ("stage" in t) for t in TOOLS)

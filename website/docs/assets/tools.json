@@ -102,7 +102,7 @@
   "role": "stage",
   "title": "Time a Python function",
   "what": "Loads the design, calls one function with your arguments, times it over several runs.",
-  "run": "{python} -m flux_helpers.bench {artifact} --call {call} --args {args} --runs {runs}",
+  "run": "fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}",
   "params": {
    "call": {
     "label": "Function",
@@ -139,7 +139,7 @@
   "role": "check",
   "title": "Build the prefetcher into ChampSim",
   "what": "Compiles a prefetcher header into ChampSim; reports the first compiler error.",
-  "run": "{python} -m flux_helpers.champsim build {artifact}",
+  "run": "fluxhelper champsim build {artifact}",
   "params": {},
   "needs": [
    "pythia"
@@ -160,7 +160,7 @@
   "role": "check",
   "title": "Smoke-run the prefetcher",
   "what": "Builds the prefetcher and runs it on one trace; refused when it issues no prefetches.",
-  "run": "{python} -m flux_helpers.champsim check {artifact} --traces {traces}",
+  "run": "fluxhelper champsim check {artifact} --traces {traces}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -187,7 +187,7 @@
   "role": "stage",
   "title": "Simulate on your traces (ChampSim)",
   "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
-  "run": "{python} -m flux_helpers.champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "run": "fluxhelper champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -227,7 +227,7 @@
   "role": "check",
   "title": "Test against a golden model",
   "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-  "run": "{python} -m flux_helpers.golden {artifact} --golden {golden}",
+  "run": "fluxhelper golden {artifact} --golden {golden}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -255,7 +255,7 @@
   "role": "stage",
   "title": "Program size",
   "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
-  "run": "{python} -m flux_helpers.prog size --build \"{build}\"",
+  "run": "fluxhelper prog size --build \"{build}\"",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -290,7 +290,7 @@
   "role": "stage",
   "title": "Program run time",
   "what": "Builds the program and times it over several runs (hyperfine when present).",
-  "run": "{python} -m flux_helpers.prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
+  "run": "fluxhelper prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -337,7 +337,7 @@
   "role": "stage",
   "title": "Instruction count (Valgrind)",
   "what": "Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic.",
-  "run": "{python} -m flux_helpers.prog count --build \"{build}\" --run \"{run}\"",
+  "run": "fluxhelper prog count --build \"{build}\" --run \"{run}\"",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -378,7 +378,7 @@
   "role": "check",
   "title": "Lint for hardware defects",
   "what": "Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse.",
-  "run": "{python} -m flux_helpers.rtl lint {artifact}",
+  "run": "fluxhelper rtl lint {artifact}",
   "params": {},
   "needs": [
    "verilator"
@@ -400,7 +400,7 @@
   "role": "stage",
   "title": "Area and cells (ASAP7)",
   "what": "OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, the cheapest screen.",
-  "run": "{python} -m flux_helpers.rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+  "run": "fluxhelper rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period (the mapper's target)",
@@ -433,7 +433,7 @@
   "role": "stage",
   "title": "Synthesise and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds.",
-  "run": "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
+  "run": "fluxhelper rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -470,7 +470,7 @@
   "role": "stage",
   "title": "Place and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds.",
-  "run": "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps {clock_ps}",
+  "run": "fluxhelper rtl measure {artifact} --stage place --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -507,7 +507,7 @@
   "role": "stage",
   "title": "Route and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to routing: timing after global routing, minutes.",
-  "run": "{python} -m flux_helpers.rtl measure {artifact} --stage route --clock-ps {clock_ps}",
+  "run": "fluxhelper rtl measure {artifact} --stage route --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",

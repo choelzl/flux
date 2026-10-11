@@ -188,7 +188,7 @@ verdict is in the [check contract](#check-command).
 | `command` | Required | Command string or argument list |
 | `metrics` | Required unless `metrics_re` | Names printed as `name=value`, or typed entries (below) |
 | `metrics_re` | Derived from `metrics` | Map of metric name to a regex with one capture group |
-| `needs` | Inferred for `flux_helpers.prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
+| `needs` | Inferred for `fluxhelper prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
 | `timeout_s` | `600` | Seconds before the stage is stopped |
 | `cutoff` | None | A gate before the next stage, or a list of gates that must all pass |
 | `estimate` | Off | Predict first, and skip designs the estimate already rules out |
@@ -477,7 +477,9 @@ baseline, the composition) runs the same way. Your own agent's command differs; 
 - **Written as** a list of arguments or one string. A string is split like a shell would
   split it, but **no shell runs**: for a pipe or redirection, call one yourself:
   `["sh", "-c", "cat {artifact} | wc -l"]`.
-- **`flux` first** runs Flux's own CLI with the same interpreter (`flux tools`, `flux prog time ...`).
+- **`flux` first** runs Flux's own CLI with the same interpreter (`flux tools ...`).
+- **`fluxhelper` first** runs one of [Flux's helpers](#flux-helpers) the same way
+  (`fluxhelper rtl measure ...`).
 - **Working directory** is `{workdir}`, the pass's trace folder, shared by every design in
   the pass. Name your files with `{home}/...`; relative paths do not reach the loop's folder.
 - **Environment:** Flux's own, unchanged. Nothing is added.
@@ -711,38 +713,69 @@ resume: [...]}`. Write `command` as a **list**.
 
 `flux tools` prints the catalog; the configurator offers these as check types and
 measurement tools. `{x}` other than the loop's placeholders are the tool's parameters. Most are
-Flux's helpers, `{python} -m flux_helpers.<name>` (D968): nothing to copy into the loop's folder.
+Flux's helpers, `fluxhelper NAME ...` (D968, D970): nothing to copy into the loop's folder.
 
 | Tool | Role | Command | Parameters (default) | Reports / passes |
 |---|---|---|---|---|
-| `rtl-lint` | check | `{python} -m flux_helpers.rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
-| `rtl-golden` | check | `{python} -m flux_helpers.golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
+| `rtl-lint` | check | `fluxhelper rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
+| `rtl-golden` | check | `fluxhelper golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
 | `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
 | `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
-| `champsim-build` | check | `{python} -m flux_helpers.champsim build {artifact}` | | exit 3 = did not build |
-| `champsim-check` | check | `{python} -m flux_helpers.champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
-| `rtl-stat` | stage | `{python} -m flux_helpers.rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
+| `champsim-build` | check | `fluxhelper champsim build {artifact}` | | exit 3 = did not build |
+| `champsim-check` | check | `fluxhelper champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
+| `rtl-stat` | stage | `fluxhelper rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
 | `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
 | `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
-| `python-bench` | stage | `{python} -m flux_helpers.bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
-| `prog-size` | stage | `{python} -m flux_helpers.prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
-| `prog-time` | stage | `{python} -m flux_helpers.prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
-| `prog-count` | stage | `{python} -m flux_helpers.prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
-| `champsim-run` | stage | `{python} -m flux_helpers.champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
+| `python-bench` | stage | `fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
+| `prog-size` | stage | `fluxhelper prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
+| `prog-time` | stage | `fluxhelper prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
+| `prog-count` | stage | `fluxhelper prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
+| `champsim-run` | stage | `fluxhelper champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
 | `custom-stage` | stage | `{command}` | `command` | your `name=value` lines |
 
-The golden test is Flux's own: `python -m flux_helpers.golden DESIGN --golden G` prints
+The golden test is Flux's own: `fluxhelper golden DESIGN --golden G` prints
 failing vectors and `N failing of M` (exit 0 pass, 1 fail, 3 did not compile; `--extra F.sv` for a
-module the design instantiates). `python -m flux_helpers.rtl lint DESIGN` prints each hardware
-defect and `N failing` (exit 3 when it does not parse); `python -m flux_helpers.rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
+module the design instantiates). `fluxhelper rtl lint DESIGN` prints each hardware
+defect and `N failing` (exit 3 when it does not parse); `fluxhelper rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
 runs OpenROAD-flow-scripts on ASAP7 to that stage and prints one line, `fmax_mhz=... area_um2=...
 power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, `cell_count`;
 `route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
-placement, `route` after routing (timing from global routing). `python -m flux_helpers.prog` builds with `--build`
+placement, `route` after routing (timing from global routing). `fluxhelper prog` builds with `--build`
 (`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails
-(`flux prog` is the same command). `python -m flux_helpers.bench DESIGN.py --call f --args "(1000,)"`
+(before D969 it was `flux prog`; `flux task migrate` rewrites it). `fluxhelper bench DESIGN.py --call f --args "(1000,)"`
 loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
 `time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
+
+## Flux helpers
+
+Flux's prebuilt checks and measurements (`flux/helpers/`, D968): `fluxhelper NAME ...` in a
+document, or in a shell inside the dev shell. `fluxhelper` alone lists them; `fluxhelper describe
+[NAME]` prints their catalog entries; `fluxhelper NAME --help` describes one.
+
+| Helper | Commands |
+|---|---|
+| `golden` | `fluxhelper golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
+| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N` |
+| `prog` | `fluxhelper prog time\|count\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
+| `bench` | `fluxhelper bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
+| `champsim` | `fluxhelper champsim build\|check\|run ARTIFACT --traces DIR [--warmup N --sim N]` |
+
+**Every helper keeps one interface** (D970; `tests/unit/test_flux_helpers.py` checks it):
+
+| | |
+|---|---|
+| Arguments | `fluxhelper NAME [SUBCOMMAND] ARTIFACT [--option VALUE ...]`: the design file first, every other input an option with a default |
+| stdin | Never read |
+| stdout | A check: each failure on a line of its own, then `N failing` (or `N failing of M`) last. A measurement: `name=value` for each metric it reports |
+| stderr | Diagnostics for a person; never the count or the numbers |
+| Exit code | `0` passed or measured; `1` failed, or the measurement could not be taken; `2` wrong arguments; `3` the design did not build, parse or load |
+| Files | Only in a temporary folder of its own; never in the loop's folder |
+
+**Writing a helper** is adding a module `flux_helpers/NAME.py` (or a package) with `main(argv) ->
+int` (its command line) and `catalog() -> [entry]`: one [catalog entry](#built-in-tools) per check
+or stage it offers, its `run` starting `fluxhelper NAME`. `flux tools`, the configurator's **Flux
+helpers** list and the loader's language and `needs` inference read those entries; nothing else
+in Flux names a helper.
 
 ## RTL golden model
 

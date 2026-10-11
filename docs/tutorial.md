@@ -81,15 +81,15 @@ language: systemverilog
 
 flow:
 
-  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py" # refuses a wrong design first
+  test: "fluxhelper golden {artifact} --golden {home}/golden.py" # refuses a wrong design first
 
   measure:                           # measurement, cheapest first
     screen:
-      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"
+      command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000"
+      command: "fluxhelper rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}

@@ -186,7 +186,7 @@ def test_flux_tools_lists_checks_then_stages(capsys):
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
             "champsim-run", "prog-time", "python-bench"} <= helpers
     assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in catalog())
-    assert fill("rtl-synth", clock_ps=300) == "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 300"
+    assert fill("rtl-synth", clock_ps=300) == "fluxhelper rtl measure {artifact} --stage synth --clock-ps 300"
 
 
 def test_every_catalog_command_loads_as_a_document(tmp_path):

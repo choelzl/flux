@@ -1,6 +1,6 @@
 """The golden test: an RTL design against golden.py's vectors, through Verilator (D967, D968).
 
-    python -m flux_helpers.golden DESIGN.sv --golden golden.py     # "N failing of M"; exit 0, 1, or 3 (no build)
+    fluxhelper golden DESIGN.sv --golden golden.py     # "N failing of M"; exit 0, 1, or 3 (no build)
 
 The vectors come from the golden model (`flux_loop.golden_model`: `PORTS`, `golden()`, `VECTORS`,
 `COUNT`, `SEED`, `EXHAUSTIVE`, `CLOCK`, `LATENCY`, `TOLERANCE_ULP`); a test bench reads them as a
@@ -29,7 +29,7 @@ def catalog() -> list[dict]:
     from ._entries import HDL, N_FAILING, param
     return [{"id": "rtl-golden", "role": "check", "title": "Test against a golden model",
              "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-             "run": "{python} -m flux_helpers.golden {artifact} --golden {golden}",
+             "run": "fluxhelper golden {artifact} --golden {golden}",
              "params": {"golden": param("Golden model", "{home}/golden.py")},
              "needs": ["verilator"], "pass": N_FAILING, "languages": HDL, "kinds": ["rtl"], "short": "golden"}]
 

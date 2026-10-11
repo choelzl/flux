@@ -1,14 +1,14 @@
 """RTL helpers on ASAP7 (D968): lint with Verilator, measure with OpenROAD-flow-scripts (ORFS).
 
-    python -m flux_helpers.rtl lint DESIGN.sv                      # hardware defects: "N failing"; exit 0, 1, 3 (no parse)
-    python -m flux_helpers.rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
+    fluxhelper rtl lint DESIGN.sv                      # hardware defects: "N failing"; exit 0, 1, 3 (no parse)
+    fluxhelper rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
     # one line: fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... (stat: area_um2, cell_count)
 
 measure runs ORFS to the stage asked: stat is Yosys's mapped cells; synth times the netlist
 unplaced (ORFS's floorplan); place after detailed placement; route after routing (timing from
 global routing, plus drc_errors and wirelength_um from the detailed router). A module without
 `clk` is timed input to output. Needs yosys, openroad, sta and ORFS's flow/ folder (FLOW_HOME, or
-the Flux dev shell's ORFS); lint needs verilator. The golden test is `python -m flux_helpers.golden`.
+the Flux dev shell's ORFS); lint needs verilator. The golden test is `fluxhelper golden`.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def catalog() -> list[dict]:
 
     def stage(depth: str, title: str, what: str, reports: tuple[str, ...]) -> dict:
         return {"id": f"rtl-{depth}", "role": "stage", "title": title, "what": what,
-                "run": f"{{python}} -m flux_helpers.rtl measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
+                "run": f"fluxhelper rtl measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
                 "params": {"clock_ps": param("Clock period" + (" (the mapper's target)" if depth == "stat" else ""), 1000, "ps")},
                 "metrics": metrics(*reports), "needs": ["yosys", "openroad", "make"] + ([] if depth == "stat" else ["sta"]),
                 "languages": HDL, "kinds": ["rtl"], "short": depth}
@@ -47,7 +47,7 @@ def catalog() -> list[dict]:
     return [{"id": "rtl-lint", "role": "check", "title": "Lint for hardware defects",
              "what": "Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking "
                      "mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse.",
-             "run": "{python} -m flux_helpers.rtl lint {artifact}", "params": {}, "needs": ["verilator"],
+             "run": "fluxhelper rtl lint {artifact}", "params": {}, "needs": ["verilator"],
              "pass": "passes when it prints `0 failing`; exit 3 = did not parse", "languages": HDL, "kinds": ["rtl"], "short": "lint"},
             stage("stat", "Area and cells (ASAP7)", "OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, "
                   "the cheapest screen.", ("area_um2", "cell_count")),
@@ -129,7 +129,7 @@ def lint(path: str, timeout_s: float = 120.0) -> tuple[int, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m flux_helpers.rtl", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxhelper rtl", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
     li = sub.add_parser("lint", help="Verilator's hardware defects only: N failing; exit 3 when it does not parse")
     li.add_argument("artifact")

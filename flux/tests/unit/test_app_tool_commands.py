@@ -26,7 +26,7 @@ def _core_env():
     return env
 
 
-@pytest.mark.parametrize("command", ["rtl", "champsim", "example"])
+@pytest.mark.parametrize("command", ["rtl", "champsim", "example", "prog"])
 def test_removed_domain_and_example_commands_are_not_cli_entry_points(command):
     parser = build_parser()
     with pytest.raises(SystemExit) as exc:

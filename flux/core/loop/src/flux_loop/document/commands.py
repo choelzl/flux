@@ -21,33 +21,26 @@ BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failur
 
 
 def _words_before_params(run: str) -> list[str]:
-    """A catalog command's leading words, up to its first placeholder but `{python}`."""
+    """A catalog command's leading words, up to its first placeholder (but `{python}`) or option."""
     out = []
     for word in run.split():
-        if "{" in word.replace("{python}", ""):
+        if "{" in word.replace("{python}", "") or word.startswith("--"):
             break
         out.append(word)
     return out
 
 
 def _flux_program_tools(cmd: Iterable[str]) -> list[str]:
-    """The programs a command needs on PATH without saying so: a catalog tool that asks for it
-    (`infer_needs`, D968: a helper's entry), and `flux prog count|size` (D661)."""
-    toks = list(cmd)
+    """The programs a command needs on PATH without saying so: those of a catalog tool that asks
+    for it (`infer_needs`, D968: a helper's entry, such as the program counts' Valgrind)."""
+    toks = _as_said(cmd)
     from ..toolbox import catalog
 
     for t in catalog():
         head = _words_before_params(str(t.get("run") or "")) if t.get("infer_needs") else []
         if len(head) > 1 and toks[:len(head)] == head:
             return list(t.get("needs") or [])
-    try:
-        at = toks.index("prog")
-    except ValueError:
-        return []
-    if not at or "flux" not in " ".join(toks[:at]):
-        return []
-    sub = toks[at + 1] if at + 1 < len(toks) else ""
-    return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
+    return []
 
 
 def _digest_of(text: str | None) -> str:
@@ -59,24 +52,21 @@ def _digest_of(text: str | None) -> str:
 def _inferred_language(gate: Any, stages: Any) -> str | None:
     """The language a document need not say (D832): the one the tools its checks and stages name
     take, from the tool catalog's
-    `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
+    `languages`. A tool that takes several (your own script, a program's timing) decides nothing; None
     when nothing decides."""
     from ..toolbox import catalog
 
     hdl = {"systemverilog", "verilog"}
 
     def said(argv: Any) -> str:
-        toks = list(argv or ())
-        if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_cli.main"]:
-            toks = ["flux", *toks[5:]]
-        return " ".join(toks)
+        return " ".join(_as_said(argv or ()))
 
     cmds = [said(c.run) for c in (gate or ())] + [said(st.command) for st in (stages or ()) if st.command]
     found: set[str] | None = None
     for cmd in cmds:
         for t in catalog():
             # the tool's words up to its first placeholder, `{python}` counted as a word (D968:
-            # a helper's `{python} -m flux_helpers.<name> ...` says its language)
+            # a helper's `fluxhelper NAME ...` says its language)
             head = " ".join(_words_before_params(str(t.get("run") or "")))
             langs = set(t.get("languages") or ())
             if len(head.split()) < 2 or not langs or not cmd.startswith(head):
@@ -109,7 +99,22 @@ def _command(raw: Any, what: str) -> tuple[str, ...] | None:
     if toks[0] == "flux":
         # warnings off (D589): runpy and numpy warnings in a refusal mislead the model
         toks = ["{python}", "-W", "ignore", "-m", "flux_cli.main", *toks[1:]]
+    elif toks[0] == "fluxhelper":                  # D970: Flux's helpers, run like `flux`
+        toks = ["{python}", "-W", "ignore", "-m", "flux_helpers", *toks[1:]]
     return tuple(toks)
+
+
+def _as_said(toks: Iterable[str]) -> list[str]:
+    """A command as a person writes it: `flux ...` and `fluxhelper ...` for the forms they run as
+    (D970), so a catalog entry's words match however the document spelled the helper."""
+    toks = list(toks)
+    if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_cli.main"]:
+        return ["flux", *toks[5:]]
+    if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_helpers"]:
+        return ["fluxhelper", *toks[5:]]
+    if len(toks) >= 3 and toks[0] == "{python}" and toks[1] == "-m" and toks[2].startswith("flux_helpers"):
+        return ["fluxhelper", *([toks[2].split(".", 1)[1]] if "." in toks[2] else []), *toks[3:]]
+    return toks
 
 
 def _check_placeholders(gate: "Gate | None", stages: Iterable["Stage"], generator: dict[str, Any],

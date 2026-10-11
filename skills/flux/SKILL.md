@@ -46,14 +46,14 @@ contract: >-             # rules every candidate must follow: ports, names, what
 language: systemverilog
 
 flow:
-  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"
+  test: "fluxhelper golden {artifact} --golden {home}/golden.py"
   measure:                  # cheapest first; commands are owned by the application
     screen:
-      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"
+      command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000"
+      command: "fluxhelper rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}
@@ -135,9 +135,9 @@ RTL directly rarely passes.
 
 ## Rules that save hours
 
-- The gate is the truth: a candidate that fails `python -m flux_helpers.golden` is never "almost right". If
+- The gate is the truth: a candidate that fails `fluxhelper golden` is never "almost right". If
   every candidate fails the same way, suspect the **golden model or the contract**, not the
-  generator: run `python -m flux_helpers.golden <a candidate> --golden golden.py --show 5` and read the vectors.
+  generator: run `fluxhelper golden <a candidate> --golden golden.py --show 5` and read the vectors.
 - Golden models compute expected values; never hand-write expected numbers. Float ports carry
   bit patterns (`unsigned: True`); read bits with `np.uint16(x).view(np.float16)`, compute in
   float64, round once; allow `TOLERANCE_ULP = {"y": 1}` for approximations. Special values

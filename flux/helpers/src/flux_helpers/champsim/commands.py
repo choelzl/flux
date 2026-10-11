@@ -1,10 +1,10 @@
 """ChampSim's build, check and measurement commands (D968: Flux's helpers, not a copy per application).
 
     flow:
-      test: '{python} -m flux_helpers.champsim check {artifact} --traces {home}/traces'
+      test: 'fluxhelper champsim check {artifact} --traces {home}/traces'
       measure:
         screen:
-          command: '{python} -m flux_helpers.champsim run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
+          command: 'fluxhelper champsim run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
           metrics: [geomean_speedup]
           needs: [pythia]
 
@@ -91,7 +91,7 @@ def cmd_champsim_check(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`python -m flux_helpers.champsim build|check|run`."""
+    """`fluxhelper champsim build|check|run`."""
     parser = argparse.ArgumentParser(description="Application ChampSim checks and measurements")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Measure an INI file or prefetcher header on traces")

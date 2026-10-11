@@ -1,10 +1,10 @@
-"""`python -m flux_helpers.prog time|count|size` (D661, D968; `flux prog` is the same): a program's
+"""`fluxhelper prog time|count|size` (D661, D968; `flux prog` before D969): a program's
 speed, instruction and cache counts, and size, as stages a document names. Each prints `name=value` lines.
 
     measure:
-      count: {command: '{python} -m flux_helpers.prog count --build "c++ -O2 -o {out} {artifact}"',
+      count: {command: 'fluxhelper prog count --build "c++ -O2 -o {out} {artifact}"',
               metrics: [instructions]}
-      time:  {command: '{python} -m flux_helpers.prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
+      time:  {command: 'fluxhelper prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
               metrics: [time_ms]}
 
 `--build` is one shell-quoted command run in a fresh directory; `{out}` in it is the program it
@@ -36,10 +36,10 @@ def catalog() -> list[dict]:
     build = {"build": param("Build command ({out}: the program)", "c++ -O2 -o {out} {artifact}"),
              "run": param("Run command (empty: the built program)", "")}
     langs, kinds = ["c", "cpp", "python"], ["program", "python"]
-    prog = '{{python}} -m flux_helpers.prog {sub} --build "{{build}}" --run "{{run}}"{more}'
+    prog = 'fluxhelper prog {sub} --build "{{build}}" --run "{{run}}"{more}'
     return [{"id": "prog-size", "role": "stage", "title": "Program size",
              "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
-             "run": '{python} -m flux_helpers.prog size --build "{build}"', "params": {"build": build["build"]},
+             "run": 'fluxhelper prog size --build "{build}"', "params": {"build": build["build"]},
              "metrics": metrics("text_bytes", "data_bytes", "bss_bytes"), "needs": ["size"], "infer_needs": True,
              "languages": langs, "kinds": kinds, "short": "size"},
             {"id": "prog-time", "role": "stage", "title": "Program run time",
@@ -79,7 +79,7 @@ def _prepare(args: argparse.Namespace, scratch: Path) -> list[str]:
             why = "\n".join(text[:20]) or f"the build wrote no {out.name}"
             raise _Failed(f"did not build: {why}\n1 failing", _DID_NOT_BUILD)
     elif getattr(args, "binary", None):
-        return [args.binary]                # `flux prog size BINARY`: a program already built
+        return [args.binary]                # `size BINARY`: a program already built
     run = (args.run or "").strip() or "{out}"
     if "{out}" in run and not out.exists():
         raise _Failed("nothing to run: say --build (which writes {out}) or --run", 2)
@@ -199,8 +199,8 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`python -m flux_helpers.prog time|count|size ...`: the same commands as `flux prog`."""
-    parser = argparse.ArgumentParser(prog="python -m flux_helpers.prog")
+    """`fluxhelper prog time|count|size ...`."""
+    parser = argparse.ArgumentParser(prog="fluxhelper prog")
     add_parsers(parser.add_subparsers(dest="command", required=True))
     args = parser.parse_args(["prog", *(argv if argv is not None else __import__("sys").argv[1:])])
     return args.func(args)
