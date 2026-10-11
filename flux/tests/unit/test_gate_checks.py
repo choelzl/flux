@@ -144,7 +144,7 @@ endmodule
 
 
 def _lint(path: Path) -> subprocess.CompletedProcess:
-    """The catalog's lint, Verilator's hardware defects (D962) through flux_helpers.rtl (D968)."""
+    """The catalog's lint, Verilator's hardware defects (D962) through flux_presets.rtl (D968)."""
     import sys
 
     from flux_loop.toolbox import fill
@@ -182,11 +182,11 @@ def test_flux_tools_lists_checks_then_stages(capsys):
     assert out.index("CHECKS") < out.index("rtl-lint:") < out.index("STAGES") < out.index("rtl-synth:")
     assert "gate: passes when it prints `0 failing`" in out and "metrics: fmax_mhz (MHz)" in out
     assert {t["id"] for t in TOOLS} == {"python-test-script", "bench-script", "custom-check", "custom-stage"}, "the generic ones"
-    helpers = {t["id"] for t in catalog() if t.get("helper")}      # D968: what flux_helpers says it has
+    presets = {t["id"] for t in catalog() if t.get("preset")}      # D968: what flux_presets says it has
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
-            "champsim-run", "prog-time", "python-bench"} <= helpers
+            "champsim-run", "prog-time", "python-bench"} <= presets
     assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in catalog())
-    assert fill("rtl-synth", clock_ps=300) == "fluxhelper rtl measure {artifact} --stage synth --clock-ps 300"
+    assert fill("rtl-synth", clock_ps=300) == "fluxpreset rtl measure {artifact} --stage synth --clock-ps 300"
 
 
 def test_every_catalog_command_loads_as_a_document(tmp_path):

@@ -1,13 +1,13 @@
-"""A C or C++ design's function against a Python reference (D972), like `fluxhelper cases`.
+"""A C or C++ design's function against a Python reference (D972), like `fluxpreset cases`.
 
-    fluxhelper ccases DESIGN.c --call add --sig "long(long,long)" --reference ref.py:add --random 200
+    fluxpreset ccases DESIGN.c --call add --sig "long(long,long)" --reference ref.py:add --random 200
     # each mismatch on a line, then "N failing of M"; exit 0, 1, or 3 (the design did not build)
 
 The design is built as a shared library (`--build`, default `cc -O2 -shared -fPIC -o {out} {artifact}`;
 C++ with `c++` and the function `extern "C"`) and its function called through ctypes with the
 signature `--sig "RET(ARG,...)"` -- scalar types only: char, short, int, long, long long, their
 unsigned forms, int8..int64, uint8..uint64, float, double, bool, size_t. The cases are the same as
-`fluxhelper cases`'s: `--cases` JSON, the reference module's `CASES`, `--random N` of its
+`fluxpreset cases`'s: `--cases` JSON, the reference module's `CASES`, `--random N` of its
 `inputs(rng)`; a result is compared with the reference function's or `expected`.
 """
 
@@ -33,12 +33,12 @@ TYPES = {"char": ctypes.c_char, "signed char": ctypes.c_byte, "unsigned char": c
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D972)."""
+    """This preset's catalog entry (D972)."""
     from ._entries import N_FAILING, param
     return [{"id": "c-cases", "role": "check", "title": "Compare a C function with a reference",
              "what": "Builds the design as a shared library and calls one function (a scalar signature) on cases, each "
                      "result compared with a Python reference function's or the expected value.",
-             "run": "fluxhelper ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
+             "run": "fluxpreset ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
              "params": {"call": param("Function", "main"), "sig": param("Signature", "int(int)"),
                         "reference": param("Reference (file:function)", "{home}/reference.py"), "random": param("Random cases", 100)},
              "needs": ["cc"], "pass": N_FAILING, "languages": ["c", "cpp"], "kinds": ["program"], "short": "cases"}]
@@ -56,7 +56,7 @@ def signature(sig: str) -> tuple[object, list[object]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper ccases", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset ccases", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     ap.add_argument("--sig", required=True, help='the function\'s signature, e.g. "long(long,long)"')
     ap.add_argument("--build", default="cc -O2 -shared -fPIC -o {out} {artifact}",

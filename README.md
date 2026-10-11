@@ -88,7 +88,7 @@ To set them once for this machine, put the same lines (without `export`) in
 - **Coding agents in any box.** Claude Code, Codex or OpenCode can write the designs or answer
   any box that does not establish facts.
 - **Real measurements.** Yosys and OpenROAD on ASAP7 (speed, area, power), ChampSim prefetcher
-  studies (`fluxhelper champsim`), or any command of yours.
+  studies (`fluxpreset champsim`), or any command of yours.
 - **Calibration.** Cheap stages are compared with costly ones; a quick estimate is never
   reported as a measurement.
 - **An honest report.** The design to build first, then the trade-offs, measured vs modelled,

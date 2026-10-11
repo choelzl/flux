@@ -299,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             why = f"{size} B is over the {args.max_storage} B budget" if size > args.max_storage else None
         print(f"1 failing: {why}" if why else "0 failing")
         return 0
-    from flux_helpers.champsim.study import measure
+    from flux_presets.champsim.study import measure
 
     import tempfile
 

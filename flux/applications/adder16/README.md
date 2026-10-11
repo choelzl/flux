@@ -16,8 +16,8 @@ run: it needs no model.
 | `golden.py` | the golden model: `PORTS` and `golden(a, b)`, what the adder must compute |
 
 For every point of the space the loop runs `gen.py` with that point's `arch`, proves the result
-against `golden.py` in Verilator (`fluxhelper golden`), synthesises it with Yosys + OpenSTA
-(`fluxhelper rtl measure --stage synth`, the screen), and places the two finalists with OpenROAD
+against `golden.py` in Verilator (`fluxpreset golden`), synthesises it with Yosys + OpenSTA
+(`fluxpreset rtl measure --stage synth`, the screen), and places the two finalists with OpenROAD
 (`--stage place`, the numbers the report quotes).
 
 ## Run it

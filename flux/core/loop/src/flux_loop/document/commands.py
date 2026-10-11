@@ -32,7 +32,7 @@ def _words_before_params(run: str) -> list[str]:
 
 def _flux_program_tools(cmd: Iterable[str]) -> list[str]:
     """The programs a command needs on PATH without saying so: those of a catalog tool that asks
-    for it (`infer_needs`, D968: a helper's entry, such as the program counts' Valgrind)."""
+    for it (`infer_needs`, D968: a preset's entry, such as the program counts' Valgrind)."""
     toks = _as_said(cmd)
     from ..toolbox import catalog
 
@@ -66,7 +66,7 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
     for cmd in cmds:
         for t in catalog():
             # the tool's words up to its first placeholder, `{python}` counted as a word (D968:
-            # a helper's `fluxhelper NAME ...` says its language)
+            # a preset's `fluxpreset NAME ...` says its language)
             head = " ".join(_words_before_params(str(t.get("run") or "")))
             langs = set(t.get("languages") or ())
             if len(head.split()) < 2 or not langs or not cmd.startswith(head):
@@ -81,7 +81,7 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
 def _command(raw: Any, what: str) -> tuple[str, ...] | None:
     """A command the document says (D580): argv tokens as a list, or one string split like
     a shell would. A command whose head is `flux` runs this flux (`{python} -m
-    flux_cli.main`), so a document can name a Flux helper and needs no
+    flux_cli.main`), so a document can name a Flux preset and needs no
     wrapper on PATH. `{artifact}`, `{workdir}`, `{name}`, `{part}`, `{python}` and
     `{home}` are substituted at run time."""
     if raw is None:
@@ -99,21 +99,21 @@ def _command(raw: Any, what: str) -> tuple[str, ...] | None:
     if toks[0] == "flux":
         # warnings off (D589): runpy and numpy warnings in a refusal mislead the model
         toks = ["{python}", "-W", "ignore", "-m", "flux_cli.main", *toks[1:]]
-    elif toks[0] == "fluxhelper":                  # D970: Flux's helpers, run like `flux`
-        toks = ["{python}", "-W", "ignore", "-m", "flux_helpers", *toks[1:]]
+    elif toks[0] == "fluxpreset":                  # D970: Flux's presets, run like `flux`
+        toks = ["{python}", "-W", "ignore", "-m", "flux_presets", *toks[1:]]
     return tuple(toks)
 
 
 def _as_said(toks: Iterable[str]) -> list[str]:
-    """A command as a person writes it: `flux ...` and `fluxhelper ...` for the forms they run as
-    (D970), so a catalog entry's words match however the document spelled the helper."""
+    """A command as a person writes it: `flux ...` and `fluxpreset ...` for the forms they run as
+    (D970), so a catalog entry's words match however the document spelled the preset."""
     toks = list(toks)
     if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_cli.main"]:
         return ["flux", *toks[5:]]
-    if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_helpers"]:
-        return ["fluxhelper", *toks[5:]]
-    if len(toks) >= 3 and toks[0] == "{python}" and toks[1] == "-m" and toks[2].startswith("flux_helpers"):
-        return ["fluxhelper", *([toks[2].split(".", 1)[1]] if "." in toks[2] else []), *toks[3:]]
+    if toks[:5] == ["{python}", "-W", "ignore", "-m", "flux_presets"]:
+        return ["fluxpreset", *toks[5:]]
+    if len(toks) >= 3 and toks[0] == "{python}" and toks[1] == "-m" and toks[2].startswith("flux_presets"):
+        return ["fluxpreset", *([toks[2].split(".", 1)[1]] if "." in toks[2] else []), *toks[3:]]
     return toks
 
 

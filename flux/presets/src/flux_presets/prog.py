@@ -1,10 +1,10 @@
-"""`fluxhelper prog time|count|size` (D661, D968; `flux prog` before D969): a program's
+"""`fluxpreset prog time|count|size` (D661, D968; `flux prog` before D969): a program's
 speed, instruction and cache counts, peak memory and size, as stages a document names. Each prints `name=value` lines.
 
     measure:
-      count: {command: 'fluxhelper prog count --build "c++ -O2 -o {out} {artifact}"',
+      count: {command: 'fluxpreset prog count --build "c++ -O2 -o {out} {artifact}"',
               metrics: [instructions]}
-      time:  {command: 'fluxhelper prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
+      time:  {command: 'fluxpreset prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
               metrics: [time_ms]}
 
 `--build` is one shell-quoted command run in a fresh directory; `{out}` in it is the program it
@@ -30,16 +30,16 @@ __all__ = ["add_parsers", "cmd_prog_count", "cmd_prog_memory", "cmd_prog_size", 
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entries (D968): a compiled program's size, time and counts. Their
+    """This preset's catalog entries (D968): a compiled program's size, time and counts. Their
     `needs` are inferred by the loader when a stage does not say them (`infer_needs`)."""
     from ._entries import metrics, param
     build = {"build": param("Build command ({out}: the program)", "c++ -O2 -o {out} {artifact}"),
              "run": param("Run command (empty: the built program)", "")}
     langs, kinds = ["c", "cpp", "python"], ["program", "python"]
-    prog = 'fluxhelper prog {sub} --build "{{build}}" --run "{{run}}"{more}'
+    prog = 'fluxpreset prog {sub} --build "{{build}}" --run "{{run}}"{more}'
     return [{"id": "prog-size", "role": "stage", "title": "Program size",
              "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
-             "run": 'fluxhelper prog size --build "{build}"', "params": {"build": build["build"]},
+             "run": 'fluxpreset prog size --build "{build}"', "params": {"build": build["build"]},
              "metrics": metrics("text_bytes", "data_bytes", "bss_bytes"), "needs": ["size"], "infer_needs": True,
              "languages": langs, "kinds": kinds, "short": "size"},
             {"id": "prog-time", "role": "stage", "title": "Program run time",
@@ -235,8 +235,8 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`fluxhelper prog time|count|size ...`."""
-    parser = argparse.ArgumentParser(prog="fluxhelper prog")
+    """`fluxpreset prog time|count|size ...`."""
+    parser = argparse.ArgumentParser(prog="fluxpreset prog")
     add_parsers(parser.add_subparsers(dest="command", required=True))
     args = parser.parse_args(["prog", *(argv if argv is not None else __import__("sys").argv[1:])])
     return args.func(args)

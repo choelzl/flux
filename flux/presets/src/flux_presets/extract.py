@@ -1,8 +1,8 @@
 """Any tool's output as `name=value` (D973), so a tool that does not speak Flux needs no script.
 
-    fluxhelper extract --pick results.latency.mean=latency_ms --pick results.ok=ok -- mytool --json design.c
-    fluxhelper extract --file out.csv --format csv --pick runtime=time_ms --row mean -- mytool design.c
-    fluxhelper extract --format regex --pick "took ([0-9.]+) ms=time_ms" -- mytool design.c
+    fluxpreset extract --pick results.latency.mean=latency_ms --pick results.ok=ok -- mytool --json design.c
+    fluxpreset extract --file out.csv --format csv --pick runtime=time_ms --row mean -- mytool design.c
+    fluxpreset extract --format regex --pick "took ([0-9.]+) ms=time_ms" -- mytool design.c
 
 The command after `--` runs; its stdout (or `--file`, written by it) is read as `--format`: `json`
 (a dotted path into the object, list items by index), `csv` (a column, its `--row`: first, last,
@@ -25,11 +25,11 @@ from ._run import command, run
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D973)."""
+    """This preset's catalog entry (D973)."""
     from ._entries import param
     return [{"id": "extract", "role": "stage", "title": "Numbers out of any tool's output",
              "what": "Runs your tool and reads its JSON, CSV or text output, printing the numbers you pick as name=value.",
-             "run": "fluxhelper extract --format {format} --pick {pick} -- {command}",
+             "run": "fluxpreset extract --format {format} --pick {pick} -- {command}",
              "params": {"format": param("Format (json, csv, regex)", "json"), "pick": param("Pick (source=name)", "value=metric"),
                         "command": param("Tool command", "")},
              "metrics": {}, "needs": [], "languages": [], "kinds": ["own"], "short": "extract"}]
@@ -50,7 +50,7 @@ def _csv(text: str, column: str, row: str) -> float:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper extract", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset extract", description=__doc__.split("\n\n")[0])
     ap.add_argument("--format", choices=("json", "csv", "regex"), default="json")
     ap.add_argument("--pick", action="append", required=True, help="SOURCE=NAME: a JSON path, a CSV column or a regex")
     ap.add_argument("--file", default="", help="read this file (the command writes it) instead of stdout")

@@ -1,4 +1,4 @@
-"""`python -m flux_helpers.prog time|count|size` (D661, D969), `flux_helpers.rtl measure --stage stat` (D662, D968) and the catalog's
+"""`python -m flux_presets.prog time|count|size` (D661, D969), `flux_presets.rtl measure --stage stat` (D662, D968) and the catalog's
 evaluator stages (D663): each prints `name=value` lines a document's stage reads."""
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ CC = shutil.which("cc")
 
 
 def _flux(capsys, *argv: str) -> tuple[int, dict[str, str]]:
-    from flux_helpers.prog import main          # D969: `python -m flux_helpers.prog`, no `flux prog`
+    from flux_presets.prog import main          # D969: `python -m flux_presets.prog`, no `flux prog`
 
     assert argv[0] == "prog"
     code = main(list(argv[1:]))
@@ -34,7 +34,7 @@ def _build(tmp_path: Path) -> str:
 
 
 def test_prog_time_without_hyperfine_times_a_python_loop(capsys, tmp_path, monkeypatch):
-    import flux_helpers.prog as prog
+    import flux_presets.prog as prog
 
     real = shutil.which
     monkeypatch.setattr(prog.shutil, "which", lambda t: None if t == "hyperfine" else real(t))
@@ -86,7 +86,7 @@ def test_prog_size_reads_the_sections(capsys, tmp_path):
 def test_rtl_measure_stat_is_the_mapped_cells(capsys, tmp_path):
     sv = tmp_path / "add8.sv"
     sv.write_text("module add8(input logic [7:0] a, b, output logic [8:0] s);\n  assign s = a + b;\nendmodule\n")
-    from flux_helpers.rtl import main
+    from flux_presets.rtl import main
 
     code = main(["measure", str(sv), "--stage", "stat"])
     out = capsys.readouterr().out
@@ -100,14 +100,14 @@ def test_documents_name_what_the_new_stages_need():
     from flux_loop import TaskSpec
     from flux_loop.document import _flux_program_tools
 
-    py = ["{python}", "-m", "flux_helpers.prog"]          # D968: the helper's own entry says what it needs
+    py = ["{python}", "-m", "flux_presets.prog"]          # D968: the preset's own entry says what it needs
     assert _flux_program_tools(py + ["count", "--build", "cc -o {out} {artifact}"]) == ["valgrind"]
     assert _flux_program_tools(py + ["size"]) == ["size"] and _flux_program_tools(py + ["time"]) == []
     task = TaskSpec.from_dict({"id": "t",
                                "statement": "x",
                                "language": "systemverilog",
                                "flow": {"test": "verilator --lint-only {artifact}",
-                                        "measure": {"stat": {"command": "{python} -m flux_helpers.rtl measure {artifact} --stage stat",
+                                        "measure": {"stat": {"command": "{python} -m flux_presets.rtl measure {artifact} --stage stat",
                                                              "metrics": ["area_um2", "cell_count"], "needs": ["yosys"]}}}})
     assert task.stages[0].metrics == ("area_um2", "cell_count") and task.stages[0].needs == ("yosys",)
     prog = TaskSpec.from_dict({"id": "p",
@@ -115,7 +115,7 @@ def test_documents_name_what_the_new_stages_need():
                                "language": "c",
                                "flow": {"test": "cc -fsyntax-only {artifact}",
                                         "measure": {"count": {"metrics": ["instructions"],
-                                                              "command": '{python} -m flux_helpers.prog count --build "cc -O2 -o {out} {artifact}"'}}}})
+                                                              "command": '{python} -m flux_presets.prog count --build "cc -O2 -o {out} {artifact}"'}}}})
     assert prog.stages[0].needs == ("valgrind",)
 
 
@@ -126,7 +126,7 @@ def test_the_catalog_carries_the_new_tools():
     for tid in ("prog-time", "prog-count", "prog-size", "rtl-stat"):
         t = tool(tid)
         assert t["role"] == "stage" and all(m in UNITS for m in t["metrics"]), tid
-    assert fill("prog-count") == 'fluxhelper prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
-    assert fill("rtl-stat") == "fluxhelper rtl measure {artifact} --stage stat --clock-ps 1000"
+    assert fill("prog-count") == 'fluxpreset prog count --build "c++ -O2 -o {out} {artifact}" --run ""'
+    assert fill("rtl-stat") == "fluxpreset rtl measure {artifact} --stage stat --clock-ps 1000"
     assert not [t for t in TOOLS if "stage" in t]
     assert all(("run" in t) != ("stage" in t) for t in TOOLS)

@@ -1,4 +1,4 @@
-"""What the glue helpers share (D973): run a command given after `--`, and read `name=value`."""
+"""What the glue presets share (D973): run a command given after `--`, and read `name=value`."""
 
 from __future__ import annotations
 

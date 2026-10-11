@@ -1,7 +1,7 @@
 """A C or C++ program built with AddressSanitizer and UndefinedBehaviorSanitizer and run (D972): each
 memory error, leak or undefined behaviour it hits is a failure.
 
-    fluxhelper sanitize --build "cc -O1 -o {out} {artifact}" [--run "{out} 1000"] [--runs 1]
+    fluxpreset sanitize --build "cc -O1 -o {out} {artifact}" [--run "{out} 1000"] [--runs 1]
     # each error's first line, then "N failing"; exit 0, 1, or 3 (the program did not build)
 
 The sanitizer flags are added to `--build` (`-fsanitize=address,undefined -fno-omit-frame-pointer
@@ -24,19 +24,19 @@ _ERRORS = re.compile(r"(ERROR: (AddressSanitizer|LeakSanitizer): .*|.*: runtime 
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D972)."""
+    """This preset's catalog entry (D972)."""
     from ._entries import N_FAILING, param
     return [{"id": "c-sanitize", "role": "check", "title": "Memory and undefined-behaviour errors",
              "what": "Builds the program with AddressSanitizer and UndefinedBehaviorSanitizer and runs it: each memory error, "
                      "leak or undefined behaviour it hits is a failure.",
-             "run": 'fluxhelper sanitize --build "{build}" --run "{run}"',
+             "run": 'fluxpreset sanitize --build "{build}" --run "{run}"',
              "params": {"build": param("Build command ({out}: the program)", "cc -O1 -o {out} {artifact}"),
                         "run": param("Run command (empty: the built program)", "")},
              "needs": ["cc"], "pass": N_FAILING, "languages": ["c", "cpp"], "kinds": ["program"], "short": "sanitize"}]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper sanitize", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset sanitize", description=__doc__.split("\n\n")[0])
     ap.add_argument("--build", required=True, help='one build command; {out} is the program it writes')
     ap.add_argument("--run", default="", help="the command run; {out} is the program (empty: the program alone)")
     ap.add_argument("--runs", type=int, default=1)

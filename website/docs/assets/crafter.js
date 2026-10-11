@@ -270,29 +270,29 @@
 
   /** A check's type, and the catalog tools that do it. `any`: offered whatever the language
       (a script of yours runs on any file); the others only for the languages they list. "Flux
-      helpers" (D968) are the catalog's `helper` entries -- lint, the golden test, ChampSim's build,
-      and whatever helpers Flux has -- chosen from a second list, so the page names none of them. */
+      presets" (D968) are the catalog's `preset` entries -- lint, the golden test, ChampSim's build,
+      and whatever presets Flux has -- chosen from a second list, so the page names none of them. */
   var CHECK_TYPES = [
-    { key: "helper", title: "Flux helpers", helper: true },
+    { key: "preset", title: "Flux presets", preset: true },
     { key: "test", title: "Test script", tools: ["python-test-script"], any: ["python-test-script"] },
     { key: "custom", title: "Custom", tools: ["custom-check"], any: ["custom-check"] },
   ];
 
-  function isHelper(id, cat) { var t = toolOf(id, cat); return !!(t && t.helper); }
+  function isPreset(id, cat) { var t = toolOf(id, cat); return !!(t && t.preset); }
 
-  /** The measuring tools the first list shows: the catalog's own stages, one "Flux helpers" entry
-      for all its helpers (`helper`), custom last, as [id, label]. */
+  /** The measuring tools the first list shows: the catalog's own stages, one "Flux presets" entry
+      for all its presets (`preset`), custom last, as [id, label]. */
   function stageTools(cat) {
     var all = (cat || CATALOG).filter(function (t) { return t.role === "stage"; });
-    var out = all.filter(function (t) { return !t.helper; }).map(function (t) { return [t.id, t.title]; });
-    if (all.some(function (t) { return t.helper; })) out.push(["helper", "Flux helpers"]);
+    var out = all.filter(function (t) { return !t.preset; }).map(function (t) { return [t.id, t.title]; });
+    if (all.some(function (t) { return t.preset; })) out.push(["preset", "Flux presets"]);
     out.sort(function (a, b) { return (a[0] === "custom-stage") - (b[0] === "custom-stage"); });
     return out;
   }
 
-  /** The helpers a measurement may use for this language, as [id, title]. */
-  function stageHelpers(lang, cat) {
-    return (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.helper && fits(t, lang); })
+  /** The presets a measurement may use for this language, as [id, title]. */
+  function stagePresets(lang, cat) {
+    return (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.preset && fits(t, lang); })
       .map(function (t) { return [t.id, t.title]; });
   }
 
@@ -326,8 +326,8 @@
   function toolsFor(type, lang, cat) {
     var ty = checkType(type);
     if (!ty) return [];
-    if (ty.helper) {
-      return (cat || CATALOG).filter(function (t) { return t.role === "check" && t.helper && fits(t, lang); })
+    if (ty.preset) {
+      return (cat || CATALOG).filter(function (t) { return t.role === "check" && t.preset && fits(t, lang); })
         .map(function (t) { return t.id; });
     }
     return ty.tools.filter(function (id) {
@@ -952,7 +952,7 @@
       seen[nm] = 1;
       if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(nm)) error("The check name \"" + nm + "\" should be a letter, then letters, digits, _ or -.");
       if (!c.tool || !toolOf(c.tool, cat)) {
-        error("Check \"" + nm + "\": there is no " + (ty && ty.helper ? "Flux helper" : (ty ? ty.title.toLowerCase() : "such") + " tool") + " for " + (lang || "this language") + "; use Custom.");
+        error("Check \"" + nm + "\": there is no " + (ty && ty.preset ? "Flux preset" : (ty ? ty.title.toLowerCase() : "such") + " tool") + " for " + (lang || "this language") + "; use Custom.");
         return;
       }
       params(c, "Check", nm);
@@ -1159,7 +1159,7 @@
   }
 
   function checkTypeOf(toolId, cat) {
-    if (isHelper(toolId, cat)) return "helper";
+    if (isPreset(toolId, cat)) return "preset";
     if (toolId === "python-test-script") return "test";
     return "custom";
   }
@@ -1499,7 +1499,7 @@
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
-              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, stageHelpers: stageHelpers, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
+              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, stagePresets: stagePresets, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, DSE_GROUPS: DSE_GROUPS, dseGroup: dseGroup, dseChoices: dseChoices, dseHint: dseHint,
               halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
@@ -1647,10 +1647,10 @@
             setCheckTool(state, c, v);
           }, { compact: true, structural: true, options: CHECK_TYPES.map(function (x) { return [x.key, x.title]; }) }),
           field("Name", function () { return c.name; }, function (v) { c.name = v; }, { compact: true, narrow: true })];
-        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + (ty.helper ? "Flux helper" : ty.title.toLowerCase() + " tool") + " for " + (lang || "this language") + "; choose Custom." }));
+        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + (ty.preset ? "Flux preset" : ty.title.toLowerCase() + " tool") + " for " + (lang || "this language") + "; choose Custom." }));
         else {
-          if (ids.length > 1 || ty.helper) {
-            line.push(field(ty.helper ? "Helper" : "Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
+          if (ids.length > 1 || ty.preset) {
+            line.push(field(ty.preset ? "Preset" : "Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
                             { compact: true, structural: true, options: ids.map(function (id) { return [id, toolOf(id).title]; }) }));
           }
           if (keys.length) line.push(paramField(t, c, keys[0]));
@@ -1671,12 +1671,12 @@
       });
       return titled("Checks", [h("span", { class: "fc-hint fc-inline", text: " each must pass, in order" })], [h("div", { class: "fc-rows" }, rows),
         button("+ Add a check", function () {
-          // a helper made for this language not used yet, else a test script, else any command
+          // a preset made for this language not used yet, else a test script, else any command
           var usedTools = state.checks.map(function (c) { return c.tool; }), usedTypes = state.checks.map(function (c) { return c.type; });
-          var helper = toolsFor("helper", lang).filter(function (id) { return usedTools.indexOf(id) < 0; })[0];
-          var row = helper ? setCheckTool(state, newCheck(state, "helper"), "helper", helper)
+          var preset = toolsFor("preset", lang).filter(function (id) { return usedTools.indexOf(id) < 0; })[0];
+          var row = preset ? setCheckTool(state, newCheck(state, "preset"), "preset", preset)
                            : newCheck(state, usedTypes.indexOf("test") < 0 && toolsFor("test", lang).length ? "test" : "custom");
-          if (helper) row.name = uniqueName((toolOf(helper) || {}).short || "check", state.checks.map(function (c) { return c.name; }));
+          if (preset) row.name = uniqueName((toolOf(preset) || {}).short || "check", state.checks.map(function (c) { return c.name; }));
           state.checks.push(row);
           changed(true);
         }, "fc-add-btn")]);
@@ -1689,15 +1689,15 @@
         var t = toolOf(st.tool), custom = isCustom(st.tool) || !t, keys = Object.keys((t && t.params) || {});
         var estimated = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
         var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? "estimated first" : null }),
-          field("Tool", function () { return isHelper(st.tool) ? "helper" : st.tool; }, function (v) {
-            if (v === "helper") v = (stageHelpers(language(state, true))[0] || stageHelpers()[0] || ["custom-stage"])[0];
+          field("Tool", function () { return isPreset(st.tool) ? "preset" : st.tool; }, function (v) {
+            if (v === "preset") v = (stagePresets(language(state, true))[0] || stagePresets()[0] || ["custom-stage"])[0];
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
-          }, { compact: true, structural: true, grow: !isHelper(st.tool), options: tools }),
+          }, { compact: true, structural: true, grow: !isPreset(st.tool), options: tools }),
           field("Name", function () { return st.name; }, function (v) { st.name = v; }, { compact: true, narrow: true })];
-        if (isHelper(st.tool)) {
-          var list = stageHelpers(language(state, true));
+        if (isPreset(st.tool)) {
+          var list = stagePresets(language(state, true));
           if (!list.some(function (x) { return x[0] === st.tool; })) list = list.concat([[st.tool, t.title]]);
-          line.splice(2, 0, field("Helper", function () { return st.tool; }, function (v) {
+          line.splice(2, 0, field("Preset", function () { return st.tool; }, function (v) {
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
           }, { compact: true, structural: true, grow: true, options: list }));
         }

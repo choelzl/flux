@@ -59,15 +59,15 @@ def test_a_wrong_max_subtasks_is_the_documents_error(value):
                                "max_subtasks": 6}).max_subtasks == 6
 
 
-def test_flux_prog_in_an_older_document_becomes_the_helper():
-    """D969: `flux prog` left the CLI; `flux task migrate` rewrites it to `fluxhelper prog`."""
+def test_flux_prog_in_an_older_document_becomes_the_preset():
+    """D969: `flux prog` left the CLI; `flux task migrate` rewrites it to `fluxpreset prog`."""
     from flux_loop.migrate import migrate
 
     doc = {"statement": "s", "flow": {"test": "true", "measure": {
         "t": {"command": 'flux prog time --build "cc -o {out} {artifact}"', "metrics": ["time_ms"]},
         "c": {"command": ["flux", "prog", "count"], "metrics": ["instructions"]}}}}
     out, said, manual = migrate(doc)
-    assert out["flow"]["measure"]["t"]["command"] == 'fluxhelper prog time --build "cc -o {out} {artifact}"'
-    assert out["flow"]["measure"]["c"]["command"] == ["fluxhelper", "prog", "count"]
+    assert out["flow"]["measure"]["t"]["command"] == 'fluxpreset prog time --build "cc -o {out} {artifact}"'
+    assert out["flow"]["measure"]["c"]["command"] == ["fluxpreset", "prog", "count"]
     assert sum("D969" in x for x in said) == 2 and not manual
     assert migrate(out)[1] == [], "a current document comes back unchanged"

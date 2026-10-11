@@ -1,9 +1,9 @@
 """How far an approximation is from its reference (D972): a measurement, not pass/fail.
 
-    fluxhelper accuracy DESIGN.py --call exp_approx --reference ref.py:exp --random 1000
+    fluxpreset accuracy DESIGN.py --call exp_approx --reference ref.py:exp --random 1000
     # max_abs_error= mean_abs_error= max_rel_error= mean_rel_error= max_ulp= cases=
 
-The design's function and the reference are called on the same cases as `fluxhelper cases` (a
+The design's function and the reference are called on the same cases as `fluxpreset cases` (a
 JSON table, the reference's `CASES`, `--random N` of its `inputs(rng)`); each numeric result (a
 number, or every number of a list or tuple) is compared. `max_ulp` counts float64 steps between
 the two results. A call that raises, or a non-numeric result, exits 1; a design that does not
@@ -23,12 +23,12 @@ from .cases import _load, add_case_arguments, collect
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D972)."""
+    """This preset's catalog entry (D972)."""
     from ._entries import metrics, param
     return [{"id": "python-accuracy", "role": "stage", "title": "Accuracy against a reference",
              "what": "Calls the design's function and a reference on the same cases and reports how far apart they are: "
                      "absolute, relative and ULP error.",
-             "run": "fluxhelper accuracy {artifact} --call {call} --reference {reference} --random {random}",
+             "run": "fluxpreset accuracy {artifact} --call {call} --reference {reference} --random {random}",
              "params": {"call": param("Function", "main"), "reference": param("Reference (file:function)", "{home}/reference.py"),
                         "random": param("Random cases", 1000)},
              "metrics": metrics("max_abs_error", "mean_abs_error", "max_rel_error", "mean_rel_error", "max_ulp"),
@@ -47,7 +47,7 @@ def _numbers(v: Any) -> list[float]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper accuracy", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset accuracy", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     add_case_arguments(ap)
     a = ap.parse_args(argv)

@@ -1,7 +1,7 @@
-# helpers/ — prebuilt checks and measurements
+# presets/ — prebuilt checks and measurements
 
-`flux_helpers`: the commands a document names for its checks and measurements, so an application
-carries no copy of them (D968). Each is `{python} -m flux_helpers.<module> ...` in a document.
+`flux_presets`: the commands a document names for its checks and measurements, so an application
+carries no copy of them (D968). Each is `{python} -m flux_presets.<module> ...` in a document.
 
 | Module | Commands | Prints |
 |---|---|---|
@@ -13,7 +13,7 @@ carries no copy of them (D968). Each is `{python} -m flux_helpers.<module> ...` 
 | `ccases` | `DESIGN.c --call f --sig "long(long,long)" --reference ref.py:f --random 100` | mismatches, `N failing of M` |
 | `sanitize` | `--build "cc -O1 -o {out} {artifact}"` | memory and UB errors, `N failing` |
 | `accuracy` | `DESIGN.py --call f --reference ref.py:f --random 1000` | `max_abs_error= max_rel_error= max_ulp=` |
-| `systemc` | `DESIGN.h --top m --golden g.py [--then "golden --golden g.py"]` | `N failing`, or the next helper's output |
+| `systemc` | `DESIGN.h --top m --golden g.py [--then "golden --golden g.py"]` | `N failing`, or the next preset's output |
 | `timebound` | `DESIGN.py --call f --args "(1000,)" --max-ms 50` | over-budget calls, `N failing` |
 | `regress` | `--baseline base.json --tol 5 -- CMD` | worse metrics, `N failing` |
 | `extract` | `--pick results.latency=latency_ms -- CMD` | `name=value` |

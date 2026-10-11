@@ -8,8 +8,8 @@ own `params` by name, which the author fills), `params` (name -> label, default,
 `metrics` (a stage's, name -> unit), `needs` (tools on PATH), `pass` (a check's pass rule),
 `languages` (the artifacts it fits) and `kinds` (the crafter's kinds of problem it belongs to).
 Every stage is a command (D954: no evaluator stages). `TOOLS` are the generic ones (your scripts,
-any command); Flux's helpers list their own entries (`flux_helpers.catalog()`, marked `helper`,
-D968), so the loop knows how a helper is named and run, not which helpers there are.
+any command); Flux's presets list their own entries (`flux_presets.catalog()`, marked `preset`,
+D968), so the loop knows how a preset is named and run, not which presets there are.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Any
 
 from .objective import UNITS
 
-__all__ = ["TOOLS", "catalog", "fill", "helpers", "tool"]
+__all__ = ["TOOLS", "catalog", "fill", "presets", "tool"]
 
 _N_FAILING = "passes when it prints `0 failing`; exit 3 = did not build"
 
@@ -33,7 +33,7 @@ def _m(*names: str) -> dict[str, str]:
 
 
 TOOLS: list[dict[str, Any]] = [
-    # ---- your own scripts and commands (D654); the prebuilt ones are Flux's helpers (D968)
+    # ---- your own scripts and commands (D654); the prebuilt ones are Flux's presets (D968)
     {"id": "python-test-script", "role": "check", "title": "A test script of yours",
      "what": "A Python script beside the document runs the design on known cases and prints `N failing`.",
      "run": "{python} {script} {artifact}", "params": {"script": _p("Script", "{home}/check.py")},
@@ -55,20 +55,20 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
-def helpers() -> list[dict[str, Any]]:
-    """Flux's helpers as catalog entries, each marked `helper` (D968): what `flux_helpers.catalog()`
-    says it has. The loop knows the framework -- a helper is `fluxhelper NAME ...`
-    with an entry like any tool's -- never the helpers themselves; none when it is not installed."""
+def presets() -> list[dict[str, Any]]:
+    """Flux's presets as catalog entries, each marked `preset` (D968): what `flux_presets.catalog()`
+    says it has. The loop knows the framework -- a preset is `fluxpreset NAME ...`
+    with an entry like any tool's -- never the presets themselves; none when it is not installed."""
     try:
-        from flux_helpers import catalog as helper_catalog
+        from flux_presets import catalog as preset_catalog
     except ImportError:
         return []
-    return [dict(t, helper=True) for t in helper_catalog()]
+    return [dict(t, preset=True) for t in preset_catalog()]
 
 
 def catalog() -> list[dict[str, Any]]:
-    """The catalog as `flux tools --json` prints it: the generic tools, then the helpers."""
-    return [dict(t) for t in TOOLS] + helpers()
+    """The catalog as `flux tools --json` prints it: the generic tools, then the presets."""
+    return [dict(t) for t in TOOLS] + presets()
 
 
 def tool(tool_id: str) -> dict[str, Any]:

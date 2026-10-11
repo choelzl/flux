@@ -83,8 +83,8 @@ The loop crafter inside the app (D826). Six steps, one at a time with **Back** /
 **Prompt** (the problem), **Check & Measure**, **Objective**, **Graph** (who does each step),
 **Extra** (baseline, budget, settings to search, parts) and **Save** (review and save). **Save** is on every step when editing a loop. A checklist shows what is left.
 
-- **Flux helpers:** a check's Type and a measurement's Tool offer **Flux helpers**, then a second
-  **Helper** list (lint, the golden test, ORFS stages, program timing, ChampSim, ...): Flux's own
+- **Flux presets:** a check's Type and a measurement's Tool offer **Flux presets**, then a second
+  **Preset** list (lint, the golden test, ORFS stages, program timing, ChampSim, ...): Flux's own
   prebuilt commands, nothing to add to the loop's folder.
 - **Files that go with it** (beside the form): the loop's own files; open, edit, write new, drop
   files or folders, delete. A file named as `{home}/…` that the loop lacks is marked missing; a

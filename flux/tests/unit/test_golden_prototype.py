@@ -145,7 +145,7 @@ def test_a_small_input_space_is_checked_exhaustively():
 
 def test_the_prototype_tables_are_spelled_by_the_loop_and_compile(tmp_path):
     """A verified prototype's module-level tables become SystemVerilog functions after the port list, shown folded in the prompt (D606)."""
-    from flux_helpers.golden import Golden, check_rtl
+    from flux_presets.golden import Golden, check_rtl
     from flux_loop.golden_proto import TABLES_MARK, fold_tables, insert_tables, table_functions
 
     code = "T = [-3, 5, 7, -8]\nU = [i * i for i in range(10)]\ndef design(i):\n    return {'y': T[i]}\n"

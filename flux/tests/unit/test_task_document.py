@@ -641,7 +641,7 @@ def test_application_commands_do_not_invent_tool_dependencies():
     """A command's tools are checked like any command's; a stage that declares `needs:` is skipped on them, not refused (D600)."""
     from flux_loop.document import _flux_program_tools
 
-    assert _flux_program_tools(["{python}", "-m", "flux_helpers.prog", "count"]) == ["valgrind"]
+    assert _flux_program_tools(["{python}", "-m", "flux_presets.prog", "count"]) == ["valgrind"]
     assert _flux_program_tools(["{python}", "{home}/rtl.py", "measure", "{artifact}"]) == []
     assert _flux_program_tools(["{python}", "{home}/check.py", "{artifact}"]) == []
 

@@ -40,7 +40,7 @@ cp -R ../docs/tutorial/isqrt ./isqrt
 ```
 
 This copies the tutorial's application and its golden model; its checks and measurements are
-Flux's helpers (`flux_helpers`), so there is no tool script to copy.
+Flux's presets (`flux_presets`), so there is no tool script to copy.
 The next two steps explain the square-root contract and its checks.
 
 ## 2. Say what is correct: the golden model
@@ -81,15 +81,15 @@ language: systemverilog
 
 flow:
 
-  test: "fluxhelper golden {artifact} --golden {home}/golden.py" # refuses a wrong design first
+  test: "fluxpreset golden {artifact} --golden {home}/golden.py" # refuses a wrong design first
 
   measure:                           # measurement, cheapest first
     screen:
-      command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 1000"
+      command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "fluxhelper rtl measure {artifact} --stage place --clock-ps 1000"
+      command: "fluxpreset rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}

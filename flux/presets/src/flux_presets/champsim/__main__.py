@@ -1,4 +1,4 @@
-"""`fluxhelper champsim build|check|run ...`."""
+"""`fluxpreset champsim build|check|run ...`."""
 
 from .commands import main
 

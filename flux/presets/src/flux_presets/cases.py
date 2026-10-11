@@ -1,7 +1,7 @@
 """A Python design's function against a reference (D971): the golden test for Python, no script to write.
 
-    fluxhelper cases DESIGN.py --call count_primes --reference ref.py:count_primes --random 200
-    fluxhelper cases DESIGN.py --call f --cases cases.json
+    fluxpreset cases DESIGN.py --call count_primes --reference ref.py:count_primes --random 200
+    fluxpreset cases DESIGN.py --call f --cases cases.json
     # each mismatch on a line, then "N failing of M"; exit 0, 1, or 3 (the design did not load)
 
 The cases are, in order: `--cases` (a JSON list: each an argument list, or {"args": [...],
@@ -24,12 +24,12 @@ from typing import Any
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D971)."""
+    """This preset's catalog entry (D971)."""
     from ._entries import N_FAILING, param
     return [{"id": "python-cases", "role": "check", "title": "Compare with a reference function",
              "what": "Calls the design's function on cases (a JSON table, the reference's CASES, random inputs from its "
                      "inputs(rng)) and compares each result with the reference function's or the expected value.",
-             "run": "fluxhelper cases {artifact} --call {call} --reference {reference} --random {random}",
+             "run": "fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}",
              "params": {"call": param("Function", "main"), "reference": param("Reference (file:function)", "{home}/reference.py"),
                         "random": param("Random cases", 100)},
              "needs": [], "pass": N_FAILING, "languages": ["python"], "kinds": ["python"], "short": "cases"}]
@@ -134,7 +134,7 @@ def compare(fn: Any, a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper cases", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset cases", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     add_case_arguments(ap)
     ap.add_argument("--tol", type=float, default=0.0, help="relative tolerance for floats")

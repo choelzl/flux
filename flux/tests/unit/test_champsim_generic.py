@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from flux_helpers.champsim.commands import main
-from flux_helpers.champsim import build_header, measure, simulate
-from flux_helpers.champsim.baseline import baseline_ipc
+from flux_presets.champsim.commands import main
+from flux_presets.champsim import build_header, measure, simulate
+from flux_presets.champsim.baseline import baseline_ipc
 
 FAKE_SIM = r'''#!/usr/bin/env python3
 import hashlib, os, sys
@@ -169,7 +169,7 @@ def test_build_installs_a_header_and_caches_the_binary(fake, capsys):
 
 
 def test_the_install_wires_knobs_and_the_dispatch(fake, tmp_path):
-    from flux_helpers.champsim.build import install, stage_tree
+    from flux_presets.champsim.build import install, stage_tree
 
     tree = stage_tree(fake["tree"], tmp_path / "copy")
     assert install(HEADER, tree) == "exstride"

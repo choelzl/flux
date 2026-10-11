@@ -19,7 +19,7 @@ all = ["z3-solver", "fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"
 
 [project.scripts]
 flux = "flux_cli.main:main"
-fluxhelper = "flux_helpers.__main__:main"
+fluxpreset = "flux_presets.__main__:main"
 
 # D600: one distribution of the whole workspace, for `pip install -e ./flux` without Nix. Each
 # package under core/, mentor/, interfaces/ and applications/ keeps its
@@ -39,7 +39,7 @@ dev-mode-dirs = [
     "core/profile/src",
     "core/stores/src",
     "core/tui/src",
-    "helpers/src",
+    "presets/src",
     "interfaces/cli/src",
     "interfaces/web/src",
     "mentor/feedback/src",
@@ -57,7 +57,7 @@ packages = [
     "core/profile/src/flux_profile",
     "core/stores/src/flux_store",
     "core/tui/src/flux_tui",
-    "helpers/src/flux_helpers",
+    "presets/src/flux_presets",
     "interfaces/cli/src/flux_cli",
     "interfaces/web/src/flux_web",
     "mentor/feedback/src/flux_feedback",

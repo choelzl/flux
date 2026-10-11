@@ -102,7 +102,7 @@
   "role": "stage",
   "title": "Accuracy against a reference",
   "what": "Calls the design's function and a reference on the same cases and reports how far apart they are: absolute, relative and ULP error.",
-  "run": "fluxhelper accuracy {artifact} --call {call} --reference {reference} --random {random}",
+  "run": "fluxpreset accuracy {artifact} --call {call} --reference {reference} --random {random}",
   "params": {
    "call": {
     "label": "Function",
@@ -135,15 +135,15 @@
    "python"
   ],
   "short": "accuracy",
-  "helper_module": "accuracy",
-  "helper": true
+  "preset_module": "accuracy",
+  "preset": true
  },
  {
   "id": "python-bench",
   "role": "stage",
   "title": "Time a Python function",
   "what": "Loads the design, calls one function with your arguments, times it over several runs.",
-  "run": "fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}",
+  "run": "fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}",
   "params": {
    "call": {
     "label": "Function",
@@ -172,15 +172,15 @@
    "python"
   ],
   "short": "bench",
-  "helper_module": "bench",
-  "helper": true
+  "preset_module": "bench",
+  "preset": true
  },
  {
   "id": "python-cases",
   "role": "check",
   "title": "Compare with a reference function",
   "what": "Calls the design's function on cases (a JSON table, the reference's CASES, random inputs from its inputs(rng)) and compares each result with the reference function's or the expected value.",
-  "run": "fluxhelper cases {artifact} --call {call} --reference {reference} --random {random}",
+  "run": "fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}",
   "params": {
    "call": {
     "label": "Function",
@@ -207,15 +207,15 @@
    "python"
   ],
   "short": "cases",
-  "helper_module": "cases",
-  "helper": true
+  "preset_module": "cases",
+  "preset": true
  },
  {
   "id": "c-cases",
   "role": "check",
   "title": "Compare a C function with a reference",
   "what": "Builds the design as a shared library and calls one function (a scalar signature) on cases, each result compared with a Python reference function's or the expected value.",
-  "run": "fluxhelper ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
+  "run": "fluxpreset ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
   "params": {
    "call": {
     "label": "Function",
@@ -250,15 +250,15 @@
    "program"
   ],
   "short": "cases",
-  "helper_module": "ccases",
-  "helper": true
+  "preset_module": "ccases",
+  "preset": true
  },
  {
   "id": "champsim-build",
   "role": "check",
   "title": "Build the prefetcher into ChampSim",
   "what": "Compiles a prefetcher header into ChampSim; reports the first compiler error.",
-  "run": "fluxhelper champsim build {artifact}",
+  "run": "fluxpreset champsim build {artifact}",
   "params": {},
   "needs": [
    "pythia"
@@ -271,15 +271,15 @@
    "champsim"
   ],
   "short": "build",
-  "helper_module": "champsim",
-  "helper": true
+  "preset_module": "champsim",
+  "preset": true
  },
  {
   "id": "champsim-check",
   "role": "check",
   "title": "Smoke-run the prefetcher",
   "what": "Builds the prefetcher and runs it on one trace; refused when it issues no prefetches.",
-  "run": "fluxhelper champsim check {artifact} --traces {traces}",
+  "run": "fluxpreset champsim check {artifact} --traces {traces}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -298,15 +298,15 @@
    "champsim"
   ],
   "short": "smoke",
-  "helper_module": "champsim",
-  "helper": true
+  "preset_module": "champsim",
+  "preset": true
  },
  {
   "id": "champsim-run",
   "role": "stage",
   "title": "Simulate on your traces (ChampSim)",
   "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
-  "run": "fluxhelper champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "run": "fluxpreset champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -338,15 +338,15 @@
    "champsim"
   ],
   "short": "sim",
-  "helper_module": "champsim",
-  "helper": true
+  "preset_module": "champsim",
+  "preset": true
  },
  {
   "id": "champsim-stats",
   "role": "stage",
   "title": "Why the prefetcher wins (ChampSim)",
   "what": "Runs it and the run without it on every trace: L2 misses per kilo-instruction with and without it, the share of misses it removed (coverage), and how many of its prefetches were used, late or useless.",
-  "run": "fluxhelper champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "run": "fluxpreset champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
   "params": {
    "traces": {
     "label": "Trace folder",
@@ -385,15 +385,15 @@
    "champsim"
   ],
   "short": "stats",
-  "helper_module": "champsim",
-  "helper": true
+  "preset_module": "champsim",
+  "preset": true
  },
  {
   "id": "extract",
   "role": "stage",
   "title": "Numbers out of any tool's output",
   "what": "Runs your tool and reads its JSON, CSV or text output, printing the numbers you pick as name=value.",
-  "run": "fluxhelper extract --format {format} --pick {pick} -- {command}",
+  "run": "fluxpreset extract --format {format} --pick {pick} -- {command}",
   "params": {
    "format": {
     "label": "Format (json, csv, regex)",
@@ -418,15 +418,15 @@
    "own"
   ],
   "short": "extract",
-  "helper_module": "extract",
-  "helper": true
+  "preset_module": "extract",
+  "preset": true
  },
  {
   "id": "rtl-golden",
   "role": "check",
   "title": "Test against a golden model",
   "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-  "run": "fluxhelper golden {artifact} --golden {golden}",
+  "run": "fluxpreset golden {artifact} --golden {golden}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -446,15 +446,15 @@
    "rtl"
   ],
   "short": "golden",
-  "helper_module": "golden",
-  "helper": true
+  "preset_module": "golden",
+  "preset": true
  },
  {
   "id": "prog-size",
   "role": "stage",
   "title": "Program size",
   "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
-  "run": "fluxhelper prog size --build \"{build}\"",
+  "run": "fluxpreset prog size --build \"{build}\"",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -481,15 +481,15 @@
    "python"
   ],
   "short": "size",
-  "helper_module": "prog",
-  "helper": true
+  "preset_module": "prog",
+  "preset": true
  },
  {
   "id": "prog-time",
   "role": "stage",
   "title": "Program run time",
   "what": "Builds the program and times it over several runs (hyperfine when present).",
-  "run": "fluxhelper prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
+  "run": "fluxpreset prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -528,15 +528,15 @@
    "python"
   ],
   "short": "time",
-  "helper_module": "prog",
-  "helper": true
+  "preset_module": "prog",
+  "preset": true
  },
  {
   "id": "prog-count",
   "role": "stage",
   "title": "Instruction count (Valgrind)",
   "what": "Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic.",
-  "run": "fluxhelper prog count --build \"{build}\" --run \"{run}\"",
+  "run": "fluxpreset prog count --build \"{build}\" --run \"{run}\"",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -569,15 +569,15 @@
    "python"
   ],
   "short": "count",
-  "helper_module": "prog",
-  "helper": true
+  "preset_module": "prog",
+  "preset": true
  },
  {
   "id": "prog-memory",
   "role": "stage",
   "title": "Program peak memory",
   "what": "Builds the program and runs it: its peak resident memory as the kernel counts it, the most over the runs.",
-  "run": "fluxhelper prog memory --build \"{build}\" --run \"{run}\" --runs {runs}",
+  "run": "fluxpreset prog memory --build \"{build}\" --run \"{run}\" --runs {runs}",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -609,15 +609,15 @@
    "python"
   ],
   "short": "memory",
-  "helper_module": "prog",
-  "helper": true
+  "preset_module": "prog",
+  "preset": true
  },
  {
   "id": "python-pytest",
   "role": "check",
   "title": "Run your pytest file",
   "what": "Runs your pytest file with the design importable as `design`; counts the failing tests.",
-  "run": "fluxhelper pytest {artifact} --tests {tests}",
+  "run": "fluxpreset pytest {artifact} --tests {tests}",
   "params": {
    "tests": {
     "label": "Tests",
@@ -634,15 +634,15 @@
    "python"
   ],
   "short": "pytest",
-  "helper_module": "pytest",
-  "helper": true
+  "preset_module": "pytest",
+  "preset": true
  },
  {
   "id": "regress",
   "role": "check",
   "title": "No worse than a baseline",
   "what": "Runs any measurement again and fails when a metric is worse than the recorded baseline by more than the tolerance.",
-  "run": "fluxhelper regress --baseline {baseline} --tol {tol} -- {command}",
+  "run": "fluxpreset regress --baseline {baseline} --tol {tol} -- {command}",
   "params": {
    "baseline": {
     "label": "Baseline (JSON)",
@@ -667,15 +667,15 @@
    "own"
   ],
   "short": "regress",
-  "helper_module": "regress",
-  "helper": true
+  "preset_module": "regress",
+  "preset": true
  },
  {
   "id": "rtl-lint",
   "role": "check",
   "title": "Lint for hardware defects",
   "what": "Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse.",
-  "run": "fluxhelper rtl lint {artifact}",
+  "run": "fluxpreset rtl lint {artifact}",
   "params": {},
   "needs": [
    "verilator"
@@ -689,15 +689,15 @@
    "rtl"
   ],
   "short": "lint",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-stat",
   "role": "stage",
   "title": "Area and cells (ASAP7)",
   "what": "OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, the cheapest screen.",
-  "run": "fluxhelper rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period (the mapper's target)",
@@ -722,15 +722,15 @@
    "rtl"
   ],
   "short": "stat",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-synth",
   "role": "stage",
   "title": "Synthesise and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds.",
-  "run": "fluxhelper rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -759,15 +759,15 @@
    "rtl"
   ],
   "short": "synth",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-place",
   "role": "stage",
   "title": "Place and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds.",
-  "run": "fluxhelper rtl measure {artifact} --stage place --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl measure {artifact} --stage place --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -796,15 +796,15 @@
    "rtl"
   ],
   "short": "place",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-route",
   "role": "stage",
   "title": "Route and time (ASAP7)",
   "what": "OpenROAD-flow-scripts to routing: timing after global routing, minutes.",
-  "run": "fluxhelper rtl measure {artifact} --stage route --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl measure {artifact} --stage route --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period",
@@ -833,15 +833,15 @@
    "rtl"
   ],
   "short": "route",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-cycles",
   "role": "stage",
   "title": "Clock cycles (Verilator)",
   "what": "A clocked design run on golden.py's vectors, each started when the last is done: its latency in cycles (the most, the fewest) and the mean cycles per result.",
-  "run": "fluxhelper rtl cycles {artifact} --golden {golden}",
+  "run": "fluxpreset rtl cycles {artifact} --golden {golden}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -865,15 +865,15 @@
    "rtl"
   ],
   "short": "cycles",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-equiv",
   "role": "check",
   "title": "Equal to a reference module",
   "what": "Formal equivalence with Yosys (a miter of the two, proved by SAT; a clocked pair by induction): passes when they are equal for every input, else prints a counterexample.",
-  "run": "fluxhelper rtl equiv {artifact} --reference {reference}",
+  "run": "fluxpreset rtl equiv {artifact} --reference {reference}",
   "params": {
    "reference": {
     "label": "Reference module",
@@ -893,15 +893,15 @@
    "rtl"
   ],
   "short": "equiv",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-breakdown",
   "role": "stage",
   "title": "Where the area goes (ASAP7)",
   "what": "OpenROAD-flow-scripts' synthesis, its cells grouped: sequential, adders, XORs, buffers and inverters, the rest of the logic; and the flops.",
-  "run": "fluxhelper rtl breakdown {artifact} --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl breakdown {artifact} --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
     "label": "Clock period (the mapper's target)",
@@ -931,15 +931,15 @@
    "rtl"
   ],
   "short": "breakdown",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-fmax",
   "role": "stage",
   "title": "Fastest clock that closes (ASAP7)",
   "what": "A few OpenROAD-flow-scripts runs, each at the period the last one's slack says, until the fastest clock that closes timing at that stage is found: costly, and the honest fmax.",
-  "run": "fluxhelper rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
+  "run": "fluxpreset rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
   "params": {
    "stage": {
     "label": "Stage (synth, place, route)",
@@ -975,15 +975,15 @@
    "rtl"
   ],
   "short": "fmax",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-power",
   "role": "stage",
   "title": "Power from the design's own switching (ASAP7)",
   "what": "Verilator runs golden.py's vectors and records the switching; OpenROAD reads it on the synthesised or placed design and reports power: internal, switching, leakage.",
-  "run": "fluxhelper rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -1022,15 +1022,15 @@
    "rtl"
   ],
   "short": "power",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-energy",
   "role": "stage",
   "title": "Energy per result (ASAP7)",
   "what": "The power the golden vectors' own switching draws, times the time one result takes (its measured cycles at the clock): energy per result and energy-delay product.",
-  "run": "fluxhelper rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -1069,15 +1069,15 @@
    "rtl"
   ],
   "short": "energy",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "rtl-path",
   "role": "stage",
   "title": "The critical path's anatomy (ASAP7)",
   "what": "OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the cells and how much in the wires -- whether to cut logic or wire.",
-  "run": "fluxhelper rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
+  "run": "fluxpreset rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
   "params": {
    "stage": {
     "label": "Stage (synth, place, route)",
@@ -1111,15 +1111,15 @@
    "rtl"
   ],
   "short": "path",
-  "helper_module": "rtl",
-  "helper": true
+  "preset_module": "rtl",
+  "preset": true
  },
  {
   "id": "c-sanitize",
   "role": "check",
   "title": "Memory and undefined-behaviour errors",
   "what": "Builds the program with AddressSanitizer and UndefinedBehaviorSanitizer and runs it: each memory error, leak or undefined behaviour it hits is a failure.",
-  "run": "fluxhelper sanitize --build \"{build}\" --run \"{run}\"",
+  "run": "fluxpreset sanitize --build \"{build}\" --run \"{run}\"",
   "params": {
    "build": {
     "label": "Build command ({out}: the program)",
@@ -1144,15 +1144,15 @@
    "program"
   ],
   "short": "sanitize",
-  "helper_module": "sanitize",
-  "helper": true
+  "preset_module": "sanitize",
+  "preset": true
  },
  {
   "id": "systemc-translate",
   "role": "check",
   "title": "SystemC translates to RTL (ICSC)",
   "what": "ICSC translates the SystemC module to SystemVerilog: passes when it does, and when the ports are the golden model's.",
-  "run": "fluxhelper systemc {artifact} --top {top} --golden {golden}",
+  "run": "fluxpreset systemc {artifact} --top {top} --golden {golden}",
   "params": {
    "top": {
     "label": "Top module",
@@ -1175,15 +1175,15 @@
    "rtl"
   ],
   "short": "translate",
-  "helper_module": "systemc",
-  "helper": true
+  "preset_module": "systemc",
+  "preset": true
  },
  {
   "id": "systemc-golden",
   "role": "check",
   "title": "SystemC against a golden model",
   "what": "ICSC translates the SystemC module, then Verilator runs the RTL on golden.py's vectors.",
-  "run": "fluxhelper systemc {artifact} --top {top} --golden {golden} --then \"golden --golden {golden}\"",
+  "run": "fluxpreset systemc {artifact} --top {top} --golden {golden} --then \"golden --golden {golden}\"",
   "params": {
    "top": {
     "label": "Top module",
@@ -1208,15 +1208,15 @@
    "rtl"
   ],
   "short": "golden",
-  "helper_module": "systemc",
-  "helper": true
+  "preset_module": "systemc",
+  "preset": true
  },
  {
   "id": "python-timebound",
   "role": "check",
   "title": "Within a time budget",
   "what": "Times one call of the design's function on a large input and fails a design slower than the budget, before the costly benchmark.",
-  "run": "fluxhelper timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
+  "run": "fluxpreset timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
   "params": {
    "call": {
     "label": "Function",
@@ -1243,7 +1243,7 @@
    "python"
   ],
   "short": "timebound",
-  "helper_module": "timebound",
-  "helper": true
+  "preset_module": "timebound",
+  "preset": true
  }
 ]

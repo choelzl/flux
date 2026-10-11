@@ -1,7 +1,7 @@
 """A time budget as a check (D973): a design slower than `--max-ms` on the given input fails, before
 the costly benchmark runs.
 
-    fluxhelper timebound DESIGN.py --call f --args "(1000000,)" --max-ms 500
+    fluxpreset timebound DESIGN.py --call f --args "(1000000,)" --max-ms 500
     # "0 failing", or "FAIL f(...) took 812 ms, over 500 ms" and "1 failing"; exit 0, 1, or 3 (did not load)
 
 The call runs in a child process that is stopped at `--max-ms` times `--grace` (default 2), so an
@@ -37,19 +37,19 @@ print(json.dumps({"best": best}))
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D973)."""
+    """This preset's catalog entry (D973)."""
     from ._entries import N_FAILING, param
     return [{"id": "python-timebound", "role": "check", "title": "Within a time budget",
              "what": "Times one call of the design's function on a large input and fails a design slower than the budget, "
                      "before the costly benchmark.",
-             "run": "fluxhelper timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
+             "run": "fluxpreset timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
              "params": {"call": param("Function", "main"), "args": param("Arguments (a Python literal)", "()"),
                         "max_ms": param("Budget", 1000, "ms")},
              "needs": [], "pass": N_FAILING, "languages": ["python"], "kinds": ["python"], "short": "timebound"}]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper timebound", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset timebound", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     ap.add_argument("--call", required=True)
     ap.add_argument("--args", default="()", help='a Python literal: "(1000,)" or "{\'n\': 1000}"')

@@ -188,7 +188,7 @@ verdict is in the [check contract](#check-command).
 | `command` | Required | Command string or argument list |
 | `metrics` | Required unless `metrics_re` | Names printed as `name=value`, or typed entries (below) |
 | `metrics_re` | Derived from `metrics` | Map of metric name to a regex with one capture group |
-| `needs` | Inferred for `fluxhelper prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
+| `needs` | Inferred for `fluxpreset prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
 | `timeout_s` | `600` | Seconds before the stage is stopped |
 | `cutoff` | None | A gate before the next stage, or a list of gates that must all pass |
 | `estimate` | Off | Predict first, and skip designs the estimate already rules out |
@@ -478,8 +478,8 @@ baseline, the composition) runs the same way. Your own agent's command differs; 
   split it, but **no shell runs**: for a pipe or redirection, call one yourself:
   `["sh", "-c", "cat {artifact} | wc -l"]`.
 - **`flux` first** runs Flux's own CLI with the same interpreter (`flux tools ...`).
-- **`fluxhelper` first** runs one of [Flux's helpers](#flux-helpers) the same way
-  (`fluxhelper rtl measure ...`).
+- **`fluxpreset` first** runs one of [Flux's presets](#flux-presets) the same way
+  (`fluxpreset rtl measure ...`).
 - **Working directory** is `{workdir}`, the pass's trace folder, shared by every design in
   the pass. Name your files with `{home}/...`; relative paths do not reach the loop's folder.
 - **Environment:** Flux's own, unchanged. Nothing is added.
@@ -713,114 +713,114 @@ resume: [...]}`. Write `command` as a **list**.
 
 `flux tools` prints the catalog; the configurator offers these as check types and
 measurement tools. `{x}` other than the loop's placeholders are the tool's parameters. Most are
-Flux's helpers, `fluxhelper NAME ...` (D968, D970): nothing to copy into the loop's folder.
+Flux's presets, `fluxpreset NAME ...` (D968, D970): nothing to copy into the loop's folder.
 
 | Tool | Role | Command | Parameters (default) | Reports / passes |
 |---|---|---|---|---|
-| `rtl-lint` | check | `fluxhelper rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
-| `rtl-golden` | check | `fluxhelper golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
+| `rtl-lint` | check | `fluxpreset rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
+| `rtl-golden` | check | `fluxpreset golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
 | `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
 | `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
-| `python-cases` | check | `fluxhelper cases {artifact} --call {call} --reference {reference} --random {random}` | `call` (`main`), `reference` (`{home}/reference.py`), `random` (`100`) | `N failing of M` |
-| `python-pytest` | check | `fluxhelper pytest {artifact} --tests {tests}` | `tests` (`{home}/test_design.py`) | `N failing of M` |
-| `champsim-build` | check | `fluxhelper champsim build {artifact}` | | exit 3 = did not build |
-| `champsim-check` | check | `fluxhelper champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
-| `rtl-stat` | stage | `fluxhelper rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
+| `python-cases` | check | `fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}` | `call` (`main`), `reference` (`{home}/reference.py`), `random` (`100`) | `N failing of M` |
+| `python-pytest` | check | `fluxpreset pytest {artifact} --tests {tests}` | `tests` (`{home}/test_design.py`) | `N failing of M` |
+| `champsim-build` | check | `fluxpreset champsim build {artifact}` | | exit 3 = did not build |
+| `champsim-check` | check | `fluxpreset champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
+| `rtl-stat` | stage | `fluxpreset rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
 | `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
-| `rtl-cycles` | stage | `fluxhelper rtl cycles {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `latency_cycles`, `latency_min_cycles`, `cycles_per_result` |
-| `prog-memory` | stage | `fluxhelper prog memory --build "{build}" --run "{run}" --runs {runs}` | `runs` (`3`) | `peak_rss_kb` |
+| `rtl-cycles` | stage | `fluxpreset rtl cycles {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `latency_cycles`, `latency_min_cycles`, `cycles_per_result` |
+| `prog-memory` | stage | `fluxpreset prog memory --build "{build}" --run "{run}" --runs {runs}` | `runs` (`3`) | `peak_rss_kb` |
 | `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
-| `python-bench` | stage | `fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
-| `prog-size` | stage | `fluxhelper prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
-| `prog-time` | stage | `fluxhelper prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
-| `prog-count` | stage | `fluxhelper prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
-| `champsim-run` | stage | `fluxhelper champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
+| `python-bench` | stage | `fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
+| `prog-size` | stage | `fluxpreset prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
+| `prog-time` | stage | `fluxpreset prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
+| `prog-count` | stage | `fluxpreset prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
+| `champsim-run` | stage | `fluxpreset champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
 | `custom-stage` | stage | `{command}` | `command` | your `name=value` lines |
 
-The golden test is Flux's own: `fluxhelper golden DESIGN --golden G` prints
+The golden test is Flux's own: `fluxpreset golden DESIGN --golden G` prints
 failing vectors and `N failing of M` (exit 0 pass, 1 fail, 3 did not compile; `--extra F.sv` for a
-module the design instantiates). `fluxhelper rtl lint DESIGN` prints each hardware
-defect and `N failing` (exit 3 when it does not parse); `fluxhelper rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
+module the design instantiates). `fluxpreset rtl lint DESIGN` prints each hardware
+defect and `N failing` (exit 3 when it does not parse); `fluxpreset rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
 runs OpenROAD-flow-scripts on ASAP7 to that stage and prints one line, `fmax_mhz=... area_um2=...
 power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, `cell_count`;
 `route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
-placement, `route` after routing (timing from global routing). `fluxhelper prog` builds with `--build`
+placement, `route` after routing (timing from global routing). `fluxpreset prog` builds with `--build`
 (`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails
-(before D969 it was `flux prog`; `flux task migrate` rewrites it). `fluxhelper bench DESIGN.py --call f --args "(1000,)"`
+(before D969 it was `flux prog`; `flux task migrate` rewrites it). `fluxpreset bench DESIGN.py --call f --args "(1000,)"`
 loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
 `time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
-`fluxhelper cases` calls the design's function on cases -- a JSON table (`[args]` or `{"args", "kwargs",
+`fluxpreset cases` calls the design's function on cases -- a JSON table (`[args]` or `{"args", "kwargs",
 "expected"}`), the reference module's `CASES`, and `--random N` draws of its `inputs(rng)` -- and
 compares each result with the expected value or the reference function's (floats within `--tol`).
-`fluxhelper pytest` copies the design as `design.py` beside your tests and counts the failing ones.
-`fluxhelper rtl cycles` runs a clocked design (`CLOCK`) on the golden vectors, each started when the
+`fluxpreset pytest` copies the design as `design.py` beside your tests and counts the failing ones.
+`fluxpreset rtl cycles` runs a clocked design (`CLOCK`) on the golden vectors, each started when the
 last is done, and prints its latency: the most and fewest cycles, and the mean per result (not
-overlapped throughput). `fluxhelper prog memory` prints the program's peak resident memory as the
+overlapped throughput). `fluxpreset prog memory` prints the program's peak resident memory as the
 kernel counts it, the most over `--runs`.
-`fluxhelper ccases` is `cases` for a C or C++ function: built as a shared library and called through
-ctypes with a scalar `--sig`. `fluxhelper sanitize` builds a program with AddressSanitizer and
-UndefinedBehaviorSanitizer and counts the distinct errors a run hits. `fluxhelper accuracy` reports how
+`fluxpreset ccases` is `cases` for a C or C++ function: built as a shared library and called through
+ctypes with a scalar `--sig`. `fluxpreset sanitize` builds a program with AddressSanitizer and
+UndefinedBehaviorSanitizer and counts the distinct errors a run hits. `fluxpreset accuracy` reports how
 far a function is from its reference: `max_abs_error`, `mean_abs_error`, `max_rel_error`,
-`mean_rel_error`, `max_ulp` (float64 steps). `fluxhelper rtl equiv` proves a design equal to a reference
+`mean_rel_error`, `max_ulp` (float64 steps). `fluxpreset rtl equiv` proves a design equal to a reference
 module (a Yosys miter, SAT; a clocked pair by induction from zero) or prints a counterexample.
-`fluxhelper rtl breakdown` groups the synthesised cells' area: `area_seq_um2`, `area_arith_um2`,
-`area_xor_um2`, `area_buf_um2`, `area_logic_um2`, `flop_count`. `fluxhelper rtl fmax` runs ORFS a few
+`fluxpreset rtl breakdown` groups the synthesised cells' area: `area_seq_um2`, `area_arith_um2`,
+`area_xor_um2`, `area_buf_um2`, `area_logic_um2`, `flop_count`. `fluxpreset rtl fmax` runs ORFS a few
 times, each at the period the last one's slack points to, and prints the fastest clock that closed:
-`fmax_closed_mhz`. `fluxhelper rtl power` records the golden vectors' switching in Verilator and has
+`fmax_closed_mhz`. `fluxpreset rtl power` records the golden vectors' switching in Verilator and has
 OpenROAD report power with it: `power_w`, `power_internal_w`, `power_switching_w`, `power_leakage_w`.
-`fluxhelper champsim stats` runs the prefetcher and the run without it on every trace: `l2_mpki`,
+`fluxpreset champsim stats` runs the prefetcher and the run without it on every trace: `l2_mpki`,
 `l2_mpki_baseline`, `pf_coverage` (the share of misses removed), `pf_accuracy`, `pf_late`, `pf_useless`,
 `pf_issued_pki`, `geomean_speedup`.
-`fluxhelper timebound` fails a Python function slower than `--max-ms` (the fastest of `--runs`; one
-stuck past the budget is stopped). `fluxhelper rtl energy` turns `rtl power` into per-result numbers:
-`energy_pj_per_result`, `edp_pj_ns`, `cycles_per_result`, `time_per_result_ns`. `fluxhelper rtl path`
+`fluxpreset timebound` fails a Python function slower than `--max-ms` (the fastest of `--runs`; one
+stuck past the budget is stopped). `fluxpreset rtl energy` turns `rtl power` into per-result numbers:
+`energy_pj_per_result`, `edp_pj_ns`, `cycles_per_result`, `time_per_result_ns`. `fluxpreset rtl path`
 prints the critical path: `path_ps`, `path_levels`, `path_cell_ps`, `path_wire_ps`, `slack_ps` (its
-cells on stderr). `fluxhelper systemc` translates a SystemC module to SystemVerilog through ICSC; alone
+cells on stderr). `fluxpreset systemc` translates a SystemC module to SystemVerilog through ICSC; alone
 it checks that it translates, and `--then "golden --golden g.py"` or `--then "rtl measure --stage
-stat"` runs that helper on the translation. `fluxhelper regress -- CMD` compares a command's
+stat"` runs that preset on the translation. `fluxpreset regress -- CMD` compares a command's
 `name=value` with a baseline file (`--record` writes it; `--tol` percent, `--higher` for metrics where
-more is better). `fluxhelper extract -- CMD` turns a tool's JSON, CSV or text into `name=value`
+more is better). `fluxpreset extract -- CMD` turns a tool's JSON, CSV or text into `name=value`
 (`--pick PATH=name`, a dotted path, a column or a regex group).
 
-## Flux helpers
+## Flux presets
 
-Flux's prebuilt checks and measurements (`flux/helpers/`, D968): `fluxhelper NAME ...` in a
-document, or in a shell inside the dev shell. `fluxhelper` alone lists them; `fluxhelper describe
-[NAME]` prints their catalog entries; `fluxhelper NAME --help` describes one.
+Flux's prebuilt checks and measurements (`flux/presets/`, D968): `fluxpreset NAME ...` in a
+document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fluxpreset describe
+[NAME]` prints their catalog entries; `fluxpreset NAME --help` describes one.
 
-| Helper | Commands |
+| Preset | Commands |
 |---|---|
-| `golden` | `fluxhelper golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
-| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py`; `fluxhelper rtl equiv DESIGN --reference ref.sv`; `fluxhelper rtl breakdown DESIGN`; `fluxhelper rtl fmax DESIGN --stage synth [--steps 6]`; `fluxhelper rtl power DESIGN --golden golden.py --stage place`; `fluxhelper rtl energy DESIGN --golden golden.py --stage place`; `fluxhelper rtl path DESIGN --stage place` |
-| `systemc` | `fluxhelper systemc DESIGN.h --top M --golden golden.py [--then "golden --golden golden.py"]` |
-| `timebound` | `fluxhelper timebound DESIGN.py --call F --args "(1000,)" --max-ms 50` |
-| `regress` | `fluxhelper regress --baseline base.json [--tol 5] [--record] -- CMD` |
-| `extract` | `fluxhelper extract [--format json\|csv\|regex] --pick PATH=name -- CMD` |
-| `cases` | `fluxhelper cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
-| `pytest` | `fluxhelper pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
-| `ccases` | `fluxhelper ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |
-| `sanitize` | `fluxhelper sanitize --build "cc -O1 -o {out} {artifact}" [--run CMD]` |
-| `accuracy` | `fluxhelper accuracy DESIGN.py --call F --reference ref.py:F --random N` |
-| `prog` | `fluxhelper prog time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
-| `bench` | `fluxhelper bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
-| `champsim` | `fluxhelper champsim build\|check\|run\|stats ARTIFACT --traces DIR [--warmup N --sim N]` |
+| `golden` | `fluxpreset golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
+| `rtl` | `fluxpreset rtl lint DESIGN`; `fluxpreset rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxpreset rtl cycles DESIGN --golden golden.py`; `fluxpreset rtl equiv DESIGN --reference ref.sv`; `fluxpreset rtl breakdown DESIGN`; `fluxpreset rtl fmax DESIGN --stage synth [--steps 6]`; `fluxpreset rtl power DESIGN --golden golden.py --stage place`; `fluxpreset rtl energy DESIGN --golden golden.py --stage place`; `fluxpreset rtl path DESIGN --stage place` |
+| `systemc` | `fluxpreset systemc DESIGN.h --top M --golden golden.py [--then "golden --golden golden.py"]` |
+| `timebound` | `fluxpreset timebound DESIGN.py --call F --args "(1000,)" --max-ms 50` |
+| `regress` | `fluxpreset regress --baseline base.json [--tol 5] [--record] -- CMD` |
+| `extract` | `fluxpreset extract [--format json\|csv\|regex] --pick PATH=name -- CMD` |
+| `cases` | `fluxpreset cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
+| `pytest` | `fluxpreset pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
+| `ccases` | `fluxpreset ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |
+| `sanitize` | `fluxpreset sanitize --build "cc -O1 -o {out} {artifact}" [--run CMD]` |
+| `accuracy` | `fluxpreset accuracy DESIGN.py --call F --reference ref.py:F --random N` |
+| `prog` | `fluxpreset prog time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
+| `bench` | `fluxpreset bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
+| `champsim` | `fluxpreset champsim build\|check\|run\|stats ARTIFACT --traces DIR [--warmup N --sim N]` |
 
-**Every helper keeps one interface** (D970; `tests/unit/test_flux_helpers.py` checks it):
+**Every preset keeps one interface** (D970; `tests/unit/test_flux_presets.py` checks it):
 
 | | |
 |---|---|
-| Arguments | `fluxhelper NAME [SUBCOMMAND] ARTIFACT [--option VALUE ...]`: the design file first, every other input an option with a default |
+| Arguments | `fluxpreset NAME [SUBCOMMAND] ARTIFACT [--option VALUE ...]`: the design file first, every other input an option with a default |
 | stdin | Never read |
 | stdout | A check: each failure on a line of its own, then `N failing` (or `N failing of M`) last. A measurement: `name=value` for each metric it reports |
 | stderr | Diagnostics for a person; never the count or the numbers |
 | Exit code | `0` passed or measured; `1` failed, or the measurement could not be taken; `2` wrong arguments; `3` the design did not build, parse or load |
 | Files | Only in a temporary folder of its own; never in the loop's folder |
 
-**Writing a helper** is adding a module `flux_helpers/NAME.py` (or a package) with `main(argv) ->
+**Writing a preset** is adding a module `flux_presets/NAME.py` (or a package) with `main(argv) ->
 int` (its command line) and `catalog() -> [entry]`: one [catalog entry](#built-in-tools) per check
-or stage it offers, its `run` starting `fluxhelper NAME`. `flux tools`, the configurator's **Flux
-helpers** list and the loader's language and `needs` inference read those entries; nothing else
-in Flux names a helper.
+or stage it offers, its `run` starting `fluxpreset NAME`. `flux tools`, the configurator's **Flux
+presets** list and the loader's language and `needs` inference read those entries; nothing else
+in Flux names a preset.
 
 ## RTL golden model
 

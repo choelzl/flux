@@ -54,7 +54,7 @@ def gen(args: argparse.Namespace) -> int:
 
 
 def check(args: argparse.Namespace) -> int:
-    from flux_helpers.golden import check_rtl
+    from flux_presets.golden import check_rtl
 
     shape = _shape(args)
     cfg = PeConfig("behavioral", "tree", int(args.pipeline))          # the golden needs only the latency
@@ -77,7 +77,7 @@ def _renamed(source: str) -> tuple[str, str]:
 def mult_check(args: argparse.Namespace) -> int:
     import dataclasses
 
-    from flux_helpers.golden import EXHAUSTIVE_MAX_BITS, check_rtl, lint_relaxed
+    from flux_presets.golden import EXHAUSTIVE_MAX_BITS, check_rtl, lint_relaxed
 
     from .invent import multiplier_golden, refusal_reason
 
@@ -110,7 +110,7 @@ def mult_check(args: argparse.Namespace) -> int:
 
 def mult_screen(args: argparse.Namespace) -> int:
     from .rtl import generate
-    from flux_helpers.rtl import measure
+    from flux_presets.rtl import measure
 
     name, source = _renamed(Path(args.artifact).read_text())
     design = generate(PeConfig(name, "tree", 0), _shape(args), invented={name: source})

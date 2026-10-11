@@ -1,6 +1,6 @@
 """Time a Python function of the design (D968): the measurement a Python loop usually writes itself.
 
-    fluxhelper bench DESIGN.py --call count_primes --args "(1000000,)" --runs 5 --warmup 1
+    fluxpreset bench DESIGN.py --call count_primes --args "(1000000,)" --runs 5 --warmup 1
     # time_ms=<median> time_min_ms=<fastest> time_spread_ms=<slowest - fastest> runs=5
 
 DESIGN.py is loaded as a module and `--call` is called with `--args` (a Python literal: a tuple of
@@ -21,18 +21,18 @@ import traceback
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D968)."""
+    """This preset's catalog entry (D968)."""
     from ._entries import metrics, param
     return [{"id": "python-bench", "role": "stage", "title": "Time a Python function",
              "what": "Loads the design, calls one function with your arguments, times it over several runs.",
-             "run": "fluxhelper bench {artifact} --call {call} --args {args} --runs {runs}",
+             "run": "fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}",
              "params": {"call": param("Function", "main"), "args": param("Arguments (a Python literal)", "()"),
                         "runs": param("Runs", 5)},
              "metrics": metrics("time_ms"), "needs": [], "languages": ["python"], "kinds": ["python"], "short": "bench"}]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper bench", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset bench", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     ap.add_argument("--call", required=True, help="the function to time")
     ap.add_argument("--args", default="()", help='its arguments, a Python literal: "(1000,)" or "{\'n\': 1000}"')

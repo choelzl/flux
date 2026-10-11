@@ -112,7 +112,7 @@
             "core/profile/src"
             "core/tui/src"
             "core/frontier/src"
-            "helpers/src"
+            "presets/src"
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
           ];
@@ -144,9 +144,9 @@
             mkdir -p "$FLUX_BIN"
             printf '#!/usr/bin/env bash\nexec python3 -c "import sys; from flux_cli.main import main; sys.exit(main())" "$@"\n' > "$FLUX_BIN/flux"
             chmod +x "$FLUX_BIN/flux"
-            # D970: Flux's helpers, `fluxhelper HELPER ...`
-            printf '#!/usr/bin/env bash\nexec python3 -m flux_helpers "$@"\n' > "$FLUX_BIN/fluxhelper"
-            chmod +x "$FLUX_BIN/fluxhelper"
+            # D970: Flux's presets, `fluxpreset PRESET ...`
+            printf '#!/usr/bin/env bash\nexec python3 -m flux_presets "$@"\n' > "$FLUX_BIN/fluxpreset"
+            chmod +x "$FLUX_BIN/fluxpreset"
             export PATH="$FLUX_BIN:$PATH"
             # D947: `orfs <target> DESIGN_CONFIG=...` in a copy made by `openroad-flow-scripts-init <dir>`:
             # its make run serially -- a -j (this machine's profile sets MAKEFLAGS=-j32) stops it at the

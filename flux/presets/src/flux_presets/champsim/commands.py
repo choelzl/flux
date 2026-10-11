@@ -1,16 +1,16 @@
-"""ChampSim's build, check and measurement commands (D968: Flux's helpers, not a copy per application).
+"""ChampSim's build, check and measurement commands (D968: Flux's presets, not a copy per application).
 
     flow:
-      test: 'fluxhelper champsim check {artifact} --traces {home}/traces'
+      test: 'fluxpreset champsim check {artifact} --traces {home}/traces'
       measure:
         screen:
-          command: 'fluxhelper champsim run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
+          command: 'fluxpreset champsim run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
           metrics: [geomean_speedup]
           needs: [pythia]
 
 ARTIFACT is an `.ini` of knobs (its `l2c_prefetcher_types = a,b` line picks the L2 prefetchers)
 or a `.h` holding one `class X : public Prefetcher`, built in and run as `x`. The commands wrap
-`flux_helpers.champsim`.
+`flux_presets.champsim`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _types(given: str | None) -> list[str]:
 
 
 def cmd_champsim_run(args: argparse.Namespace) -> int:
-    from flux_helpers.champsim import BuildFailedError, measure
+    from flux_presets.champsim import BuildFailedError, measure
 
     try:
         got = measure(args.artifact, args.traces, int(args.warmup), int(args.sim),
@@ -46,8 +46,8 @@ def cmd_champsim_run(args: argparse.Namespace) -> int:
 
 
 def cmd_champsim_stats(args: argparse.Namespace) -> int:
-    from flux_helpers.champsim import BuildFailedError
-    from flux_helpers.champsim.study import detail
+    from flux_presets.champsim import BuildFailedError
+    from flux_presets.champsim.study import detail
 
     try:
         got = detail(args.artifact, args.traces, int(args.warmup), int(args.sim), with_types=_types(args.with_),
@@ -61,7 +61,7 @@ def cmd_champsim_stats(args: argparse.Namespace) -> int:
 
 
 def _build(header: Path) -> tuple[int, object]:
-    from flux_helpers.champsim import BuildError, build_header
+    from flux_presets.champsim import BuildError, build_header
 
     try:
         got = build_header(header.read_text())
@@ -84,7 +84,7 @@ def cmd_champsim_build(args: argparse.Namespace) -> int:
 
 
 def cmd_champsim_check(args: argparse.Namespace) -> int:
-    from flux_helpers.champsim import SimulationFailedError, resolve_traces, simulate
+    from flux_presets.champsim import SimulationFailedError, resolve_traces, simulate
 
     code, got = _build(Path(args.header))
     if code:
@@ -106,7 +106,7 @@ def cmd_champsim_check(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`fluxhelper champsim build|check|run`."""
+    """`fluxpreset champsim build|check|run`."""
     parser = argparse.ArgumentParser(description="Application ChampSim checks and measurements")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Measure an INI file or prefetcher header on traces")

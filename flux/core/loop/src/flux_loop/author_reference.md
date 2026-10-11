@@ -32,14 +32,14 @@ Say only what is yours; the rest is inferred.
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
     prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
-    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "fluxhelper golden {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "fluxpreset golden {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
     They run in the order written; the first that reports failures refuses the design ("failed at
     lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
     check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
     group) or `fail_re` (one match per failure) for a checker that prints something else. A check
     named `build` refuses on any non-zero exit (did not build). Never an agent: it establishes the facts.
   - `measure`: the costed measurements, cheapest first, a map from each stage's name to its
-    settings, including `command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 1000"`,
+    settings, including `command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 1000"`,
     `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad, sta, make]`.
     All measurement commands print `name=value` tokens and
     says `metrics:` (the names to read) and `needs:` (tools on PATH it requires), so it is
@@ -140,17 +140,17 @@ Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the 
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command
 starting with `flux` runs this Flux.
 
-## Flux's helpers
+## Flux's presets
 
-The checks and measurements Flux ships are its helpers, run as `fluxhelper NAME ...` (like `flux`, nothing on PATH needed):
+The checks and measurements Flux ships are its presets, run as `fluxpreset NAME ...` (like `flux`, nothing on PATH needed):
 `golden` (RTL against golden.py), `rtl lint|measure|cycles|equiv|breakdown|fmax|power|energy|path` (Verilator
 defects; OpenROAD-flow-scripts on ASAP7; latency; formal equivalence to a reference; the area by kind;
 the fastest closing clock; power from the vectors' own switching; energy per result; the critical path), `cases` / `ccases` (a Python or C
 function against a Python reference), `accuracy` (how far an approximation is), `pytest` (your tests on
 the design), `sanitize` (C/C++ memory and UB errors), `prog time|count|memory|size`, `bench` (a Python
 function's time), `timebound` (a Python function over a time budget), `systemc` (SystemC to
-SystemVerilog through ICSC, then another helper), `regress` (any command's numbers against a baseline),
-`extract` (a tool's JSON/CSV/text as `name=value`) and `champsim build|check|run|stats`. `fluxhelper` lists them. Nothing is copied into the loop's folder. Any other check or
+SystemVerilog through ICSC, then another preset), `regress` (any command's numbers against a baseline),
+`extract` (a tool's JSON/CSV/text as `name=value`) and `champsim build|check|run|stats`. `fluxpreset` lists them. Nothing is copied into the loop's folder. Any other check or
 measurement is a script of the application's own, called with `{python} {home}/script.py`.
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.
@@ -158,14 +158,14 @@ an arbitrary script does not imply a language. List every stage's `metrics` and 
 - Lint is Verilator itself, its hardware defects only (latches, multiple drivers, combinational loops,
   `<=` in combinational logic, mixed `=`/`<=`, implicit nets): `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}`;
   exit 0 passes. Put it before the golden test.
-- `fluxhelper golden {artifact} --golden {home}/golden.py` -- Verilator against a
+- `fluxpreset golden {artifact} --golden {home}/golden.py` -- Verilator against a
   golden model; prints `N failing of M`; exits 3 when the module does not compile (the loop then
   treats it as a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
-- `fluxhelper rtl measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
+- `fluxpreset rtl measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
   on ASAP7 run to that stage (`synth` times the netlist unplaced; `place` after placement; `route`
   after routing, adding `drc_errors= wirelength_um=`); prints `fmax_mhz= area_um2= power_w=
   cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its reset).
-- `fluxhelper rtl measure {artifact} --stage stat` -- the mapped cells: `area_um2= cell_count=`,
+- `fluxpreset rtl measure {artifact} --stage stat` -- the mapped cells: `area_um2= cell_count=`,
   nothing timed; the cheapest screen before `synth`.
 - `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
   `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),
@@ -196,14 +196,14 @@ The gate and the stages are any commands: a Python script you write beside the d
 (`{python} -m pytest -q {home}/tests --rootdir {home}` with a `fail_re`), a simulator, a
 benchmark printing `name=value`. Write every script the document names.
 
-A program (C, C++, Python) is measured by the helper `fluxhelper prog`; `--build` is one quoted command writing
+A program (C, C++, Python) is measured by the preset `fluxpreset prog`; `--build` is one quoted command writing
 `{out}`, `--run` the command measured (empty: the built program; Python: `--run "{python} {artifact}"`):
 
-- `fluxhelper prog time --build "c++ -O2 -o {out} {artifact}" --runs 10 --warmup 1` -- hyperfine:
+- `fluxpreset prog time --build "c++ -O2 -o {out} {artifact}" --runs 10 --warmup 1` -- hyperfine:
   `time_ms=` (mean) `time_ms_stddev= time_ms_min=`.
-- `fluxhelper prog count --build "c++ -O2 -o {out} {artifact}"` -- Valgrind cachegrind, the same every run:
+- `fluxpreset prog count --build "c++ -O2 -o {out} {artifact}"` -- Valgrind cachegrind, the same every run:
   `instructions= d1_misses= ll_misses= branch_mispredicts=`.
-- `fluxhelper prog size --build "c++ -O2 -o {out} {artifact}"` -- `text_bytes= data_bytes= bss_bytes=`.
+- `fluxpreset prog size --build "c++ -O2 -o {out} {artifact}"` -- `text_bytes= data_bytes= bss_bytes=`.
 
 ## Rules
 

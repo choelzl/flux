@@ -1,6 +1,6 @@
 """Your pytest file run against the design (D971).
 
-    fluxhelper pytest DESIGN.py --tests test_design.py
+    fluxpreset pytest DESIGN.py --tests test_design.py
     # each failing test on a line, then "N failing of M"; exit 0, 1, or 3 (the design did not load)
 
 The design is copied as `design.py` beside a copy of the tests in a folder of its own, so the
@@ -21,16 +21,16 @@ from pathlib import Path
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D971)."""
+    """This preset's catalog entry (D971)."""
     from ._entries import N_FAILING, param
     return [{"id": "python-pytest", "role": "check", "title": "Run your pytest file",
              "what": "Runs your pytest file with the design importable as `design`; counts the failing tests.",
-             "run": "fluxhelper pytest {artifact} --tests {tests}", "params": {"tests": param("Tests", "{home}/test_design.py")},
+             "run": "fluxpreset pytest {artifact} --tests {tests}", "params": {"tests": param("Tests", "{home}/test_design.py")},
              "needs": [], "pass": N_FAILING, "languages": ["python"], "kinds": ["python"], "short": "pytest"}]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper pytest", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset pytest", description=__doc__.split("\n\n")[0])
     ap.add_argument("artifact")
     ap.add_argument("--tests", required=True, help="the pytest file (or folder)")
     ap.add_argument("--timeout", type=float, default=600.0)

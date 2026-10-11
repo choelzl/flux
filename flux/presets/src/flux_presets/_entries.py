@@ -1,4 +1,4 @@
-"""How a helper describes itself in the tool catalog (D654, D968): the same entry as any tool's."""
+"""How a preset describes itself in the tool catalog (D654, D968): the same entry as any tool's."""
 
 from __future__ import annotations
 

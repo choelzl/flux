@@ -266,13 +266,13 @@ def _d954(doc: dict[str, Any], say: Say, manual: Say) -> None:
 
 
 def _d969(doc: dict[str, Any], say: Say) -> None:
-    """`flux prog` is Flux's helper `fluxhelper prog` (D968, D969, D970): every command the
+    """`flux prog` is Flux's preset `fluxpreset prog` (D968, D969, D970): every command the
     document says that starts with it."""
     def fixed(cmd: Any) -> Any:
         if isinstance(cmd, str) and cmd.strip().startswith("flux prog "):
-            return "fluxhelper prog " + cmd.strip()[len("flux prog "):]
+            return "fluxpreset prog " + cmd.strip()[len("flux prog "):]
         if isinstance(cmd, list) and cmd[:2] == ["flux", "prog"]:
-            return ["fluxhelper", "prog", *cmd[2:]]
+            return ["fluxpreset", "prog", *cmd[2:]]
         return cmd
 
     def walk(node: Any, where: str) -> None:
@@ -281,7 +281,33 @@ def _d969(doc: dict[str, Any], say: Say) -> None:
             new = fixed(v)
             if new is not v:
                 node[k] = new
-                say(f"{where}.{k}: flux prog -> fluxhelper prog")
+                say(f"{where}.{k}: flux prog -> fluxpreset prog")
+            elif isinstance(v, (dict, list)):
+                walk(v, f"{where}.{k}")
+    walk(doc.get("flow"), "flow")
+    if isinstance(doc.get("baseline"), dict):
+        walk(doc["baseline"], "baseline")
+
+
+def _d974(doc: dict[str, Any], say: Say) -> None:
+    """Flux's helpers are its presets (D974): `fluxhelper NAME` is `fluxpreset NAME` and the module
+    `flux_helpers` is `flux_presets`, in every command the document says."""
+    old = ("fluxhelper", "flux_helpers")
+
+    def fixed(cmd: Any) -> Any:
+        if isinstance(cmd, str) and any(w in cmd for w in old):
+            return cmd.replace("fluxhelper", "fluxpreset").replace("flux_helpers", "flux_presets")
+        if isinstance(cmd, list) and any(isinstance(w, str) and any(o in w for o in old) for w in cmd):
+            return [fixed(w) if isinstance(w, str) else w for w in cmd]
+        return cmd
+
+    def walk(node: Any, where: str) -> None:
+        items = node.items() if isinstance(node, dict) else enumerate(node) if isinstance(node, list) else ()
+        for k, v in list(items):
+            new = fixed(v)
+            if new is not v:
+                node[k] = new
+                say(f"{where}.{k}: fluxhelper -> fluxpreset")
             elif isinstance(v, (dict, list)):
                 walk(v, f"{where}.{k}")
     walk(doc.get("flow"), "flow")
@@ -300,7 +326,8 @@ STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D803", "no world, no hooks", _d803),
     ("D830", "who digests the papers is knowledge.digest", _d830),
     ("D954", "no evaluator stages: no workload, no mined calibration", _d954),
-    ("D969", "flux prog is the helper fluxhelper prog", _d969),
+    ("D969", "flux prog is the preset fluxpreset prog", _d969),
+    ("D974", "fluxhelper is fluxpreset (helpers are presets)", _d974),
 ]
 
 

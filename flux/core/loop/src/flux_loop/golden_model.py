@@ -1,5 +1,5 @@
 """Golden models: their values and vectors (the test of an RTL design against them is
-`python -m flux_helpers.golden`, D968; a Python prototype's is `flux_loop.golden_proto`, D951).
+`python -m flux_presets.golden`, D968; a Python prototype's is `flux_loop.golden_proto`, D951).
 
 The golden model declares `PORTS` ([{name, dir, bits}], signed unless `unsigned: true`) and
 `golden(**inputs) -> {output: value}`; optionally `VECTORS`, `COUNT`, `SEED`, `EXHAUSTIVE`,

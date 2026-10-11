@@ -19,15 +19,15 @@ objectives:                 # 3% margin on shallower stages, 3% tie band
 
 flow:                       # every operator's, unless its folder says otherwise
   generate: claude    # D804: drafts each operator's prototype and RTL (a parent's command would compose)
-  test: "fluxhelper golden {artifact} --golden {home}/golden.py" # {home}: the operator's folder
+  test: "fluxpreset golden {artifact} --golden {home}/golden.py" # {home}: the operator's folder
   measure:
     synth:
-      command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 1250 --timeout 1200"
+      command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 1250 --timeout 1200"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1300
     place:
-      command: "fluxhelper rtl measure {artifact} --stage place --clock-ps 1250 --timeout 1800"
+      command: "fluxpreset rtl measure {artifact} --stage place --clock-ps 1250 --timeout 1800"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1900

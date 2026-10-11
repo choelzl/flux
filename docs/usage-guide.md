@@ -52,8 +52,8 @@ flux ask --tui                                           # the same, from a setu
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
   "review first" on, you read the checked problem and type `run`, `stop`, or a note.
 
-Checks and measurements that Flux ships are its helpers (D968): `fluxhelper golden`,
-`fluxhelper rtl lint|measure`, `fluxhelper prog`, `fluxhelper bench` and `fluxhelper champsim`
+Checks and measurements that Flux ships are its presets (D968): `fluxpreset golden`,
+`fluxpreset rtl lint|measure`, `fluxpreset prog`, `fluxpreset bench` and `fluxpreset champsim`
 (the [document reference](../website/docs/guide/parameters.md#built-in-tools) lists them). Older
 loops that carry their own `rtl.py` or `champsim.py` keep working. Declare each measurement
 stage's `metrics` and `needs` explicitly, and set the design `language`.
@@ -76,14 +76,14 @@ flow:
     policy: sweep
     space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  test: "fluxhelper golden {artifact} --golden {home}/golden.py" # the gate
+  test: "fluxpreset golden {artifact} --golden {home}/golden.py" # the gate
   measure:                               # the stages, by name, cheapest first
     screen:
-      command: "fluxhelper rtl measure {artifact} --stage synth --clock-ps 300"
+      command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 300"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "fluxhelper rtl measure {artifact} --stage place --clock-ps 300"
+      command: "fluxpreset rtl measure {artifact} --stage place --clock-ps 300"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1800
@@ -294,13 +294,13 @@ flux user add ada --admin && flux serve   # http://127.0.0.1:8765/
 The commands an RTL document names as its gate and stages:
 
 ```bash
-fluxhelper golden design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
+fluxpreset golden design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
 python -m flux_loop.golden_proto prototype.py --golden golden.py   # a Python prototype against the golden model (D951)
-fluxhelper rtl measure design.sv --stage synth --clock-ps 1000   # or stat, place, route: ASAP7 metric=value lines
+fluxpreset rtl measure design.sv --stage synth --clock-ps 1000   # or stat, place, route: ASAP7 metric=value lines
 ```
 
 The golden test, the RTL lint and measurement and the prototype check are Flux's own (D951,
-D968); `fluxhelper rtl measure` runs OpenROAD-flow-scripts on ASAP7 to the stage asked. `fluxhelper golden` exits 1 when the
+D968); `fluxpreset rtl measure` runs OpenROAD-flow-scripts on ASAP7 to the stage asked. `fluxpreset golden` exits 1 when the
 design fails and 3 when it does not compile. A prototype that
 passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper

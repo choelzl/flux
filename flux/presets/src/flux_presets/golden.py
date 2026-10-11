@@ -1,6 +1,6 @@
 """The golden test: an RTL design against golden.py's vectors, through Verilator (D967, D968).
 
-    fluxhelper golden DESIGN.sv --golden golden.py     # "N failing of M"; exit 0, 1, or 3 (no build)
+    fluxpreset golden DESIGN.sv --golden golden.py     # "N failing of M"; exit 0, 1, or 3 (no build)
 
 The vectors come from the golden model (`flux_loop.golden_model`: `PORTS`, `golden()`, `VECTORS`,
 `COUNT`, `SEED`, `EXHAUSTIVE`, `CLOCK`, `LATENCY`, `TOLERANCE_ULP`); a test bench reads them as a
@@ -25,11 +25,11 @@ __all__ = ["EXHAUSTIVE_MAX_BITS", "Check", "Golden", "check_rtl", "explain_diagn
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entries (D968)."""
+    """This preset's catalog entries (D968)."""
     from ._entries import HDL, N_FAILING, param
     return [{"id": "rtl-golden", "role": "check", "title": "Test against a golden model",
              "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-             "run": "fluxhelper golden {artifact} --golden {golden}",
+             "run": "fluxpreset golden {artifact} --golden {golden}",
              "params": {"golden": param("Golden model", "{home}/golden.py")},
              "needs": ["verilator"], "pass": N_FAILING, "languages": HDL, "kinds": ["rtl"], "short": "golden"}]
 
@@ -66,7 +66,7 @@ class Check:
     lines: tuple[str, ...] = ()     # the first failures: what came out, what went in, what was expected
     latency: int | None = None      # measured cycles (a design with start/done)
     error: str = ""                 # why it did not build, or the latency refused
-    cycles: tuple[int, ...] = ()    # each vector's cycles, start to done (D971: `fluxhelper rtl cycles`)
+    cycles: tuple[int, ...] = ()    # each vector's cycles, start to done (D971: `fluxpreset rtl cycles`)
 
     @property
     def ok(self) -> bool:

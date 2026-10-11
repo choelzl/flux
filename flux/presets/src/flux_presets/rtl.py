@@ -1,21 +1,21 @@
-"""RTL helpers on ASAP7 (D968): lint with Verilator, measure with OpenROAD-flow-scripts (ORFS).
+"""RTL presets on ASAP7 (D968): lint with Verilator, measure with OpenROAD-flow-scripts (ORFS).
 
-    fluxhelper rtl lint DESIGN.sv                      # hardware defects: "N failing"; exit 0, 1, 3 (no parse)
-    fluxhelper rtl cycles DESIGN.sv --golden golden.py # a clocked design: latency_cycles= cycles_per_result=
-    fluxhelper rtl equiv DESIGN.sv --reference ref.sv  # formally equal: "0 failing", else a counterexample
-    fluxhelper rtl breakdown DESIGN.sv                 # area_seq_um2= area_arith_um2= area_xor_um2= area_buf_um2= ...
-    fluxhelper rtl fmax DESIGN.sv --stage synth        # fmax_closed_mhz= closed_period_ps= runs=
-    fluxhelper rtl power DESIGN.sv --golden golden.py --stage place   # power_w= with the vectors' own switching
-    fluxhelper rtl energy DESIGN.sv --golden golden.py # energy_pj_per_result= edp_pj_ns=
-    fluxhelper rtl path DESIGN.sv --stage place        # path_levels= path_cell_ps= path_wire_ps=
-    fluxhelper rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
+    fluxpreset rtl lint DESIGN.sv                      # hardware defects: "N failing"; exit 0, 1, 3 (no parse)
+    fluxpreset rtl cycles DESIGN.sv --golden golden.py # a clocked design: latency_cycles= cycles_per_result=
+    fluxpreset rtl equiv DESIGN.sv --reference ref.sv  # formally equal: "0 failing", else a counterexample
+    fluxpreset rtl breakdown DESIGN.sv                 # area_seq_um2= area_arith_um2= area_xor_um2= area_buf_um2= ...
+    fluxpreset rtl fmax DESIGN.sv --stage synth        # fmax_closed_mhz= closed_period_ps= runs=
+    fluxpreset rtl power DESIGN.sv --golden golden.py --stage place   # power_w= with the vectors' own switching
+    fluxpreset rtl energy DESIGN.sv --golden golden.py # energy_pj_per_result= edp_pj_ns=
+    fluxpreset rtl path DESIGN.sv --stage place        # path_levels= path_cell_ps= path_wire_ps=
+    fluxpreset rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
     # one line: fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... (stat: area_um2, cell_count)
 
 measure runs ORFS to the stage asked: stat is Yosys's mapped cells; synth times the netlist
 unplaced (ORFS's floorplan); place after detailed placement; route after routing (timing from
 global routing, plus drc_errors and wirelength_um from the detailed router). A module without
 `clk` is timed input to output. Needs yosys, openroad, sta and ORFS's flow/ folder (FLOW_HOME, or
-the Flux dev shell's ORFS); lint needs verilator. The golden test is `fluxhelper golden`.
+the Flux dev shell's ORFS); lint needs verilator. The golden test is `fluxpreset golden`.
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ STAGES = {"stat": ("synth", "1_synth", "synth"), "synth": ("floorplan", "2_1_flo
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entries (D968): lint, and a measurement per stage."""
+    """This preset's catalog entries (D968): lint, and a measurement per stage."""
     from ._entries import HDL, metrics, param
 
     def stage(depth: str, title: str, what: str, reports: tuple[str, ...]) -> dict:
         return {"id": f"rtl-{depth}", "role": "stage", "title": title, "what": what,
-                "run": f"fluxhelper rtl measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
+                "run": f"fluxpreset rtl measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
                 "params": {"clock_ps": param("Clock period" + (" (the mapper's target)" if depth == "stat" else ""), 1000, "ps")},
                 "metrics": metrics(*reports), "needs": ["yosys", "openroad", "make"] + ([] if depth == "stat" else ["sta"]),
                 "languages": HDL, "kinds": ["rtl"], "short": depth}
@@ -54,7 +54,7 @@ def catalog() -> list[dict]:
     return [{"id": "rtl-lint", "role": "check", "title": "Lint for hardware defects",
              "what": "Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking "
                      "mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse.",
-             "run": "fluxhelper rtl lint {artifact}", "params": {}, "needs": ["verilator"],
+             "run": "fluxpreset rtl lint {artifact}", "params": {}, "needs": ["verilator"],
              "pass": "passes when it prints `0 failing`; exit 3 = did not parse", "languages": HDL, "kinds": ["rtl"], "short": "lint"},
             stage("stat", "Area and cells (ASAP7)", "OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, "
                   "the cheapest screen.", ("area_um2", "cell_count")),
@@ -67,19 +67,19 @@ def catalog() -> list[dict]:
             {"id": "rtl-cycles", "role": "stage", "title": "Clock cycles (Verilator)",
              "what": "A clocked design run on golden.py's vectors, each started when the last is done: its latency in "
                      "cycles (the most, the fewest) and the mean cycles per result.",
-             "run": "fluxhelper rtl cycles {artifact} --golden {golden}", "params": {"golden": param("Golden model", "{home}/golden.py")},
+             "run": "fluxpreset rtl cycles {artifact} --golden {golden}", "params": {"golden": param("Golden model", "{home}/golden.py")},
              "metrics": metrics("latency_cycles", "latency_min_cycles", "cycles_per_result"), "needs": ["verilator"],
              "languages": HDL, "kinds": ["rtl"], "short": "cycles"},
             {"id": "rtl-equiv", "role": "check", "title": "Equal to a reference module",
              "what": "Formal equivalence with Yosys (a miter of the two, proved by SAT; a clocked pair by induction): "
                      "passes when they are equal for every input, else prints a counterexample.",
-             "run": "fluxhelper rtl equiv {artifact} --reference {reference}",
+             "run": "fluxpreset rtl equiv {artifact} --reference {reference}",
              "params": {"reference": param("Reference module", "{home}/reference.sv")}, "needs": ["yosys"],
              "pass": "passes when it prints `0 failing`; exit 3 = did not parse", "languages": HDL, "kinds": ["rtl"], "short": "equiv"},
             {"id": "rtl-breakdown", "role": "stage", "title": "Where the area goes (ASAP7)",
              "what": "OpenROAD-flow-scripts' synthesis, its cells grouped: sequential, adders, XORs, buffers and inverters, "
                      "the rest of the logic; and the flops.",
-             "run": "fluxhelper rtl breakdown {artifact} --clock-ps {clock_ps}",
+             "run": "fluxpreset rtl breakdown {artifact} --clock-ps {clock_ps}",
              "params": {"clock_ps": param("Clock period (the mapper's target)", 1000, "ps")},
              "metrics": metrics("area_seq_um2", "area_arith_um2", "area_xor_um2", "area_buf_um2", "area_logic_um2",
                                 "flop_count", "area_um2"),
@@ -87,7 +87,7 @@ def catalog() -> list[dict]:
             {"id": "rtl-fmax", "role": "stage", "title": "Fastest clock that closes (ASAP7)",
              "what": "A few OpenROAD-flow-scripts runs, each at the period the last one's slack says, until the fastest "
                      "clock that closes timing at that stage is found: costly, and the honest fmax.",
-             "run": "fluxhelper rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
+             "run": "fluxpreset rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
              "params": {"stage": param("Stage (synth, place, route)", "synth"), "clock_ps": param("First period tried", 1000, "ps"),
                         "steps": param("Runs at most", 6)},
              "metrics": metrics("fmax_closed_mhz", "closed_period_ps"), "needs": ["yosys", "openroad", "sta", "make"],
@@ -95,7 +95,7 @@ def catalog() -> list[dict]:
             {"id": "rtl-power", "role": "stage", "title": "Power from the design's own switching (ASAP7)",
              "what": "Verilator runs golden.py's vectors and records the switching; OpenROAD reads it on the synthesised or "
                      "placed design and reports power: internal, switching, leakage.",
-             "run": "fluxhelper rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+             "run": "fluxpreset rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
              "params": {"golden": param("Golden model", "{home}/golden.py"), "stage": param("Stage (synth, place)", "place"),
                         "clock_ps": param("Clock period", 1000, "ps")},
              "metrics": metrics("power_w", "power_internal_w", "power_switching_w", "power_leakage_w"),
@@ -103,7 +103,7 @@ def catalog() -> list[dict]:
             {"id": "rtl-energy", "role": "stage", "title": "Energy per result (ASAP7)",
              "what": "The power the golden vectors' own switching draws, times the time one result takes (its measured "
                      "cycles at the clock): energy per result and energy-delay product.",
-             "run": "fluxhelper rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+             "run": "fluxpreset rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
              "params": {"golden": param("Golden model", "{home}/golden.py"), "stage": param("Stage (synth, place)", "place"),
                         "clock_ps": param("Clock period", 1000, "ps")},
              "metrics": metrics("energy_pj_per_result", "edp_pj_ns", "power_w", "cycles_per_result"),
@@ -111,7 +111,7 @@ def catalog() -> list[dict]:
             {"id": "rtl-path", "role": "stage", "title": "The critical path's anatomy (ASAP7)",
              "what": "OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the "
                      "cells and how much in the wires -- whether to cut logic or wire.",
-             "run": "fluxhelper rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
+             "run": "fluxpreset rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
              "params": {"stage": param("Stage (synth, place, route)", "place"), "clock_ps": param("Clock period", 1000, "ps")},
              "metrics": metrics("path_ps", "path_levels", "path_cell_ps", "path_wire_ps", "slack_ps"),
              "needs": ["yosys", "openroad", "sta", "make"], "languages": HDL, "kinds": ["rtl"], "short": "path"}]
@@ -398,7 +398,7 @@ def lint(path: str, timeout_s: float = 120.0) -> tuple[int, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper rtl", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset rtl", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
     eq = sub.add_parser("equiv", help="formally equal to a reference module (Yosys miter + SAT): 0 failing or a counterexample")
     eq.add_argument("artifact")

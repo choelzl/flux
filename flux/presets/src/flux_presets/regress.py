@@ -1,10 +1,10 @@
 """A performance gate (D973): any measurement run again and compared with a recorded baseline.
 
-    fluxhelper regress --baseline base.json --tol 5 -- fluxhelper bench design.py --call f --args "(10**6,)"
-    fluxhelper regress --baseline base.json --record -- CMD ...     # writes the baseline from this run
+    fluxpreset regress --baseline base.json --tol 5 -- fluxpreset bench design.py --call f --args "(10**6,)"
+    fluxpreset regress --baseline base.json --record -- CMD ...     # writes the baseline from this run
     # each metric worse than the baseline by more than --tol percent a line, then "N failing"
 
-The command after `--` prints `name=value` (any helper or script); the baseline is a JSON object
+The command after `--` prints `name=value` (any preset or script); the baseline is a JSON object
 {name: value}. Lower is better unless the metric is named in `--higher`. Only the baseline's metrics
 are judged (or those `--metrics` names); one the run does not print is a failure. The run's numbers
 go to stderr.
@@ -22,19 +22,19 @@ from ._run import command, numbers, run
 
 
 def catalog() -> list[dict]:
-    """This helper's catalog entry (D973)."""
+    """This preset's catalog entry (D973)."""
     from ._entries import N_FAILING, param
     return [{"id": "regress", "role": "check", "title": "No worse than a baseline",
              "what": "Runs any measurement again and fails when a metric is worse than the recorded baseline by more than "
                      "the tolerance.",
-             "run": "fluxhelper regress --baseline {baseline} --tol {tol} -- {command}",
+             "run": "fluxpreset regress --baseline {baseline} --tol {tol} -- {command}",
              "params": {"baseline": param("Baseline (JSON)", "{home}/baseline.json"), "tol": param("Tolerance", 5, "%"),
                         "command": param("Measurement command", "")},
              "needs": [], "pass": N_FAILING, "languages": [], "kinds": ["own"], "short": "regress"}]
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="fluxhelper regress", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="fluxpreset regress", description=__doc__.split("\n\n")[0])
     ap.add_argument("--baseline", required=True)
     ap.add_argument("--tol", type=float, default=5.0, help="percent worse that still passes")
     ap.add_argument("--higher", default="", help="metrics where higher is better, comma-separated")
