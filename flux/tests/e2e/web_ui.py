@@ -122,7 +122,16 @@ class Browser:
         return list(r["value"].values())[0]
 
     def click(self, css):
-        self.cmd("WebDriver:ElementClick", {"id": self.find(css)})
+        # A live page redraws (LiveAlt each second while running): the element found can be
+        # replaced before the click lands; find it again (D976).
+        for attempt in range(5):
+            try:
+                self.cmd("WebDriver:ElementClick", {"id": self.find(css)})
+                return
+            except RuntimeError as exc:
+                if "stale" not in str(exc) or attempt == 4:
+                    raise
+                time.sleep(0.1)
 
     def type(self, css, text):
         el = self.find(css)

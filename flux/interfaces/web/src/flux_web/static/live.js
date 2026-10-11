@@ -543,6 +543,15 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, n.failed ? "err" : ""),
       !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "No output recorded.") : "");
   }
+  /** A command as a person reads it (D976): Flux's own interpreter path gone, `python -m
+      flux_presets` as the `fluxpreset` the document said, and paths under its folder relative. */
+  function tidyCommand(cmd, folder) {
+    let text = cmd.replace(/\/nix\/store\/[a-z0-9]{32}-[^/\s]+\/bin\//g, "")
+      .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_presets(?:\.(\w+))?(?=\s|$)/g, (_, pre, sub) => `${pre}fluxpreset${sub ? " " + sub : ""}`)
+      .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_cli(?=\s|$)/g, "$1flux");
+    if (folder && folder.length > 1) text = text.split(folder.replace(/\/$/, "") + "/").join("");
+    return text;
+  }
   let detailTab = "";
   function drawDetail(now) {
     const n = selected;
@@ -563,7 +572,8 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     if (!selected) { delete detail.dataset.view; delete detail.dataset.task; detail.replaceChildren(empty("Select a task.")); return; }
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
-      const text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
+      let text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
+      if (unifiedDetail && title === "Input" && k === "command" && typeof v === "string") text = tidyCommand(v, obj.folder);   // D976; Raw keeps it whole
       const long = text.length > 120 || text.includes("\n");
       return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val", "data-k": unifiedDetail && k === "prompt" && title === "Input" ? "prompt" : `field:${title}:${k}` }, text) : h("div", { class: "val mono" }, text));
     })) : "";

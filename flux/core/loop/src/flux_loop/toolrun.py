@@ -9,6 +9,7 @@ ran and how it went (D709): its command and folder, its output's ends while it r
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import threading
@@ -40,6 +41,32 @@ class ToolRun:
     def tail(self, *, stdout: bool = True, stderr: bool = True, chars: int = TAIL_CHARS) -> str:
         return tails(self, stdout=stdout, stderr=stderr, chars=chars)
 
+
+
+_WORD = re.compile(r"[a-z][\w-]*")
+
+
+def _named(cmd: list[str]) -> str:
+    """The tool as the document said it (D976): a preset run as `python -m flux_presets rtl
+    measure ...` is `fluxpreset rtl measure`, Flux's CLI is `flux`, `python3 gen.py` is `gen.py`;
+    any other command its program."""
+    words = [str(c) for c in cmd]
+    if "-m" in words[:-1]:
+        module = words[words.index("-m") + 1]
+        rest = words[words.index("-m") + 2:]
+        head = {"flux_presets": "fluxpreset", "flux_cli": "flux"}.get(module.split(".")[0])
+        if head:
+            sub = module.split(".")[1:2]
+            sub += [w for w in rest[:2 - len(sub)] if _WORD.fullmatch(w)][:2 - len(sub)]
+            while len(sub) > 1 and not _WORD.fullmatch(sub[-1]):
+                sub.pop()
+            return " ".join([head, *sub])
+    program = words[0].rsplit("/", 1)[-1]
+    if re.fullmatch(r"python[\d.]*", program):        # a script run by Python is named after the script
+        script = next((w for w in words[1:] if not w.startswith("-")), "")
+        if script.endswith(".py"):
+            return script.rsplit("/", 1)[-1]
+    return program
 
 def tails(proc: Any, *, stdout: bool = True, stderr: bool = True, chars: int = TAIL_CHARS) -> str:
     """The last `chars` of a process's stdout and/or stderr, labelled -- the one shape
@@ -83,7 +110,7 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
     was doing; a non-zero exit raises the same when `error` is given and is otherwise the
     caller's to read from `.ok` / `.tail()` -- some tools exit non-zero and still report."""
     exc_type = error or RuntimeError
-    binary = cmd[0].rsplit("/", 1)[-1]
+    binary = _named(cmd)
     label = what or binary
     try:
         from flux_profile import phase, progress

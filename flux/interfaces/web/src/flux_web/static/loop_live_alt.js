@@ -4,17 +4,16 @@ import { liveTree } from "./live.js";
 import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel } from "./work_style.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
 
-const WORK_OF_BOX = { plan: "plan", dse: "search", generate: "design", parts: "design", test: "check",
-  measure: "measure", calibrate: "measure", select: "choose" };
-const workOf = n => { const box = window.FluxLoopTree.boxOf(n); return box?.startsWith("crit-") ? "critic" : WORK_OF_BOX[box] || "setup"; };
+// D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
+const workOf = phaseKind;
 const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 
 export function liveAltTab(ctx) {
   let startId = "current", pass = "current", history = null, inspector = null, transport = null;
   let abort = null, timer = null, frame = 0, seq = 0, mounted = false, following = true, limit = 200;
-  let panel, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, detailNav, logLink, locateBtn;
+  let panel, split, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, stepper, logLink, locateBtn;
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), viewPlaces = new Map();
@@ -77,14 +76,16 @@ export function liveAltTab(ctx) {
       ...Object.entries(counts).filter(([, n]) => n).map(([s, n]) => h("span", { class: `alt-count ${s}`, title: `All tasks in this scope: ${n} ${s}` }, `${n} ${s}`)));
     locateBtn.disabled = selected == null;
     const index = visibleRows.findIndex(r => r.node.id === selected);
-    detailNav.querySelector('[data-step="-1"]').disabled = index <= 0;
-    detailNav.querySelector('[data-step="1"]').disabled = index < 0 || index >= visibleRows.length - 1;
-    detailNav.querySelector(".alt-task-position").textContent = index < 0 ? selected != null ? "Context task" : "No task selected" : `Task ${index + 1} of ${visibleRows.length}`;
+    stepper.querySelector('[data-step="-1"]').disabled = index <= 0;
+    stepper.querySelector('[data-step="1"]').disabled = index < 0 || index >= visibleRows.length - 1;
+    stepper.querySelector(".alt-task-position").textContent = index < 0 ? "–" : `${index + 1} / ${visibleRows.length}`;
+    stepper.title = index < 0 ? "The selected task is outside this list" : `Task ${index + 1} of ${visibleRows.length} in this list (↑ ↓ to step)`;
     logLink.textContent = startId === "current" ? "Full log" : "History";
     logLink.href = `${appHref(ctx.owner, ctx.name)}/live/${startId === "current" ? "log" : "history/" + startId}`;
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
     const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
+    split.classList.toggle("wide", mode === "timeline");          // a timeline needs the width; the inspector goes under it
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -164,19 +165,19 @@ export function liveAltTab(ctx) {
     }));
   }
   function timeline(rows, selected) {
-    const now = Date.now() / 1000, a = Math.min(...rows.map(r => r.node.t0)), b = Math.max(a + .001, ...rows.map(r => r.node.t1 ?? now));
-    const W = Math.max(300, panel.clientWidth || 380), L = 82, R = 12, T = 8, B = 26, lane = 30;
-    const lanes = Object.keys(COLORS).filter(kind => rows.some(r => workOf(r.node) === kind));
+    // D977: as Live's timeline -- a task's own time, its children's taken out, so a container
+    // (DSE: batch, a pass's generation) is not a bar over everything under it
+    const now = Date.now() / 1000, end = n => n.t1 ?? now;
+    const a = Math.min(...rows.map(r => r.node.t0)), b = Math.max(a + .001, ...rows.map(r => end(r.node)));
+    const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
+      .map(([t0, t1]) => ({ n, depth, t0, t1, kind: workOf(n) })));
+    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 8, B = 26, lane = 30;
+    const lanes = Object.keys(COLORS).filter(kind => segs.some(x => x.kind === kind));
     const H = T + lanes.length * lane + B;
-    // As in Live: one lane per work category. Nested tasks share their phase's lane.
-    // Paint shorter tasks over their parents, and keep the pinned task visible.
-    const tasks = rows.slice().sort((x, y) => {
-      if (x.node.id === y.node.id) return 0;
-      if (x.node.id === selected) return 1;
-      if (y.node.id === selected) return -1;
-      return ((y.node.t1 ?? now) - y.node.t0) - ((x.node.t1 ?? now) - x.node.t0);
-    });
     const X = t => L + (W - L - R) * (t - a) / (b - a);
+    // the pinned task painted last, so it stays visible where work ran side by side
+    const order = segs.slice().sort((x, y) => (x.n.id === selected) - (y.n.id === selected) || (y.t1 - y.t0) - (x.t1 - x.t0));
+    const agents = segs.filter(x => agentActive(x.n));
     return h("div", { class: "gantt-box" }, sv("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, style: `width:${W}px;max-width:none;height:${H}px`, class: "chart gantt alt-timeline", role: "group", "aria-label": "Task timeline by kind of work" },
       lanes.map((kind, i) => [sv("text", { x: L - 8, y: T + i * lane + lane / 2 + 4, class: "tick", "text-anchor": "end" }, workLabel(kind)),
         sv("line", { x1: L, x2: W - R, y1: T + (i + 1) * lane, y2: T + (i + 1) * lane, class: "grid" })]),
@@ -184,32 +185,34 @@ export function liveAltTab(ctx) {
         sv("text", { x: X(a + f * (b - a)), y: H - 8, class: "tick", "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" }, `+${dur(f * (b - a)) || "0s"}`)]),
       inspector.model.marks.filter(m => m.name === "pass" && m.t > a && m.t < b).map(m =>
         sv("line", { x1: X(m.t), x2: X(m.t), y1: T, y2: H - B, class: "pass-line" }, sv("title", {}, `Pass ${m.n}`))),
-      tasks.map(({ node: n }) => {
-        const kind = workOf(n), y = T + lanes.indexOf(kind) * lane + 3, width = Math.max(3, X(n.t1 ?? now) - X(n.t0));
+      order.map(({ n, kind, t0, t1 }) => {
+        const y = T + lanes.indexOf(kind) * lane + 3, width = Math.max(3, X(t1) - X(t0));
         return taskSvg(n, { class: `alt-time-task${n.id === selected ? " sel" : ""}`, "data-kind": kind, "aria-pressed": String(n.id === selected),
           onclick: event => {
             const svg = event.currentTarget.ownerSVGElement, bounds = svg.getBoundingClientRect();
             const at = a + ((event.clientX - bounds.left) * W / bounds.width - L) / (W - L - R) * (b - a);
-            const hits = rows.filter(r => workOf(r.node) === kind && r.node.t0 <= at && (r.node.t1 ?? now) >= at);
+            const slack = 3 * (b - a) / (W - L - R);              // a bar is drawn at least 3 px wide
+            const hits = [...new Map(segs.filter(x => x.kind === kind && x.t0 - slack <= at && x.t1 + slack >= at)
+              .map(x => [x.n.id, x])).values()];
             if (hits.length < 2) { select(n.id); return; }
             following = false; pinPass(inspector.taskId());
-            choice = { ids: hits.slice().sort((x, y) => y.depth - x.depth || y.node.t0 - x.node.t0).map(r => r.node.id), kind };
+            choice = { ids: hits.sort((x, y) => y.depth - x.depth || y.n.t0 - x.n.t0).map(x => x.n.id), kind };
             render(); panel.querySelector(".alt-choice [data-task]")?.focus({ preventScroll: true });
           } },
-          sv("title", {}, `${n.name} · ${state(n)} · ${dur(n.seconds ?? now - n.t0)}`),
-          sv("rect", { x: X(n.t0), y, width, height: lane - 6, rx: 2, fill: COLORS[kind], class: `bar ${state(n)}` }));
+          sv("title", {}, `${n.name}${n.why ? " · " + n.why : ""} · ${state(n)} · ${dur(n.seconds ?? now - n.t0)}`),
+          sv("rect", { x: X(t0), y, width, height: lane - 6, rx: 2, fill: COLORS[kind], class: `bar ${state(n)}` }));
       }),
-      rows.filter(r => agentActive(r.node)).map(({ node: n }) => sv("rect", {
-        x: X(n.t0), y: T + lanes.indexOf(workOf(n)) * lane + lane - 8,
-        width: Math.max(3, X(n.t1 ?? now) - X(n.t0)), height: 5, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
-      h("p", { class: "muted small tl-legend" }, h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work"),
+      agents.map(({ kind, t0, t1 }) => sv("rect", {
+        x: X(t0), y: T + lanes.indexOf(kind) * lane + lane - 8,
+        width: Math.max(3, X(t1) - X(t0)), height: 5, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
+      h("p", { class: "muted small tl-legend" }, agents.length ? h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work") : "",
         "Dashed: a pass begins."),
-      choice ? h("div", { class: "alt-choice", role: "group", "aria-label": "Overlapping tasks", onkeydown: event => {
+      choice ? h("div", { class: "alt-choice", role: "group", "aria-label": "Tasks side by side", onkeydown: event => {
         if (event.key === "Escape") { event.preventDefault(); choice = null; reveal = true; render(); }
-      } }, h("div", { class: "alt-choice-head" }, h("strong", {}, `${workLabel(choice.kind)} · choose a task`),
-        h("button", { type: "button", class: "small", "aria-label": "Close overlapping tasks", onclick: () => { choice = null; render(); } }, "×")),
+      } }, h("div", { class: "alt-choice-head" }, h("strong", {}, `${workLabel(choice.kind)} · side by side here`),
+        h("button", { type: "button", class: "small", "aria-label": "Close the tasks side by side", onclick: () => { choice = null; render(); } }, "×")),
         choice.ids.map(id => inspector.model.nodes.get(id)).filter(Boolean).map(n => h("button", {
-          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, n.name), h("small", { class: "muted" }, state(n))))) : "");
+          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, n.name, n.why ? h("small", { class: "muted" }, " · " + n.why) : ""), h("small", { class: "muted" }, state(n))))) : "");
   }
   async function load(validPage) {
     close(); valid = validPage;
@@ -282,6 +285,10 @@ export function liveAltTab(ctx) {
       loadMessage = "This start's task journal could not be loaded."; render();
     }
   }
+  function stepBy(step) {
+    const i = visibleRows.findIndex(r => r.node.id === inspector.taskId()), n = visibleRows[i + step]?.node;
+    if (n) select(n.id, true);
+  }
   const detailHost = h("div", { class: "alt-inspector-host", tabindex: "-1" });
   const earlier = h("button", { type: "button", class: "small", hidden: true, title: "Load every pass of this start", onclick: () => loadEarlier?.() }, "Earlier passes");
   async function show() {
@@ -311,17 +318,23 @@ export function liveAltTab(ctx) {
       h("div", { class: "alt-selectors" }, h("label", {}, "Start ", startSel), h("label", {}, "Pass ", passSel)));
     summary = h("div", { class: "alt-summary" });
     logLink = h("a", { class: "btn small alt-log-link", title: "Full output and retained run data" });
-    detailNav = h("div", { class: "alt-detail-nav" }, ...[-1, 1].map(step => h("button", { type: "button", class: "small", "data-step": String(step), "aria-label": step < 0 ? "Previous task" : "Next task",
-      onclick: () => { const i = visibleRows.findIndex(r => r.node.id === inspector.taskId()); const n = visibleRows[i + step]?.node; if (n) select(n.id, true); } }, step < 0 ? "← Prev" : "Next →")),
-      h("span", { class: "alt-task-position muted small" }),
-      locateBtn = h("button", { type: "button", class: "small", title: "Reveal and highlight the selected task in this view", onclick: () => {
-        for (let p = inspector.model.nodes.get(inspector.taskId())?.parent; p; p = p.parent) folded.delete(p.id);
-        reveal = true; render();
-      } }, "Locate"), logLink);
-    panel = h("div", { class: "alt-visual", tabindex: "0", "aria-label": "LiveAlt task view" });
+    // D976: the stepper moves through the list it sits on, so it sits on the list, not the inspector
+    stepper = h("div", { class: "alt-stepper", role: "group", "aria-label": "Step through the tasks in this list" },
+      ...[-1, 1].map(step => h("button", { type: "button", class: "small", "data-step": String(step), "aria-label": step < 0 ? "Previous task" : "Next task",
+        onclick: () => stepBy(step) }, step < 0 ? "‹" : "›")));
+    stepper.insertBefore(h("span", { class: "alt-task-position muted small mono" }), stepper.lastChild);
+    locateBtn = h("button", { type: "button", class: "small", title: "Reveal and highlight the selected task in the list", onclick: () => {
+      for (let p = inspector.model.nodes.get(inspector.taskId())?.parent; p; p = p.parent) folded.delete(p.id);
+      reveal = true; render();
+    } }, "Locate");
+    panel = h("div", { class: "alt-visual", tabindex: "0", "aria-label": "LiveAlt task view", onkeydown: event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || !["ArrowUp", "ArrowDown"].includes(event.key) || event.target.closest("select, input, textarea, .alt-choice")) return;
+      event.preventDefault(); stepBy(event.key === "ArrowUp" ? -1 : 1);
+    } });
     ctx.subHolder.append(controls);
-    ctx.body.replaceChildren(h("div", { class: "live-alt" }, notice,
-      h("div", { class: "alt-split" }, card(null, [summary, panel], { cls: "alt-visual-card" }), card("Task", [detailNav, detailHost], { cls: "alt-inspector-card" }))));
+    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, stepper), panel], { cls: "alt-visual-card" }),
+      card(null, [h("div", { class: "alt-detail-actions" }, locateBtn, logLink), detailHost], { cls: "alt-inspector-card" }));
+    ctx.body.replaceChildren(h("div", { class: "live-alt" }, notice, split));
     await load(validPage);
   }
   return { show, close };
