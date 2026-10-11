@@ -3,7 +3,7 @@ name = "flux-presets"
 version = "0.1.0"
 description = "Flux's prebuilt check and measurement commands: the golden test, RTL lint and ORFS measurement, program time/count/size, a Python bench, ChampSim (docs/decisions.md D968)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["lizard"]
 
 [build-system]
 requires = ["hatchling"]

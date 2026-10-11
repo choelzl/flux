@@ -72,6 +72,7 @@
             # under conflict-freeness constraints; numpy is the exhaustive checker.
             ps.z3-solver
             ps.numpy
+            ps.lizard            # fluxpreset complexity (D975)
             # `flux serve`, the web interface (D683): the API, its server, form uploads,
             # and httpx for FastAPI's test client
             ps.fastapi

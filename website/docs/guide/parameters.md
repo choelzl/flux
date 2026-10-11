@@ -781,6 +781,15 @@ stat"` runs that preset on the translation. `fluxpreset regress -- CMD` compares
 `name=value` with a baseline file (`--record` writes it; `--tol` percent, `--higher` for metrics where
 more is better). `fluxpreset extract -- CMD` turns a tool's JSON, CSV or text into `name=value`
 (`--pick PATH=name`, a dotted path, a column or a regex group).
+`fluxpreset complexity` reads a design's source in any common language (lizard) and prints `loc`,
+`functions`, `cyclomatic_max`, `cyclomatic_mean`, `tokens`, `max_function_loc`; with
+`--max-cyclomatic N` it fails each function over N. `fluxpreset scaling -- CMD {n}` times a command at
+doubling sizes (`{n}`; `--input "gen {n}"` feeds its stdin, `--build` makes `{out}` first), takes the
+start-up time off and fits time ~ n^k: `scaling_exponent` (about 1 linear, 2 quadratic),
+`scaling_r2`, `time_at_max_ms`, `max_n`; with `--max-exponent K` it is a check. `fluxpreset repeat
+--n 5 -- CMD` prints each metric's median and `NAME_spread_pct`. `fluxpreset derive --expr
+"adp=area_um2*path_ps" -- CMD` adds formula metrics (arithmetic, min, max, abs, sqrt, log, exp) to a
+command's own.
 
 ## Flux presets
 
@@ -796,6 +805,10 @@ document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fl
 | `timebound` | `fluxpreset timebound DESIGN.py --call F --args "(1000,)" --max-ms 50` |
 | `regress` | `fluxpreset regress --baseline base.json [--tol 5] [--record] -- CMD` |
 | `extract` | `fluxpreset extract [--format json\|csv\|regex] --pick PATH=name -- CMD` |
+| `complexity` | `fluxpreset complexity DESIGN [--ext .c] [--max-cyclomatic 15]` |
+| `scaling` | `fluxpreset scaling [--start 1000\|--sizes A,B,C] [--input "gen {n}"] [--build "cc -o {out} {artifact}"] [--max-exponent K] -- CMD {n}` |
+| `repeat` | `fluxpreset repeat --n 5 [--warmup 1] -- CMD` |
+| `derive` | `fluxpreset derive --expr NAME=EXPR [--expr ...] -- CMD` |
 | `cases` | `fluxpreset cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
 | `pytest` | `fluxpreset pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
 | `ccases` | `fluxpreset ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |

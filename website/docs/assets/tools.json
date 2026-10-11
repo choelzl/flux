@@ -389,6 +389,77 @@
   "preset": true
  },
  {
+  "id": "complexity",
+  "role": "stage",
+  "title": "Source complexity",
+  "what": "Reads the design's source (any common language) and counts its lines of code, functions, cyclomatic complexity and tokens; nothing is built or run.",
+  "run": "fluxpreset complexity {artifact}",
+  "params": {},
+  "metrics": {
+   "loc": "",
+   "functions": "",
+   "cyclomatic_max": "",
+   "cyclomatic_mean": "",
+   "tokens": "",
+   "max_function_loc": ""
+  },
+  "needs": [],
+  "languages": [],
+  "kinds": [],
+  "short": "complexity",
+  "preset_module": "complexity",
+  "preset": true
+ },
+ {
+  "id": "complexity-limit",
+  "role": "check",
+  "title": "No function too complex",
+  "what": "Fails each function whose cyclomatic complexity is over the limit.",
+  "run": "fluxpreset complexity {artifact} --max-cyclomatic {max_cyclomatic}",
+  "params": {
+   "max_cyclomatic": {
+    "label": "Most branches per function",
+    "default": 15,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "complexity",
+  "preset_module": "complexity",
+  "preset": true
+ },
+ {
+  "id": "derive",
+  "role": "stage",
+  "title": "Metrics from formulas",
+  "what": "Runs any measurement and adds metrics computed from its numbers, such as area times delay or throughput per watt.",
+  "run": "fluxpreset derive --expr {expr} -- {command}",
+  "params": {
+   "expr": {
+    "label": "Formula (name=expression)",
+    "default": "adp=area_um2*path_ps",
+    "unit": ""
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "derive",
+  "preset_module": "derive",
+  "preset": true
+ },
+ {
   "id": "extract",
   "role": "stage",
   "title": "Numbers out of any tool's output",
@@ -668,6 +739,34 @@
   ],
   "short": "regress",
   "preset_module": "regress",
+  "preset": true
+ },
+ {
+  "id": "repeat",
+  "role": "stage",
+  "title": "Median of several runs",
+  "what": "Runs any measurement several times and prints each metric's median and its spread, so one noisy run does not decide.",
+  "run": "fluxpreset repeat --n {n} -- {command}",
+  "params": {
+   "n": {
+    "label": "Runs",
+    "default": 5,
+    "unit": ""
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "repeat",
+  "preset_module": "repeat",
   "preset": true
  },
  {
@@ -1145,6 +1244,72 @@
   ],
   "short": "sanitize",
   "preset_module": "sanitize",
+  "preset": true
+ },
+ {
+  "id": "scaling",
+  "role": "stage",
+  "title": "How time grows with size",
+  "what": "Times the program at doubling problem sizes and fits time ~ n^k: the exponent says how it scales (1 linear, 2 quadratic), the constant factor aside.",
+  "run": "fluxpreset scaling --start {start} -- {command}",
+  "params": {
+   "start": {
+    "label": "First size",
+    "default": 1000,
+    "unit": ""
+   },
+   "command": {
+    "label": "Run command ({n}: the size)",
+    "default": "{artifact} {n}",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "scaling_exponent": "",
+   "scaling_r2": "",
+   "time_at_max_ms": "",
+   "max_n": ""
+  },
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "scaling",
+  "preset_module": "scaling",
+  "preset": true
+ },
+ {
+  "id": "scaling-limit",
+  "role": "check",
+  "title": "Scales no worse than n^k",
+  "what": "Times the program at doubling sizes and fails when time grows faster than n to the given power.",
+  "run": "fluxpreset scaling --start {start} --max-exponent {max_exponent} -- {command}",
+  "params": {
+   "start": {
+    "label": "First size",
+    "default": 1000,
+    "unit": ""
+   },
+   "command": {
+    "label": "Run command ({n}: the size)",
+    "default": "{artifact} {n}",
+    "unit": ""
+   },
+   "max_exponent": {
+    "label": "Highest exponent",
+    "default": 1.5,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "scaling",
+  "preset_module": "scaling",
   "preset": true
  },
  {

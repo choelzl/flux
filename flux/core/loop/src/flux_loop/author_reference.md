@@ -150,7 +150,9 @@ function against a Python reference), `accuracy` (how far an approximation is), 
 the design), `sanitize` (C/C++ memory and UB errors), `prog time|count|memory|size`, `bench` (a Python
 function's time), `timebound` (a Python function over a time budget), `systemc` (SystemC to
 SystemVerilog through ICSC, then another preset), `regress` (any command's numbers against a baseline),
-`extract` (a tool's JSON/CSV/text as `name=value`) and `champsim build|check|run|stats`. `fluxpreset` lists them. Nothing is copied into the loop's folder. Any other check or
+`extract` (a tool's JSON/CSV/text as `name=value`), `complexity` (any source's lines and cyclomatic
+complexity), `scaling` (time ~ n^k over doubling sizes), `repeat` (a measurement's median and spread),
+`derive` (formula metrics over a command's numbers) and `champsim build|check|run|stats`. `fluxpreset` lists them. Nothing is copied into the loop's folder. Any other check or
 measurement is a script of the application's own, called with `{python} {home}/script.py`.
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.

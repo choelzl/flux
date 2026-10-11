@@ -17,6 +17,10 @@ carries no copy of them (D968). Each is `{python} -m flux_presets.<module> ...` 
 | `timebound` | `DESIGN.py --call f --args "(1000,)" --max-ms 50` | over-budget calls, `N failing` |
 | `regress` | `--baseline base.json --tol 5 -- CMD` | worse metrics, `N failing` |
 | `extract` | `--pick results.latency=latency_ms -- CMD` | `name=value` |
+| `complexity` | `DESIGN [--max-cyclomatic 15]` (any language) | `loc= functions= cyclomatic_max= tokens=` |
+| `scaling` | `--start 1000 -- CMD {n}` | `scaling_exponent= scaling_r2= time_at_max_ms=` |
+| `repeat` | `--n 5 -- CMD` | each metric's median, `NAME_spread_pct=` |
+| `derive` | `--expr "adp=area_um2*path_ps" -- CMD` | the command's numbers and the formulas' |
 | `bench` | `DESIGN.py --call f --args "(1000,)" --runs 5` | `time_ms= time_min_ms= time_spread_ms=` |
 | `champsim` | `build\|check\|run\|stats ARTIFACT --traces DIR ...` | `geomean_speedup=` |
 

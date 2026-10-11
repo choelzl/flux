@@ -30,7 +30,8 @@ def _fluxpreset(*args: str, stdin=subprocess.DEVNULL) -> subprocess.CompletedPro
 def test_the_helpers_are_the_modules_that_say_their_entries():
     presets = _presets()
     assert {"golden", "rtl", "prog", "bench", "champsim", "cases", "pytest", "ccases", "sanitize", "accuracy",
-            "timebound", "regress", "extract", "systemc"} <= set(presets)
+            "timebound", "regress", "extract", "systemc",
+            "complexity", "scaling", "repeat", "derive"} <= set(presets)
     for name, entries in presets.items():
         mod = importlib.import_module(f"flux_presets.{name}")
         assert callable(getattr(mod, "main", None)), f"{name}: main(argv)"
@@ -255,3 +256,48 @@ def test_an_older_document_saying_fluxhelper_says_fluxpreset():
     assert out["flow"]["measure"]["a"]["command"][2] == "flux_presets.rtl"
     assert sum("D974" in x for x in said) == 2 and not manual
     assert migrate(out)[1] == []
+
+
+# ---- D975: complexity, scaling, repeat, derive (any language, any command)
+def test_complexity_reads_any_source_and_fails_a_tangled_function(tmp_path):
+    (tmp_path / "d.c").write_text("int f(int x) { return x + 1; }\n"
+                                  "int g(int x) { if (x > 1) { if (x > 2) return 3; return 2; } while (x) x--; return x; }\n")
+    (tmp_path / "d.rs").write_text("fn h(x: i32) -> i32 { if x > 0 { x } else { -x } }\n")
+    got = _fluxpreset("complexity", str(tmp_path / "d.c"))
+    assert got.returncode == 0 and "functions=2" in got.stdout and "cyclomatic_max=4" in got.stdout
+    assert "functions=3" in _fluxpreset("complexity", str(tmp_path)).stdout          # a folder: every file it reads
+    over = _fluxpreset("complexity", str(tmp_path / "d.c"), "--max-cyclomatic", "3")
+    assert over.returncode == 1 and over.stdout.split("\n")[0].startswith("FAIL g") and "1 failing" in over.stdout
+    (tmp_path / "design").write_text((tmp_path / "d.c").read_text())
+    assert "functions=2" in _fluxpreset("complexity", str(tmp_path / "design"), "--ext", ".c").stdout
+
+
+def test_scaling_tells_linear_from_quadratic(tmp_path):
+    sleeps = lambda ms: ["--", sys.executable, "-c", f"import sys, time; n = int(sys.argv[1]); time.sleep({ms})", "{n}"]  # noqa: E731
+    linear = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("n * 5e-4"))
+    square = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("(n / 100) ** 2 * 2e-2"))
+    k = lambda r: float(r.stdout.split("scaling_exponent=")[1].split()[0])  # noqa: E731
+    assert linear.returncode == 0 and 0.8 < k(linear) < 1.2, linear.stdout + linear.stderr
+    assert square.returncode == 0 and 1.8 < k(square) < 2.2, square.stdout + square.stderr
+    gate = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", "--max-exponent", "1.5",
+                       *sleeps("(n / 100) ** 2 * 2e-2"))
+    assert gate.returncode == 1 and gate.stdout.strip().endswith("1 failing")
+    assert _fluxpreset("scaling", "--", "true").returncode == 2, "a command without {n} is refused"
+
+
+def test_repeat_prints_the_median_and_the_spread(tmp_path):
+    (tmp_path / "c").write_text("0")
+    tick = ["--", sys.executable, "-c", f"import pathlib; p = pathlib.Path({str(tmp_path / 'c')!r}); i = int(p.read_text()) + 1; "
+            "p.write_text(str(i)); print(f'time_ms={[10, 30, 12, 11, 9][i - 1]} runs=1')"]
+    got = _fluxpreset("repeat", "--n", "5", *tick)
+    assert got.returncode == 0 and got.stdout.split() == ["time_ms=11", "time_ms_spread_pct=191", "runs=1", "runs_spread_pct=0"]
+    assert _fluxpreset("repeat", "--n", "2", "--", sys.executable, "-c", "raise SystemExit(1)").returncode == 1
+
+
+def test_derive_adds_formulas_and_evaluates_nothing_else():
+    say = ["--", sys.executable, "-c", "print('area_um2=2 path_ps=50 power_w=0.5')"]
+    got = _fluxpreset("derive", "--expr", "adp=area_um2*path_ps", "--expr", "half=max(adp, 1)/2", *say)
+    assert got.returncode == 0 and got.stdout.split()[-2:] == ["adp=100", "half=50"]
+    assert _fluxpreset("derive", "--expr", "x=__import__('os')", *say).returncode == 1
+    assert _fluxpreset("derive", "--expr", "x=nope*2", *say).returncode == 1
+    assert _fluxpreset("derive", "--expr", "x=area_um2/(power_w-0.5)", *say).returncode == 1
