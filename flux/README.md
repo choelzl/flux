@@ -10,7 +10,7 @@ the words are defined in [the glossary](../docs/glossary.md), the loop's design 
 |---|---|
 | run a problem, start your own, run long campaigns | [the repository README](../README.md) |
 | pick a recipe: tuning, sweeps, models writing designs | [cookbook.md](../docs/cookbook.md) |
-| every document key | [author_reference.md](core/loop/src/flux_loop/author_reference.md) |
+| every document key, every command's format | [document reference](../website/docs/guide/parameters.md) |
 | a policy, a world, a role of your own | [extending.md](../docs/extending.md) |
 | models, servers and coding agents | [models.md](../docs/models.md) |
 | drive Flux from a script or an agent | [agent-surface.md](../docs/agent-surface.md) |

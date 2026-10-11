@@ -1,8 +1,8 @@
 # Cookbook: which recipe for which problem
 
 Each recipe describes a loop shape and the commands it needs. Start with `flux new NAME`, or
-copy a bundled application including its scripts. The document keys are in
-[author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md), and the extension
+copy a bundled application including its scripts. The document keys and command formats are in the
+[document reference](../website/docs/guide/parameters.md), and the extension
 points in [extending.md](extending.md).
 
 ## Pick your starting point

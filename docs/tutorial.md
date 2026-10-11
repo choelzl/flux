@@ -106,8 +106,8 @@ stage. With a golden model the prototype stage is on by default (`budget.prototy
 turns it off, for plain logic like an adder), and that is what matters for a numeric function
 like this one. The model first writes the algorithm as Python `design(x)` on integers. It is checked on every one of the
 65,536 inputs in about a second, and the loop then writes the SystemVerilog from it, bit for
-bit. Asking a model for that RTL directly rarely passes. Every key a document may use is in
-[author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md).
+bit. Asking a model for that RTL directly rarely passes. Every key a document may use, and what each command must print, is in the
+[document reference](../website/docs/guide/parameters.md).
 
 ## 4. Check it
 

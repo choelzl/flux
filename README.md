@@ -146,8 +146,8 @@ flux task run myproblem --passes 1
 You can also copy a folder from `flux/applications/`, including its local tool commands. Edit
 the statement, contract and scripts to make it yours. Prefer a
 form? The [Loop crafter](https://choelzl.github.io/flux/guide/loop-crafter/): fill in a form, get
-a `problem.yaml`. Step by step: [docs/tutorial.md](docs/tutorial.md). Every key:
-[author reference](flux/core/loop/src/flux_loop/author_reference.md).
+a `problem.yaml`. Step by step: [docs/tutorial.md](docs/tutorial.md). Every key and every command's format:
+[document reference](website/docs/guide/parameters.md).
 
 ## Long runs
 

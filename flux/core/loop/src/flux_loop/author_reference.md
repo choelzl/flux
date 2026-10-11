@@ -5,6 +5,9 @@ candidate is checked, how it is measured, what "better" means, and how the searc
 loop generates candidates (a model writes them, a script renders them from knobs, or a coding
 agent writes them), gates each one, measures the survivors stage by stage and decides.
 
+The complete reference, with every key's values and every command's arguments and output format, is
+`website/docs/guide/parameters.md` in the repository.
+
 ## Keys
 
 Say only what is yours; the rest is inferred.
@@ -40,7 +43,7 @@ Say only what is yours; the rest is inferred.
     `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad]`.
     All measurement commands print `name=value` tokens and
     says `metrics:` (the names to read) and `needs:` (tools on PATH it requires), so it is
-    `bench: {command: "...", metrics: [time_ms]}`. Every stage must measure every objective.
+    `bench: {command: "...", metrics: [time_ms]}`. Every stage should report every objective's metric (unless a limit names a deeper `stage:`).
     `timeout_s` optional.
     A stage's gate is its `cutoff`: go on to the next stage only if `{metric, at: N}` (at least
     N), `{metric, below: N}` (at most N) or `{metric, within: 0.9}` (within 10% of this run's
@@ -77,7 +80,7 @@ Say only what is yours; the rest is inferred.
     `args` beside: another executable, extra arguments such as `[--agent, flux]`; per machine
     `FLUX_OPENCODE_BIN` / `FLUX_OPENCODE_ARGS`).
   - `knowledge`: what the model reads with every prompt -- `files: [...]` (specs, reference code,
-    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `by: opencode` (the
+    papers as PDF, notes, beside the document), `text: "..."` (inline notes), `digest: opencode` (the
     library's papers digested by that coding agent instead of the model), or `knowledge: off` (no
     library at all). The operator's library (`mentor/knowledge/library/`) and the loop's own
     `library/` folder reach every document, each paper digested once: excerpts

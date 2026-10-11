@@ -58,5 +58,5 @@ nav:
       - Search and agents: guide/loop-shape.md
       - Loop crafter: guide/loop-crafter.md
   - Reference:
-      - Parameters: guide/parameters.md
+      - Document reference: guide/parameters.md
       - Run and results: guide/run.md

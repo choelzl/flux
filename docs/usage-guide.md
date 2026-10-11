@@ -8,7 +8,7 @@ Every `flux` command and what it is for. Run them from `flux/` inside `nix devel
 |---|---|
 | choose and configure a model or a coding agent | [models.md](models.md) |
 | pick a recipe for your problem | [cookbook.md](cookbook.md) |
-| every key of a problem document | [author_reference.md](../flux/core/loop/src/flux_loop/author_reference.md) |
+| every key of a problem document, every command's format | [document reference](../website/docs/guide/parameters.md) |
 | drive Flux from a script or an agent | [agent-surface.md](agent-surface.md) |
 | use the web interface | [web.md](web.md) |
 | extend it: a policy, a search command, a role | [extending.md](extending.md) |
