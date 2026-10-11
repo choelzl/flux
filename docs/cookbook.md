@@ -13,7 +13,7 @@ points in [extending.md](extending.md).
 | a script that writes a design from knobs (any language) | `flux new NAME` + a generator command and search space | no |
 | a hardware family you can spell from knobs | copy `applications/adder16/` | no |
 | a function you want written and made fast | copy `applications/primes/` | yes |
-| a hardware module you want written | copy `applications/mul8/`, including `rtl.py` | yes |
+| a hardware module you want written | copy `applications/mul8/` (its tools are Flux's helpers) | yes |
 | only a description, a spec, some files | `flux ask "..." --file spec.pdf` | yes |
 
 ## Tuning: knobs into your own commands

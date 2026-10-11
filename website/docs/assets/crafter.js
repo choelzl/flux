@@ -269,31 +269,31 @@
   var MORE_UNITS = { storage_bytes: "B", path_ps: "ps" };
 
   /** A check's type, and the catalog tools that do it. `any`: offered whatever the language
-      (a script of yours runs on any file); the others only for the languages they list. For
-      HDL, "Compile" is the lint's parse step (Verilator exits non-zero when the source does not
-      parse): Flux has no separate compile command for RTL. */
+      (a script of yours runs on any file); the others only for the languages they list. "Flux
+      helpers" (D968) are the catalog's `helper` entries -- lint, the golden test, ChampSim's build,
+      and whatever helpers Flux has -- chosen from a second list, so the page names none of them. */
   var CHECK_TYPES = [
-    { key: "lint", title: "Lint", tools: ["rtl-lint"] },
-    { key: "compile", title: "Compile", tools: ["rtl-lint", "champsim-build"],
-      note: { "rtl-lint": "For RTL, compiling is the lint's parse step: exit 3 means it does not parse." } },
-    { key: "golden", title: "Golden model", tools: ["rtl-golden"] },
-    { key: "test", title: "Test script", tools: ["python-test-script", "champsim-check"], any: ["python-test-script"] },
+    { key: "helper", title: "Flux helpers", helper: true },
+    { key: "test", title: "Test script", tools: ["python-test-script"], any: ["python-test-script"] },
     { key: "custom", title: "Custom", tools: ["custom-check"], any: ["custom-check"] },
   ];
 
-  /** Labels by tool for the measuring tools the page knows; any other catalog stage shows its title. */
-  var STAGE_LABELS = { "rtl-synth": "Yosys synthesis (timed by OpenSTA)", "rtl-place": "OpenROAD placement",
-                       "rtl-route": "OpenROAD routing", "champsim-run": "ChampSim simulation",
-                       "bench-script": "Benchmark script", "custom-stage": "Custom command",
-                       "rtl-stat": "Yosys area (no timing)", "prog-size": "Program size (size)",
-                       "prog-time": "Program run time", "prog-count": "Instruction count (Valgrind)" };
+  function isHelper(id, cat) { var t = toolOf(id, cat); return !!(t && t.helper); }
 
-  /** The measuring tools: every stage the catalog lists, custom last, as [id, label]. */
+  /** The measuring tools the first list shows: the catalog's own stages, one "Flux helpers" entry
+      for all its helpers (`helper`), custom last, as [id, label]. */
   function stageTools(cat) {
-    var out = (cat || CATALOG).filter(function (t) { return t.role === "stage"; })
-      .map(function (t) { return [t.id, STAGE_LABELS[t.id] || t.title]; });
+    var all = (cat || CATALOG).filter(function (t) { return t.role === "stage"; });
+    var out = all.filter(function (t) { return !t.helper; }).map(function (t) { return [t.id, t.title]; });
+    if (all.some(function (t) { return t.helper; })) out.push(["helper", "Flux helpers"]);
     out.sort(function (a, b) { return (a[0] === "custom-stage") - (b[0] === "custom-stage"); });
     return out;
+  }
+
+  /** The helpers a measurement may use for this language, as [id, title]. */
+  function stageHelpers(lang, cat) {
+    return (cat || CATALOG).filter(function (t) { return t.role === "stage" && t.helper && fits(t, lang); })
+      .map(function (t) { return [t.id, t.title]; });
   }
 
   /** `names` joined by arrows within `max` characters: as many as fit, then "+N". */
@@ -311,12 +311,11 @@
   /** The tool a new measurement starts with: the first made for this language that is not used
       yet (Yosys alone reports no fmax, so it comes after the tools that time), else custom. */
   function nextStageTool(lang, used, cat) {
-    var ids = stageTools(cat).map(function (x) { return x[0]; }).filter(function (id) {
-      var t = toolOf(id, cat);
-      return t && !isCustom(id) && lang && (t.languages || []).indexOf(lang) >= 0 && (used || []).indexOf(id) < 0;
+    var ids = (cat || CATALOG).filter(function (t) {
+      return t.role === "stage" && !isCustom(t.id) && lang && (t.languages || []).indexOf(lang) >= 0 && (used || []).indexOf(t.id) < 0;
     });
-    ids.sort(function (a, b) { return (a === "rtl-stat") - (b === "rtl-stat"); });
-    return ids[0] || "custom-stage";
+    ids.sort(function (a, b) { return (a.short === "stat") - (b.short === "stat"); });   // untimed after the timed
+    return ids.length ? ids[0].id : "custom-stage";
   }
 
   function checkType(key) { for (var i = 0; i < CHECK_TYPES.length; i++) if (CHECK_TYPES[i].key === key) return CHECK_TYPES[i]; return null; }
@@ -327,6 +326,10 @@
   function toolsFor(type, lang, cat) {
     var ty = checkType(type);
     if (!ty) return [];
+    if (ty.helper) {
+      return (cat || CATALOG).filter(function (t) { return t.role === "check" && t.helper && fits(t, lang); })
+        .map(function (t) { return t.id; });
+    }
     return ty.tools.filter(function (id) {
       var t = toolOf(id, cat);
       return t && ((ty.any || []).indexOf(id) >= 0 || fits(t, lang));
@@ -369,9 +372,8 @@
   /** A new measurement with a catalog tool. */
   function newStage(state, id, cat) {
     var taken = (state.stages || []).map(function (s) { return s.name; });
-    var base = { "rtl-synth": "synth", "rtl-place": "place", "rtl-route": "route", "champsim-run": "sim",
-                 "bench-script": "bench", "custom-stage": "measure", "rtl-stat": "stat",
-                 "prog-size": "size", "prog-time": "time", "prog-count": "count" }[id] || "measure";
+    var t = toolOf(id, cat);
+    var base = (t && t.short) || { "bench-script": "bench", "custom-stage": "measure" }[id] || "measure";
     var params = paramsOf(toolOf(id, cat));
     if ("clock_ps" in params) params.clock_ps = "";           // empty: from an fmax limit, else the tool's default
     return { tool: id, name: uniqueName(base, taken), params: params, metrics: "", needs: "", gates: [],
@@ -950,7 +952,7 @@
       seen[nm] = 1;
       if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(nm)) error("The check name \"" + nm + "\" should be a letter, then letters, digits, _ or -.");
       if (!c.tool || !toolOf(c.tool, cat)) {
-        error("Check \"" + nm + "\": there is no " + (ty ? ty.title.toLowerCase() : "such") + " tool for " + (lang || "this language") + "; use Custom.");
+        error("Check \"" + nm + "\": there is no " + (ty && ty.helper ? "Flux helper" : (ty ? ty.title.toLowerCase() : "such") + " tool") + " for " + (lang || "this language") + "; use Custom.");
         return;
       }
       params(c, "Check", nm);
@@ -1156,11 +1158,9 @@
     return null;
   }
 
-  function checkTypeOf(toolId, name) {
-    if (toolId === "rtl-lint") return name === "compile" ? "compile" : "lint";
-    if (toolId === "champsim-build") return "compile";
-    if (toolId === "rtl-golden") return "golden";
-    if (toolId === "python-test-script" || toolId === "champsim-check") return "test";
+  function checkTypeOf(toolId, cat) {
+    if (isHelper(toolId, cat)) return "helper";
+    if (toolId === "python-test-script") return "test";
     return "custom";
   }
 
@@ -1412,7 +1412,7 @@
       var custom = !m || (c.count_re && c.count_re !== "(\\d+) failing");
       var row = custom ? { type: "custom", tool: "custom-check", name: c.name, params: { command: argv.map(shellWord).join(" ") },
                            count_re: c.count_re && c.count_re !== "(\\d+) failing" ? c.count_re : "", timeout: "" }
-                       : { type: checkTypeOf(m.tool.id, c.name), tool: m.tool.id, name: c.name, params: paramsOf(m.tool, m.params),
+                       : { type: checkTypeOf(m.tool.id, cat), tool: m.tool.id, name: c.name, params: paramsOf(m.tool, m.params),
                            count_re: "", timeout: "" };
       if (c.timeout_s && Number(c.timeout_s) !== CHECK_TIMEOUT) row.timeout = String(c.timeout_s);
       s.checks.push(row);
@@ -1499,7 +1499,7 @@
               toolsFor: toolsFor, newCheck: newCheck, setCheckTool: setCheckTool, newStage: newStage,
               newObjective: newObjective, reports: reports, reported: reported, fillRun: fillRun,
               describeObjectives: describeObjectives, naturalDirection: naturalDirection, clockPs: clockPs,
-              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
+              CHECK_TYPES: CHECK_TYPES, stageTools: stageTools, stageHelpers: stageHelpers, nextStageTool: nextStageTool, abbreviate: abbreviate, autoClock: autoClock, LABELS: LABELS,
               BOXES: BOXES, FLOW_BOXES: FLOW_BOXES, DELEGABLE: DELEGABLE, NEVER: NEVER, LANGUAGES: LANGUAGES,
               AGENTS: AGENTS, DSE_POLICIES: DSE_POLICIES, DSE_GROUPS: DSE_GROUPS, dseGroup: dseGroup, dseChoices: dseChoices, dseHint: dseHint,
               halfOf: halfOf, defaultFlow: defaultFlow, base: base, isFixed: isFixed,
@@ -1647,10 +1647,10 @@
             setCheckTool(state, c, v);
           }, { compact: true, structural: true, options: CHECK_TYPES.map(function (x) { return [x.key, x.title]; }) }),
           field("Name", function () { return c.name; }, function (v) { c.name = v; }, { compact: true, narrow: true })];
-        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + ty.title.toLowerCase() + " tool for " + (lang || "this language") + "; choose Custom." }));
+        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + (ty.helper ? "Flux helper" : ty.title.toLowerCase() + " tool") + " for " + (lang || "this language") + "; choose Custom." }));
         else {
-          if (ids.length > 1) {
-            line.push(field("Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
+          if (ids.length > 1 || ty.helper) {
+            line.push(field(ty.helper ? "Helper" : "Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
                             { compact: true, structural: true, options: ids.map(function (id) { return [id, toolOf(id).title]; }) }));
           }
           if (keys.length) line.push(paramField(t, c, keys[0]));
@@ -1658,8 +1658,7 @@
         line.push(rowButtons(state.checks, i, t ? [moreButton(c)] : []));
         var kids = [h("div", { class: "fc-line" }, line)];
         if (t && moreOpen.has(c)) {
-          var more = [h("small", { class: "fc-wide", text: t.what + " Passes " + String(t.pass || "").replace(/^passes /, "") +
-                                     ((ty.note || {})[c.tool] ? " " + ty.note[c.tool] : "") })];
+          var more = [h("small", { class: "fc-wide", text: t.what + " Passes " + String(t.pass || "").replace(/^passes /, "") })];
           keys.slice(1).forEach(function (k) { more.push(paramField(t, c, k)); });
           if (isCustom(c.tool)) {
             more.push(field("Count pattern (optional)", function () { return c.count_re; }, function (v) { c.count_re = v; },
@@ -1672,10 +1671,13 @@
       });
       return titled("Checks", [h("span", { class: "fc-hint fc-inline", text: " each must pass, in order" })], [h("div", { class: "fc-rows" }, rows),
         button("+ Add a check", function () {
-          var used = state.checks.map(function (c) { return c.type; });
-          var type = ["lint", "golden", "test", "custom"].filter(function (x) {
-            return used.indexOf(x) < 0 && toolsFor(x, lang).length; })[0] || "custom";
-          state.checks.push(newCheck(state, type));
+          // a helper made for this language not used yet, else a test script, else any command
+          var usedTools = state.checks.map(function (c) { return c.tool; }), usedTypes = state.checks.map(function (c) { return c.type; });
+          var helper = toolsFor("helper", lang).filter(function (id) { return usedTools.indexOf(id) < 0; })[0];
+          var row = helper ? setCheckTool(state, newCheck(state, "helper"), "helper", helper)
+                           : newCheck(state, usedTypes.indexOf("test") < 0 && toolsFor("test", lang).length ? "test" : "custom");
+          if (helper) row.name = uniqueName((toolOf(helper) || {}).short || "check", state.checks.map(function (c) { return c.name; }));
+          state.checks.push(row);
           changed(true);
         }, "fc-add-btn")]);
     }
@@ -1687,10 +1689,18 @@
         var t = toolOf(st.tool), custom = isCustom(st.tool) || !t, keys = Object.keys((t && t.params) || {});
         var estimated = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
         var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? "estimated first" : null }),
-          field("Tool", function () { return st.tool; }, function (v) {
+          field("Tool", function () { return isHelper(st.tool) ? "helper" : st.tool; }, function (v) {
+            if (v === "helper") v = (stageHelpers(language(state, true))[0] || stageHelpers()[0] || ["custom-stage"])[0];
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
-          }, { compact: true, structural: true, grow: true, options: tools }),
+          }, { compact: true, structural: true, grow: !isHelper(st.tool), options: tools }),
           field("Name", function () { return st.name; }, function (v) { st.name = v; }, { compact: true, narrow: true })];
+        if (isHelper(st.tool)) {
+          var list = stageHelpers(language(state, true));
+          if (!list.some(function (x) { return x[0] === st.tool; })) list = list.concat([[st.tool, t.title]]);
+          line.splice(2, 0, field("Helper", function () { return st.tool; }, function (v) {
+            var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
+          }, { compact: true, structural: true, grow: true, options: list }));
+        }
         if (keys.length) line.push(paramField(t, st, keys[0]));
         if (custom) {
           line.push(field("Numbers it prints", function () { return st.metrics; }, function (v) { st.metrics = v; },

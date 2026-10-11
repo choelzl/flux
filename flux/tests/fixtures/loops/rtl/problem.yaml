@@ -1,4 +1,4 @@
-# Test-only RTL loop: rtl.py checks against golden.py and measures the result.
+# Test-only RTL loop: Flux's helpers check it against golden.py and measure the result.
 # times it on ASAP7. Change the statement, the contract and golden.py.
 #     flux task run ./__NAME__ --passes 1 --screen-only
 
@@ -11,14 +11,14 @@ contract: >-
 language: systemverilog
 
 flow:
-  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"
   measure:
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 500"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 500"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 500"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 500"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}

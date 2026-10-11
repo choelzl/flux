@@ -31,8 +31,8 @@ FLUX_ROOT = HERE.parents[3]
 from .document import DOCUMENT_KEYS  # noqa: E402 -- the loader's own list (D590)
 
 #: The worked examples every author reads, live from the repository so they never drift.
-EXAMPLES = (("mul8", ("problem.yaml", "golden.py", "rtl.py")),
-            ("adder16", ("problem.yaml", "golden.py", "rtl.py", "gen.py")))
+EXAMPLES = (("mul8", ("problem.yaml", "golden.py")),
+            ("adder16", ("problem.yaml", "golden.py", "gen.py")))
 
 DOCUMENT = "problem.yaml"
 DONE = "done.txt"

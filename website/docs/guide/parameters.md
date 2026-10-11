@@ -188,7 +188,7 @@ verdict is in the [check contract](#check-command).
 | `command` | Required | Command string or argument list |
 | `metrics` | Required unless `metrics_re` | Names printed as `name=value`, or typed entries (below) |
 | `metrics_re` | Derived from `metrics` | Map of metric name to a regex with one capture group |
-| `needs` | Inferred for `flux prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
+| `needs` | Inferred for `flux_helpers.prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
 | `timeout_s` | `600` | Seconds before the stage is stopped |
 | `cutoff` | None | A gate before the next stage, or a list of gates that must all pass |
 | `estimate` | Off | Predict first, and skip designs the estimate already rules out |
@@ -477,7 +477,7 @@ baseline, the composition) runs the same way. Your own agent's command differs; 
 - **Written as** a list of arguments or one string. A string is split like a shell would
   split it, but **no shell runs**: for a pipe or redirection, call one yourself:
   `["sh", "-c", "cat {artifact} | wc -l"]`.
-- **`flux` first** runs Flux's own CLI with the same interpreter (`flux prog time ...`).
+- **`flux` first** runs Flux's own CLI with the same interpreter (`flux tools`, `flux prog time ...`).
 - **Working directory** is `{workdir}`, the pass's trace folder, shared by every design in
   the pass. Name your files with `{home}/...`; relative paths do not reach the loop's folder.
 - **Environment:** Flux's own, unchanged. Nothing is added.
@@ -710,34 +710,39 @@ resume: [...]}`. Write `command` as a **list**.
 ## Built-in tools
 
 `flux tools` prints the catalog; the configurator offers these as check types and
-measurement tools. `{x}` other than the loop's placeholders are the tool's parameters.
+measurement tools. `{x}` other than the loop's placeholders are the tool's parameters. Most are
+Flux's helpers, `{python} -m flux_helpers.<name>` (D968): nothing to copy into the loop's folder.
 
 | Tool | Role | Command | Parameters (default) | Reports / passes |
 |---|---|---|---|---|
-| `rtl-lint` | check | `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}` | | exit 0 |
-| `rtl-golden` | check | `{python} -m flux_loop.golden_model {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
+| `rtl-lint` | check | `{python} -m flux_helpers.rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
+| `rtl-golden` | check | `{python} -m flux_helpers.golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
 | `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
 | `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
-| `champsim-build` | check | `{python} {home}/champsim.py build {artifact}` | | exit 3 = did not build |
-| `champsim-check` | check | `{python} {home}/champsim.py check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
-| `rtl-stat` | stage | `{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
+| `champsim-build` | check | `{python} -m flux_helpers.champsim build {artifact}` | | exit 3 = did not build |
+| `champsim-check` | check | `{python} -m flux_helpers.champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
+| `rtl-stat` | stage | `{python} -m flux_helpers.rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
 | `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
 | `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
-| `prog-size` | stage | `flux prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
-| `prog-time` | stage | `flux prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
-| `prog-count` | stage | `flux prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
-| `champsim-run` | stage | `{python} {home}/champsim.py run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
+| `python-bench` | stage | `{python} -m flux_helpers.bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
+| `prog-size` | stage | `{python} -m flux_helpers.prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
+| `prog-time` | stage | `{python} -m flux_helpers.prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
+| `prog-count` | stage | `{python} -m flux_helpers.prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
+| `champsim-run` | stage | `{python} -m flux_helpers.champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
 | `custom-stage` | stage | `{command}` | `command` | your `name=value` lines |
 
-The golden test is Flux's own: `python -m flux_loop.golden_model DESIGN --golden G` prints
+The golden test is Flux's own: `python -m flux_helpers.golden DESIGN --golden G` prints
 failing vectors and `N failing of M` (exit 0 pass, 1 fail, 3 did not compile; `--extra F.sv` for a
-module the design instantiates). `rtl.py` is the RTL applications' one-file measurement (copy it
-from a bundled RTL application): `rtl.py measure DESIGN --stage stat|synth|place|route --clock-ps N`
+module the design instantiates). `python -m flux_helpers.rtl lint DESIGN` prints each hardware
+defect and `N failing` (exit 3 when it does not parse); `python -m flux_helpers.rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
 runs OpenROAD-flow-scripts on ASAP7 to that stage and prints one line, `fmax_mhz=... area_um2=...
 power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, `cell_count`;
 `route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
-placement, `route` after routing (timing from global routing). `flux prog` builds with `--build`
-(`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails.
+placement, `route` after routing (timing from global routing). `python -m flux_helpers.prog` builds with `--build`
+(`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails
+(`flux prog` is the same command). `python -m flux_helpers.bench DESIGN.py --call f --args "(1000,)"`
+loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
+`time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
 
 ## RTL golden model
 

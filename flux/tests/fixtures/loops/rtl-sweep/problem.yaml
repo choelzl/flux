@@ -14,10 +14,10 @@ flow:
       arch: [behavioral, tree, lut]
       chunk: [2, 4]                         # the table size for `lut` (the others ignore it)
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {chunk}"}
-  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"
   measure:
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 333"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 333"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
 

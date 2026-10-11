@@ -29,7 +29,7 @@ LOOP_PENDING = "needs the loop's cutoff lists / objective limits"
 
 #: files a case's document names -> where they come from
 FILES = {
-    "rtl": (TEMPLATES / "rtl", ["golden.py", "rtl.py"]),
+    "rtl": (TEMPLATES / "rtl", ["golden.py"]),
     "python": (TEMPLATES / "python", ["check.py", "bench.py"]),
     "none": (TEMPLATES, []),
     "zigzag": (REPO / "flux/applications/npu_gemm", ["check.py", "workload.yaml"]),
@@ -37,6 +37,8 @@ FILES = {
 
 SCRIPT = r"""
 const c = require(process.argv[1]);
+// D968: a check from the "Flux helpers" list, named as before
+function hc(s, id, name) { const r = c.newCheck(s, "helper"); c.setCheckTool(s, r, "helper", id); r.name = name; return r; }
 const catalog = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
 c.setCatalog(catalog);
 const out = {};
@@ -46,7 +48,7 @@ const obj = (m, label, value) => Object.assign(c.newObjective(m, label), {value:
 
 // RTL: lint + golden; synth + place, two gates on place; at least fmax, at most area, least power
 let s = fresh("adder8", "systemverilog");
-s.checks.push(c.newCheck(s, "lint")); s.checks.push(c.newCheck(s, "golden"));
+s.checks.push(hc(s, "rtl-lint", "lint")); s.checks.push(hc(s, "rtl-golden", "golden"));
 s.stages.push(c.newStage(s, "rtl-synth")); s.stages.push(c.newStage(s, "rtl-place"));
 s.stages.forEach(st => { st.params.clock_ps = "1000"; });
 s.stages[0].gates = [{metric: "fmax_mhz", rule: "at", value: "800"}];
@@ -73,22 +75,22 @@ out.baseline_alias = c.fromDoc({statement: "Measure", baseline: {metrics: [{metr
 
 // ChampSim: build + smoke-run a prefetcher header; simulate; most speed-up
 s = fresh("prefetcher_h", "cpp");
-s.checks.push(c.newCheck(s, "compile"));
-const smoke = c.newCheck(s, "test"); c.setCheckTool(s, smoke, "test", "champsim-check"); s.checks.push(smoke);
+s.checks.push(hc(s, "champsim-build", "compile"));
+const smoke = hc(s, "champsim-check", "test"); s.checks.push(smoke);
 s.stages.push(c.newStage(s, "champsim-run"));
 s.objectives = [obj("geomean_speedup", "max")];
 add("champsim", "none", s);
 
 // a balance of fmax and area
 s = fresh("balanced", "verilog");
-s.checks.push(c.newCheck(s, "golden"));
+s.checks.push(hc(s, "rtl-golden", "golden"));
 s.stages.push(c.newStage(s, "rtl-synth"));
 s.objectives = [obj("fmax_mhz", "balance"), obj("area_um2", "balance")];
 add("balance", "rtl", s);
 
 // five checks and five measurements with long names (the diagram abbreviates them)
 s = fresh("many", "systemverilog");
-["lint", "golden", "test", "custom", "custom"].forEach(t => s.checks.push(c.newCheck(s, t)));
+s.checks.push(hc(s, "rtl-lint", "lint"), hc(s, "rtl-golden", "golden")); ["test", "custom", "custom"].forEach(t => s.checks.push(c.newCheck(s, t)));
 s.checks[3].name = "a_rather_long_custom_check"; s.checks[3].params.command = "{python} {home}/golden.py";
 s.checks[4].name = "another_long_custom_check"; s.checks[4].params.command = "{python} {home}/golden.py";
 ["rtl-synth", "rtl-place", "rtl-route", "custom-stage", "custom-stage"].forEach(t => s.stages.push(c.newStage(s, t)));
@@ -105,7 +107,7 @@ s = JSON.parse(JSON.stringify(out.rtl.state)); s.id = "typed_clock"; s.stages[0]
 add("typed_clock", "rtl", s);
 
 // maximise fmax with a fixed clock: a warning; searching the clock: none
-s = fresh("fastest", "systemverilog"); s.checks.push(c.newCheck(s, "golden")); s.stages.push(c.newStage(s, "rtl-synth"));
+s = fresh("fastest", "systemverilog"); s.checks.push(hc(s, "rtl-golden", "golden")); s.stages.push(c.newStage(s, "rtl-synth"));
 s.objectives = [obj("fmax_mhz", "max")];
 add("fastest", "rtl", s);
 s = JSON.parse(JSON.stringify(s)); s.id = "fastest_searched"; s.stages[0].params.clock_ps = "{clock_ps}";
@@ -117,7 +119,7 @@ add("fastest_searched", "rtl", s);
 s = fresh("prog_timed", "cpp"); s.checks.push(c.newCheck(s, "test"));
 s.stages.push(c.newStage(s, "prog-time")); s.objectives = [obj("time_ms", "min")];
 add("prog_timed", "python", s);
-s = fresh("stat_then_synth", "systemverilog"); s.checks.push(c.newCheck(s, "golden"));
+s = fresh("stat_then_synth", "systemverilog"); s.checks.push(hc(s, "rtl-golden", "golden"));
 s.stages.push(c.newStage(s, "rtl-stat")); s.stages.push(c.newStage(s, "rtl-synth"));
 s.objectives = [obj("area_um2", "min")];
 add("stat_then_synth", "rtl", s);
@@ -170,7 +172,7 @@ for (const [name, value] of [["blank", ""], ["infinite", "Infinity"], ["text", "
 }
 s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics.push({...s.baseline.metrics[0]}); bad("bad_baseline_duplicate", s);
 s = JSON.parse(JSON.stringify(out.baseline_metrics.state)); s.baseline.metrics[0].stage = "removed"; bad("bad_baseline_stage", s);
-s = fresh("x", "python"); s.checks.push(c.newCheck(s, "lint")); bad("bad_no_lint_for_python", s);
+s = fresh("x", "python"); s.checks.push(c.newCheck(s, "helper")); bad("bad_no_lint_for_python", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.stages[0].gates = [{metric: "energy_pj", rule: "at", value: "1"}]; bad("bad_gate_metric", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives.push(obj("latency_ns", "min")); bad("bad_objective_metric", s);
 s = JSON.parse(JSON.stringify(out.rtl.state)); s.objectives = [obj("fmax_mhz", "balance")]; bad("bad_balance_one", s);
@@ -375,7 +377,7 @@ def test_the_crafter_writes_a_document_the_loader_takes(tmp_path, name):
 def test_rtl_checks_run_in_order_and_the_limits_are_goals(tmp_path):
     t = _load(tmp_path, BUILT["rtl_one_gate"])
     assert [c.name for c in t.gate] == ["lint", "golden"]
-    assert t.gate.named("lint").run[:2] == ("verilator", "--lint-only") and t.gate.named("lint").run[-1] == "{artifact}"
+    assert t.gate.named("lint").run[:4] == ("{python}", "-m", "flux_helpers.rtl", "lint") and t.gate.named("lint").run[-1] == "{artifact}"
     assert t.gate.named("golden").run[-3:] == ("{artifact}", "--golden", "{home}/golden.py")
     assert t.stages[0].cutoff == {"metric": "fmax_mhz", "at": 800} and not t.stages[1].cutoff
     got = [(o.metric, o.direction, o.goal) for o in t.objectives]
@@ -424,7 +426,7 @@ def test_balance_marks_a_knee_group(tmp_path):
 def test_check_flags_what_can_still_go_wrong():
     e = _errors(BUILT["bad_empty"])
     assert "Add a check" in e and "Add a measurement" in e and "Add an objective" in e
-    assert "no lint tool for python" in _errors(BUILT["bad_no_lint_for_python"])
+    assert "no Flux helper for python" in _errors(BUILT["bad_no_lint_for_python"])
     assert "does not report energy_pj" in _errors(BUILT["bad_gate_metric"])
     assert "latency_ns, which no measurement reports" in _errors(BUILT["bad_objective_metric"])
     assert "Balance needs two" in _warnings(BUILT["bad_balance_one"])

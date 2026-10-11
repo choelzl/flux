@@ -216,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     tools_p.set_defaults(func=cmd_tools)
 
 
-    from .prog import add_parsers as add_prog
+    from flux_helpers.prog import add_parsers as add_prog
 
     add_prog(subparsers)
 

@@ -1,18 +1,17 @@
-# Application-owned tools
+# Application tools
 
-Flux runs ordinary commands from each loop's folder. The application carries the code for
-those commands; the old global RTL and ChampSim packages are removed, ZigZag and Timeloop with
-the NPU app (D958).
+Flux runs ordinary commands from each loop's folder. The checks and measurements Flux ships are
+its helpers (`flux/helpers/`, D968), run as `{python} -m flux_helpers.<name>`; an application
+carries no copy of them:
 
-- RTL apps include one file, `rtl.py`: `test` (Verilator against `golden.py`), `lint` and
-  `measure` (Yosys + OpenROAD on ASAP7, read from OpenROAD-flow-scripts' platform folder; no PDK
-  is bundled).
-- The prefetcher includes `champsim.py`, `bingo.py` and `tools/champsim_tools/`.
+- `flux_helpers.golden`: an RTL design against `golden.py` (Verilator).
+- `flux_helpers.rtl`: `lint` (Verilator's hardware defects) and `measure` (OpenROAD-flow-scripts
+  on ASAP7: `stat`, `synth`, `place`, `route`).
+- `flux_helpers.prog`, `flux_helpers.bench`: a compiled program's time, counts and size; a Python
+  function's time.
+- `flux_helpers.champsim`: ChampSim `build`, `check`, `run` (the prefetcher; `bingo.py` is its own).
 
-These scripts still use Flux's shared values and installed runtime libraries. External tools
-such as Verilator, Yosys, OpenROAD (with ORFS for ASAP7) and Pythia must be available in the loop's environment.
-Set `language`, stage `metrics` and stage `needs` explicitly in the problem document.
-
-To maintain the RTL copies, edit `mul8/rtl.py`, then run `python scripts/sync-app-tools.py`
-from `flux/`. `--check` verifies every application, library and test copy matches it. The NLU's
-operators (`nlu/ops/*/rtl.py`) are launchers for the NLU's own copy, not copies (D956). Copies are regular files so an uploaded or copied application is self-contained.
+External tools such as Verilator, Yosys, OpenROAD (with ORFS for ASAP7) and Pythia must be
+available in the loop's environment. Set `language`, stage `metrics` and stage `needs` explicitly
+in the problem document. Loops made before D968 carry their own `rtl.py` or `champsim.py` and keep
+working.

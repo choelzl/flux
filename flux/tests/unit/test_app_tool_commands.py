@@ -50,11 +50,11 @@ def test_copied_application_calls_its_own_tool_scripts(name, tmp_path):
                 if not task.subtasks and word.startswith("{home}/") and word.endswith(".py"):
                     assert (home / word.removeprefix("{home}/")).is_file()
         for stage in task.stages:
-            if stage.command and "{home}/rtl.py" in stage.command:
+            if stage.command and "flux_helpers.rtl" in stage.command:
                 assert stage.metrics == ("fmax_mhz", "area_um2", "power_w", "cell_count")
                 assert stage.needs == ("yosys", "openroad")
-        script = home / {"prefetcher": "champsim.py"}.get(name, "rtl.py")
-        result = subprocess.run([sys.executable, str(script), "--help"], cwd=tmp_path,
+        helper = {"prefetcher": "flux_helpers.champsim"}.get(name, "flux_helpers.rtl")   # D968: Flux's, no copy
+        result = subprocess.run([sys.executable, "-m", helper, "--help"], cwd=tmp_path,
                                 env=_core_env(), capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
     if name == "nlu":
@@ -62,7 +62,6 @@ def test_copied_application_calls_its_own_tool_scripts(name, tmp_path):
             task = load_task(child)
             assert task.language == "systemverilog"
             assert golden_path(task) == child.parent / "golden.py"
-            assert (child.parent / "rtl.py").is_file()
 
 
 def test_all_bundled_documents_avoid_removed_cli_commands():
@@ -85,7 +84,10 @@ print(json.dumps({'packages': {name: importlib.util.find_spec(name) is not None 
     assert not any(result["packages"].values()), result
 
 
-def test_bundled_rtl_sources_stay_consistent():
-    result = subprocess.run([sys.executable, str(FLUX / "scripts/sync-app-tools.py"), "--check"],
-                            capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
+def test_no_application_carries_a_copy_of_flux_helpers():
+    """D968: the RTL and ChampSim tools are Flux's helpers; no application bundles a copy."""
+    apps = FLUX / "applications"
+    assert not list(apps.glob("*/rtl.py")) and not list(apps.glob("*/champsim.py")) and not list(apps.glob("*/ops/*/rtl.py"))
+    for doc in apps.rglob("*.yaml"):
+        text = doc.read_text()
+        assert "{home}/rtl.py" not in text and "{home}/champsim.py" not in text, doc

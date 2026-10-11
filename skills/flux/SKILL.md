@@ -46,14 +46,14 @@ contract: >-             # rules every candidate must follow: ports, names, what
 language: systemverilog
 
 flow:
-  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"
   measure:                  # cheapest first; commands are owned by the application
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}
@@ -65,8 +65,8 @@ budget: {steps: 4, repair_attempts: 6, prototype: false}  # prototype: true for 
 
 ## Run it
 
-The RTL commands above come from the application: copy `rtl.py` and `tools/` together
-from a bundled RTL app, or provide your own check and measurement scripts.
+The RTL commands above are Flux's helpers (`flux_helpers`, nothing to copy); or provide your own
+check and measurement scripts.
 
 **A run never ends on its own** (only `flux stop`, Ctrl-C, or `--passes N`): pass after pass it
 resumes from the record, and a pass with nothing left to try is followed by one that sends the
@@ -135,9 +135,9 @@ RTL directly rarely passes.
 
 ## Rules that save hours
 
-- The gate is the truth: a candidate that fails `python -m flux_loop.golden_model` is never "almost right". If
+- The gate is the truth: a candidate that fails `python -m flux_helpers.golden` is never "almost right". If
   every candidate fails the same way, suspect the **golden model or the contract**, not the
-  generator: run `python -m flux_loop.golden_model <a candidate> --golden golden.py --show 5` and read the vectors.
+  generator: run `python -m flux_helpers.golden <a candidate> --golden golden.py --show 5` and read the vectors.
 - Golden models compute expected values; never hand-write expected numbers. Float ports carry
   bit patterns (`unsigned: True`); read bits with `np.uint16(x).view(np.float16)`, compute in
   float64, round once; allow `TOLERANCE_ULP = {"y": 1}` for approximations. Special values

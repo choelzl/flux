@@ -35,7 +35,7 @@ def _prototype(tmp_path):
            "language": "systemverilog",
            "objectives": [{"metric": "area_um2", "direction": "minimize"}],
            "budget": {"prototype": "systemc"},
-           "flow": {"test": "{python} " + str(Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py") + " test {artifact} --golden {home}/golden.py"}}
+           "flow": {"test": "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"}}
     return PromptProblem(TaskSpec.from_dict(doc, base=tmp_path)).prototype()
 
 
@@ -73,7 +73,7 @@ def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     sv, why = cap.extra["translate"](RIGHT)
     assert sv and not why and "module add4" in sv and "always_comb" in sv
     (tmp_path / "add4.sv").write_text(sv)
-    run = subprocess.run([sys.executable, "-m", "flux_loop.golden_model", str(tmp_path / "add4.sv"), "--golden",   # D967
+    run = subprocess.run([sys.executable, "-m", "flux_helpers.golden", str(tmp_path / "add4.sv"), "--golden",   # D967
                           str(tmp_path / "golden.py")],
                          capture_output=True, text=True, timeout=600)
     assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]

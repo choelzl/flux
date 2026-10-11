@@ -88,7 +88,7 @@ For RTL, define the ports and reference function in `golden.py`, then use:
 flow:
   test:
     lint: "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}"
-    golden: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
+    golden: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py"
 ```
 
 The [RTL reference](parameters.md#rtl-golden-model) describes vectors, clocked designs, and
@@ -118,18 +118,18 @@ for example, `time_ms=2.31 bytes=2048`. Metrics can appear on stdout or stderr; 
 measurement command exit rejects its numbers. Use `metrics_re` for a different output format.
 
 Every stage must declare the metrics required by its objectives. The command belongs to the
-application: copy `rtl.py` and `tools/` from a bundled RTL application, or write your own script. Declare
-the tools it requires too:
+application, or is one of Flux's helpers (`{python} -m flux_helpers.rtl measure ...`; see
+[built-in tools](parameters.md#built-in-tools)). Declare the tools it requires too:
 
 ```yaml
 flow:
   measure:
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1800

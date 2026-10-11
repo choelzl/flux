@@ -32,14 +32,14 @@ Say only what is yours; the rest is inferred.
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
     prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
-    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
     They run in the order written; the first that reports failures refuses the design ("failed at
     lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
     check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
     group) or `fail_re` (one match per failure) for a checker that prints something else. A check
     named `build` refuses on any non-zero exit (did not build). Never an agent: it establishes the facts.
   - `measure`: the costed measurements, cheapest first, a map from each stage's name to its
-    settings, including `command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"`,
+    settings, including `command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"`,
     `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad, sta, make]`.
     All measurement commands print `name=value` tokens and
     says `metrics:` (the names to read) and `needs:` (tools on PATH it requires), so it is
@@ -140,30 +140,27 @@ Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the 
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command
 starting with `flux` runs this Flux.
 
-## Application-local RTL tools
+## Flux's helpers
 
-There are no `flux rtl` or `flux champsim` commands. The golden test is Flux's own
-(`{python} -m flux_loop.golden_model`); every other tool command lives in the loop's folder and is
-called with `{python} {home}/rtl.py` or `{python} {home}/champsim.py`.
-The bundled RTL applications include one file, `rtl.py` (it runs OpenROAD-flow-scripts on ASAP7); the
-prefetcher includes `champsim.py` and `tools/champsim_tools/`. Copy the whole application
-to reuse these commands. They are not installed as global Flux packages: a wrapper alone
-does not provide its tool code. For a new application, write its own tool commands or include
-the complete tool bundle it uses. All scripts and tool files belong in the application.
+The checks and measurements Flux ships are its helpers, run as `{python} -m flux_helpers.<name>`:
+`golden` (RTL against golden.py), `rtl lint|measure` (Verilator defects; OpenROAD-flow-scripts on
+ASAP7), `prog time|count|size` (a compiled program), `bench` (a Python function's time) and
+`champsim build|check|run`. Nothing is copied into the loop's folder. Any other check or
+measurement is a script of the application's own, called with `{python} {home}/script.py`.
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.
 
 - Lint is Verilator itself, its hardware defects only (latches, multiple drivers, combinational loops,
   `<=` in combinational logic, mixed `=`/`<=`, implicit nets): `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}`;
   exit 0 passes. Put it before the golden test.
-- `python -m flux_loop.golden_model {artifact} --golden {home}/golden.py` -- Verilator against a
+- `python -m flux_helpers.golden {artifact} --golden {home}/golden.py` -- Verilator against a
   golden model; prints `N failing of M`; exits 3 when the module does not compile (the loop then
   treats it as a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
-- `python rtl.py measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
+- `python -m flux_helpers.rtl measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
   on ASAP7 run to that stage (`synth` times the netlist unplaced; `place` after placement; `route`
   after routing, adding `drc_errors= wirelength_um=`); prints `fmax_mhz= area_um2= power_w=
   cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its reset).
-- `python rtl.py measure {artifact} --stage stat` -- the mapped cells: `area_um2= cell_count=`,
+- `python -m flux_helpers.rtl measure {artifact} --stage stat` -- the mapped cells: `area_um2= cell_count=`,
   nothing timed; the cheapest screen before `synth`.
 - `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
   `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),

@@ -1,16 +1,16 @@
-"""Reusable build, check and measurement commands behind an application's champsim.py.
+"""ChampSim's build, check and measurement commands (D968: Flux's helpers, not a copy per application).
 
     flow:
-      test: '{python} {home}/champsim.py check {artifact} --traces {home}/traces'
+      test: '{python} -m flux_helpers.champsim check {artifact} --traces {home}/traces'
       measure:
         screen:
-          command: '{python} {home}/champsim.py run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
+          command: '{python} -m flux_helpers.champsim run {artifact} --traces {home}/traces --warmup 10000000 --sim 15000000'
           metrics: [geomean_speedup]
           needs: [pythia]
 
 ARTIFACT is an `.ini` of knobs (its `l2c_prefetcher_types = a,b` line picks the L2 prefetchers)
 or a `.h` holding one `class X : public Prefetcher`, built in and run as `x`. The commands wrap
-`champsim_tools`.
+`flux_helpers.champsim`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _types(given: str | None) -> list[str]:
 
 
 def cmd_champsim_run(args: argparse.Namespace) -> int:
-    from champsim_tools import BuildFailedError, measure
+    from flux_helpers.champsim import BuildFailedError, measure
 
     try:
         got = measure(args.artifact, args.traces, int(args.warmup), int(args.sim),
@@ -46,7 +46,7 @@ def cmd_champsim_run(args: argparse.Namespace) -> int:
 
 
 def _build(header: Path) -> tuple[int, object]:
-    from champsim_tools import BuildError, build_header
+    from flux_helpers.champsim import BuildError, build_header
 
     try:
         got = build_header(header.read_text())
@@ -69,7 +69,7 @@ def cmd_champsim_build(args: argparse.Namespace) -> int:
 
 
 def cmd_champsim_check(args: argparse.Namespace) -> int:
-    from champsim_tools import SimulationFailedError, resolve_traces, simulate
+    from flux_helpers.champsim import SimulationFailedError, resolve_traces, simulate
 
     code, got = _build(Path(args.header))
     if code:
@@ -91,7 +91,7 @@ def cmd_champsim_check(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Commands exposed by the prefetcher application's champsim.py."""
+    """`python -m flux_helpers.champsim build|check|run`."""
     parser = argparse.ArgumentParser(description="Application ChampSim checks and measurements")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Measure an INI file or prefetcher header on traces")

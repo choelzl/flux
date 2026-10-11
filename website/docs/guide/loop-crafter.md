@@ -9,6 +9,10 @@ Build the same `problem.yaml` as the [written guide](build-your-own.md) using a 
 the goal and interface, add checks and measurements, set objectives, and configure the flow.
 The document preview follows your changes.
 
+A check's **Type** and a measurement's **Tool** include **Flux helpers**: choose it, then the
+helper from the second list (RTL lint and golden test, OpenROAD-flow-scripts stages, program
+timing, ChampSim). Helpers are Flux's own commands, so the loop's folder needs no script for them.
+
 Custom measurements can use **+ Dictionary** for a changing set of tests. Give the parent
 metric a name, direction and unit, then print JSON such as `timings={"parse": 12, "build": null}`.
 Objectives can use a named test, such as `timings.parse`, or the parent aggregate (`timings`).

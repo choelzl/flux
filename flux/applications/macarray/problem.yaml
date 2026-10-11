@@ -29,11 +29,11 @@ flow:
     verify: {run: "{python} -m flux_macarray.steps check {artifact} {pipeline}", timeout_s: 300}
   measure:
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000 --module mac_pe"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000 --module mac_pe"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000 --module mac_pe"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000 --module mac_pe"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1800

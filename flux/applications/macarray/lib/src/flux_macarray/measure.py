@@ -9,7 +9,7 @@ from .objective import Score
 
 
 def pe_score(got: dict[str, Any], latency_cycles: int) -> Score:
-    """The study's own score from what `rtl_check.measure` returns."""
+    """The study's own score from what `flux_helpers.rtl.measure` returns."""
     return Score(area_um2=float(got["area_um2"]), worst_slack_ps=float(got["worst_slack_ps"]),
                  clock_period_ps=float(got["clock_period_ps"]), power_w=float(got["power_w"]),
                  cell_count=int(got["cell_count"]), latency_cycles=int(latency_cycles),

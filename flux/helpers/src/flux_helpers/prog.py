@@ -1,17 +1,17 @@
-"""`flux prog time|count|size` (D661): a program's speed, instruction and cache counts, and size,
-as stages a document names. Each prints `name=value` lines.
+"""`python -m flux_helpers.prog time|count|size` (D661, D968; `flux prog` is the same): a program's
+speed, instruction and cache counts, and size, as stages a document names. Each prints `name=value` lines.
 
-    stages:
-      - {name: count, command: 'flux prog count --build "c++ -O2 -o {out} {artifact}"',
-         metrics: [instructions]}
-      - {name: time,  command: 'flux prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
-         metrics: [time_ms]}
+    measure:
+      count: {command: '{python} -m flux_helpers.prog count --build "c++ -O2 -o {out} {artifact}"',
+              metrics: [instructions]}
+      time:  {command: '{python} -m flux_helpers.prog time --build "c++ -O2 -o {out} {artifact}" --runs 10',
+              metrics: [time_ms]}
 
 `--build` is one shell-quoted command run in a fresh directory; `{out}` in it is the program it
 must write there (`<dir>/prog`). `--run` is the command measured, `{out}` again the built program;
 empty, it is the built program alone. A Python artifact needs no build:
 `--run "{python} {artifact}"`. A build that fails prints the compiler's first lines and exits 3
-(did not build, as an RTL application's `rtl.py test`); a run that fails exits 1.
+(did not build, as the golden test's); a run that fails exits 1.
 """
 
 from __future__ import annotations
@@ -26,7 +26,33 @@ import tempfile
 import time
 from pathlib import Path
 
-__all__ = ["cmd_prog_count", "cmd_prog_size", "cmd_prog_time"]
+__all__ = ["add_parsers", "cmd_prog_count", "cmd_prog_size", "cmd_prog_time", "main"]
+
+
+def catalog() -> list[dict]:
+    """This helper's catalog entries (D968): a compiled program's size, time and counts. Their
+    `needs` are inferred by the loader when a stage does not say them (`infer_needs`)."""
+    from ._entries import metrics, param
+    build = {"build": param("Build command ({out}: the program)", "c++ -O2 -o {out} {artifact}"),
+             "run": param("Run command (empty: the built program)", "")}
+    langs, kinds = ["c", "cpp", "python"], ["program", "python"]
+    prog = '{{python}} -m flux_helpers.prog {sub} --build "{{build}}" --run "{{run}}"{more}'
+    return [{"id": "prog-size", "role": "stage", "title": "Program size",
+             "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
+             "run": '{python} -m flux_helpers.prog size --build "{build}"', "params": {"build": build["build"]},
+             "metrics": metrics("text_bytes", "data_bytes", "bss_bytes"), "needs": ["size"], "infer_needs": True,
+             "languages": langs, "kinds": kinds, "short": "size"},
+            {"id": "prog-time", "role": "stage", "title": "Program run time",
+             "what": "Builds the program and times it over several runs (hyperfine when present).",
+             "run": prog.format(sub="time", more=" --runs {runs} --warmup {warmup}"),
+             "params": {**build, "runs": param("Runs", 10), "warmup": param("Warm-up runs", 1)},
+             "metrics": metrics("time_ms", "time_ms_stddev", "time_ms_min"), "needs": [], "languages": langs, "kinds": kinds,
+             "short": "time"},
+            {"id": "prog-count", "role": "stage", "title": "Instruction count (Valgrind)",
+             "what": "Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic.",
+             "run": prog.format(sub="count", more=""), "params": build,
+             "metrics": metrics("instructions", "d1_misses", "ll_misses", "branch_mispredicts"), "needs": ["valgrind"],
+             "infer_needs": True, "languages": langs, "kinds": kinds, "short": "count"}]
 
 #: exit code for "did not build" (D594)
 _DID_NOT_BUILD = 3
@@ -170,3 +196,15 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
     common(s)
     s.add_argument("binary", nargs="?", default=None, help="A program already built (instead of --build).")
     s.set_defaults(func=cmd_prog_size)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`python -m flux_helpers.prog time|count|size ...`: the same commands as `flux prog`."""
+    parser = argparse.ArgumentParser(prog="python -m flux_helpers.prog")
+    add_parsers(parser.add_subparsers(dest="command", required=True))
+    args = parser.parse_args(["prog", *(argv if argv is not None else __import__("sys").argv[1:])])
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

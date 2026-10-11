@@ -144,10 +144,12 @@ endmodule
 
 
 def _lint(path: Path) -> subprocess.CompletedProcess:
-    """The catalog's lint, Verilator itself (D962)."""
+    """The catalog's lint, Verilator's hardware defects (D962) through flux_helpers.rtl (D968)."""
+    import sys
+
     from flux_loop.toolbox import fill
 
-    return subprocess.run(fill("rtl-lint").replace("{artifact}", str(path)).split(),
+    return subprocess.run(fill("rtl-lint").replace("{artifact}", str(path)).replace("{python}", sys.executable).split(),
                           capture_output=True, text=True, timeout=120)
 
 
@@ -157,9 +159,9 @@ def test_rtl_lint_counts_a_latch_and_passes_a_clean_module(tmp_path):
     (tmp_path / "c.sv").write_text(_CLEAN)
     (tmp_path / "s.sv").write_text("module s(input a, output y)\n assign y = a;\nendmodule\n")
     bad, good, broken = _lint(tmp_path / "l.sv"), _lint(tmp_path / "c.sv"), _lint(tmp_path / "s.sv")
-    assert bad.returncode != 0 and "%Warning-LATCH" in bad.stderr
-    assert good.returncode == 0 and not good.stderr.strip()
-    assert broken.returncode != 0 and "syntax error" in broken.stderr
+    assert bad.returncode == 1 and "%Warning-LATCH" in bad.stdout and bad.stdout.strip().endswith("1 failing")
+    assert good.returncode == 0 and good.stdout.strip() == "0 failing"
+    assert broken.returncode == 3 and "did not parse" in broken.stdout and "syntax error" in broken.stdout
 
 
 # ---- the catalog
@@ -173,22 +175,23 @@ def test_the_crafters_tools_json_is_flux_tools_json(capsys):
 
 def test_flux_tools_lists_checks_then_stages(capsys):
     from flux_cli.main import main
-    from flux_loop.toolbox import TOOLS, fill
+    from flux_loop.toolbox import TOOLS, catalog, fill
 
     assert main(["tools"]) == 0
     out = capsys.readouterr().out
     assert out.index("CHECKS") < out.index("rtl-lint:") < out.index("STAGES") < out.index("rtl-synth:")
-    assert "gate: passes when it exits 0" in out and "metrics: fmax_mhz (MHz)" in out
-    ids = {t["id"] for t in TOOLS}
+    assert "gate: passes when it prints `0 failing`" in out and "metrics: fmax_mhz (MHz)" in out
+    assert {t["id"] for t in TOOLS} == {"python-test-script", "bench-script", "custom-check", "custom-stage"}, "the generic ones"
+    helpers = {t["id"] for t in catalog() if t.get("helper")}      # D968: what flux_helpers says it has
     assert {"rtl-lint", "rtl-golden", "rtl-synth", "rtl-place", "rtl-route", "champsim-build", "champsim-check",
-            "champsim-run", "python-test-script", "bench-script", "custom-check", "custom-stage"} <= ids
-    assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in TOOLS)
-    assert fill("rtl-synth", clock_ps=300) == "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
+            "champsim-run", "prog-time", "python-bench"} <= helpers
+    assert all(("pass" in t) == (t["role"] == "check") and ("metrics" in t) == (t["role"] == "stage") for t in catalog())
+    assert fill("rtl-synth", clock_ps=300) == "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 300"
 
 
 def test_every_catalog_command_loads_as_a_document(tmp_path):
     """What the crafter writes from the catalog is a document Flux accepts."""
-    from flux_loop.toolbox import TOOLS, fill
+    from flux_loop.toolbox import TOOLS, catalog, fill
 
     for t in TOOLS:
         if t["id"].startswith("custom"):

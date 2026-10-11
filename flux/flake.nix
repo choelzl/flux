@@ -112,6 +112,7 @@
             "core/profile/src"
             "core/tui/src"
             "core/frontier/src"
+            "helpers/src"
             "applications/bankmap/lib/src"
             "applications/macarray/lib/src"
           ];

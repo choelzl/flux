@@ -52,12 +52,11 @@ flux ask --tui                                           # the same, from a setu
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
   "review first" on, you read the checked problem and type `run`, `stop`, or a note.
 
-Existing loops using the removed `flux rtl` or `flux champsim` commands need an app-local
-script and its tool sources. Copy `rtl.py` and `tools/` from `flux/applications/mul8/`,
-or `champsim.py` and `tools/` from `flux/applications/prefetcher/`, and replace the command prefix with
-`{python} {home}/rtl.py` or `{python} {home}/champsim.py`. Declare each measurement stage's
-`metrics` and `needs` explicitly, and set the design `language`. The bundled applications
-already use this layout; copying them includes their scripts.
+Checks and measurements that Flux ships are its helpers (D968): `{python} -m flux_helpers.golden`,
+`flux_helpers.rtl lint|measure`, `flux_helpers.prog`, `flux_helpers.bench` and `flux_helpers.champsim`
+(the [document reference](../website/docs/guide/parameters.md#built-in-tools) lists them). Older
+loops that carry their own `rtl.py` or `champsim.py` keep working. Declare each measurement
+stage's `metrics` and `needs` explicitly, and set the design `language`.
 
 ## The problem document
 
@@ -77,14 +76,14 @@ flow:
     policy: sweep
     space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py" # the gate
+  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py" # the gate
   measure:                               # the stages, by name, cheapest first
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 300"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 300"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 300"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1800
@@ -295,14 +294,13 @@ flux user add ada --admin && flux serve   # http://127.0.0.1:8765/
 The commands an RTL document names as its gate and stages:
 
 ```bash
-python -m flux_loop.golden_model design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
+python -m flux_helpers.golden design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
 python -m flux_loop.golden_proto prototype.py --golden golden.py   # a Python prototype against the golden model (D951)
-python rtl.py measure design.sv --stage synth --clock-ps 1000   # or stat, place, route: ASAP7 metric=value lines
+python -m flux_helpers.rtl measure design.sv --stage synth --clock-ps 1000   # or stat, place, route: ASAP7 metric=value lines
 ```
 
-The golden test and the prototype check are Flux's own (D951, D967). `rtl.py` is one file in each
-RTL application's folder: it runs OpenROAD-flow-scripts on ASAP7 to the stage asked (D967); copy it
-from a bundled RTL app when creating your own. `python -m flux_loop.golden_model` exits 1 when the
+The golden test, the RTL lint and measurement and the prototype check are Flux's own (D951,
+D968); `flux_helpers.rtl measure` runs OpenROAD-flow-scripts on ASAP7 to the stage asked. `python -m flux_helpers.golden` exits 1 when the
 design fails and 3 when it does not compile. A prototype that
 passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper

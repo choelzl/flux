@@ -39,7 +39,8 @@ any OpenAI-compatible server (`FLUX_REMOTE_BASE_URL`, `FLUX_REMOTE_MODEL`,
 cp -R ../docs/tutorial/isqrt ./isqrt
 ```
 
-This copies the tutorial's application, including its local `rtl.py` command and golden model.
+This copies the tutorial's application and its golden model; its checks and measurements are
+Flux's helpers (`flux_helpers`), so there is no tool script to copy.
 The next two steps explain the square-root contract and its checks.
 
 ## 2. Say what is correct: the golden model
@@ -80,15 +81,15 @@ language: systemverilog
 
 flow:
 
-  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py" # refuses a wrong design first
+  test: "{python} -m flux_helpers.golden {artifact} --golden {home}/golden.py" # refuses a wrong design first
 
   measure:                           # measurement, cheapest first
     screen:
-      command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage synth --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000"
+      command: "{python} -m flux_helpers.rtl measure {artifact} --stage place --clock-ps 1000"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
   select: {finalists: 2}

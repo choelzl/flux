@@ -1,5 +1,5 @@
-"""The golden test, core's `python -m flux_loop.golden_model` (D967), and an RTL application's own
-`rtl.py measure` on OpenROAD-flow-scripts (D948, D967): an RTL problem with no code of its own."""
+"""Flux's RTL helpers (D968): the golden test, `python -m flux_helpers.golden` (D967), and
+`python -m flux_helpers.rtl measure` on OpenROAD-flow-scripts: an RTL problem with no code of its own."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ endmodule
 
 
 def _rtl(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(EXAMPLE / "rtl.py"), *args], capture_output=True, text=True, timeout=900, cwd=str(FLUX))
+    return subprocess.run([sys.executable, "-m", "flux_helpers.rtl", *args], capture_output=True, text=True, timeout=900, cwd=str(FLUX))
 
 
 def _test(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "flux_loop.golden_model", *args], capture_output=True, text=True, timeout=900,
+    return subprocess.run([sys.executable, "-m", "flux_helpers.golden", *args], capture_output=True, text=True, timeout=900,
                           cwd=str(FLUX))
 
 
@@ -51,7 +51,7 @@ def test_the_example_document_loads_and_names_the_two_commands():
     from flux_loop.document import describe_flow
 
     task = load_task(EXAMPLE / "problem.yaml")
-    assert task.gate.named("test").run[:4] == ("{python}", "-m", "flux_loop.golden_model", "{artifact}")
+    assert task.gate.named("test").run[:4] == ("{python}", "-m", "flux_helpers.golden", "{artifact}")
     assert "{home}/golden.py" in task.gate.named("test").run and task.home.endswith("mul8")
     assert [s.name for s in task.stages] == ["screen", "confirm"]
     prob = PromptProblem(task)
@@ -91,7 +91,7 @@ def test_rtl_test_passes_the_right_module_and_names_the_wrong_ones_vectors(tmp_p
 def test_the_vectors_are_a_table_the_testbench_reads():
     """D865: the vectors are a `$readmemh` table of the packed inputs, never unrolled lines; the
     test bench prints each row's outputs and Python compares them (D948)."""
-    from flux_loop import golden_model as rtl
+    from flux_helpers import golden as rtl
 
     g = rtl.load_golden(EXAMPLE / "golden.py")
     tb = rtl._testbench(g, "mul8", 65536)
@@ -147,7 +147,7 @@ def test_rtl_measure_prints_the_screens_numbers(tmp_path):
 def test_an_output_is_read_back_at_its_width_signed_or_not():
     """D581: the bits that came out, read as the golden declares the port: signed unless
     `unsigned: true`; an x or z bit is no value."""
-    from flux_loop import golden_model as rtl
+    from flux_helpers import golden as rtl
 
     assert rtl._value("ffff", 16, False) == 65535 and rtl._value("ffff", 16, True) == -1
     assert rtl._value("10000", 17, False) == 65536 and rtl._value("1", 1, False) == 1
@@ -237,7 +237,7 @@ def test_measure_on_asap7_through_orfs_at_each_stage(tmp_path):
     mapped cells; synth times the signed multiplier's netlist unplaced (OpenROAD refuses
     `input signed` until it is stripped); place after placement; route after routing, with the
     detailed router's DRC count; a clocked design's clock is its own."""
-    import rtl
+    from flux_helpers import rtl
 
     try:
         rtl.flow_home()

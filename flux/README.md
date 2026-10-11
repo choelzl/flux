@@ -32,8 +32,8 @@ The tree follows the kinds of module the architecture is built from:
 
 | application | the problem | the chain | the model's roles |
 |---|---|---|---|
-| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `python -m flux_loop.golden_model` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
-| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `python -m flux_loop.golden_model` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
+| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `python -m flux_helpers.golden` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
+| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `python -m flux_helpers.golden` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
 | [`primes/`](applications/primes/) | not hardware: the fastest Python `count_primes(n)` | `check.py` against a reference, `bench.py` timing | writes it, then makes it faster pass after pass |
 | [`nlu/`](applications/nlu/) | an FP16 non-linear unit of seven functions, each within 1 ULP on all 65536 inputs, under one mux at 800 MHz routed, with the least area and power | a Python prototype proven on every input, translated to SystemVerilog, Yosys + OpenSTA screen, OpenROAD placement, full place-and-route for the whole | writes and repairs the prototype, invents algorithms, orchestrates with tools |
 | [`macarray/`](applications/macarray/) | the multiply-accumulate element's microarchitecture at a workload's precision | Verilator on golden vectors, Yosys + OpenSTA screen, OpenROAD placement along the fmax-vs-area front | invents multiplier structures beyond the four built in |
@@ -41,7 +41,8 @@ The tree follows the kinds of module the architecture is built from:
 | [`bankmap/`](applications/bankmap/) | a conflict-free bank mapping for given strides through a given interconnect | a pigeonhole or SAT-colouring proof, z3 over XOR folds, an exhaustive checker | proposes mappings past the solver's reach |
 
 An application's measuring commands and the domain library it evaluates live with that
-application (ChampSim in `prefetcher/tools/`, `rtl.py` in each RTL application); nothing
+application, or are Flux's helpers (`helpers/`: the golden test, RTL lint and ORFS measurement,
+program timing, ChampSim); nothing
 registers them by name. `mentor/knowledge/corpus/` holds documents to
 retrieve from.
 
@@ -62,7 +63,7 @@ Everything a world needs already exists as a package; building one is mostly wir
 | one model call, schema-constrained or with tools | `flux_llm.OpenAIChatProposer` -> `Reply` | `core/llm` |
 | the mentor's sources: a sheet, a library, the record read back, mined facts | `flux_knowledge.Mentor` + `Corpus`/`Library`/`RecordReadback`/`Mined` | `mentor/knowledge`, `mentor/records` |
 | operator guidance typed while the loop runs | `FeedbackChannel` | `mentor/feedback` |
-| Verilator checks of generated RTL against golden vectors, Yosys + OpenROAD on ASAP7 | `rtl.py`, one file in the application (ASAP7 from OpenROAD-flow-scripts) | bundled RTL applications |
+| Verilator checks of generated RTL against golden vectors, OpenROAD-flow-scripts on ASAP7 | `flux_helpers.golden`, `flux_helpers.rtl` | `helpers/` |
 | a measurement as a record, one tool launch | `Result`, `run_tool` | `core/stores`, `core/loop` |
 | tool fingerprints for cache keys and provenance | `toolchain_fingerprint` | `core/loop` |
 
@@ -98,7 +99,7 @@ nix develop --command flux --help
 
 `pytest.ini` leaves out the `heavy` tests by default; the heavy files are listed in
 `tests/unit/conftest.py`. CI runs both. `tests/integration/` needs whichever real tool
-each test targets (Verilator, Yosys and OpenROAD for `rtl.py`, a model for the prose
+each test targets (Verilator, Yosys and OpenROAD for `flux_helpers`, a model for the prose
 checks); run the files relevant to what you change. Every test gets its own trace root, so a
 test run never disturbs a live campaign.
 

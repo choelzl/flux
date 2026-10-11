@@ -20,9 +20,26 @@ BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failur
                 "prompt", "prompt_file", "point", "params", "history", "state", "parts")
 
 
+def _words_before_params(run: str) -> list[str]:
+    """A catalog command's leading words, up to its first placeholder but `{python}`."""
+    out = []
+    for word in run.split():
+        if "{" in word.replace("{python}", ""):
+            break
+        out.append(word)
+    return out
+
+
 def _flux_program_tools(cmd: Iterable[str]) -> list[str]:
-    """External tools used by Flux's program measurement helpers."""
+    """The programs a command needs on PATH without saying so: a catalog tool that asks for it
+    (`infer_needs`, D968: a helper's entry), and `flux prog count|size` (D661)."""
     toks = list(cmd)
+    from ..toolbox import catalog
+
+    for t in catalog():
+        head = _words_before_params(str(t.get("run") or "")) if t.get("infer_needs") else []
+        if len(head) > 1 and toks[:len(head)] == head:
+            return list(t.get("needs") or [])
     try:
         at = toks.index("prog")
     except ValueError:
@@ -31,6 +48,7 @@ def _flux_program_tools(cmd: Iterable[str]) -> list[str]:
         return []
     sub = toks[at + 1] if at + 1 < len(toks) else ""
     return {"count": ["valgrind"], "size": ["size"]}.get(sub, [])
+
 
 def _digest_of(text: str | None) -> str:
     import hashlib
@@ -43,7 +61,7 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
     take, from the tool catalog's
     `languages`. A tool that takes several (your own script, `flux prog`) decides nothing; None
     when nothing decides."""
-    from ..toolbox import TOOLS
+    from ..toolbox import catalog
 
     hdl = {"systemverilog", "verilog"}
 
@@ -56,8 +74,10 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
     cmds = [said(c.run) for c in (gate or ())] + [said(st.command) for st in (stages or ()) if st.command]
     found: set[str] | None = None
     for cmd in cmds:
-        for t in TOOLS:
-            head = str(t.get("run") or "").split("{")[0].strip()
+        for t in catalog():
+            # the tool's words up to its first placeholder, `{python}` counted as a word (D968:
+            # a helper's `{python} -m flux_helpers.<name> ...` says its language)
+            head = " ".join(_words_before_params(str(t.get("run") or "")))
             langs = set(t.get("languages") or ())
             if len(head.split()) < 2 or not langs or not cmd.startswith(head):
                 continue                                   # `{python} {script}`, `{command}`: no word on it
