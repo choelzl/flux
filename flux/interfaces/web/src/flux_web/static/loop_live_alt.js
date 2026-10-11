@@ -18,7 +18,7 @@ export function liveAltTab(ctx) {
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
-  let foldDone = true, notes = {}, chainPass = null;                 // D978: ⊟ folds what has finished; the graph's chosen pass
+  let foldDone = true, notes = {}, chainPass = null, openBox = null;                 // D978: ⊟ folds what has finished; the graph's chosen pass
   const close = () => {
     seq++; mounted = false;
     clearInterval(timer); timer = null;
@@ -88,7 +88,8 @@ export function liveAltTab(ctx) {
     const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
     split.classList.toggle("wide", mode === "timeline");
-    split.querySelector(".alt-fold-done").hidden = mode !== "tree";          // a timeline needs the width; the inspector goes under it
+    split.querySelector(".alt-fold-done").hidden = mode !== "tree";
+    stepper.hidden = mode === "graph";                      // the graph's boxes list their own tasks          // a timeline needs the width; the inspector goes under it
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -211,13 +212,15 @@ export function liveAltTab(ctx) {
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; render(); } }, p == null ? "S" : String(p));
     })) : "";
-    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, g = [];
+    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, RH = 22, g = [];
     const at = {};
+    let y = 6;
     boxes.forEach((b, i) => {
-      // a box opens its current task: a running agent first, as the tree's Following does
-      const y = 6 + i * (BH + GAP), c = COLORS[b.kind] || COLORS.setup, task = currentTask(inPass.filter(r => b.ids.has(r.node.id)));
-      at[b.key] = y;
+      // a box opens its current task (a running agent first, as Following does) and lists its tasks under it
+      const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id)), task = currentTask(own);
       if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
+      const isOpen = openBox === `${shown}:${b.key}` && own.some(r => !b.runs.includes(r.node));   // only a box with tasks under it opens
+      at[b.key] = y;
       const note = notes[b.key === "record" ? "record" : b.key] || "";
       const kids = [];
       if (b.state === "run") kids.push(sv("rect", { x: X - 5, y: y - 5, width: BW + 10, height: BH + 10, rx: 10, fill: c, class: "alt-glow" }));
@@ -230,14 +233,35 @@ export function liveAltTab(ctx) {
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
       if (b.state === "ok" || b.state === "bad") kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : "✗"));
-      g.push(task ? taskSvg(task, { class: `alt-flow-box${task.id === selected || b.runs.some(n => n.id === selected) ? " sel" : ""}`, "data-kind": b.kind, "data-box": b.key }, ...kids)
-        : sv("g", { class: "alt-flow-box", "data-box": b.key }, ...kids));
+      const box = task ? taskSvg(task, { class: `alt-flow-box${b.ids.has(selected) ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key,
+        "aria-expanded": String(!!isOpen) }, ...kids) : sv("g", { class: "alt-flow-box", "data-box": b.key }, ...kids);
+      if (task) box.addEventListener("click", () => { openBox = isOpen ? null : `${shown}:${b.key}`; queue(); });
+      g.push(box);
+      y += BH;
+      if (isOpen) {
+        // the box is its runs: list what is under each, never the run itself; runs of a box that
+        // ran more than once are kept apart by a thin divider
+        const under = (run, n) => { for (let p = n.parent; p; p = p.parent) if (p === run) return true; return false; };
+        const groups = b.runs.map(run => own.filter(r => under(run, r.node))).filter(gr => gr.length);
+        const depthOf = r => { let d = 0; for (let p = r.node.parent; p && b.ids.has(p.id); p = p.parent) d++; return d - 1; };
+        const rowsOf = gr => gr.map(r => h("button", { ...taskButton(r.node), type: "button", class: `alt-box-task ${state(r.node)}${r.node.id === selected ? " sel" : ""}`,
+          style: `--depth:${Math.max(0, depthOf(r))}`, onclick: event => { event.stopPropagation(); select(r.node.id); } },
+          mark(r.node), h("span", { class: "alt-task-name" }, taskLabel(r.node)), h("span", { class: "mono muted small" }, dur(r.node.seconds ?? (r.node.t1 ?? Date.now() / 1000) - r.node.t0))));
+        if (groups.length) {
+          const list = h("div", { class: "alt-box-tasks", role: "group", "aria-label": `${b.title} tasks` },
+            groups.flatMap((gr, k) => [k ? h("div", { class: "alt-box-sep", role: "separator" }) : "", ...rowsOf(gr)]));
+          const lh = groups.reduce((t, gr) => t + gr.length * RH, 0) + (groups.length - 1) * 7 + 8;
+          g.push(sv("foreignObject", { x: X, y: y + 4, width: BW, height: lh }, list));
+          y += lh + 4;
+        }
+      }
+      y += GAP;
     });
     if (back && at.check != null && at.design != null) {
-      const y0 = at.check + BH / 2, y1 = at.design + BH / 2;
+      const y0 = at.check + BH / 2, y1 = at.design + BH / 2;   // the way back, from Check to Design
       g.push(sv("path", { d: `M${X + BW} ${y0} H${W - 8} V${y1} H${X + BW + 2}`, class: "alt-flow-back", "marker-end": "url(#alt-arrow)" }));
     }
-    const H = 6 + boxes.length * (BH + GAP) - GAP + 8;
+    const H = y - GAP + 8;
     return h("div", { class: "alt-graph", role: "group", "aria-label": "The pass as a flow" }, chain,
       boxes.length ? sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "alt-flow", style: `max-width:${W}px` },
         sv("defs", {}, sv("marker", { id: "alt-arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" }, sv("path", { d: "M0 0 L10 5 L0 10 z", class: "alt-arrow-head" }))), g)
@@ -250,7 +274,7 @@ export function liveAltTab(ctx) {
     const a = Math.min(...rows.map(r => r.node.t0)), b = Math.max(a + .001, ...rows.map(r => end(r.node)));
     const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
       .map(([t0, t1]) => ({ n, depth, t0, t1, kind: workOf(n) })));
-    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 18, B = 26, lane = 30;
+    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 18, B = 26, lane = 22;
     const lanes = Object.keys(COLORS).filter(kind => segs.some(x => x.kind === kind));
     const H = T + lanes.length * lane + B;
     const X = t => L + (W - L - R) * (t - a) / (b - a);
@@ -261,7 +285,8 @@ export function liveAltTab(ctx) {
     const membership = taskScope(inspector.model, "all").membership, spans = new Map();
     for (const r of rows) { const p = membership.get(r.node.id) ?? null, sp = spans.get(p) || [Infinity, -Infinity];
       spans.set(p, [Math.min(sp[0], r.node.t0), Math.max(sp[1], end(r.node))]); }
-    const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0]);
+    const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0])
+      .map(([p, [t0]], i, all) => [p, [i ? t0 : a, i < all.length - 1 ? all[i + 1][1][0] : b]]);   // each to the next's start: no gaps
     // steps of a kind run back to back read as one bar: a thin cut where one ends and the next begins
     const cuts = [];
     for (const kind of lanes) {
@@ -294,15 +319,15 @@ export function liveAltTab(ctx) {
       }),
       cuts.map(([kind, t]) => sv("rect", { x: X(t) - .75, y: T + lanes.indexOf(kind) * lane + 3, width: 1.5, height: lane - 6, class: "alt-cut", "pointer-events": "none" })),
       agents.map(({ kind, t0, t1 }) => sv("rect", {
-        x: X(t0), y: T + lanes.indexOf(kind) * lane + lane - 8,
-        width: Math.max(3, X(t1) - X(t0)), height: 5, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
+        x: X(t0), y: T + lanes.indexOf(kind) * lane + lane - 7,
+        width: Math.max(3, X(t1) - X(t0)), height: 4, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
       agents.length ? h("p", { class: "muted small tl-legend" }, h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work")) : "",
       choice ? h("div", { class: "alt-choice", role: "group", "aria-label": "Tasks side by side", onkeydown: event => {
         if (event.key === "Escape") { event.preventDefault(); choice = null; reveal = true; render(); }
       } }, h("div", { class: "alt-choice-head" }, h("strong", {}, `${workLabel(choice.kind)} · side by side here`),
         h("button", { type: "button", class: "small", "aria-label": "Close the tasks side by side", onclick: () => { choice = null; render(); } }, "×")),
         choice.ids.map(id => inspector.model.nodes.get(id)).filter(Boolean).map(n => h("button", {
-          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, taskLabel(n)), h("small", { class: "muted" }, state(n))))) : "");
+          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, taskLabel(n), n.why ? h("small", { class: "muted" }, " · " + n.why) : ""), h("small", { class: "muted" }, state(n))))) : "");
   }
   async function load(validPage) {
     close(); valid = validPage;
