@@ -8,7 +8,13 @@ export function taskPass(node, marks) {
   }
   let pass = null;
   for (const mark of marks) if (mark.name === "pass" && mark.t <= root.t0 + .001 && Number.isFinite(Number(mark.n))) pass = Number(mark.n);
-  return pass;
+  if (pass != null) return pass;
+  // D978: before the first mark -- the engine marks passes from the second (or the baseline) on, so
+  // what ran before is the pass before it, as Live counts it; the run's own setup (the document
+  // checked, the papers read, the round planned) and anything before a baseline stay Setup
+  const first = marks.find(m => m.name === "pass" && Number.isFinite(Number(m.n)));
+  if (!first || Number(first.n) <= 0 || /^\s*(validate|digest|plan\b|lessons)/i.test(String(root.name))) return null;
+  return Number(first.n) - 1;
 }
 
 export function taskScope(model, pass = "current") {

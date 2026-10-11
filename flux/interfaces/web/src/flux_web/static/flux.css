@@ -764,18 +764,47 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-count { font-size: 11px; color: var(--muted); }
 .alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.interrupted { color: var(--warn); }
 .alt-visual { overflow: auto; max-height: 74vh; }
-.alt-pass-heading { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 10px 8px 6px; margin: 0; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.alt-tree-row { display: flex; align-items: stretch; padding-left: calc(min(var(--depth), 8) * 14px); border-bottom: 1px solid var(--line); }
+.alt-pass-heading { font-weight: 600; }
+/* D978: one line per task, tinted by its kind; the selected deeper and outlined; quiet when it took no time */
+.alt-tree-row { display: flex; align-items: stretch; padding-left: calc(min(var(--depth), 8) * 12px); background: color-mix(in srgb, var(--k, transparent) 24%, var(--panel)); border-bottom: 1px solid var(--panel); }
+.alt-tree-row.alt-pass-row { background: var(--panel); border-bottom: 1px solid var(--line); }
+.alt-tree-row.quiet .alt-task { padding-block: 1px; font-size: 12px; } .alt-tree-row.quiet .alt-task-name { color: var(--muted); }
 .alt-fold, .alt-fold-space { flex: 0 0 24px; width: 24px; }
 .alt-fold { border: 0; padding: 4px; border-radius: 0; background: transparent; color: var(--muted); }
-.alt-task { display: flex; width: 100%; align-items: center; gap: 8px; padding: 9px 8px; border: 0; border-radius: 0; text-align: left; }
+.alt-task { display: flex; width: 100%; align-items: center; gap: 7px; padding: 4px 8px; border: 0; border-radius: 0; text-align: left; background: transparent; font-size: 13px; }
 .alt-tree-row .alt-task { min-width: 0; }
-.alt-task.sel { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: inset 3px 0 var(--accent); }
-.alt-task-state { color: var(--ok); }
+.alt-task.sel { background: color-mix(in srgb, var(--k, var(--accent)) 46%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 80%, var(--ink)); }
+.alt-tree-row:has(.alt-task.sel) { background: transparent; }
+.alt-task-state { color: var(--ok); width: 11px; text-align: center; flex-shrink: 0; }
+.alt-task-state.failed { color: var(--bad); }
+.alt-spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--run) 25%, transparent); border-top-color: var(--run); flex-shrink: 0; box-sizing: border-box; }
+@media (prefers-reduced-motion: no-preference) { .alt-spin { animation: alt-spin .9s linear infinite; } @keyframes alt-spin { to { transform: rotate(360deg); } } }
+.alt-list-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.alt-fold-done { min-width: 28px; padding-inline: 6px; } .alt-fold-done.on { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+/* D978: the pass as a flow, the chain of passes */
+.alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
+.alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
+.alt-chip:not(:last-child)::after { content: "→"; position: absolute; right: -13px; color: var(--muted); }
+.alt-chip::before { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.alt-chip.failed::before { background: var(--bad); } .alt-chip.running::before { background: var(--run); }
+.alt-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overflow: visible; }
+.alt-flow-edge, .alt-flow-back { stroke: var(--muted); stroke-width: 1.2; fill: none; } .alt-flow-back { stroke-dasharray: 4 3; } .alt-arrow-head { fill: var(--muted); }
+.alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); stroke-width: 2.6; } .alt-box.wait { opacity: .55; }
+.alt-glow { opacity: .22; } @media (prefers-reduced-motion: no-preference) { .alt-glow { animation: alt-glow 1.4s ease-in-out infinite alternate; } @keyframes alt-glow { to { opacity: .06; } } }
+.alt-box-title { font: 600 12px var(--sans, sans-serif); fill: var(--ink); } .alt-box-note { font: 10px var(--mono, monospace); fill: var(--muted); text-anchor: end; }
+.alt-pill-text { font: 9px var(--sans, sans-serif); fill: #fff; text-anchor: middle; } .alt-count-pill { fill: var(--line); } .alt-count-text { font: 9px var(--mono, monospace); fill: var(--ink); text-anchor: middle; }
+.alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.bad { fill: var(--bad); }
+@media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
+.alt-done.ok { fill: var(--ok); } .alt-done.bad { fill: var(--bad); } .alt-done-mark { font: 600 9.5px var(--sans, sans-serif); fill: #fff; text-anchor: middle; }
+.alt-flow-box { cursor: pointer; } .alt-flow-box.sel .alt-box { stroke-width: 2.4; } .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
+/* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
+.alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
+.alt-cut { fill: var(--panel); }
 .alt-task.failed .alt-task-state { color: var(--bad); }
 .alt-task.interrupted .alt-task-state { color: var(--warn); }
 .alt-task.running .alt-task-state { color: var(--run); }
-.alt-task-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.alt-task-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-task-name small { display: block; font-weight: normal; }
 .alt-task > .mono { flex-shrink: 0; }
 .alt-phase-graph { display: grid; gap: 22px; padding: 6px 2px; }

@@ -5,6 +5,7 @@ import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
+import { docNotes, flowBoxes, passKind, repaired, taskLabel } from "./live_alt_views.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
 const workOf = phaseKind;
@@ -16,7 +17,8 @@ export function liveAltTab(ctx) {
   let panel, split, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, stepper, logLink, locateBtn;
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
-  const folded = new Set(), viewPlaces = new Map();
+  const folded = new Set(), opened = new Set(), viewPlaces = new Map();
+  let foldDone = true, notes = {}, chainPass = null;                 // D978: ⊟ folds what has finished; the graph's chosen pass
   const close = () => {
     seq++; mounted = false;
     clearInterval(timer); timer = null;
@@ -85,7 +87,8 @@ export function liveAltTab(ctx) {
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
     const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
-    split.classList.toggle("wide", mode === "timeline");          // a timeline needs the width; the inspector goes under it
+    split.classList.toggle("wide", mode === "timeline");
+    split.querySelector(".alt-fold-done").hidden = mode !== "tree";          // a timeline needs the width; the inspector goes under it
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -129,40 +132,116 @@ export function liveAltTab(ctx) {
     el.addEventListener("click", onclick); el.addEventListener("keydown", onkeydown);
     return el;
   }
+  // D978: a branch is folded when asked, or when it finished and ⊟ is on -- unless it holds the selected task
+  function isFolded(key, finished, holdsSelected) {
+    if (opened.has(key)) return false;
+    return folded.has(key) || (foldDone && finished && !holdsSelected);
+  }
+  function toggleFold(key, now) {
+    if (now) { folded.delete(key); opened.add(key); } else { opened.delete(key); folded.add(key); }
+    render(); panel.querySelector(`[data-fold="${CSS.escape(String(key))}"]`)?.focus({ preventScroll: true });
+  }
+  const mark = n => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
+    : h("span", { class: `alt-task-state ${state(n)}`, "aria-hidden": "true" }, n.interrupted ? "—" : n.failed ? "✗" : "✓");
   function tree(rows, selected) {
     const membership = taskScope(inspector.model, "all").membership;
-    const included = new Set(rows.map(r => r.node.id));
-    const children = new Map();
-    for (const r of rows) if (r.parent != null) children.set(r.parent, (children.get(r.parent) || 0) + 1);
-    let lastPass;
-    return h("div", { class: "alt-tree", role: "group", "aria-label": "Tasks as a tree" }, rows.map(({ node: n, depth }) => {
-      for (let p = n.parent; p; p = p.parent) if (folded.has(p.id) && included.has(p.id)) return "";
-      const p = membership.get(n.id), heading = p !== lastPass && pass === "all";
-      lastPass = p;
-      const hasKids = children.has(n.id), collapsed = folded.has(n.id);
-      return [heading ? h("h3", { class: "alt-pass-heading" }, p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`) : "",
-      h("div", { class: "alt-tree-row", style: `--depth:${depth}` },
-        hasKids ? h("button", { type: "button", class: "alt-fold", "data-fold": String(n.id), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${n.name}`, "aria-expanded": String(!collapsed),
-          onclick: () => { collapsed ? folded.delete(n.id) : folded.add(n.id); render(); panel.querySelector(`[data-fold="${n.id}"]`)?.focus({ preventScroll: true }); } }, collapsed ? "▸" : "▾") : h("span", { class: "alt-fold-space" }),
-      h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected) },
-        h("span", { class: "alt-task-state", title: state(n), "aria-hidden": "true" }, n.t1 == null ? "●" : n.interrupted ? "—" : n.failed ? "✗" : "✓"),
-        h("span", { class: "alt-task-name" }, n.name, n.why ? h("small", { class: "muted" }, n.why) : ""),
-        collapsed ? h("span", { class: "muted small" }, `${children.get(n.id)} branches`) : "",
-        h("span", { class: "mono muted small" }, dur(n.seconds ?? Date.now() / 1000 - n.t0))))]; }));
+    const byId = new Map(rows.map(r => [r.node.id, r])), kids = new Map();
+    for (const r of rows) if (r.parent != null) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
+    const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
+    const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0;
+    const out = [];
+    const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
+      "aria-expanded": String(!collapsed), onclick: () => toggleFold(key, collapsed) }, collapsed ? "▸" : "▾");
+    const line = (r, depth) => {
+      const n = r.node, under = kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
+      const kind = phaseKind(n), label = taskLabel(n);
+      out.push(h("div", { class: `alt-tree-row${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${/^\s*agent\s*:/i.test(n.name) ? AGENT_COLOR : COLORS[kind] || COLORS.setup}` },
+        under.length ? fold(n.id, collapsed, label) : h("span", { class: "alt-fold-space" }),
+        h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected), title: n.name + (n.why ? " · " + n.why : "") },
+          mark(n), h("span", { class: "alt-task-name" }, label), h("span", { class: "mono muted small" }, dur(secs(n))))));
+      if (!collapsed) under.forEach(k => line(k, depth + 1));
+    };
+    // per pass: the steps every pass starts with fold into one Setup line
+    const top = rows.filter(r => r.parent == null);
+    const groups = [];
+    for (const r of top) { const p = membership.get(r.node.id) ?? null; let g = groups.at(-1); if (!g || g.p !== p) groups.push(g = { p, rows: [] }); g.rows.push(r); }
+    for (const g of groups) {
+      let depth = 0;
+      if (pass === "all") {
+        const key = `pass:${g.p ?? "setup"}`, nodes = g.rows.map(r => r.node), finished = nodes.every(n => n.t1 != null);
+        const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
+        const failed = nodes.some(n => n.failed), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+        const name = g.p == null ? "Setup" : g.p === 0 ? "Pass 0 · baseline" : `Pass ${g.p}`;
+        out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
+          h("button", { type: "button", class: `alt-task alt-pass-heading`, "data-pass": String(g.p ?? "setup"), onclick: () => toggleFold(key, collapsed) },
+            finished ? h("span", { class: `alt-task-state ${failed ? "failed" : "done"}`, "aria-hidden": "true" }, failed ? "✗" : "✓") : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+            h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+        if (collapsed) continue;
+        depth = 1;
+      }
+      let i = 0;
+      const lead = [];
+      while (i < g.rows.length && phaseKind(g.rows[i].node) === "setup" && !(kids.get(g.rows[i].node.id) || []).length && g.p != null) lead.push(g.rows[i++]);
+      if (lead.length > 1) {
+        const key = `setup:${g.p}`, nodes = lead.map(r => r.node), finished = nodes.every(n => n.t1 != null);
+        const collapsed = isFolded(key, finished, nodes.some(n => n.id === selected)) || (!opened.has(key) && !nodes.some(n => n.id === selected));
+        out.push(h("div", { class: `alt-tree-row quiet`, style: `--depth:${depth};--k:${COLORS.setup}` }, fold(key, collapsed, "Setup"),
+          h("button", { type: "button", class: "alt-task alt-setup-steps", onclick: () => toggleFold(key, collapsed) },
+            finished ? h("span", { class: `alt-task-state ${nodes.some(n => n.failed) ? "failed" : "done"}`, "aria-hidden": "true" }, nodes.some(n => n.failed) ? "✗" : "✓") : h("span", { class: "alt-spin" }),
+            h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
+        if (!collapsed) lead.forEach(r => line(r, depth + 1));
+      } else lead.forEach(r => line(r, depth));
+      g.rows.slice(i).forEach(r => line(r, depth));
+    }
+    return h("div", { class: "alt-tree", role: "group", "aria-label": "Tasks as a tree" }, out);
   }
   function graph(rows, selected) {
-    const selectedNode = inspector.model.nodes.get(selected), selectedKind = selectedNode && workOf(selectedNode);
-    const kinds = Object.keys(COLORS).filter(k => rows.some(r => workOf(r.node) === k));
-    return h("div", { class: "alt-graph alt-phase-graph", role: "group", "aria-label": "Work in this pass" }, kinds.map(kind => {
-      const tasks = rows.filter(r => workOf(r.node) === kind), task = currentTask(tasks);
-      const counts = ["running", "failed", "interrupted"].map(s => [s, tasks.filter(r => state(r.node) === s).length]).filter(([, n]) => n);
-      const description = counts.length ? counts.map(([s, n]) => `${n} ${s}`).join(" · ") : "done";
-      return h("button", { type: "button", class: `alt-phase${kind === selectedKind ? " sel" : ""}`, "data-kind": kind,
-        "aria-pressed": String(kind === selectedKind), title: `${tasks.length} tasks · ${description}`, onclick: () => select(task.id) },
-        h("i", { class: "sw", style: `background:${COLORS[kind]}`, "aria-hidden": "true" }),
-        h("span", { class: "alt-phase-name" }, workLabel(kind), h("small", { class: "muted" }, description)),
-        h("span", { class: "muted mono small" }, String(tasks.length)));
-    }));
+    // D978: the flow the pass went through, top to bottom, in the timeline's words; with All passes,
+    // the chain of passes (setup and the baseline first) and the chosen one's flow under it
+    const membership = taskScope(inspector.model, "all").membership;
+    const passes = [...new Set(rows.map(r => membership.get(r.node.id) ?? null))];
+    const selPass = membership.get(selected) ?? null;
+    const shown = pass === "all" ? (passes.includes(chainPass) ? chainPass : passes.includes(selPass) ? selPass : passes.at(-1)) : passes.at(-1);
+    const inPass = rows.filter(r => (membership.get(r.node.id) ?? null) === shown);
+    const running = inPass.some(r => r.node.t1 == null);
+    const boxes = flowBoxes(inPass, shown, running), back = repaired(boxes);
+    const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" }, passes.map(p => {
+      const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
+      const st = nodes.some(n => n.t1 == null) ? "running" : nodes.some(n => n.failed) ? "failed" : "done";
+      return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
+        title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; render(); } }, p == null ? "S" : String(p));
+    })) : "";
+    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, g = [];
+    const at = {};
+    boxes.forEach((b, i) => {
+      // a box opens its current task: a running agent first, as the tree's Following does
+      const y = 6 + i * (BH + GAP), c = COLORS[b.kind] || COLORS.setup, task = currentTask(inPass.filter(r => b.ids.has(r.node.id)));
+      at[b.key] = y;
+      if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
+      const note = notes[b.key === "record" ? "record" : b.key] || "";
+      const kids = [];
+      if (b.state === "run") kids.push(sv("rect", { x: X - 5, y: y - 5, width: BW + 10, height: BH + 10, rx: 10, fill: c, class: "alt-glow" }));
+      kids.push(sv("rect", { x: X, y, width: BW, height: BH, rx: 7, class: `alt-box ${b.state}`, style: `--k:${c}` }), sv("rect", { x: X, y, width: 5, height: BH, rx: 2, fill: c }),
+        sv("text", { x: X + 14, y: y + (b.steps ? 15 : BH / 2 + 4), class: "alt-box-title" }, b.title));
+      let right = X + BW - 10;
+      if (b.who) { kids.push(sv("rect", { x: right - 40, y: y + 6, width: 40, height: 14, rx: 7, fill: AGENT_COLOR }), sv("text", { x: right - 20, y: y + 16, class: "alt-pill-text" }, b.who)); right -= 46; }
+      if (b.count > 1) { kids.push(sv("rect", { x: right - 22, y: y + 6, width: 22, height: 14, rx: 7, class: "alt-count-pill" }), sv("text", { x: right - 11, y: y + 16, class: "alt-count-text" }, `×${b.count}`)); right -= 28; }
+      if (note) kids.push(sv("text", { x: right, y: y + (b.steps ? 15 : BH / 2 + 4), class: "alt-box-note" }, note));
+      if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
+        class: `alt-step ${v}`, style: `--k:${c}` }))); }
+      if (b.state === "ok" || b.state === "bad") kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : "✗"));
+      g.push(task ? taskSvg(task, { class: `alt-flow-box${task.id === selected || b.runs.some(n => n.id === selected) ? " sel" : ""}`, "data-kind": b.kind, "data-box": b.key }, ...kids)
+        : sv("g", { class: "alt-flow-box", "data-box": b.key }, ...kids));
+    });
+    if (back && at.check != null && at.design != null) {
+      const y0 = at.check + BH / 2, y1 = at.design + BH / 2;
+      g.push(sv("path", { d: `M${X + BW} ${y0} H${W - 8} V${y1} H${X + BW + 2}`, class: "alt-flow-back", "marker-end": "url(#alt-arrow)" }));
+    }
+    const H = 6 + boxes.length * (BH + GAP) - GAP + 8;
+    return h("div", { class: "alt-graph", role: "group", "aria-label": "The pass as a flow" }, chain,
+      boxes.length ? sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "alt-flow", style: `max-width:${W}px` },
+        sv("defs", {}, sv("marker", { id: "alt-arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" }, sv("path", { d: "M0 0 L10 5 L0 10 z", class: "alt-arrow-head" }))), g)
+        : empty("No work in this pass yet."));
   }
   function timeline(rows, selected) {
     // D977: as Live's timeline -- a task's own time, its children's taken out, so a container
@@ -171,20 +250,31 @@ export function liveAltTab(ctx) {
     const a = Math.min(...rows.map(r => r.node.t0)), b = Math.max(a + .001, ...rows.map(r => end(r.node)));
     const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
       .map(([t0, t1]) => ({ n, depth, t0, t1, kind: workOf(n) })));
-    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 8, B = 26, lane = 30;
+    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 18, B = 26, lane = 30;
     const lanes = Object.keys(COLORS).filter(kind => segs.some(x => x.kind === kind));
     const H = T + lanes.length * lane + B;
     const X = t => L + (W - L - R) * (t - a) / (b - a);
     // the pinned task painted last, so it stays visible where work ran side by side
     const order = segs.slice().sort((x, y) => (x.n.id === selected) - (y.n.id === selected) || (y.t1 - y.t0) - (x.t1 - x.t0));
     const agents = segs.filter(x => agentActive(x.n));
+    // D978: quiet bands, one per pass (setup and the baseline too), numbered; no lines
+    const membership = taskScope(inspector.model, "all").membership, spans = new Map();
+    for (const r of rows) { const p = membership.get(r.node.id) ?? null, sp = spans.get(p) || [Infinity, -Infinity];
+      spans.set(p, [Math.min(sp[0], r.node.t0), Math.max(sp[1], end(r.node))]); }
+    const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0]);
+    // steps of a kind run back to back read as one bar: a thin cut where one ends and the next begins
+    const cuts = [];
+    for (const kind of lanes) {
+      const own = segs.filter(x => x.kind === kind).sort((x, y) => x.t0 - y.t0);
+      for (let i = 1; i < own.length; i++) if (own[i].n !== own[i - 1].n && Math.abs(X(own[i].t0) - X(own[i - 1].t1)) < 1.5) cuts.push([kind, own[i].t0]);
+    }
     return h("div", { class: "gantt-box" }, sv("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, style: `width:${W}px;max-width:none;height:${H}px`, class: "chart gantt alt-timeline", role: "group", "aria-label": "Task timeline by kind of work" },
       lanes.map((kind, i) => [sv("text", { x: L - 8, y: T + i * lane + lane / 2 + 4, class: "tick", "text-anchor": "end" }, workLabel(kind)),
         sv("line", { x1: L, x2: W - R, y1: T + (i + 1) * lane, y2: T + (i + 1) * lane, class: "grid" })]),
       [0, .25, .5, .75, 1].map(f => [sv("line", { x1: X(a + f * (b - a)), x2: X(a + f * (b - a)), y1: T, y2: H - B, class: "grid" }),
         sv("text", { x: X(a + f * (b - a)), y: H - 8, class: "tick", "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" }, `+${dur(f * (b - a)) || "0s"}`)]),
-      inspector.model.marks.filter(m => m.name === "pass" && m.t > a && m.t < b).map(m =>
-        sv("line", { x1: X(m.t), x2: X(m.t), y1: T, y2: H - B, class: "pass-line" }, sv("title", {}, `Pass ${m.n}`))),
+      bands.length > 1 ? bands.map(([p, [t0, t1]], i) => [sv("rect", { x: X(t0), y: 2, width: Math.max(1, X(t1) - X(t0)), height: H - B - 2, class: `alt-band${i % 2 ? " odd" : ""}` }),
+        sv("text", { x: (X(t0) + X(t1)) / 2, y: 12, class: "tick alt-band-label", "text-anchor": "middle" }, p == null ? "S" : String(p))]) : "",
       order.map(({ n, kind, t0, t1 }) => {
         const y = T + lanes.indexOf(kind) * lane + 3, width = Math.max(3, X(t1) - X(t0));
         return taskSvg(n, { class: `alt-time-task${n.id === selected ? " sel" : ""}`, "data-kind": kind, "aria-pressed": String(n.id === selected),
@@ -199,20 +289,20 @@ export function liveAltTab(ctx) {
             choice = { ids: hits.sort((x, y) => y.depth - x.depth || y.n.t0 - x.n.t0).map(x => x.n.id), kind };
             render(); panel.querySelector(".alt-choice [data-task]")?.focus({ preventScroll: true });
           } },
-          sv("title", {}, `${n.name}${n.why ? " · " + n.why : ""} · ${state(n)} · ${dur(n.seconds ?? now - n.t0)}`),
+          sv("title", {}, `${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}`),
           sv("rect", { x: X(t0), y, width, height: lane - 6, rx: 2, fill: COLORS[kind], class: `bar ${state(n)}` }));
       }),
+      cuts.map(([kind, t]) => sv("rect", { x: X(t) - .75, y: T + lanes.indexOf(kind) * lane + 3, width: 1.5, height: lane - 6, class: "alt-cut", "pointer-events": "none" })),
       agents.map(({ kind, t0, t1 }) => sv("rect", {
         x: X(t0), y: T + lanes.indexOf(kind) * lane + lane - 8,
         width: Math.max(3, X(t1) - X(t0)), height: 5, rx: 1, fill: AGENT_COLOR, class: "agent-time", "pointer-events": "none" }))),
-      h("p", { class: "muted small tl-legend" }, agents.length ? h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work") : "",
-        "Dashed: a pass begins."),
+      agents.length ? h("p", { class: "muted small tl-legend" }, h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work")) : "",
       choice ? h("div", { class: "alt-choice", role: "group", "aria-label": "Tasks side by side", onkeydown: event => {
         if (event.key === "Escape") { event.preventDefault(); choice = null; reveal = true; render(); }
       } }, h("div", { class: "alt-choice-head" }, h("strong", {}, `${workLabel(choice.kind)} · side by side here`),
         h("button", { type: "button", class: "small", "aria-label": "Close the tasks side by side", onclick: () => { choice = null; render(); } }, "×")),
         choice.ids.map(id => inspector.model.nodes.get(id)).filter(Boolean).map(n => h("button", {
-          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, n.name, n.why ? h("small", { class: "muted" }, " · " + n.why) : ""), h("small", { class: "muted" }, state(n))))) : "");
+          ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, taskLabel(n)), h("small", { class: "muted" }, state(n))))) : "");
   }
   async function load(validPage) {
     close(); valid = validPage;
@@ -303,6 +393,8 @@ export function liveAltTab(ctx) {
     catch (error) { if (validPage()) ctx.body.replaceChildren(card(null, empty(`Starts unavailable: ${error.message}`), { actions: [h("button", { type: "button", onclick: show }, "Retry")] })); return; }
     if (!validPage()) return;
     history = got;
+    notes = {};
+    api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => { notes = docNotes(d.raw, d.document); queue(); }).catch(() => {});
     const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));
     startSel.value = history.starts.some(s => !s.running && String(s.id) === startId) ? startId : "current"; startId = startSel.value;
@@ -332,7 +424,11 @@ export function liveAltTab(ctx) {
       event.preventDefault(); stepBy(event.key === "ArrowUp" ? -1 : 1);
     } });
     ctx.subHolder.append(controls);
-    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, stepper), panel], { cls: "alt-visual-card" }),
+    const foldBtn = h("button", { type: "button", class: "small alt-fold-done", title: "Fold what has finished", "aria-pressed": "true", onclick: () => {
+      foldDone = !foldDone; folded.clear(); opened.clear(); foldBtn.setAttribute("aria-pressed", String(foldDone)); foldBtn.classList.toggle("on", foldDone); render();
+    } }, "⊟");
+    foldBtn.classList.add("on");
+    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, h("div", { class: "alt-list-tools" }, foldBtn, stepper)), panel], { cls: "alt-visual-card" }),
       card(null, [h("div", { class: "alt-detail-actions" }, locateBtn, logLink), detailHost], { cls: "alt-inspector-card" }));
     ctx.body.replaceChildren(h("div", { class: "live-alt" }, notice, split));
     await load(validPage);

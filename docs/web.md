@@ -175,10 +175,18 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
   14:03:22`; one setting for both logs, per browser, on by default). A docked line sends notes
   (Enter sends, Shift+Enter breaks) and answers the agent's question. Standings: counts, frontier,
   parts.
-- **LiveAlt:** an alternative layout: **Tree**, **Graph**, **Timeline** of the same journal;
-  pick **Start** and **Current** / **All passes** / a **Pass** (including pass 0). Selecting a
-  task pins its inspector; **Current** resumes following. Inputs (prompts, commands, stdin up to
-  48,000 characters), output and conversations together, with Raw and Fullscreen.
+- **LiveAlt:** an alternative layout: **Tree**, **Graph**, **Timeline** of the same journal, in one
+  palette (setup grey, search yellow, design indigo, check green, measure cyan, choose orange,
+  critic olive, the agent pink); pick **Start** and **Current** / **All passes** / a **Pass**
+  (including pass 0). **Tree:** one line per task, tinted by kind and named kind first
+  (`Search · lut-chunk=4`, `Check · golden`), a spinner while it runs; the steps every pass starts
+  with fold to `Setup · N steps`, and **⊟** folds what has finished. **Graph:** the pass as a
+  flow (Search → Design → Check → Measure → Choose → Critic; setup and the baseline have their
+  own), each box with what it is set to, ✓/✗, step bars, `×N` when it ran again; with All passes,
+  the chain of passes over the chosen one's flow. **Timeline:** Live's lanes, quiet numbered pass
+  bands, steps back to back as one bar. Selecting a task pins its inspector (which keeps the
+  engine's own name); **Following** resumes. Inputs (prompts, commands, stdin up to 48,000
+  characters), output and conversations together, with Raw and Fullscreen.
 - **Long runs** (D759): Tasks opens on the last 30 passes (**Earlier** loads the rest), at most
   24 MB (the oldest whole pass that fits, or the newest pass's tail); **Show more** expands large
   lists. A resumed loop keeps a design its judge already admitted unless the gate, its files, the

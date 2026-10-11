@@ -272,16 +272,17 @@ def test_complexity_reads_any_source_and_fails_a_tangled_function(tmp_path):
     assert "functions=2" in _fluxpreset("complexity", str(tmp_path / "design"), "--ext", ".c").stdout
 
 
+@pytest.mark.heavy          # timing: seconds of sleeps, and a loaded machine stretches the start-up
 def test_scaling_tells_linear_from_quadratic(tmp_path):
     sleeps = lambda ms: ["--", sys.executable, "-c", f"import sys, time; n = int(sys.argv[1]); time.sleep({ms})", "{n}"]  # noqa: E731
-    linear = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("n * 5e-4"))
-    square = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("(n / 100) ** 2 * 2e-2"))
+    linear = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("n * 2e-3"))
+    square = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", *sleeps("(n / 100) ** 2 * 25e-3"))
     k = lambda r: float(r.stdout.split("scaling_exponent=")[1].split()[0])  # noqa: E731
     # a loaded machine (the full check runs suites side by side) blurs the exponent; the order stays
     assert linear.returncode == 0 and 0.7 < k(linear) < 1.3, linear.stdout + linear.stderr
     assert square.returncode == 0 and k(square) > 1.5 and k(square) - k(linear) > 0.4, square.stdout + square.stderr
     gate = _fluxpreset("scaling", "--sizes", "100,200,400,800", "--runs", "1", "--max-exponent", "1.3",
-                       *sleeps("(n / 100) ** 2 * 2e-2"))
+                       *sleeps("(n / 100) ** 2 * 25e-3"))
     assert gate.returncode == 1 and gate.stdout.strip().endswith("1 failing")
     assert _fluxpreset("scaling", "--", "true").returncode == 2, "a command without {n} is refused"
 

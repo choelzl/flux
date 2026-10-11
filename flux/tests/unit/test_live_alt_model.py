@@ -150,3 +150,12 @@ def test_campaign_lookup_uses_nearest_earlier_campaign_and_unsorted_start_bounda
     literal = json.dumps(history)
     assert evaluate([], f"campaignForStart({literal},{literal}.starts[1]).campaign_id") == "old"
     assert evaluate([], f"campaignForStart({literal},{literal}.starts[2]).campaign_id") == "resumed"
+
+
+def test_tasks_before_the_first_mark_are_the_pass_before_it_as_live_counts():
+    """D978: the engine marks passes from the second on; what ran before is pass 1 -- not Setup --
+    while the run's own setup (validate, digest, plan) and what precedes a baseline stay Setup."""
+    events = [start(1, 1, name="validate: the document"), end(1, 1.5), start(2, 2, name="propose: decompose"), end(2, 3),
+              start(3, 3, name="DSE: batch"), end(3, 9), mark(2, 10), start(4, 11, name="DSE: batch"), end(4, 12)]
+    got = evaluate(events, "(() => { const m=taskScope(model,'all').membership; return [1,2,3,4].map(id=>m.get(id)); })()")
+    assert got == [None, 1, 1, 2]

@@ -1,6 +1,7 @@
 // Shared timeline colours: work keeps its colour, agent activity is an overlay.
-export const WORK_COLORS = { setup: "#8f9aa6", plan: "#c98a56", search: "#d9b440", design: "#5b8def",
-  check: "#4fb286", measure: "#48b3c9", choose: "#e8804f", critic: "#a3c956" };
+// D978: palette A4 -- one meaning per colour in the tree, the graph and the timeline; the agent keeps its pink
+export const WORK_COLORS = { setup: "#8f9aa6", plan: "#c98a56", search: "#d9b440", design: "#5b6ee8",
+  check: "#3faa78", measure: "#2fb0c6", choose: "#e8804f", critic: "#97b84a" };
 export const AGENT_COLOR = "#d45eae";
 export const workLabel = kind => kind[0].toUpperCase() + kind.slice(1);
 
