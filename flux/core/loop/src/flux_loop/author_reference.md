@@ -143,12 +143,14 @@ starting with `flux` runs this Flux.
 ## Flux's helpers
 
 The checks and measurements Flux ships are its helpers, run as `fluxhelper NAME ...` (like `flux`, nothing on PATH needed):
-`golden` (RTL against golden.py), `rtl lint|measure|cycles|equiv|breakdown|fmax|power` (Verilator
+`golden` (RTL against golden.py), `rtl lint|measure|cycles|equiv|breakdown|fmax|power|energy|path` (Verilator
 defects; OpenROAD-flow-scripts on ASAP7; latency; formal equivalence to a reference; the area by kind;
-the fastest closing clock; power from the vectors' own switching), `cases` / `ccases` (a Python or C
+the fastest closing clock; power from the vectors' own switching; energy per result; the critical path), `cases` / `ccases` (a Python or C
 function against a Python reference), `accuracy` (how far an approximation is), `pytest` (your tests on
 the design), `sanitize` (C/C++ memory and UB errors), `prog time|count|memory|size`, `bench` (a Python
-function's time) and `champsim build|check|run|stats`. `fluxhelper` lists them. Nothing is copied into the loop's folder. Any other check or
+function's time), `timebound` (a Python function over a time budget), `systemc` (SystemC to
+SystemVerilog through ICSC, then another helper), `regress` (any command's numbers against a baseline),
+`extract` (a tool's JSON/CSV/text as `name=value`) and `champsim build|check|run|stats`. `fluxhelper` lists them. Nothing is copied into the loop's folder. Any other check or
 measurement is a script of the application's own, called with `{python} {home}/script.py`.
 Set `language: systemverilog` or `language: cpp` explicitly;
 an arbitrary script does not imply a language. List every stage's `metrics` and `needs`.

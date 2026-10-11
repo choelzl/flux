@@ -6,6 +6,8 @@
     fluxhelper rtl breakdown DESIGN.sv                 # area_seq_um2= area_arith_um2= area_xor_um2= area_buf_um2= ...
     fluxhelper rtl fmax DESIGN.sv --stage synth        # fmax_closed_mhz= closed_period_ps= runs=
     fluxhelper rtl power DESIGN.sv --golden golden.py --stage place   # power_w= with the vectors' own switching
+    fluxhelper rtl energy DESIGN.sv --golden golden.py # energy_pj_per_result= edp_pj_ns=
+    fluxhelper rtl path DESIGN.sv --stage place        # path_levels= path_cell_ps= path_wire_ps=
     fluxhelper rtl measure DESIGN.sv --stage stat|synth|place|route --clock-ps 1000
     # one line: fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... (stat: area_um2, cell_count)
 
@@ -97,7 +99,22 @@ def catalog() -> list[dict]:
              "params": {"golden": param("Golden model", "{home}/golden.py"), "stage": param("Stage (synth, place)", "place"),
                         "clock_ps": param("Clock period", 1000, "ps")},
              "metrics": metrics("power_w", "power_internal_w", "power_switching_w", "power_leakage_w"),
-             "needs": ["verilator", "yosys", "openroad", "sta", "make"], "languages": HDL, "kinds": ["rtl"], "short": "power"}]
+             "needs": ["verilator", "yosys", "openroad", "sta", "make"], "languages": HDL, "kinds": ["rtl"], "short": "power"},
+            {"id": "rtl-energy", "role": "stage", "title": "Energy per result (ASAP7)",
+             "what": "The power the golden vectors' own switching draws, times the time one result takes (its measured "
+                     "cycles at the clock): energy per result and energy-delay product.",
+             "run": "fluxhelper rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+             "params": {"golden": param("Golden model", "{home}/golden.py"), "stage": param("Stage (synth, place)", "place"),
+                        "clock_ps": param("Clock period", 1000, "ps")},
+             "metrics": metrics("energy_pj_per_result", "edp_pj_ns", "power_w", "cycles_per_result"),
+             "needs": ["verilator", "yosys", "openroad", "sta", "make"], "languages": HDL, "kinds": ["rtl"], "short": "energy"},
+            {"id": "rtl-path", "role": "stage", "title": "The critical path's anatomy (ASAP7)",
+             "what": "OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the "
+                     "cells and how much in the wires -- whether to cut logic or wire.",
+             "run": "fluxhelper rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
+             "params": {"stage": param("Stage (synth, place, route)", "place"), "clock_ps": param("Clock period", 1000, "ps")},
+             "metrics": metrics("path_ps", "path_levels", "path_cell_ps", "path_wire_ps", "slack_ps"),
+             "needs": ["yosys", "openroad", "sta", "make"], "languages": HDL, "kinds": ["rtl"], "short": "path"}]
 
 
 def flow_home() -> Path:
@@ -224,6 +241,11 @@ def fmax(source: str, module: str | None = None, *, stage: str = "synth", clock_
 
 def power(source: str, golden: str, module: str | None = None, *, stage: str = "place", clock_ps: float = 1000.0,
           timeout_s: float = 1800.0) -> dict[str, Any]:
+    return _power(source, golden, module, stage=stage, clock_ps=clock_ps, timeout_s=timeout_s)[0]
+
+
+def _power(source: str, golden: str, module: str | None = None, *, stage: str = "place", clock_ps: float = 1000.0,
+           timeout_s: float = 1800.0) -> tuple[dict[str, Any], Any]:
     """Power with the golden vectors' own switching (D972): Verilator runs them and writes a VCD, and
     OpenROAD reads it on the design ORFS made (`synth` or `place`) before reporting power."""
     from .golden import check_rtl, load_golden
@@ -233,7 +255,12 @@ def power(source: str, golden: str, module: str | None = None, *, stage: str = "
     with tempfile.TemporaryDirectory(prefix="flux-rtl-") as d:
         work = Path(d)
         vcd = work / "activity.vcd"
-        checked = check_rtl(source, load_golden(golden), module=module, timeout_s=timeout_s, vcd=vcd)
+        from dataclasses import replace
+
+        g = load_golden(golden)
+        if g.clocked:              # start/done driven whatever LATENCY says (or none): its cycles measured, not checked
+            g = replace(g, latency=g.latency if g.latency is not None else 0)
+        checked = check_rtl(source, g, module=module, timeout_s=timeout_s, vcd=vcd, claim=False)
         if not checked.ok:
             raise SystemExit("a design that fails its golden vectors has no activity to measure: " + checked.why)
         run = _orfs(work, source, module, clock_ps, 40, timeout_s)
@@ -248,7 +275,57 @@ def power(source: str, golden: str, module: str | None = None, *, stage: str = "
     if not total:
         raise SystemExit(f"OpenROAD's power report is unreadable:\n{out[-1500:]}")
     internal, switching, leakage, all_ = (float(x) for x in total.groups())
-    return {"power_w": all_, "power_internal_w": internal, "power_switching_w": switching, "power_leakage_w": leakage}
+    return ({"power_w": all_, "power_internal_w": internal, "power_switching_w": switching, "power_leakage_w": leakage},
+            checked)
+
+
+def energy(source: str, golden: str, module: str | None = None, *, stage: str = "place", clock_ps: float = 1000.0,
+           timeout_s: float = 1800.0) -> dict[str, Any]:
+    """Energy per result (D973): the power the vectors' own switching draws, times the time one
+    result takes -- its measured cycles at the clock (a design without a clock: one clock period)."""
+    got, checked = _power(source, golden, module, stage=stage, clock_ps=clock_ps, timeout_s=timeout_s)
+    cycles = sum(checked.cycles) / len(checked.cycles) if checked.cycles else 1.0
+    result_ps = cycles * clock_ps
+    energy_pj = got["power_w"] * result_ps                      # W x ps = pJ
+    return {"energy_pj_per_result": energy_pj, "edp_pj_ns": energy_pj * result_ps / 1000, "power_w": got["power_w"],
+            "cycles_per_result": cycles, "time_per_result_ns": result_ps / 1000}
+
+
+def path(source: str, module: str | None = None, *, stage: str = "place", clock_ps: float = 1000.0,
+         timeout_s: float = 1800.0, utilization: float = 40) -> dict[str, Any]:
+    """The critical path's anatomy (D973): its cells, and how much of its delay is in cells and
+    how much in wires, from OpenROAD's report at the stage; its start and end go to stderr."""
+    import sys
+
+    module = _module(source, module)
+    target, odb, parasitics = {"synth": ("floorplan", "2_floorplan", ""),
+                               "place": ("place", "3_place", "estimate_parasitics -placement\n"),
+                               "route": ("route", "5_route", "estimate_parasitics -global_routing\n")}[stage]
+    with tempfile.TemporaryDirectory(prefix="flux-rtl-") as d:
+        work = Path(d)
+        run = _orfs(work, source, module, clock_ps, utilization, timeout_s)
+        run(target)
+        (work / "path.tcl").write_text("source $::env(SCRIPTS_DIR)/load.tcl\n"
+                                       f"load_design {odb}.odb {odb}.sdc\n{parasitics}report_checks -path_delay max -format json\n")
+        out = run("run", f"RUN_SCRIPT={work / 'path.tcl'}")
+    start = out.find('{"checks"')
+    if start < 0:
+        raise SystemExit(f"OpenROAD's path report is unreadable:\n{out[-1500:]}")
+    check = json.JSONDecoder().raw_decode(out[start:])[0]["checks"][0]
+    pins = max((v for v in check.values() if isinstance(v, list) and v and isinstance(v[0], dict) and "arrival" in v[0]), key=len)
+    cell_ps = wire_ps = 0.0
+    cells = []
+    for before, pin in zip(pins, pins[1:]):
+        step = (float(pin["arrival"]) - float(before["arrival"])) * 1e12
+        inst = pin.get("instance") or ""
+        if inst and inst == (before.get("instance") or ""):
+            cell_ps += step
+            cells.append(pin.get("cell", ""))
+        else:
+            wire_ps += step
+    print(f"critical path: {pins[0].get('pin')} -> {pins[-1].get('pin')} through {' '.join(cells)}", file=sys.stderr)
+    return {"path_ps": float(check.get("data_arrival_time", pins[-1]["arrival"])) * 1e12, "path_levels": len(cells),
+            "path_cell_ps": cell_ps, "path_wire_ps": wire_ps, "slack_ps": float(check.get("slack", 0.0)) * 1e12}
 
 
 def equiv(path: str, reference: str, module: str | None = None, timeout_s: float = 600.0) -> tuple[int, list[str]]:
@@ -348,6 +425,20 @@ def main(argv: list[str] | None = None) -> int:
     pw.add_argument("--clock-ps", type=float, default=1000.0)
     pw.add_argument("--module")
     pw.add_argument("--timeout", type=float, default=1800.0)
+    en = sub.add_parser("energy", help="energy per result: the vectors' own switching power times the time a result takes")
+    en.add_argument("artifact")
+    en.add_argument("--golden", required=True)
+    en.add_argument("--stage", choices=("synth", "place"), default="place")
+    en.add_argument("--clock-ps", type=float, default=1000.0)
+    en.add_argument("--module")
+    en.add_argument("--timeout", type=float, default=1800.0)
+    pa = sub.add_parser("path", help="the critical path's cells, and its delay in cells and in wires")
+    pa.add_argument("artifact")
+    pa.add_argument("--stage", choices=("synth", "place", "route"), default="place")
+    pa.add_argument("--clock-ps", type=float, default=1000.0)
+    pa.add_argument("--module")
+    pa.add_argument("--utilization", type=float, default=40)
+    pa.add_argument("--timeout", type=float, default=1800.0)
     cy = sub.add_parser("cycles", help="a clocked design's cycles over golden.py's vectors (Verilator)")
     cy.add_argument("artifact")
     cy.add_argument("--golden", required=True)
@@ -370,8 +461,12 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(lines))
         return code
     source = Path(a.artifact).read_text()
-    if a.command in ("breakdown", "fmax", "power"):
+    if a.command in ("breakdown", "fmax", "power", "energy", "path"):
         got = (breakdown(source, a.module, clock_ps=a.clock_ps, timeout_s=a.timeout) if a.command == "breakdown" else
+               energy(source, a.golden, a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout)
+               if a.command == "energy" else
+               path(source, a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout, utilization=a.utilization)
+               if a.command == "path" else
                fmax(source, a.module, stage=a.stage, clock_ps=a.clock_ps, steps=a.steps, timeout_s=a.timeout,
                     utilization=a.utilization) if a.command == "fmax" else
                power(source, a.golden, a.module, stage=a.stage, clock_ps=a.clock_ps, timeout_s=a.timeout))

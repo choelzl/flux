@@ -771,6 +771,16 @@ OpenROAD report power with it: `power_w`, `power_internal_w`, `power_switching_w
 `fluxhelper champsim stats` runs the prefetcher and the run without it on every trace: `l2_mpki`,
 `l2_mpki_baseline`, `pf_coverage` (the share of misses removed), `pf_accuracy`, `pf_late`, `pf_useless`,
 `pf_issued_pki`, `geomean_speedup`.
+`fluxhelper timebound` fails a Python function slower than `--max-ms` (the fastest of `--runs`; one
+stuck past the budget is stopped). `fluxhelper rtl energy` turns `rtl power` into per-result numbers:
+`energy_pj_per_result`, `edp_pj_ns`, `cycles_per_result`, `time_per_result_ns`. `fluxhelper rtl path`
+prints the critical path: `path_ps`, `path_levels`, `path_cell_ps`, `path_wire_ps`, `slack_ps` (its
+cells on stderr). `fluxhelper systemc` translates a SystemC module to SystemVerilog through ICSC; alone
+it checks that it translates, and `--then "golden --golden g.py"` or `--then "rtl measure --stage
+stat"` runs that helper on the translation. `fluxhelper regress -- CMD` compares a command's
+`name=value` with a baseline file (`--record` writes it; `--tol` percent, `--higher` for metrics where
+more is better). `fluxhelper extract -- CMD` turns a tool's JSON, CSV or text into `name=value`
+(`--pick PATH=name`, a dotted path, a column or a regex group).
 
 ## Flux helpers
 
@@ -781,7 +791,11 @@ document, or in a shell inside the dev shell. `fluxhelper` alone lists them; `fl
 | Helper | Commands |
 |---|---|
 | `golden` | `fluxhelper golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
-| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py`; `fluxhelper rtl equiv DESIGN --reference ref.sv`; `fluxhelper rtl breakdown DESIGN`; `fluxhelper rtl fmax DESIGN --stage synth [--steps 6]`; `fluxhelper rtl power DESIGN --golden golden.py --stage place` |
+| `rtl` | `fluxhelper rtl lint DESIGN`; `fluxhelper rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxhelper rtl cycles DESIGN --golden golden.py`; `fluxhelper rtl equiv DESIGN --reference ref.sv`; `fluxhelper rtl breakdown DESIGN`; `fluxhelper rtl fmax DESIGN --stage synth [--steps 6]`; `fluxhelper rtl power DESIGN --golden golden.py --stage place`; `fluxhelper rtl energy DESIGN --golden golden.py --stage place`; `fluxhelper rtl path DESIGN --stage place` |
+| `systemc` | `fluxhelper systemc DESIGN.h --top M --golden golden.py [--then "golden --golden golden.py"]` |
+| `timebound` | `fluxhelper timebound DESIGN.py --call F --args "(1000,)" --max-ms 50` |
+| `regress` | `fluxhelper regress --baseline base.json [--tol 5] [--record] -- CMD` |
+| `extract` | `fluxhelper extract [--format json\|csv\|regex] --pick PATH=name -- CMD` |
 | `cases` | `fluxhelper cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
 | `pytest` | `fluxhelper pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
 | `ccases` | `fluxhelper ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |

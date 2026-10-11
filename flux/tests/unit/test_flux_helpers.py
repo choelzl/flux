@@ -29,7 +29,8 @@ def _fluxhelper(*args: str, stdin=subprocess.DEVNULL) -> subprocess.CompletedPro
 
 def test_the_helpers_are_the_modules_that_say_their_entries():
     helpers = _helpers()
-    assert {"golden", "rtl", "prog", "bench", "champsim", "cases", "pytest", "ccases", "sanitize", "accuracy"} <= set(helpers)
+    assert {"golden", "rtl", "prog", "bench", "champsim", "cases", "pytest", "ccases", "sanitize", "accuracy",
+            "timebound", "regress", "extract", "systemc"} <= set(helpers)
     for name, entries in helpers.items():
         mod = importlib.import_module(f"flux_helpers.{name}")
         assert callable(getattr(mod, "main", None)), f"{name}: main(argv)"
@@ -54,7 +55,7 @@ def test_fluxhelper_lists_describes_and_refuses_an_unknown_helper():
     assert listed.returncode == 0 and "rtl" in listed.stdout and "golden" in listed.stdout
     described = json.loads(_fluxhelper("describe", "rtl").stdout)
     assert {e["id"] for e in described} >= {"rtl-lint", "rtl-stat", "rtl-synth", "rtl-place", "rtl-route", "rtl-cycles", "rtl-equiv",
-                                            "rtl-breakdown", "rtl-fmax", "rtl-power"}
+                                            "rtl-breakdown", "rtl-fmax", "rtl-power", "rtl-energy", "rtl-path"}
     assert _fluxhelper("nope").returncode == 2 and _fluxhelper("describe", "nope").returncode == 2
 
 
@@ -187,3 +188,57 @@ def test_rtl_equiv_proves_or_shows_a_counterexample(tmp_path):
     off = _fluxhelper("rtl", "equiv", str(tmp_path / "off.sv"), "--reference", str(tmp_path / "ref.sv"))
     assert same.returncode == 0 and same.stdout.strip() == "0 failing", same.stdout + same.stderr
     assert off.returncode == 1 and "input a = 3" in off.stdout, off.stdout
+
+
+# ---- D973: timebound, regress, extract, systemc, rtl path, rtl energy
+def test_timebound_fails_a_design_over_its_budget(tmp_path):
+    (tmp_path / "t.py").write_text("def slow(n):\n    return sum(i * j for i in range(n) for j in range(n))\n\n"
+                                   "def fast(n):\n    return (n * (n - 1) // 2) ** 2\n")
+    slow = _fluxhelper("timebound", str(tmp_path / "t.py"), "--call", "slow", "--args", "(1500,)", "--max-ms", "20")
+    fast = _fluxhelper("timebound", str(tmp_path / "t.py"), "--call", "fast", "--args", "(1500,)", "--max-ms", "20")
+    assert slow.returncode == 1 and "over 20 ms" in slow.stdout and slow.stdout.strip().endswith("1 failing")
+    assert fast.returncode == 0 and fast.stdout.strip().endswith("0 failing")
+    (tmp_path / "forever.py").write_text("def f():\n    while True:\n        pass\n")
+    stuck = _fluxhelper("timebound", str(tmp_path / "forever.py"), "--call", "f", "--max-ms", "100", "--runs", "1")
+    assert stuck.returncode == 1 and "did not finish" in stuck.stdout
+
+
+def test_regress_records_a_baseline_and_fails_a_worse_run(tmp_path):
+    base = tmp_path / "b.json"
+    say = lambda v: ["--", sys.executable, "-c", f"print('time_ms={v} runs=5')"]  # noqa: E731
+    assert _fluxhelper("regress", "--baseline", str(base), "--metrics", "time_ms", "--record", *say(10)).returncode == 0
+    assert json.loads(base.read_text()) == {"time_ms": 10.0}
+    assert _fluxhelper("regress", "--baseline", str(base), "--tol", "5", *say(10.4)).returncode == 0
+    worse = _fluxhelper("regress", "--baseline", str(base), "--tol", "5", *say(12))
+    assert worse.returncode == 1 and "FAIL time_ms: 12" in worse.stdout
+    assert _fluxhelper("regress", "--baseline", str(base), "--higher", "time_ms", *say(12)).returncode == 0
+
+
+def test_extract_turns_json_csv_and_text_into_name_value(tmp_path):
+    (tmp_path / "o.json").write_text('{"results": {"latency": [3.5, 7.25]}, "ok": 1}')
+    (tmp_path / "o.csv").write_text("step,runtime\n1,10\n2,14\n")
+    cat = lambda f: ["--", "cat", str(tmp_path / f)]  # noqa: E731
+    r = _fluxhelper("extract", "--pick", "results.latency.1=latency_ms", "--pick", "ok=ok", *cat("o.json"))
+    assert r.returncode == 0 and r.stdout.split() == ["latency_ms=7.25", "ok=1"]
+    assert _fluxhelper("extract", "--format", "csv", "--pick", "runtime=t", "--row", "max", *cat("o.csv")).stdout.strip() == "t=14"
+    assert _fluxhelper("extract", "--format", "regex", "--pick", r"(\d+),14=step", *cat("o.csv")).stdout.strip() == "step=2"
+    assert _fluxhelper("extract", "--pick", "nope=x", *cat("o.json")).returncode == 1
+
+
+@pytest.mark.heavy
+def test_systemc_translates_and_hands_the_rtl_on(tmp_path):
+    from flux_loop.systemc_proto import icsc
+
+    if icsc() is None or __import__("shutil").which("verilator") is None:
+        pytest.skip("needs ICSC and Verilator")
+    (tmp_path / "add4.h").write_text("#include <systemc.h>\nSC_MODULE(add4) {\n  sc_in<sc_uint<4>> a, b;\n  sc_out<sc_uint<5>> s;\n"
+                                     "  void run() { s.write(a.read() + b.read()); }\n  SC_CTOR(add4) { SC_METHOD(run); sensitive << a << b; }\n};\n")
+    (tmp_path / "g.py").write_text("PORTS = [{'name': 'a', 'dir': 'in', 'bits': 4, 'unsigned': True}, {'name': 'b', 'dir': 'in', "
+                                   "'bits': 4, 'unsigned': True}, {'name': 's', 'dir': 'out', 'bits': 5, 'unsigned': True}]\n"
+                                   "def golden(a, b):\n    return {'s': a + b}\n")
+    args = [str(tmp_path / "add4.h"), "--top", "add4", "--golden", str(tmp_path / "g.py")]
+    assert _fluxhelper("systemc", *args).stdout.strip() == "0 failing"
+    tested = _fluxhelper("systemc", *args, "--then", f"golden --golden {tmp_path / 'g.py'}")
+    assert tested.returncode == 0 and tested.stdout.strip().startswith("0 failing of"), tested.stdout + tested.stderr
+    (tmp_path / "bad.h").write_text("SC_MODULE(add4) { this is not C++ };\n")
+    assert _fluxhelper("systemc", str(tmp_path / "bad.h"), *args[1:]).returncode == 3

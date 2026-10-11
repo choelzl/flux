@@ -389,6 +389,39 @@
   "helper": true
  },
  {
+  "id": "extract",
+  "role": "stage",
+  "title": "Numbers out of any tool's output",
+  "what": "Runs your tool and reads its JSON, CSV or text output, printing the numbers you pick as name=value.",
+  "run": "fluxhelper extract --format {format} --pick {pick} -- {command}",
+  "params": {
+   "format": {
+    "label": "Format (json, csv, regex)",
+    "default": "json",
+    "unit": ""
+   },
+   "pick": {
+    "label": "Pick (source=name)",
+    "default": "value=metric",
+    "unit": ""
+   },
+   "command": {
+    "label": "Tool command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "extract",
+  "helper_module": "extract",
+  "helper": true
+ },
+ {
   "id": "rtl-golden",
   "role": "check",
   "title": "Test against a golden model",
@@ -602,6 +635,39 @@
   ],
   "short": "pytest",
   "helper_module": "pytest",
+  "helper": true
+ },
+ {
+  "id": "regress",
+  "role": "check",
+  "title": "No worse than a baseline",
+  "what": "Runs any measurement again and fails when a metric is worse than the recorded baseline by more than the tolerance.",
+  "run": "fluxhelper regress --baseline {baseline} --tol {tol} -- {command}",
+  "params": {
+   "baseline": {
+    "label": "Baseline (JSON)",
+    "default": "{home}/baseline.json",
+    "unit": ""
+   },
+   "tol": {
+    "label": "Tolerance",
+    "default": 5,
+    "unit": "%"
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "regress",
+  "helper_module": "regress",
   "helper": true
  },
  {
@@ -960,6 +1026,95 @@
   "helper": true
  },
  {
+  "id": "rtl-energy",
+  "role": "stage",
+  "title": "Energy per result (ASAP7)",
+  "what": "The power the golden vectors' own switching draws, times the time one result takes (its measured cycles at the clock): energy per result and energy-delay product.",
+  "run": "fluxhelper rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   },
+   "stage": {
+    "label": "Stage (synth, place)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "energy_pj_per_result": "",
+   "edp_pj_ns": "",
+   "power_w": "W",
+   "cycles_per_result": ""
+  },
+  "needs": [
+   "verilator",
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "energy",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
+  "id": "rtl-path",
+  "role": "stage",
+  "title": "The critical path's anatomy (ASAP7)",
+  "what": "OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the cells and how much in the wires -- whether to cut logic or wire.",
+  "run": "fluxhelper rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "stage": {
+    "label": "Stage (synth, place, route)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "path_ps": "ps",
+   "path_levels": "",
+   "path_cell_ps": "ps",
+   "path_wire_ps": "ps",
+   "slack_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "path",
+  "helper_module": "rtl",
+  "helper": true
+ },
+ {
   "id": "c-sanitize",
   "role": "check",
   "title": "Memory and undefined-behaviour errors",
@@ -990,6 +1145,105 @@
   ],
   "short": "sanitize",
   "helper_module": "sanitize",
+  "helper": true
+ },
+ {
+  "id": "systemc-translate",
+  "role": "check",
+  "title": "SystemC translates to RTL (ICSC)",
+  "what": "ICSC translates the SystemC module to SystemVerilog: passes when it does, and when the ports are the golden model's.",
+  "run": "fluxhelper systemc {artifact} --top {top} --golden {golden}",
+  "params": {
+   "top": {
+    "label": "Top module",
+    "default": "top",
+    "unit": ""
+   },
+   "golden": {
+    "label": "Golden model (its PORTS)",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not translate",
+  "languages": [
+   "cpp",
+   "systemc"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "translate",
+  "helper_module": "systemc",
+  "helper": true
+ },
+ {
+  "id": "systemc-golden",
+  "role": "check",
+  "title": "SystemC against a golden model",
+  "what": "ICSC translates the SystemC module, then Verilator runs the RTL on golden.py's vectors.",
+  "run": "fluxhelper systemc {artifact} --top {top} --golden {golden} --then \"golden --golden {golden}\"",
+  "params": {
+   "top": {
+    "label": "Top module",
+    "default": "top",
+    "unit": ""
+   },
+   "golden": {
+    "label": "Golden model (its PORTS)",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "verilator"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not translate",
+  "languages": [
+   "cpp",
+   "systemc"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "golden",
+  "helper_module": "systemc",
+  "helper": true
+ },
+ {
+  "id": "python-timebound",
+  "role": "check",
+  "title": "Within a time budget",
+  "what": "Times one call of the design's function on a large input and fails a design slower than the budget, before the costly benchmark.",
+  "run": "fluxhelper timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "args": {
+    "label": "Arguments (a Python literal)",
+    "default": "()",
+    "unit": ""
+   },
+   "max_ms": {
+    "label": "Budget",
+    "default": 1000,
+    "unit": "ms"
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "timebound",
+  "helper_module": "timebound",
   "helper": true
  }
 ]
