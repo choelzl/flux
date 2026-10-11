@@ -19,7 +19,7 @@ objectives:                 # 3% margin on shallower stages, 3% tie band
 
 flow:                       # every operator's, unless its folder says otherwise
   generate: claude    # D804: drafts each operator's prototype and RTL (a parent's command would compose)
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # {home}: the operator's folder
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py" # {home}: the operator's folder
   measure:
     synth:
       command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1250 --timeout 1200"

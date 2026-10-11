@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .rtl_check import Golden
+    from flux_loop.golden_model import Golden
 
 from .config import PeConfig, Shape
 
@@ -75,7 +75,7 @@ def golden_vectors(shape: Shape, *, seed: str, count: int = 200) -> list[dict[st
 def pe_golden(shape: Shape, cfg: PeConfig, vectors: list[dict[str, Any]]) -> "Golden":
     """The PE as a golden model for the harness's shared check: ports, the sum it must
     compute, this world's vectors and, when pipelined, the claimed latency."""
-    from .rtl_check import Golden
+    from flux_loop.golden_model import Golden
 
     ports = ([{"name": f"a{i}", "dir": "in", "bits": max(2, shape.in_bits)} for i in range(shape.lanes)]
              + [{"name": f"w{i}", "dir": "in", "bits": max(2, shape.w_bits)} for i in range(shape.lanes)]

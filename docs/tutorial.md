@@ -80,7 +80,7 @@ language: systemverilog
 
 flow:
 
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # refuses a wrong design first
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py" # refuses a wrong design first
 
   measure:                           # measurement, cheapest first
     screen:

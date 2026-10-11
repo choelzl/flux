@@ -168,7 +168,11 @@ class TaskSpec:
                     continue
                 if not isinstance(child, dict):
                     raise TaskError(f"subtasks[{i}] is a folder beside the document, or a task document (an object)")
-                subtasks.append(cls.from_dict(_inherited(doc, child), base))
+                try:                               # D967: its own surface read first, as a folder's is
+                    own = _lift(child)
+                except TaskError as exc:
+                    raise TaskError(f"subtasks[{i}]: {exc}") from exc
+                subtasks.append(cls.from_dict(_inherited(doc, own), base))
         if len({c.id for c in subtasks}) != len(subtasks):
             raise TaskError(f"subtask ids must be unique, got {[c.id for c in subtasks]}")
         flow, doc = _flow(doc)             # D542: the drawing's boxes, folded into the fields below
@@ -367,7 +371,7 @@ class TaskSpec:
             parts=tuple(parts), decompose=decompose,
             generator=dict(generator), roles=dict(roles), flow=dict(flow),
             subtasks=tuple(subtasks), split=split,
-            max_subtasks=int(doc.get("max_subtasks") or 4),
+            max_subtasks=_max_subtasks(doc.get("max_subtasks")),
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
@@ -472,6 +476,41 @@ def _with_workbench(task: "TaskSpec", where: str) -> "TaskSpec":
     return replace(task, workbench=where, subtasks=tuple(_with_workbench(c, where) for c in task.subtasks))
 
 
+def _max_subtasks(value: Any) -> int:
+    """`max_subtasks`: how many sub-tasks `subtasks: decompose` may make (D967: said wrongly, the
+    document's own error, not Python's)."""
+    if value is None:
+        return 4
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise TaskError(f"`max_subtasks` is a whole number of sub-tasks, at least 1, not {value!r}")
+    return value
+
+
+def _paths_beside(parent: dict[str, Any], base: Path) -> dict[str, Any]:
+    """The parent's relative paths made absolute, so a sub-task in another folder reads the
+    parent's files (D967): knowledge files and sheet, skills, and a search's `from:` globs."""
+    def _abs(f: Any) -> Any:
+        return f if not isinstance(f, str) or Path(f).is_absolute() else str((base / f).resolve())
+
+    def _space(knobs: Any) -> Any:
+        if not isinstance(knobs, dict):
+            return knobs
+        return {k: ({**v, "from": _abs(v["from"])} if isinstance(v, dict) and "from" in v
+                    else _space(v) if isinstance(v, dict) else v) for k, v in knobs.items()}
+
+    out = dict(parent)
+    know = out.get("knowledge")
+    if isinstance(know, dict):
+        out["knowledge"] = {k: ([_abs(x) for x in v] if k == "files" and isinstance(v, list) else _abs(v) if k == "sheet" else v)
+                            for k, v in know.items()}
+    skills = out.get("skills")
+    if skills:
+        out["skills"] = [_abs(x) for x in ([skills] if isinstance(skills, str) else skills)] if isinstance(skills, (str, list)) else skills
+    if isinstance(out.get("space"), dict):
+        out["space"] = _space(out["space"])
+    return out
+
+
 def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
     """A sub-task in a folder beside the parent (D801): its `problem.yaml` says only what
     differs; its id is the folder's name, its home the folder (its golden model, library/, ...)."""
@@ -493,13 +532,7 @@ def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":
         raise TaskError(f"subtasks: {rel}/{DOCUMENT_FILE} does not say its `id`: it is its folder's name (D786)")
     from dataclasses import replace
 
-    parent = dict(parent)
-    know = parent.get("knowledge")
-    if isinstance(know, dict):                             # the parent's files, beside the parent
-        def _abs(f: Any) -> Any:
-            return f if not isinstance(f, str) or Path(f).is_absolute() else str((Path(base) / f).resolve())
-        parent["knowledge"] = {k: ([_abs(x) for x in v] if k == "files" and isinstance(v, list) else _abs(v) if k == "sheet" else v)
-                               for k, v in know.items()}
+    parent = _paths_beside(parent, Path(base))
     try:
         own = _lift({**raw, "id": home.name})              # its own surface, read before it inherits
         child = replace(TaskSpec.from_dict(_inherited(parent, own), home), from_path=rel)

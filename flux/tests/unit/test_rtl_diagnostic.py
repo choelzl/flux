@@ -11,7 +11,7 @@ endmodule"""
 
 
 def test_the_diagnostic_names_the_models_line_quotes_it_and_hints():
-    from rtl import explain_diagnostic
+    from flux_loop.golden_model import explain_diagnostic
 
     msg = ("verilator exited 1:\n%Error: /tmp/x/dut.sv:5:29: syntax error, unexpected ',', expecting '}'\n"
            "%Error: Exiting due to 1 error(s)")
@@ -23,7 +23,7 @@ def test_the_diagnostic_names_the_models_line_quotes_it_and_hints():
 
 
 def test_a_diagnostic_that_maps_to_no_line_is_said_as_it_was():
-    from rtl import explain_diagnostic
+    from flux_loop.golden_model import explain_diagnostic
 
     assert explain_diagnostic("%Error: /tmp/x/dut.sv:40:1: whatever", SOURCE, prefix_lines=2) == "%Error: /tmp/x/dut.sv:40:1: whatever"
     assert explain_diagnostic("nothing structured\nmore", SOURCE) == "nothing structured"
@@ -35,7 +35,7 @@ def test_lint_pragmas_and_macarrays_rules_screen():
     """The lint pragmas a generated module is given (rtl.py), and the rules screen macarray's
     invented multiplier passes before any tool runs (D557; macarray's own since D956)."""
     from flux_macarray.invent import sv_refusal
-    from rtl import LINT_PRAGMA, lint_relaxed
+    from flux_loop.golden_model import LINT_PRAGMA, lint_relaxed
 
     assert lint_relaxed("module m; endmodule").startswith(LINT_PRAGMA) and lint_relaxed(LINT_PRAGMA + "x").count("lint_off") == 2
     assert sv_refusal("always_ff @(posedge clk) q <= d;") == "sequential logic: the module must be combinational"

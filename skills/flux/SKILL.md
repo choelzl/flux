@@ -46,7 +46,7 @@ contract: >-             # rules every candidate must follow: ports, names, what
 language: systemverilog
 
 flow:
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
   measure:                  # cheapest first; commands are owned by the application
     screen:
       command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"
@@ -113,7 +113,7 @@ set `budget: {prototype: true}` with a `golden.py` gate. The model (or the codin
 writes the algorithm as Python `design(**inputs)` on integers, checked on every input in about
 a second (inputs up to 20 bits); the loop then spells the RTL itself, bit for bit. Writing that
 RTL directly rarely passes.
-- Check a prototype by hand: `python rtl.py proto prototype.py --golden golden.py`. It prints where
+- Check a prototype by hand: `python -m flux_loop.golden_proto prototype.py --golden golden.py`. It prints where
   the failures are, grouped by the input's sign and exponent.
 - The prototype must be a formula, not a lookup: module-level tables of at most 64 entries
   (`budget.prototype_table_max`), for coefficients. For a float input, keep the exponent and
@@ -135,9 +135,9 @@ RTL directly rarely passes.
 
 ## Rules that save hours
 
-- The gate is the truth: a candidate that fails `python rtl.py test` is never "almost right". If
+- The gate is the truth: a candidate that fails `python -m flux_loop.golden_model` is never "almost right". If
   every candidate fails the same way, suspect the **golden model or the contract**, not the
-  generator: run `python rtl.py test <a candidate> --golden golden.py --show 5` and read the vectors.
+  generator: run `python -m flux_loop.golden_model <a candidate> --golden golden.py --show 5` and read the vectors.
 - Golden models compute expected values; never hand-write expected numbers. Float ports carry
   bit patterns (`unsigned: True`); read bits with `np.uint16(x).view(np.float16)`, compute in
   float64, round once; allow `TOLERANCE_ULP = {"y": 1}` for approximations. Special values

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Sync the one-file RTL tool (rtl.py) bundled with self-contained applications; --check reports drift.
 
-Edit applications/mul8/rtl.py first, then run this script. Each RTL application (and the
-application libraries that check RTL in Python, as rtl_check.py) carries its own copy, so uploading
-or copying one never needs another application's folder; the NLU's operators run the NLU's own
-copy through a four-line launcher (D956).
+Edit applications/mul8/rtl.py first, then run this script. Each RTL application (and macarray's
+library, which measures in Python, as rtl_check.py) carries its own copy, so uploading or copying
+one never needs another application's folder; the NLU's operators run the NLU's own copy through a
+four-line launcher (D956). The golden test is not here: it is core's flux_loop.golden_model (D967).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def targets() -> list[Path]:
     out = [apps / name / "rtl.py" for name in ("adder16", "macarray", "nlu")]
     out += [FLUX.parent / "docs/tutorial/isqrt/rtl.py"]
     out += [FLUX / "tests/fixtures/loops" / kind / "rtl.py" for kind in ("rtl", "rtl-sweep")]
-    out += [apps / "bankmap/lib/src/flux_bankmap/rtl_check.py", apps / "macarray/lib/src/flux_macarray/rtl_check.py"]
+    out += [apps / "macarray/lib/src/flux_macarray/rtl_check.py"]
     return out
 
 

@@ -61,7 +61,7 @@ def test_every_vector_is_checked_against_the_golden_model(tmp_path):
 @pytest.mark.skipif(icsc() is None, reason="no ICSC_HOME: run in `nix develop` (linux)")
 def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     """D636: the verified SC_MODULE becomes SystemVerilog by ICSC, not by the model; the SV
-    has the golden ports and passes `rtl.py test` on every vector."""
+    has the golden ports and passes the golden test on every vector."""
     import subprocess
     import sys
 
@@ -73,8 +73,8 @@ def test_icsc_translates_the_verified_module_and_the_gate_proves_it(tmp_path):
     sv, why = cap.extra["translate"](RIGHT)
     assert sv and not why and "module add4" in sv and "always_comb" in sv
     (tmp_path / "add4.sv").write_text(sv)
-    rtl = Path(__file__).resolve().parents[2] / "applications/mul8/rtl.py"      # an RTL application's own tool (D948)
-    run = subprocess.run([sys.executable, str(rtl), "test", str(tmp_path / "add4.sv"), "--golden", str(tmp_path / "golden.py")],
+    run = subprocess.run([sys.executable, "-m", "flux_loop.golden_model", str(tmp_path / "add4.sv"), "--golden",   # D967
+                          str(tmp_path / "golden.py")],
                          capture_output=True, text=True, timeout=600)
     assert run.returncode == 0, run.stdout[-2000:] + run.stderr[-2000:]
     bad, why = translate(RIGHT.replace("sc_out<sc_uint<5>> s", "sc_out<sc_uint<6>> s"), "add4", load(tmp_path / "golden.py"))

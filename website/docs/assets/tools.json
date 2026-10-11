@@ -22,8 +22,8 @@
   "id": "rtl-golden",
   "role": "check",
   "title": "Test against a golden model",
-  "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-  "run": "{python} {home}/rtl.py test {artifact} --golden {golden}",
+  "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs (Flux's own test, D967).",
+  "run": "{python} -m flux_loop.golden_model {artifact} --golden {golden}",
   "params": {
    "golden": {
     "label": "Golden model",
@@ -139,7 +139,7 @@
   "id": "rtl-stat",
   "role": "stage",
   "title": "Area and cells, Yosys alone (ASAP7)",
-  "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
+  "what": "OpenROAD-flow-scripts' synthesis: Yosys maps to ASAP7 cells and sums their area; nothing timed, the cheapest screen.",
   "run": "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
@@ -153,7 +153,9 @@
    "cell_count": "cells"
   },
   "needs": [
-   "yosys"
+   "yosys",
+   "openroad",
+   "make"
   ],
   "languages": [
    "systemverilog",
@@ -167,7 +169,7 @@
   "id": "rtl-synth",
   "role": "stage",
   "title": "Synthesise and time (ASAP7)",
-  "what": "Yosys synthesis, timed by OpenROAD's OpenSTA: seconds per design.",
+  "what": "OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds.",
   "run": "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
@@ -185,7 +187,9 @@
   },
   "needs": [
    "yosys",
-   "openroad"
+   "openroad",
+   "sta",
+   "make"
   ],
   "languages": [
    "systemverilog",
@@ -199,7 +203,7 @@
   "id": "rtl-place",
   "role": "stage",
   "title": "Place and time (ASAP7)",
-  "what": "OpenROAD placement, timed with wire estimates: tens of seconds.",
+  "what": "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds.",
   "run": "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
@@ -217,7 +221,9 @@
   },
   "needs": [
    "yosys",
-   "openroad"
+   "openroad",
+   "sta",
+   "make"
   ],
   "languages": [
    "systemverilog",
@@ -231,7 +237,7 @@
   "id": "rtl-route",
   "role": "stage",
   "title": "Route and time (ASAP7)",
-  "what": "OpenROAD placement and routing, the signoff numbers: minutes.",
+  "what": "OpenROAD-flow-scripts to routing: timing after global routing, minutes.",
   "run": "{python} {home}/rtl.py measure {artifact} --stage route --clock-ps {clock_ps}",
   "params": {
    "clock_ps": {
@@ -249,7 +255,9 @@
   },
   "needs": [
    "yosys",
-   "openroad"
+   "openroad",
+   "sta",
+   "make"
   ],
   "languages": [
    "systemverilog",

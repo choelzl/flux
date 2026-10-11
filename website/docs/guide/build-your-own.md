@@ -11,7 +11,8 @@ function signature or module ports, supported inputs, numerical accuracy, and an
 restrictions. Put executable checks in `flow.test`: prose alone does not establish correctness.
 
 Choose the artifact `language`, such as `python`, `systemverilog`, or `cpp`. Flux uses it for
-the generated file extension; when omitted it can infer the language from known tools.
+the generated file extension. Say it: only the built-in Verilator lint command implies one, and
+without it the design is a `.txt` file.
 
 ```yaml
 statement: Find a fast implementation of count_primes(n).
@@ -87,7 +88,7 @@ For RTL, define the ports and reference function in `golden.py`, then use:
 flow:
   test:
     lint: "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}"
-    golden: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
+    golden: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
 ```
 
 The [RTL reference](parameters.md#rtl-golden-model) describes vectors, clocked designs, and

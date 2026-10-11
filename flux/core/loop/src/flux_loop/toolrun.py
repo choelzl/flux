@@ -102,10 +102,11 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
         with phase(f"tool:{binary}", why=what, command=shown, folder=str(cwd or os.getcwd()),
                    **({"stdin": stdin[:48000] + ("\n… stdin truncated after 48000 characters" if len(stdin) > 48000 else "")} if stdin is not None else {})) as out:
             # D854: the tool and everything it starts are one process group of their own: the whole
-            # call is bounded by `timeout_s` -- its output drained too -- and the group goes with it
+            # call is bounded by `timeout_s` -- its output drained too -- and the group goes with it.
+            # D967: no input unless given one -- a tool that reads stdin gets end-of-file, never Flux's
             proc = subprocess.Popen(
                 cmd, cwd=None if cwd is None else str(cwd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                stdin=None if stdin is None else subprocess.PIPE, env=None if env is None else dict(env),
+                stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE, env=None if env is None else dict(env),
                 start_new_session=True)
             streams: dict[str, list[bytes]] = {"stdout": [], "stderr": []}
 

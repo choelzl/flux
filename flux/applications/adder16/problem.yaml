@@ -13,7 +13,7 @@ flow:
       # D866: one knob, six designs -- carry-select's block size is in its name
       arch: [behavioral, ripple, carry_select_2, carry_select_4, carry_select_8, kogge_stone]
   generate: {command: "{python} {home}/gen.py {artifact} {arch}"}
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
   measure:
     screen:
       command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 333"

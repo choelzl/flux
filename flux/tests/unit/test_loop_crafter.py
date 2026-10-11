@@ -464,7 +464,7 @@ def test_the_real_catalogs_newer_tools_load(tmp_path):
     t = _load(tmp_path, BUILT["prog_timed"])
     assert t.stages[0].command[-9:-6] == ("time", "--build", "c++ -O2 -o {out} {artifact}")
     t = _load(tmp_path, BUILT["stat_then_synth"])
-    assert [s.command[-3] for s in t.stages] == ["stat", "synth"] and t.stages[0].needs == ("yosys",)
+    assert [s.command[-3] for s in t.stages] == ["stat", "synth"] and t.stages[0].needs == ("yosys", "openroad", "make")
 
 
 def test_an_objective_every_measurement_does_not_report_is_an_error():

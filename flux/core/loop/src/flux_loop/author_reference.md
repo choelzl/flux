@@ -32,7 +32,7 @@ Say only what is yours; the rest is inferred.
 - `flow`: each box of the loop -- who works it, and its own settings. Every key is optional:
   - `test`: how a candidate is refused -- a command (one string, or a list of tokens) that
     prints `N failing` or exits non-zero. Several checks, cheapest first, as a map by name like
-    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
+    `measure`: `test: {lint: "verilator --lint-only ... {artifact}", golden: {run: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py", timeout_s: 120}}`.
     They run in the order written; the first that reports failures refuses the design ("failed at
     lint: ...") and the rest do not run. Exit 3 from any check means the design did not build. A
     check is its command, or `{run, count_re, fail_re, timeout_s}`: `count_re` (one integer
@@ -40,7 +40,7 @@ Say only what is yours; the rest is inferred.
     named `build` refuses on any non-zero exit (did not build). Never an agent: it establishes the facts.
   - `measure`: the costed measurements, cheapest first, a map from each stage's name to its
     settings, including `command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 1000"`,
-    `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad]`.
+    `metrics: [fmax_mhz, area_um2, power_w, cell_count]` and `needs: [yosys, openroad, sta, make]`.
     All measurement commands print `name=value` tokens and
     says `metrics:` (the names to read) and `needs:` (tools on PATH it requires), so it is
     `bench: {command: "...", metrics: [time_ms]}`. Every stage should report every objective's metric (unless a limit names a deeper `stage:`).
@@ -56,7 +56,7 @@ Say only what is yours; the rest is inferred.
     the record's rows on that stage (nothing until 3 are measured); `command: "..."` (kind command
     only) runs a script with the stage's placeholders that prints the same `name=value` metrics;
     `model` asks the model with the design and the stage's measured rows (no model, no estimate).
-  - `orchestrate` with a space (D797) is the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|model` (the model proposes points)
+  - `orchestrate` with a space (D797) is the search over the design space -- `sweep|montecarlo|anneal|gradient|genetic|pareto|model|control|phases` (model: the model proposes points)
     or a list of phases, or, with its space, `{policy: sweep, space: {...}, seeds: [...]}`.
     `space`: knob -> its choices, in a meaningful order. A knob that only matters for some
     choices of another: `{values: [...], when: {stack: [b, c]}}`; elsewhere it stays at its first
@@ -142,9 +142,10 @@ starting with `flux` runs this Flux.
 
 ## Application-local RTL tools
 
-There are no `flux rtl` or `flux champsim` commands. Put each tool command inside the loop's
-folder and call it with `{python} {home}/rtl.py` or `{python} {home}/champsim.py`.
-The bundled RTL applications include one file, `rtl.py` (ASAP7 comes from OpenROAD-flow-scripts); the
+There are no `flux rtl` or `flux champsim` commands. The golden test is Flux's own
+(`{python} -m flux_loop.golden_model`); every other tool command lives in the loop's folder and is
+called with `{python} {home}/rtl.py` or `{python} {home}/champsim.py`.
+The bundled RTL applications include one file, `rtl.py` (it runs OpenROAD-flow-scripts on ASAP7); the
 prefetcher includes `champsim.py` and `tools/champsim_tools/`. Copy the whole application
 to reuse these commands. They are not installed as global Flux packages: a wrapper alone
 does not provide its tool code. For a new application, write its own tool commands or include
@@ -155,15 +156,15 @@ an arbitrary script does not imply a language. List every stage's `metrics` and 
 - Lint is Verilator itself, its hardware defects only (latches, multiple drivers, combinational loops,
   `<=` in combinational logic, mixed `=`/`<=`, implicit nets): `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}`;
   exit 0 passes. Put it before the golden test.
-- `python rtl.py test {artifact} --golden {home}/golden.py` -- Verilator against a golden model;
-  prints `N failing of M`; exits 3 when the module does not compile (the loop then treats it as
-  a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
-- `python rtl.py measure {artifact} --stage synth|place|route --clock-ps P` -- Yosys and OpenROAD
-  on ASAP7 (`synth` times the netlist with OpenROAD's OpenSTA; `place`, `route` lay it out); prints `fmax_mhz= area_um2= power_w=
-  cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its
-  reset); `--repair-design` buffers long wires after placement.
-- `python rtl.py measure {artifact} --stage stat` -- Yosys alone: `area_um2= cell_count=`, nothing
-  timed; the cheapest screen before `synth`.
+- `python -m flux_loop.golden_model {artifact} --golden {home}/golden.py` -- Verilator against a
+  golden model; prints `N failing of M`; exits 3 when the module does not compile (the loop then
+  treats it as a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
+- `python rtl.py measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
+  on ASAP7 run to that stage (`synth` times the netlist unplaced; `place` after placement; `route`
+  after routing, adding `drc_errors= wirelength_um=`); prints `fmax_mhz= area_um2= power_w=
+  cell_count= path_ps=`. A module with a `clk` port is timed as clocked (and `rst_n` as its reset).
+- `python rtl.py measure {artifact} --stage stat` -- the mapped cells: `area_um2= cell_count=`,
+  nothing timed; the cheapest screen before `synth`.
 - `golden.py` declares `PORTS = [{"name", "dir": "in"|"out", "bits", "unsigned": True?}]` and
   `def golden(**inputs) -> {output: value}`; optionally `COUNT` (random vectors, default 32),
   `SEED`, `VECTORS` (explicit rows), `CLOCK = "clk"` and `LATENCY` (cycles, checked) for a

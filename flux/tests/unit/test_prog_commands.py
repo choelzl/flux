@@ -80,8 +80,9 @@ def test_prog_size_reads_the_sections(capsys, tmp_path):
     assert code == 0 and int(again["text_bytes"]) > 0
 
 
-@pytest.mark.skipif(shutil.which("yosys") is None, reason="needs yosys")
-def test_rtl_measure_stat_is_yosys_alone(capsys, tmp_path):
+@pytest.mark.heavy
+@pytest.mark.skipif(shutil.which("yosys") is None or shutil.which("openroad") is None, reason="needs yosys and openroad")
+def test_rtl_measure_stat_is_the_mapped_cells(capsys, tmp_path):
     sv = tmp_path / "add8.sv"
     sv.write_text("module add8(input logic [7:0] a, b, output logic [8:0] s);\n  assign s = a + b;\nendmodule\n")
     from rtl import main

@@ -45,7 +45,7 @@ in the report).
 
 ### A prototype before the target (evolving, D604)
 
-When the gate is `python rtl.py test ... --golden golden.py` and `budget.prototype: true`, the
+When the gate is `python -m flux_loop.golden_model ... --golden golden.py` and `budget.prototype: true`, the
 model first writes the algorithm as plain Python, `design(<the golden's inputs>) ->
 {output: bits}`. Integers and bits only, and a formula, not a lookup of the answers (D616):
 the range split where the function saturates or is the identity, a low-degree fixed-point
@@ -65,7 +65,7 @@ spelled nor synthesised. If the document
 names a `golden.py` that does not exist, the model writes it first from the statement and the
 contract. That golden is checked (it imports, makes its vectors, answers every output port),
 but read it before trusting a decision made against it. With `flow.generate: {by: ...}`, a coding agent writes the prototype
-and the loop checks it with `python rtl.py proto FILE --golden golden.py`, the stage's own check (D618).
+and the loop checks it with `python -m flux_loop.golden_proto FILE --golden golden.py`, the stage's own check (D618).
 
 ## 4. How the search goes (stable names, evolving fields)
 

@@ -13,7 +13,7 @@ contract: >-
 language: systemverilog
 
 flow:
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py"
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"
   measure:
     screen:
       command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 625"

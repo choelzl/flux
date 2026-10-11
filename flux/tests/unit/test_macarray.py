@@ -80,7 +80,7 @@ def test_fmax_is_the_measured_path_not_the_constraint():
 
 def verify(design, vectors):
     """What `steps check` does: Verilator on the PE against its golden model, the latency checked."""
-    from flux_macarray.rtl_check import check_rtl
+    from flux_loop.golden_model import check_rtl
     from flux_macarray.verify import pe_golden
 
     return check_rtl(design.source, pe_golden(design.shape, design.config, vectors), module=design.module_name,
@@ -125,7 +125,7 @@ def test_a_pe_that_lies_about_its_latency_is_refused_and_a_wrong_multiplier_says
     """The shared check refuses a design whose cycles differ from its claim, and a failing multiplier hears the failing inputs (D582)."""
     from dataclasses import replace
 
-    from rtl import check_rtl
+    from flux_loop.golden_model import check_rtl
     from flux_macarray.invent import multiplier_golden
 
     cfg = PeConfig("array", "chain", 2)

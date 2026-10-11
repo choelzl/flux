@@ -157,6 +157,12 @@ class AgentSpec:
     kind: str = ""                 # the preset it runs as (D807); "" for a command of one's own
 
 
+def _argv(command: Any) -> tuple[str, ...]:
+    """An agent's own command: a list of arguments, or one string split into words as a shell
+    would split it (D967: never into its characters)."""
+    return tuple(shlex.split(command)) if isinstance(command, str) else tuple(str(t) for t in command)
+
+
 def agent_spec(spec: Any) -> AgentSpec:
     """The document's `agent:` value: a preset's name, or an object with `preset` or
     `command` (+ `resume`, `output`) and `timeout_s`, `questions`, `max_questions`, `wait_s`,
@@ -190,12 +196,12 @@ def agent_spec(spec: Any) -> AgentSpec:
     if spec.get("command") and (spec.get("bin") or spec.get("args")):
         raise ValueError("agent: `bin` and `args` adjust a preset; with your own `command`, write them there")
     if spec.get("command"):
-        argv = tuple(str(t) for t in spec["command"])
+        argv = _argv(spec["command"])
         output = str(spec.get("output") or "text")
         if output not in OUTPUTS:
             raise ValueError(f"agent.output is one of {', '.join(OUTPUTS)}, not {output!r}")
         first = next((t for t in argv if not t.startswith("{")), argv[0])       # `{python} my-agent.py`: the script
-        resume = tuple(str(t) for t in spec["resume"]) if spec.get("resume") else None
+        resume = _argv(spec["resume"]) if spec.get("resume") else None
         return AgentSpec(str(spec.get("name") or Path(first).name), argv, resume, output, **common)
     preset = str(spec.get("preset") or "")
     kinds = agent_kinds()

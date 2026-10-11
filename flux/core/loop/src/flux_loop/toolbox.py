@@ -43,7 +43,7 @@ def _rtl_stage(depth: str, title: str, what: str) -> dict[str, Any]:
             "run": f"{{python}} {{home}}/rtl.py measure {{artifact}} --stage {depth} --clock-ps {{clock_ps}}",
             "params": {"clock_ps": _p("Clock period", 1000, "ps")},
             "metrics": _m("fmax_mhz", "area_um2", "power_w", "cell_count", "path_ps"),
-            "needs": ["yosys", "openroad"], "languages": _HDL, "kinds": ["rtl"]}
+            "needs": ["yosys", "openroad", "sta", "make"], "languages": _HDL, "kinds": ["rtl"]}
 
 
 TOOLS: list[dict[str, Any]] = [
@@ -54,8 +54,8 @@ TOOLS: list[dict[str, Any]] = [
      "run": "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}", "params": {}, "needs": ["verilator"],
      "pass": "passes when it exits 0 (no defect, and it parses)", "languages": _HDL, "kinds": ["rtl"]},
     {"id": "rtl-golden", "role": "check", "title": "Test against a golden model",
-     "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
-     "run": "{python} {home}/rtl.py test {artifact} --golden {golden}", "params": {"golden": _p("Golden model", "{home}/golden.py")},
+     "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs (Flux's own test, D967).",
+     "run": "{python} -m flux_loop.golden_model {artifact} --golden {golden}", "params": {"golden": _p("Golden model", "{home}/golden.py")},
      "needs": ["verilator"], "pass": _N_FAILING, "languages": _HDL, "kinds": ["rtl"]},
     {"id": "champsim-build", "role": "check", "title": "Build the prefetcher into ChampSim",
      "what": "Copy champsim.py and tools/ from applications/prefetcher: compiles a prefetcher header; reports the first compiler error.",
@@ -77,13 +77,13 @@ TOOLS: list[dict[str, Any]] = [
      "languages": [], "kinds": ["own"]},
     # ---- stages: measurements, cheapest first; a `cutoff` is a stage's gate
     {"id": "rtl-stat", "role": "stage", "title": "Area and cells, Yosys alone (ASAP7)",
-     "what": "Yosys maps to ASAP7 cells and sums their liberty area; nothing timed: a second or two, the cheapest screen.",
+     "what": "OpenROAD-flow-scripts' synthesis: Yosys maps to ASAP7 cells and sums their area; nothing timed, the cheapest screen.",
      "run": "{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}",
      "params": {"clock_ps": _p("Clock period (the mapper's target)", 1000, "ps")},
-     "metrics": _m("area_um2", "cell_count"), "needs": ["yosys"], "languages": _HDL, "kinds": ["rtl"]},
-    _rtl_stage("synth", "Synthesise and time (ASAP7)", "Yosys synthesis, timed by OpenROAD's OpenSTA: seconds per design."),
-    _rtl_stage("place", "Place and time (ASAP7)", "OpenROAD placement, timed with wire estimates: tens of seconds."),
-    _rtl_stage("route", "Route and time (ASAP7)", "OpenROAD placement and routing, the signoff numbers: minutes."),
+     "metrics": _m("area_um2", "cell_count"), "needs": ["yosys", "openroad", "make"], "languages": _HDL, "kinds": ["rtl"]},
+    _rtl_stage("synth", "Synthesise and time (ASAP7)", "OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds."),
+    _rtl_stage("place", "Place and time (ASAP7)", "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds."),
+    _rtl_stage("route", "Route and time (ASAP7)", "OpenROAD-flow-scripts to routing: timing after global routing, minutes."),
     {"id": "champsim-run", "role": "stage", "title": "Simulate on your traces (ChampSim)",
      "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
      "run": "{python} {home}/champsim.py run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",

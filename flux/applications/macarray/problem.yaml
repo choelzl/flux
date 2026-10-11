@@ -33,7 +33,7 @@ flow:
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
     confirm:
-      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000 --module mac_pe --repair-design"
+      command: "{python} {home}/rtl.py measure {artifact} --stage place --clock-ps 1000 --module mac_pe"
       metrics: [fmax_mhz, area_um2, power_w, cell_count]
       needs: [yosys, openroad]
       timeout_s: 1800

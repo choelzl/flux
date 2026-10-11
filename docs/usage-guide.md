@@ -77,7 +77,7 @@ flow:
     policy: sweep
     space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
   generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  test: "{python} {home}/rtl.py test {artifact} --golden {home}/golden.py" # the gate
+  test: "{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py" # the gate
   measure:                               # the stages, by name, cheapest first
     screen:
       command: "{python} {home}/rtl.py measure {artifact} --stage synth --clock-ps 300"
@@ -295,15 +295,15 @@ flux user add ada --admin && flux serve   # http://127.0.0.1:8765/
 The commands an RTL document names as its gate and stages:
 
 ```bash
-python rtl.py test design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
+python -m flux_loop.golden_model design.sv --golden golden.py        # Verilator against the golden model; prints `N failing of M`
 python -m flux_loop.golden_proto prototype.py --golden golden.py   # a Python prototype against the golden model (D951)
-python rtl.py measure design.sv --stage synth --clock-ps 1000   # or stat, place: ASAP7 metric=value lines
+python rtl.py measure design.sv --stage synth --clock-ps 1000   # or stat, place, route: ASAP7 metric=value lines
 ```
 
-Run these from an application's folder: its `rtl.py` is one file, reading ASAP7 from
-OpenROAD-flow-scripts' platform folder (D948, D950). Copy that script from a bundled RTL app
-when creating your own. `python rtl.py test` exits 1 when the design fails and 3 when it does
-not compile. The prototype check is core's, not RTL tooling (D951). A prototype that
+The golden test and the prototype check are Flux's own (D951, D967). `rtl.py` is one file in each
+RTL application's folder: it runs OpenROAD-flow-scripts on ASAP7 to the stage asked (D967); copy it
+from a bundled RTL app when creating your own. `python -m flux_loop.golden_model` exits 1 when the
+design fails and 3 when it does not compile. A prototype that
 passes is spelled as SystemVerilog by the loop (py2sv): integers, `if`/`elif`/`else` and early
 returns, `for` over a constant range, helpers (inlined), module-level tables, and tuples -- a helper
 returning several values, `s, m, k = unpack(x)`, `(a, b) if c else (d, e)`, `len(T)`, a tuple read

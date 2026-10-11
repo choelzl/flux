@@ -32,8 +32,8 @@ The tree follows the kinds of module the architecture is built from:
 
 | application | the problem | the chain | the model's roles |
 |---|---|---|---|
-| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `python rtl.py test` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
-| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `python rtl.py test` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
+| [`adder16/`](applications/adder16/) | the smallest 16-bit adder that makes 2.9 GHz placed, from six architectures a script writes | `python -m flux_loop.golden_model` against `golden.py`, Yosys screen, OpenROAD placement | none: a design-space sweep |
+| [`mul8/`](applications/mul8/) | the smallest signed 8x8 multiplier that makes 1.6 GHz placed | `python -m flux_loop.golden_model` against `golden.py`, Yosys screen, OpenROAD placement | writes and repairs the RTL |
 | [`primes/`](applications/primes/) | not hardware: the fastest Python `count_primes(n)` | `check.py` against a reference, `bench.py` timing | writes it, then makes it faster pass after pass |
 | [`nlu/`](applications/nlu/) | an FP16 non-linear unit of seven functions, each within 1 ULP on all 65536 inputs, under one mux at 800 MHz routed, with the least area and power | a Python prototype proven on every input, translated to SystemVerilog, Yosys + OpenSTA screen, OpenROAD placement, full place-and-route for the whole | writes and repairs the prototype, invents algorithms, orchestrates with tools |
 | [`macarray/`](applications/macarray/) | the multiply-accumulate element's microarchitecture at a workload's precision | Verilator on golden vectors, Yosys + OpenSTA screen, OpenROAD placement along the fmax-vs-area front | invents multiplier structures beyond the four built in |

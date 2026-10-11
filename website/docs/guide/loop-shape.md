@@ -42,6 +42,9 @@ home point. Order numeric choices meaningfully because local search uses that or
 | `genetic` | Evolve a population through selection and mutation |
 | `pareto` | Explore trade-offs; requires at least two objectives |
 | `model` | Ask a model to propose legal points from the space and measured history |
+| `control` | Compare the home point with only some of the incumbent's knobs kept (`keep: [...]`) |
+| `phases` | Run several of these in order, each with its own options |
+| `command` | Your own search script: `orchestrate: {command: "...", timeout_s: 600}` ([contract](parameters.md#search-command)) |
 
 One pass normally carries one point. `budget.batch` lets it carry several; `budget.parallel`
 runs several passes simultaneously. A policy finishing its finite walk does not, by itself,
@@ -180,7 +183,7 @@ flow:
 
 `claude`, `codex`, and `opencode` are built in; a server can offer additional named agents.
 They can plan, generate, critique, and advise decisions. `flow.test` and `flow.measure` remain
-commands or evaluators: an agent cannot replace their factual results. Selection still uses
+commands: an agent cannot replace their factual results. Selection still uses
 the objectives; an agent's advice is checked and can fall back to the rules.
 
 A generation agent resumes one session for a part through its repairs until that part is

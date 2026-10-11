@@ -91,7 +91,7 @@ turns every failure into the next prompt. For hard numeric RTL:
   For the GELU, the note covered not putting a float into one fixed-point format, the function
   factored as x times a smooth h(x), the regions where the answer is x, -0 or a short Taylor
   series, and a polynomial per segment;
-- hand the prototype to a coding agent; the loop checks each draft with `python rtl.py proto` and
+- hand the prototype to a coding agent; the loop checks each draft with `python -m flux_loop.golden_proto` and
   tells the agent where it fails.
 
 ## Coding agents
@@ -119,7 +119,7 @@ see, and is on the record with the agent's turn. A budget per turn bounds them: 
 (the defaults are 20 and 3; `probe: false` turns it off). `allow: [verilator, yosys]` gives
 denied commands back to one agent, and `allow: all` lifts the deny list for it. With
 `budget.prototype: true` the agent writes the Python prototype instead. The loop checks it with
-`python rtl.py proto` and spells the RTL (D618). An agent that
+`python -m flux_loop.golden_proto` and spells the RTL (D618). An agent that
 ends a turn without writing its file is nudged to write it, twice at most. An agent whose
 session outgrew the model's context window continues in a fresh session from the brief and its
 last file.

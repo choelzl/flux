@@ -715,13 +715,13 @@ measurement tools. `{x}` other than the loop's placeholders are the tool's param
 | Tool | Role | Command | Parameters (default) | Reports / passes |
 |---|---|---|---|---|
 | `rtl-lint` | check | `verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}` | | exit 0 |
-| `rtl-golden` | check | `{python} {home}/rtl.py test {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
+| `rtl-golden` | check | `{python} -m flux_loop.golden_model {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
 | `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
 | `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
 | `champsim-build` | check | `{python} {home}/champsim.py build {artifact}` | | exit 3 = did not build |
 | `champsim-check` | check | `{python} {home}/champsim.py check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
 | `rtl-stat` | stage | `{python} {home}/rtl.py measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
-| `rtl-synth`, `rtl-place` | stage | `... --stage synth` / `place` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps` |
+| `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
 | `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
 | `prog-size` | stage | `flux prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
 | `prog-time` | stage | `flux prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
@@ -729,16 +729,19 @@ measurement tools. `{x}` other than the loop's placeholders are the tool's param
 | `champsim-run` | stage | `{python} {home}/champsim.py run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
 | `custom-stage` | stage | `{command}` | `command` | your `name=value` lines |
 
-`rtl.py` is the RTL applications' one-file tool (copy it from a bundled RTL application):
-`rtl.py test DESIGN --golden G` prints failing vectors and `N failing of M` (exit 0 pass, 1
-fail, 3 did not compile); `rtl.py measure DESIGN --stage stat|synth|place --clock-ps N`
-prints `fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... worst_slack_ps=...`
-on one line. `flux prog` builds with `--build` (`{out}` is the program it builds), prints
-`name=value` lines, and exits 3 when the build fails.
+The golden test is Flux's own: `python -m flux_loop.golden_model DESIGN --golden G` prints
+failing vectors and `N failing of M` (exit 0 pass, 1 fail, 3 did not compile; `--extra F.sv` for a
+module the design instantiates). `rtl.py` is the RTL applications' one-file measurement (copy it
+from a bundled RTL application): `rtl.py measure DESIGN --stage stat|synth|place|route --clock-ps N`
+runs OpenROAD-flow-scripts on ASAP7 to that stage and prints one line, `fmax_mhz=... area_um2=...
+power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, `cell_count`;
+`route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
+placement, `route` after routing (timing from global routing). `flux prog` builds with `--build`
+(`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails.
 
 ## RTL golden model
 
-Define `PORTS` and `golden(**inputs)` in the file given to `rtl.py test --golden`:
+Define `PORTS` and `golden(**inputs)` in the file given to `--golden`:
 
 ```python
 PORTS = [
