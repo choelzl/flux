@@ -504,6 +504,29 @@ class RunManager:
     def _wait(self, run_id: int, proc: subprocess.Popen) -> None:
         rc = proc.wait()
         self.store.set_run(run_id, ended=time.time(), rc=rc)
+        self.forget_if_empty(run_id)
+
+    def forget_if_empty(self, run_id: int) -> bool:
+        """D987: a start that did nothing (stopped before any work) is not kept: its row, its log and
+        its journal go. Once checked, a start is marked so the history does not check it again."""
+        from .run_history import empty_start, forget_start
+
+        run = self.store.run(run_id)
+        if not run or not run.get("ended"):
+            return False
+        options = json.loads(run.get("options") or "{}")
+        if options.get("kept"):
+            return False
+        try:
+            empty = empty_start(run, self)
+        except Exception:  # noqa: BLE001 -- never lose a start to a check that failed
+            empty = False
+        if empty:
+            mine = [r["id"] for r in self.store.runs(None, run["app"]) if r.get("user_id") == run.get("user_id")]
+            forget_start(run, self, self.store, last=run["id"] == max(mine, default=run["id"]))
+            return True
+        self.store.set_run(run_id, options=json.dumps({**options, "kept": True}))
+        return False
 
     # ---- state
     def live(self, run: dict[str, Any]) -> bool:

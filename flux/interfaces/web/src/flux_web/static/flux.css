@@ -753,9 +753,6 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-split.wide .alt-visual { max-height: none; }
 .alt-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .alt-list-head .alt-summary { margin-bottom: 0; min-width: 0; }
-.alt-stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.alt-stepper button { display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0; font-size: 16px; line-height: 1; }
-.alt-stepper .alt-task-position { min-width: 4.5em; text-align: center; font-variant-numeric: tabular-nums; }
 .alt-inspector-card { position: relative; }
 .alt-detail-actions { position: absolute; top: 14px; right: 16px; z-index: 1; display: flex; gap: 6px; }
 .alt-detail .detail-head { padding-right: 150px; }
@@ -766,8 +763,13 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-visual { overflow: auto; max-height: 74vh; }
 .alt-pass-heading { font-weight: 600; }
 /* D978: one line per task, tinted by its kind; the selected deeper and outlined; quiet when it took no time */
-.alt-tree-row { display: flex; align-items: stretch; padding-left: calc(min(var(--depth), 8) * 12px); background: color-mix(in srgb, var(--k, transparent) 24%, var(--panel)); border-bottom: 1px solid var(--panel); }
-.alt-tree-row.alt-pass-row { background: var(--panel); border-bottom: 1px solid var(--line); }
+/* D987: soft rounded strips, a light tint, a little air between them -- no hard separators */
+.alt-tree { display: grid; gap: 2px; }
+.alt-tree-row { display: flex; align-items: stretch; margin-left: calc(min(var(--depth), 8) * 12px); border-radius: 6px; background: color-mix(in srgb, var(--k, transparent) 14%, var(--panel)); transition: background-color .12s; }
+.alt-tree-row:hover { background: color-mix(in srgb, var(--k, transparent) 22%, var(--panel)); }
+.alt-tree-row.alt-pass-row { background: transparent; border-radius: 0; margin-top: 4px; border-bottom: 1px solid var(--line); }
+.alt-tree-row.alt-pass-row:hover { background: color-mix(in srgb, var(--ink) 4%, var(--panel)); }
+.alt-tree-row.quiet { background: color-mix(in srgb, var(--k, transparent) 7%, var(--panel)); }
 .alt-tree-row.quiet .alt-task { padding-block: 1px; font-size: 12px; } .alt-tree-row.quiet .alt-task-name { color: var(--muted); }
 .alt-fold, .alt-fold-space { flex: 0 0 24px; width: 24px; }
 .alt-fold { border: 0; padding: 4px; border-radius: 0; background: transparent; color: var(--muted); }
@@ -775,7 +777,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-tree-row .alt-task { min-width: 0; }
 .alt-task.sel { background: transparent; }
 /* the selected row deeper and outlined across its whole width, indent included */
-.alt-tree-row:has(.alt-task.sel) { background: color-mix(in srgb, var(--k, var(--accent)) 46%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 80%, var(--ink)); }
+.alt-tree-row:has(.alt-task.sel) { background: color-mix(in srgb, var(--k, var(--accent)) 32%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 75%, var(--panel)); }
 .alt-task-state { color: var(--ok); width: 11px; text-align: center; flex-shrink: 0; }
 .alt-task-state.failed { color: var(--bad); }
 .alt-spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--run) 25%, transparent); border-top-color: var(--run); flex-shrink: 0; box-sizing: border-box; }

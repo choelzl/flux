@@ -121,6 +121,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         starts, campaigns, seen = [], [], {}
         for run in store.runs(whose, name):
             running = runs.live(run)
+            if not running and runs.forget_if_empty(run["id"]):          # D987: a start that did nothing is not listed
+                continue
             record_id = seen.setdefault(run["db"], run["id"])
             starts.append({k: run.get(k) for k in ("id", "started", "ended", "rc")} | {"running": running, "record_id": record_id})
             if record_id != run["id"] or not os.path.isfile(run["db"]):

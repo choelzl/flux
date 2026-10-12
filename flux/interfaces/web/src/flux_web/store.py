@@ -554,6 +554,11 @@ class Store:
         with self._db() as db:
             db.execute(f"UPDATE runs SET {cols} WHERE id = ?", (*fields.values(), run_id))
 
+    def delete_run(self, run_id: int) -> None:
+        """A start forgotten (D987: it did nothing)."""
+        with self._db() as db:
+            db.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+
     def runs(self, user: User | None = None, app: str | None = None) -> list[dict[str, Any]]:
         q, args = "SELECT r.*, u.name AS user FROM runs r JOIN users u ON u.id = r.user_id", []
         where = []

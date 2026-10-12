@@ -15,7 +15,7 @@ const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(
 export function liveAltTab(ctx) {
   let startId = "current", pass = "current", history = null, inspector = null, transport = null;
   let abort = null, timer = null, frame = 0, seq = 0, mounted = false, following = true, limit = 200;
-  let panel, split, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, stepper, logLink, locateBtn;
+  let panel, split, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, logLink, locateBtn;
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
@@ -92,11 +92,6 @@ export function liveAltTab(ctx) {
       h("span", { class: "muted small" }, `${visibleRows.length} tasks`),
       ...Object.entries(counts).filter(([, n]) => n).map(([s, n]) => h("span", { class: `alt-count ${s}`, title: `All tasks in this scope: ${n} ${s}` }, `${n} ${s}`)));
     locateBtn.disabled = !boxView && selected == null;
-    const index = visibleRows.findIndex(r => r.node.id === selected);
-    stepper.querySelector('[data-step="-1"]').disabled = index <= 0;
-    stepper.querySelector('[data-step="1"]').disabled = index < 0 || index >= visibleRows.length - 1;
-    stepper.querySelector(".alt-task-position").textContent = index < 0 ? "–" : `${index + 1} / ${visibleRows.length}`;
-    stepper.title = index < 0 ? "The selected task is outside this list" : `Task ${index + 1} of ${visibleRows.length} in this list (↑ ↓ to step)`;
     logLink.textContent = startId === "current" ? "Full log" : "History";
     logLink.href = `${appHref(ctx.owner, ctx.name)}/live/${startId === "current" ? "log" : "history/" + startId}`;
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
@@ -105,7 +100,6 @@ export function liveAltTab(ctx) {
     if (mode !== "graph") boxView = null;
     split.classList.toggle("wide", mode === "timeline" && pass === "all");   // D984: one pass fits the narrow column; all passes take the width
     split.querySelector(".alt-fold-done").hidden = mode !== "tree";
-    stepper.hidden = mode === "graph";                      // the graph's boxes list their own tasks
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -142,7 +136,7 @@ export function liveAltTab(ctx) {
     } else if (passView !== NO_PASS) {
       const m = taskScope(inspector.model, "all").membership, nodes = [...inspector.model.nodes.values()].filter(n => (m.get(n.id) ?? null) === passView);
       detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-pass-detail", "data-pass": String(passView ?? "setup") }, passSummary(passView, nodes, { pick: id => select(id) })));
-    } else if (inspector.detail.parentNode !== detailHost) detailHost.replaceChildren(inspector.detail);
+    } else if (inspector.detail.parentNode !== detailHost && !inspector.detail.closest("dialog.fullscreen-view")) detailHost.replaceChildren(inspector.detail);   // D987: not out of Fullscreen
   }
   function selectedElement(id) {
     if (boxView) return panel.querySelector(`[data-box="${CSS.escape(boxView.key)}"]`);
@@ -498,11 +492,6 @@ export function liveAltTab(ctx) {
       h("div", { class: "alt-selectors" }, h("label", {}, "Start ", startSel), h("label", {}, "Pass ", passSel)));
     summary = h("div", { class: "alt-summary" });
     logLink = h("a", { class: "btn small alt-log-link", title: "Full output and retained run data" });
-    // D976: the stepper moves through the list it sits on, so it sits on the list, not the inspector
-    stepper = h("div", { class: "alt-stepper", role: "group", "aria-label": "Step through the tasks in this list" },
-      ...[-1, 1].map(step => h("button", { type: "button", class: "small", "data-step": String(step), "aria-label": step < 0 ? "Previous task" : "Next task",
-        onclick: () => stepBy(step) }, step < 0 ? "‹" : "›")));
-    stepper.insertBefore(h("span", { class: "alt-task-position muted small mono" }), stepper.lastChild);
     locateBtn = h("button", { type: "button", class: "small", title: "Reveal and highlight the selected task in the list", onclick: () => {
       for (let p = inspector.model.nodes.get(inspector.taskId())?.parent; p; p = p.parent) folded.delete(p.id);
       reveal = true; render();
@@ -516,7 +505,7 @@ export function liveAltTab(ctx) {
       foldDone = !foldDone; folded.clear(); opened.clear(); foldBtn.setAttribute("aria-pressed", String(foldDone)); foldBtn.classList.toggle("on", foldDone); render();
     } }, "⊟");
     foldBtn.classList.add("on");
-    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, h("div", { class: "alt-list-tools" }, foldBtn, stepper)), panel], { cls: "alt-visual-card" }),
+    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, h("div", { class: "alt-list-tools" }, foldBtn)), panel], { cls: "alt-visual-card" }),
       card(null, [h("div", { class: "alt-detail-actions" }, locateBtn, logLink), detailHost], { cls: "alt-inspector-card" }));
     ctx.body.replaceChildren(h("div", { class: "live-alt" }, notice, split));
     await load(validPage);
