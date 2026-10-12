@@ -202,9 +202,9 @@ export function liveAltTab(ctx) {
     const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0, below = failedUnder();
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
-    const line = (r, depth) => {
+    const line = (r, depth, named = "") => {
       const n = r.node, under = kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
-      const kind = phaseKind(n), label = taskLabel(n);
+      const kind = phaseKind(n), label = named || taskLabel(n);
       out.push(h("div", { class: `alt-tree-row${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${/^\s*agent\s*:/i.test(n.name) ? AGENT_COLOR : COLORS[kind] || COLORS.setup}` },
         under.length ? fold(n.id, collapsed, label) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected), title: n.name + (n.why ? " · " + n.why : "") },
@@ -212,11 +212,31 @@ export function liveAltTab(ctx) {
           h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) under.forEach(k => line(k, depth + 1));
     };
-    return { line, fold, secs, kids, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
+    // D1016: the same task again in a row (a design continued in its pass, D999) -- one line, ×N, its tries under it
+    const again = (run, depth) => {
+      if (run.length < 2) return line(run[0], depth);
+      const nodes = run.map(r => r.node), first = nodes[0], key = `again:${first.id}`, finished = nodes.every(n => n.t1 != null);
+      const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
+      const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+      out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
+        h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
+          finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          h("span", { class: "alt-task-name" }, taskLabel(first)), h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`),
+          h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+      if (!collapsed) run.forEach((r, i) => line(r, depth + 1, `try ${i + 1}`));
+    };
+    const runs = (list, depth) => {
+      for (let k = 0; k < list.length;) {
+        let e = k + 1;
+        while (e < list.length && taskLabel(list[e].node) === taskLabel(list[k].node) && !(kids.get(list[k].node.id) || []).length === !(kids.get(list[e].node.id) || []).length) e++;
+        again(list.slice(k, e), depth); k = e;
+      }
+    };
+    return { line, fold, secs, kids, runs, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
   }
   function tree(rows, selected) {
     const membership = taskScope(inspector.model, "all").membership;
-    const out = [], { line, fold, secs, kids } = taskRows(rows, selected, out), below = failedUnder();
+    const out = [], { line, fold, secs, kids, runs } = taskRows(rows, selected, out), below = failedUnder();
     const now = Date.now() / 1000;
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     // per pass: the steps every pass starts with fold into one Setup line
@@ -250,7 +270,7 @@ export function liveAltTab(ctx) {
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
         if (!collapsed) lead.forEach(r => line(r, depth + 1));
       } else lead.forEach(r => line(r, depth));
-      rest.forEach(r => line(r, depth));
+      runs(rest, depth);
     }
     return h("div", { class: "alt-tree", role: "group", "aria-label": "Tasks as a tree" }, out);
   }

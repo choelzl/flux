@@ -576,7 +576,9 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
         count = int(subs.get("_recoveries") or 0)
         if count < RECOVERIES and time.monotonic() < deadline:
             base, headers = _recovery_endpoint(spec)
-            with _phase("agent: endpoint recovery", why=spec.tool, session=turn.session) as row:
+            # D1016: said for the box it serves, as the agent's own task is (an orchestrator's recovery is Search's)
+            with _phase("agent: endpoint recovery", why=subs.get("name") or subs.get("part") or spec.tool,
+                        session=turn.session, tool=spec.tool) as row:
                 def report(status: str) -> None:
                     from flux_profile import progress
 

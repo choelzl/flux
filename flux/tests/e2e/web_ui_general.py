@@ -697,6 +697,12 @@ def general_flows(r, watch):
                 r.check("pausing Follow pins the inspected task and pass when the loop advances", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='2' && document.querySelector('.alt-controls button').textContent==='Follow' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'"))
                 r.button("Follow", ".alt-controls")
                 r.check("resuming Follow selects the newest active agent", b.js("return document.querySelector('.alt-detail').dataset.task==='2000' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='true'"))
+                b.js("""const s = window.__altStreams.at(-1), t = Date.now() / 1000;      // D1016: a design continued in its pass -- twice the same task
+                  for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}});
+                    s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
+                b.wait("document.querySelector('.alt-tree .alt-again')", what="the repeated design as one line")
+                r.check("D1016: the same task again in a row is one line, ×2, its tries under it", b.js(
+                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×2' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent.startsWith('Design')"))
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
