@@ -370,6 +370,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
     one = not hunting and not goals
     built_before = state.built
     directed = False
+    direction: Improve | None = None    # D999: this pass's one decision, kept for its retries
     try:
         while step < request.steps:
             if one and state.built > built_before and not state.improve:   # a critic's send-back finishes first
@@ -384,8 +385,15 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                 break
             waiting = list(todo)
             if one and not waiting and not state.improve and not directed and state.built == built_before:
-                item = _direction(problem, state)       # D845: this pass's design: refine or explore,
-                if item is not None:                    # again when the last try was refused
+                # D845: this pass's design: refine or explore. D999: decided once a pass -- a try that
+                # gave no design (refused, out of time) goes on with the same direction and agent
+                if direction is None:
+                    item = direction = _direction(problem, state)
+                else:
+                    state.say(f"  direction: the pass goes on with {'explore' if direction.explore else direction.dse or 'refine'} "
+                              f"-- no new decision until this pass has a design")
+                    item = dataclasses.replace(direction, again=True)
+                if item is not None:
                     state.improve.append(item)
                     continue
                 directed = True                         # nothing here drafts a new design
@@ -616,7 +624,8 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     # A part's ladder already asks the orchestrator to pick its next action. Supply the
     # DSE preference and quota there without spending a second, competing decision turn.
     pick, why = (item.dse or "explore", item.why) if item.dse or item.explore else choose(problem, state, item.candidate, item.why, consult=False)
-    pick, why = reserve_choice(state, pick, why, item.subgoal)
+    if not item.again:                      # D999: the same direction again is the same decision, counted once
+        pick, why = reserve_choice(state, pick, why, item.subgoal)
     item = replace(item, dse=pick, explore=pick == "explore", refine=item.refine,
                    why=item.why + "\n" + guidance(problem, state, item.subgoal))
     state.say(f"  search [{item.subgoal or '*'}]: {pick} -- {why[:200]}")
@@ -624,14 +633,17 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         f"{item.why[:120]}")
     rested_before = len(state.rested)
     ps = state.part(item.subgoal)
-    ps.sessions.clear()                     # D669: an improve is a new job, a new agent ...
+    if not item.again:
+        ps.sessions.clear()                 # D669: an improve is a new job, a new agent ...
     try:
         with _phase(f"generation: improve {item.candidate.name}", why=item.stage) as out:
             out["dse"] = pick
             out["hypothesis"] = why
             cand, built, reason = problem.improve(item, state)
     finally:
-        ps.sessions.clear()                 # ... whose session ends with it
+        # ... whose session ends with it -- unless it ran out of time: the pass's next try continues it (D999)
+        if not any(getattr(s, "timed_out", False) for s in ps.sessions.values()):
+            ps.sessions.clear()
         from .boxes import flush_turns
 
         flush_turns(state)

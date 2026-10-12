@@ -542,7 +542,7 @@ class GeneratorRole(_Role):
             from .novelty import explore_brief, fresh_context
 
             brief = explore_brief(item.why, item.candidate, state, variations=item.dse == "variations")
-            with fresh_context(state, item.subgoal):
+            with fresh_context(state, item.subgoal, keep_session=item.again):
                 if source is None or isinstance(source, Model) or _agent_writes_prototypes(self, state):
                     return self.generate(item.subgoal, "", state, brief)
                 return iterate(self, source, item.subgoal, state, brief=brief)

@@ -123,6 +123,8 @@ class Improve:
     #: a pass's direction (D845): the ladder's due step if any, else the generator reworks it -- never "stand"
     refine: bool = False
     dse: str = ""                 # chosen move; the public setting remains flow.orchestrate.dse
+    #: the same direction again in its pass (D999): no new decision, the design agent's session kept
+    again: bool = False
 
 
 @dataclass(frozen=True)
@@ -232,6 +234,7 @@ class AgentSession:
     id: str | None = None
     turns: int = 0
     schema: str = ""                       # a box's answer schema, said once per session
+    timed_out: bool = False                # D999: its last turn ran past the time limit -- the next one continues it
 
 
 @dataclass

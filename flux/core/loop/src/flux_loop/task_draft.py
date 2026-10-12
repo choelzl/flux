@@ -106,7 +106,14 @@ class DraftMixin:
         probe_ctx = probe_context(self.task, workdir, sg or "", budget)
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
-        if resume:
+        if agent.resume and sess.id and sess.timed_out:
+            # D999: its last turn ran out of time mid-design -- the same session finishes it, the file as it left it
+            resume = sess.id
+            message = (f"YOUR LAST TURN RAN PAST ITS TIME LIMIT before the design was finished. Continue where you "
+                       f"stopped: finish the design in `{path}` (what you already wrote there is kept), "
+                       "without starting over. Then reply with one line saying the file is written.\n")
+            message += "\n\n" + instructions(path)
+        elif resume:
             # the session holds the brief: what failed, the file, fix it (D669)
             path.write_text(prior.artifact)
             message = (f"THE LOOP RAN YOUR DRAFT AND REFUSED IT:\n{failure.strip()[:4000]}\n\nThe refused draft is in "
@@ -165,6 +172,7 @@ class DraftMixin:
 
         sess.id = turn.session or sess.id
         sess.turns += 1
+        sess.timed_out = turn.rc == 124
         state.say(f"  {kind} {sg or self.task.id}: agent {tool}, {turn.began} session"
                   + (f" {sess.id}" if sess.id else "") + f", turn {sess.turns}, {len(sent)} chars sent")
         probes = probes_done(probe_ctx)

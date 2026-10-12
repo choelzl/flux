@@ -21,7 +21,7 @@ __all__ = ["explore_brief", "fresh_context", "tried_block", "twin", "twin_said"]
 
 
 @contextmanager
-def fresh_context(state: Any, subgoal: str | None):
+def fresh_context(state: Any, subgoal: str | None, keep_session: bool = False):
     """Draft an independent alternative without seeding it with an earlier design or session.
 
     Repairs within this experiment still see their own draft. Retain earlier verified designs
@@ -31,7 +31,8 @@ def fresh_context(state: Any, subgoal: str | None):
     best = state.best.pop(key, None)
     proto = state.prototypes.pop(key, None)
     seed = state.proto_best.pop(key, None)
-    state.part(subgoal).sessions.clear()
+    if not keep_session:                       # D999: the same direction again continues its agent
+        state.part(subgoal).sessions.clear()
     state.__dict__.get("_idea_selected", {}).pop(key, None)
     try:
         yield
