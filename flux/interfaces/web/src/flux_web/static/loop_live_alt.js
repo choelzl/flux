@@ -173,8 +173,13 @@ export function liveAltTab(ctx) {
     if (now) { folded.delete(key); opened.add(key); } else { opened.delete(key); folded.add(key); }
     render(); panel.querySelector(`[data-fold="${CSS.escape(String(key))}"]`)?.focus({ preventScroll: true });
   }
-  const mark = n => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
-    : h("span", { class: `alt-task-state ${state(n)}`, "aria-hidden": "true" }, n.interrupted ? "—" : n.failed ? "✗" : "✓");
+  // D995: a finished task that did not fail itself but holds one that did is marked "!", not ✓
+  const failedUnder = () => { const s = new Set(); for (const n of inspector.model.nodes.values()) if (n.failed) for (let p = n.parent; p; p = p.parent) s.add(p.id); return s; };
+  const doneMark = (failed, partial) => h("span", { class: `alt-task-state ${failed ? "failed" : partial ? "partial" : "done"}`, "aria-hidden": "true",
+    title: partial && !failed ? "a step under it failed" : null }, failed ? "✗" : partial ? "!" : "✓");
+  const mark = (n, below) => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
+    : n.interrupted ? h("span", { class: `alt-task-state ${state(n)}`, "aria-hidden": "true" }, "—")
+    : n.timedOut ? h("span", { class: "alt-task-state partial", "aria-hidden": "true", title: "stopped at its time limit" }, "!") : doneMark(n.failed, below?.has(n.id));
   /** D980: the rows of a set of tasks as the tree draws them -- one line each, tinted by kind,
       named kind first, a spinner while running, quiet when it took no time, ▸/▾ to fold -- for the
       tree and for a graph box's list alike. `rows` carry their parent's id when it is among them. */
@@ -182,7 +187,7 @@ export function liveAltTab(ctx) {
     const ids = new Set(rows.map(r => r.node.id)), kids = new Map();
     for (const r of rows) if (r.parent != null && ids.has(r.parent)) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
-    const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0;
+    const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0, below = failedUnder();
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     const line = (r, depth) => {
@@ -191,14 +196,14 @@ export function liveAltTab(ctx) {
       out.push(h("div", { class: `alt-tree-row${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${/^\s*agent\s*:/i.test(n.name) ? AGENT_COLOR : COLORS[kind] || COLORS.setup}` },
         under.length ? fold(n.id, collapsed, label) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected), title: n.name + (n.why ? " · " + n.why : "") },
-          mark(n), h("span", { class: "alt-task-name" }, label), h("span", { class: "mono muted small" }, dur(secs(n))))));
+          mark(n, below), h("span", { class: "alt-task-name" }, label), h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) under.forEach(k => line(k, depth + 1));
     };
     return { line, fold, secs, kids, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
   }
   function tree(rows, selected) {
     const membership = taskScope(inspector.model, "all").membership;
-    const out = [], { line, fold, secs, kids } = taskRows(rows, selected, out);
+    const out = [], { line, fold, secs, kids } = taskRows(rows, selected, out), below = failedUnder();
     const now = Date.now() / 1000;
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     // per pass: the steps every pass starts with fold into one Setup line
@@ -214,7 +219,7 @@ export function liveAltTab(ctx) {
         const name = g.p == null ? "Setup" : g.p === 0 ? "Pass 0 · baseline" : `Pass ${g.p}`;
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
           h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
-            finished ? h("span", { class: `alt-task-state ${failed ? "failed" : "done"}`, "aria-hidden": "true" }, failed ? "✗" : "✓") : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+            finished ? doneMark(failed, nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
             h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
         if (collapsed) continue;
         depth = 1;
@@ -227,7 +232,7 @@ export function liveAltTab(ctx) {
         const collapsed = isFolded(key, finished, nodes.some(n => n.id === selected)) || (!opened.has(key) && !nodes.some(n => n.id === selected));
         out.push(h("div", { class: `alt-tree-row quiet`, style: `--depth:${depth};--k:${COLORS.setup}` }, fold(key, collapsed, "Setup"),
           h("button", { type: "button", class: "alt-task alt-setup-steps", onclick: () => toggleFold(key, collapsed) },
-            finished ? h("span", { class: `alt-task-state ${nodes.some(n => n.failed) ? "failed" : "done"}`, "aria-hidden": "true" }, nodes.some(n => n.failed) ? "✗" : "✓") : h("span", { class: "alt-spin" }),
+            finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin" }),
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
         if (!collapsed) lead.forEach(r => line(r, depth + 1));
       } else lead.forEach(r => line(r, depth));
@@ -275,7 +280,7 @@ export function liveAltTab(ctx) {
         h("div", { class: "alt-box-note" }, note)));
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
-      if (b.state === "ok" || b.state === "bad") kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : "✗"));
+      if (["ok", "bad", "part"].includes(b.state)) kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : b.state === "part" ? "!" : "✗"));
       const picked = boxView ? boxView.p === shown && boxView.key === b.key : b.ids.has(selected);
       const attrs = { class: `alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key, "aria-pressed": String(picked) };
       // Every box follows the same activation path, including synthetic boxes such as Record.

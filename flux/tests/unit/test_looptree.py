@@ -231,3 +231,15 @@ process.stdout.write(JSON.stringify(out));
     assert again == before, "the run goes on: what was settled runs again"
     assert early == [[1, False, True, True, 5], [2, False, False, False, 4], [3, False, True, True, 5]]
     assert real[2] == [3, False, False, False, 7], "its own end replaces the settled one"
+
+
+def test_an_agent_stopped_at_its_time_limit_warns_and_a_tool_exit_fails():
+    """D997: exit 124 of an agent is its time limit -- a warning, not a failure; a tool's exit 1 fails."""
+    events = "\n".join(json.dumps(e) for e in [
+        {"ev": "start", "id": 1, "name": "agent: claude", "t": 0}, {"ev": "end", "id": 1, "t": 9, "seconds": 9, "output": {"exit": 124}},
+        {"ev": "start", "id": 2, "name": "tool:python3", "t": 9}, {"ev": "end", "id": 2, "t": 10, "seconds": 1, "output": {"exit": 1}}])
+    js = r"""const LT = require(process.argv[1]); const m = LT.model();
+      for (const l of require("fs").readFileSync(0, "utf8").split("\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
+      process.stdout.write(JSON.stringify([...m.nodes.values()].map(n => [n.failed, !!n.timedOut])));"""
+    r = subprocess.run(["node", "-e", js, str(LOOPTREE)], input=events, capture_output=True, text=True, timeout=60)
+    assert json.loads(r.stdout) == [[False, True], [True, False]], r.stderr

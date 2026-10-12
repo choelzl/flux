@@ -49,6 +49,12 @@ def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():
     assert got == {"keys": ["search", "design", "check", "measure"], "states": ["ok", "ok", "ok", "ok"], "design": 1, "repaired": False}
 
 
+def test_a_box_whose_step_failed_says_so_though_it_finished():
+    """D995: a measure that ended with one of its tools failing (exit 1) is "!", not ✓."""
+    got = run(f"""m => {{ {TREE} rtl.failed = true; const b = m.flowBoxes(rows, 6, false); return b.map(x => x.state); }}""")
+    assert got == ["part", "ok", "ok", "part"]          # the search holds the measure; the check passed
+
+
 def test_a_design_after_a_check_is_a_repair_counted_on_the_box():
     got = run(f"""m => {{ {TREE} const again = {{id: 9, name: "tool:gen.py", why: "generate lut-chunk=4", parent: null, t0: 5, t1: 6, kids: []}};
       const b = m.flowBoxes([...rows, {{node: again}}], 6, false); return [b.find(x => x.key === "design").count, m.repaired(b)]; }}""")

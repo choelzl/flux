@@ -28,6 +28,9 @@
         d.t1 = e.t; d.seconds = e.seconds; d.output = e.output; d.interrupted = false;   // D928: its own end, not a settled one
         // D757: a tool that exited with an error failed, though its step went on
         d.failed = e.failed || (String(d.name).indexOf("tool:") === 0 && e.output && e.output.exit != null && e.output.exit !== 0);
+        // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
+        d.timedOut = /^\s*agent\s*:/i.test(String(d.name)) && !!e.output && Number(e.output.exit) === 124;
+        if (d.timedOut) d.failed = false;
       }
     }
     else if (e.ev === "publish") m.standings.set(e.key, e.payload);

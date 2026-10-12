@@ -11,7 +11,7 @@ const isModel = n => /^\s*(llm\b|model\b)/i.test(String(n.name));
 const head = n => String(n.name).toLowerCase().split(":")[0].trim();
 const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
 const running = n => n.t1 == null;
-const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : ["ok", "done"];
+const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"] : ["ok", "done"];
 const fieldsOf = n => ({ ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) });
 const stdoutOf = n => { const f = fieldsOf(n); return String(f.stdout ?? f["stdout (live tail)"] ?? ""); };
 const lines = s => String(s).split("\n").filter(l => l.trim());
@@ -117,7 +117,9 @@ function toolBody(n, env) {
           return h("tr", {}, h("td", {}, k, dir ? ` ${dir > 0 ? "↑" : "↓"}` : ""), h("td", { class: "num mono" }, fmt(v)), h("td", { class: "num mono" }, b != null ? fmt(b) : "—"),
             h("td", { class: `alt-change ${better}` }, change == null || !dir ? "" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`));
         })))));
-    } else if (f.exit != null) top.push(h("div", { class: `alt-result ${f.exit === 0 ? "ok" : "bad"}`, style: `--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}` },
+    } else if (n.timedOut) top.push(h("div", { class: "alt-result warn", style: "--k:var(--warn)" },     // D997: a time limit warns
+      h("span", { class: "alt-big" }, `! exit ${f.exit} · time limit`)));
+    else if (f.exit != null) top.push(h("div", { class: `alt-result ${f.exit === 0 ? "ok" : "bad"}`, style: `--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}` },
       h("span", { class: "alt-big" }, f.exit === 0 ? "✓ exit 0" : `✗ exit ${f.exit}`)));
   }
   const command = String(p.command || "");

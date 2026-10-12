@@ -494,7 +494,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       when read upward and follows its end otherwise. */
   function agentView(n, now) {
     const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) };
-    const stderrClass = n.failed || (f.exit != null && f.exit !== 0) ? "err" : "";
+    const stderrClass = n.failed || (f.exit != null && f.exit !== 0 && !n.timedOut) ? "err" : "";
     const facts = [["model", f.agent], ["status", f.status], ["output", f.output], ["rate limit", f["rate limit"]],
       ["exit", f.exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)]].filter(([k, v]) => v != null && v !== "" && !(unifiedDetail && k === "took"));
     const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
@@ -538,7 +538,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
       h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
     return h("div", { class: "agent-view" },
-      h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? " bad" : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
+      h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? (n.timedOut ? " warn" : " bad") : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
       p.command && !unifiedDetail ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono", "data-k": "command" }, p.command)) : "",
       stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, n.failed ? "err" : ""),
@@ -631,7 +631,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     } else
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
-        n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done"),   // D928
+        n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted || n.timedOut ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : n.timedOut ? "time limit" : "done"),   // D928
         n.pseudo ? "" : h("span", { class: "muted" }, dur(running(n) ? now - n.t0 : n.seconds))),
       h("div", { class: "actions" }, ...viewerTools(detail, { title: n.name,
         rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) })),

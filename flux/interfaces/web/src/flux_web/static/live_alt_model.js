@@ -45,7 +45,7 @@ export function currentTask(rows) {
     || latest(active) || latest(nodes.filter(n => !n.kids.length), true) || latest(nodes, true);
 }
 
-export const taskState = n => n.t1 == null ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done";
+export const taskState = n => n.t1 == null ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : n.timedOut ? "timeout" : "done";
 
 // Recent tasks first in long journals, without dropping the selected task or its ancestors.
 export function taskWindow(rows, limit, selected) {

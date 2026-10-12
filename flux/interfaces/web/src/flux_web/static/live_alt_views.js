@@ -55,7 +55,11 @@ function leaves(n) { return n.kids?.length ? n.kids.flatMap(leaves) : [n]; }
 function boxState(runs) {
   if (!runs.length) return "wait";
   const last = runs[runs.length - 1], s = state(last);
-  return s === "running" ? "run" : s === "failed" ? "bad" : s === "interrupted" ? "bad" : "ok";
+  if (s === "running") return "run";
+  if (s === "failed" || s === "interrupted") return "bad";
+  if (s === "timeout") return "part";                   // D997: a time limit warns
+  const failedIn = n => (n.kids || []).some(k => k.failed || failedIn(k));
+  return failedIn(last) ? "part" : "ok";                // D995: a step under it failed
 }
 function who(runs) {
   const all = runs.flatMap(r => { const out = [], st = [r]; while (st.length) { const x = st.pop(); out.push(x); st.push(...(x.kids || [])); } return out; });
@@ -73,7 +77,7 @@ export function flowBoxes(rows, p, running) {
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "critic"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))) }));
-  if (kind === "baseline" && boxes.length && boxes.every(b => boxState(b.runs) === "ok")) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
+  if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
   return boxes.map(finish);
 }
 function finish(b) {

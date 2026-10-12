@@ -131,7 +131,7 @@ function resultsView(ctx, r) {
       return h("td", { class: "pick" }, box); };
     const more = all.length > shown.length ? h("div", { class: "more" }, h("button", { class: "small", onclick: () => { pageN += PAGE; drawTable(); } },
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
-    table.replaceChildren(shown.length ? h("div", { class: "scroll-x" }, h("table", { class: "list designs" },
+    table.replaceChildren(shown.length ? h("div", { class: "scroll-x rows-scroll" }, h("table", { class: "list designs" },     // D998: scrolls in its box
       h("thead", {}, measurementGroupRow(metrics, metricGroups, 3), h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
         ...metrics.map(m => { const l = limitOf(m); return th(m, m, { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
