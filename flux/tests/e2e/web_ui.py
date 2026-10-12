@@ -2185,6 +2185,10 @@ def flows(r: Run) -> None:
             svg.dispatchEvent(new PointerEvent('pointermove', {clientX: b.left + b.width * 0.6, clientY: b.top + b.height / 2, bubbles: true}));
             const tip = svg.parentNode.querySelector('.tchart-tip'); return tip && !tip.hidden ? tip.textContent : '';""")
         r.check("hovering a chart shows its time and value in a bubble", said is None or bool(said), repr(said))
+        heads = b.js("return [...document.querySelectorAll('#main .card')].filter(c => /^(Disk per loop|Sandbox containers)/.test(c.querySelector('h2')?.textContent || '') && c.querySelector('table'))"
+                     ".map(c => [c.querySelector('h2').textContent, !!c.querySelector('table.sortable th button.th-sort'), !!c.querySelector('tfoot tr.sum') || !/^Disk/.test(c.querySelector('h2').textContent)])")
+        r.check("Resources: the containers and disk per loop sort by a header, the sum stays under the rows (D989)",
+                bool(heads) and all(x[1] and x[2] for x in heads), str(heads))
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
         r.check("the model settings have a tab per tool, an agent's where it is installed, no Other (D721, D807, D817)",
@@ -2863,6 +2867,9 @@ def flows(r: Run) -> None:
             got = b.js("const o = {}; for (const c of document.querySelectorAll('#insights-part .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
             per[label] = sorted(got)
             cards.update(got)
+            if label == "Usage and disk":       # D989: its tables sort by a header, as Users
+                sortable = b.js("return [...document.querySelectorAll('#insights-part .card')].filter(c => c.querySelector('table')).every(c => [...c.querySelectorAll('table')].every(t => t.classList.contains('sortable') && t.querySelector('th button.th-sort')))")
+                r.check("Insights: Usage and disk's tables sort by a header (D989)", sortable is True, str(sortable))
         r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage and disk": ["Current disk usage", "Usage"],
                 "Endpoints and network": ["Endpoints and agents", "Network refused"]}, str(per))
         r.check("Insights: the failed start with why it stopped", "bob/broken" in cards.get("Failures", "") and "not on PATH" in cards.get("Failures", ""),

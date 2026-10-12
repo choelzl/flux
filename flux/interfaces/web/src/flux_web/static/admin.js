@@ -14,6 +14,13 @@ const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: 
 const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
 const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
 
+/** D989: an admin table sorted by a click on a header (as Users), the phone's sort strip above it,
+    its totals (a <tfoot>) kept under the rows whatever the order. */
+function sortedTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list compact" } = {}, foot = null) {
+  const t = sortableTable(memo, cols, rows, rowFn, firstCol, { cls });
+  if (foot) t.append(foot);
+  return [t.strip, h("div", { class: "scroll-x" }, t)];
+}
 function meter(frac, cls = "") {
   const f = Math.max(0, Math.min(1, frac || 0));
   return h("div", { class: `meter ${cls}${f > 0.9 ? " high" : f > 0.75 ? " mid" : ""}` }, h("div", { style: `width:${(f * 100).toFixed(1)}%` }));
@@ -204,8 +211,11 @@ async function adminResources(body) {
     const cs = r.containers || [];
     const loopLink = (u, a) => u ? h("a", { href: appHref(u, a) }, `${u} / ${a}`) : h("span", { class: "muted" }, "no loop");
     const contCard = card(`Sandbox containers (${r.engine || "none"})`, r.error ? h("p", { class: "callout bad" }, r.error)
-      : cs.length ? h("div", { class: "scroll-x" }, h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Container", "Loop", "State", "CPU", "Memory", "PIDs", ""].map((x, i) => h("th", { class: i >= 3 && i <= 5 ? "num" : "" }, x)))),
-          h("tbody", {}, cs.map(c => h("tr", {},
+      : cs.length ? sortedTable("flux-sort-containers", [      // D989: sorted by a header, as Users
+          { label: "Container", key: c => c.name, asc: true }, { label: "Loop", key: c => c.user ? `${c.user}/${c.loop}` : "", asc: true },
+          { label: "State", key: c => c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state, asc: true },
+          { label: "CPU", key: c => c.cpu, num: true }, { label: "Memory", key: c => c.mem, num: true }, { label: "PIDs", key: c => c.pids, num: true }, { label: "" }],
+          cs, c => h("tr", {},
             h("td", { class: "mono" }, c.name), h("td", {}, loopLink(c.user, c.loop)),
             h("td", {}, h("span", { class: `pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}` }, c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state), " ", h("small", { class: "muted" }, c.status)),
             h("td", { class: "num mono" }, c.cpu != null ? `${c.cpu.toFixed(1)}%` : ""),
@@ -216,7 +226,7 @@ async function adminResources(body) {
                 toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
               }, { cls: "small danger" })
               : c.activity && c.activity !== "loop" ? (c.user ? h("a", { class: "btn small", href: appHref(c.user, c.loop) }, "View") : null)
-              : act("Stop", async () => { await stopLoop(c.loop, false, c.user); load(); }, { cls: "small", title: "Stop the loop after this pass" }))))))) : empty("No sandbox container."),
+              : act("Stop", async () => { await stopLoop(c.loop, false, c.user); load(); }, { cls: "small", title: "Stop the loop after this pass" }))), 3, { cls: "list" }) : empty("No sandbox container."),
       { actions: r.containers_at ? [h("span", { class: "muted small" }, "asked ", ago(r.containers_at))] : null });   // D921: a sample, said with its time
     const loops = r.loops.slice().sort((a, b) => b.total - a.total);
     const totalOf = (k) => loops.reduce((s, l) => s + (l[k] || 0), 0);
@@ -224,24 +234,27 @@ async function adminResources(body) {
       if (!await confirmDialog(`${label}: ${l.user} / ${l.app}?`, text, { ok: label, danger: what === "all" })) return;
       const x = await api(`/admin/caches/${enc(l.cache_key || l.key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
     }, { cls: "small" });
-    const diskCard = card("Disk per loop", h("div", { class: "scroll-x" }, h("table", { class: "list compact" },
-      h("thead", {}, h("tr", {}, ["Loop", "", "Inputs", "Record", "Log", "Workbench", "Sandbox cache", "Total", ""].map((x, i) => h("th", { class: i >= 2 && i <= 7 ? "num" : "" }, x)))),
-      h("tbody", {}, loops.map(l => h("tr", {}, h("td", {}, loopLink(l.user, l.app)), h("td", {}, l.running ? h("span", { class: "pill live" }, "running") : ""),
-          ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: `num mono${k === "total" ? " strong" : ""}` }, bytes(l[k]))),
+    const SIZES = ["inputs", "record", "log", "workbench", "cache", "total"];
+    const diskCard = card("Disk per loop", sortedTable("flux-sort-loop-disk", [
+      { label: "Loop", key: l => `${l.user}/${l.app}`, asc: true }, { label: "" },
+      ...SIZES.map((k, i) => ({ label: ["Inputs", "Record", "Log", "Workbench", "Sandbox cache", "Total"][i], key: l => l[k] || 0, num: true })), { label: "" }],
+      loops, l => h("tr", {}, h("td", {}, loopLink(l.user, l.app)), h("td", {}, l.running ? h("span", { class: "pill live" }, "running") : ""),
+          ...SIZES.map(k => h("td", { class: `num mono${k === "total" ? " strong" : ""}` }, bytes(l[k]))),
           h("td", { class: "right" }, l.running || !l.cache ? "" : h("div", { class: "actions end" },
             cleanBtn(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need."),
-            cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay."))))),
-        h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...["inputs", "record", "log", "workbench", "cache", "total"].map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {}))))));
+            cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay.")))),
+      7, {}, h("tfoot", {}, h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...SIZES.map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {})))));
     const other = r.caches;
     const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "Deleting one frees its space; it is rebuilt when needed."),
-      h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Cache", "Whose", "Size", "Last touched", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
-        h("tbody", {}, other.map(c => h("tr", {}, h("td", { class: "mono" }, c.key),
+      sortedTable("flux-sort-caches", [{ label: "Cache", key: c => c.key, asc: true }, { label: "Whose", key: c => c.kind === "gone" ? `${c.user}/${c.app}` : "", asc: true },
+        { label: "Size", key: c => c.size, num: true }, { label: "Last touched", key: c => c.touched }, { label: "" }],
+        other, c => h("tr", {}, h("td", { class: "mono" }, c.key),
           h("td", {}, c.kind === "gone" ? h("span", {}, `${c.user}'s ${c.app}, `, h("span", { class: "pill warn" }, "deleted")) : h("span", { class: "muted" }, "not the web's")),
           h("td", { class: "num mono" }, bytes(c.size)), h("td", { class: "muted" }, c.touched ? ago(c.touched) : ""),
           h("td", { class: "right" }, act("Delete", async () => {
             if (!await confirmDialog(`Delete the cache ${c.key}?`, `${bytes(c.size)}: its scratch, the agents' sessions and the tools' cache.`, { ok: "Delete", danger: true })) return;
             const x = await api(`/admin/caches/${enc(c.key)}/clean`, { method: "POST", body: { what: "all" } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
-          }, { cls: "small danger" }))))))]) : "";
+          }, { cls: "small danger" }))), 2)]) : "";
     body.replaceChildren(machineCard, overTime, contCard, diskCard, cacheCard);
     drawHistory();
   }
@@ -490,11 +503,12 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
       if (!ok()) return;
       at.replaceChildren("measured ", ago(d.at));
       const maxDisk = Math.max(...d.disk.map(x => x.total), 1);
-      dbox.replaceChildren(h("table", { class: "list compact" },
-        h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", { class: "num" }, "Home"), h("th", { class: "num" }, "Loops"), h("th", {}, "Largest loop"), h("th", { class: "num" }, "Total"), h("th", {}, ""))),
-        h("tbody", {}, d.disk.map(x => h("tr", {}, h("td", { class: "strong" }, x.user), h("td", { class: "num mono" }, bytes(x.home)),
+      dbox.replaceChildren(...sortedTable("flux-sort-user-disk", [{ label: "User", key: x => x.user, asc: true }, { label: "Home", key: x => x.home, num: true },
+        { label: "Loops", key: x => x.loops, num: true }, { label: "Largest loop", key: x => x.largest ? x.largest.size : null },
+        { label: "Total", key: x => x.total, num: true }, { label: "" }],
+        d.disk, x => h("tr", {}, h("td", { class: "strong" }, x.user), h("td", { class: "num mono" }, bytes(x.home)),
           h("td", { class: "num mono" }, `${bytes(x.loops)} (${x.count})`), h("td", {}, x.largest ? [loopLink(x.user, x.largest.app), " ", h("span", { class: "muted mono small" }, bytes(x.largest.size))] : "—"),
-          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk))))),
+          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk))), 4, {},
         totals("Total", totalCell("Home", bytes(sum(d.disk.map(x => x.home)))),
           totalCell("Loops", `${bytes(sum(d.disk.map(x => x.loops)))} (${sum(d.disk.map(x => x.count))})`), h("td", {}, ""),
           totalCell("Total", bytes(sum(d.disk.map(x => x.total)))), h("td", {}, ""))));
@@ -535,20 +549,22 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
       const usageTable = (by, head) => {
         const rows = rowsOf(by), values = rows.map(([, v]) => v);
         const tokens = u.days.map((_, i) => sum(values.map(v => v.tokens[i] || 0)));
-        return h("table", { class: "list compact" },
-          h("thead", {}, h("tr", {}, h("th", {}, head), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", {}, `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)`))),
-          h("tbody", {}, rows.map(([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
+        return sortedTable(`flux-sort-usage-${head}`, [{ label: head, key: ([k]) => k, asc: true },
+          { label: "Turns", key: ([, v]) => sum(v.turns), num: true }, { label: "Tokens", key: ([, v]) => sum(v.tokens), num: true },
+          { label: "Cost", key: ([, v]) => sum(v.cost), num: true }, { label: `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)` }],
+          rows, ([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
             h("td", { class: "num" }, String(sum(v.turns))), h("td", { class: "num mono" }, fmtTok(sum(v.tokens))),
-            h("td", { class: "num mono" }, `$${sum(v.cost).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))))),
+            h("td", { class: "num mono" }, `$${sum(v.cost).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))), 2, {},
           totals("Total", totalCell("Turns", String(sum(values.map(v => sum(v.turns)))), false),
             totalCell("Tokens", fmtTok(sum(tokens))), totalCell("Cost", `$${sum(values.map(v => sum(v.cost))).toFixed(2)}`),
             h("td", { "data-label": `Tokens ${per}` }, spark(tokens, `Total: tokens ${per}`))));
       };
       fill(...[Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
-        u.top.length ? [h("h3", {}, "Highest usage loops"), h("table", { class: "list compact" },
-          h("thead", {}, h("tr", {}, h("th", {}, "Loop"), h("th", { class: "num" }, "Turns"), h("th", { class: "num" }, "Tokens"), h("th", { class: "num" }, "Cost"), h("th", { class: "num" }, "Time"))),
-          h("tbody", {}, u.top.map(t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
-            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))))),
+        u.top.length ? [h("h3", {}, "Highest usage loops"), sortedTable("flux-sort-usage-loops", [{ label: "Loop", key: t => `${t.user}/${t.app}`, asc: true },
+          { label: "Turns", key: t => t.turns, num: true }, { label: "Tokens", key: t => t.tokens, num: true },
+          { label: "Cost", key: t => t.cost, num: true }, { label: "Time", key: t => t.seconds, num: true }],
+          u.top, t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
+            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))), 2, {},
           totals("Total shown", totalCell("Turns", String(sum(u.top.map(t => t.turns))), false),
             totalCell("Tokens", fmtTok(sum(u.top.map(t => t.tokens)))), totalCell("Cost", `$${sum(u.top.map(t => t.cost)).toFixed(2)}`),
             totalCell("Time", dur(sum(u.top.map(t => t.seconds))), false)))] : ""]
