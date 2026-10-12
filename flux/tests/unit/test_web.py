@@ -256,7 +256,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
         assert bob.post("/api/apps/sw/start", json={"passes": 1}, headers=H).status_code == 409, "running already"
         deadline = time.time() + 240
         while time.time() < deadline and bob.get("/api/apps/sw/state").json()["running"]:
-            time.sleep(1)
+            time.sleep(0.2)
         st = bob.get("/api/apps/sw/state").json()
         assert st["running"] is False and not st["failed"] and st["events"] and st["campaign"], st
     log = bob.get("/api/apps/sw/log/raw").text
@@ -291,7 +291,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     assert r.status_code == 200, r.text
     deadline = time.time() + 240
     while time.time() < deadline and bob.get("/api/apps/sw/state").json()["running"]:
-        time.sleep(1)
+        time.sleep(0.2)
     after = bob.get("/api/apps/sw/results").json()
     assert after["invalidated"][0]["reevaluated"] and (gone["key"], gone["base"]) in {(d["key"], d["base"]) for d in after["designs"]}
     pre = bob.get("/api/apps/sw/preflight").json()

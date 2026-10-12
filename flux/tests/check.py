@@ -6,11 +6,12 @@ run's. From flux/, in the dev shell:
     python3 tests/check.py unit e2e              # some
     FLUX_E2E_STEPS=invitation python3 tests/check.py e2e
 
-The unit suite runs on 32 workers that steal work from each other (`--dist worksteal`): more
-workers than that gain nothing, a few long tests and each worker's collection being the floor.
-The e2e runs as three shards side by side (D1003), each its own server, browser and home: the steps
-of web_ui.py that build on each other in order (the floor), and two of the steps that stand alone
-(the other web_ui_*.py files', and `ALONE` below) -- `FLUX_E2E_STEPS` set runs those steps as one.
+The unit suite runs on 24 workers that steal work from each other (`--dist worksteal`), heavy on 16:
+more gain nothing while the e2e shards share the machine (D1011) -- a few long tests are the floor.
+The e2e runs as seven shards side by side (D1003, D1011), each its own server, browser and home: three
+of the steps that stand alone (the other web_ui_*.py files', `ALONE` and the first of `CHAINS`), four
+of web_ui.py's other steps, each started from a setup made by API (bob, the sweep `sw` run once), the
+few that need an earlier step's work kept together (`CHAINS`). `FLUX_E2E_STEPS` set runs those steps as one.
 Exit 1 when one fails; its log's last lines are printed.
 """
 
@@ -27,39 +28,63 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[1]
 JOBS = {
     "ruff": ["ruff", "check", "."],
-    "unit": [sys.executable, "-m", "pytest", "-q", "-n", "32", "--dist", "worksteal", "tests/unit"],
-    "heavy": [sys.executable, "-m", "pytest", "-q", "-m", "heavy", "-n", "24", "--dist", "worksteal", "tests/unit"],
+    "unit": [sys.executable, "-m", "pytest", "-q", "-n", "24", "--dist", "worksteal", "tests/unit"],
+    "heavy": [sys.executable, "-m", "pytest", "-q", "-m", "heavy", "-n", "16", "--dist", "worksteal", "tests/unit"],
     "e2e": [sys.executable, "tests/e2e/web_ui.py"],
 }
 
 
-#: web_ui.py's steps that pass on their own (D1003: found by running each step alone); the rest
-#: of that file is one chain -- a login, the loops the steps before made
-ALONE = ("phone", "sorted lists", "invitation", "documents migrated")      # not "error feedback": Insights reads its start
-E2E_SHARDS = 3
+#: web_ui.py's steps that pass on a fresh server with nothing made before them (found by running
+#: each step alone)
+ALONE = ("phone", "sorted lists", "invitation", "documents migrated")
+#: D1011: web_ui.py's steps that need what an earlier one made, kept together in their order; the
+#: first runs on a fresh server (it checks the empty list and uploads), the others after the setup
+CHAINS = (("login refused", "login", "upload", "every tab", "screens"),
+          ("passes at once", "live tabs", "agent test", "files and questions"),     # `fromex`, made by the first
+          ("error feedback", "insights"))                                          # the failed start Insights reads
+#: the rest of web_ui.py runs on its own after the setup (`FLUX_E2E_SETUP=1`: bob, the sweep `sw`
+#: uploaded and run once -- web_ui.Run.setup); seconds of the longer steps, to deal shards evenly
+WEIGHT = {"start and stop": 56, "phone": 54, "agent test": 45, "live tabs": 21, "compact tables": 19, "author progress": 17,
+          "a killed run": 16, "overview layout": 14, "admin sharing": 13, "passes at once": 12, "user groups": 12,
+          "sorted lists": 11, "error feedback": 10, "keyboard journey": 10}
+PLAIN_SHARDS, SETUP_SHARDS = 3, 4
 
 
 def _steps(name: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r'r\.step\("([^"]+)"', (HERE / "tests/e2e" / name).read_text())))
 
 
-def e2e_shards() -> list[list[str]]:
-    """The chain whole, in its order; the steps that stand alone dealt over the other shards."""
-    chain = [s for s in _steps("web_ui.py") if s not in ALONE]
-    alone = [s for s in _steps("web_ui.py") if s in ALONE] + [s for p in sorted((HERE / "tests/e2e").glob("web_ui_*.py"))
-                                                              for s in _steps(p.name)]     # each sets up its own
-    rest = [alone[i::E2E_SHARDS - 1] for i in range(E2E_SHARDS - 1)]
-    return [chain, *rest]
+def _deal(groups: list[tuple[str, ...]], n: int, order: dict[str, int]) -> list[list[str]]:
+    """The groups over `n` shards, the heaviest first onto the lightest; each shard in the steps' own order."""
+    shards: list[list[str]] = [[] for _ in range(n)]
+    load = [0] * n
+    for g in sorted(groups, key=lambda g: -sum(WEIGHT.get(s, 5) for s in g)):
+        i = load.index(min(load))
+        shards[i] += g
+        load[i] += sum(WEIGHT.get(s, 5) for s in g)
+    return [sorted(sh, key=order.__getitem__) for sh in shards if sh]
+
+
+def e2e_shards() -> list[tuple[list[str], bool]]:
+    """(steps, with the setup) per shard: the first chain and every step that stands alone on plain
+    shards; the other chains and the rest of web_ui.py on shards that start from the setup."""
+    main = _steps("web_ui.py")
+    others = [s for p in sorted((HERE / "tests/e2e").glob("web_ui_*.py")) for s in _steps(p.name)]   # each sets up its own
+    order = {s: i for i, s in enumerate(main + others)}
+    chained = {s for c in CHAINS for s in c}
+    plain = [CHAINS[0], *((s,) for s in main if s in ALONE), *((s,) for s in others)]
+    setup = [*CHAINS[1:], *((s,) for s in main if s not in ALONE and s not in chained)]
+    return [(sh, False) for sh in _deal(plain, PLAIN_SHARDS, order)] + [(sh, True) for sh in _deal(setup, SETUP_SHARDS, order)]
 
 
 def _e2e(logs: Path) -> list[tuple[str, list[str], dict[str, str]]]:
-    """(job, argv, env) per e2e shard: its steps, its own home (the first keeps the default one)."""
+    """(job, argv, env) per e2e shard: its steps, the setup or not, its own home (the first keeps the default one)."""
     if os.environ.get("FLUX_E2E_STEPS"):
         return [("e2e", JOBS["e2e"], {})]
     homes = Path.home() / "snap" / "firefox" / "common"     # where a snap Firefox may read its profile
-    return [(f"e2e{i}", JOBS["e2e"], {"FLUX_E2E_STEPS": ",".join(steps),
+    return [(f"e2e{i}", JOBS["e2e"], {"FLUX_E2E_STEPS": ",".join(steps), **({"FLUX_E2E_SETUP": "1"} if setup else {}),
                                       **({"FLUX_E2E_HOME": str(homes / f"flux-e2e-{i}")} if i else {})})
-            for i, steps in enumerate(e2e_shards())]
+            for i, (steps, setup) in enumerate(e2e_shards())]
 
 
 def _said(job: str, text: str, ok: bool) -> str:
@@ -99,7 +124,7 @@ def main(argv: list[str]) -> int:
                 failed.append(job)
             del running[job]
         time.sleep(0.5)
-    shards = sorted(logs.glob("e2e?.log"))
+    shards = sorted(logs.glob("e2e[0-9]*.log"))
     if shards:                                    # D1003: the shards' checks as one count
         got = [re.search(r"(\d+) of (\d+) checks passed", p.read_text(errors="replace")) for p in shards]
         passed, total = (sum(int(m.group(k)) for m in got if m) for k in (1, 2))

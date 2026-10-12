@@ -286,10 +286,55 @@ class Run:
             except Exception:  # noqa: BLE001
                 pass
 
+    def setup(self):
+        """D1011: what the dependent steps start from, made by API in seconds -- bob logged in, the
+        sweep `sw` uploaded and run once to its end -- so a shard runs a part of them on its own
+        (FLUX_E2E_SETUP=1; the first shard makes it through its own steps, as a user would)."""
+        import http.cookiejar
+        import urllib.request
+        import uuid
+
+        jar = http.cookiejar.CookieJar()
+        web = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+        def call(path, method="GET", body=None, form=None):
+            headers, data = {"X-Flux": "1"}, None
+            if form is not None:
+                edge = uuid.uuid4().hex
+                parts = [f'--{edge}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode() for k, v in form["fields"].items()]
+                parts += [f'--{edge}\r\nContent-Disposition: form-data; name="files"; filename="{n}"\r\n\r\n'.encode() + t + b"\r\n"
+                          for n, t in form["files"].items()]
+                data, headers["Content-Type"] = b"".join(parts) + f"--{edge}--\r\n".encode(), f"multipart/form-data; boundary={edge}"
+            elif body is not None:
+                data, headers["Content-Type"] = json.dumps(body).encode(), "application/json"
+            with web.open(urllib.request.Request(self.url + "/api" + path, data=data, headers=headers, method=method), timeout=300) as got:
+                return json.loads(got.read() or b"null")
+
+        call("/login", "POST", {"name": "bob", "password": PASSWORDS["bob"]})
+        call("/apps", "POST", form={"fields": {"name": "sw"},
+                                    "files": {f.name: f.read_bytes() for f in sorted((self.files / "sw").iterdir()) if f.is_file()}})
+        call("/apps/sw/start", "POST", {"passes": 1})
+        deadline = time.time() + 300
+        while time.time() < deadline:
+            st = call("/apps/sw/state")
+            if not st.get("running") and st.get("campaign"):
+                break
+            time.sleep(0.5)
+        else:
+            raise AssertionError("the setup's run of sw did not end")
+        self.login("bob")
+
     def step(self, name, fn):
         only = [x.strip() for x in os.environ.get("FLUX_E2E_STEPS", "").split(",") if x.strip()]
         if only and name not in only:                   # D821: while working on a few, only those
             return
+        if os.environ.get("FLUX_E2E_SETUP") == "1" and not getattr(self, "_set_up", False):
+            self._set_up = True
+            try:
+                self.setup()
+            except Exception as exc:  # noqa: BLE001
+                self.check("setup: bob, the sweep sw uploaded and run once", False, f"{type(exc).__name__}: {exc}")
+                traceback.print_exc()
         t0 = time.monotonic()
         try:
             fn()
@@ -2155,6 +2200,8 @@ def flows(r: Run) -> None:
     r.step("graphs", graphs)
 
     def watcher():
+        r.login("bob")                                  # D1011: its own share, not an earlier step's
+        assert r.api("/apps/sw/shares", "PUT", {"user": "cy", "perm": "watch"})["status"] == 200
         r.login("cy")
         r.page("#/", "document.querySelector('#main')", "cy's loops")
         b.wait("document.querySelector('#main').innerText.includes('Shared with me')", what="the shared list")
@@ -2219,6 +2266,7 @@ def flows(r: Run) -> None:
     r.step("admin", admin)
 
     def external_user():                                                   # D734
+        r.login("ada")                                  # D1011: the admin's page, logged in here, not by an earlier step
         group_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s group\")"
         r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s group\"))", "the users and their groups")
         r.check("the admin sees each user's group", b.js(f"const k = {group_of}; return k && k.options[k.selectedIndex].textContent", "bob") == "Internal")

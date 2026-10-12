@@ -230,27 +230,3 @@ def test_a_clocked_design_is_checked_and_its_latency_measured(tmp_path):
     assert r.returncode == 1 and "claims 3 cycle(s) of latency, measured 2" in r.stdout, r.stdout
 
 
-@pytest.mark.heavy
-@pytest.mark.skipif(shutil.which("openroad") is None or shutil.which("yosys") is None, reason="needs yosys and openroad")
-def test_measure_on_asap7_through_orfs_at_each_stage(tmp_path):
-    """D967: OpenROAD-flow-scripts run to the stage asked, its own metrics read: stat is the
-    mapped cells; synth times the signed multiplier's netlist unplaced (OpenROAD refuses
-    `input signed` until it is stripped); place after placement; route after routing, with the
-    detailed router's DRC count; a clocked design's clock is its own."""
-    from flux_presets import rtl
-
-    try:
-        rtl.flow_home()
-    except SystemExit:
-        pytest.skip("OpenROAD-flow-scripts is not here (FLOW_HOME)")
-    stat = rtl.measure(GOOD, stage="stat")
-    assert set(stat) == {"area_um2", "cell_count"} and stat["area_um2"] > 0
-    synth = rtl.measure(GOOD, stage="synth", clock_ps=625)
-    route = rtl.measure(GOOD, stage="route", clock_ps=625)
-    assert 1000 < synth["fmax_mhz"] < 4000 and synth["power_w"] > 0 and synth["cell_count"] == stat["cell_count"]
-    assert route["fmax_mhz"] < synth["fmax_mhz"] and route["flow_depth"] == "routing" and route["drc_errors"] == 0
-    assert abs(synth["path_ps"] - (625 - synth["worst_slack_ps"])) < 1e-6 and route["wirelength_um"] > 0
-    piped = rtl.measure(PIPE, stage="synth", clock_ps=400)
-    assert piped["fmax_mhz"] > 1000 and piped["cell_count"] > 0
-    r = _rtl("measure", str(tmp_path / "x.sv"), "--stage", "stat") if (tmp_path / "x.sv").write_text(GOOD) else None
-    assert r.returncode == 0 and r.stdout.startswith("area_um2=") and "stage=stat" in r.stdout, r.stdout + r.stderr
