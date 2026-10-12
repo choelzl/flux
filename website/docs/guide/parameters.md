@@ -311,7 +311,9 @@ Beside `by: <agent>` on any box an agent may work:
 An agent never compiles, simulates or tests by itself: those programs are denied (verilator,
 yosys, openroad, sta, klayout, champsim, gcc, g++, cc, c++, clang, clang++, make, cmake,
 ninja, pytest, bash, sh, `flux rtl`, `flux task`, `flux run`) unless `allow` gives them back.
-It checks its file through the loop's own gate and stages with `flux probe`. The agent's
+It checks its file through the loop's own gate and stages with `flux probe`; `probe: false` keeps it
+from running any of them itself (the loop alone checks and measures), and `budget.tools_at_once`
+makes its probes wait for a free slot like the loop's own runs. The agent's
 model is set on the machine (`FLUX_<NAME>_MODEL` or the web's Agents settings), not in the
 document. Your own agent is `by: {command: [my-agent, "{prompt_file}", "{artifact}"]}`
 ([agent contract](#agent-command)).
@@ -354,6 +356,7 @@ as missed. `goal` cannot be combined with `keep` or `balance`; a dictionary metr
 | `workers` | `0` | Tool runs at once; `0` = half the cores, at most 4. Use `1` for timings |
 | `parallel` | `1` | Passes at once (a server limit also applies) |
 | `parallel_parts` | `1` | Parts drafted at once |
+| `tools_at_once` | `0` | Checks and measurements at once across the whole loop -- passes and parts at once, and an agent's `flux probe` -- for a tool that breaks when two of its runs share the machine; `0` = no limit |
 | `ahead` | `true` | Measure a part while the next one is drafted |
 | `screen_only` | `false` | Stop after the first stage |
 | `max_depth` | `3` | Deepest nesting of sub-loops |

@@ -468,9 +468,12 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         if any("{params}" in t for t in cmd) and "params" not in subs:
             subs = {**subs, "params": self._params_file(subs.get("workdir") or ".")}   # D799
 
+        from .toollock import tool_slot
+
         who = subs.get("name") or ""                   # D709: the task says which candidate
-        return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
-                        what=f"{what} {who}" if who and who not in what else what)
+        with tool_slot(self.task.home or ".", int(self.task.budget.get("tools_at_once") or 0), what):   # D1004
+            return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
+                            what=f"{what} {who}" if who and who not in what else what)
 
     def _params_file(self, workdir: str) -> str:
         """`{params}` (D799): the document's `params:` as a JSON file a command reads."""

@@ -343,6 +343,9 @@ class TaskSpec:
         bad = sorted(set(budget) - known)
         if bad:
             raise TaskError(f"budget keys {bad} are not loop knobs; known: {sorted(known)}")
+        at_once = budget.get("tools_at_once", 0)
+        if type(at_once) is not int or at_once < 0:
+            raise TaskError("budget.tools_at_once is how many checks and measurements may run at once: 1 or more, 0 for no limit")
         quota = budget.get("exploration_quota", 0)
         if isinstance(quota, bool) or not isinstance(quota, (int, float)) or not 0 <= quota <= 1:
             raise TaskError("budget.exploration_quota is a fraction between 0 and 1")
