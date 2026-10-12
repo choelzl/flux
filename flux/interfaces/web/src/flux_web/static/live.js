@@ -624,14 +624,9 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     // Live keeps this one
     if (unifiedDetail) {
       detail.replaceChildren(...altInspector(n, {
-        now, nodes, place, goals, tidy: tidyCommand, block,
+        now, nodes, place, goals, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
         pick: id => { if (pick) pick(id); },
         tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),
-        agent: x => agentView(x, now),
-        agentRest: x => [(f.stdout ?? f["stdout (live tail)"]) ? h("section", { class: "astream" }, h("h3", {}, "stdout"),
-            h("pre", { class: "val astream-body", "data-k": "stdout" }, f.stdout ?? f["stdout (live tail)"])) : "",
-          has(x.params) ? h("details", { class: "inspector-input", "data-fold": "input", open: place?.folds?.get("input") || false },
-            h("summary", {}, "Prompt & input"), block("Input", x.params)) : ""],
       }));
     } else
     detail.replaceChildren(

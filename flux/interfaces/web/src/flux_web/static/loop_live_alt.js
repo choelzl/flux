@@ -92,7 +92,7 @@ export function liveAltTab(ctx) {
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
     const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
-    split.classList.toggle("wide", mode === "timeline");
+    split.classList.toggle("wide", mode === "timeline" && pass === "all");   // D984: one pass fits the narrow column; all passes take the width
     split.querySelector(".alt-fold-done").hidden = mode !== "tree";
     stepper.hidden = mode === "graph";                      // the graph's boxes list their own tasks          // a timeline needs the width; the inspector goes under it
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;

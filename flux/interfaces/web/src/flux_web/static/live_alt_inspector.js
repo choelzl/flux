@@ -3,9 +3,11 @@
 import { dur, h } from "./ui.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, phaseKind, workLabel, ownSpans } from "./work_style.js";
 import { candidateOf, taskLabel } from "./live_alt_views.js";
+import { conversation, markdown } from "./loops.js";
 
 const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
 const isTool = n => /^\s*tool\s*:/i.test(String(n.name));
+const isModel = n => /^\s*(llm\b|model\b)/i.test(String(n.name));
 const head = n => String(n.name).toLowerCase().split(":")[0].trim();
 const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
 const running = n => n.t1 == null;
@@ -126,6 +128,73 @@ function toolBody(n, env) {
       h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : "")];
 }
 
+
+/* D984: an agent's turn, or a model's call, as a chat that keeps up -- the prompt and what was
+   fed back on the right, its words on the left, its thinking and its commands as quiet rows; it
+   opens at the newest end and follows it while you are there; scrolling up shows the history in
+   steps without moving your place; scrolled up, new activity waits behind "↓ latest". */
+const CHAT_STEP = 40;
+const chatLimit = new Map(), chatAnchor = new Map();       // per task: how many steps shown, the place to keep
+function chatBox(n, env, kids, more) {
+  const box = h("div", { class: "alt-chat cv", "data-k": "chat", tabindex: "0", "aria-label": "Conversation" }, kids);
+  const jump = h("button", { type: "button", class: "alt-chat-jump", hidden: true, onclick: () => { box.scrollTop = box.scrollHeight; } }, "↓ latest");
+  const atBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+  box.addEventListener("scroll", () => {
+    jump.hidden = atBottom();
+    if (more && box.scrollTop < 40 && !chatAnchor.has(n.id)) {           // the history, a step at a time, the place kept
+      chatAnchor.set(n.id, box.scrollHeight - box.scrollTop);
+      chatLimit.set(n.id, (chatLimit.get(n.id) || CHAT_STEP) + CHAT_STEP);
+      env.redraw();
+    }
+  });
+  requestAnimationFrame(() => {
+    const anchor = chatAnchor.get(n.id);
+    if (anchor != null) { chatAnchor.delete(n.id); box.scrollTop = box.scrollHeight - anchor; }
+    else if (!env.place?.blocks?.get("chat")) box.scrollTop = box.scrollHeight;     // a new task opens at its newest end
+    jump.hidden = atBottom();
+  });
+  return h("div", { class: "alt-chat-wrap" }, box, jump);
+}
+const bubble = (side, label, body, key, env, open) => h("details", { class: `alt-bubble ${side}${side === "me" ? " inspector-input" : ""}`, "data-fold": key, open: open ?? env.place?.folds?.get(key) ?? false },
+  h("summary", {}, h("small", {}, label)), body);
+function usage(f, extra) {
+  const facts = [...extra, ["status", f.status], ["exit", f.exit], ...Object.entries(f).filter(([k]) => /token|cost|usd|first/i.test(k))]
+    .filter(([, v]) => v != null && v !== "");
+  return facts.length ? h("div", { class: "facts alt-usage" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))) : "";
+}
+function agentChat(n, env) {
+  const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) }, p = n.params || {};
+  const steps = Array.isArray(f.steps) ? f.steps : [], total = Number(f["steps total"] || steps.length);
+  const limit = chatLimit.get(n.id) || CHAT_STEP, shown = steps.slice(-limit), above = steps.length - shown.length, kept = total - steps.length;
+  const conv = conversation(shown, { key: `task${n.id}`, offset: total - shown.length, live: running(n) });
+  conv.querySelector(":scope > p.muted.small")?.remove();                   // the chat says what is above, below
+  const prompt = typeof p.prompt === "string" ? p.prompt : "";
+  const top = above > 0 ? h("div", { class: "alt-chat-more" }, `↑ ${above} earlier — scroll up`)
+    : [kept > 0 ? h("div", { class: "alt-chat-more" }, `${kept} earlier step${kept === 1 ? "" : "s"} are in the full log`) : "",
+      prompt ? bubble("me", `Prompt · ${prompt.length.toLocaleString()} characters`, h("pre", { class: "val tall", "data-k": "prompt" }, prompt), "input", env) : ""];
+  const now = running(n) ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";
+  const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
+  return [usage(f, [["model", f.agent || p.model]]),
+    h("div", { class: "agent-view" }, chatBox(n, env, [top, steps.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),
+    out ? fold("stdout", "stdout", `${lines(out).length} lines`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
+    err ? fold("stderr", "stderr", `${lines(err).length} lines`, h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : ""];
+}
+function modelChat(n, env) {
+  const f = fieldsOf(n), p = n.params || {};
+  const reply = String(f.reply ?? f["reply (live tail)"] ?? ""), thinking = String(f.thinking ?? f["thinking (live tail)"] ?? "");
+  let shown = reply;
+  try { if (/^\s*[{[]/.test(reply)) shown = JSON.stringify(JSON.parse(reply), null, 2); } catch (_) { /* not JSON: as it came */ }
+  const kids = [
+    p.system ? bubble("me", `System · ${String(p.system).length.toLocaleString()} characters`, h("pre", { class: "val tall" }, String(p.system)), "system", env) : "",
+    p.prompt ? bubble("me", `Prompt · ${String(p.prompt).length.toLocaleString()} characters`, h("pre", { class: "val tall", "data-k": "prompt" }, String(p.prompt)), "input", env) : "",
+    thinking ? h("details", { class: "cv-step cv-think" }, h("summary", {}, h("span", { class: "cv-kind" }, "Thinking"), h("span", { class: "cv-sum muted" }, thinking.slice(0, 140))),
+      h("pre", { class: "cv-body cv-thought" }, thinking)) : "",
+    reply ? h("div", { class: "cv-text alt-reply" }, shown !== reply ? h("pre", { class: "mono" }, shown) : markdown(reply.trim())) : "",
+    f.error ? h("div", { class: "alt-chat-more bad" }, String(f.error)) : "",
+    running(n) ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), "answering…") : ""];
+  return [usage(f, [["model", p.model], ["thinking", p.think === false ? "off" : p.think ? "on" : ""]]), chatBox(n, env, kids, false)];
+}
+
 /** A search (P8): the point it proposed and that candidate's way through the pass. */
 function searchBody(n, env) {
   const c = candidateOf(n);
@@ -184,7 +253,8 @@ function stepsBody(n, env) {
 export function altInspector(n, env) {
   const hd = head(n);
   let body;
-  if (isAgent(n)) body = [h("div", { class: "task-inspector" }, env.agent(n), ...env.agentRest(n))];
+  if (isAgent(n)) body = [h("div", { class: "task-inspector" }, agentChat(n, env))];
+  else if (isModel(n)) body = [h("div", { class: "task-inspector" }, modelChat(n, env))];
   else if (isTool(n)) body = toolBody(n, env);
   else if (hd === "dse") body = searchBody(n, env);
   else if (["decide", "frontier", "decision", "select"].includes(hd) || /^propose:\s*what next/i.test(n.name)) body = chooseBody(n, env);
