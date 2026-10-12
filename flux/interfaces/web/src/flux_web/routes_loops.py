@@ -916,14 +916,16 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.post("/api/apps/{name}/start")
     def start(name: str, body: RunOptions, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         w, whose, d, meta = prepare_start(name, body, owner, user)
+        if w.meta(name).get("rerun_baseline"):        # D1005: Maintenance asked for it once -- this start
+            body = body.model_copy(update={"rerun_baseline": True})
         try:     # the owner's loop: their record, settings and limits; who started it is said (D701)
             from flux_loop.document import record_name
 
             runs.start(whose, name, d, meta["document"], record_name(d / meta["document"]), body.model_dump(), by=user)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        w.set_meta(name, last_start_digest=w.inputs_digest(name),                                    # D693
-                   **({} if body.reevaluate else {"last_options": body.model_dump()}))           # D988: not repeated
+        w.set_meta(name, last_start_digest=w.inputs_digest(name), rerun_baseline=False,             # D693, D1005: once
+                   **({} if body.reevaluate else {"last_options": {**body.model_dump(), "rerun_baseline": False}}))   # D988: not repeated
         store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
         return {"ok": f"{name} started: it resumes from its record"}
 

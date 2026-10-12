@@ -339,7 +339,7 @@ class TaskSpec:
                 raise TaskError("baseline.timeout_s must be a finite positive number")
         else:
             raise TaskError("baseline is true, false, or a mapping with file or command")
-        known = {f.name for f in fields(LoopRequest)} - {"db", "params", "baseline", "baseline_only", "reevaluate"}
+        known = {f.name for f in fields(LoopRequest)} - {"db", "params", "baseline", "baseline_only", "reevaluate", "rerun_baseline"}
         bad = sorted(set(budget) - known)
         if bad:
             raise TaskError(f"budget keys {bad} are not loop knobs; known: {sorted(known)}")

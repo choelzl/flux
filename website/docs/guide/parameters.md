@@ -440,10 +440,10 @@ baseline: true                                   # the project as it is: your sc
   the deepest; the metric must be one that stage reports; each stage/metric pair once.
   Provided values supply no design and are never the decision.
 - **`only: true`** ends the run after pass 0 (a tool check without optimization).
-- **Reuse:** a successful baseline is reused on restart while its inputs are unchanged: the
-  document, the folder's files, the baseline file, the command's programs, tool builds, the
-  Flux revision and the build environment (`PATH`, `PYTHONPATH`, `CC`, ...). A failed one is
-  tried again at the next start. Baselines bypass the cache, estimates and cutoffs.
+- **Reuse:** a successful baseline on record stands while the document's `baseline:` section is
+  unchanged -- whatever else changes (the folder's files, the tools, Flux). To measure it again,
+  the loop's Settings › Maintenance › **Rerun baseline** (or `flux task run ... --rerun-baseline`)
+  makes the next start, and only it, run pass 0. A failed one is tried again at the next start. Baselines bypass the cache, estimates and cutoffs.
 - Baselines are references: drawn as gray lines, the base of relative values, never the
   decision or a search start. They are not inherited by sub-loops.
 

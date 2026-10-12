@@ -70,6 +70,9 @@ TASKS: dict[str, Task] = {t.key: t for t in (
     Task("empty", "Prune empty starts", "Starts that did nothing -- stopped before any search, design, check or "
          "measurement began (D987) -- go: their row, and for a loop's latest start its log and journal. "
          "Starts already checked are left.", 24, False, per_loop=True),
+    Task("baseline", "Rerun baseline", "The loop's next start measures pass 0 again, once (D1005): otherwise a "
+         "baseline on record stands while the document's baseline: section is unchanged, whatever else changed.",
+         168, False, per_loop=True),
     Task("reevaluate", "Invalidate + re-evaluate all", "After the checks or measurement scripts change "
          "(D988): one run checks and measures every design on record again; the earlier results stay as "
          "history, no longer counted. Started on one loop only.", 168, False, per_loop=True),
@@ -473,6 +476,18 @@ class Maintenance:
             st = f.stat()
             self.store.server_set("refusals_read", {"ino": st.st_ino, "offset": st.st_size - len(late)})
         return f"{dropped} refused connection(s) older than {p['days']:g} days removed", True
+
+    def _baseline(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        """D1005: marks the loop -- its next start measures the baseline again, then the mark goes."""
+        if loop is None:
+            raise ValueError("a baseline is measured again on one loop, from its settings")
+        from .workspace import Workspace
+
+        w = Workspace(self.store.data, loop[0])
+        if not w.meta(loop[1]).get("document") and not (w.root / loop[1]).is_dir():
+            raise ValueError(f"no loop {loop[0]}/{loop[1]}")
+        w.set_meta(loop[1], rerun_baseline=True)
+        return "the next start measures the baseline again (once)", True
 
     def _reevaluate(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         """D988: not a clean-up of its own but a run of the loop; never on a schedule, never on all."""

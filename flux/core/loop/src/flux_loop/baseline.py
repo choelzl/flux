@@ -5,12 +5,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
-import os
-import shutil
-import sys
-from pathlib import Path
 
-from .inputs import digest, file_digest
 from .measure import measure_many
 from .observe import _phase
 from .records import _record_trial
@@ -18,44 +13,14 @@ from .types import Candidate, Scored, Verdict
 
 
 def _fingerprint(problem):
-    """Fresh inputs, configuration and executable builds; never the run's outputs."""
+    """D1005: what decides whether pass 0 runs again -- the document's `baseline:` section, nothing
+    else. A baseline on record stands while that section is unchanged, whatever else changes (Flux,
+    the tools, the inputs); measuring it again is asked for, once, with Maintenance's "Rerun baseline"
+    (`--rerun-baseline` on the next start), as re-measuring every design is a re-evaluation (D988)."""
     task = getattr(problem, "task", None)
     if task is None:
         return None  # a custom problem must not reuse evidence without an input identity
-    from flux_loop.toolchain import MEASURING_TOOLS, toolchain_fingerprint
-
-    from .provenance import git_revision
-
-    def content(path):
-        try:
-            return file_digest(path)
-        except OSError:
-            return "missing or unreadable"
-
-    config = task.baseline or {}
-    if "metrics" in config:
-        body = {"schema": 1, "id": task.id, "parts": [p.name for p in task.parts], "metrics": config["metrics"]}
-        return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
-    source = None
-    if "file" in config:
-        path = Path(config["file"].replace("{home}", task.home or "."))
-        source = content(path if path.is_absolute() else Path(task.home or ".") / path)
-    binaries = set()
-    for label, command in task.commands():
-        if label == "generator" or label.startswith("estimate "):
-            continue
-        binaries.add(command[0].replace("{python}", sys.executable).replace("{home}", task.home or "."))
-    needs = tuple(dict.fromkeys((*MEASURING_TOOLS, *(n for st in task.stages for n in st.needs))))
-    tools = {}
-    for binary in sorted(binaries | set(needs)):
-        path = shutil.which(binary)
-        resolved = str(Path(path).resolve()) if path else None
-        tools[binary] = (resolved, content(resolved) if resolved else None)
-    body = {"schema": 1, "document": task.digest, "inputs": digest(task.home, task.params),
-            "source": source, "executables": tools, "tools": toolchain_fingerprint(needs), "flux": git_revision(),
-            "environment": {key: os.environ.get(key) for key in (
-                "PATH", "PYTHONPATH", "LD_LIBRARY_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS",
-                "CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "PKG_CONFIG_PATH")}}
+    body = {"schema": 3, "id": task.id, "parts": [p.name for p in task.parts], "baseline": task.baseline or {}}
     return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -114,15 +79,22 @@ def run_baseline(problem, state):
 
     fingerprint = _fingerprint(problem)
     saved = state.records.recall("baseline") if state.records is not None else []
+    asked = bool(getattr(state.request, "rerun_baseline", False))
+    last = saved[-1] if saved else {}
+    # D1005: a baseline recorded before this rule (another fingerprint, no `rule`) is adopted as it stands
+    same = last.get("fingerprint") == fingerprint or last.get("rule") != "baseline-section"
     reused = False
-    if fingerprint and saved and saved[-1].get("fingerprint") == fingerprint and saved[-1].get("ok"):
+    if fingerprint and last and same and last.get("ok") and not asked:
         try:
             _restore(state, saved[-1])
             reused = True
         except (KeyError, TypeError, ValueError):
             pass  # an older or incomplete snapshot cannot stand in for a real tool run
+    if reused and last.get("rule") != "baseline-section":
+        state.records.remember("baseline", {**last, "fingerprint": fingerprint, "rule": "baseline-section"})
     if reused:
-        line = "baseline pass 0 reused: provided metrics unchanged" if provided else "baseline pass 0 reused: inputs, configuration and tools unchanged"
+        line = ("baseline pass 0 reused: provided metrics unchanged" if provided
+                else "baseline pass 0 reused: the document's baseline is unchanged (Maintenance › Rerun baseline measures it again)")
         state.say(f"  {line}")
         state.lessons.append(line)
         _merge_decision_history(problem, state)
@@ -132,6 +104,10 @@ def run_baseline(problem, state):
         if state.depth == 0:
             _publish(problem, state, [], [], line, searching=False)
         return result
+    if last and fingerprint:                   # D1005: why it runs again, said
+        why = ("asked for (Maintenance › Rerun baseline)" if asked else "the last baseline failed" if not last.get("ok")
+               else "the document's baseline: section changed")
+        state.say(f"  baseline pass 0 runs again: {why}")
     cand = Candidate(f"{problem.name}#baseline", meta={"baseline": True})
     try:
         if provided:
@@ -165,7 +141,7 @@ def run_baseline(problem, state):
     if state.records is not None:
         state.records.remember("baseline", {"candidate": cand.name, "ok": not state.refused,
                                            "failures": list(state.refused), "stages": list(state.on_stage),
-                                           "fingerprint": fingerprint, "stopped": state.stopped,
+                                           "fingerprint": fingerprint, "rule": "baseline-section", "stopped": state.stopped,
                                            "reached": state.reached, "scored": [dataclasses.asdict(s) for s in state.scored],
                                            "admitted": {k: c.to_record() for k, c in state.admitted.items()}})
     # Save pass 0 as a reference, then retain the campaign's search decision.

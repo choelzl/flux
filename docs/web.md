@@ -426,6 +426,8 @@ empty starts (D1000), Prune stale records (off). Off until enabled: **Check data
 documents**, **Back up server database** (`flux-web.db` and `secret.key` to
 `<server-data>/backups/server-<timestamp>/`, latest seven kept; back up loop folders separately).
 Loop tasks run over all loops or one; running loops are never touched; every run is audited.
+**Rerun baseline** (D1005, a loop's settings) makes its next start measure pass 0 again, once; otherwise a
+baseline on record stands while the document's `baseline:` section is unchanged.
 **Invalidate + re-evaluate all** (D988, a loop's settings only) starts one run that checks and
 measures every design on record again under today's checks and measurement scripts; earlier rows
 stay as history behind an `invalidated` mark and are no longer counted.

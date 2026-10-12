@@ -166,6 +166,7 @@ class LoopRequest:
     passes: int = 0                 # passes the document caps the run at; 0 = until stopped (D593)
     baseline: bool = False          # pass 0: check and measure without generation or repairs
     baseline_only: bool = False     # explicitly run only pass 0
+    rerun_baseline: bool = False    # D1005: pass 0 measured again though the document's baseline is unchanged (asked once)
     reevaluate: bool = False        # D988: invalidate the record's evidence; check and measure every design again
     explore: int = 0                # consecutive at-rest passes before this one; > 0 = send every
                                     # admitted design back to the generator

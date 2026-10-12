@@ -290,8 +290,11 @@ def test_baseline_with_the_same_source_does_not_rename_the_retained_decision(tmp
         assert decision_doc(req.db)["name"] == "existing-design"
 
 
-@pytest.mark.parametrize("change", ["source", "checker", "measurement", "params", "settings", "tools", "environment", "external"])
-def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize("change", ["source", "checker", "measurement", "params", "settings", "tools", "environment", "external", "asked"])
+def test_a_baseline_on_record_stands_until_its_section_changes_or_a_rerun_is_asked(tmp_path, monkeypatch, change):
+    """D1005: pass 0 is measured again only when the document's baseline: section changed or a
+    rerun is asked for once (Maintenance › Rerun baseline); a changed input, tool, param or
+    environment leaves the baseline on record standing."""
     task = _task(tmp_path, {"file": "design.py", "only": True})
     if change == "external":
         external = tmp_path.parent / (tmp_path.name + "-baseline.py")
@@ -299,9 +302,10 @@ def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, chan
         task = dataclasses.replace(task, baseline={"file": str(external), "only": True})
     problem = PromptProblem(task)
     req = request_for(task, db=str(tmp_path / "out.db"))
+    said: list[str] = []
 
-    def run():
-        return run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+    def run(**over):
+        return run_loop(problem, dataclasses.replace(req, **over), proposer=NoModel(), log=said.append)
 
     run()
     assert run().provenance["baseline_reused"]
@@ -314,13 +318,35 @@ def test_baseline_reruns_when_evidence_inputs_change(tmp_path, monkeypatch, chan
         problem.task = dataclasses.replace(task, baseline={**task.baseline, "timeout_s": 10})
     elif change == "environment":
         monkeypatch.setenv("PYTHONPATH", "/new/sandbox/packages")
-    else:
+    elif change == "tools":
         monkeypatch.setattr("flux_loop.toolchain.toolchain_fingerprint", lambda tools: {"yosys": "new-build"})
-    changed = run()
-    assert not changed.provenance.get("baseline_reused")
-    assert changed.decision is None
-    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
-    assert run().provenance["baseline_reused"]
+    again = run(rerun_baseline=True) if change == "asked" else run()
+    if change in ("settings", "asked"):
+        assert not again.provenance.get("baseline_reused")
+        assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
+        why = "asked for" if change == "asked" else "baseline: section changed"
+        assert any(f"baseline pass 0 runs again: " in m and why in m for m in said), said
+    else:
+        assert again.provenance["baseline_reused"]
+        assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
+    assert run().provenance["baseline_reused"], "once: the next start stands on it again"
+
+
+def test_a_baseline_recorded_under_the_earlier_rule_is_adopted(tmp_path):
+    """D1005: a snapshot from before the rule (another fingerprint, no rule) stands, not measured again."""
+    task = _task(tmp_path, {"only": True})
+    req = request_for(task, db=str(tmp_path / "out.db"))
+    problem = PromptProblem(task)
+    run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
+    records = problem.open_records(req, lambda m: None)
+    saved = records.recall("baseline")[-1]
+    saved.pop("rule")
+    saved["fingerprint"] = "an-older-fingerprint"
+    records.remember("baseline", saved)
+    records.close("paused")
+    for _ in range(2):
+        assert run_loop(problem, req, proposer=NoModel(), log=lambda m: None).provenance["baseline_reused"]
+    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked"]
 
 
 def test_generated_outputs_do_not_invalidate_baseline(tmp_path):
@@ -358,21 +384,6 @@ def test_old_or_incomplete_baseline_snapshot_runs_tools_again(tmp_path, legacy):
     out = run_loop(problem, req, proposer=NoModel(), log=lambda m: None)
     assert not out.provenance.get("baseline_reused")
     assert len(out.scored) == 2  # an incomplete restore must not leave duplicate measurements
-    assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
-
-
-def test_input_change_during_baseline_is_not_blessed_as_unchanged(tmp_path):
-    task = _task(tmp_path, {"only": True})
-    check = tmp_path / "check.py"
-    check.write_text(check.read_text().replace("sys.exit(0)",
-        "source = home / 'design.py'\n"
-        "if 'answer = 43' not in source.read_text(): source.write_text('# changed\\nanswer = 43\\n')\n"
-        "sys.exit(0)"))
-    req = request_for(task, db=str(tmp_path / "out.db"))
-    for _ in range(2):
-        out = run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None)
-        assert not out.provenance.get("baseline_reused")
-    assert run_loop(PromptProblem(task), req, proposer=NoModel(), log=lambda m: None).provenance["baseline_reused"]
     assert (tmp_path / "out/checks.txt").read_text().splitlines() == ["checked", "checked"]
 
 

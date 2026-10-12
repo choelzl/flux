@@ -197,6 +197,11 @@ def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(
     monkeypatch.setattr(RunManager, "start", lambda self, whose, name, d, doc, rec, options, by=None: started.append(options))
     got = c["bob"].post("/api/apps/x/maintenance/reevaluate", headers=H).json()
     assert got["ok"] and started and started[0]["reevaluate"] and started[0]["passes"] == 1, got
+    started.clear()                                # D1005: Rerun baseline -- the next start, once
+    assert c["bob"].post("/api/apps/x/maintenance/baseline", headers=H).json()["ok"]
+    for _ in range(2):
+        assert c["bob"].post("/api/apps/x/start", json={"passes": 1}, headers=H).status_code == 200
+    assert [o["rerun_baseline"] for o in started] == [True, False], started
     assert c["bob"].post("/api/apps/x/maintenance/backups", headers=H).status_code == 404
     assert c["bob"].post("/api/admin/maintenance/backups/run", json={}, headers=H).status_code == 403
     assert c["ada"].post("/api/admin/maintenance/backups/run", json={}, headers=H).json()["ok"]
