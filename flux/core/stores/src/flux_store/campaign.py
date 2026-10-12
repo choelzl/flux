@@ -207,6 +207,48 @@ class CampaignStore:
         self._conn.commit()
 
 
+    _HAND = "kind IN ('decided:invalidated', 'decided:restored')"
+
+    def invalid_seqs(self, campaign_id: str) -> set[int]:
+        """D1001: the trials invalidated by hand, with a reason, less those restored since."""
+        out: set[int] = set()
+        for kind, d in self._conn.execute(
+                f"SELECT kind, detail_json FROM campaign_events WHERE campaign_id = ? AND {self._HAND} ORDER BY id",
+                (campaign_id,)).fetchall():
+            seqs = {int(x) for x in json.loads(d).get("seqs") or ()}
+            out = out | seqs if kind == "decided:invalidated" else out - seqs
+        return out
+
+    def invalidations(self, campaign_id: str) -> list[dict[str, Any]]:
+        """D1001: each invalidation by hand -- its id, why, who, when, the designs and trials it
+        took out -- and whether it was restored; newest first."""
+        out: dict[int, dict[str, Any]] = {}
+        for i, kind, d, at in self._conn.execute(
+                f"SELECT id, kind, detail_json, created_at FROM campaign_events WHERE campaign_id = ? AND {self._HAND} ORDER BY id",
+                (campaign_id,)).fetchall():
+            doc = json.loads(d)
+            if kind == "decided:invalidated" and doc.get("seqs"):
+                out[i] = {"id": i, "at": at, "reason": doc.get("reason") or "", "by": doc.get("by") or "",
+                          "names": doc.get("names") or [], "trials": len(doc["seqs"]), "restored": False}
+            elif kind == "decided:restored" and doc.get("of") in out:
+                out[doc["of"]]["restored"] = True
+        return list(reversed(out.values()))
+
+    def invalidate(self, campaign_id: str, seqs: list[int], *, reason: str, by: str, names: list[str]) -> None:
+        """D1001: these trials stop being evidence (nothing is deleted), with why and by whom."""
+        self.append_event(campaign_id, "decided:invalidated",
+                          {"seqs": sorted(set(seqs)), "reason": reason, "by": by, "names": names})
+
+    def restore(self, campaign_id: str, event_id: int, *, by: str) -> bool:
+        """D1001: an invalidation by hand undone -- its trials are evidence again."""
+        row = self._conn.execute("SELECT detail_json FROM campaign_events WHERE id = ? AND campaign_id = ? "
+                                 "AND kind = 'decided:invalidated'", (event_id, campaign_id)).fetchone()
+        seqs = json.loads(row[0]).get("seqs") if row else None
+        if not seqs:
+            return False
+        self.append_event(campaign_id, "decided:restored", {"of": event_id, "seqs": seqs, "by": by})
+        return True
+
     def invalid_through(self, campaign_id: str) -> int:
         """D988: the last trial a re-evaluation invalidated -- rows at or before it are history,
         not evidence (0 when the campaign was never invalidated)."""
@@ -322,9 +364,10 @@ class CampaignStore:
 
     def trials(self, campaign_id: str, *, phase: str | None = None,
                status: str | None = None, current: bool = False) -> list[Trial]:
-        """`current` (D988): only the trials a re-evaluation has not invalidated -- the evidence;
-        without it, every trial, history included."""
+        """`current` (D988): only the trials a re-evaluation has not invalidated, nor a hand with a
+        reason (D1001) -- the evidence; without it, every trial, history included."""
         clauses, params = ["campaign_id = ?"], [campaign_id]
+        hand = self.invalid_seqs(campaign_id) if current else set()
         if current:
             through = self.invalid_through(campaign_id)
             if through:
@@ -347,6 +390,8 @@ class CampaignStore:
         ).fetchall()
         out: list[Trial] = []
         for r in rows:
+            if hand and r[0] in hand:
+                continue
             result = None
             if r[6] is not None and r[11] is not None:
                 # Any status with a stored result gets it back, not just "ok": a

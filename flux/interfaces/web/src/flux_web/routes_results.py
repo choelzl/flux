@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from .models import InvalidateIn, RestoreIn
 from .runs import loop_files
 from .store import User
 from .workspace import Workspace, WorkspaceError
@@ -563,6 +564,52 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         finally:
             record.close()
 
+    # ---- D1001: a design invalidated by hand, with why; undone by Restore
+    def _record_of(name: str, user: User, owner: str | None):
+        _w, _whose, _d, run = loop_of(name, user, owner, edit=True)
+        if not run or not os.path.exists(run["db"]):
+            raise HTTPException(404, "this loop has no record yet")
+        if runs.live(run):
+            raise HTTPException(409, "stop the loop first: a running loop holds its record")
+        cid = runs.campaign(run)[0]
+        if not cid:
+            raise HTTPException(404, "this loop has no record yet")
+        from flux_store import CampaignStore
+
+        return CampaignStore(run["db"]), cid
+
+    @app.post("/api/apps/{name}/results/invalidate")
+    def invalidate_design(name: str, body: InvalidateIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """Every row of one design stops counting -- in Results, the report and the search -- kept
+        on record with why and by whom; nothing is deleted."""
+        from .results import content_key
+
+        reason = body.reason.strip()
+        if len(reason) < 3:
+            raise HTTPException(400, "say why it is invalid")
+        record, cid = _record_of(name, user, owner)
+        try:
+            seqs = [t.seq for t in record.trials(cid, current=True)
+                    if content_key(t.candidate or {}) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
+            if not seqs:
+                raise HTTPException(404, "no such design among the results")
+            record.invalidate(cid, seqs, reason=reason, by=user.name, names=[body.name])
+        finally:
+            record.close()
+        store.audit(user.name, "invalidated a design", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
+        return {"ok": f"{body.name} invalidated: its {len(seqs)} row(s) no longer count", "trials": len(seqs)}
+
+    @app.post("/api/apps/{name}/results/restore")
+    def restore_design(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        record, cid = _record_of(name, user, owner)
+        try:
+            if not record.restore(cid, body.id, by=user.name):
+                raise HTTPException(404, "no such invalidation")
+        finally:
+            record.close()
+        store.audit(user.name, "restored a design", f"{owner or user.name}/{name}: invalidation {body.id}")
+        return {"ok": "restored: its rows count again"}
+
     @app.get("/api/apps/{name}/results")
     def results(name: str, owner: str | None = None, run_id: int | None = None, campaign: str | None = None, start_id: int | None = None,
                 raw: bool = False,
@@ -596,12 +643,19 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         decided_by = decision_said(run["db"], cid, until)       # D815: why, as the loop said it
         stages = _stages(_w, name) if campaign is None else [{"name": s} for s in dict.fromkeys(row.stage for row in rep.rows)]
         listed = designs(run["db"], stages, decision, limit=None if raw else 20000, campaign=campaign, until=until)
+        from flux_store import CampaignStore
+
+        record = CampaignStore(run["db"])
+        try:
+            invalidated = record.invalidations(cid)                 # D1001: by hand, with why
+        finally:
+            record.close()
         objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
                           for o in rep.objectives]                     # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
                 "rows_total": len(rep.rows),
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
-                "agent_turns": len(rep.agent_turns), "answer": answer, "decided_by": decided_by, **listed}
+                "agent_turns": len(rep.agent_turns), "answer": answer, "decided_by": decided_by, "invalidated": invalidated, **listed}
 
     @app.get("/api/apps/{name}/design")
     def design(name: str, design: str, part: str = "", key: str = "", owner: str | None = None,

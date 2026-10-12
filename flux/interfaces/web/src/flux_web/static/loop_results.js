@@ -2,7 +2,7 @@
 // charts (D892: out of loopPage; D916: Results and Graphs two views).
 
 import { codeBlock } from "./highlight.js";
-import { api, card, dialog, empty, enc, h, skeleton } from "./ui.js";
+import { act, ago, api, card, dialog, empty, enc, h, promptDialog, skeleton, toast } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
@@ -25,6 +25,22 @@ function resultsView(ctx, r) {
   const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
     : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending") : h("span", { class: "pill bad" }, "failed");
   const detail = h("div", { class: "detail" }, empty("Select a design."));
+  // D1001: a design taken out of the evidence by hand, with why -- the loop at rest, by whoever may change it
+  const canChange = () => ctx.mine && !ctx.st?.running;
+  const reload = () => ctx.goTab("Results", ctx.curSub());
+  const invalidateBtn = (d) => canChange() && !d.reference_only ? act("Invalidate…", async () => {
+    const reason = await promptDialog(`Invalidate ${d.name}?`, "Why its results no longer count (kept with it; Restore undoes it)", { ok: "Invalidate", min: 3 });
+    if (!reason) return;
+    const got = await api(`/apps/${enc(name)}/results/invalidate${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, reason } });
+    toast(got.ok, "ok"); reload();
+  }, { cls: "small invalidate-design", title: "Take this design's results out of the evidence, with a reason" }) : "";
+  const invalidated = (r.invalidated || []).length ? h("details", { class: "invalidated-list" },
+    h("summary", {}, `Invalidated by hand (${r.invalidated.filter(x => !x.restored).length})`),
+    h("table", { class: "list compact" }, h("tbody", {}, r.invalidated.map(x => h("tr", { class: x.restored ? "muted" : "" },
+      h("td", { class: "mono" }, x.names.join(", ")), h("td", {}, x.reason), h("td", { class: "muted small" }, `${x.by} · `, ago(Date.parse(x.at) / 1000)),
+      h("td", { class: "right" }, x.restored ? h("span", { class: "pill" }, "restored") : canChange() ? act("Restore", async () => {
+        toast((await api(`/apps/${enc(name)}/results/restore${qs}`, { method: "POST", body: { id: x.id } })).ok, "ok"); reload();
+      }, { cls: "small" }) : "")))))) : "";
   let shownEl, selectedKey;
   async function open(d, tr) {
     selectedKey = keyOf(d);
@@ -36,7 +52,7 @@ function resultsView(ctx, r) {
     const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, d.name), verdictPill(d), d.decision ? h("span", { class: "pill ok" }, "★ decision") : "",
-        d.part ? h("span", { class: "muted" }, `part ${d.part}`) : ""),
+        d.part ? h("span", { class: "muted" }, `part ${d.part}`) : "", invalidateBtn(d)),
       d.why.length ? h("div", { class: "blk" }, h("h3", {}, d.verdict === "pending" ? "Waiting for" : "Not met"), h("ul", { class: "misses" }, d.why.map(w => h("li", {}, w)))) : "",
       stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
         h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
@@ -244,7 +260,7 @@ function resultsView(ctx, r) {
       r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
     h("div", { class: "actions" }, ...viewerTools(() => shownEl, { title: "Results", rawUrl: `${base}/results${qs}${qs ? "&" : "?"}raw=true` }),
       r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "Answer (JSON)") : "",
-      h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report"))), decisionLine]);
+      h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report"))), decisionLine, invalidated]);
   const resultsEl = h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, resultsDetail, { cls: "detail-card" }));
   /** The view to show, "results" or "graphs": the decision and the detail move to it; the graphs are
       built the first time (D916) and kept, as are the selection, the filter and the controls. */

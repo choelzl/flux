@@ -58,6 +58,17 @@ class FileText(BaseModel):
     text: str
 
 
+class InvalidateIn(BaseModel):
+    """D1001: a design on record taken out of the evidence by hand, and why."""
+    key: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=500)
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class RestoreIn(BaseModel):
+    id: int
+
+
 class RunOptions(BaseModel):
     passes: int | None = Field(default=1, ge=1, le=1000)
     screen_only: bool = False

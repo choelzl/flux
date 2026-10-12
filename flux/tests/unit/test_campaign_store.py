@@ -115,3 +115,20 @@ def test_a_campaign_is_keyed_by_its_document_name(tmp_path):
     req = LoopRequest(db=db)
     assert prob.campaign_name(req) == "nlu" and prob.objective(req) == {"study": "nlu"}
     assert prob.open_records(req, lambda _m: None).campaign_id == "nlu"
+
+
+def test_trials_invalidated_by_hand_leave_the_evidence_and_come_back_on_restore(store):
+    """D1001: a hand's invalidation takes its trials out of `current` (not out of the record),
+    with why and by whom; a restore puts them back; a re-evaluation's mark (D988) is not one."""
+    cid = _start(store)
+    seqs = []
+    for key in ("a", "b", "c"):
+        seq = _begin(store, cid, key=key)
+        store.complete_trial(cid, seq, status="ok", result=_result(), error=None, wall_clock_s=1.0)
+        seqs.append(seq)
+    store.invalidate(cid, seqs[:2], reason="wrong bench", by="bob", names=["a", "b"])
+    assert [t.seq for t in store.trials(cid, current=True)] == seqs[2:] and len(store.trials(cid)) == 3
+    (inv,) = store.invalidations(cid)
+    assert inv["reason"] == "wrong bench" and inv["by"] == "bob" and inv["trials"] == 2 and not inv["restored"]
+    assert store.restore(cid, inv["id"], by="ada") and not store.restore(cid, 999999, by="ada")
+    assert [t.seq for t in store.trials(cid, current=True)] == seqs and store.invalidations(cid)[0]["restored"]

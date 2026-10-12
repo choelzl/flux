@@ -1328,3 +1328,6 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 /* D998: a long list scrolls in its own box, its header kept in view -- picking an old row needs no page scroll */
 .rows-scroll { max-height: min(72vh, 900px); overflow: auto; }
 .rows-scroll thead { position: sticky; top: 0; z-index: 2; background: var(--panel); }
+/* D1001: designs invalidated by hand, folded under the decision */
+.invalidated-list { margin-top: 8px; font-size: 13px; } .invalidated-list summary { cursor: pointer; color: var(--muted); }
+.detail-head .invalidate-design { margin-left: auto; }

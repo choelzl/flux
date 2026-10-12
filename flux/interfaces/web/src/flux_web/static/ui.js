@@ -429,6 +429,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, ago, promptDialog, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };

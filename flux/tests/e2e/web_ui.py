@@ -1008,6 +1008,8 @@ def flows(r: Run) -> None:
             d["numbers"].update(dict.fromkeys(metrics[2:], i + 0.25))
             d["shown"], d["stages"] = stage, {stage: d["numbers"]}
             d["meets"]["fmax_mhz"] = d["numbers"]["fmax_mhz"] >= 1000
+        fixture["invalidated"] = [{"id": 7, "at": "2026-10-12T10:00:00+00:00", "reason": "the bench was misconfigured", "by": "bob",
+                                   "names": ["w-old"], "trials": 3, "restored": False}]          # D1001
         b.js("window.__compactFetch = window.fetch.bind(window); const fixture = arguments[0]; localStorage.setItem('flux-results-compact', 'false'); localStorage.removeItem('flux-results-relative'); localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]');"
              " localStorage.setItem('flux-results:[\"bob\",\"bob\",\"sw\"]', JSON.stringify({hidden: [JSON.stringify(['', fixture.designs[0].base, fixture.designs[0].key])]}));"
              " window.fetch = (u, o) => String(u) === '/api/apps/sw' ? window.__compactFetch(u, o).then(async r => { const info = await r.json();"
@@ -1019,6 +1021,8 @@ def flows(r: Run) -> None:
              " : window.__compactFetch(u, o); return 1", fixture)
         try:
             r.page("#/app/sw/results", "document.querySelector('table.designs th.measurement-head')", "wide results table")
+            r.check("D1001: designs invalidated by hand are listed under the decision with why, and Restore",
+                    b.js("const l = document.querySelector('.invalidated-list'); return !!l && l.textContent.includes('Invalidated by hand (1)') && l.textContent.includes('the bench was misconfigured') && [...l.querySelectorAll('button')].some(x => x.textContent === 'Restore')"))
             r.check("old row-hiding preferences are ignored and every design remains visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && !document.querySelector('.hide-design, .hidden-rows')"))
             r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))

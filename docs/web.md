@@ -216,6 +216,9 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
   are gray reference lines.
 - **Compare:** tick two designs: numbers per stage, the change (green where better), a source
   diff. A design opens with the limits it misses, every stage's numbers and its source.
+- **Invalidate…** (a design's detail; the loop stopped, by whoever may change it): asks why, then
+  the design's rows stop counting -- Results, the report, the search -- kept on record; listed as
+  **Invalidated by hand** under the decision, each with **Restore** (D1001).
 - **Table layout** (also Overview's Decision table): compact; names `#ID` or `part#ID` (reused IDs
   get a content-key suffix); ✓/✗/… badges; limit status as green/red text; details on hover;
   diagonal headers.

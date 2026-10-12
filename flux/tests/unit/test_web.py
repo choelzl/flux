@@ -270,6 +270,19 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     sm = bob.get("/api/apps").json()[0]["summary"]                  # D693: the list's line
     assert sm["designs"] == len(res["designs"]) > 0 and sm["accepted"] == res["counts"]["accepted"], sm
     assert 0 <= sm["this_run"] <= sm["designs"], "D837: the designs first measured since the latest start, of them all"
+    # D1001: a design invalidated by hand with why stops counting, is listed with it, and Restore undoes it
+    gone = res["designs"][0]
+    body = {"key": gone["key"], "name": gone["base"], "reason": "the bench was misconfigured"}
+    assert bob.post("/api/apps/sw/results/invalidate", json={**body, "reason": "x"}, headers=H).status_code == 422
+    got = bob.post("/api/apps/sw/results/invalidate", json=body, headers=H)
+    assert got.status_code == 200 and got.json()["trials"] >= 1, got.text
+    after = bob.get("/api/apps/sw/results").json()
+    assert (gone["key"], gone["base"]) not in {(d["key"], d["base"]) for d in after["designs"]}
+    (inv,) = after["invalidated"]
+    assert inv["reason"] == "the bench was misconfigured" and inv["by"] == "bob" and inv["names"] == [gone["base"]] and not inv["restored"]
+    assert bob.post("/api/apps/sw/results/restore", json={"id": inv["id"]}, headers=H).status_code == 200
+    again = bob.get("/api/apps/sw/results").json()
+    assert len(again["designs"]) == len(res["designs"]) and again["invalidated"][0]["restored"]
     pre = bob.get("/api/apps/sw/preflight").json()
     assert pre["changed"] is False and pre["options"]["passes"] == 1, "the last start's inputs and options"
     ada = _client(app, "ada", "correct horse battery")
