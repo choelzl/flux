@@ -766,7 +766,7 @@ def feedback_panel(notes: list[Any], enabled: bool) -> list[str]:
         return ["feedback is disabled for this run (no model consumes it here)."]
     lines = [
         "Type in the prompt line below and press Enter; the note reaches the loop at",
-        "its next drain point as HUMAN GUIDANCE -- advisory, every candidate still",
+        "its next drain point as HUMAN GUIDANCE -- instructions to follow, every candidate still",
         "passes the same gates (D388).",
         "",
         f"notes this run: {len(notes)}",

@@ -413,7 +413,9 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         from .direction import guidance
 
         target = f"part {subgoal}" if subgoal else f"task {self.task.id}"
-        parts = [human or "", guidance(self, state, subgoal), tried_block(self, state, subgoal)]
+        notes = state.notes_block()             # D1023: the operator's notes lead, whatever the brief is about
+        parts = [notes, (human or "") if not notes or notes not in (human or "") else (human or "").replace(notes, ""),
+                 guidance(self, state, subgoal), tried_block(self, state, subgoal)]
         from .ideas import FIELDS, context
 
         parts.append(context(state, subgoal))

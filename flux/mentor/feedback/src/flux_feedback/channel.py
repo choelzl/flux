@@ -20,8 +20,9 @@ __all__ = ["FeedbackChannel", "InboxChannel", "Joined", "Note", "drain_guidance"
            "scripted_channel"]
 
 _LABEL = (
-    "HUMAN GUIDANCE (typed by the operator during this run -- advisory directions, not "
-    "measurements; every candidate still passes the same gates):")
+    "HUMAN GUIDANCE -- the operator's instructions, typed during this campaign. FOLLOW THEM: they come "
+    "before the pass's direction, the search policy and your own plan; only the contract and the gate "
+    "(every candidate still passes the same checks) stand above them. The newest note wins where they disagree:")
 
 _HINT = (
     "feedback: type a line + Enter at any time; it reaches the model's next proposal prompt "

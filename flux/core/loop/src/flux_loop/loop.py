@@ -581,12 +581,13 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     if cand is None or not _can_draft(problem, None, state):
         return None
     said, stage = _standing_said(problem, state, cand)
+    human = state.drain()                   # D1023: the notes before the pass decides; the design brief leads with them
     menu: list[tuple[str, str]] = []
     if getattr(getattr(problem, "task", None), "scope", None) or type(problem).scope_list is not Problem.scope_list:
         with _phase("orchestrate: scope list") as out:
             menu = problem.scope_list(state)
             out["scopes"] = len(menu)
-    pick, why, scope = decide(problem, state, cand, said, menu=menu)
+    pick, why, scope = decide(problem, state, cand, f"{human}\n\n{said}" if human else said, menu=menu)
     state.say(f"  direction: {pick} {cand.name}" + (f" on {scope}" if scope else "") + f" -- {why}")
     state.lessons.append(f"[direction] {pick}" + (f" on {scope}" if scope else "") + f": {why}")
     if scope:
@@ -637,6 +638,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     pick, why = (item.dse or "explore", item.why) if item.dse or item.explore else choose(problem, state, item.candidate, item.why, consult=False)
     if not item.again:                      # D999: the same direction again is the same decision, counted once
         pick, why = reserve_choice(state, pick, why, item.subgoal, item.scope)
+    state.drain()                           # D1023: a note since the item was made reaches its brief
     asked = item.why                        # D1022: what a scope's next try is told again, without the guidance
     item = replace(item, dse=pick, explore=pick == "explore", refine=item.refine,
                    why=item.why + "\n" + guidance(problem, state, item.subgoal))

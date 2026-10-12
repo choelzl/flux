@@ -149,3 +149,50 @@ def test_a_pass_on_a_scope_goes_on_until_its_check_is_clean(tmp_path):
     said.clear()
     run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=said.append)
     assert any(" on TSUB" in m for m in said if "direction:" in m), "then the other scope"
+
+
+def test_a_note_leads_the_pass_of_one_design_it_reaches(tmp_path):
+    """D1023: a loop of one design drained no note before its pass -- a note reached the record at the
+    pass's end and the prompts only a pass later, as background. Now the pass's decision and the
+    design agent's brief lead with it."""
+    from flux_feedback import scripted_channel
+
+    db = str(tmp_path / "d.db")
+    task = _task(tmp_path, {})
+    run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=lambda _m: None)
+    before = len(_turns(tmp_path))
+    run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=lambda _m: None,
+             feedback=scripted_channel("use a lookup table, not a loop"))
+    first = _turns(tmp_path)[before]["text"]
+    assert first.lstrip().startswith("HUMAN GUIDANCE") and "use a lookup table, not a loop" in first[:600], first[:600]
+    assert "FOLLOW THEM" in first and "advisory" not in first
+
+
+def test_a_note_mid_pass_leads_the_resumed_sessions_next_message(tmp_path):
+    """D1023: a note typed while the pass works -- its scope's retry resumes the same agent -- is the head
+    of that agent's next message, not only of a fresh brief it will not read again."""
+    from flux_feedback import Note
+
+    class Later:                                  # the note comes once the agent has taken a turn
+        sent = False
+
+        def drain(self):
+            if self.sent or len(list(tmp_path.glob("turn-*"))) <= before:
+                return []
+            self.sent = True
+            return [Note("keep the adder ripple-carry", 0.0)]
+
+    db = str(tmp_path / "d.db")
+    py = sys.executable
+    (tmp_path / "check.py").write_text("import pathlib, sys\n"
+                                       "n = pathlib.Path(sys.argv[1]); k = int(n.read_text()) if n.exists() else 0\n"
+                                       "n.write_text(str(k + 1)); print(f'{1 if k == 0 else 0} failing of 1')\n")
+    task = _task(tmp_path, {"list": (py, "-c", "print('TADD add')"),
+                            "check": (py, str(tmp_path / "check.py"), str(tmp_path / "count"), "{scope}"), "timeout_s": 60})
+    run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=lambda _m: None)
+    before = len(_turns(tmp_path))
+    run_loop(PromptProblem(task), request_for(task, db=db), proposer=None, log=lambda _m: None, feedback=Later())
+    turns = _turns(tmp_path)[before:]
+    assert len(turns) >= 2 and len({t["sid"] for t in turns}) == 1, turns
+    assert "keep the adder ripple-carry" not in turns[0]["text"]
+    assert turns[1]["text"].startswith("HUMAN GUIDANCE") and "keep the adder ripple-carry" in turns[1]["text"][:600]

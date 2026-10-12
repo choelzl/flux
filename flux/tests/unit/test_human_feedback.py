@@ -83,11 +83,12 @@ def test_without_a_terminal_the_channel_is_inert():
     channel.close()
 
 
-def test_the_rendered_block_always_carries_the_advisory_label():
+def test_the_rendered_block_always_carries_the_label():
+    """D1023: instructions to follow, before the direction and the policy -- below the contract and the gate."""
     assert render_guidance([]) == ""
     block = render_guidance([Note("go smaller", time.time())])
     assert block.startswith(_LABEL)
-    assert "advisory" in block and "not" in block and "measurements" in block
+    assert "FOLLOW THEM" in block and "the gate" in block and "advisory" not in block
     assert "go smaller" in block
 
 

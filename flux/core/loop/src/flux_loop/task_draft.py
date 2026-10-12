@@ -126,6 +126,11 @@ class DraftMixin:
             message += "\n\n" + instructions(path)
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
+        told = state.__dict__.setdefault("_notes_told", {})          # D1023: notes a session has not heard lead its message
+        if message and len(state.human_notes) > told.get(sess.id, 0):
+            message = state.notes_block() + "\n\n" + message
+        if sess.id or not message:
+            told[sess.id or ""] = len(state.human_notes)
         prompt_file = workdir / f"PROMPT-{safe}.md"
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),

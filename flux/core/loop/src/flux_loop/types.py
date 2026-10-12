@@ -346,6 +346,12 @@ class LoopState:
         """The campaign's ledger over this run's record."""
         return Ledger(self.records)
 
+    def notes_block(self) -> str:
+        """Every operator note so far, rendered for the head of a design brief (D1023); "" with none."""
+        from flux_feedback import render_guidance
+
+        return render_guidance(self.human_notes) if self.human_notes else ""
+
     def drain(self) -> str | None:
         """Operator guidance since the last drain, rendered for a prompt, plus earlier runs'
         notes reloaded from the record (stamped as such) (D403)."""

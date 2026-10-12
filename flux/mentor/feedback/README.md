@@ -7,10 +7,11 @@ labelled for what it is ([docs/decisions.md D388](../../../docs/decisions.md)).
 
 What it is, deliberately:
 
-- **Advisory free text only.** A note is a direction, not an instruction: it goes into the
-  proposer prompt under a `HUMAN GUIDANCE` heading that says so, and every candidate the model
-  proposes still passes the same gates, screens and confirmations as any other. No note can
-  change a constraint, skip a stage, or stop the run.
+- **Free text the design follows.** A note is an instruction to the designer: it leads every
+  design brief under a `HUMAN GUIDANCE` heading that says to follow it before the pass's direction,
+  the search policy and the agent's own plan (D1023), and every candidate still passes the same
+  gates, screens and confirmations as any other. No note can change a constraint, skip a stage, or
+  stop the run.
 - **A fourth provenance class.** The mentor layer keeps curated text, measured facts, and
   model-drawn conclusions under separate, honest headings; operator guidance is a fourth kind
   -- neither measured nor published -- and its heading declares that.
