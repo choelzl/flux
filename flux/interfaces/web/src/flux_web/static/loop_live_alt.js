@@ -289,7 +289,10 @@ export function liveAltTab(ctx) {
     const a = Math.min(...rows.map(r => r.node.t0)), b = Math.max(a + .001, ...rows.map(r => end(r.node)));
     const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
       .map(([t0, t1]) => ({ n, depth, t0, t1, kind: workOf(n) })));
-    const W = Math.max(300, panel.clientWidth || 380), L = 90, R = 12, T = 18, B = 26, lane = 22;
+    // D985: narrow (one pass, in the column) the chart fits the column: a shorter margin, three ticks
+    const narrow = (panel.clientWidth || 380) < 500;
+    const W = narrow ? Math.max(200, panel.clientWidth - 4) : Math.max(300, panel.clientWidth || 380), L = narrow ? 62 : 90, R = narrow ? 18 : 12, T = 18, B = 26, lane = 22;
+    const TICKS = narrow ? [0, .5, 1] : [0, .25, .5, .75, 1];
     const lanes = Object.keys(COLORS).filter(kind => segs.some(x => x.kind === kind));
     const H = T + lanes.length * lane + B;
     const X = t => L + (W - L - R) * (t - a) / (b - a);
@@ -311,7 +314,7 @@ export function liveAltTab(ctx) {
     return h("div", { class: "gantt-box" }, sv("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, style: `width:${W}px;max-width:none;height:${H}px`, class: "chart gantt alt-timeline", role: "group", "aria-label": "Task timeline by kind of work" },
       lanes.map((kind, i) => [sv("text", { x: L - 8, y: T + i * lane + lane / 2 + 4, class: "tick", "text-anchor": "end" }, workLabel(kind)),
         sv("line", { x1: L, x2: W - R, y1: T + (i + 1) * lane, y2: T + (i + 1) * lane, class: "grid" })]),
-      [0, .25, .5, .75, 1].map(f => [sv("line", { x1: X(a + f * (b - a)), x2: X(a + f * (b - a)), y1: T, y2: H - B, class: "grid" }),
+      TICKS.map(f => [sv("line", { x1: X(a + f * (b - a)), x2: X(a + f * (b - a)), y1: T, y2: H - B, class: "grid" }),
         sv("text", { x: X(a + f * (b - a)), y: H - 8, class: "tick", "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" }, `+${dur(f * (b - a)) || "0s"}`)]),
       bands.length > 1 ? bands.map(([p, [t0, t1]], i) => [sv("rect", { x: X(t0), y: 2, width: Math.max(1, X(t1) - X(t0)), height: H - B - 2, class: `alt-band${i % 2 ? " odd" : ""}` }),
         sv("text", { x: (X(t0) + X(t1)) / 2, y: 12, class: "tick alt-band-label", "text-anchor": "middle" }, p == null ? "S" : String(p))]) : "",

@@ -176,8 +176,8 @@ function agentChat(n, env) {
   const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
   return [usage(f, [["model", f.agent || p.model]]),
     h("div", { class: "agent-view" }, chatBox(n, env, [top, steps.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),
-    out ? fold("stdout", "stdout", `${lines(out).length} lines`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
-    err ? fold("stderr", "stderr", `${lines(err).length} lines`, h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : ""];
+    out ? fold("stdout", "stdout", `${lines(out).length} line${lines(out).length === 1 ? "" : "s"}`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
+    err ? fold("stderr", "stderr", `${lines(err).length} line${lines(err).length === 1 ? "" : "s"}`, h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : ""];
 }
 function modelChat(n, env) {
   const f = fieldsOf(n), p = n.params || {};
