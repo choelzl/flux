@@ -62,7 +62,7 @@ function topDesigns(ctx, r, n) {
   const head = h("thead", {}), rows = h("tbody", {}), comparison = measurementComparison(r.designs, directions);
   const columns = measurementColumns(ctx, ms, drawRows, groups);
   function drawRows() {
-    const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups);       // D1014
+    const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups), labels = measurementLabels(metrics, groups);       // D1014
     head.replaceChildren(measurementGroupRow(metrics, groups, 3), h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
       ...metrics.map(m => h("th", { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`, "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m))))));
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },

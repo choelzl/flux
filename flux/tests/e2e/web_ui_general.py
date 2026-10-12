@@ -1023,7 +1023,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                 page()
                 r.check("D1008: a dictionary shows its document's aggregate, named, with no test to pick", b.js(
                     "return document.querySelectorAll('table.designs th.measurement-head').length === 2 && !document.querySelector('.dictionary-select, .column-picker')"
-                    " && document.querySelector('.measurement-groups th[title=timings]').textContent === 'timings · mean' && document.querySelector('.dictionary-expand').textContent === 'Tests ▸ 3' && [...document.querySelectorAll('table.designs th.measurement-head')].some(th => th.dataset.label === 'timings')"))
+                    " && !document.querySelector('.measurement-groups') && document.querySelector('th[data-label=timings] .measurement-text, th[data-label=timings] .th-sort')?.textContent.includes('timings') && !document.querySelector('th[data-label=timings] .dict-how') && document.querySelector('.dictionary-expand').textContent === 'Tests ▸' && [...document.querySelectorAll('table.designs th.measurement-head')].some(th => th.dataset.label === 'timings')"))
                 r.check("zero is a measured value", b.js("return [...document.querySelectorAll('table.designs tbody tr')].some(tr => tr.querySelector('td.num[data-label=timings]')?.textContent === '0')"))
                 r.check("the aggregate keeps its unit", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '10' && td.title.includes('ms'))"))
                 b.click(".relative-values")
@@ -1042,7 +1042,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.check("D1013: the axes' pickers list a dictionary's tests under it", b.js(
                     "const s = document.querySelector('.chart-ctl select'), g = s.querySelector('optgroup');"
                     " return !!g && g.label === 'timings ·' && [...g.querySelectorAll('option')].map(o => o.textContent).join() === 'fast,slow'"
-                    " && [...s.options].some(o => o.value === 'timings' && o.textContent === 'timings (mean)')"))
+                    " && [...s.options].some(o => o.value === 'timings' && o.textContent === 'timings')"))
                 r.check("D1014: one chip per dictionary, with its aggregate or per test", b.js(
                     "const v = document.querySelector('.dict-view[data-dict=timings]');"
                     " return [...document.querySelectorAll('.chips .chip')].filter(c => c.textContent.startsWith('timings')).length === 1"

@@ -143,7 +143,7 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
     dictionaryControls.replaceChildren(names.length ? h("button", { type: "button", class: `small dictionary-expand${open ? " on" : ""}`,
       "aria-pressed": String(open), title: open ? "Fold every dictionary to its aggregate" : `Show every dictionary's tests (${tests})`,
       onclick: () => { for (const name of names) choices[name] = { ...selection(name), expanded: !open }; changed(); } },
-      `Tests ${open ? "▾" : "▸"} ${tests}`) : "");
+      `Tests ${open ? "▾" : "▸"}`) : "");
   }
   function changed() {
     controls(); prefs.save({ hiddenMetrics: [...hidden], showHiddenMetrics: showHidden, dictionaryMetrics: choices }); redraw();
@@ -171,7 +171,8 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
 
 export function measurementGroupRow(metrics, groups = {}, leading = 0) {
   const parentOf = new Map(Object.entries(groups).flatMap(([name, group]) => group.metrics.map(m => [m, name])));
-  if (!metrics.some(m => parentOf.has(m))) return "";
+  // D1015: only an unrolled dictionary has a group header; folded, its column carries its name
+  if (!metrics.some((m, i) => parentOf.has(m) && metrics.filter(x => parentOf.get(x) === parentOf.get(m)).length > 1)) return "";
   const spans = [];
   for (const m of metrics) {
     const name = parentOf.get(m) || "";
@@ -180,8 +181,8 @@ export function measurementGroupRow(metrics, groups = {}, leading = 0) {
   }
   // D1014: a dictionary's block named with its method, a line before it when unrolled
   return h("tr", { class: "measurement-groups" }, h("th", { colspan: leading }),
-    spans.map(({ name, count }) => h("th", { colspan: count, scope: "colgroup", title: name, class: name && count > 1 ? "dict-start" : null },
-      name, name && groups[name]?.aggregate ? h("span", { class: "muted" }, ` · ${groups[name].aggregate}`) : "")));
+    spans.map(({ name, count }) => count > 1 && name ? h("th", { colspan: count, scope: "colgroup", title: name, class: "dict-start" }, name)
+      : h("th", { colspan: count })));
 }
 
 /** D1014: each shown column of an unrolled dictionary -> its classes: the aggregate tinted, the tests
@@ -250,12 +251,29 @@ export function measurementText(d, metric, compare, fmt, relative) {
     title: `${metric}: ${value == null ? "not measured" : fmt(value)} · ${delta} from ${ref}${reference?.value === 0 ? " (zero reference; percent change is undefined)" : ""}` };
 }
 
+/** The columns' header labels (D1014, D1015): a dictionary's column is its own name, folded or not;
+    each of its tests is what tells it from its siblings -- their common beginning and ending taken
+    off at a word boundary -- the full names staying in the titles. */
 export function measurementLabels(metrics, groups = {}) {
   const labels = new Map(), used = new Set();
+  const parentOf = new Map(Object.entries(groups).flatMap(([name, g]) => (g.metrics || []).map(m => [m, name])));
+  const distinct = {};
+  for (const [name, g] of Object.entries(groups)) {
+    const tests = metrics.filter(m => parentOf.get(m) === name && m !== name).map(m => m.slice(name.length + 1));
+    if (tests.length < 2) { tests.forEach(t => { distinct[`${name}.${t}`] = t; }); continue; }
+    const cut = (xs) => { let i = 0; while (xs.every(x => i < x.length && x[i] === xs[0][i])) i++;
+      while (i > 0 && !/[._\-\s]/.test(xs[0][i - 1])) i--; return i; };           // a whole word, not half of one
+    const head = cut(tests), tail = cut(tests.map(t => [...t.slice(head)].reverse().join("")));
+    for (const t of tests) {
+      let mid = t.slice(head, t.length - tail).replace(/^[._\-\s]+|[._\-\s]+$/g, "");
+      if (/^\d+$/.test(mid)) mid = `${(t.slice(0, head).match(/([^._\-\s]+)[._\-\s]*$/) || ["", ""])[1]} ${mid}`.trim();   // run_1 -> "run 1", not "1"
+      distinct[`${name}.${t}`] = mid || t;
+    }
+  }
   for (const metric of metrics) {
-    const parent = Object.keys(groups).find(name => groups[name].metrics.includes(metric));
-    const full = (parent ? metric === parent ? groups[parent].aggregate : metric.slice(parent.length + 1) : metric).replace(/_/g, " ");
-    const short = full.length > 20 ? `${full.slice(0, 7).trimEnd()}…${full.slice(-12).trimStart()}` : full;
+    const parent = parentOf.get(metric);
+    const full = (parent ? metric === parent ? parent : distinct[metric] || metric.slice(parent.length + 1) : metric).replace(/_/g, " ");
+    const short = full.length > 18 ? `…${full.slice(-16).trimStart()}` : full;
     let text = short, suffix = 1;
     while (used.has(text)) text = `${short} ${++suffix}`;
     labels.set(metric, text); used.add(text);

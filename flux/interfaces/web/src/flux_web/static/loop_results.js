@@ -69,7 +69,7 @@ function resultsView(ctx, r) {
   }
   const table = h("div", { class: "result-table-surface" });
   const comparison = measurementComparison(r.designs, directions);
-  const labels = measurementLabels(r.metrics, metricGroups);
+  let labels = measurementLabels(r.metrics, metricGroups);           // D1015: drawn again from the columns shown
   const names = designLabels(r.designs, name);
   const relativeButton = relativeToggle(table, () => drawTable(), ctx);
   let sortKey = null, sortDir = 1;                      // null: the decision, then the newest (D692)
@@ -138,6 +138,7 @@ function resultsView(ctx, r) {
   function drawTable() {
     const all = sorted(visibleRows());
     const metrics = columns.visible();
+    labels = measurementLabels(metrics, metricGroups);
     const shown = all.slice(0, pageN);
     const boxes = new Map();
     const tick = (d) => { const box = h("input", { type: "checkbox", title: "compare", "aria-label": `Compare ${d.name}`, checked: picked.some(p => keyOf(p) === keyOf(d)),
@@ -194,7 +195,7 @@ function resultsView(ctx, r) {
   const metricSel = (value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, folded(nums).flatMap(([k, ms]) => {
     const tests = ms.filter(m => m !== k), opt = (m, label) => h("option", { value: m, selected: m === value }, label);
     if (!tests.length) return [opt(k, k)];
-    return [ms.includes(k) ? opt(k, `${k}${metricGroups[k]?.aggregate ? ` (${metricGroups[k].aggregate})` : ""}`) : "",
+    return [ms.includes(k) ? opt(k, k) : "",
       h("optgroup", { label: `${k} ·` }, tests.map(m => opt(m, m.slice(k.length + 1))))];
   })); return e; };
   const savedGraphs = preferences.read().graphs;
@@ -217,7 +218,7 @@ function resultsView(ctx, r) {
     open(d, tr || h("tr"));                             // filtered out: the detail alone
     if (view === "graphs") detail.scrollIntoView({ block: "nearest" });
   };
-  const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];
+  const stageOpts = (all) => [["", all], ...stageNames.map(s => [s, s])];     // D1015: one name for the default, "deepest stage"
   // D914: the best and the front are of one scope -- the whole, or a part -- never parts pooled
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? (groups.includes(graphPrefs.scope) ? graphPrefs.scope : "whole") : "";
@@ -234,7 +235,7 @@ function resultsView(ctx, r) {
     paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
       h("label", {}, "x ", metricSel(px, v => { px = v; rememberGraphs(); drawPareto(); })),
       h("label", {}, "y ", metricSel(py, v => { py = v; rememberGraphs(); drawPareto(); })),
-      h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; rememberGraphs(); drawPareto(); })),
+      h("label", {}, "stage ", sel(stageOpts("deepest stage"), pst, v => { pst = v; rememberGraphs(); drawPareto(); })),
       h("button", { type: "button", class: `small chip pareto-focus${paretoFocus ? " on" : ""}`, "aria-pressed": String(paretoFocus),
         title: paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view",
         disabled: nums.length < 2, onclick: () => {
@@ -256,7 +257,7 @@ function resultsView(ctx, r) {
         return [chip, h("span", { class: "seg dict-view", "data-dict": k }, ...(ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]).map(([v, label]) =>
           h("button", { type: "button", class: (v === "each") === each ? "on" : "", onclick: () => { if (v === "each") perTest.add(k); else perTest.delete(k); rememberGraphs(); drawTime(); } }, label)))];
       })),
-      h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; rememberGraphs(); drawTime(); }))),
+      h("label", { title: "deepest stage: each design's deepest, or the stage its objective names" }, "stage ", sel(stageOpts("deepest stage"), tst, v => { tst = v; rememberGraphs(); drawTime(); }))),
       tMetrics.size ? h("div", { class: "chart-grid" }, folded(nums).filter(([k, ms]) => ms.some(m => tMetrics.has(m))).flatMap(([k, ms]) => {
         const tests = ms.filter(m => m !== k), each = tests.length && (perTest.has(k) || !ms.includes(k));
         const one = (m, each) => { const o = objFor(m); const c = bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false });
