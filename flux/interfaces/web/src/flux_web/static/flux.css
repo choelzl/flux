@@ -1336,7 +1336,7 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 /* D1014: an unrolled dictionary -- its aggregate tinted, its tests narrow, a line before the block */
 .measurement-groups th.dict-start { border-left: 2px solid var(--dict, #2fb0c6); }
 th.dict-start, td.dict-start { border-left: 2px solid var(--dict, #2fb0c6); }
-td.dict-agg, th.dict-agg { background: color-mix(in srgb, var(--dict, #2fb0c6) 10%, var(--panel)); font-weight: 600; }
+td.dict-agg { background: color-mix(in srgb, var(--dict, #2fb0c6) 10%, var(--panel)); font-weight: 600; }   /* the values, not the tall header */
 td.dict-test { font-size: 11.5px; padding-inline: 3px !important; }
 th.dict-test { padding-inline: 2px !important; }
 .dictionary-expand.on { background: color-mix(in srgb, var(--dict, #2fb0c6) 14%, var(--panel)); border-color: var(--dict, #2fb0c6); }
