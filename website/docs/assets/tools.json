@@ -139,6 +139,29 @@
   "preset": true
  },
  {
+  "id": "asl-avs",
+  "role": "check",
+  "title": "The spec's AVS tests pass",
+  "what": "Runs a PTO-style spec unit's AVS tests with ASLRef, through the spec's own runner, from the spec kept in the application's folder. Each failing test a line, then the count.",
+  "run": "fluxpreset asl run {unit} --spec {home}/spec",
+  "params": {
+   "unit": {
+    "label": "Unit (id or mnemonic)",
+    "default": "TADD",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "aslref"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "avs",
+  "preset_module": "asl",
+  "preset": true
+ },
+ {
   "id": "python-bench",
   "role": "stage",
   "title": "Time a Python function",

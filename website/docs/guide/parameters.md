@@ -793,6 +793,10 @@ start-up time off and fits time ~ n^k: `scaling_exponent` (about 1 linear, 2 qua
 --n 5 -- CMD` prints each metric's median and `NAME_spread_pct`. `fluxpreset derive --expr
 "adp=area_um2*path_ps" -- CMD` adds formula metrics (arithmetic, min, max, abs, sqrt, log, exp) to a
 command's own.
+`fluxpreset asl tests UNIT --spec {home}/spec` lists a PTO-style spec unit's AVS tests (the unit by id or
+mnemonic, the spec a checkout kept in the application's folder); `fluxpreset asl run UNIT --spec
+{home}/spec` runs them with ASLRef through the spec's own `scripts/run-asl-test`, each failing test a line
+then `N failing of M` (`--out FILE` writes each result as JSON; needs `aslref` on PATH or `--aslref`).
 
 ## Flux presets
 

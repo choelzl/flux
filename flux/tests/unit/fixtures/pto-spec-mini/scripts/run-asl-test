@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""A stand-in for pto-spec's runner in Flux's tests: finds the test by id, passes when it says PASS,
+and writes its build under --root/build (the preset must give it a folder of its own)."""
+import argparse, os, pathlib, sys
+ap = argparse.ArgumentParser(); ap.add_argument("--root"); ap.add_argument("--id"); a = ap.parse_args()
+root = pathlib.Path(a.root)
+assert os.environ.get("ASLREF"), "ASLREF not given"
+(root / "build").mkdir(exist_ok=True); (root / "build" / (a.id + ".log")).write_text("ran")
+for p in (root / "tests").rglob("*.asl"):
+    text = p.read_text()
+    if f'"id":"{a.id}"' in text:
+        if "PASS" in text:
+            sys.exit(0)
+        print(f"{a.id}: assertion failed", file=sys.stderr); sys.exit(1)
+print("no such test", file=sys.stderr); sys.exit(1)
