@@ -1,8 +1,11 @@
 """Native TCP/UDP uses the allowlist without giving the task firewall capabilities."""
 
 import json
+import shutil
 import socket
 import struct
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -71,8 +74,11 @@ def test_native_name_lookup_uses_the_host_policy_and_audits_refusals(tmp_path, m
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
         (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("192.0.2.7", 0)),
     ])
-    proxy = AllowProxy(str(tmp_path / "proxy.sock"), ["example.test", "2001:db8::/32"], log=str(log), proxies={},
-                       network_path=str(tmp_path / "network.sock"))
+    # sockets in a short folder of their own: a Unix socket's path is at most 107 bytes, and a CI
+    # runner's pytest folder (/tmp/pytest-of-runner/pytest-0/popen-gwN/<this test's name>) is longer
+    short = Path(tempfile.mkdtemp(prefix="fx-", dir="/tmp"))
+    proxy = AllowProxy(str(short / "proxy.sock"), ["example.test", "2001:db8::/32"], log=str(log), proxies={},
+                       network_path=str(short / "network.sock"))
     proxy.start()
     try:
         assert network.request(proxy.path, "FLUX-RESOLVE", "api.example.test") == {"addresses": ["192.0.2.7"]}
@@ -84,6 +90,7 @@ def test_native_name_lookup_uses_the_host_policy_and_audits_refusals(tmp_path, m
         assert json.loads(log.read_text())["how"] == "lookup"
     finally:
         proxy.stop()
+        shutil.rmtree(short, ignore_errors=True)
 
 
 def args(tmp_path):
