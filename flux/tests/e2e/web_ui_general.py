@@ -1107,6 +1107,9 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.page(f"#/app/{name}/ask", "document.querySelector('.drawer.open .ask-reply')", "chat drawer")
                 b.wait("getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="open drawer transition")
                 r.check("Ask keeps conversations separate and renders answer text safely", b.js("return document.querySelectorAll('.ask-card').length === 2 && !document.querySelector('.ask-agent img')"))
+                r.check("an older conversation starts folded, Reply at its top; the newest stays open (D990)", b.js(
+                    'const o = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"), n = document.querySelector(`[data-ask-toggle="${arguments[1]}"]`).closest(".ask-card");'
+                    ' return o.classList.contains("collapsed") && !!o.querySelector(".ask-thread-head .ask-reply-top")?.getClientRects().length && !n.classList.contains("collapsed")', other, root))
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
                 b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")
@@ -1118,7 +1121,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.wait("window.__askPosted.length === 1 && document.querySelectorAll('.ask-turn').length === 3", what="follow-up response")
                 r.check("Reply sends its parent and keeps turns together in order", b.js("const posted = window.__askPosted[0], turns = [...document.querySelector('.selected-thread').querySelectorAll('.ask-user p')]; return posted.parent_id === arguments[0] && posted.question === 'Explain the numbers' && turns[0].textContent === 'Why is this design best?' && turns[1].textContent === posted.question && !document.querySelector('#ask-q').value", root))
                 b.click(f'[data-ask-toggle="{root}"]')
-                r.check("collapsing a conversation shows only its initial prompt", b.js("const c = document.querySelector('.selected-thread'), visible = [...c.querySelectorAll('.ask-message')].filter(el => el.getClientRects().length); return visible.length === 1 && visible[0].querySelector('p').textContent === 'Why is this design best?' && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'false' && !c.querySelector('.ask-reply').getClientRects().length"))
+                r.check("collapsing a conversation shows only its initial prompt", b.js("const c = document.querySelector('.selected-thread'), visible = [...c.querySelectorAll('.ask-message')].filter(el => el.getClientRects().length); return visible.length === 1 && visible[0].querySelector('p').textContent === 'Why is this design best?' && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'false' && !c.querySelector('.ask-turn .ask-reply').getClientRects().length && !!c.querySelector('.ask-reply-top').getClientRects().length"))
                 b.click(".drawer-head button"); b.click(".ask-fab")
                 b.wait("document.querySelector('.drawer.open .selected-thread.collapsed') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened collapsed chat")
                 r.check("closing Ask preserves the collapsed conversation and its reply context", b.js("return document.querySelector('.selected-thread .ask-collapse').textContent === 'Expand' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
@@ -1139,7 +1142,6 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.click(".composer-row button")
                 b.wait("document.querySelector('.notes')?.textContent.includes('long/path/')", what="sent loop note")
                 r.check("notes are distinct from agent conversations", b.js("return window.__askNotes.length === 1 && window.__askPosted.length === 2"))
-                b.js('document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).click(); return 1', other)
                 b.js("document.querySelector('details[data-ask-output]').open = true; const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].running = true; window.__askData[0].ended = null; return 1")
                 # Closing/reopening starts the poll while keeping the same history scroll container.
                 b.click(".drawer-head button"); b.click(".ask-fab")

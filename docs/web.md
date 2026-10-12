@@ -115,8 +115,8 @@ header has **Start**, or **Stop** / **Restart** while active.
   subtracts completed passes from a finite budget. Requests persist on the server.
 - A loop has one log (each start marked), one answer and one notes inbox; no run numbers.
 - **Talk** (any tab) opens a panel with conversations about the loop. **Reply** follows up with
-  that branch as context; **New chat** starts another; **Collapse** / **Expand** (survives
-  refreshes). Ctrl+Enter (⌘+Enter) sends, Enter adds a line, Escape closes keeping the draft.
+  that branch as context (also at a conversation's top); **New chat** starts another; **Collapse** /
+  **Expand** (survives refreshes); older conversations open folded (D990). Ctrl+Enter (⌘+Enter) sends, Enter adds a line, Escape closes keeping the draft.
   While running, **Send a note to the running loop** joins the next prompt or answers the
   agent's open question (`questions: operator` shows its time left). A bin removes a note or
   conversation after confirming; an unread note never reaches the loop, a read one stays in the

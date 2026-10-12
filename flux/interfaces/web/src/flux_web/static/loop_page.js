@@ -232,7 +232,7 @@ async function loopPage(name, owner, path = "") {
   cleanup.push(past.close, alt.close);
   // Conversations keep their own reply context; loop notes still join the next design prompt.
   let askTimer = null, askWho = null, askReply = null, askBusy = false, askSending = false;
-  const collapsedAsks = new Set();
+  const collapsedAsks = new Set(), expandedAsks = new Set();   // D990: what the viewer chose; else older ones fold
   let notesOpen = false;
   const askQ = h("textarea", { rows: 2, id: "ask-q", "aria-label": "Message", placeholder: "Ask about this loop…" });
   askQ.addEventListener("keydown", e => {
@@ -347,17 +347,21 @@ async function loopPage(name, owner, path = "") {
       if (!threads.has(id)) threads.set(id, []);
       threads.get(id).push(a);
     }
-    const conversations = [...threads.values()].sort((a, b) => b.at(-1).started - a.at(-1).started).map(turns => {
+    const conversations = [...threads.values()].sort((a, b) => b.at(-1).started - a.at(-1).started).map((turns, i) => {
       const selected = turns.some(a => a.id === askReply), running = turns.some(a => a.running);
-      const id = turns[0].thread_id || turns[0].id;
+      const id = turns[0].thread_id || turns[0].id, last = turns.at(-1);
+      // D990: the newest conversation, the one replied to and a running one stay open; older ones fold
+      const folded = () => collapsedAsks.has(id) || (!expandedAsks.has(id) && !(i === 0 || selected || running));
       const toggle = h("button", { type: "button", class: "small ask-collapse", "data-ask-toggle": id,
-        onclick: () => { if (collapsedAsks.has(id)) collapsedAsks.delete(id); else collapsedAsks.add(id); updateCollapse(); } });
-      const conversation = card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"), toggle,
+        onclick: () => { const f = folded(); collapsedAsks.delete(id); expandedAsks.delete(id); (f ? expandedAsks : collapsedAsks).add(id); updateCollapse(); } });
+      const replyTop = mine && canRun && !running && last.answer ? h("button", { type: "button", class: "small ask-reply ask-reply-top", disabled: askBusy || askSending,
+        "data-reply-to": last.id, title: "Reply to this conversation's latest answer", onclick: () => replyTo(last) }, "Reply") : "";
+      const conversation = card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"), replyTop, toggle,
         mine && !running ? binButton("conversation", "Remove this conversation?", "All its messages, answers and saved reply context are removed for everyone who sees this loop.",
           async () => { await api(`/apps/${enc(name)}/asks/${turns[0].id}${qs}`, { method: "DELETE" }); askView(); }) : ""), ...turns.map(turn)],
         { cls: `ask-card has-bin${selected ? " selected-thread" : ""}` });
       function updateCollapse() {
-        const collapsed = collapsedAsks.has(id);
+        const collapsed = folded();
         conversation.classList.toggle("collapsed", collapsed);
         toggle.textContent = collapsed ? "Expand" : "Collapse";
         toggle.setAttribute("aria-expanded", String(!collapsed));

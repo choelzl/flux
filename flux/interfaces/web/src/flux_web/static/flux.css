@@ -905,7 +905,8 @@ svg.gantt .bar.interrupted { stroke: var(--warn); stroke-dasharray: 4 3; }
 .md blockquote { margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--muted); }
 .md table.md { margin: 6px 0; }
 .ask-thread-head { display: flex; align-items: center; min-width: 0; padding-right: 30px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
-.ask-collapse { margin-left: auto; }
+.ask-collapse, .ask-reply-top { margin-left: auto; }
+.ask-reply-top + .ask-collapse { margin-left: 6px; }
 .ask-card.collapsed .ask-agent, .ask-card.collapsed .ask-turn ~ .ask-turn { display: none; }
 .ask-card.collapsed .ask-user { margin-bottom: 0; }
 .ask-card.selected-thread { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
