@@ -5,7 +5,7 @@ import { cleanup } from "./state.js";
 import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
-import { defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
+import { dictionaryClasses, defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 import { loadOverviewLayout } from "./overview_layout.js";
 import { additionalOverviewCards } from "./overview_cards.js";
@@ -62,14 +62,14 @@ function topDesigns(ctx, r, n) {
   const head = h("thead", {}), rows = h("tbody", {}), comparison = measurementComparison(r.designs, directions);
   const columns = measurementColumns(ctx, ms, drawRows, groups);
   function drawRows() {
-    const metrics = columns.visible();
+    const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups);       // D1014
     head.replaceChildren(measurementGroupRow(metrics, groups, 3), h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
-      ...metrics.map(m => h("th", { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m))))));
+      ...metrics.map(m => h("th", { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`, "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m))))));
     rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
         h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
-          return h("td", { class: `num mono${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
+          return h("td", { class: `num mono${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
   }
   const relative = relativeToggle(surface, drawRows, ctx);
   surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), columns.controls, relative),

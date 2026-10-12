@@ -227,10 +227,11 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
 - **Absolute / Relative** (shared toggle): Relative is percent change from the latest baseline
   for the same metric, stage and group; without one, from accepted designs' P90 (higher-better) or
   P10 (lower-better). Hover for absolute value, reference, sample count. Undefined shows —.
-- **Dictionary metrics:** folded to the aggregate the document names (its method beside the name, and in
-  Settings › Preferences' Aggregate column), or **All** to unroll every test (D1008). Preferences and
-  Graphs fold a dictionary's tests under it: a ▸ on its row and its chip, its tests grouped in the axes' pickers (D1013). Tests
-  missing or null/empty/NaN stay unmeasured, not zero.
+- **Dictionary metrics:** folded to the aggregate the document names (the group header says `ipc · gmean`);
+  **Tests ▸ N** in the table's toolbar unrolls every dictionary at once: its aggregate tinted, its tests as narrow
+  columns, a line before each block (D1014). Preferences folds a dictionary's tests behind ▸ before its name, its
+  method and count beside it; Graphs shows one chip per dictionary with an aggregate / per test switch (one small
+  chart per test). Tests missing or null/empty/NaN stay unmeasured, not zero.
 - **Baselines** are references, never the decision or a search start. Pass 0 keeps the best
   eligible search design if its measurements are fresh; unchanged successful baselines are reused.
 - **Ideas:** the full ideas notebook.

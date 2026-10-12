@@ -17,6 +17,7 @@ class GraphPreferences(BaseModel):
     scope: Name = ""
     paretoFocus: StrictBool = False
     metrics: Names = Field(default_factory=list)
+    perTest: Names = Field(default_factory=list)       # D1014: dictionaries charted one small chart per test
 
 
 class DictionaryPreference(BaseModel):

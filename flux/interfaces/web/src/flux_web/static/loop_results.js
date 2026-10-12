@@ -6,7 +6,7 @@ import { act, ago, api, card, dialog, empty, enc, h, promptDialog, skeleton, toa
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
-import { defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
+import { dictionaryClasses, defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, resultPreferences, verdictBadge } from "./result_table.js";
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
@@ -154,9 +154,10 @@ function resultsView(ctx, r) {
       return h("td", { class: "pick" }, box); };
     const more = all.length > shown.length ? h("div", { class: "more" }, h("button", { class: "small", onclick: () => { pageN += PAGE; drawTable(); } },
       `Show ${Math.min(PAGE, all.length - shown.length)} more`), h("span", { class: "muted" }, ` ${shown.length} of ${all.length} shown`)) : "";
+    const dict = dictionaryClasses(metrics, metricGroups);                   // D1014: an unrolled dictionary's block
     table.replaceChildren(shown.length ? h("div", { class: "scroll-x rows-scroll" }, h("table", { class: "list designs" },     // D998: scrolls in its box
       h("thead", {}, measurementGroupRow(metrics, metricGroups, 3), h("tr", {}, h("th", { class: "pick", title: "Tick two to compare" }, ""), th("name", "Design"), th("verdict", "Status", { class: "status-column" }),
-        ...metrics.map(m => { const l = limitOf(m); return th(m, m, { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}`, title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
+        ...metrics.map(m => { const l = limitOf(m); return th(m, m, { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`, title: `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}` },
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
       h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
         tick(d),
@@ -167,7 +168,7 @@ function resultsView(ctx, r) {
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...metrics.map(m => { const ok = d.meets[m];
           const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
-          return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
+          return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
   }
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
@@ -196,10 +197,10 @@ function resultsView(ctx, r) {
     return [ms.includes(k) ? opt(k, `${k}${metricGroups[k]?.aggregate ? ` (${metricGroups[k].aggregate})` : ""}`) : "",
       h("optgroup", { label: `${k} ·` }, tests.map(m => opt(m, m.slice(k.length + 1))))];
   })); return e; };
-  const openDicts = new Set();
   const savedGraphs = preferences.read().graphs;
   const graphPrefs = savedGraphs && typeof savedGraphs === "object" && !Array.isArray(savedGraphs) ? savedGraphs : {};
   let paretoFocus = graphPrefs.paretoFocus === true;
+  const perTest = new Set(Array.isArray(graphPrefs.perTest) ? graphPrefs.perTest : []);   // D1014: dictionaries charted per test
   let px = nums.includes(graphPrefs.x) ? graphPrefs.x : nums[1] || nums[0], py = nums.includes(graphPrefs.y) ? graphPrefs.y : nums[0];
   let pst = stageNames.includes(graphPrefs.paretoStage) ? graphPrefs.paretoStage : "", tst = stageNames.includes(graphPrefs.timeStage) ? graphPrefs.timeStage : "";
   const restoredMetrics = Array.isArray(graphPrefs.metrics) ? graphPrefs.metrics.filter(m => nums.includes(m)) : null;
@@ -221,7 +222,7 @@ function resultsView(ctx, r) {
   const groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   let scope = groups.length ? (groups.includes(graphPrefs.scope) ? graphPrefs.scope : "whole") : "";
   function rememberGraphs() {
-    preferences.save({ graphs: { x: px, y: py, paretoStage: pst, paretoFocus, timeStage: tst, metrics: [...tMetrics], scope } });
+    preferences.save({ graphs: { x: px, y: py, paretoStage: pst, paretoFocus, timeStage: tst, metrics: [...tMetrics], scope, perTest: [...perTest] } });
   }
   const scopeBox = h("div", {});
   function drawScope() {
@@ -244,21 +245,25 @@ function resultsView(ctx, r) {
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
     timeBox.replaceChildren(h("div", { class: "chart-ctl" },
+      // D1014: one chip per dictionary; charted, a switch between its aggregate and one small chart per test
       h("div", { class: "chips" }, folded(nums).flatMap(([k, ms]) => {
-        const chip = (m, label) => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}${m !== k ? " dict-test" : ""}`, title: m,
-          onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); rememberGraphs(); drawTime(); } }, label);
-        const tests = ms.filter(m => m !== k);
-        if (!tests.length) return [chip(k, k)];
-        const open = openDicts.has(k) || tests.some(m => tMetrics.has(m));
-        return [ms.includes(k) ? chip(k, k) : h("span", { class: "chip-label" }, k),
-          h("button", { type: "button", class: "chip dict-fold", "data-dict": k, "aria-expanded": String(open), title: open ? `Fold ${k}'s tests` : `Show ${k}'s ${tests.length} tests`,
-            onclick: () => { if (openDicts.has(k) || tests.some(m => tMetrics.has(m))) { openDicts.delete(k); tests.forEach(m => tMetrics.delete(m)); } else openDicts.add(k); rememberGraphs(); drawTime(); } },
-            open ? "▾" : `▸ ${tests.length}`),
-          ...(open ? tests.map(m => chip(m, m.slice(k.length + 1))) : [])];
+        const tests = ms.filter(m => m !== k), on = tMetrics.has(k) || tests.some(m => tMetrics.has(m));
+        const chip = h("button", { class: `chip${on ? " on" : ""}`, title: k, onclick: () => {
+          if (on) { tMetrics.delete(k); tests.forEach(m => tMetrics.delete(m)); } else tMetrics.add(ms.includes(k) ? k : tests[0]);
+          rememberGraphs(); drawTime(); } }, k);
+        if (!tests.length || !on) return [chip];
+        const each = perTest.has(k) || !ms.includes(k);
+        return [chip, h("span", { class: "seg dict-view", "data-dict": k }, ...(ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]).map(([v, label]) =>
+          h("button", { type: "button", class: (v === "each") === each ? "on" : "", onclick: () => { if (v === "each") perTest.add(k); else perTest.delete(k); rememberGraphs(); drawTime(); } }, label)))];
       })),
       h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; rememberGraphs(); drawTime(); }))),
-      tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m);
-        return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false }); }))
+      tMetrics.size ? h("div", { class: "chart-grid" }, folded(nums).filter(([k, ms]) => ms.some(m => tMetrics.has(m))).flatMap(([k, ms]) => {
+        const tests = ms.filter(m => m !== k), each = tests.length && (perTest.has(k) || !ms.includes(k));
+        const one = (m, each) => { const o = objFor(m); const c = bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false });
+          if (each) c.classList.add("small-multiple"); return c; };
+        // per test: one chart per test at the charts' own size, under the dictionary's name
+        return each ? [h("div", { class: "small-multiples", "data-dict": k }, h("div", { class: "muted small" }, `${k} · per test`), ...tests.map(m => one(m, true)))] : [one(ms.includes(k) ? k : ms[0], false)];
+      }))
         : empty("Pick a metric to chart."));
   }
   let graphsEl = null;

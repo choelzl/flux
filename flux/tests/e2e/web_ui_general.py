@@ -1023,16 +1023,19 @@ objectives: [{metric: timings.fast, goal: 15}]
                 page()
                 r.check("D1008: a dictionary shows its document's aggregate, named, with no test to pick", b.js(
                     "return document.querySelectorAll('table.designs th.measurement-head').length === 2 && !document.querySelector('.dictionary-select, .column-picker')"
-                    " && document.querySelector('.dictionary-name').textContent === 'timings · mean' && [...document.querySelectorAll('table.designs th.measurement-head')].some(th => th.dataset.label === 'timings')"))
+                    " && document.querySelector('.measurement-groups th[title=timings]').textContent === 'timings · mean' && document.querySelector('.dictionary-expand').textContent === 'Tests ▸ 3' && [...document.querySelectorAll('table.designs th.measurement-head')].some(th => th.dataset.label === 'timings')"))
                 r.check("zero is a measured value", b.js("return [...document.querySelectorAll('table.designs tbody tr')].some(tr => tr.querySelector('td.num[data-label=timings]')?.textContent === '0')"))
                 r.check("the aggregate keeps its unit", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '10' && td.title.includes('ms'))"))
                 b.click(".relative-values")
                 r.check("relative dictionary values use their own baseline", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '-100%' && td.title.includes('ms'))"))
                 b.click(".relative-values")
                 b.click(".dictionary-expand")
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "dict-table.png")
                 r.check("missing dictionary tests remain empty", b.js("return [...document.querySelectorAll('table.designs td.num[data-label=\"timings.never\"]')].every(td => td.textContent === '')"))
                 r.check("All unrolls grouped subcolumns and keeps unavailable tests", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && document.querySelector('th[scope=colgroup][title=timings]').colSpan === 4 && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8)"))
-                b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings.fast')", what="grouped table column labels")
+                b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings')", what="grouped table column labels: the aggregate first (D1014)")
                 page("", "document.querySelector('.best-n')")
                 r.check("Decision shares dictionary expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && !document.querySelector('.dictionary-select')"))
                 page("results/graphs", "document.querySelector('.chart-ctl select')")
@@ -1040,20 +1043,26 @@ objectives: [{metric: timings.fast, goal: 15}]
                     "const s = document.querySelector('.chart-ctl select'), g = s.querySelector('optgroup');"
                     " return !!g && g.label === 'timings ·' && [...g.querySelectorAll('option')].map(o => o.textContent).join() === 'fast,slow'"
                     " && [...s.options].some(o => o.value === 'timings' && o.textContent === 'timings (mean)')"))
-                r.check("the charts' chips: a charted test keeps its dictionary open, its tests by their own names", b.js(
-                    "return document.querySelector('.dict-fold[data-dict=timings]').getAttribute('aria-expanded') === 'true'"
-                    " && [...document.querySelectorAll('.chip.dict-test')].map(c => c.textContent).join() === 'fast,slow'"))
-                b.click('.chips .dict-fold[data-dict="timings"]')
-                r.check("its fold folds the tests away", b.js("return !document.querySelector('.chip.dict-test') && document.querySelector('.dict-fold[data-dict=timings]').textContent === '▸ 2'"))
+                r.check("D1014: one chip per dictionary, with its aggregate or per test", b.js(
+                    "const v = document.querySelector('.dict-view[data-dict=timings]');"
+                    " return [...document.querySelectorAll('.chips .chip')].filter(c => c.textContent.startsWith('timings')).length === 1"
+                    " && !!v && [...v.querySelectorAll('button')].map(x => x.textContent).join() === 'mean,per test'"))
+                b.js("[...document.querySelectorAll('.dict-view[data-dict=timings] button')].find(x => x.textContent === 'per test').click(); return 1")
+                b.wait("document.querySelector('.small-multiples[data-dict=timings]')", what="timings per test")
+                r.check("per test draws one small chart per measured test", b.js("return document.querySelectorAll('.small-multiples[data-dict=timings] .small-multiple').length === 2"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "dict-graphs.png", full=True)
                 page("settings", "document.querySelector('.measurement-preferences .measurement-options')")
                 r.check("existing loops open Settings on Preferences", b.js("return document.querySelector('.subtabs [role=tab].on').textContent") == "Preferences")
                 r.check("D1008: Preferences shows each dictionary's aggregate, read from the document", b.js(
-                    "const t = document.querySelector('.measurement-options'), row = [...t.querySelectorAll('tbody tr')].find(tr => tr.cells[0].firstChild.textContent === 'timings');"
-                    " return [...t.querySelectorAll('thead th')].some(th => th.textContent === 'Aggregate') && row && row.cells[4].textContent === 'mean'"))
+                    "const t = document.querySelector('.measurement-options'), row = [...t.querySelectorAll('tbody tr')].find(tr => tr.cells[0].title === 'timings');"
+                    " return row && row.querySelector('.dict-how').textContent.trim() === 'mean · 3 tests' && ![...t.querySelectorAll('thead th')].some(th => th.textContent === 'Aggregate')"))
                 r.check("D1013: Preferences folds a dictionary's tests under its row", b.js(
                     "const t = document.querySelector('.measurement-options'), tests = [...t.querySelectorAll('tr[data-dict-of=timings]')];"
                     " return tests.length === 3 && tests.every(tr => tr.hidden) && !!t.querySelector('.dict-fold[data-dict=timings]')"))
                 b.click('.measurement-options .dict-fold[data-dict="timings"]')
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "dict-preferences.png")
                 r.check("its fold shows the tests", b.js("return [...document.querySelectorAll('.measurement-options tr[data-dict-of=timings]')].every(tr => !tr.hidden)"))
                 b.click('.measurement-options input[data-metric="timings.fast"]')
                 page()

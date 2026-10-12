@@ -69,12 +69,9 @@ export function measurementPreferences(ctx, metrics, groups = {}, defaults = met
     .flatMap(([name, g]) => (g.metrics || []).filter(m => m !== name && metrics.includes(m)).map(m => [m, name])));
   const dictTests = new Map();
   for (const [m, name] of dictParent) (dictTests.get(name) || dictTests.set(name, []).get(name)).push(m);
-  const aggregate = Object.keys(dicts).length ? (metric) => h("td", { class: "muted", title: dicts[metric] ? "set in the document (the measurement's aggregate:)" : null },
-    dicts[metric] ? (dicts[metric].aggregate || "—") : "") : () => "";
   const table = h("table", { class: "list compact measurement-options" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"),
-      Object.keys(dicts).length ? h("th", { title: "How a dictionary's tests make its one number" }, "Aggregate") : "")),
-    h("tbody", {}, metrics.map(metric => {
+    h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"))),
+    h("tbody", {}, metrics.filter(m => !dictParent.has(m)).flatMap(m => [m, ...(dictTests.get(m) || [])]).map(metric => {   // D1014: tests under their row
       const visible = columns.picker.querySelector(`input[data-metric="${CSS.escape(metric)}"]`);
       visible.setAttribute("aria-label", `Show ${metric} column`);
       const primary = h("input", { type: "checkbox", checked: main.has(metric), "data-main-metric": metric,
@@ -88,12 +85,16 @@ export function measurementPreferences(ctx, metrics, groups = {}, defaults = met
           prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked } });
         } });
       const parent = dictParent.get(metric), tests = dictTests.get(metric) || [];
-      const fold = tests.length ? h("button", { type: "button", class: "link small dict-fold", "data-dict": metric, "aria-expanded": "false",
-        onclick: () => { const open = fold.getAttribute("aria-expanded") !== "true"; fold.setAttribute("aria-expanded", String(open)); fold.textContent = open ? "▾" : `▸ ${tests.length}`;
-          for (const tr of table.querySelectorAll(`tr[data-dict-of="${CSS.escape(metric)}"]`)) tr.hidden = !open; } }, `▸ ${tests.length}`) : "";
+      // D1014: a dictionary's row folds its tests behind a caret before its name; its method and count beside it
+      const how = dicts[metric]?.aggregate;
+      const fold = tests.length ? h("button", { type: "button", class: "link dict-fold", "data-dict": metric, "aria-expanded": "false",
+        title: `Show ${metric}'s ${tests.length} tests`,
+        onclick: () => { const open = fold.getAttribute("aria-expanded") !== "true"; fold.setAttribute("aria-expanded", String(open)); fold.textContent = open ? "▾" : "▸";
+          for (const tr of table.querySelectorAll(`tr[data-dict-of="${CSS.escape(metric)}"]`)) tr.hidden = !open; } }, "▸") : "";
       return h("tr", { ...(parent ? { "data-dict-of": parent, class: "dict-test", hidden: true } : {}) },
-        h("td", { class: "mono", title: metric }, parent ? metric.slice(parent.length + 1) : metric, " ", fold),
-        h("td", {}, visible), h("td", {}, primary), h("td", {}, relative), aggregate(metric));
+        h("td", { class: "mono", title: metric }, fold, fold ? " " : "", parent ? metric.slice(parent.length + 1) : metric,
+          dicts[metric] ? h("span", { class: "muted small dict-how", title: "set in the document (the measurement's aggregate:)" }, ` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`) : ""),
+        h("td", {}, visible), h("td", {}, primary), h("td", {}, relative));
     })));
   if (!ctx.mine) for (const input of table.querySelectorAll("input")) input.disabled = true;
   return h("div", { class: "scroll-x" }, table);
@@ -135,16 +136,14 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
     toggle.setAttribute("aria-pressed", String(showHidden));
     toggle.title = showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns";
     for (const [metric, box] of boxes) box.checked = !hidden.has(metric);
-    dictionaryControls.replaceChildren(...Object.entries(dictionaries).map(([name, ms]) => {
-      const current = selection(name), how = groups[name].aggregate;
-      return h("div", { class: "dictionary-control" }, h("span", { class: "dictionary-name", title: how ? `${name}: the ${how} of its tests, as the document says` : name },
-          name, how ? h("span", { class: "muted small" }, ` · ${how}`) : ""),
-        h("button", { type: "button", class: "small dictionary-expand", "data-group": name,
-          "aria-pressed": String(current.expanded), disabled: ms.length < 2 || !current.selected,
-          title: current.expanded ? `Show one ${name} test` : `Show all ${name} tests`, onclick: () => {
-            choices[name] = { ...selection(name), expanded: !selection(name).expanded }; changed();
-          } }, "All"));
-    }));
+    // D1014: one toggle unrolls every dictionary at once -- its tests as narrow columns beside its aggregate
+    const names = Object.keys(dictionaries).filter(name => dictionaries[name].length > 1);
+    const tests = names.reduce((n, name) => n + dictionaries[name].filter(m => m !== name).length, 0);
+    const open = names.length > 0 && names.every(name => selection(name).expanded);
+    dictionaryControls.replaceChildren(names.length ? h("button", { type: "button", class: `small dictionary-expand${open ? " on" : ""}`,
+      "aria-pressed": String(open), title: open ? "Fold every dictionary to its aggregate" : `Show every dictionary's tests (${tests})`,
+      onclick: () => { for (const name of names) choices[name] = { ...selection(name), expanded: !open }; changed(); } },
+      `Tests ${open ? "▾" : "▸"} ${tests}`) : "");
   }
   function changed() {
     controls(); prefs.save({ hiddenMetrics: [...hidden], showHiddenMetrics: showHidden, dictionaryMetrics: choices }); redraw();
@@ -163,7 +162,9 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
         const parent = groupOf.get(m);
         if (!parent) return visible.includes(m) ? [m] : [];
         if (seen.has(parent)) return [];
-        seen.add(parent); return visible.filter(x => groupOf.get(x) === parent);
+        seen.add(parent);                                    // D1014: the block's aggregate first, then its tests
+        const block = visible.filter(x => groupOf.get(x) === parent);
+        return [...block.filter(x => x === parent), ...block.filter(x => x !== parent)];
       });
     } };
 }
@@ -177,8 +178,23 @@ export function measurementGroupRow(metrics, groups = {}, leading = 0) {
     if (name && spans.at(-1)?.name === name) spans.at(-1).count++;
     else spans.push({ name, count: 1 });
   }
+  // D1014: a dictionary's block named with its method, a line before it when unrolled
   return h("tr", { class: "measurement-groups" }, h("th", { colspan: leading }),
-    spans.map(({ name, count }) => h("th", { colspan: count, scope: "colgroup", title: name }, name)));
+    spans.map(({ name, count }) => h("th", { colspan: count, scope: "colgroup", title: name, class: name && count > 1 ? "dict-start" : null },
+      name, name && groups[name]?.aggregate ? h("span", { class: "muted" }, ` · ${groups[name].aggregate}`) : "")));
+}
+
+/** D1014: each shown column of an unrolled dictionary -> its classes: the aggregate tinted, the tests
+    narrow, a line before the block. Folded (the aggregate alone), nothing. */
+export function dictionaryClasses(metrics, groups = {}) {
+  const parentOf = new Map(Object.entries(groups).filter(([, g]) => g?.type === "dict").flatMap(([name, g]) => g.metrics.map(m => [m, name])));
+  const out = new Map();
+  metrics.forEach((m, i) => {
+    const name = parentOf.get(m);
+    if (!name || metrics.filter(x => parentOf.get(x) === name).length < 2) return;
+    out.set(m, ` dict-col ${m === name ? "dict-agg" : "dict-test"}${parentOf.get(metrics[i - 1]) !== name ? " dict-start" : ""}`);
+  });
+  return out;
 }
 
 /** Short display names; the original names and content keys still identify designs. */
