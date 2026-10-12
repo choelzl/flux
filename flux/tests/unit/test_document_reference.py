@@ -32,7 +32,7 @@ def test_every_flow_box_a_document_writes_is_described():
 
 def test_every_budget_knob_is_described():
     from flux_loop.types import LoopRequest
-    not_budget = {"db", "params", "baseline", "baseline_only", "finalists", "calibrate"}   # said elsewhere
+    not_budget = {"db", "params", "baseline", "baseline_only", "reevaluate", "finalists", "calibrate"}   # said elsewhere
     assert not _missing({f.name for f in dataclasses.fields(LoopRequest)} - not_budget)
 
 
