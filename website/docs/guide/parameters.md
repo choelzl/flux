@@ -797,6 +797,11 @@ command's own.
 mnemonic, the spec a checkout kept in the application's folder); `fluxpreset asl run UNIT --spec
 {home}/spec` runs them with ASLRef through the spec's own `scripts/run-asl-test`, each failing test a line
 then `N failing of M` (`--out FILE` writes each result as JSON; needs `aslref` on PATH or `--aslref`).
+`fluxpreset ndf list --spec {home}/spec` lists each unit with its NDF clauses by modality and its test count
+(`--classification` to narrow); `fluxpreset ndf clauses UNIT` prints the unit's clauses whole; `fluxpreset ndf
+check UNIT --results FILE` reads `asl run --out`'s results: each MUST clause failed or uncovered (no test names it
+or its unit) a line, then `N failing of M` (`--uncovered warn` lists without counting). It uses the NDF tool
+(`ndf`, in the dev shell from nixchip), building the spec's index in a temporary folder each time.
 
 ## Flux presets
 

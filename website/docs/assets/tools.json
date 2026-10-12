@@ -544,6 +544,34 @@
   "preset": true
  },
  {
+  "id": "ndf-contract",
+  "role": "check",
+  "title": "Every MUST clause covered and passing",
+  "what": "Reads a PTO-style spec unit's NDF clauses (the NDF tool, from the spec in the application's folder) and the AVS results `fluxpreset asl run --out` wrote: each MUST clause that failed or has no test is a line, then the count.",
+  "run": "fluxpreset ndf check {unit} --spec {home}/spec --results {results}",
+  "params": {
+   "unit": {
+    "label": "Unit (id or mnemonic)",
+    "default": "TADD",
+    "unit": ""
+   },
+   "results": {
+    "label": "AVS results (JSON)",
+    "default": "avs.json",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "ndf"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "contract",
+  "preset_module": "ndf",
+  "preset": true
+ },
+ {
   "id": "prog-size",
   "role": "stage",
   "title": "Program size",

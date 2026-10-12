@@ -5,11 +5,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1790606828,
-        "narHash": "sha256-sY+xJeJkd/KMGMNXCAWLFF1oihwUIhm4HreIg7jGh7I=",
+        "lastModified": 1791840310,
+        "narHash": "sha256-XuQuA3yDWwaR3EiWfcFHY80oyAH9QspFde3ox+40tqQ=",
         "owner": "helcel-net",
         "repo": "nixchip",
-        "rev": "f4fddde1616926a11cec12d325cf321536b4fc60",
+        "rev": "58ef768b44dff734a0b8f22afacdc94e0b9cf1dd",
         "type": "github"
       },
       "original": {

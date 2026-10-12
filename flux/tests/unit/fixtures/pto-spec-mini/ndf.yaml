@@ -1,0 +1,9 @@
+format_version: "0.2"
+project: pto-spec
+roots:
+  - asl/**/*.asl
+id_prefixes:
+  - PTO
+domains:
+  - tile
+policies: {}
