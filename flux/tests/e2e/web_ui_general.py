@@ -497,6 +497,9 @@ def general_flows(r, watch):
 
             try:
                 r.page(f"#/app/{name}/live-alt", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "LiveAlt current activity")
+                r.check("D1002: a long task name truncates in the tree; the tree never scrolls sideways", b.js(
+                    "const n=document.querySelector('.alt-tree .alt-task-name'); n.textContent='x'.repeat(400);"
+                    " const v=document.querySelector('.alt-visual'); return v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth"))
                 r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
                 r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
                 r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent: claude')"))

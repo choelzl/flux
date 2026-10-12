@@ -764,8 +764,8 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-pass-heading { font-weight: 600; }
 /* D978: one line per task, tinted by its kind; the selected deeper and outlined; quiet when it took no time */
 /* D987: soft rounded strips, a light tint, a little air between them -- no hard separators */
-.alt-tree { display: grid; gap: 2px; }
-.alt-tree-row { display: flex; align-items: stretch; margin-left: calc(min(var(--depth), 8) * 12px); border-radius: 6px; background: color-mix(in srgb, var(--k, transparent) 14%, var(--panel)); transition: background-color .12s; }
+.alt-tree { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }   /* D1002: a long name truncates, never widens the tree */
+.alt-tree-row { display: flex; align-items: stretch; min-width: 0; margin-left: calc(min(var(--depth), 8) * 12px); border-radius: 6px; background: color-mix(in srgb, var(--k, transparent) 14%, var(--panel)); transition: background-color .12s; }
 .alt-tree-row:hover { background: color-mix(in srgb, var(--k, transparent) 22%, var(--panel)); }
 .alt-tree-row.alt-pass-row { background: transparent; border-radius: 0; margin-top: 4px; border-bottom: 1px solid var(--line); }
 .alt-tree-row.alt-pass-row:hover { background: color-mix(in srgb, var(--ink) 4%, var(--panel)); }
@@ -801,7 +801,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
 .alt-done.ok { fill: var(--ok); } .alt-done.bad { fill: var(--bad); } .alt-done.part { fill: var(--warn); } .alt-done-mark { font: 600 9.5px var(--sans, sans-serif); fill: #fff; text-anchor: middle; }
 .alt-flow-box { cursor: pointer; }
-.alt-box-tasks { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; }
+.alt-box-tasks { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }
 .alt-box-tasks .alt-tree-row { font-size: 12.5px; }
 .alt-box-sep { height: 0; border-top: 1px solid var(--line); margin: 3px 8px; } .alt-flow-box.sel .alt-box { stroke-width: 2.4; } .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
 /* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
