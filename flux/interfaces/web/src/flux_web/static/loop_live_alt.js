@@ -20,8 +20,9 @@ export function liveAltTab(ctx) {
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
   let foldDone = true, notes = {}, goals = [], chainPass = null, openBox = null;
+  let boxView = null, problem = null;
   const NO_PASS = Symbol("no pass");
-  let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task                 // D978: ⊟ folds what has finished; the graph's chosen pass
+  let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task
   const close = () => {
     seq++; mounted = false;
     clearInterval(timer); timer = null;
@@ -39,9 +40,15 @@ export function liveAltTab(ctx) {
     const n = taskScope(inspector.model, "all").membership.get(id);
     pass = n == null ? "all" : String(n);
   }
-  function showPass(p) { passView = p; following = false; render(); }
+  function showPass(p) { boxView = null; passView = p; following = false; render(); }
+  function showBox(p, key) {
+    boxView = { p, key }; passView = NO_PASS; following = false; choice = null;
+    if (pass === "current") pass = p == null ? "all" : String(p);
+    render(); revealDetails();
+  }
   function select(id, locate = false) {
     following = false;
+    boxView = null;
     passView = NO_PASS;
     pinPass(id);
     choice = null;
@@ -49,6 +56,9 @@ export function liveAltTab(ctx) {
     for (let p = inspector.model.nodes.get(id)?.parent; p; p = p.parent) folded.delete(p.id);
     inspector.inspect(id);
     render();
+    revealDetails();
+  }
+  function revealDetails() {
     if (window.matchMedia("(max-width: 960px)").matches) {
       detailHost.closest(".alt-inspector-card")?.scrollIntoView({ block: "start" });
       detailHost.focus({ preventScroll: true });
@@ -81,7 +91,7 @@ export function liveAltTab(ctx) {
     summary.replaceChildren(h("strong", {}, scopeName === "Pass 0" ? "Pass 0 · baseline" : scopeName),
       h("span", { class: "muted small" }, `${visibleRows.length} tasks`),
       ...Object.entries(counts).filter(([, n]) => n).map(([s, n]) => h("span", { class: `alt-count ${s}`, title: `All tasks in this scope: ${n} ${s}` }, `${n} ${s}`)));
-    locateBtn.disabled = selected == null;
+    locateBtn.disabled = !boxView && selected == null;
     const index = visibleRows.findIndex(r => r.node.id === selected);
     stepper.querySelector('[data-step="-1"]').disabled = index <= 0;
     stepper.querySelector('[data-step="1"]').disabled = index < 0 || index >= visibleRows.length - 1;
@@ -92,9 +102,10 @@ export function liveAltTab(ctx) {
     const place = scrollState(panel), active = panel.contains(document.activeElement) ? document.activeElement : null;
     const focusKey = active?.dataset.choice ? "choice" : active?.dataset.task ? "task" : active?.dataset.fold ? "fold" : "kind", focused = active?.dataset[focusKey];
     const mode = ctx.curSub() || "tree";
+    if (mode !== "graph") boxView = null;
     split.classList.toggle("wide", mode === "timeline" && pass === "all");   // D984: one pass fits the narrow column; all passes take the width
     split.querySelector(".alt-fold-done").hidden = mode !== "tree";
-    stepper.hidden = mode === "graph";                      // the graph's boxes list their own tasks          // a timeline needs the width; the inspector goes under it
+    stepper.hidden = mode === "graph";                      // the graph's boxes list their own tasks
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -112,12 +123,29 @@ export function liveAltTab(ctx) {
     }
     if (locatedId === selected && Date.now() < locatedUntil) selectedElement(selected)?.classList.add("alt-located");
     if (!didReveal && focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
-    if (passView !== NO_PASS) {
+    if (boxView) {
+      const scope = taskScope(inspector.model, "all"), rows = scope.rows.filter(r => (scope.membership.get(r.node.id) ?? null) === boxView.p);
+      const boxes = flowBoxes(rows, boxView.p, rows.some(r => r.node.t1 == null)), b = boxes.find(b => b.key === boxView.key);
+      const config = { search: problem?.raw?.flow?.orchestrate, design: problem?.raw?.flow?.generate,
+        check: problem?.raw?.flow?.test, measure: problem?.raw?.flow?.measure, choose: problem?.raw?.objectives }[boxView.key];
+      const later = b && boxes.slice(boxes.indexOf(b) + 1).some(b => b.runs.length);
+      detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-box-detail", "data-box": boxView.key, "data-pass": String(boxView.p ?? "setup") },
+        h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${COLORS[b?.kind] || COLORS.setup}` }),
+          h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length ? "recorded" : later ? "not recorded" : "waiting")),
+        h("p", { class: "muted small" }, boxView.p == null ? "Setup" : boxView.p === 0 ? "Pass 0 · baseline" : `Pass ${boxView.p}`),
+        b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
+          : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
+        boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
+        config != null ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),
+          h("pre", { class: "val tall", "data-k": "configuration" }, typeof config === "string" ? config : JSON.stringify(config, null, 2)))
+          : notes[boxView.key] ? h("p", { class: "mono" }, notes[boxView.key]) : ""));
+    } else if (passView !== NO_PASS) {
       const m = taskScope(inspector.model, "all").membership, nodes = [...inspector.model.nodes.values()].filter(n => (m.get(n.id) ?? null) === passView);
       detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-pass-detail", "data-pass": String(passView ?? "setup") }, passSummary(passView, nodes, { pick: id => select(id) })));
     } else if (inspector.detail.parentNode !== detailHost) detailHost.replaceChildren(inspector.detail);
   }
   function selectedElement(id) {
+    if (boxView) return panel.querySelector(`[data-box="${CSS.escape(boxView.key)}"]`);
     if (id == null) return null;
     const node = inspector.model.nodes.get(id);
     return panel.querySelector(`[data-task="${CSS.escape(String(id))}"]`)
@@ -229,7 +257,7 @@ export function liveAltTab(ctx) {
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; showPass(p); } }, p == null ? "S" : String(p));
     })) : "";
-    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, RH = 28, g = [];
+    const W = 300, X = 26, BW = W - 2 * X, GAP = 16, RH = 28, g = [];
     const at = {};
     let y = 6;
     boxes.forEach((b, i) => {
@@ -237,22 +265,36 @@ export function liveAltTab(ctx) {
       const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id)), task = currentTask(own);
       if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
       const isOpen = openBox === `${shown}:${b.key}` && own.some(r => !b.runs.includes(r.node));   // only a box with tasks under it opens
-      at[b.key] = y;
       const note = notes[b.key === "record" ? "record" : b.key] || "";
+      // Notes get their own bounded line: long objective names must not run into the title or pills.
+      const BH = note ? (b.steps ? 52 : 44) : 34;
+      at[b.key] = y + BH / 2;
       const kids = [];
+      if (note) kids.push(sv("title", {}, `${b.title}: ${note}`));
       if (b.state === "run") kids.push(sv("rect", { x: X - 5, y: y - 5, width: BW + 10, height: BH + 10, rx: 10, fill: c, class: "alt-glow" }));
       kids.push(sv("rect", { x: X, y, width: BW, height: BH, rx: 7, class: `alt-box ${b.state}`, style: `--k:${c}` }), sv("rect", { x: X, y, width: 5, height: BH, rx: 2, fill: c }),
-        sv("text", { x: X + 14, y: y + (b.steps ? 15 : BH / 2 + 4), class: "alt-box-title" }, b.title));
+        sv("text", { x: X + 14, y: y + (note || b.steps ? 15 : BH / 2 + 4), class: "alt-box-title" }, b.title));
       let right = X + BW - 10;
       if (b.who) { kids.push(sv("rect", { x: right - 40, y: y + 6, width: 40, height: 14, rx: 7, fill: AGENT_COLOR }), sv("text", { x: right - 20, y: y + 16, class: "alt-pill-text" }, b.who)); right -= 46; }
       if (b.count > 1) { kids.push(sv("rect", { x: right - 22, y: y + 6, width: 22, height: 14, rx: 7, class: "alt-count-pill" }), sv("text", { x: right - 11, y: y + 16, class: "alt-count-text" }, `×${b.count}`)); right -= 28; }
-      if (note) kids.push(sv("text", { x: right, y: y + (b.steps ? 15 : BH / 2 + 4), class: "alt-box-note" }, note));
+      if (note) kids.push(sv("foreignObject", { x: X + 14, y: y + 22, width: BW - 28, height: 16, "pointer-events": "none" },
+        h("div", { class: "alt-box-note" }, note)));
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
       if (b.state === "ok" || b.state === "bad") kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : "✗"));
-      const box = task ? taskSvg(task, { class: `alt-flow-box${b.ids.has(selected) ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key,
-        "aria-expanded": String(!!isOpen) }, ...kids) : sv("g", { class: "alt-flow-box", "data-box": b.key }, ...kids);
-      if (task) box.addEventListener("click", () => { openBox = isOpen ? null : `${shown}:${b.key}`; queue(); });
+      const picked = boxView ? boxView.p === shown && boxView.key === b.key : b.ids.has(selected);
+      const attrs = { class: `alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key, "aria-pressed": String(picked) };
+      // Every box follows the same activation path, including synthetic boxes such as Record.
+      // Update expansion before selection redraws the graph; keyboard and mouse do the same thing.
+      const box = sv("g", { ...attrs, tabindex: "0", role: "button", "aria-label": `${b.title} · ${task ? state(task) : b.done ? "done" : "no task recorded"}`,
+        ...(task ? { "data-task": String(task.id), "aria-expanded": String(!!isOpen) } : {}) }, ...kids);
+      const activate = () => {
+        box.focus({ preventScroll: true });
+        openBox = task && !isOpen ? `${shown}:${b.key}` : null;
+        if (task) select(task.id); else showBox(shown, b.key);
+      };
+      box.addEventListener("click", activate);
+      box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
       g.push(box);
       y += BH;
       if (isOpen) {
@@ -273,7 +315,7 @@ export function liveAltTab(ctx) {
       y += GAP;
     });
     if (back && at.check != null && at.design != null) {
-      const y0 = at.check + BH / 2, y1 = at.design + BH / 2;   // the way back, from Check to Design
+      const y0 = at.check, y1 = at.design;   // the way back, from Check to Design
       g.push(sv("path", { d: `M${X + BW} ${y0} H${W - 8} V${y1} H${X + BW + 2}`, class: "alt-flow-back", "marker-end": "url(#alt-arrow)" }));
     }
     const H = y - GAP + 8;
@@ -353,6 +395,7 @@ export function liveAltTab(ctx) {
     abort = new AbortController(); const signal = abort.signal;
     notice.replaceChildren(); panel.replaceChildren(skeleton(6));
     following = true; limit = 200; loadMessage = "";
+    boxView = null; passView = NO_PASS;
     folded.clear(); viewPlaces.clear(); lastMode = "";
     const listeners = {};
     const port = { on: (kind, callbacks, options) => {
@@ -436,19 +479,19 @@ export function liveAltTab(ctx) {
     catch (error) { if (validPage()) ctx.body.replaceChildren(card(null, empty(`Starts unavailable: ${error.message}`), { actions: [h("button", { type: "button", onclick: show }, "Retry")] })); return; }
     if (!validPage()) return;
     history = got;
-    notes = {};
+    notes = {}; problem = null;
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
-      notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.filter(o => o && o.metric) : []; queue();
+      problem = d; notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.filter(o => o && o.metric) : []; queue();
     }).catch(() => {});
     const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));
     startSel.value = history.starts.some(s => !s.running && String(s.id) === startId) ? startId : "current"; startId = startSel.value;
-    passSel = h("select", { "aria-label": "LiveAlt pass", onchange: () => { choice = null; pass = passSel.value; following = true; limit = 200; folded.clear(); reveal = true; render(); } }, h("option", { value: "current" }, "Current"));
+    passSel = h("select", { "aria-label": "LiveAlt pass", onchange: () => { boxView = null; passView = NO_PASS; choice = null; pass = passSel.value; following = true; limit = 200; folded.clear(); reveal = true; render(); } }, h("option", { value: "current" }, "Current"));
     notice = h("div", { class: "alt-notice" });
     followBtn = h("button", { type: "button", class: "small", title: "Follow the latest task in the current pass", onclick: () => {
       choice = null;
       if (following) { following = false; pinPass(inspector.taskId()); render(); return; }
-      pass = "current"; following = true; passView = NO_PASS; folded.clear(); reveal = true; render();
+      boxView = null; pass = "current"; following = true; passView = NO_PASS; folded.clear(); reveal = true; render();
     } }, "Follow");
     controls = h("div", { class: "alt-controls" },
       followBtn, earlier,

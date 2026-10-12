@@ -793,7 +793,8 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-flow-edge, .alt-flow-back { stroke: var(--muted); stroke-width: 1.2; fill: none; } .alt-flow-back { stroke-dasharray: 4 3; } .alt-arrow-head { fill: var(--muted); }
 .alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); stroke-width: 2.6; } .alt-box.wait { opacity: .55; }
 .alt-glow { opacity: .22; } @media (prefers-reduced-motion: no-preference) { .alt-glow { animation: alt-glow 1.4s ease-in-out infinite alternate; } @keyframes alt-glow { to { opacity: .06; } } }
-.alt-box-title { font: 600 12px var(--sans, sans-serif); fill: var(--ink); } .alt-box-note { font: 10px var(--mono, monospace); fill: var(--muted); text-anchor: end; }
+.alt-box-title { font: 600 12px var(--sans, sans-serif); fill: var(--ink); }
+.alt-box-note { font: 10px/16px var(--mono, monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-pill-text { font: 9px var(--sans, sans-serif); fill: #fff; text-anchor: middle; } .alt-count-pill { fill: var(--line); } .alt-count-text { font: 9px var(--mono, monospace); fill: var(--ink); text-anchor: middle; }
 .alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.bad { fill: var(--bad); }
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }

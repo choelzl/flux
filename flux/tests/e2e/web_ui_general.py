@@ -440,8 +440,16 @@ def general_flows(r, watch):
                       {"ev": "mark", "name": "pass", "t": now - 21, "why": '{"n":2}'},
                       task(3, now - 20, "generation: current", **{"pass": 2}),
                       task(4, now - 19, "agent: claude", 3, prompt="FULL live prompt\n" + "\n".join(f"Prompt line {i}" for i in range(180)), command="claude --print", stdin="The prompt above (sent on stdin)")]
-            older = [task(21, 101, "generation: old", **{"pass": 7}),
+            older = [task(81, 100, "validate: document"), end(81, 100.1),
+                     task(82, 100.2, "knowledge: prepare"), end(82, 100.3),
+                     task(83, 100.4, "knowledge: digest"), end(83, 100.5),
+                     task(84, 100.6, "plan: stages"), end(84, 100.7),
+                     task(21, 101, "generation: old", **{"pass": 7}),
                      task(22, 102, "agent: codex", 21, prompt="FULL retained prompt"),
+                     task(88, 102.1, "test: gate", 21), end(88, 102.2),
+                     task(89, 102.3, "simulation: screen", 21), end(89, 102.4),
+                     task(90, 102.5, "decide: frontier", 21), end(90, 102.6),
+                     task(91, 102.7, "critique: decision", 21), end(91, 102.8),
                      end(22, 103, steps=[{"k": "text", "text": "Retained answer"}]), end(21, 104)]
             interrupted = [task(51, 121, "generation: incomplete", **{"pass": 9}),
                            {**task(52, 122, "tool: compile", 51, command="make build"), "why": "build"},
@@ -460,6 +468,10 @@ def general_flows(r, watch):
               window.fetch=async(u,o)=>{
                 const url=new URL(String(u),location.href);
                 if(url.pathname===base+'/runs') return reply(history);
+                if(url.pathname===base+'/document') return reply({document:'problem.yaml',raw:{
+                  flow:{orchestrate:{policy:'sweep'},test:'true',measure:{screen:{command:'python3 latency-bench.py'}}},objectives:[
+                    {metric:'very_long_latency_metric_for_the_selected_candidate',direction:'minimize'},
+                    {metric:'another_long_throughput_metric_for_the_selected_candidate',direction:'maximize'}]}});
                 if(url.pathname===base+'/run-data') {
                   window.__altTraceRequests.push(String(u));
                   if(window.__altDeferred) return new Promise(resolve=>{window.__altRelease=()=>resolve(new Response(trace));});
@@ -538,11 +550,48 @@ def general_flows(r, watch):
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
                 r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-pill-text')].some(t=>t.textContent==='agent') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
+                b.wait("document.querySelector('.alt-flow-box[data-box=choose] .alt-box-note')", what="Choose objective note")
+                r.check("long objective notes sit below Choose, stay inside the box, and expose their full text on hover", b.js("""const box=document.querySelector('.alt-flow-box[data-box=choose]'), note=box.querySelector('.alt-box-note');
+                  const n=note.getBoundingClientRect(), t=box.querySelector('.alt-box-title').getBoundingClientRect(), r=box.querySelector('.alt-box').getBoundingClientRect();
+                  return n.top>=t.bottom && n.left>=r.left && n.right<=r.right && n.bottom<=r.bottom
+                    && note.scrollWidth>note.clientWidth && getComputedStyle(note).textOverflow==='ellipsis'
+                    && box.querySelector('title').textContent==='Choose: '+note.textContent
+                    && note.textContent.includes('another_long_throughput_metric');"""))
+                choose("LiveAlt pass", "current")
+                b.click('.alt-flow-box[data-box="search"] .alt-box')
+                r.check("Search without a task opens its policy and pins the current pass", b.js("""const d=document.querySelector('.alt-box-detail');
+                  return d.dataset.box==='search' && d.dataset.pass==='2' && d.textContent.includes('No task was recorded')
+                    && d.querySelector('[data-k=configuration]').textContent.includes('sweep')
+                    && document.querySelector('[aria-label="LiveAlt pass"]').value==='2'
+                    && document.querySelector('.alt-flow-box[data-box=search]').getAttribute('aria-pressed')==='true';"""))
+                b.js("window.__altBoxDetail=document.querySelector('.alt-box-detail');window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'working'}});return 1")
+                b.wait("window.__altBoxDetail!==document.querySelector('.alt-box-detail')", what="phase detail redraw")
+                r.check("live updates keep the selected empty phase instead of the previous task", b.js("return document.querySelector('.alt-box-detail').dataset.box==='search' && !document.querySelector('.alt-detail[data-task]')"))
+                r.button("Locate", ".alt-detail-actions")
+                r.check("Locate reveals the selected empty phase", b.js("return document.activeElement.matches('.alt-flow-box[data-box=search].alt-located')"))
+                b.js("const box=document.querySelector('.alt-flow-box[data-box=measure]');box.focus();box.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1")
+                r.check("waiting boxes open with the keyboard and show their command", b.js("""const d=document.querySelector('.alt-box-detail');
+                  return d.dataset.box==='measure' && d.textContent.includes('This phase has not started')
+                    && d.querySelector('[data-k=configuration]').textContent.includes('latency-bench.py')
+                    && document.activeElement.matches('.alt-flow-box[data-box=measure]');"""))
+                b.click('.alt-flow-box[data-box="choose"] .alt-box')
+                r.check("waiting Choose exposes full objective names", b.js("return document.querySelector('.alt-box-detail').dataset.box==='choose' && document.querySelector('.alt-box-detail [data-k=configuration]').textContent.includes('another_long_throughput_metric_for_the_selected_candidate')"))
+                for key in ("search", "design", "check", "measure", "choose"):
+                    b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
+                    r.check(f"every pass box opens details when clicking its label: {key}", b.js("""const key=arguments[0], box=document.querySelector('.alt-flow-box[data-box="'+key+'"]'), d=document.querySelector('.alt-detail');
+                      return box.getAttribute('role')==='button' && box.getAttribute('tabindex')==='0' && box.getAttribute('aria-pressed')==='true'
+                        && (key==='design' ? d.dataset.task==='4' : d.dataset.box===key);""", key))
+                choose("LiveAlt pass", "all")
+                r.check("changing pass clears the empty-phase inspector", b.js("return !document.querySelector('.alt-box-detail')"))
                 b.click('.alt-flow-box[data-box="design"] .alt-box')
                 r.check("a box opens its current task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-flow-box[data-box=design].sel')"))
                 r.check("a box lists the tasks under it (not itself again), named in the timeline's words; the graph has no stepper", b.js("return [...document.querySelectorAll('.alt-box-tasks .alt-task-name')].map(n=>n.textContent).join(',')==='Agent · claude' && document.querySelector('.alt-stepper').hidden"))
                 b.click('.alt-flow-box[data-box="design"] .alt-box')
                 r.check("a second click on a box closes its list", b.js("return !document.querySelector('.alt-box-tasks')"))
+                b.js("document.querySelector('.alt-flow-box[data-box=design]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1")
+                r.check("Enter opens a recorded box's tasks as a click does", b.js("return !!document.querySelector('.alt-box-tasks') && document.querySelector('.alt-detail').dataset.task==='4'"))
+                b.js("document.querySelector('.alt-flow-box[data-box=design]').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));return 1")
+                r.check("Space closes a recorded box's tasks as a click does", b.js("return !document.querySelector('.alt-box-tasks')"))
                 b.click('.alt-flow-box[data-box="design"] .alt-box')
                 b.click('.alt-box-tasks [data-task="4"]')
                 r.check("a task in a box's list opens in the inspector, the list stays open", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-box-tasks [data-task=\"4\"].sel')"))
@@ -552,6 +601,18 @@ def general_flows(r, watch):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-graph.png")
                 b.click('.alt-chip[data-chain="0"]')
                 b.wait("document.querySelector('.alt-flow-box[data-box=check]')", what="the baseline's flow")
+                b.click('.alt-flow-box[data-box="record"] .alt-box-title')
+                r.check("Record opens the baseline summary and links to its recorded tasks", b.js("""const d=document.querySelector('.alt-box-detail');return d.dataset.box==='record' && d.dataset.pass==='0'
+                  && d.querySelector('h2').textContent==='Record' && d.querySelector('.pill').textContent==='done'
+                  && d.textContent.includes('Baseline stored as a reference') && !!d.querySelector('.alt-steps [data-task="10"]')
+                  && document.querySelector('.alt-flow-box[data-box=record]').getAttribute('aria-pressed')==='true';"""))
+                r.button("Locate", ".alt-detail-actions")
+                r.check("Locate targets Record rather than a previous task", b.js("return document.activeElement.matches('.alt-flow-box[data-box=record].alt-located')"))
+                for key in ("Enter", " "):
+                    b.js("document.querySelector('.alt-flow-box[data-box=record]').dispatchEvent(new KeyboardEvent('keydown',{key:arguments[0],bubbles:true}));return 1", key)
+                    r.check(f"Record is keyboard actionable with {key.strip() or 'Space'}", b.js("return document.querySelector('.alt-box-detail').dataset.box==='record' && document.activeElement.matches('.alt-flow-box[data-box=record]')"))
+                b.click('.alt-box-detail .alt-steps [data-task="10"]')
+                r.check("Record's task link opens its baseline check", b.js("return document.querySelector('.alt-detail').dataset.task==='10' && !document.querySelector('.alt-box-detail')"))
                 b.click('.alt-flow-box[data-box="check"] .alt-box')
                 r.check("a graph box opens its scoped task in the shared inspector", b.js("return document.querySelector('.alt-detail').dataset.task==='10' && !!document.querySelector('.alt-flow-box[data-box=check].sel')"))
                 r.button("Tree", ".subrow .subtabs")
@@ -629,6 +690,17 @@ def general_flows(r, watch):
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
                 r.check("historical selection links to the matching retained start", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/history/21')"))
                 r.check("leaving current start closes its live stream", b.js("return window.__altStreams.every(s=>s.closed)"))
+                choose("LiveAlt pass", "all")
+                r.button("Graph", ".subrow .subtabs")
+                b.click('.alt-chip[data-chain="S"]')
+                for key, task_id in (("Document", 81), ("Library", 83), ("Papers", 83), ("Plan", 84)):
+                    b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
+                    r.check(f"setup box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
+                b.click('.alt-chip[data-chain="7"]')
+                for key, task_id in (("design", 22), ("check", 88), ("measure", 89), ("choose", 90), ("critic", 91)):
+                    b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
+                    r.check(f"completed phase box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
+                r.button("Tree", ".subrow .subtabs")
                 choose("LiveAlt start", "11")
                 b.wait("document.querySelector('.alt-visual').textContent.includes('No task journal retained')", what="missing historical data")
                 r.check("missing retained data is explicit and points to historical logs", "History › Log" in b.js("return document.querySelector('.alt-visual').textContent"))
