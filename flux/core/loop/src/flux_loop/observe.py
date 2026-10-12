@@ -25,6 +25,14 @@ def _publish_mentor(problem: Problem, state: LoopState) -> None:
         from flux_profile import publish
     except Exception:  # noqa: BLE001
         return
+    # D981: reading the knowledge and the record back takes time (the library's first read takes
+    # seconds); like all the loop's work it is a task's time, not a gap between tasks
+    with _phase("knowledge: mentor", why="the knowledge and the record, read back for the mentor panel"):
+        sections = _mentor_sections(problem, state)
+    publish("mentor", {"sections": sections})
+
+
+def _mentor_sections(problem: Problem, state: LoopState) -> list[dict[str, str]]:
     sections: list[dict[str, str]] = []
     try:
         for title, text in problem.mentor_sections(state):
@@ -66,7 +74,7 @@ def _publish_mentor(problem: Problem, state: LoopState) -> None:
                                                     for c, why in ref)})
         except Exception:  # noqa: BLE001
             pass
-    publish("mentor", {"sections": sections})
+    return sections
 
 
 def refresh_standings(state: LoopState, at: str) -> None:

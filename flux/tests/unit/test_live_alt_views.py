@@ -37,9 +37,10 @@ TREE = """
 
 
 def test_tasks_are_named_kind_first_then_what():
-    got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}].map(m.taskLabel); }}""")
+    got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
     assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · rtl measure",
-                   "Design · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Critic · decision"]
+                   "Design · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Critic · decision",
+                   "Setup · mentor", "Setup · papers"]
 
 
 def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():

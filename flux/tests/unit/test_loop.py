@@ -1158,3 +1158,23 @@ def test_a_prototype_sent_as_a_text_check_call_or_a_fenced_block_is_read():
     fenced = "Here it is:\n```python\nT = 6\ndef design(x):\n    return x\n```\nDone."
     assert _parse_prototype(fenced) == "T = 6\ndef design(x):\n    return x\n"
     assert _parse_prototype("nothing here") is None
+
+
+def test_the_mentor_read_back_is_a_task_not_a_gap(monkeypatch):
+    """D981: reading the knowledge and the record back for the mentor panel can take seconds (the
+    library's first read); it is journalled as a task, so no time of a run belongs to no task."""
+    import types
+
+    import flux_profile
+
+    from flux_loop.observe import _publish_mentor
+
+    seen, names, real = [], [], flux_profile.phase
+    monkeypatch.setattr(flux_profile, "publish", lambda key, payload: seen.append((key, payload)))
+    monkeypatch.setattr(flux_profile, "phase", lambda name, **kw: (names.append(name), real(name, **kw))[1])
+
+    class P:
+        def mentor_sections(self, state):
+            return [("sheet", "text")]
+    _publish_mentor(P(), types.SimpleNamespace(human_notes=[], admitted={}, best={}, records=None))
+    assert "knowledge: mentor" in names and seen and seen[0][0] == "mentor"

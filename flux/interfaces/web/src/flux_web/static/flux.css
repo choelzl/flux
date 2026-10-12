@@ -799,10 +799,9 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
 .alt-done.ok { fill: var(--ok); } .alt-done.bad { fill: var(--bad); } .alt-done-mark { font: 600 9.5px var(--sans, sans-serif); fill: #fff; text-anchor: middle; }
 .alt-flow-box { cursor: pointer; }
-.alt-box-tasks { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; }
-.alt-box-task { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 calc(8px + var(--depth) * 12px); border: 0; border-radius: 0; background: transparent; font-size: 12px; text-align: left; min-width: 0; }
-.alt-box-task .alt-task-name { flex: 1; }
-.alt-box-sep { height: 0; border-top: 1px solid var(--line); margin: 3px 8px; } .alt-box-task.sel { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); box-shadow: inset 2px 0 var(--accent); } .alt-flow-box.sel .alt-box { stroke-width: 2.4; } .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
+.alt-box-tasks { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; }
+.alt-box-tasks .alt-tree-row { font-size: 12.5px; }
+.alt-box-sep { height: 0; border-top: 1px solid var(--line); margin: 3px 8px; } .alt-flow-box.sel .alt-box { stroke-width: 2.4; } .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
 /* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
 .alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
 .alt-cut { fill: var(--panel); }

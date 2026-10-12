@@ -144,15 +144,16 @@ export function liveAltTab(ctx) {
   }
   const mark = n => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
     : h("span", { class: `alt-task-state ${state(n)}`, "aria-hidden": "true" }, n.interrupted ? "—" : n.failed ? "✗" : "✓");
-  function tree(rows, selected) {
-    const membership = taskScope(inspector.model, "all").membership;
-    const byId = new Map(rows.map(r => [r.node.id, r])), kids = new Map();
-    for (const r of rows) if (r.parent != null) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
+  /** D980: the rows of a set of tasks as the tree draws them -- one line each, tinted by kind,
+      named kind first, a spinner while running, quiet when it took no time, ▸/▾ to fold -- for the
+      tree and for a graph box's list alike. `rows` carry their parent's id when it is among them. */
+  function taskRows(rows, selected, out) {
+    const ids = new Set(rows.map(r => r.node.id)), kids = new Map();
+    for (const r of rows) if (r.parent != null && ids.has(r.parent)) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0;
-    const out = [];
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
-      "aria-expanded": String(!collapsed), onclick: () => toggleFold(key, collapsed) }, collapsed ? "▸" : "▾");
+      "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     const line = (r, depth) => {
       const n = r.node, under = kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), label = taskLabel(n);
@@ -162,6 +163,13 @@ export function liveAltTab(ctx) {
           mark(n), h("span", { class: "alt-task-name" }, label), h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) under.forEach(k => line(k, depth + 1));
     };
+    return { line, fold, secs, kids, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
+  }
+  function tree(rows, selected) {
+    const membership = taskScope(inspector.model, "all").membership;
+    const out = [], { line, fold, secs, kids } = taskRows(rows, selected, out);
+    const now = Date.now() / 1000;
+    const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     // per pass: the steps every pass starts with fold into one Setup line
     const top = rows.filter(r => r.parent == null);
     const groups = [];
@@ -212,7 +220,7 @@ export function liveAltTab(ctx) {
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; render(); } }, p == null ? "S" : String(p));
     })) : "";
-    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, RH = 22, g = [];
+    const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, RH = 28, g = [];
     const at = {};
     let y = 6;
     boxes.forEach((b, i) => {
@@ -243,14 +251,12 @@ export function liveAltTab(ctx) {
         // ran more than once are kept apart by a thin divider
         const under = (run, n) => { for (let p = n.parent; p; p = p.parent) if (p === run) return true; return false; };
         const groups = b.runs.map(run => own.filter(r => under(run, r.node))).filter(gr => gr.length);
-        const depthOf = r => { let d = 0; for (let p = r.node.parent; p && b.ids.has(p.id); p = p.parent) d++; return d - 1; };
-        const rowsOf = gr => gr.map(r => h("button", { ...taskButton(r.node), type: "button", class: `alt-box-task ${state(r.node)}${r.node.id === selected ? " sel" : ""}`,
-          style: `--depth:${Math.max(0, depthOf(r))}`, onclick: event => { event.stopPropagation(); select(r.node.id); } },
-          mark(r.node), h("span", { class: "alt-task-name" }, taskLabel(r.node)), h("span", { class: "mono muted small" }, dur(r.node.seconds ?? (r.node.t1 ?? Date.now() / 1000) - r.node.t0))));
+        const rowsOf = gr => { const out = [], t = taskRows(gr, selected, out); t.roots.forEach(r => t.line(r, 0)); return out; };
         if (groups.length) {
           const list = h("div", { class: "alt-box-tasks", role: "group", "aria-label": `${b.title} tasks` },
             groups.flatMap((gr, k) => [k ? h("div", { class: "alt-box-sep", role: "separator" }) : "", ...rowsOf(gr)]));
-          const lh = groups.reduce((t, gr) => t + gr.length * RH, 0) + (groups.length - 1) * 7 + 8;
+          const shownRows = list.querySelectorAll(".alt-tree-row").length, quiet = list.querySelectorAll(".alt-tree-row.quiet").length;
+          const lh = (shownRows - quiet) * RH + quiet * 21 + (groups.length - 1) * 7 + 8;   // the tree's own row heights
           g.push(sv("foreignObject", { x: X, y: y + 4, width: BW, height: lh }, list));
           y += lh + 4;
         }

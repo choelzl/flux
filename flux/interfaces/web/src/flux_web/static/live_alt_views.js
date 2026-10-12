@@ -27,7 +27,7 @@ export function taskLabel(n) {
   if (isModel(n)) return rest ? `Model · ${rest}` : "Model";
   const kind = workLabel(phaseKind(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
-  if (head === "knowledge") return "Setup · inputs";
+  if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
   if (head === "tool") return `${kind} · ${rest.replace(/^fluxpreset\s+/, "") || "a command"}`;
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") return "Check";
