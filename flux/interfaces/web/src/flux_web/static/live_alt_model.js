@@ -13,7 +13,11 @@ export function taskPass(node, marks) {
   // what ran before is the pass before it, as Live counts it; the run's own setup (the document
   // checked, the papers read, the round planned) and anything before a baseline stay Setup
   const first = marks.find(m => m.name === "pass" && Number.isFinite(Number(m.n)));
-  if (!first || Number(first.n) <= 0 || /^\s*(validate|digest|plan\b|lessons)/i.test(String(root.name))) return null;
+  if (/^\s*(validate|digest|plan\b|lessons)/i.test(String(root.name))) return null;
+  // D1012: no mark yet -- the first pass is not marked: its work is Pass 1, as Live says; its setup
+  // (the papers, the library, the tools' gate) the start's Setup, as Live keeps it
+  if (!first) return /^\s*(knowledge|records|feedback|extract|setup|gate:\s*(tools|the problem)|propose:\s*decompose)/i.test(String(root.name)) ? null : 1;
+  if (Number(first.n) <= 0) return null;
   return Number(first.n) - 1;
 }
 

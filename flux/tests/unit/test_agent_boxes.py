@@ -142,9 +142,34 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, AgentOrchestrator) and prob.roles().orchestrator.coding
     said: list[str] = []
-    out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "o.db"), steps=4, repair_attempts=1, critique_rounds=0,
-                                     prototype=False, screen_only=True),
-                   proposer=ScriptedProposer(['{"artifact": "good", "why": "-"}'] * 4), log=said.append)
+    import flux_profile
+
+    class Seen:                                         # D1012: the agent's turn inside its orchestrate task
+        def __init__(self):
+            self.open, self.under = [], []
+
+        def phase_start(self, name, why, params):
+            if name.startswith("agent:") and self.open:
+                self.under.append(self.open[-1])
+            self.open.append(name)
+            return name
+
+        def phase_update(self, *a):
+            pass
+
+        def phase_end(self, token, name, *a):
+            if self.open and self.open[-1] == name:
+                self.open.pop()
+
+    seen = Seen()
+    flux_profile.add_listener(seen)
+    try:
+        out = run_loop(prob, LoopRequest(batch=WHOLE, db=str(tmp_path / "o.db"), steps=4, repair_attempts=1, critique_rounds=0,
+                                         prototype=False, screen_only=True),
+                       proposer=ScriptedProposer(['{"artifact": "good", "why": "-"}'] * 4), log=said.append)
+    finally:
+        flux_profile.remove_listener(seen)
+    assert any(u.startswith("orchestrate: ") for u in seen.under), seen.under
     assert sorted(out.admitted) == ["one", "two"]
     picks = [m for m in said if "orchestrate [next part]" in m]
     assert picks and picks[0].strip().startswith("orchestrate [next part]: two"), said

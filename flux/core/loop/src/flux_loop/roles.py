@@ -340,14 +340,18 @@ class AgentOrchestrator:
         """The pick as a coding agent's box turn (D640): the brief carries what the tools would
         return, since a turn is fresh; an off-menu answer is refused and retried once."""
         from .boxes import box_turn
+        from .observe import _phase
         from .tools import orchestrator_tools
 
         tools = {t.name: t for t in orchestrator_tools(problem, state)}
         read = [f"STANDINGS:\n{tools['standings'].run({})}", f"PICKS SO FAR:\n{tools['decisions'].run({})}"]
         lines = [ln for ln in head if ln and not ln.startswith(("You have tools:", "Reply with ONLY JSON"))]
-        doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, problem=problem,
-                       home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
-                       check=lambda d: None if d.get("pick") in choices else f"pick must be one of {', '.join(choices)}")
+        # D1012: the agent's turn under its own `orchestrate:` task, as the model's is -- not a stray agent at the top
+        with _phase(f"orchestrate: {what}", why=", ".join(choices)) as out:
+            doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, problem=problem,
+                           home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
+                           check=lambda d: None if d.get("pick") in choices else f"pick must be one of {', '.join(choices)}")
+            out["pick"] = (doc or {}).get("pick") or "no answer"
         if doc is None:
             return None
         why = str(doc.get("why") or "").strip()

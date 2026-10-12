@@ -159,3 +159,12 @@ def test_tasks_before_the_first_mark_are_the_pass_before_it_as_live_counts():
               start(3, 3, name="DSE: batch"), end(3, 9), mark(2, 10), start(4, 11, name="DSE: batch"), end(4, 12)]
     got = evaluate(events, "(() => { const m=taskScope(model,'all').membership; return [1,2,3,4].map(id=>m.get(id)); })()")
     assert got == [None, 1, 1, 2]
+
+
+def test_a_first_pass_without_a_mark_is_pass_one_as_live_says():
+    """D1012: the engine marks passes from the second (or the baseline) on -- a start with no mark yet
+    is in its first pass, not Setup; the run's own setup stays Setup."""
+    events = [start(1, 1, name="validate: problem"), end(1, 2), start(2, 3, name="generation: improve x"),
+              start(3, 4, parent=2, name="agent: claude")]
+    assert evaluate(events, "[1, 2, 3].map(id => taskPass(model.nodes.get(id), model.marks))") == [None, 1, 1]
+    assert evaluate(events, "taskScope(model).current") == [1]

@@ -226,6 +226,10 @@
       }
       if (w > i) i = w;
       var lead = vs.slice(0, i), rest = vs.slice(i);
+      // D1012: setup work later in the pass (the mentor's reading, the inputs read again) joins the
+      // pass's Setup leaf -- not a "Reading" leaf between two designs
+      var late = rest.filter(function (v) { return isSetup(v) && !isDivide(v); });
+      if (late.length) { lead = lead.concat(late); rest = rest.filter(function (v) { return late.indexOf(v) < 0; }); }
       if (p === order[0]) { setupLeaves.push.apply(setupLeaves, leavesOf(lead, "setup")); return leavesOf(rest, key); }
       var pre = lead.length ? [{ leaf: true, box: "validate", title: "Setup", tasks: lead, key: key + "/setup" }] : [];
       return pre.concat(leavesOf(rest, key));
