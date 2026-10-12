@@ -380,3 +380,20 @@ def test_reevaluate_starts_a_run_on_one_idle_loop_only(tmp_path):
     assert not busy["ok"] and "running" in busy["said"] and started == [1]
     everywhere = _m(store, [("ada", "x", d)]).run("reevaluate", by="ada")
     assert not everywhere["ok"] and started == [1]
+
+
+def test_empty_starts_are_pruned_on_idle_loops(tmp_path, monkeypatch):
+    """D1000: Prune empty starts forgets, on each loop at rest, the ended starts that did nothing
+    (as the history's read does, D987); a running loop is left alone."""
+    from types import SimpleNamespace
+
+    store = _store(tmp_path)
+    x, y = _loop(tmp_path, "x"), _loop(tmp_path, "y")
+    rows = {"x": [{"id": 1, "ended": 5}, {"id": 2, "ended": 9}, {"id": 3, "ended": None}], "y": [{"id": 4, "ended": 3}]}
+    monkeypatch.setattr(store, "runs", lambda user=None, app=None: rows[app])
+    forgot = []
+    m = _m(store, [("ada", "x", x), ("ada", "y", y)], live={("ada", "y")})
+    m.runs = SimpleNamespace(forget_if_empty=lambda i: forgot.append(i) or i == 2)
+    got = m.run("empty", by="ada")
+    assert got["ok"] and got["said"].startswith("1 empty start(s) removed (ada/x: 1)") and "1 running" in got["said"], got
+    assert forgot == [1, 2], "ended starts only, the running loop's none"

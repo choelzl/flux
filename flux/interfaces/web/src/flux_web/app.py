@@ -72,6 +72,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return bool(r and runs.live(r))
 
     maintenance = Maintenance(store, _loop_live, _all_loops)      # D885
+    maintenance.runs = runs                                        # D1000: the starts' history
     app.state.maintenance = maintenance
 
     # ---- guards

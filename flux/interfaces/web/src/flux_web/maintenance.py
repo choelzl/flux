@@ -67,6 +67,9 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
          "counts them. Reports them; deletes them when told to.", 168, False, {"delete": False}, per_loop=True),
+    Task("empty", "Prune empty starts", "Starts that did nothing -- stopped before any search, design, check or "
+         "measurement began (D987) -- go: their row, and for a loop's latest start its log and journal. "
+         "Starts already checked are left.", 24, False, per_loop=True),
     Task("reevaluate", "Invalidate + re-evaluate all", "After the checks or measurement scripts change "
          "(D988): one run checks and measures every design on record again; the earlier results stay as "
          "history, no longer counted. Started on one loop only.", 168, False, per_loop=True),
@@ -92,6 +95,7 @@ class Maintenance:
     def __init__(self, store: Any, live: Callable[[str, str], bool],
                  loops: Callable[[], list[tuple[str, str, Path]]]) -> None:
         self.store, self.live, self.loops = store, live, loops
+        self.runs: Any = None                  # D1000: the run manager, for the starts' history
         self._lock = threading.Lock()
         self.running: str | None = None
 
@@ -478,6 +482,24 @@ class Maintenance:
             raise ValueError("the loop is running: stop it first")
         self._start()
         return "started: every design on record is checked and measured again (Live shows it)", True
+
+    def _empty(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        """D1000: the starts that did nothing, forgotten as the history's own read does (D987),
+        on loops at rest; a running loop's starts are left alone."""
+        if self.runs is None:
+            return "no run history here", False
+        idle, busy = self._loops(loop)
+        gone, per = 0, []
+        for u, a, _d in idle:
+            user = self.store.user(name=u)
+            if user is None:
+                continue
+            n = sum(1 for r in self.store.runs(user, a) if r.get("ended") and self.runs.forget_if_empty(r["id"]))
+            if n:
+                gone += n
+                per.append(f"{u}/{a}: {n}")
+        return (f"{gone} empty start(s) removed" + (f" ({', '.join(per[:6])})" if per else "")
+                + self._skipped(busy)), gone > 0
 
     def _stale(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
         idle, busy = self._loops(loop)

@@ -419,7 +419,7 @@ member counts, admin status. The last subtab is remembered.
 Scheduled tasks (D885), each on/off, an interval, settings, last result, **Run now**: Clean
 scratch (`FLUX_TMPDIR`; off by default), Reap containers (every minute), Clean idle caches, Disk
 alert, Compact databases, Condense run logs (old part gzipped beside), Prune server tables, Prune
-stale records (off). Off until enabled: **Check database integrity**, **Validate loop
+empty starts (D1000), Prune stale records (off). Off until enabled: **Check database integrity**, **Validate loop
 documents**, **Back up server database** (`flux-web.db` and `secret.key` to
 `<server-data>/backups/server-<timestamp>/`, latest seven kept; back up loop folders separately).
 Loop tasks run over all loops or one; running loops are never touched; every run is audited.
