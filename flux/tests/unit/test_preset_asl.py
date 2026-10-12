@@ -35,7 +35,7 @@ def test_run_reports_each_failure_then_the_count_and_writes_nothing_in_the_spec(
     before = sorted(p.relative_to(spec) for p in spec.rglob("*"))
     code = asl.main(["run", "TADD", "--spec", str(spec), "--aslref", sys.executable, "--out", str(out)])
     lines = capsys.readouterr().out.splitlines()
-    assert code == 1 and lines[-1] == "1 failing of 2" and lines[0].startswith("PTO-AVS-TILE-TADD-BROKEN-001:")
+    assert code == 1 and lines[-1] == "1 failing of 2" and lines[0] == "PTO-AVS-TILE-TADD-BROKEN-001: ASL Dynamic error: Assertion failed: PTO-AVS-TILE-TADD-BROKEN-001"
     got = {t["id"]: t["passed"] for t in json.loads(out.read_text())["tests"]}
     assert got == {"PTO-AVS-TILE-TADD-SUM-001": True, "PTO-AVS-TILE-TADD-BROKEN-001": False}
     assert sorted(p.relative_to(spec) for p in spec.rglob("*")) == before, "the runner's build went elsewhere"

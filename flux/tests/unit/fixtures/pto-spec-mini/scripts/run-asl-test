@@ -11,5 +11,5 @@ for p in (root / "tests").rglob("*.asl"):
     if f'"id":"{a.id}"' in text:
         if "PASS" in text:
             sys.exit(0)
-        print(f"{a.id}: assertion failed", file=sys.stderr); sys.exit(1)
+        print(f"ASL Dynamic error: Assertion failed: {a.id}", file=sys.stderr); print("{", file=sys.stderr); sys.exit(1)
 print("no such test", file=sys.stderr); sys.exit(1)

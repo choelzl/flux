@@ -89,7 +89,7 @@
           # shell's inputs, so the whole set would build every nixchip tool on entry, the
           # cryptominisat that cannot build in the sandbox among them (see the description).
           chipTools = {
-            inherit (chipPkgs) verilator sv-lang yosys iverilog pythia ndf;   # ndf: a spec's normative clauses (D1020)
+            inherit (chipPkgs) verilator sv-lang yosys iverilog pythia ndf aslref;   # ndf, aslref: a spec's clauses and its ASL (D1020, D1021)
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
             # OpenROAD-flow-scripts over this OpenROAD and Yosys (`orfs`, below); KLayout for its GDS
             # step, not the host's (D947)

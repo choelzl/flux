@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,14 @@ def _mirror(spec: Path, into: Path) -> Path:
     return root
 
 
+def _why(output: str) -> str:
+    """The line that says why a test failed: ASLRef's error, else the last line with words in it
+    (the runner can end on a bare `{` of its JSON)."""
+    lines = [ln.strip() for ln in output.splitlines() if re.search(r"\w", ln)]
+    said = next((ln for ln in lines if re.search(r"Assertion failed|[Dd]ynamic error|[Ss]tatic error|[Ee]rror:", ln)), "")
+    return said or (lines[-1] if lines else "")
+
+
 def _run(a: argparse.Namespace) -> int:
     units, unit = _spec(a)
     if unit is None:
@@ -84,7 +93,7 @@ def _run(a: argparse.Namespace) -> int:
                 done = subprocess.run([sys.executable, str(root / "scripts" / "run-asl-test"), "--root", str(root), "--id", t.id],
                                       cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                                       timeout=a.timeout, env={**os.environ, "ASLREF": aslref})
-                ok, said = done.returncode == 0, (done.stderr or done.stdout).strip().splitlines()[-1:] or [""]
+                ok, said = done.returncode == 0, [_why(done.stderr + "\n" + done.stdout)]
             except subprocess.TimeoutExpired:
                 ok, said = False, [f"timed out after {a.timeout:g} s"]
             results.append({"id": t.id, "kind": t.kind, "requirements": t.requirements, "passed": ok,
