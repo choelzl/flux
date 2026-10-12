@@ -1035,11 +1035,26 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings.fast')", what="grouped table column labels")
                 page("", "document.querySelector('.best-n')")
                 r.check("Decision shares dictionary expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && !document.querySelector('.dictionary-select')"))
+                page("results/graphs", "document.querySelector('.chart-ctl select')")
+                r.check("D1013: the axes' pickers list a dictionary's tests under it", b.js(
+                    "const s = document.querySelector('.chart-ctl select'), g = s.querySelector('optgroup');"
+                    " return !!g && g.label === 'timings ·' && [...g.querySelectorAll('option')].map(o => o.textContent).join() === 'fast,slow'"
+                    " && [...s.options].some(o => o.value === 'timings' && o.textContent === 'timings (mean)')"))
+                r.check("the charts' chips: a charted test keeps its dictionary open, its tests by their own names", b.js(
+                    "return document.querySelector('.dict-fold[data-dict=timings]').getAttribute('aria-expanded') === 'true'"
+                    " && [...document.querySelectorAll('.chip.dict-test')].map(c => c.textContent).join() === 'fast,slow'"))
+                b.click('.chips .dict-fold[data-dict="timings"]')
+                r.check("its fold folds the tests away", b.js("return !document.querySelector('.chip.dict-test') && document.querySelector('.dict-fold[data-dict=timings]').textContent === '▸ 2'"))
                 page("settings", "document.querySelector('.measurement-preferences .measurement-options')")
                 r.check("existing loops open Settings on Preferences", b.js("return document.querySelector('.subtabs [role=tab].on').textContent") == "Preferences")
                 r.check("D1008: Preferences shows each dictionary's aggregate, read from the document", b.js(
-                    "const t = document.querySelector('.measurement-options'), row = [...t.querySelectorAll('tbody tr')].find(tr => tr.cells[0].textContent === 'timings');"
+                    "const t = document.querySelector('.measurement-options'), row = [...t.querySelectorAll('tbody tr')].find(tr => tr.cells[0].firstChild.textContent === 'timings');"
                     " return [...t.querySelectorAll('thead th')].some(th => th.textContent === 'Aggregate') && row && row.cells[4].textContent === 'mean'"))
+                r.check("D1013: Preferences folds a dictionary's tests under its row", b.js(
+                    "const t = document.querySelector('.measurement-options'), tests = [...t.querySelectorAll('tr[data-dict-of=timings]')];"
+                    " return tests.length === 3 && tests.every(tr => tr.hidden) && !!t.querySelector('.dict-fold[data-dict=timings]')"))
+                b.click('.measurement-options .dict-fold[data-dict="timings"]')
+                r.check("its fold shows the tests", b.js("return [...document.querySelectorAll('.measurement-options tr[data-dict-of=timings]')].every(tr => !tr.hidden)"))
                 b.click('.measurement-options input[data-metric="timings.fast"]')
                 page()
                 r.check("Preferences hides dictionary columns in Results", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 4 && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))

@@ -64,6 +64,11 @@ export function measurementPreferences(ctx, metrics, groups = {}, defaults = met
   const main = new Set(mainMeasurements(ctx, metrics, defaults));
   // D1008: a dictionary's aggregate, as its document says -- shown here, set in the document
   const dicts = Object.fromEntries(Object.entries(groups).filter(([, g]) => g && g.type === "dict"));
+  // D1013: a dictionary's tests folded under its own row (shown when its aggregate is measured)
+  const dictParent = new Map(Object.entries(dicts).filter(([name]) => metrics.includes(name))
+    .flatMap(([name, g]) => (g.metrics || []).filter(m => m !== name && metrics.includes(m)).map(m => [m, name])));
+  const dictTests = new Map();
+  for (const [m, name] of dictParent) (dictTests.get(name) || dictTests.set(name, []).get(name)).push(m);
   const aggregate = Object.keys(dicts).length ? (metric) => h("td", { class: "muted", title: dicts[metric] ? "set in the document (the measurement's aggregate:)" : null },
     dicts[metric] ? (dicts[metric].aggregate || "—") : "") : () => "";
   const table = h("table", { class: "list compact measurement-options" },
@@ -82,7 +87,13 @@ export function measurementPreferences(ctx, metrics, groups = {}, defaults = met
           const saved = prefs.read().relativeMetrics;
           prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked } });
         } });
-      return h("tr", {}, h("td", { class: "mono", title: metric }, metric), h("td", {}, visible), h("td", {}, primary), h("td", {}, relative), aggregate(metric));
+      const parent = dictParent.get(metric), tests = dictTests.get(metric) || [];
+      const fold = tests.length ? h("button", { type: "button", class: "link small dict-fold", "data-dict": metric, "aria-expanded": "false",
+        onclick: () => { const open = fold.getAttribute("aria-expanded") !== "true"; fold.setAttribute("aria-expanded", String(open)); fold.textContent = open ? "▾" : `▸ ${tests.length}`;
+          for (const tr of table.querySelectorAll(`tr[data-dict-of="${CSS.escape(metric)}"]`)) tr.hidden = !open; } }, `▸ ${tests.length}`) : "";
+      return h("tr", { ...(parent ? { "data-dict-of": parent, class: "dict-test", hidden: true } : {}) },
+        h("td", { class: "mono", title: metric }, parent ? metric.slice(parent.length + 1) : metric, " ", fold),
+        h("td", {}, visible), h("td", {}, primary), h("td", {}, relative), aggregate(metric));
     })));
   if (!ctx.mine) for (const input of table.querySelectorAll("input")) input.disabled = true;
   return h("div", { class: "scroll-x" }, table);

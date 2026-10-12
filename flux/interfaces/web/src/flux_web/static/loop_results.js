@@ -185,6 +185,18 @@ function resultsView(ctx, r) {
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
     .filter(s => r.designs.some(d => d.stages[s] && Object.keys(d.stages[s]).length));
   const sel = (opts, value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, opts.map(([v, l]) => h("option", { value: v, selected: v === value }, l))); return e; };
+  // D1013: a dictionary's tests folded under it -- [key, members] in the metrics' order, a dictionary's
+  // aggregate first among its own; a plain metric is its own group
+  const dictOf = new Map(Object.entries(metricGroups).filter(([, g]) => g && g.type === "dict")
+    .flatMap(([name, g]) => (g.metrics || []).filter(m => m !== name).map(m => [m, name])));
+  const folded = (ms) => { const out = new Map(); for (const m of ms) { const k = dictOf.get(m) || m; (out.get(k) || out.set(k, []).get(k)).push(m); } return [...out]; };
+  const metricSel = (value, onchange) => { const e = h("select", { onchange: () => onchange(e.value) }, folded(nums).flatMap(([k, ms]) => {
+    const tests = ms.filter(m => m !== k), opt = (m, label) => h("option", { value: m, selected: m === value }, label);
+    if (!tests.length) return [opt(k, k)];
+    return [ms.includes(k) ? opt(k, `${k}${metricGroups[k]?.aggregate ? ` (${metricGroups[k].aggregate})` : ""}`) : "",
+      h("optgroup", { label: `${k} ·` }, tests.map(m => opt(m, m.slice(k.length + 1))))];
+  })); return e; };
+  const openDicts = new Set();
   const savedGraphs = preferences.read().graphs;
   const graphPrefs = savedGraphs && typeof savedGraphs === "object" && !Array.isArray(savedGraphs) ? savedGraphs : {};
   let paretoFocus = graphPrefs.paretoFocus === true;
@@ -219,8 +231,8 @@ function resultsView(ctx, r) {
   }
   function drawPareto() {
     paretoBox.replaceChildren(h("div", { class: "chart-ctl" },
-      h("label", {}, "x ", sel(nums.map(m => [m, m]), px, v => { px = v; rememberGraphs(); drawPareto(); })),
-      h("label", {}, "y ", sel(nums.map(m => [m, m]), py, v => { py = v; rememberGraphs(); drawPareto(); })),
+      h("label", {}, "x ", metricSel(px, v => { px = v; rememberGraphs(); drawPareto(); })),
+      h("label", {}, "y ", metricSel(py, v => { py = v; rememberGraphs(); drawPareto(); })),
       h("label", {}, "stage ", sel(stageOpts("each design's deepest"), pst, v => { pst = v; rememberGraphs(); drawPareto(); })),
       h("button", { type: "button", class: `small chip pareto-focus${paretoFocus ? " on" : ""}`, "aria-pressed": String(paretoFocus),
         title: paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view",
@@ -232,8 +244,18 @@ function resultsView(ctx, r) {
   function drawTime() {
     const objFor = (m) => { const o = objectives.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, objectives), goal: o.goal, stage: tst || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
     timeBox.replaceChildren(h("div", { class: "chart-ctl" },
-      h("div", { class: "chips" }, nums.map(m => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}`,
-        onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); rememberGraphs(); drawTime(); } }, m))),
+      h("div", { class: "chips" }, folded(nums).flatMap(([k, ms]) => {
+        const chip = (m, label) => h("button", { class: `chip${tMetrics.has(m) ? " on" : ""}${m !== k ? " dict-test" : ""}`, title: m,
+          onclick: () => { if (tMetrics.has(m)) tMetrics.delete(m); else tMetrics.add(m); rememberGraphs(); drawTime(); } }, label);
+        const tests = ms.filter(m => m !== k);
+        if (!tests.length) return [chip(k, k)];
+        const open = openDicts.has(k) || tests.some(m => tMetrics.has(m));
+        return [ms.includes(k) ? chip(k, k) : h("span", { class: "chip-label" }, k),
+          h("button", { type: "button", class: "chip dict-fold", "data-dict": k, "aria-expanded": String(open), title: open ? `Fold ${k}'s tests` : `Show ${k}'s ${tests.length} tests`,
+            onclick: () => { if (openDicts.has(k) || tests.some(m => tMetrics.has(m))) { openDicts.delete(k); tests.forEach(m => tMetrics.delete(m)); } else openDicts.add(k); rememberGraphs(); drawTime(); } },
+            open ? "▾" : `▸ ${tests.length}`),
+          ...(open ? tests.map(m => chip(m, m.slice(k.length + 1))) : [])];
+      })),
       h("label", {}, "stage ", sel(stageOpts("the objective's stage"), tst, v => { tst = v; rememberGraphs(); drawTime(); }))),
       tMetrics.size ? h("div", { class: "chart-grid" }, nums.filter(m => tMetrics.has(m)).map(m => { const o = objFor(m);
         return bestChart(designPoints(r.designs, o), o, r.passes, { styles, scope, legend: false }); }))
