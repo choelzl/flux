@@ -151,7 +151,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     # the plan the pass follows (applied before anything is divided)
     if not state.workdir:
         state.workdir = trace_dir(None, problem.name)
-    if request.reevaluate:
+    if request.reevaluate or request.reevaluate_of:
         from .reevaluate import run_reevaluate
 
         return run_reevaluate(problem, state)

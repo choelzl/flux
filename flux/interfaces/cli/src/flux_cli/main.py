@@ -184,6 +184,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--screen-only", action="store_true", help="Stop the chain at the synthesis screen.")
     run_p.add_argument("--reevaluate", action="store_true",
                        help="Invalidate the record's checks and measurements and check and measure every design on it again (D988).")
+    run_p.add_argument("--reevaluate-of", type=int, default=0, metavar="ID",
+                       help="Check and measure again the designs one invalidation by hand took out (D1007; its id in Results).")
     run_p.add_argument("--rerun-baseline", action="store_true",
                        help="Measure pass 0 again though the document's baseline is unchanged (D1005; otherwise the one on record stands).")
     run_p.add_argument("--json", default=None, metavar="FILE", help="Also write the answer as JSON: the decision, the frontier, what was refused, the application's own result.")

@@ -1021,8 +1021,8 @@ def flows(r: Run) -> None:
              " : window.__compactFetch(u, o); return 1", fixture)
         try:
             r.page("#/app/sw/results", "document.querySelector('table.designs th.measurement-head')", "wide results table")
-            r.check("D1001: designs invalidated by hand are listed under the decision with why, and Restore",
-                    b.js("const l = document.querySelector('.invalidated-list'); return !!l && l.textContent.includes('Invalidated by hand (1)') && l.textContent.includes('the bench was misconfigured') && [...l.querySelectorAll('button')].some(x => x.textContent === 'Restore')"))
+            r.check("D1001, D1007: designs invalidated by hand are listed under the decision with why, Re-evaluate and Restore",
+                    b.js("const l = document.querySelector('.invalidated-list'); return !!l && l.textContent.includes('Invalidated by hand (1)') && l.textContent.includes('the bench was misconfigured') && ['Re-evaluate', 'Restore'].every(t => [...l.querySelectorAll('button')].some(x => x.textContent === t))"))
             r.check("old row-hiding preferences are ignored and every design remains visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && !document.querySelector('.hide-design, .hidden-rows')"))
             r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))

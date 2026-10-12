@@ -167,6 +167,7 @@ class LoopRequest:
     baseline: bool = False          # pass 0: check and measure without generation or repairs
     baseline_only: bool = False     # explicitly run only pass 0
     rerun_baseline: bool = False    # D1005: pass 0 measured again though the document's baseline is unchanged (asked once)
+    reevaluate_of: int = 0          # D1007: re-evaluate the designs one invalidation by hand took out (its event id)
     reevaluate: bool = False        # D988: invalidate the record's evidence; check and measure every design again
     explore: int = 0                # consecutive at-rest passes before this one; > 0 = send every
                                     # admitted design back to the generator

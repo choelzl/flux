@@ -37,10 +37,17 @@ function resultsView(ctx, r) {
   const invalidated = (r.invalidated || []).length ? h("details", { class: "invalidated-list" },
     h("summary", {}, `Invalidated by hand (${r.invalidated.filter(x => !x.restored).length})`),
     h("table", { class: "list compact" }, h("tbody", {}, r.invalidated.map(x => h("tr", { class: x.restored ? "muted" : "" },
-      h("td", { class: "mono" }, x.names.join(", ")), h("td", {}, x.reason), h("td", { class: "muted small" }, `${x.by} · `, ago(Date.parse(x.at) / 1000)),
-      h("td", { class: "right" }, x.restored ? h("span", { class: "pill" }, "restored") : canChange() ? act("Restore", async () => {
-        toast((await api(`/apps/${enc(name)}/results/restore${qs}`, { method: "POST", body: { id: x.id } })).ok, "ok"); reload();
-      }, { cls: "small" }) : "")))))) : "";
+      h("td", { class: "mono" }, x.names.join(", ")), h("td", {}, x.reason), h("td", { class: "muted small" }, `${x.by} · `, ago(Date.parse(x.at) / 1000),
+        x.reevaluated ? [" · re-evaluated ", ago(Date.parse(x.reevaluated) / 1000)] : ""),
+      h("td", { class: "right" }, x.restored ? h("span", { class: "pill" }, "restored") : canChange() ? h("div", { class: "actions end" },
+        // D1007: measured again under today's checks and measurements -- the new numbers count
+        act("Re-evaluate", async () => {
+          toast((await api(`/apps/${enc(name)}/results/reevaluate${qs}`, { method: "POST", body: { id: x.id } })).ok, "ok");
+          ctx.goTab("Live");
+        }, { cls: "small", title: "Check and measure these designs again now (one run); the invalidated numbers stay history" }),
+        act("Restore", async () => {
+          toast((await api(`/apps/${enc(name)}/results/restore${qs}`, { method: "POST", body: { id: x.id } })).ok, "ok"); reload();
+        }, { cls: "small", title: "Count the invalidated numbers again" })) : "")))))) : "";
   let shownEl, selectedKey;
   async function open(d, tr) {
     selectedKey = keyOf(d);

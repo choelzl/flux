@@ -599,6 +599,20 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         store.audit(user.name, "invalidated a design", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
         return {"ok": f"{body.name} invalidated: its {len(seqs)} row(s) no longer count", "trials": len(seqs)}
 
+    @app.post("/api/apps/{name}/results/reevaluate")
+    def reevaluate_designs(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1007: one run checks and measures again the designs one invalidation took out."""
+        record, cid = _record_of(name, user, owner)
+        try:
+            if not record.invalidated_by(cid, body.id):
+                raise HTTPException(404, "no such invalidation")
+        finally:
+            record.close()
+        from .models import RunOptions
+
+        ctx.start_loop(name, RunOptions(passes=1, reevaluate_of=body.id), owner, user)
+        return {"ok": "re-evaluation started: Live shows it; the new numbers count when it ends"}
+
     @app.post("/api/apps/{name}/results/restore")
     def restore_design(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         record, cid = _record_of(name, user, owner)

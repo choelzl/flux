@@ -73,6 +73,7 @@ class RunOptions(BaseModel):
     passes: int | None = Field(default=1, ge=1, le=1000)
     screen_only: bool = False
     rerun_baseline: bool = False         # D1005: pass 0 measured again, once
+    reevaluate_of: int | None = None     # D1007: the designs of one invalidation by hand, measured again
     reevaluate: bool = False             # D988: every design on record checked and measured again
     document: str | None = None          # D787: which of the loop's problems, when it has several
 

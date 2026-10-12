@@ -219,7 +219,8 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
   diff. A design opens with the limits it misses, every stage's numbers and its source.
 - **Invalidate…** (a design's detail; the loop stopped, by whoever may change it): asks why, then
   the design's rows stop counting -- Results, the report, the search -- kept on record; listed as
-  **Invalidated by hand** under the decision, each with **Restore** (D1001).
+  **Invalidated by hand** under the decision, each with **Restore** (D1001) and **Re-evaluate**: one run
+  checks and measures those designs again; the new numbers count, the old stay history (D1007).
 - **Table layout** (also Overview's Decision table): compact; names `#ID` or `part#ID` (reused IDs
   get a content-key suffix); ✓/✗/… badges; limit status as green/red text; details on hover;
   diagonal headers.

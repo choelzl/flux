@@ -925,7 +925,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         w.set_meta(name, last_start_digest=w.inputs_digest(name), rerun_baseline=False,             # D693, D1005: once
-                   **({} if body.reevaluate else {"last_options": {**body.model_dump(), "rerun_baseline": False}}))   # D988: not repeated
+                   **({} if body.reevaluate or body.reevaluate_of else {"last_options": {**body.model_dump(), "rerun_baseline": False}}))   # D988: not repeated
         store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
         return {"ok": f"{name} started: it resumes from its record"}
 

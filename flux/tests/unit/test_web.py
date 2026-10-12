@@ -283,6 +283,17 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     assert bob.post("/api/apps/sw/results/restore", json={"id": inv["id"]}, headers=H).status_code == 200
     again = bob.get("/api/apps/sw/results").json()
     assert len(again["designs"]) == len(res["designs"]) and again["invalidated"][0]["restored"]
+    # D1007: invalidated again, then re-evaluated -- one run measures the design again; the entry says when
+    assert bob.post("/api/apps/sw/results/invalidate", json=body, headers=H).status_code == 200
+    inv = bob.get("/api/apps/sw/results").json()["invalidated"][0]
+    assert bob.post("/api/apps/sw/results/reevaluate", json={"id": 999999}, headers=H).status_code == 404
+    r = bob.post("/api/apps/sw/results/reevaluate", json={"id": inv["id"]}, headers=H)
+    assert r.status_code == 200, r.text
+    deadline = time.time() + 240
+    while time.time() < deadline and bob.get("/api/apps/sw/state").json()["running"]:
+        time.sleep(1)
+    after = bob.get("/api/apps/sw/results").json()
+    assert after["invalidated"][0]["reevaluated"] and (gone["key"], gone["base"]) in {(d["key"], d["base"]) for d in after["designs"]}
     pre = bob.get("/api/apps/sw/preflight").json()
     assert pre["changed"] is False and pre["options"]["passes"] == 1, "the last start's inputs and options"
     ada = _client(app, "ada", "correct horse battery")

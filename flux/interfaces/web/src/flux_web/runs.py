@@ -453,6 +453,8 @@ class RunManager:
             argv.append("--reevaluate")
         if options.get("rerun_baseline"):
             argv.append("--rerun-baseline")
+        if options.get("reevaluate_of"):
+            argv += ["--reevaluate-of", str(int(options["reevaluate_of"]))]
         home_ready(self.store, user)                          # D744: started before anything runs in it, not on a page's look
         # D769: the owner's loop runs as the owner's -- their agents' logins too, whoever starts it
         from .admin import _key, cache_root
@@ -473,6 +475,7 @@ class RunManager:
         said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
             + (["re-evaluation of every design on record"] if options.get("reevaluate") else []) \
             + (["the baseline measured again"] if options.get("rerun_baseline") else []) \
+            + ([f"re-evaluation of the designs invalidated by hand (#{options['reevaluate_of']})"] if options.get("reevaluate_of") else []) \
             + (["on the host, no sandbox (an admin's setting)"] if options.get("host") else [])   # D720: not the network
         if env.get("FLUX_SANDBOX_MOUNTS"):
             said.append(mounts_said(adv))                       # D936: the admin's mounts, said in the run's log

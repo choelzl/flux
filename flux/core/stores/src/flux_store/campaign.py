@@ -207,7 +207,7 @@ class CampaignStore:
         self._conn.commit()
 
 
-    _HAND = "kind IN ('decided:invalidated', 'decided:restored')"
+    _HAND = "kind IN ('decided:invalidated', 'decided:restored', 'decided:reevaluated')"
 
     def invalid_seqs(self, campaign_id: str) -> set[int]:
         """D1001: the trials invalidated by hand, with a reason, less those restored since."""
@@ -229,15 +229,23 @@ class CampaignStore:
             doc = json.loads(d)
             if kind == "decided:invalidated" and doc.get("seqs"):
                 out[i] = {"id": i, "at": at, "reason": doc.get("reason") or "", "by": doc.get("by") or "",
-                          "names": doc.get("names") or [], "trials": len(doc["seqs"]), "restored": False}
+                          "names": doc.get("names") or [], "trials": len(doc["seqs"]), "restored": False, "reevaluated": None}
             elif kind == "decided:restored" and doc.get("of") in out:
                 out[doc["of"]]["restored"] = True
+            elif kind == "decided:reevaluated" and doc.get("of") in out:        # D1007: measured again, when
+                out[doc["of"]]["reevaluated"] = at
         return list(reversed(out.values()))
 
     def invalidate(self, campaign_id: str, seqs: list[int], *, reason: str, by: str, names: list[str]) -> None:
         """D1001: these trials stop being evidence (nothing is deleted), with why and by whom."""
         self.append_event(campaign_id, "decided:invalidated",
                           {"seqs": sorted(set(seqs)), "reason": reason, "by": by, "names": names})
+
+    def invalidated_by(self, campaign_id: str, event_id: int) -> list[int]:
+        """D1007: the trials one invalidation by hand took out (none for another kind of event)."""
+        row = self._conn.execute("SELECT detail_json FROM campaign_events WHERE id = ? AND campaign_id = ? "
+                                 "AND kind = 'decided:invalidated'", (event_id, campaign_id)).fetchone()
+        return [int(x) for x in (json.loads(row[0]).get("seqs") or [])] if row else []
 
     def restore(self, campaign_id: str, event_id: int, *, by: str) -> bool:
         """D1001: an invalidation by hand undone -- its trials are evidence again."""
