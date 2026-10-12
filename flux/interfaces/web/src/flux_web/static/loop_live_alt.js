@@ -78,7 +78,8 @@ export function liveAltTab(ctx) {
     const selected = inspector.taskId();
     const rows = taskWindow(scope.rows, limit, selected);
     visibleRows = scope.rows;
-    passSel.replaceChildren(h("option", { value: "current" }, `Current${scope.current.length ? " · " + scope.current.join(", ") : ""}`),
+    if (startId !== "current" && pass === "current") pass = "all";         // D994: a past start has no current pass
+    passSel.replaceChildren(startId === "current" ? h("option", { value: "current" }, `Current${scope.current.length ? " · " + scope.current.join(", ") : ""}`) : "",
       h("option", { value: "all" }, "All passes"), ...scope.passes.map(n => h("option", { value: String(n) }, n === 0 ? "Pass 0 · baseline" : `Pass ${n}`)),
       !["current", "all"].includes(pass) && !scope.passes.includes(Number(pass)) ? h("option", { value: pass }, `Pass ${pass} · unavailable`) : "");
     passSel.value = pass;
@@ -476,9 +477,10 @@ export function liveAltTab(ctx) {
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
       problem = d; notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.filter(o => o && o.metric) : []; queue();
     }).catch(() => {});
-    const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
+    const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = startId === "current" ? "current" : "all"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));
     startSel.value = history.starts.some(s => !s.running && String(s.id) === startId) ? startId : "current"; startId = startSel.value;
+    if (startId !== "current" && pass === "current") pass = "all";           // D994: a past start has no current pass
     passSel = h("select", { "aria-label": "LiveAlt pass", onchange: () => { boxView = null; passView = NO_PASS; choice = null; pass = passSel.value; following = true; limit = 200; folded.clear(); reveal = true; render(); } }, h("option", { value: "current" }, "Current"));
     notice = h("div", { class: "alt-notice" });
     followBtn = h("button", { type: "button", class: "small", title: "Follow the latest task in the current pass", onclick: () => {

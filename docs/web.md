@@ -178,7 +178,7 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
   parts.
 - **LiveAlt:** an alternative layout: **Tree**, **Graph**, **Timeline** of the same journal, in one
   palette (setup grey, search yellow, design indigo, check green, measure cyan, choose orange,
-  critic olive, the agent pink); pick **Start** and **Current** / **All passes** / a **Pass**
+  critic olive, the agent pink); pick **Start** and **Current** / **All passes** / a **Pass** (a past start opens on All passes, D994)
   (including pass 0). **Tree:** one line per task, tinted by kind and named kind first
   (`Search · lut-chunk=4`, `Check · golden`), a spinner while it runs; the steps every pass starts
   with fold to `Setup · N steps`, and what has finished folds (D992). **Graph:** the pass as a

@@ -699,6 +699,7 @@ def general_flows(r, watch):
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
                 r.check("historical selection links to the matching retained start", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/history/21')"))
                 r.check("leaving current start closes its live stream", b.js("return window.__altStreams.every(s=>s.closed)"))
+                r.check("D994: a past start opens on All passes and offers no Current pass", b.js("const s=document.querySelector('[aria-label=\"LiveAlt pass\"]');return s.value==='all' && ![...s.options].some(o=>o.value==='current') && document.querySelector('.alt-summary strong')?.textContent==='All passes'"))
                 choose("LiveAlt pass", "all")
                 r.button("Graph", ".subrow .subtabs")
                 b.click('.alt-chip[data-chain="S"]')
