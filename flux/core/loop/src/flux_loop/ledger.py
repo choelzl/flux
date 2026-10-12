@@ -32,6 +32,7 @@ class Kind(str, Enum):
     REST = "rest"                          # the design stands; nothing on the ladder was due
     DECISION = "decision"                  # an orchestrator's pick and why
     SEARCH_CHOICE = "search_choice"        # DSE intent for an attempted improvement, retained across passes
+    SCOPE_CHECK = "scope_check"            # a pass's scope checked on its design: how many of its checks fail (D1022)
 
     @property
     def void(self) -> "Kind | None":

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 import threading
 
-__all__ = ["choose", "stood"]
+__all__ = ["choose", "decide", "stood"]
 
 CHOICES = ("improve", "explore", "tune", "finetune", "variations", "refine")
 PRESETS = ("adaptive", "explore", "improve", "tune", "finetune", "variations")
@@ -55,7 +55,7 @@ def _quota_due(state: Any) -> bool:
     return picks.count("explore") < quota * (len(picks) + 1)
 
 
-def record_choice(state: Any, pick: str, why: str, subgoal: str | None = None) -> None:
+def record_choice(state: Any, pick: str, why: str, subgoal: str | None = None, scope: str = "") -> None:
     from .ledger import Kind
 
     if hasattr(state, "part"):
@@ -63,16 +63,39 @@ def record_choice(state: Any, pick: str, why: str, subgoal: str | None = None) -
     if hasattr(state, "search_choices"):
         state.search_choices.append(pick)
     if hasattr(state, "ledger"):
-        state.ledger.note(Kind.SEARCH_CHOICE, subgoal or "*", pick=pick, why=why)
+        state.ledger.note(Kind.SEARCH_CHOICE, subgoal or "*", pick=pick, why=why, **({"scope": scope} if scope else {}))
 
 
-def reserve_choice(state: Any, pick: str, why: str, subgoal: str | None = None) -> tuple[str, str]:
+def reserve_choice(state: Any, pick: str, why: str, subgoal: str | None = None, scope: str = "") -> tuple[str, str]:
     # Parallel passes reserve against the same ledger before launching their work.
     with _CHOOSING:
         if _quota_due(state):
             pick, why = "explore", "the budget's exploration quota reserves this attempt for a new approach"
-        record_choice(state, pick, why, subgoal)
+        record_choice(state, pick, why, subgoal, scope)
     return pick, why
+
+
+def scoped(state: Any) -> list[tuple[str, str]]:
+    """The scopes the passes worked on (D1022), the latest last: (scope, how its check ended, "" unchecked)."""
+    from .ledger import Kind
+
+    rows = state.ledger.entries() if hasattr(state, "ledger") else []
+    out: list[tuple[str, str]] = []
+    for r in rows:
+        if r.kind == Kind.SEARCH_CHOICE and r.detail.get("scope"):
+            out.append((str(r.detail["scope"]), ""))
+        elif r.kind == Kind.SCOPE_CHECK and out and out[-1][0] == r.detail.get("scope"):
+            out[-1] = (out[-1][0], str(r.detail.get("said") or ""))
+    return out
+
+
+def next_scope(state: Any, names: list[str]) -> str:
+    """The rules' scope for a pass (D1022): the first one no pass worked on, else the one worked on
+    longest ago -- every scope in turn."""
+    if not names:
+        return ""
+    last = {n: i for i, (n, _said) in enumerate(scoped(state))}
+    return min(names, key=lambda n: (n in last, last.get(n, -1)))
 
 
 def begin(problem: Any, state: Any, subgoal: str | None) -> None:
@@ -105,8 +128,30 @@ def stood(state: Any) -> int:
 
 def choose(problem: Any, state: Any, standing: Any, said: str, *, consult: bool = True) -> tuple[str, str]:
     """Choose a search move; DSE names guide it, and an optional quota reserves exploration."""
+    pick, why, _scope = decide(problem, state, standing, said, consult=consult)
+    return pick, why
+
+
+def _menu_lines(state: Any, menu: list[tuple[str, str]]) -> list[str]:
+    done = scoped(state)[-8:]
+    recent = "; ".join(f"{n} ({s or 'unchecked'})" for n, s in reversed(done))
+    return ["SCOPE: the design is one whole; this pass works on ONE scope of it (the whole design is still checked "
+            "and measured). The scopes:",
+            *[f"  - {n}: {w}"[:240] for n, w in menu[:400]],
+            *([f"  ... and {len(menu) - 400} more"] if len(menu) > 400 else []),
+            f"Scopes the latest passes worked on, the latest first, with how the scope's check ended: {recent}." if recent
+            else "No pass has worked on a scope yet.",
+            "Pick the scope too: where the evidence says the design falls short, or what no pass has covered."]
+
+
+def decide(problem: Any, state: Any, standing: Any, said: str, *, consult: bool = True,
+           menu: list[tuple[str, str]] | None = None) -> tuple[str, str, str]:
+    """The pass's direction and, with a list of scopes (D1022), the one it works on: (pick, why, scope).
+    The orchestrator picks both in its one decision; the rules take every scope in turn."""
+    names = [n for n, _w in menu or ()]
+    rule_scope = next_scope(state, names)
     if _quota_due(state):
-        return "explore", "the budget's exploration quota reserves this attempt for a new approach"
+        return "explore", "the budget's exploration quota reserves this attempt for a new approach", rule_scope
     n = stood(state)
     after = max(1, int(getattr(state.request, "explore_after", 2) or 2))
     orch = problem.roles().orchestrator
@@ -117,20 +162,22 @@ def choose(problem: Any, state: Any, standing: Any, said: str, *, consult: bool 
                  guidance(problem, state, active=False),
                  "improve: any reasoned improvement, local or structural; explore: a new approach, with no need to win immediately; "
                  "tune: parameters or implementation choices; finetune: small edits; variations: develop distinct alternatives; refine: use the existing ladder.",
+                 *(_menu_lines(state, menu or []) if names else []),
                  "Pick the direction of the next design."]
         try:
-            got = ask(problem, state, lines)
+            got = ask(problem, state, lines, scope=names) if names else ask(problem, state, lines)
         except Exception:  # noqa: BLE001 -- an unanswered choice falls back to the rules
             got = None
         if got and got[0] in CHOICES:
-            return got[0], f"the orchestrator: {got[1]}" if got[1] else "the orchestrator"
+            scope = got[2] if len(got) > 2 and got[2] in names else rule_scope
+            return got[0], f"the orchestrator: {got[1]}" if got[1] else "the orchestrator", scope
     policy = policy_name(problem)
     if policy in PRESETS and policy != "adaptive":
-        return policy, f"the DSE preference is {policy}; reasoned risks remain allowed"
+        return policy, f"the DSE preference is {policy}; reasoned risks remain allowed", rule_scope
     mapped = {"gradient": "tune", "sweep": "variations", "montecarlo": "explore", "genetic": "variations", "pareto": "variations"}
     if policy in mapped:
-        return mapped[policy], f"the {policy} DSE policy guides this attempt"
+        return mapped[policy], f"the {policy} DSE policy guides this attempt", rule_scope
     if n < after:
-        return "improve", "choose a reasoned improvement; structural changes are allowed before stagnation"
+        return "improve", "choose a reasoned improvement; structural changes are allowed before stagnation", rule_scope
     pick = "explore" if (n - after) % 2 == 0 else "refine"
-    return pick, f"the decision has stood {n} pass(es): {'a new design' if pick == 'explore' else 'its ladder again'}, in turn"
+    return pick, f"the decision has stood {n} pass(es): {'a new design' if pick == 'explore' else 'its ladder again'}, in turn", rule_scope

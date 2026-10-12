@@ -22,7 +22,7 @@ DOCUMENT_KEYS = frozenset({
     "budget", "params", "ladder",
     "skills", "baseline"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
-_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge"})
+_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge", "scope"})
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
 _INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})

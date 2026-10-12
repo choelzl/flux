@@ -12,7 +12,7 @@ from typing import Any, TYPE_CHECKING
 
 from ..objective import Objectives
 from ..types import LoopRequest
-from .commands import _check_placeholders, _command, _inferred_language
+from .commands import _as_said, _check_placeholders, _command, _inferred_language
 from .flow import _flow
 from .gate import Gate, _gate, _gate_doc
 from .keys import DOCUMENT_FILE, DOCUMENT_KEYS, EXTENSIONS, TaskError, _INHERITED, _INTERNAL_KEYS, _LIFTED_KEYS
@@ -72,6 +72,9 @@ class TaskSpec:
     #: The design space (D553): knob -> its choices in a meaningful order, what a `flow.dse`
     #: policy searches.
     space: dict[str, list] = field(default_factory=dict)
+    #: D1022: `flow.orchestrate.scope` -- {"list", "brief", "check": commands, "timeout_s": s}: the scopes of
+    #: the whole design a pass may work on, what the design agent is told of one, and its own check
+    scope: dict[str, Any] = field(default_factory=dict)
     #: D801: the folder a sub-task was read from, as its parent wrote it ("" inline)
     from_path: str = field(default="", compare=False)
     #: D798: knob -> (its written choices, a glob beside the document) for a knob whose choices
@@ -209,6 +212,7 @@ class TaskSpec:
                 "a task divides into `parts` of ONE artifact or into `subtasks` that are each "
                 "their own loop, not both: with both, what the parent composes is ambiguous")
         space, when, space_from = _space(doc.get("space"), base)
+        scope = _scope(doc.get("scope"), bool(parts or decompose or subtasks or split or space))
         seeds = _seeds(doc.get("seeds"), space)
         # the record is named by the document's id, a sub-document's by `<parent>/<child>` (D628)
         record = str(doc.get("_record") or doc.get("id") or "").strip()
@@ -378,7 +382,7 @@ class TaskSpec:
             critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
-            budget=budget, baseline=baseline, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds,
+            budget=budget, baseline=baseline, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds, scope=scope,
             home=str(Path(base).resolve()) if base is not None else "",
             record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
@@ -414,6 +418,9 @@ class TaskSpec:
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),
+            **({"scope": {**{k: _as_said(v) for k, v in self.scope.items() if k != "timeout_s"},
+                          **({"timeout_s": self.scope["timeout_s"]} if self.scope.get("timeout_s") != 120 else {})}}
+               if self.scope else {}),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -438,12 +445,43 @@ class TaskSpec:
             out.append(("baseline", tuple(self.baseline["command"])))
         if self.generator.get("command") and not (self.baseline or {}).get("only"):
             out.append(("generator", tuple(self.generator["command"])))
+        out += [(f"scope {k}", self.scope[k]) for k in ("list", "brief", "check") if self.scope.get(k)]
         for r in self.stages:
             if r.command:
                 out.append((f"stage {r.name}", r.command))
             if r.estimate and r.estimate.command and not (self.baseline or {}).get("only"):
                 out.append((f"estimate {r.name}", r.estimate.command))
         return out
+
+
+def _scope(raw: Any, divided: bool) -> dict[str, Any]:
+    """`flow.orchestrate.scope` (D1022): `list`, a command printing the scopes of the whole design a pass may
+    work on, one a line, its name first; `brief`, a command given `{scope}` printing what the design agent
+    is told of it; `check`, a command given `{scope}` and `{artifact}` that counts the scope's failures
+    ("N failing of M", or its exit); `timeout_s` for each (120)."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or not raw.get("list"):
+        raise TaskError("flow.orchestrate.scope is {list: <command printing the scopes, one a line, name first>, "
+                        "brief: <command given {scope}>, check: <command given {scope} and {artifact}>, timeout_s: <s>}")
+    bad = sorted(set(raw) - {"list", "brief", "check", "timeout_s"})
+    if bad:
+        raise TaskError(f"flow.orchestrate.scope: {', '.join(bad)} is not a setting; they are list, brief, check, timeout_s")
+    if divided:
+        raise TaskError("flow.orchestrate.scope is for a loop of one whole design: a pass works on one scope of it; "
+                        "a loop of parts, sub-loops or a search over knobs has its own picks")
+    out: dict[str, Any] = {"list": _command(raw["list"], "flow.orchestrate.scope.list")}
+    for key in ("brief", "check"):
+        if raw.get(key) is not None:
+            cmd = _command(raw[key], f"flow.orchestrate.scope.{key}")
+            if not any("{scope}" in t for t in cmd):
+                raise TaskError(f"flow.orchestrate.scope.{key} names the scope it is about: `{{scope}}` in the command")
+            out[key] = cmd
+    t = raw.get("timeout_s", 120)
+    if isinstance(t, bool) or not isinstance(t, (int, float)) or t <= 0:
+        raise TaskError("flow.orchestrate.scope.timeout_s is a number of seconds above 0")
+    out["timeout_s"] = t
+    return out
 
 
 def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:

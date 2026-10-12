@@ -475,6 +475,54 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
                             what=f"{what} {who}" if who and who not in what else what)
 
+    def _scope_run(self, which: str, state: LoopState, scope: str = "", artifact: str = "") -> Any:
+        """`flow.orchestrate.scope`'s `list`, `brief` or `check` run from the pass's folder (D1022): its run, or
+        None when it is not said or did not run (said on the pass's lines)."""
+        cfg = self.task.scope
+        if not cfg.get(which):
+            return None
+        workdir = str(state.workdir or ".")
+        Path(workdir).mkdir(parents=True, exist_ok=True)
+        subs = {"home": self.task.home or ".", "python": sys.executable, "workdir": workdir, "scope": scope,
+                "artifact": artifact, "name": scope}
+        try:
+            return self._run(tuple(cfg[which]), subs, float(cfg.get("timeout_s") or 120), f"scope {which}")
+        except Exception as exc:  # noqa: BLE001 -- no scope: the pass works on the whole design
+            state.say(f"  scope {which} did not run: {exc!s:.200}")
+            return None
+
+    def scope_list(self, state: LoopState) -> list[tuple[str, str]]:
+        run = self._scope_run("list", state)
+        if run is None or not run.ok:
+            if run is not None:
+                state.say(f"  scope list exited {run.returncode}: {run.tail()[-200:]}")
+            return []
+        out: list[tuple[str, str]] = []
+        for line in (run.stdout or "").splitlines():
+            name, _, what = line.strip().partition(" ")
+            if name and name not in (n for n, _w in out):
+                out.append((name, " ".join(what.split())))
+        return out
+
+    def scope_brief(self, scope: str, state: LoopState) -> str:
+        run = self._scope_run("brief", state, scope)
+        return (run.stdout or "").strip() if run is not None and run.ok else ""
+
+    def scope_check(self, scope: str, cand: Candidate, state: LoopState) -> tuple[int, str] | None:
+        if not self.task.scope.get("check"):
+            return None
+        workdir = Path(state.workdir or ".")
+        workdir.mkdir(parents=True, exist_ok=True)
+        path = workdir / f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', cand.name)}{self.task.extension}"
+        path.write_text(cand.artifact or "")
+        run = self._scope_run("check", state, scope, str(path))
+        if run is None:
+            return None
+        text = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()
+        m = re.search(r"(\d+) failing of \d+", text)
+        fails = int(m.group(1)) if m else (0 if run.ok else 1)
+        return fails, text[-4000:]
+
     def _params_file(self, workdir: str) -> str:
         """`{params}` (D799): the document's `params:` as a JSON file a command reads."""
         path = Path(workdir) / "params.json"

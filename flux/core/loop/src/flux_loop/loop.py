@@ -575,18 +575,29 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
 def _direction(problem: Problem, state: LoopState) -> Improve | None:
     """This pass's design when nothing is left to draft (D845): the standing design refined or a
     new one explored, as the orchestrator or the rules choose (`flux_loop.direction`)."""
-    from .direction import choose
+    from .direction import decide
 
     cand = state.admitted.get("*")
     if cand is None or not _can_draft(problem, None, state):
         return None
     said, stage = _standing_said(problem, state, cand)
-    pick, why = choose(problem, state, cand, said)
-    state.say(f"  direction: {pick} {cand.name} -- {why}")
-    state.lessons.append(f"[direction] {pick}: {why}")
+    menu: list[tuple[str, str]] = []
+    if getattr(getattr(problem, "task", None), "scope", None) or type(problem).scope_list is not Problem.scope_list:
+        with _phase("orchestrate: scope list") as out:
+            menu = problem.scope_list(state)
+            out["scopes"] = len(menu)
+    pick, why, scope = decide(problem, state, cand, said, menu=menu)
+    state.say(f"  direction: {pick} {cand.name}" + (f" on {scope}" if scope else "") + f" -- {why}")
+    state.lessons.append(f"[direction] {pick}" + (f" on {scope}" if scope else "") + f": {why}")
+    if scope:
+        # D1022: one scope of the whole design this pass -- the design agent is told which, and what it says
+        brief = problem.scope_brief(scope, state)
+        said += (f"\nTHIS PASS'S SCOPE: {scope}. Work on this scope of the whole design; leave the rest working, "
+                 "since the whole design is checked and measured as before."
+                 + (f"\nWHAT THE SCOPE SAYS:\n{brief[:12000]}" + ("\n... (cut)" if len(brief) > 12000 else "") if brief else ""))
     if pick == "explore":
-        return Improve(cand, f"Use this measured baseline to test a new approach. {said}", stage=stage, subgoal=None, explore=True, dse=pick)
-    return Improve(cand, f"Test a reasoned improvement; structural changes are welcome. {said}", stage=stage, subgoal=None, refine=True, dse=pick)
+        return Improve(cand, f"Use this measured baseline to test a new approach. {said}", stage=stage, subgoal=None, explore=True, dse=pick, scope=scope)
+    return Improve(cand, f"Test a reasoned improvement; structural changes are welcome. {said}", stage=stage, subgoal=None, refine=True, dse=pick, scope=scope)
 
 
 def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) -> str:
@@ -625,7 +636,8 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     # DSE preference and quota there without spending a second, competing decision turn.
     pick, why = (item.dse or "explore", item.why) if item.dse or item.explore else choose(problem, state, item.candidate, item.why, consult=False)
     if not item.again:                      # D999: the same direction again is the same decision, counted once
-        pick, why = reserve_choice(state, pick, why, item.subgoal)
+        pick, why = reserve_choice(state, pick, why, item.subgoal, item.scope)
+    asked = item.why                        # D1022: what a scope's next try is told again, without the guidance
     item = replace(item, dse=pick, explore=pick == "explore", refine=item.refine,
                    why=item.why + "\n" + guidance(problem, state, item.subgoal))
     state.say(f"  search [{item.subgoal or '*'}]: {pick} -- {why[:200]}")
@@ -639,10 +651,13 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         with _phase(f"generation: improve {item.candidate.name}", why=item.stage) as out:
             out["dse"] = pick
             out["hypothesis"] = why
+            if item.scope:
+                out["scope"] = item.scope
             cand, built, reason = problem.improve(item, state)
     finally:
-        # ... whose session ends with it -- unless it ran out of time: the pass's next try continues it (D999)
-        if not any(getattr(s, "timed_out", False) for s in ps.sessions.values()):
+        # ... whose session ends with it -- unless it ran out of time: the pass's next try continues it (D999);
+        # a pass on a scope keeps it to the pass's end, its scope's failures told to the same agent (D1022)
+        if not item.scope and not any(getattr(s, "timed_out", False) for s in ps.sessions.values()):
             ps.sessions.clear()
         from .boxes import flush_turns
 
@@ -695,7 +710,32 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     state.scored.extend(got)
     problem.review(stages[0], got, state)
     _route(problem, state, stages[0], got)
+    if item.scope:
+        _scope_check(problem, state, item, cand, asked)
     return got
+
+
+def _scope_check(problem: Problem, state: LoopState, item: Improve, cand: Candidate, asked: str) -> None:
+    """D1022: the pass's scope checked on its design, which the gate passed and the stages measured (it is
+    kept either way). Failures send it back to the same agent with them -- the pass goes on until the
+    scope is clean or its steps are spent."""
+    from .ledger import Kind
+
+    with _phase(f"test: scope {item.scope}", why=cand.name) as out:
+        got = problem.scope_check(item.scope, cand, state)
+        if got is None:
+            out["said"] = "no scope check"
+            return
+        fails, text = got
+        said = "clean" if fails == 0 else f"{fails} failing"
+        out["said"] = said
+    state.ledger.note(Kind.SCOPE_CHECK, "*", str(cand.key())[:16], scope=item.scope, said=said, design=cand.name)
+    state.say(f"  scope {item.scope}: {said} on {cand.name}")
+    if fails:
+        state.improve.append(dataclasses.replace(
+            item, candidate=cand, again=True,
+            why=f"The design passed the gate, but the check of THIS PASS'S SCOPE ({item.scope}) has {fails} failing:\n"
+                f"{text[-3000:]}\nFix them in this scope; the rest of the design must keep working.\n\n{asked}"))
 
 
 def _forget_stale_compositions(state: LoopState) -> None:

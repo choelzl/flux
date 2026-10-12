@@ -125,6 +125,7 @@ flow:
 | `flow.validate` | `rules`, `model`, agent | yes | Review the document before the first pass (advisory) |
 | `flow.orchestrate` | `rules`, `given`, `model`, `tools`, agent, or a search ([search settings](#search-settings)) | yes | What to try next |
 | `flow.orchestrate.dse` | `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations`, or a policy name | | The emphasis that guides a model or agent ([search settings](#search-settings)) |
+| `flow.orchestrate.scope` | `{list: ..., brief: ..., check: ..., timeout_s: 120}` | | The scopes of one whole design a pass may work on ([scope](#scope)) |
 | `flow.plan` | `off`, `model`, agent | yes | Write the pass's plan, checked before use |
 | `flow.generate` | `model`, agent, `{command: ...}`, `{catalog: [paths]}` | yes | Write each design |
 | `flow.test` | A command, or an ordered map of named checks | never | Decide correctness ([checks](#check-settings)) |
@@ -141,6 +142,18 @@ flow:
   to guide a model or agent: `adaptive` (default), `explore`, `improve`, `tune`, `finetune`,
   `variations`, or a policy name (`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`,
   `pareto`) as an emphasis. `dse` guides; it never forbids.
+- <a id="scope"></a>**`orchestrate.scope`** (D1022), for a loop of one whole design (no parts,
+  sub-loops or knobs): each pass works on one scope of it. `list` is a command printing the scopes,
+  one a line, its name first; `brief`, given `{scope}`, prints what the design agent is told of it;
+  `check`, given `{scope}` and `{artifact}`, checks the scope on a design that passed the gate
+  (`N failing of M`, or its exit). Each pass the orchestrator picks its direction and a scope in one
+  decision, seeing which scopes the latest passes took and how their checks ended (the rules: each
+  in turn). While the scope's check fails, the design goes back to the same agent with the failures,
+  until it is clean or the pass's `steps` are spent; every design that passes the gate is kept and
+  measured as usual. For a spec kept in the loop's folder: `list: fluxpreset ndf list --spec
+  {home}/spec`, `brief: fluxpreset ndf clauses {scope} --spec {home}/spec` (it names the units that
+  depend on it), and `fluxpreset ndf scope {scope} --spec {home}/spec` lists the unit and its
+  dependents for a check of your own.
 - **`generate`** takes exactly one form. `{command: ...}` is your script
   ([generator contract](#generator-command)); `{catalog: [a.py, b.py]}` reads the listed files
   (relative to the folder) in turn; `model` and agents write the design from the brief. A
@@ -514,6 +527,7 @@ baseline, the composition) runs the same way. Your own agent's command differs; 
 | `{attempt}` | `1`, `2`, ... | drafting | | | `1` | |
 | `{history}`, `{state}` | Search history and the search's own state file | | | ✓ | | |
 | `{parts}` | Path of a JSON map of the children's designs | | | | | ✓ |
+| `{scope}` | The scope a pass works on, in `orchestrate.scope`'s `brief` and `check` | | | | | |
 | `{prompt}`, `{prompt_file}`, `{session}`, `{answer}` | Brief and session, for [your own agent](#agent-command) | | | | | |
 
 **File formats:**

@@ -75,6 +75,12 @@ Say only what is yours; the rest is inferred.
     refused), keeps `{state}`, and prints one JSON object: `candidates` (name, artifact, knobs,
     why), `lessons`, `not_established`, a `conclusion` (kept when nothing passes), `done`.
     `{params}` is the document's `params:` as a JSON file, for any command.
+  - `orchestrate: {by: ..., scope: {list: "...", brief: "... {scope} ...", check: "... {scope} {artifact}"}}`
+    (D1022): one whole design whose passes each work on one scope -- `list` prints the scopes (one
+    a line, name first), `brief` what the agent is told of one, `check` counts its failures on a
+    design past the gate; the orchestrator picks the scope with the direction (the rules: each in
+    turn); the pass goes on, the same agent told the failures, until the check is clean or the
+    steps are spent.
   - `generate`: `model` (the default), `{command: "..."}` (a script renders each candidate; with a
     space, once per point, knobs as `{knob}`), `{by: opencode|claude|codex}` (with `bin`,
     `args` beside: another executable, extra arguments such as `[--agent, flux]`; per machine

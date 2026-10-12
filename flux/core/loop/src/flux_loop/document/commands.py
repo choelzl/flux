@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
 _PLACEHOLDER_ANY = re.compile(r"\{(\w+)\}")      # D879: any knob a command says, in a script too
 BUILTIN_SUBS = ("artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                "prompt", "prompt_file", "point", "params", "history", "state", "parts")
+                "prompt", "prompt_file", "point", "params", "history", "state", "parts", "scope")
 
 
 def _words_before_params(run: str) -> list[str]:

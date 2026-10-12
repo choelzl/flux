@@ -125,6 +125,8 @@ class Improve:
     dse: str = ""                 # chosen move; the public setting remains flow.orchestrate.dse
     #: the same direction again in its pass (D999): no new decision, the design agent's session kept
     again: bool = False
+    #: the area of the whole design this pass works on (D1022): a name from `flow.orchestrate.scope`'s menu
+    scope: str = ""
 
 
 @dataclass(frozen=True)

@@ -141,6 +141,10 @@ def _layout(doc: Any) -> Any:
         out["subtasks"] = [_layout(c) for c in out["subtasks"]]
     if flow:
         out["flow"] = _by_layout(flow)
-    else:
+    if doc.get("scope"):                                   # D1022: said under the box that picks it
+        f = out.setdefault("flow", {})
+        o = f.get("orchestrate")
+        f["orchestrate"] = {**(o if isinstance(o, dict) else {} if o is None else {"by": o}), "scope": doc["scope"]}
+    if not out.get("flow"):
         out.pop("flow", None)
     return out

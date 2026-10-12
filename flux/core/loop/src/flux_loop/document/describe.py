@@ -66,7 +66,14 @@ _KIND_OF_WORK = "rules pick the kind of work: a design sent back is improved fir
 
 
 def describe_orchestrate(task: "TaskSpec") -> str:
-    """The orchestrate line's half, in words (D666)."""
+    """The orchestrate line's half, in words (D666); D1022: with the area each pass works on."""
+    said = _describe_orchestrate(task)
+    if task.scope:
+        said += "; each pass works on the area of the design its `scope` command prints, the design agent told what it says"
+    return said
+
+
+def _describe_orchestrate(task: "TaskSpec") -> str:
     from ..roles import available_roles
 
     raw = task.flow.get("orchestrate")

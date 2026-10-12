@@ -179,6 +179,20 @@ class OrchestratorRole(_Role):
     A problem may have more than one of them, and then `next_work` is the orchestration
     decision: what to spend the next step on. Code, a DSE rule or a model may answer it."""
 
+    def scope_list(self, state: LoopState) -> list[tuple[str, str]]:
+        """The scopes of the whole design a pass may work on (D1022), each (name, what it is); [] when a
+        pass works on the whole design as it sees fit."""
+        return []
+
+    def scope_brief(self, scope: str, state: LoopState) -> str:
+        """What the design agent is told of `scope` (D1022); "" for nothing more."""
+        return ""
+
+    def scope_check(self, scope: str, cand: Candidate, state: LoopState) -> tuple[int, str] | None:
+        """The scope's own check on a design that passed the gate (D1022): (failures, what failed), or
+        None when there is none. A pass goes on until it is clean or its steps are spent."""
+        return None
+
     def search(self, state: LoopState) -> Iterator[list[Candidate]] | None:
         """propose, for a problem that enumerates or proposes candidates in batches instead
         of writing one part at a time (D446): a generator. Every batch it yields is gated

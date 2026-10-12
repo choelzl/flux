@@ -32,6 +32,7 @@ class Unit:
     summary: str
     classification: list[str]
     tests: list[Test] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)      # the units' ids it builds on
 
 
 def _header(text: str, tag: str) -> dict | None:
@@ -52,7 +53,8 @@ def load(spec: Path) -> dict[str, Unit]:
         head = _header(path.read_text(errors="replace"), "PTO-INSTRUCTION")
         if head and head.get("id"):
             units[head["id"]] = Unit(head["id"], str(head.get("mnemonic") or head["id"]), path, str(path.relative_to(spec)),
-                                     str(head.get("summary") or ""), list(head.get("classification") or []))
+                                     str(head.get("summary") or ""), list(head.get("classification") or []),
+                                     depends_on=[str(d) for d in head.get("depends_on") or []])
     by_source = {u.source: u for u in units.values()}
     for path in sorted((spec / "tests").rglob("*.asl")) if (spec / "tests").is_dir() else []:
         head = _header(path.read_text(errors="replace"), "PTO-TEST")
@@ -61,6 +63,19 @@ def load(spec: Path) -> dict[str, Unit]:
             unit.tests.append(Test(head["id"], path, [str(r) for r in head.get("requirements") or []],
                                    str(head.get("kind") or ""), str(head.get("summary") or "")))
     return units
+
+
+def dependents(units: dict[str, Unit], unit: Unit) -> list[Unit]:
+    """The units that name `unit` in their `depends_on`, directly or through others, in source order."""
+    out: dict[str, Unit] = {}
+    todo = [unit.id]
+    while todo:
+        uid = todo.pop()
+        for u in units.values():
+            if uid in u.depends_on and u.id not in out and u.id != unit.id:
+                out[u.id] = u
+                todo.append(u.id)
+    return sorted(out.values(), key=lambda u: u.source)
 
 
 def find(units: dict[str, Unit], name: str) -> Unit | None:

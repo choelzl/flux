@@ -57,7 +57,7 @@
                     "select", "feedback", "knowledge"];
   /** flux_loop.document BUILTIN_SUBS, the same list (a test compares them, D912). */
   var BUILTIN_SUBS = ["artifact", "workdir", "name", "part", "python", "home", "failure", "attempt",
-                      "prompt", "prompt_file", "point", "params", "history", "state", "parts"];
+                      "prompt", "prompt_file", "point", "params", "history", "state", "parts", "scope"];
 
   /** D728: a box whose agent has its own settings, as written (agentRaw) -- "*" is no agent's name, so
       an added agent may be called anything, "custom" too (D946). */

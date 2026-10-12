@@ -200,6 +200,11 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     raw = doc.get("flow")
     if not isinstance(raw, dict):
         return doc
+    o = raw.get("orchestrate")
+    if strict and isinstance(o, dict) and "scope" in o:   # D1022: the menu of areas a pass may work on
+        o = dict(o)
+        doc["scope"] = o.pop("scope")
+        raw = {**raw, "orchestrate": o} if o else {k: v for k, v in raw.items() if k != "orchestrate"}
     flow = _by_surface(raw) if strict else dict(raw)
     for box in ("test", "measure"):
         if isinstance(raw.get(box), dict) and ("agent" in raw[box] or "by" in raw[box]):

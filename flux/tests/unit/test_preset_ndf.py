@@ -58,3 +58,14 @@ def test_a_spec_ndf_cannot_build_says_why(spec, capsys):
     (spec / "ndf.lock").unlink()
     assert ndf.main(["list", "--spec", str(spec)]) == 2
     assert "ndf build failed" in capsys.readouterr().err
+
+
+
+def test_scope_is_the_unit_then_its_dependents(spec, capsys):
+    """D1022: what a pass on a unit must keep working -- TSUB builds on TADD in the fixture."""
+    assert ndf.main(["scope", "TADD", "--spec", str(spec)]) == 0
+    assert [ln.split()[0] for ln in capsys.readouterr().out.splitlines()] == ["TADD", "TSUB"]
+    assert ndf.main(["scope", "TSUB", "--spec", str(spec)]) == 0
+    assert [ln.split()[0] for ln in capsys.readouterr().out.splitlines()] == ["TSUB"]
+    assert ndf.main(["clauses", "TADD", "--spec", str(spec)]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "Units that depend on TADD (keep them working): TSUB"

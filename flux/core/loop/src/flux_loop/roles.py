@@ -190,24 +190,29 @@ class ModelOrchestrator:
         return None
 
 
-    def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
-        """Ask the model which experiment to try; an unanswered choice falls back to rules."""
+    def direction(self, problem: Any, state: Any, lines: list[str],
+                  scope: list[str] | None = None) -> tuple[str, ...] | None:
+        """Ask the model which experiment to try and, given scopes (D1022), which one the pass works on:
+        (pick, why[, scope]). An unanswered choice falls back to rules."""
         from .model import _ask, _json
 
         if state.proposer is None:
             return None
         from .direction import CHOICES
 
-        schema = {"type": "object", "properties": {"pick": {"enum": list(CHOICES)}, "why": {"type": "string"}},
-                  "required": ["pick"]}
+        props: dict = {"pick": {"enum": list(CHOICES)}, "why": {"type": "string"}}
+        if scope:
+            props["scope"] = {"enum": list(scope)}
+        schema = {"type": "object", "properties": props, "required": ["pick", *(["scope"] if scope else [])]}
         prompt = "\n".join(["You orchestrate a design campaign: one design a pass.", *lines,
-                             'Reply with ONLY JSON: {"pick": "<one of ' + ', '.join(CHOICES) + '>", "why": "<hypothesis and evidence>"}'])
+                             'Reply with ONLY JSON: {"pick": "<one of ' + ', '.join(CHOICES) + '>", '
+                             + ('"scope": "<one of the scopes>", ' if scope else "") + '"why": "<hypothesis and evidence>"}'])
         try:
             doc = _json(_ask(state, prompt, schema).text)
         except Exception:  # noqa: BLE001 -- an unanswered choice is not a failed run
             return None
         if isinstance(doc, dict) and doc.get("pick") in CHOICES:
-            return str(doc["pick"]), str(doc.get("why") or "")[:200]
+            return (str(doc["pick"]), str(doc.get("why") or "")[:200], *([str(doc.get("scope") or "")] if scope else []))
         return None
 
 
@@ -255,14 +260,19 @@ class AgentOrchestrator:
         got = self._decide(problem, state, "what next", lines, kinds)
         return got["pick"] if got else None
 
-    def direction(self, problem: Any, state: Any, lines: list[str]) -> tuple[str, str] | None:
-        """Choose an experiment with tools and record the hypothesis behind it."""
+    def direction(self, problem: Any, state: Any, lines: list[str],
+                  scope: list[str] | None = None) -> tuple[str, ...] | None:
+        """Choose an experiment with tools and record the hypothesis behind it; given scopes (D1022), the
+        one the pass works on too."""
         if self.coding is None and state.proposer is None:
             return None
         from .direction import CHOICES
 
-        got = self._decide(problem, state, "direction", lines, list(CHOICES))
-        return (got["pick"], str(got.get("why") or "")[:200]) if got else None
+        got = self._decide(problem, state, "direction", lines, list(CHOICES),
+                           extra={"scope": {"type": "string", "enum": list(scope)}} if scope else None)
+        if not got:
+            return None
+        return (got["pick"], str(got.get("why") or "")[:200], *([str(got.get("scope") or "")] if scope else []))
 
     def choose_improve(self, problem: Any, item: Any, options: list, state: Any) -> Any | None:
         if (self.coding is None and state.proposer is None) or len(options) <= 1:
@@ -304,13 +314,14 @@ class AgentOrchestrator:
                 "reasons; knowledge(query) -- the method sheet and the papers. Read what you need, then answer.",
                 *lines,
                 'Reply with ONLY JSON: {"pick": "<one of ' + ", ".join(choices) + '>", "why": "<one or two lines: the numbers that decide it>"'
-                + (', "method": "<one line>"' if extra and "method" in extra else "") + "}"]
+                + (', "method": "<one line>"' if extra and "method" in extra else "")
+                + (', "scope": "<one of the scopes>"' if extra and "scope" in extra else "") + "}"]
         from .direction import guidance
 
         head.insert(1, guidance(problem, state))
         props: dict = {"pick": {"type": "string", "enum": list(choices)}, "why": {"type": "string"}}
         props.update(extra or {})
-        schema = {"type": "object", "properties": props, "required": ["pick", "why"]}
+        schema = {"type": "object", "properties": props, "required": ["pick", "why", *(["scope"] if extra and "scope" in extra else [])]}
         if self.coding is not None:
             return self._decide_by_agent(problem, state, what, head, choices, schema)
         prompt = "\n".join(l for l in head if l)
@@ -329,8 +340,10 @@ class AgentOrchestrator:
                 return None
             out["pick"] = str(doc["pick"])
             out["why"] = str(doc.get("why") or "")
+            if doc.get("scope"):
+                out["scope"] = str(doc["scope"])
         why = str(doc.get("why") or "").strip()
-        state.say(f"  orchestrate [{what}]: {doc['pick']} -- {why[:200]}")
+        state.say(f"  orchestrate [{what}]: {doc['pick']}" + (f" on {doc['scope']}" if doc.get("scope") else "") + f" -- {why[:200]}")
         _record_decision(state, what, str(doc["pick"]), why, choices)
         return doc
 
@@ -350,14 +363,26 @@ class AgentOrchestrator:
         with _phase(f"orchestrate: {what}", why=", ".join(choices)) as out:
             doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, problem=problem,
                            home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
-                           check=lambda d: None if d.get("pick") in choices else f"pick must be one of {', '.join(choices)}")
+                           check=lambda d: _off_menu(d, choices, schema))
             out["pick"] = (doc or {}).get("pick") or "no answer"
+            if (doc or {}).get("scope"):
+                out["scope"] = str(doc["scope"])
         if doc is None:
             return None
         why = str(doc.get("why") or "").strip()
-        state.say(f"  orchestrate [{what}]: {doc['pick']} -- {why[:200]}")
+        state.say(f"  orchestrate [{what}]: {doc['pick']}" + (f" on {doc['scope']}" if doc.get("scope") else "") + f" -- {why[:200]}")
         _record_decision(state, what, str(doc["pick"]), why, choices)
         return doc
+
+
+def _off_menu(doc: dict, choices: list[str], schema: dict) -> str | None:
+    """Why an agent's answer is off its menu, or None: the pick, and a scope when one is asked (D1022)."""
+    if doc.get("pick") not in choices:
+        return f"pick must be one of {', '.join(choices)}"
+    scopes = ((schema.get("properties") or {}).get("scope") or {}).get("enum")
+    if scopes and doc.get("scope") not in scopes:
+        return "scope must be one of the scopes listed"
+    return None
 
 
 def _record_decision(state: Any, what: str, pick: str, why: str, choices: list[str]) -> None:

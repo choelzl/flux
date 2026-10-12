@@ -5,6 +5,7 @@ kept in the application's folder (D1020).
     fluxpreset ndf clauses TADD --spec {home}/spec         # the unit's clauses, whole: what a design must do
     fluxpreset ndf check TADD --spec {home}/spec --results avs.json   # each MUST clause failed or uncovered,
                                                                        # then "N failing of M"
+    fluxpreset ndf scope TADD --spec {home}/spec           # the unit, then every unit depending on it (D1022)
 
 `ndf build` compiles the spec (its ndf.yaml, ndf.lock and the dependencies they pin, e.g. the
 `tools/ndf` submodule) into an index in a temporary folder, each time; nothing is written in the
@@ -26,7 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ._pto import Unit, find, load
+from ._pto import Unit, dependents, find, load
 
 MODALITIES = ("must", "should", "may")
 ENFORCED_STATUS = ("active", "accepted")
@@ -129,6 +130,14 @@ def _list(a: argparse.Namespace) -> int:
     return 0
 
 
+def _show(unit: Unit, found: list[dict]) -> None:
+    print(f"# {unit.mnemonic} ({unit.id}): {unit.summary}\n")
+    for c in of_unit(found, unit):
+        how = modality(c.get("body") or "") or "none"
+        print(f"## {_short(c['id'])}  [{how}, {c.get('status')}{'' if _enforced(c) else ', not enforced'}]\n")
+        print((c.get("body") or "").strip() + "\n")
+
+
 def _clauses(a: argparse.Namespace) -> int:
     got = _load(a)
     if got is None:
@@ -138,11 +147,23 @@ def _clauses(a: argparse.Namespace) -> int:
     if unit is None:
         print(f"no unit {a.unit!r} in {a.spec}", file=sys.stderr)
         return 2
-    print(f"# {unit.mnemonic} ({unit.id}): {unit.summary}\n")
-    for c in of_unit(found, unit):
-        how = modality(c.get("body") or "") or "none"
-        print(f"## {_short(c['id'])}  [{how}, {c.get('status')}{'' if _enforced(c) else ', not enforced'}]\n")
-        print((c.get("body") or "").strip() + "\n")
+    _show(unit, found)
+    deps = dependents(units, unit)
+    if deps:
+        print(f"Units that depend on {unit.mnemonic} (keep them working): " + ", ".join(u.mnemonic for u in deps[:60])
+              + (f" and {len(deps) - 60} more" if len(deps) > 60 else ""))
+    return 0
+
+
+def _scope(a: argparse.Namespace) -> int:
+    """The unit, then every unit that depends on it (D1022): what a pass on it must keep working."""
+    units = load(Path(a.spec))
+    unit = find(units, a.unit) if units else None
+    if unit is None:
+        print(f"no unit {a.unit!r} in {a.spec}", file=sys.stderr)
+        return 2
+    for u in [unit, *dependents(units, unit)]:
+        print(f"{u.mnemonic:<10} {u.id:<24} tests={len(u.tests)}  {u.summary}")
     return 0
 
 
@@ -184,9 +205,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, fn, helped in (("list", _list, "each unit, its clauses by modality and its tests"),
                              ("clauses", _clauses, "a unit's clauses, whole"),
-                             ("check", _check, "each MUST clause failed or uncovered, then the count")):
+                             ("check", _check, "each MUST clause failed or uncovered, then the count"),
+                             ("scope", _scope, "the unit, then every unit that depends on it")):
         p = sub.add_parser(name, help=helped)
-        if name != "list":
+        if name in ("clauses", "check", "scope"):
             p.add_argument("unit", help="the unit's id or mnemonic (PTO-TILE-TADD, TADD)")
         else:
             p.add_argument("--classification", default="", help="only units of this classification (elementwise-tile-tile)")
