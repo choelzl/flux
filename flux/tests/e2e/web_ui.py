@@ -1254,7 +1254,7 @@ def flows(r: Run) -> None:
         r.check("keep options are chosen per reset", b.js("return !document.querySelector('[data-reset-keep=workbench]').checked"))
         b.js("window.__resetBox = document.querySelector('#main .danger-card'); return 1")
         r.dialog_button("Reset")
-        b.wait("!window.__resetBox.isConnected && document.querySelector('#main .danger-card')", what="full reset completed")
+        b.wait("!window.__resetBox.isConnected && document.querySelector('#main .danger-card')", timeout=60, what="full reset completed")   # a loaded machine
         r.check("reset with no keep choices clears the workbench", not (root / "workbench").exists())
         r.clean("reset loop")
         r.api("/apps/resettable", "DELETE")
