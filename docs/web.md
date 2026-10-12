@@ -422,6 +422,9 @@ stale records (off). Off until enabled: **Check database integrity**, **Validate
 documents**, **Back up server database** (`flux-web.db` and `secret.key` to
 `<server-data>/backups/server-<timestamp>/`, latest seven kept; back up loop folders separately).
 Loop tasks run over all loops or one; running loops are never touched; every run is audited.
+**Invalidate + re-evaluate all** (D988, a loop's settings only) starts one run that checks and
+measures every design on record again under today's checks and measurement scripts; earlier rows
+stay as history behind an `invalidated` mark and are no longer counted.
 
 ## Users, groups and permissions
 

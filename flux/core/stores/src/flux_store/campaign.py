@@ -207,6 +207,15 @@ class CampaignStore:
         self._conn.commit()
 
 
+    def invalid_through(self, campaign_id: str) -> int:
+        """D988: the last trial a re-evaluation invalidated -- rows at or before it are history,
+        not evidence (0 when the campaign was never invalidated)."""
+        rows = self._conn.execute(
+            "SELECT detail_json FROM campaign_events WHERE campaign_id = ? AND kind = 'decided:invalidated'",
+            (campaign_id,),
+        ).fetchall()
+        return max((int(json.loads(d).get("seq") or 0) for (d,) in rows), default=0)
+
     def events(self, campaign_id: str) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT kind, detail_json, created_at FROM campaign_events "
@@ -312,8 +321,15 @@ class CampaignStore:
         return result_id
 
     def trials(self, campaign_id: str, *, phase: str | None = None,
-               status: str | None = None) -> list[Trial]:
+               status: str | None = None, current: bool = False) -> list[Trial]:
+        """`current` (D988): only the trials a re-evaluation has not invalidated -- the evidence;
+        without it, every trial, history included."""
         clauses, params = ["campaign_id = ?"], [campaign_id]
+        if current:
+            through = self.invalid_through(campaign_id)
+            if through:
+                clauses.append("seq > ?")
+                params.append(through)
         if phase is not None:
             clauses.append("phase = ?")
             params.append(phase)

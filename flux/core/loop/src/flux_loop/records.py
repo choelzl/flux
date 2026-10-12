@@ -133,7 +133,7 @@ def history(problem: Problem, state: LoopState) -> list[Scored]:
         stages = set(problem.stages() or [])
         latest: dict[tuple[str, str], Scored] = {}
         try:
-            for t in state.records.store.trials(state.records.campaign_id, status="ok"):
+            for t in state.records.store.trials(state.records.campaign_id, status="ok", current=True):
                 if t.stage not in stages or t.result is None:
                     continue
                 cand = Candidate.from_record(dict(t.candidate or {}))
@@ -162,7 +162,7 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
     latest: dict[tuple[str, str], Scored] = {}
     stale: set[tuple[str, str]] = set()
     try:
-        for t in state.records.store.trials(state.records.campaign_id, status="ok"):
+        for t in state.records.store.trials(state.records.campaign_id, status="ok", current=True):
             if t.stage not in stages or t.result is None:
                 continue
             cand = Candidate.from_record(dict(t.candidate or {}))
@@ -215,7 +215,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     measured: dict[str, dict[str, dict[str, float]]] = {}   # stage -> artifact digest -> its numbers
     stages_all = list(problem.stages() or [])
     try:
-        for t in state.records.store.trials(state.records.campaign_id):
+        for t in state.records.store.trials(state.records.campaign_id, current=True):
             if ((t.candidate or {}).get("meta") or {}).get("baseline"):
                 continue
             if t.stage == StageNames.PROTOTYPE:
@@ -385,7 +385,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     try:
         # The best refused prototype per part (D480): the stage resumes from it instead of a
         # blank page.
-        for t in state.records.store.trials(state.records.campaign_id):
+        for t in state.records.store.trials(state.records.campaign_id, current=True):
             c = t.candidate or {}
             if t.stage != StageNames.PROTOTYPE or (c.get("meta") or {}).get("kind") != "prototype":
                 continue
@@ -404,7 +404,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
     except Exception:  # noqa: BLE001
         pass
     try:
-        for t in state.records.store.trials(state.records.campaign_id, status="ok"):
+        for t in state.records.store.trials(state.records.campaign_id, status="ok", current=True):
             c = t.candidate or {}
             if t.stage == StageNames.PROTOTYPE and c.get("artifact") and (c.get("meta") or {}).get("kind") == "prototype":
                 key = c.get("subgoal") or "*"
@@ -478,7 +478,7 @@ def sibling_design(problem: Problem, part: str, proto: str, state: LoopState) ->
             admitted_rtl: str | None = None
             admitted_sha: str | None = None
             measured: dict[str, dict[str, float]] = {}    # artifact digest -> numbers, deepest stage
-            for t in store.trials(cid):
+            for t in store.trials(cid, current=True):
                 c = t.candidate or {}
                 meta = c.get("meta") or {}
                 if t.stage == "prototype" and t.status == "ok" and meta.get("kind") == "prototype" \

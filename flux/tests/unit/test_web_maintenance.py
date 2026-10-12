@@ -192,6 +192,11 @@ def test_the_admin_runs_tasks_and_an_owner_runs_a_loops_task_on_their_loop_only(
     assert c["bob"].post("/api/apps/x/maintenance/tables", headers=H).status_code == 404, "a server task is the admin's"
     assert c["bob"].post("/api/apps/x/maintenance/documents", headers=H).json()["ok"]
     assert c["bob"].post("/api/apps/x/maintenance/integrity", headers=H).json()["ok"]
+    started = []                                   # D988: re-evaluation starts the loop, with its flag
+    from flux_web.runs import RunManager
+    monkeypatch.setattr(RunManager, "start", lambda self, whose, name, d, doc, rec, options, by=None: started.append(options))
+    got = c["bob"].post("/api/apps/x/maintenance/reevaluate", headers=H).json()
+    assert got["ok"] and started and started[0]["reevaluate"] and started[0]["passes"] == 1, got
     assert c["bob"].post("/api/apps/x/maintenance/backups", headers=H).status_code == 404
     assert c["bob"].post("/api/admin/maintenance/backups/run", json={}, headers=H).status_code == 403
     assert c["ada"].post("/api/admin/maintenance/backups/run", json={}, headers=H).json()["ok"]
@@ -362,3 +367,16 @@ def test_failed_backup_preserves_existing_snapshots_and_removes_partial_files(tm
     monkeypatch.setattr("flux_web.maintenance.os.replace", fail_publish)
     got = m.run("backups", by="ada")
     assert not got["ok"] and "disk full" in got["said"] and set(root.iterdir()) == before
+
+
+def test_reevaluate_starts_a_run_on_one_idle_loop_only(tmp_path):
+    """D988: Invalidate + re-evaluate is a run of the loop: started on one idle loop, never on all."""
+    store, d = _store(tmp_path), _loop(tmp_path)
+    started = []
+    got = _m(store, [("ada", "x", d)]).run("reevaluate", by="ada", loop=("ada", "x"), start=lambda: started.append(1))
+    assert got["ok"] and started == [1] and "started" in got["said"]
+    busy = _m(store, [("ada", "x", d)], live={("ada", "x")}).run("reevaluate", by="ada", loop=("ada", "x"),
+                                                                 start=lambda: started.append(2))
+    assert not busy["ok"] and "running" in busy["said"] and started == [1]
+    everywhere = _m(store, [("ada", "x", d)]).run("reevaluate", by="ada")
+    assert not everywhere["ok"] and started == [1]

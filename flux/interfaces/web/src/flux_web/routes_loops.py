@@ -74,7 +74,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         if key not in TASKS or not TASKS[key].per_loop:
             raise HTTPException(404, f"no task {key} for a loop")
         try:
-            return maintenance.run(key, by=user.name, loop=(whose.name, name))
+            again = (lambda: ctx.start_loop(name, RunOptions(passes=1, reevaluate=True), owner, user)) \
+                if key == "reevaluate" else None                    # D988: a run of the loop
+            return maintenance.run(key, by=user.name, loop=(whose.name, name), start=again)
         except ValueError as exc:
             raise fail(exc) from exc
         except RuntimeError as exc:
@@ -880,7 +882,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             runs.start(whose, name, d, meta["document"], record_name(d / meta["document"]), body.model_dump(), by=user)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        w.set_meta(name, last_start_digest=w.inputs_digest(name), last_options=body.model_dump())    # D693
+        w.set_meta(name, last_start_digest=w.inputs_digest(name),                                    # D693
+                   **({} if body.reevaluate else {"last_options": body.model_dump()}))           # D988: not repeated
         store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
         return {"ok": f"{name} started: it resumes from its record"}
 

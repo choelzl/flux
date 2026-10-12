@@ -67,6 +67,9 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
          "counts them. Reports them; deletes them when told to.", 168, False, {"delete": False}, per_loop=True),
+    Task("reevaluate", "Invalidate + re-evaluate all", "After the checks or measurement scripts change "
+         "(D988): one run checks and measures every design on record again; the earlier results stay as "
+         "history, no longer counted. Started on one loop only.", 168, False, per_loop=True),
     Task("integrity", "Check database integrity", "Read-only SQLite integrity checks on the server database "
          "and stopped loops' out/*.db records. Reports problems without repairing or deleting data.",
          168, False, per_loop=True),
@@ -171,9 +174,12 @@ class Maintenance:
             threading.Thread(target=lambda: [self.run(k, by="schedule") for k in keys], daemon=True,
                              name="flux-maintenance").start()
 
-    def run(self, key: str, *, by: str = "schedule", loop: tuple[str, str] | None = None) -> dict[str, Any]:
-        """One task now; its result (also kept, and in the audit trail). `loop`: (user, app) only."""
+    def run(self, key: str, *, by: str = "schedule", loop: tuple[str, str] | None = None,
+            start: Callable[[], Any] | None = None) -> dict[str, Any]:
+        """One task now; its result (also kept, and in the audit trail). `loop`: (user, app) only;
+        `start`: how a task that is a run (re-evaluate) starts it."""
         t = TASKS[key]
+        self._start = start
         if loop is not None and not t.per_loop:
             raise ValueError(f"{t.title} is the server's, not a loop's")
         if not self._lock.acquire(blocking=False):
@@ -463,6 +469,15 @@ class Maintenance:
             st = f.stat()
             self.store.server_set("refusals_read", {"ino": st.st_ino, "offset": st.st_size - len(late)})
         return f"{dropped} refused connection(s) older than {p['days']:g} days removed", True
+
+    def _reevaluate(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        """D988: not a clean-up of its own but a run of the loop; never on a schedule, never on all."""
+        if loop is None or getattr(self, "_start", None) is None:
+            raise ValueError("re-evaluation is started on one loop, from its settings")
+        if self.live(*loop):
+            raise ValueError("the loop is running: stop it first")
+        self._start()
+        return "started: every design on record is checked and measured again (Live shows it)", True
 
     def _stale(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
         idle, busy = self._loops(loop)

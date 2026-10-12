@@ -369,7 +369,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         for camp in store.list_campaigns():
             if campaign is not None and camp["campaign_id"] != campaign:
                 continue
-            for t in store.trials(camp["campaign_id"], status="ok"):
+            for t in store.trials(camp["campaign_id"], status="ok", current=True):
                 if until is not None and _when(t.created_at) > until:
                     continue
                 if t.result is None or not t.stage or t.stage in _NOT_MEASURED:

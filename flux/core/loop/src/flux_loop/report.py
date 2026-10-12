@@ -108,7 +108,7 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
             if docs:
                 objectives = Objectives.from_doc((docs[-1].get("detail") or {}).get("objectives") or [])
         rows: list[Row] = []
-        for t in store.trials(cid, status="ok"):
+        for t in store.trials(cid, status="ok", current=True):
             if until is not None and _when(t.created_at) > until:
                 continue
             if t.result is None or not t.stage or t.stage in ("gate", "admit", "prototype"):

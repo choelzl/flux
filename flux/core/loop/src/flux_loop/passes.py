@@ -171,6 +171,12 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
     n = rests = 0
     together = False
     with carrying() as run_mark:
+        if getattr(request, "reevaluate", False):              # D988: one pass over the record, then rest
+            mark("pass", n=1, reevaluate=True)
+            say("\n── re-evaluation: every design on record, checked and measured again ──")
+            out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
+            mark("ended", why="re-evaluation done")
+            return out
         if getattr(request, "baseline", False):
             from flux_profile import tagged
 

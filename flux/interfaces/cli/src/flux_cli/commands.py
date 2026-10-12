@@ -292,6 +292,8 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         overrides["prototype"] = False
     if getattr(args, "screen_only", False):
         overrides["screen_only"] = True
+    if getattr(args, "reevaluate", False):
+        overrides["reevaluate"] = True
     if getattr(args, "regenerate", None):
         overrides["regenerate"] = tuple("*" if o == "all" else o for o in args.regenerate)
     halves = tuple(getattr(args, "agent", ()) or ())

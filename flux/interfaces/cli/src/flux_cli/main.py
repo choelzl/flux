@@ -182,6 +182,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--regenerate", nargs="+", default=(), metavar="PART",
                        help="Parts to draft again instead of resuming from the record; all for every part.")
     run_p.add_argument("--screen-only", action="store_true", help="Stop the chain at the synthesis screen.")
+    run_p.add_argument("--reevaluate", action="store_true",
+                       help="Invalidate the record's checks and measurements and check and measure every design on it again (D988).")
     run_p.add_argument("--json", default=None, metavar="FILE", help="Also write the answer as JSON: the decision, the frontier, what was refused, the application's own result.")
     run_p.add_argument("--no-prototype", action="store_true", help="No prototype stage: the target directly.")
     run_p.add_argument("--no-patching", action="store_true", help="Repair by rewrite, not by edits.")
