@@ -889,6 +889,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             if body.document not in [x["path"] for x in docs]:
                 raise HTTPException(400, f"{name} has no problem {body.document!r}")
             meta = w.set_meta(name, document=body.document)
+        elif body.reevaluate or body.reevaluate_of:
+            pass                                   # D1009: a re-evaluation is of the record shown -- the current problem's
         elif sum(x["ok"] for x in docs) > 1:
             raise HTTPException(409, f"{name} has {sum(x['ok'] for x in docs)} problems: say which one to start ("
                                 + ", ".join(x["path"] for x in docs if x["ok"]) + ")")

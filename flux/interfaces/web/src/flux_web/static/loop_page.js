@@ -307,8 +307,17 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   }
   async function askView() {
     const my = ++askSeq;
-    const list = await api(`/apps/${enc(name)}/asks${qs}`).catch(() => []);
+    let list;
+    try { list = await api(`/apps/${enc(name)}/asks${qs}`); }
+    catch (_) {
+      // D1009: the server away (a restart) -- keep what is shown, say so, try again; never an empty list
+      if (!askOpen || show.stale() || my !== askSeq) return;
+      askBox.querySelector(".ask-offline") || askBox.prepend(h("p", { class: "ask-offline muted small" }, "Reconnecting to the server…"));
+      clearTimeout(askTimer); askTimer = setTimeout(askView, 3000);
+      return;
+    }
     if (!askOpen || show.stale() || my !== askSeq) return;
+    askBox.querySelector(".ask-offline")?.remove();
     askBusy = list.some(a => a.running);
     clearTimeout(askTimer);
     if (askBusy) askTimer = setTimeout(askView, 3000);
