@@ -11,7 +11,8 @@ const isModel = n => /^\s*(llm\b|model)/i.test(String(n.name));
 export function candidateOf(n) {
   const stack = [n];
   while (stack.length) {
-    const x = stack.shift(), m = /^(?:generate|test|stage|estimate)\s+(\S+)/i.exec(String(x.why || ""));
+    const x = stack.shift(), why = String(x.why || "");
+    const m = /^(?:stage|estimate)\s+\S+\s+(\S+)/i.exec(why) || /^(?:generate|test)\s+(\S+)/i.exec(why);   // a measurement names its stage first
     if (m) return m[1];
     stack.push(...(x.kids || []));
   }

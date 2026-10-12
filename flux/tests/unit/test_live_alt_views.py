@@ -83,3 +83,9 @@ def test_the_inspector_reads_a_check_and_a_measurement_from_what_they_printed():
       m.metricsOf("fmax_mhz=3162.34 area_um2=4.47606 cells=45 note=x power_w=7.5e-05")]""")
     assert got[0]["failing"] == 2 and got[0]["of"] == 204 and got[1] == {"failing": 0, "of": None, "index": 0} and got[2] is None
     assert got[3] == {"fmax_mhz": 3162.34, "area_um2": 4.47606, "cells": 45, "power_w": 7.5e-05}
+
+
+def test_a_measurement_names_its_candidate_after_its_stage():
+    got = run("""m => [m.candidateOf({why: "stage screen lut-chunk=4", kids: []}), m.candidateOf({why: "estimate place tree-chunk=2", kids: []}),
+      m.candidateOf({why: "generate lut-chunk=4", kids: []}), m.candidateOf({why: "test lut-chunk=4", kids: []}), m.candidateOf({why: "decide", kids: []})]""")
+    assert got == ["lut-chunk=4", "tree-chunk=2", "lut-chunk=4", "lut-chunk=4", ""]

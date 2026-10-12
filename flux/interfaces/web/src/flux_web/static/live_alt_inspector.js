@@ -145,14 +145,18 @@ function measured(env) {
 }
 /** A choice (P9): what was chosen, and the frontier it was chosen from, sorted by the goals. */
 function chooseBody(n, env) {
-  const f = fieldsOf(n), text = Object.values(f).map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ");
+  // the decision may be the task's own or a task's under it (the outer "decide" holds the inner one)
+  const all = [], walk = x => { all.push(fieldsOf(x)); (x.kids || []).forEach(walk); }; walk(n);
+  const said = all.find(f => f.decision) || {};
+  const text = String(said.decision || "") || all.map(o => Object.values(o).map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ")).join(" ");
   const rows = [...measured(env).entries()], goals = (env.goals?.() || []).filter(g => g.metric);
   const cols = (goals.length ? goals.map(g => g.metric) : Object.keys(rows[0]?.[1] || {})).slice(0, 3);
   const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
   const g0 = goals[0], sign = g0 ? (/max/i.test(g0.direction || "") ? -1 : 1) : 0;
   if (g0) rows.sort((a, b) => sign * ((a[1][g0.metric] ?? Infinity * sign) - (b[1][g0.metric] ?? Infinity * sign)));
   return [h("div", { class: "task-inspector" },
-    chosen ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen}`)) : "",
+    chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen || said.decision}`),
+      said["decided by"] ? h("span", { class: "muted" }, said["decided by"]) : "") : "",
     rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
       h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k); return h("th", { class: "num" }, k, g ? ` ${/max/i.test(g.direction || "") ? "↑" : "↓"}` : ""); }))),
       h("tbody", {}, rows.map(([c, m]) => h("tr", { class: c === chosen ? "alt-chosen" : "" }, h("td", {}, c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, m[k] != null ? fmt(m[k]) : "—"))))))) : "",
@@ -207,8 +211,8 @@ export function passSummary(p, nodes, env) {
   const steps = top.filter(n => !["setup"].includes(phaseKind(n)));
   return [h("div", { class: "detail-head alt-ihead" }, h("h2", {}, p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · baseline" : `Pass ${p}`),
       h("span", { class: `pill ${live ? "live" : failed ? "bad" : "ok"}` }, live ? h("span", { class: "alt-spin" }) : "", live ? "running" : failed ? "failed" : "done"), h("span", { class: "muted" }, dur(t1 - t0))),
-    cand ? h("div", { class: "alt-result ok", style: `--k:${COLORS.search}` }, h("span", { class: "alt-big" }, cand),
-      h("span", { class: "muted" }, Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : "",
+    cand ? h("div", { class: "alt-tried" }, h("div", { class: "alt-label" }, "Tried"), h("b", {}, cand),
+      h("span", { class: "mono muted small" }, Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : "",
     h("div", {}, h("div", { class: "alt-label" }, "Where the time went"),
       h("div", { class: "alt-bar tall" }, order.map(k => h("i", { style: `width:${100 * kinds[k] / total}%;background:${COLORS[k]}`, title: `${workLabel(k)} ${dur(kinds[k])}` }))),
       h("div", { class: "mono muted small" }, order.slice().sort((a, b) => kinds[b] - kinds[a]).filter(k => kinds[k] >= 1).map(k => `${workLabel(k)} ${dur(kinds[k])}`).join(" · ") || "all under a second")),
