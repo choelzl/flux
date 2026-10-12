@@ -227,7 +227,8 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
 - **Absolute / Relative** (shared toggle): Relative is percent change from the latest baseline
   for the same metric, stage and group; without one, from accepted designs' P90 (higher-better) or
   P10 (lower-better). Hover for absolute value, reference, sample count. Undefined shows —.
-- **Dictionary metrics:** one test at a time from a dropdown, or **All** to unroll them. Tests
+- **Dictionary metrics:** folded to the aggregate the document names (its method beside the name, and in
+  Settings › Preferences' Aggregate column), or **All** to unroll every test (D1008). Tests
   missing or null/empty/NaN stay unmeasured, not zero.
 - **Baselines** are references, never the decision or a search start. Pass 0 keeps the best
   eligible search design if its measurements are fresh; unchanged successful baselines are reused.

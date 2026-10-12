@@ -1020,25 +1020,26 @@ objectives: [{metric: timings.fast, goal: 15}]
             try:
                 def page(path="results", ready="document.querySelector('table.designs')"):
                     r.page(f"#/app/{name}" + (f"/{path}" if path else ""), ready, path or "Overview")
-                def select(test):
-                    b.js("const s = document.querySelector('.dictionary-select'); s.value = arguments[0]; s.dispatchEvent(new Event('change')); return 1", f"timings.{test}" if test else "timings")
                 page()
-                r.check("dictionary tables initially show one named test", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 2 && document.querySelector('.dictionary-select').value === 'timings.fast' && !document.querySelector('.column-picker')"))
-                r.check("zero is a measured value", b.js("return document.querySelector('table.designs tbody td.num').textContent") == "0")
-                select("")
-                r.check("the parent aggregate is selectable with its unit", b.js("return document.querySelector('.dictionary-select option:checked').textContent === 'Aggregate (mean)' && [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '10' && td.title.includes('ms'))"))
-                select("slow")
-                r.check("missing dictionary tests remain empty", b.js("return document.querySelector('table.designs tbody td.num').textContent") == "")
+                r.check("D1008: a dictionary shows its document's aggregate, named, with no test to pick", b.js(
+                    "return document.querySelectorAll('table.designs th.measurement-head').length === 2 && !document.querySelector('.dictionary-select, .column-picker')"
+                    " && document.querySelector('.dictionary-name').textContent === 'timings · mean' && [...document.querySelectorAll('table.designs th.measurement-head')].some(th => th.dataset.label === 'timings')"))
+                r.check("zero is a measured value", b.js("return [...document.querySelectorAll('table.designs tbody tr')].some(tr => tr.querySelector('td.num[data-label=timings]')?.textContent === '0')"))
+                r.check("the aggregate keeps its unit", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '10' && td.title.includes('ms'))"))
                 b.click(".relative-values")
-                r.check("relative dictionary values use their own baseline", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '-20%' && td.title.includes('ms'))"))
+                r.check("relative dictionary values use their own baseline", b.js("return [...document.querySelectorAll('table.designs td.num')].some(td => td.textContent === '-100%' && td.title.includes('ms'))"))
                 b.click(".relative-values")
                 b.click(".dictionary-expand")
+                r.check("missing dictionary tests remain empty", b.js("return [...document.querySelectorAll('table.designs td.num[data-label=\"timings.never\"]')].every(td => td.textContent === '')"))
                 r.check("All unrolls grouped subcolumns and keeps unavailable tests", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && document.querySelector('th[scope=colgroup][title=timings]').colSpan === 4 && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8)"))
                 b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings.fast')", what="grouped table column labels")
                 page("", "document.querySelector('.best-n')")
-                r.check("Decision shares dictionary selection and expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && document.querySelector('.dictionary-select').value === 'timings.slow'"))
+                r.check("Decision shares dictionary expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && !document.querySelector('.dictionary-select')"))
                 page("settings", "document.querySelector('.measurement-preferences .measurement-options')")
                 r.check("existing loops open Settings on Preferences", b.js("return document.querySelector('.subtabs [role=tab].on').textContent") == "Preferences")
+                r.check("D1008: Preferences shows each dictionary's aggregate, read from the document", b.js(
+                    "const t = document.querySelector('.measurement-options'), row = [...t.querySelectorAll('tbody tr')].find(tr => tr.cells[0].textContent === 'timings');"
+                    " return [...t.querySelectorAll('thead th')].some(th => th.textContent === 'Aggregate') && row && row.cells[4].textContent === 'mean'"))
                 b.click('.measurement-options input[data-metric="timings.fast"]')
                 page()
                 r.check("Preferences hides dictionary columns in Results", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 4 && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
@@ -1046,8 +1047,6 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.check("Hidden temporarily shows ignored tests without changing preferences", b.js("return document.querySelectorAll('table.designs th.hidden-measurement').length === 1 && document.querySelectorAll('table.designs th.measurement-head').length === 5"))
                 b.click(".show-hidden-columns")
                 b.click(".dictionary-expand")
-                select("never")
-                r.check("an unavailable test can be selected without becoming zero", b.js("return [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').textContent === '')"))
                 r.page("#/", "document.querySelector('#main')", "home before dictionary reload")
                 r.preferences(name)
                 b.js("localStorage.clear(); window.__dictionaryReload = true; location.reload(); return 1")
@@ -1055,7 +1054,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                 b.js(watch)
                 b.js(stub, name, payload)
                 page()
-                r.check("dictionary settings restore from the server with browser storage cleared", b.js("return document.querySelector('.dictionary-select').value === 'timings.never' && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
+                r.check("dictionary settings restore from the server with browser storage cleared", b.js("return !document.querySelector('.dictionary-select') && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
                 page("settings/problem", "document.querySelector('.flux-crafter .fc-stepbar')")
                 parsed = b.ajs("""const done = arguments[arguments.length - 1]; fetch('/api/apps/' + arguments[0] + '/document').then(r => r.json())
                   .then(v => done({error: v.error, stages: window.FluxCrafter.fromDoc(v.raw, v.normal || v.raw).state.stages}));""", name)
@@ -1093,6 +1092,7 @@ objectives: [{metric: timings.fast, goal: 15}]
                 }
                 if (path.startsWith(app + '/asks/') && path.endsWith('/agent'))
                   return json({running: false, agent: 'opencode', steps: [{k: 'think', text: 'the record says two'}, {k: 'text', text: 'Design two is best'}], 'steps total': 2});
+                if (path === app + '/asks' && window.__askDown && !(o && o.method === 'POST')) throw new TypeError('Failed to fetch');   // D1009
                 if (path === app + '/asks') {
                   if (o.method === 'POST') {
                     const body = JSON.parse(o.body); window.__askPosted.push(body);
@@ -1112,6 +1112,12 @@ objectives: [{metric: timings.fast, goal: 15}]
             try:
                 r.page(f"#/app/{name}/ask", "document.querySelector('.drawer.open .ask-reply')", "chat drawer")
                 b.wait("getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="open drawer transition")
+                b.js("window.__askDown = true; return 1")              # D1009: the server restarting
+                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.wait("document.querySelector('.ask-offline')", what="Talk says it reconnects")
+                r.check("D1009: with the server away, Talk keeps its conversations and says it reconnects", b.js("return document.querySelectorAll('.ask-card').length === 2"))
+                b.js("window.__askDown = false; return 1")
+                b.wait("!document.querySelector('.ask-offline') && document.querySelectorAll('.ask-card').length === 2", timeout=15, what="Talk back without a reload")
                 r.check("Ask keeps conversations separate and renders answer text safely", b.js("return document.querySelectorAll('.ask-card').length === 2 && !document.querySelector('.ask-agent img')"))
                 r.check("an older conversation starts folded, Reply at its top; the newest stays open (D990)", b.js(
                     'const o = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"), n = document.querySelector(`[data-ask-toggle="${arguments[1]}"]`).closest(".ask-card");'

@@ -62,8 +62,13 @@ export function relativeMeasurement(ctx, metric, fallback = false, preferences =
 export function measurementPreferences(ctx, metrics, groups = {}, defaults = metrics.slice(0, 1)) {
   const prefs = resultPreferences(ctx), columns = measurementColumns(ctx, metrics, () => {}, groups);
   const main = new Set(mainMeasurements(ctx, metrics, defaults));
+  // D1008: a dictionary's aggregate, as its document says -- shown here, set in the document
+  const dicts = Object.fromEntries(Object.entries(groups).filter(([, g]) => g && g.type === "dict"));
+  const aggregate = Object.keys(dicts).length ? (metric) => h("td", { class: "muted", title: dicts[metric] ? "set in the document (the measurement's aggregate:)" : null },
+    dicts[metric] ? (dicts[metric].aggregate || "—") : "") : () => "";
   const table = h("table", { class: "list compact measurement-options" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"))),
+    h("thead", {}, h("tr", {}, h("th", {}, "Metric"), h("th", {}, "Visible"), h("th", {}, "Main"), h("th", {}, "%"),
+      Object.keys(dicts).length ? h("th", { title: "How a dictionary's tests make its one number" }, "Aggregate") : "")),
     h("tbody", {}, metrics.map(metric => {
       const visible = columns.picker.querySelector(`input[data-metric="${CSS.escape(metric)}"]`);
       visible.setAttribute("aria-label", `Show ${metric} column`);
@@ -77,7 +82,7 @@ export function measurementPreferences(ctx, metrics, groups = {}, defaults = met
           const saved = prefs.read().relativeMetrics;
           prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [metric]: relative.checked } });
         } });
-      return h("tr", {}, h("td", { class: "mono", title: metric }, metric), h("td", {}, visible), h("td", {}, primary), h("td", {}, relative));
+      return h("tr", {}, h("td", { class: "mono", title: metric }, metric), h("td", {}, visible), h("td", {}, primary), h("td", {}, relative), aggregate(metric));
     })));
   if (!ctx.mine) for (const input of table.querySelectorAll("input")) input.disabled = true;
   return h("div", { class: "scroll-x" }, table);
@@ -106,9 +111,10 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
       boxes.set(metric, box);
       return h("label", { class: "column-option" }, box, h("span", { title: metric }, metric));
     }));
+  // D1008: folded, a dictionary shows the aggregate its document names (no picking a test); All unrolls every test
   function selection(name) {
     const available = dictionaries[name].filter(m => showHidden || !hidden.has(m)), saved = choices[name];
-    return { selected: available.includes(saved?.selected) ? saved.selected : available[0], expanded: saved?.expanded === true };
+    return { selected: available.includes(name) ? name : available[0], expanded: saved?.expanded === true };
   }
   function controls() {
     const n = metrics.filter(m => hidden.has(m)).length;
@@ -119,12 +125,9 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
     toggle.title = showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns";
     for (const [metric, box] of boxes) box.checked = !hidden.has(metric);
     dictionaryControls.replaceChildren(...Object.entries(dictionaries).map(([name, ms]) => {
-      const current = selection(name);
-      const select = h("select", { class: "dictionary-select", "aria-label": `${name} test`, disabled: !current.selected,
-        onchange: () => { choices[name] = { ...selection(name), selected: select.value, expanded: false }; changed(); } },
-        ms.filter(m => showHidden || !hidden.has(m)).map(m => h("option", { value: m, selected: current.selected === m },
-          m === name ? `Aggregate (${groups[name].aggregate})` : m.slice(name.length + 1))));
-      return h("div", { class: "dictionary-control" }, h("label", {}, name, " ", select),
+      const current = selection(name), how = groups[name].aggregate;
+      return h("div", { class: "dictionary-control" }, h("span", { class: "dictionary-name", title: how ? `${name}: the ${how} of its tests, as the document says` : name },
+          name, how ? h("span", { class: "muted small" }, ` · ${how}`) : ""),
         h("button", { type: "button", class: "small dictionary-expand", "data-group": name,
           "aria-pressed": String(current.expanded), disabled: ms.length < 2 || !current.selected,
           title: current.expanded ? `Show one ${name} test` : `Show all ${name} tests`, onclick: () => {
