@@ -149,7 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     points = [(n, t - startup) for n, t in measured if t - startup >= floor]
     print(f"start-up {startup * 1000:.3f} ms taken off; {len(points)} of {len(measured)} sizes fitted", file=sys.stderr)
     if len(points) < 3:
-        return failed(f"only {len(points)} sizes ran over {a.floor_ms:g} ms after start-up; give larger sizes "
+        return failed(f"only {len(points)} sizes ran over {floor * 1000:.0f} ms after start-up "
+                      f"(the larger of --floor-ms and the start-up itself); give larger sizes "
                       "(--start, --sizes) or a lower --floor-ms")
     k, r2 = fit(points)
     if checking:
