@@ -87,10 +87,10 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     const acts = [];
     if (st.running && (canRun || isOwner)) {
       const stopNow = st.stop_requested && !st.restart_requested;
-      acts.push(act(stopNow ? "Stop NOW" : "Stop", async () => {
+      acts.push(act("Stop", async () => {
         if (await stopLoop(name, stopNow, owner)) await refresh();
       }, { cls: stopNow ? "danger solid" : "", title: stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass" }));
-      if (canRun) acts.push(act(st.restart_requested ? "Restart NOW" : "Restart", async () => {
+      if (canRun) acts.push(act("Restart", async () => {
         if (await restartLoop(name, !!st.restart_requested, owner)) await refresh();
       }, { cls: st.restart_requested ? "danger solid" : "", title: st.restart_requested ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings" }));
     } else if (!st.running && canRun && info.document) {

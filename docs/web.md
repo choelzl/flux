@@ -109,8 +109,8 @@ header has **Start**, or **Stop** / **Restart** while active.
   admin's and the loop's Settings. Offers the last start's choices; runs the check when inputs
   changed since it last ran; if it fails the button reads **Start anyway**. Resumes from the
   record. Says when the document needs migrating.
-- **Stop / Restart:** one press schedules it after the pass; the button turns red (**Stop NOW** /
-  **Restart NOW**); pressing again asks to confirm abandoning the pass (cancel keeps the
+- **Stop / Restart:** one press schedules it after the pass; the button turns red (its label stays,
+  D1018); pressing again asks to confirm abandoning the pass (cancel keeps the
   scheduled action). Stop replaces a pending restart. Restart keeps problem and run settings and
   subtracts completed passes from a finite budget. Requests persist on the server. The Loops list and
   Admin › Loops work the same way (D1006).

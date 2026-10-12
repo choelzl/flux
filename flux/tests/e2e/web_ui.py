@@ -1601,10 +1601,10 @@ def flows(r: Run) -> None:
         r.check("a note sent is confirmed and listed under the line", True)
         b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
         r.button("Stop", ".page-head")
-        b.wait("[...document.querySelectorAll('.page-head button')].some(b => b.textContent==='Stop NOW') || !document.querySelector('.page-head .pill.live')", what="stop scheduled")
+        b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b => b.textContent==='Stop') || !document.querySelector('.page-head .pill.live')", what="stop scheduled")
         if b.js("return !!document.querySelector('.page-head .pill.live')"):
-            r.button("Stop NOW", ".page-head")
-            r.dialog_button("Stop NOW")
+            r.button("Stop", ".page-head")
+            r.dialog_button("Stop")
         b.wait("!document.querySelector('.page-head .pill.live')", timeout=60, what="stopped")
         r.check("stopped", True)
         # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped

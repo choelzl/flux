@@ -65,13 +65,13 @@ async function startLoopOwned(name) {
   return true;
 }
 async function stopLoop(name, now, owner) {
-  if (now && !await confirmDialog(`Stop ${name} now?`, "This abandons the current pass. What was already measured is kept.", { ok: "Stop NOW", danger: true })) return false;
+  if (now && !await confirmDialog(`Stop ${name} now?`, "This abandons the current pass. What was already measured is kept.", { ok: "Stop", danger: true })) return false;
   const r = await api(`/apps/${enc(name)}/stop${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
   return true;
 }
 async function restartLoop(name, now = false, owner) {
-  if (now && !await confirmDialog(`Restart ${name} now?`, "This abandons the current pass, then resumes with the same run settings and remaining pass budget. Files, results and logs are kept.", { ok: "Restart NOW", danger: true })) return false;
+  if (now && !await confirmDialog(`Restart ${name} now?`, "This abandons the current pass, then resumes with the same run settings and remaining pass budget. Files, results and logs are kept.", { ok: "Restart", danger: true })) return false;
   const r = await api(`/apps/${enc(name)}/restart${owner ? "?owner=" + enc(owner) : ""}`, { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
   return true;
@@ -201,9 +201,9 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
     // the list keeps still while focus is in it: the pressed button lets go, so it turns red at once
     const redrawn = () => { document.activeElement?.blur?.(); return pageRefresh && pageRefresh(); };
     const runningActions = () => [
-      owner && !canRun ? "" : act(stopNow ? "Stop NOW" : "Stop", () => stopLoop(name, stopNow, owner).then(redrawn),
+      owner && !canRun ? "" : act("Stop", () => stopLoop(name, stopNow, owner).then(redrawn),
         { cls: `small${stopNow ? " danger solid" : ""}`, title: stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass" }),
-      canRun ? act(restartNow ? "Restart NOW" : "Restart", () => restartLoop(name, restartNow, owner).then(redrawn),
+      canRun ? act("Restart", () => restartLoop(name, restartNow, owner).then(redrawn),
         { cls: `small${restartNow ? " danger solid" : ""}`, title: restartNow ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings" }) : "",
     ];
     const acts = owner ? (!canRun ? [h("span", { class: "pill" }, l.perm === "edit" ? "can edit" : "watching")]
