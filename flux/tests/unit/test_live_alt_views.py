@@ -63,3 +63,23 @@ def test_what_each_box_is_set_to_comes_from_the_document():
     got = run(f"m => m.docNotes({json.dumps(raw)}, 'problem.yaml')")
     assert got["search"] == "sweep" and got["design"] == "gen.py" and got["check"] == "3 checks" and got["measure"] == "2 measurements"
     assert got["choose"] == "fmax_mhz ↑ · area_um2 ↓ +1" and got["Document"] == "problem.yaml"
+
+
+def run_inspector(js):
+    uri = lambda f: "data:text/javascript;base64," + base64.b64encode(  # noqa: E731
+        (STATIC / f).read_text().replace('"./work_style.js"', json.dumps(WS)).replace('"./live_alt_model.js"', json.dumps(MODEL)).encode()).decode()
+    views = uri("live_alt_views.js")
+    ui = "data:text/javascript;base64," + base64.b64encode(b"export const dur = s => s + 's'; export const h = () => null;").decode()
+    src = (STATIC / "live_alt_inspector.js").read_text().replace('"./ui.js"', json.dumps(ui)).replace('"./work_style.js"', json.dumps(WS)).replace('"./live_alt_views.js"', json.dumps(views))
+    mod = "data:text/javascript;base64," + base64.b64encode(src.encode()).decode()
+    r = subprocess.run(["node", "-e", f"import({json.dumps(mod)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_the_inspector_reads_a_check_and_a_measurement_from_what_they_printed():
+    """D982: a check's "N failing of M" and a measurement's name=value are the result shown first."""
+    got = run_inspector("""m => [m.failingOf("FAIL a=1\\nFAIL a=2\\n2 failing of 204"), m.failingOf("0 failing"), m.failingOf("no count"),
+      m.metricsOf("fmax_mhz=3162.34 area_um2=4.47606 cells=45 note=x power_w=7.5e-05")]""")
+    assert got[0]["failing"] == 2 and got[0]["of"] == 204 and got[1] == {"failing": 0, "of": None, "index": 0} and got[2] is None
+    assert got[3] == {"fmax_mhz": 3162.34, "area_um2": 4.47606, "cells": 45, "power_w": 7.5e-05}

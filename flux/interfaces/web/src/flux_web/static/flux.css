@@ -805,6 +805,39 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 /* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
 .alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
 .alt-cut { fill: var(--panel); }
+/* D982: LiveAlt's inspector -- the head in the left side's words, what a task gave first */
+.alt-ihead { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.alt-ihead h2 { font-family: var(--sans); font-size: 15px; margin: 0; }
+.alt-stripe { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+.alt-head-tools { display: inline-flex; gap: 4px; } .alt-icon-btn { min-width: 26px; padding-inline: 6px; font-family: var(--mono); }
+.alt-ihead .pill .alt-spin { display: inline-block; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; }
+.alt-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 2px; font-size: 12px; }
+.alt-pchip { border: 0; border-radius: 10px; padding: 1px 8px; font-size: 12px; background: color-mix(in srgb, var(--k) 24%, var(--panel)); color: var(--ink); }
+.alt-pchip:hover { background: color-mix(in srgb, var(--k) 40%, var(--panel)); }
+.alt-meta { margin: 2px 0 8px; font-size: 12.5px; } .alt-meta .mono { font-size: 11.5px; }
+.alt-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+.alt-bar { display: flex; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-bottom: 8px; } .alt-bar.tall { height: 10px; margin-bottom: 3px; } .alt-bar i { display: block; height: 100%; }
+.alt-run { margin-bottom: 4px; }
+.alt-tail { min-height: 2.5em; max-height: 12em; overflow: auto; font-size: 12px; }
+.alt-result { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 8px 10px; margin: 2px 0 10px; border-radius: 7px; background: color-mix(in srgb, var(--k) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--k) 35%, var(--line)); }
+.alt-big { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.alt-cases { font-size: 12px; margin-bottom: 8px; }
+.alt-table-wrap { overflow-x: auto; margin-bottom: 8px; } .alt-metrics td.num, .alt-metrics th.num { text-align: right; }
+.alt-change.up { color: var(--ok); } .alt-change.down { color: var(--bad); }
+.alt-metrics tr.alt-chosen td { background: color-mix(in srgb, #e8804f 20%, var(--panel)); }
+.alt-steps { display: grid; gap: 2px; margin: 4px 0 10px; }
+.alt-step-row { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 8px; border: 0; border-radius: 4px; text-align: left; font-size: 13px; background: color-mix(in srgb, var(--k) 24%, var(--panel)); }
+.alt-step-row:hover { background: color-mix(in srgb, var(--k) 38%, var(--panel)); }
+.alt-step-row .alt-task-name .muted { font-size: 12px; }
+.alt-fold-block { border-top: 1px solid var(--line); padding: 6px 0 2px; } .alt-fold-block > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 13px; }
+.alt-fold-block > summary::-webkit-details-marker { display: none; } .alt-fold-block > summary { list-style: none; }
+.alt-fold-block > summary::before { content: "▸"; color: var(--muted); width: 10px; flex-shrink: 0; } .alt-fold-block[open] > summary::before { content: "▾"; }
+.alt-fold-block > summary b { font-weight: 500; white-space: nowrap; }
+.alt-fold-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px var(--mono); color: var(--muted); }
+.alt-verdict { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.alt-badge { font-weight: 600; font-size: 12px; padding: 2px 10px; border-radius: 12px; }
+.alt-badge.ok { background: color-mix(in srgb, var(--ok) 16%, var(--panel)); color: var(--ok); } .alt-badge.objection { background: color-mix(in srgb, #e8804f 24%, var(--panel)); color: var(--ink); }
+.alt-pass-detail { padding-right: 150px; } .alt-pass-heading.sel .alt-task-name { text-decoration: underline; }
 .alt-task.failed .alt-task-state { color: var(--bad); }
 .alt-task.interrupted .alt-task-state { color: var(--warn); }
 .alt-task.running .alt-task-state { color: var(--run); }

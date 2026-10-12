@@ -487,6 +487,7 @@ def general_flows(r, watch):
                 r.page(f"#/app/{name}/live-alt", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "LiveAlt current activity")
                 r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
                 r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
+                r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent: claude')"))
                 r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
                 r.check("the inspector links directly to the complete current log", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/log')"))
                 r.check("agent output is visible before the collapsed full prompt", b.js("const d=document.querySelector('.alt-detail');return !!d.querySelector('.inspector-input:not([open])') && d.querySelector('.agent-view').getBoundingClientRect().height>0 && d.querySelector('.task-inspector').firstElementChild.classList.contains('agent-view')"))
@@ -518,6 +519,8 @@ def general_flows(r, watch):
                 b.click('.alt-tree [data-fold="1"]')
                 r.check("LiveAlt removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find LiveAlt tasks\"], [aria-label=\"LiveAlt task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
+                b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
+                r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
                 b.click('.alt-tree [data-task="2"]')
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
                 if os.environ.get("FLUX_E2E_SHOTS"):

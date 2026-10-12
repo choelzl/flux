@@ -6,6 +6,7 @@ import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
 import { docNotes, flowBoxes, passKind, repaired, taskLabel } from "./live_alt_views.js";
+import { passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
 const workOf = phaseKind;
@@ -18,7 +19,9 @@ export function liveAltTab(ctx) {
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
-  let foldDone = true, notes = {}, chainPass = null, openBox = null;                 // D978: ⊟ folds what has finished; the graph's chosen pass
+  let foldDone = true, notes = {}, goals = [], chainPass = null, openBox = null;
+  const NO_PASS = Symbol("no pass");
+  let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task                 // D978: ⊟ folds what has finished; the graph's chosen pass
   const close = () => {
     seq++; mounted = false;
     clearInterval(timer); timer = null;
@@ -36,8 +39,10 @@ export function liveAltTab(ctx) {
     const n = taskScope(inspector.model, "all").membership.get(id);
     pass = n == null ? "all" : String(n);
   }
+  function showPass(p) { passView = p; following = false; render(); }
   function select(id, locate = false) {
     following = false;
+    passView = NO_PASS;
     pinPass(id);
     choice = null;
     reveal = locate;
@@ -107,6 +112,10 @@ export function liveAltTab(ctx) {
     }
     if (locatedId === selected && Date.now() < locatedUntil) selectedElement(selected)?.classList.add("alt-located");
     if (!didReveal && focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+    if (passView !== NO_PASS) {
+      const m = taskScope(inspector.model, "all").membership, nodes = [...inspector.model.nodes.values()].filter(n => (m.get(n.id) ?? null) === passView);
+      detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-pass-detail", "data-pass": String(passView ?? "setup") }, passSummary(passView, nodes, { pick: id => select(id) })));
+    } else if (inspector.detail.parentNode !== detailHost) detailHost.replaceChildren(inspector.detail);
   }
   function selectedElement(id) {
     if (id == null) return null;
@@ -182,7 +191,7 @@ export function liveAltTab(ctx) {
         const failed = nodes.some(n => n.failed), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
         const name = g.p == null ? "Setup" : g.p === 0 ? "Pass 0 · baseline" : `Pass ${g.p}`;
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
-          h("button", { type: "button", class: `alt-task alt-pass-heading`, "data-pass": String(g.p ?? "setup"), onclick: () => toggleFold(key, collapsed) },
+          h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
             finished ? h("span", { class: `alt-task-state ${failed ? "failed" : "done"}`, "aria-hidden": "true" }, failed ? "✗" : "✓") : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
             h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
         if (collapsed) continue;
@@ -218,7 +227,7 @@ export function liveAltTab(ctx) {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const st = nodes.some(n => n.t1 == null) ? "running" : nodes.some(n => n.failed) ? "failed" : "done";
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
-        title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; render(); } }, p == null ? "S" : String(p));
+        title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; showPass(p); } }, p == null ? "S" : String(p));
     })) : "";
     const W = 300, X = 26, BW = W - 2 * X, BH = 34, GAP = 16, RH = 28, g = [];
     const at = {};
@@ -354,7 +363,7 @@ export function liveAltTab(ctx) {
     const pill = streamPill();
     notice.append(pill.el);
     if (startId === "current") transport = loopStream(ctx.base, ctx.qs);
-    inspector = liveTree(ctx.base, ctx.qs, () => {}, port, { unifiedDetail: true, inspectorOnly: true });
+    inspector = liveTree(ctx.base, ctx.qs, () => {}, port, { unifiedDetail: true, inspectorOnly: true, pick: id => select(id), goals: () => goals });
     loadEarlier = () => { listeners.events.onData({ ev: "hello" }); transport?.restart("events", { window: 0 }); queue(); };
     inspector.detail.classList.add("alt-detail");
     detailHost.replaceChildren(inspector.detail);
@@ -425,7 +434,9 @@ export function liveAltTab(ctx) {
     if (!validPage()) return;
     history = got;
     notes = {};
-    api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => { notes = docNotes(d.raw, d.document); queue(); }).catch(() => {});
+    api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
+      notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.filter(o => o && o.metric) : []; queue();
+    }).catch(() => {});
     const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = "current"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));
     startSel.value = history.starts.some(s => !s.running && String(s.id) === startId) ? startId : "current"; startId = startSel.value;
@@ -434,7 +445,7 @@ export function liveAltTab(ctx) {
     followBtn = h("button", { type: "button", class: "small", title: "Follow the latest task in the current pass", onclick: () => {
       choice = null;
       if (following) { following = false; pinPass(inspector.taskId()); render(); return; }
-      pass = "current"; following = true; folded.clear(); reveal = true; render();
+      pass = "current"; following = true; passView = NO_PASS; folded.clear(); reveal = true; render();
     } }, "Follow");
     controls = h("div", { class: "alt-controls" },
       followBtn, earlier,

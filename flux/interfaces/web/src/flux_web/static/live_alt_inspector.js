@@ -1,0 +1,216 @@
+// D982: LiveAlt's inspector -- a task as the left side names it, what it gave before what it was
+// given, and for the tasks that decide something, what was decided. Live's own inspector is unchanged.
+import { dur, h } from "./ui.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, phaseKind, workLabel, ownSpans } from "./work_style.js";
+import { candidateOf, taskLabel } from "./live_alt_views.js";
+
+const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
+const isTool = n => /^\s*tool\s*:/i.test(String(n.name));
+const head = n => String(n.name).toLowerCase().split(":")[0].trim();
+const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
+const running = n => n.t1 == null;
+const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : ["ok", "done"];
+const fieldsOf = n => ({ ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) });
+const stdoutOf = n => { const f = fieldsOf(n); return String(f.stdout ?? f["stdout (live tail)"] ?? ""); };
+const lines = s => String(s).split("\n").filter(l => l.trim());
+
+/** `name=value` pairs a command printed (the loop's own reading of a measurement). */
+export function metricsOf(text) {
+  const out = {};
+  for (const m of String(text).matchAll(/(?:^|\s)([A-Za-z_][\w.]*)=([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)(?=\s|$)/g)) if (!(m[1] in out)) out[m[1]] = Number(m[2]);
+  return out;
+}
+/** A check's own result line, "N failing" or "N failing of M" (every preset prints it). */
+export function failingOf(text) {
+  const all = [...String(text).matchAll(/(\d+)\s+failing(?:\s+of\s+(\d+))?/g)], m = all.at(-1);
+  return m ? { failing: Number(m[1]), of: m[2] != null ? Number(m[2]) : null, index: m.index } : null;
+}
+const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
+
+function pill(n) {
+  const [cls, text] = stateOf(n);
+  return h("span", { class: `pill ${cls}` }, running(n) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : "", text);
+}
+function stepRow(x, env) {
+  const s = summaryOf(x);
+  return h("button", { type: "button", class: "alt-step-row", style: `--k:${colorOf(x)}`, "data-task": String(x.id), onclick: () => env.pick?.(x.id) },
+    running(x) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : h("span", { class: `alt-task-state ${x.failed ? "failed" : "done"}` }, x.failed ? "✗" : "✓"),
+    h("span", { class: "alt-task-name" }, taskLabel(x), s ? h("span", { class: "muted" }, ` — ${s}`) : ""),
+    h("span", { class: "mono muted small" }, dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)));
+}
+/** One line of what a task gave: a check's failing count, a measurement's numbers, else nothing. */
+function summaryOf(x) {
+  const leaves = x.kids?.length ? x.kids.flatMap(k => k.kids?.length ? k.kids : [k]) : [x];
+  for (const l of leaves) {
+    const out = stdoutOf(l), f = failingOf(out);
+    if (f) return `${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`;
+    const m = Object.entries(metricsOf(out)).slice(0, 2);
+    if (m.length) return m.map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
+  }
+  return running(x) ? "running" : "";
+}
+function fold(key, title, summary, kids, env, attrs = {}) {
+  return h("details", { class: `alt-fold-block ${attrs.cls || ""}`, "data-fold": key, open: env.place?.folds?.get(key) || false },
+    h("summary", {}, h("b", {}, title), summary ? h("span", { class: "alt-fold-summary" }, summary) : ""), kids);
+}
+
+/** The inspector's head (P1): the task as the tree names it, its kind's stripe, state, time, Raw and
+    Fullscreen; the parents as chips that open them; the purpose and the engine's own name. */
+export function inspectorHead(n, env) {
+  const tools = env.tools();
+  for (const b of tools) if (b && b.textContent) { b.title = b.textContent; b.setAttribute("aria-label", b.textContent); b.textContent = b.textContent === "Raw" ? "{ }" : "⤢"; b.classList.add("alt-icon-btn"); }
+  const parents = []; for (let p = n.parent; p; p = p.parent) parents.unshift(p);
+  return [h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${colorOf(n)}` }),
+      h("h2", {}, taskLabel(n)), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
+    parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
+      h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id) }, taskLabel(p))])) : "",
+    h("p", { class: "alt-meta muted" }, n.why ? `${n.why} · ` : "", h("span", { class: "mono" }, n.name))];
+}
+
+/** The usual time of a task like this one (the same name and purpose's first word), from its earlier runs. */
+function usualOf(n, env) {
+  const word = String(n.why || "").split(/\s+/)[0], times = [];
+  for (const x of env.nodes.values()) if (x !== n && x.t1 != null && x.name === n.name && String(x.why || "").split(/\s+/)[0] === word) times.push(x.seconds ?? x.t1 - x.t0);
+  if (!times.length) return null;
+  times.sort((a, b) => a - b);
+  return times[Math.floor(times.length / 2)];
+}
+/** The best of each metric among the earlier runs of this measurement, by the goals' directions. */
+function bestOf(n, env) {
+  const goals = Object.fromEntries((env.goals?.() || []).map(g => [g.metric, /max/i.test(g.direction || "") ? 1 : -1]));
+  const best = {};
+  for (const x of env.nodes.values()) {
+    if (x === n || x.t1 == null || x.failed || x.name !== n.name) continue;
+    for (const [k, v] of Object.entries(metricsOf(stdoutOf(x)))) if (goals[k] && (best[k] == null || goals[k] * v > goals[k] * best[k])) best[k] = v;
+  }
+  return { best, goals };
+}
+
+/** A command (P2-P6): what it gave first -- running time and the latest lines, a check's failing
+    count and its first failures, a measurement's numbers against the best so far -- then the input,
+    stdout and stderr folded, each kept where the person left it. */
+function toolBody(n, env) {
+  const f = fieldsOf(n), p = n.params || {}, out = stdoutOf(n), err = String(f.stderr ?? f["stderr (live tail)"] ?? "");
+  const top = [];
+  if (running(n)) {
+    const took = env.now - n.t0, usual = usualOf(n, env);
+    top.push(h("div", { class: "alt-run" }, h("div", { class: "alt-label" }, `${dur(took)}${usual ? ` · usually ${dur(usual)}` : ""}`),
+      usual ? h("div", { class: "alt-bar" }, h("i", { style: `width:${Math.min(100, 100 * took / usual)}%;background:${colorOf(n)}` })) : ""));
+    if (lines(out).length) top.push(h("pre", { class: "val alt-tail", "data-k": "stdout" }, lines(out).slice(-8).join("\n")));   // the tail, once there is one
+  } else {
+    const fails = failingOf(out), metrics = metricsOf(out);
+    if (fails) {
+      const ok = fails.failing === 0, before = lines(out.slice(0, fails.index)).filter(l => !/^\s*\d+\s+failing/.test(l));
+      top.push(h("div", { class: `alt-result ${ok ? "ok" : "bad"}`, style: `--k:${ok ? colorOf(n) : "var(--bad)"}` },
+        h("span", { class: "alt-big" }, `${ok ? "✓" : "✗"} ${fails.failing} failing`), h("span", { class: "muted" }, `${fails.of != null ? `of ${fails.of} · ` : ""}exit ${f.exit ?? (n.failed ? "≠0" : 0)}`)));
+      if (!ok && before.length) top.push(h("div", {}, h("div", { class: "alt-label" }, "The first failures"),
+        h("pre", { class: "val alt-cases" }, before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : ""))));
+    } else if (Object.keys(metrics).length) {
+      const { best, goals } = bestOf(n, env);
+      top.push(h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
+        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num" }, "this design"), h("th", { class: "num" }, "best so far"), h("th", {}, ""))),
+        h("tbody", {}, Object.entries(metrics).map(([k, v]) => {
+          const b = best[k], dir = goals[k], change = b != null && b !== 0 ? (v - b) / Math.abs(b) : null;
+          const better = change == null || dir == null ? "" : dir * change > 0 ? "up" : dir * change < 0 ? "down" : "";
+          return h("tr", {}, h("td", {}, k, dir ? ` ${dir > 0 ? "↑" : "↓"}` : ""), h("td", { class: "num mono" }, fmt(v)), h("td", { class: "num mono" }, b != null ? fmt(b) : "—"),
+            h("td", { class: `alt-change ${better}` }, change == null || !dir ? "" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`));
+        })))));
+    } else if (f.exit != null) top.push(h("div", { class: `alt-result ${f.exit === 0 ? "ok" : "bad"}`, style: `--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}` },
+      h("span", { class: "alt-big" }, f.exit === 0 ? "✓ exit 0" : `✗ exit ${f.exit}`)));
+  }
+  const command = String(p.command || "");
+  return [h("div", { class: "task-inspector alt-tool" }, ...top,
+    fold("input", "Input", env.tidy(command, p.folder).split("\n")[0], env.block("Input", p), env),
+    out && !running(n) ? fold("stdout", "stdout", `${lines(out).length} line${lines(out).length === 1 ? "" : "s"}`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
+    err ? fold("stderr", "stderr", `${lines(err).length} line${lines(err).length === 1 ? "" : "s"}`,
+      h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : "")];
+}
+
+/** A search (P8): the point it proposed and that candidate's way through the pass. */
+function searchBody(n, env) {
+  const c = candidateOf(n);
+  return [h("div", { class: "task-inspector" }, c ? h("div", { class: "kv" }, h("div", { class: "k" }, "point"), h("div", { class: "val mono" }, c)) : "",
+    n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : h("p", { class: "muted" }, running(n) ? "Proposing…" : "Nothing under it."))];
+}
+
+/** The candidates measured so far, with their numbers: the frontier a choice is made from. */
+function measured(env) {
+  const by = new Map();
+  for (const x of env.nodes.values()) {
+    if (x.t1 == null || x.failed || !isTool(x)) continue;
+    const c = candidateOf(x), m = metricsOf(stdoutOf(x));
+    if (c && Object.keys(m).length) by.set(c, { ...(by.get(c) || {}), ...m });
+  }
+  return by;
+}
+/** A choice (P9): what was chosen, and the frontier it was chosen from, sorted by the goals. */
+function chooseBody(n, env) {
+  const f = fieldsOf(n), text = Object.values(f).map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ");
+  const rows = [...measured(env).entries()], goals = (env.goals?.() || []).filter(g => g.metric);
+  const cols = (goals.length ? goals.map(g => g.metric) : Object.keys(rows[0]?.[1] || {})).slice(0, 3);
+  const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
+  const g0 = goals[0], sign = g0 ? (/max/i.test(g0.direction || "") ? -1 : 1) : 0;
+  if (g0) rows.sort((a, b) => sign * ((a[1][g0.metric] ?? Infinity * sign) - (b[1][g0.metric] ?? Infinity * sign)));
+  return [h("div", { class: "task-inspector" },
+    chosen ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen}`)) : "",
+    rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
+      h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k); return h("th", { class: "num" }, k, g ? ` ${/max/i.test(g.direction || "") ? "↑" : "↓"}` : ""); }))),
+      h("tbody", {}, rows.map(([c, m]) => h("tr", { class: c === chosen ? "alt-chosen" : "" }, h("td", {}, c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, m[k] != null ? fmt(m[k]) : "—"))))))) : "",
+    n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : "")];
+}
+
+/** A critic (P10): the verdict as a badge, the subject as a design's name and its numbers. */
+function criticBody(n, env) {
+  const f = fieldsOf(n), verdict = String(f.verdict ?? ""), subject = String(f.subject ?? "");
+  const agreed = /no objection|stands|agree|^ok/i.test(verdict);
+  const m = /^([^:{]+):\s*(\{.*\})\s*$/s.exec(subject), numbers = m ? metricsOf(m[2].replace(/['"{},]/g, " ").replace(/\s*:\s*/g, "=")) : {};
+  return [h("div", { class: "task-inspector" },
+    verdict ? h("div", { class: "alt-verdict" }, h("span", { class: `alt-badge ${agreed ? "ok" : "objection"}` }, agreed ? "No objection" : "Objection"), agreed ? "" : h("span", {}, verdict)) : "",
+    subject ? h("div", {}, h("div", { class: "alt-label" }, "Subject"), m ? h("div", { class: "alt-verdict" }, h("span", { class: "alt-pchip", style: `--k:${COLORS.choose}` }, m[1].trim()),
+      h("span", { class: "mono muted small" }, Object.entries(numbers).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : h("div", { class: "mono" }, subject)) : "")];
+}
+
+/** Any other task: its steps (the tasks under it) with what each gave. */
+function stepsBody(n, env) {
+  return n.kids.length ? [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))))] : [];
+}
+
+/** The inspector of a task in LiveAlt (D982). `env`: now, nodes, tools(), block(), tidy(), agent(n),
+    agentRest(n) (its stdout and folded prompt), pick(id), goals(), place. */
+export function altInspector(n, env) {
+  const hd = head(n);
+  let body;
+  if (isAgent(n)) body = [h("div", { class: "task-inspector" }, env.agent(n), ...env.agentRest(n))];
+  else if (isTool(n)) body = toolBody(n, env);
+  else if (hd === "dse") body = searchBody(n, env);
+  else if (["decide", "frontier", "decision", "select"].includes(hd) || /^propose:\s*what next/i.test(n.name)) body = chooseBody(n, env);
+  else if (hd === "critique") body = criticBody(n, env);
+  else body = stepsBody(n, env);
+  const f = n.fields || {}, o = n.output || {};
+  const every = Object.keys(f).length || Object.keys(o).length || Object.keys(n.params || {}).length
+    ? fold("fields", "Every field", "", [env.block("Input", n.params), env.block("Fields", f), env.block("Output", o)], env) : "";
+  return [...inspectorHead(n, env), ...body, isAgent(n) ? "" : every];
+}
+
+/** A pass at a glance (P11): what it tried and how that ended, where its time went, its steps. */
+export function passSummary(p, nodes, env) {
+  const now = Date.now() / 1000, end = n => n.t1 ?? now;
+  const top = nodes.filter(n => !n.parent || !nodes.includes(n.parent));
+  const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(end));
+  const kinds = {};
+  for (const n of nodes) for (const [a, b] of ownSpans(n, end)) { const k = isAgent(n) ? "design" : phaseKind(n); kinds[k] = (kinds[k] || 0) + (b - a); }
+  const total = Object.values(kinds).reduce((a, b) => a + b, 0) || 1;
+  const order = Object.keys(COLORS).filter(k => kinds[k]);
+  const live = nodes.some(n => n.t1 == null), failed = nodes.some(n => n.failed);
+  const cand = nodes.map(candidateOf).find(Boolean) || "";
+  const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
+  const steps = top.filter(n => !["setup"].includes(phaseKind(n)));
+  return [h("div", { class: "detail-head alt-ihead" }, h("h2", {}, p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · baseline" : `Pass ${p}`),
+      h("span", { class: `pill ${live ? "live" : failed ? "bad" : "ok"}` }, live ? h("span", { class: "alt-spin" }) : "", live ? "running" : failed ? "failed" : "done"), h("span", { class: "muted" }, dur(t1 - t0))),
+    cand ? h("div", { class: "alt-result ok", style: `--k:${COLORS.search}` }, h("span", { class: "alt-big" }, cand),
+      h("span", { class: "muted" }, Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : "",
+    h("div", {}, h("div", { class: "alt-label" }, "Where the time went"),
+      h("div", { class: "alt-bar tall" }, order.map(k => h("i", { style: `width:${100 * kinds[k] / total}%;background:${COLORS[k]}`, title: `${workLabel(k)} ${dur(kinds[k])}` }))),
+      h("div", { class: "mono muted small" }, order.slice().sort((a, b) => kinds[b] - kinds[a]).filter(k => kinds[k] >= 1).map(k => `${workLabel(k)} ${dur(kinds[k])}`).join(" · ") || "all under a second")),
+    steps.length ? h("div", { class: "alt-steps" }, steps.map(n => stepRow(n, env))) : ""];
+}

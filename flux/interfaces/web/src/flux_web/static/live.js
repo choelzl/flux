@@ -5,6 +5,7 @@ import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 import { viewerTools } from "./viewer.js";
 import { restoreScroll, scrollState } from "./scroll.js";
+import { altInspector } from "./live_alt_inspector.js";
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
     pick one from (D692). */
@@ -164,7 +165,7 @@ function logView(base, qs, stream) {
 
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
-function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspectorOnly = false } = {}) {
+function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspectorOnly = false, pick = null, goals = null } = {}) {
   const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
   let loadAll = () => {};                           // D759: the passes a window left out
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
@@ -619,6 +620,20 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       const walk = (it) => { if (it.leaf) { if (!hit && v && it.tasks.includes(v)) hit = it; if (!near && itemHas(it, n)) near = it; } else it.kids.forEach(walk); };
       shownItems.forEach(walk); return hit || near;
     })();
+    // D982: LiveAlt draws its own inspector (the task as the tree names it, what it gave first);
+    // Live keeps this one
+    if (unifiedDetail) {
+      detail.replaceChildren(...altInspector(n, {
+        now, nodes, place, goals, tidy: tidyCommand, block,
+        pick: id => { if (pick) pick(id); },
+        tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),
+        agent: x => agentView(x, now),
+        agentRest: x => [(f.stdout ?? f["stdout (live tail)"]) ? h("section", { class: "astream" }, h("h3", {}, "stdout"),
+            h("pre", { class: "val astream-body", "data-k": "stdout" }, f.stdout ?? f["stdout (live tail)"])) : "",
+          has(x.params) ? h("details", { class: "inspector-input", "data-fold": "input", open: place?.folds?.get("input") || false },
+            h("summary", {}, "Prompt & input"), block("Input", x.params)) : ""],
+      }));
+    } else
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
         n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : "done"),   // D928
