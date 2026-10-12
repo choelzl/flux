@@ -112,7 +112,8 @@ header has **Start**, or **Stop** / **Restart** while active.
 - **Stop / Restart:** one press schedules it after the pass; the button turns red (**Stop NOW** /
   **Restart NOW**); pressing again asks to confirm abandoning the pass (cancel keeps the
   scheduled action). Stop replaces a pending restart. Restart keeps problem and run settings and
-  subtracts completed passes from a finite budget. Requests persist on the server.
+  subtracts completed passes from a finite budget. Requests persist on the server. The Loops list and
+  Admin › Loops work the same way (D1006).
 - A loop has one log (each start marked), one answer and one notes inbox; no run numbers.
 - **Talk** (any tab) opens a panel with conversations about the loop. **Reply** follows up with
   that branch as context (also at a conversation's top); **New chat** starts another; **Collapse** /

@@ -1710,16 +1710,26 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.page(f"#/app/{name}/settings", "document.querySelector('.measurement-options, .settings-section, .loop-ownership') || document.querySelector('#main .subtabs')", "another loop view")
                 r.page(f"#/app/{name}", "document.querySelector('.page-head button.danger.solid')", "return to the queued restart")
                 r.check("the pending action survives navigation", b.js("return document.querySelector('.page-head button.danger.solid').textContent==='Restart NOW'"))
+                # D1006: the loop lists work as the loop's page -- a second press turns red and, confirmed, is now
+                b.js("Object.assign(window.__controlState,{stop_requested:false,restart_requested:false}); return 1")
                 r.page("#/", "document.querySelector('table.list tbody tr')", "loop list controls")
-                for index, label in enumerate(("Stop", "Stop", "Restart", "Restart")):
+                red = "[...document.querySelectorAll('table.list button.danger.solid')].some(b=>b.textContent===arguments[0])"
+                for label in ("Stop", "Restart"):
                     r.button(label, "table.list tbody")
-                    b.wait(f"window.__controlCalls.length==={5 + index}", what="list action")
-                r.check("loop-list repeated presses remain after-pass actions", b.js("return window.__controlCalls.length===8 && window.__controlCalls.slice(4).every(c=>!c.now) && ![...document.querySelectorAll('table.list button')].some(b=>b.textContent.includes('NOW'))"))
+                    b.wait(red.replace("arguments[0]", repr(label + " NOW")), what=f"list {label} scheduled, red")
+                    r.button(label + " NOW", "table.list tbody")
+                    r.dialog_button(label + " NOW")
+                    b.wait(f"window.__controlCalls.at(-1).action==={label.lower()!r} && window.__controlCalls.at(-1).now", what=f"list {label} now")
+                r.check("loop-list Stop and Restart: the first press after the pass, then red, the confirmed second now (D1006)",
+                        b.js("return window.__controlCalls.length===8 && window.__controlCalls.slice(4).map(c=>!!c.now).join()==='false,true,false,true'"))
                 r.login("ada")
+                b.js("Object.assign(window.__controlState,{stop_requested:false,restart_requested:false}); return 1")
                 r.page("#/admin", "document.querySelector('.ctl-grid') && document.querySelector('table.list tbody tr')", "admin loop controls")
                 r.button("Restart", "table.list tbody")
                 b.wait("window.__controlCalls.length===9", what="admin row restart")
-                r.check("admin row controls always use after-pass actions and the loop's owner", b.js("return !window.__controlCalls.at(-1).now && window.__controlCalls.at(-1).owner==='bob' && ![...document.querySelectorAll('.ctl-grid button,table.list button')].some(b=>b.textContent.includes('NOW') || b.textContent.includes('all now'))"))
+                b.wait(red.replace("arguments[0]", "'Restart NOW'"), what="admin row restart scheduled, red")
+                r.check("admin row controls: the loop's owner, after the pass first, then red Restart NOW (D1006)",
+                        b.js("return !window.__controlCalls.at(-1).now && window.__controlCalls.at(-1).owner==='bob'"))
                 r.clean("loop controls")
             finally:
                 b.js("window.fetch=window.__controlFetch; return 1")

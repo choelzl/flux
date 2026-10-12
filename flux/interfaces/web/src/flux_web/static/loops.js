@@ -195,9 +195,16 @@ function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
     const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
     const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
+    // D1006: as on the loop's page -- the first press schedules it after the pass, the button turns
+    // red, a second press (confirmed) abandons the pass
+    const stopNow = !!l.stop_requested && !l.restart_requested, restartNow = !!l.restart_requested;
+    // the list keeps still while focus is in it: the pressed button lets go, so it turns red at once
+    const redrawn = () => { document.activeElement?.blur?.(); return pageRefresh && pageRefresh(); };
     const runningActions = () => [
-      owner && !canRun ? "" : act("Stop", () => stopLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small", title: "Stop after this pass" }),
-      canRun ? act("Restart", () => restartLoop(name, false, owner).then(() => pageRefresh && pageRefresh()), { cls: "small", title: "Restart after this pass with the same run settings" }) : "",
+      owner && !canRun ? "" : act(stopNow ? "Stop NOW" : "Stop", () => stopLoop(name, stopNow, owner).then(redrawn),
+        { cls: `small${stopNow ? " danger solid" : ""}`, title: stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass" }),
+      canRun ? act(restartNow ? "Restart NOW" : "Restart", () => restartLoop(name, restartNow, owner).then(redrawn),
+        { cls: `small${restartNow ? " danger solid" : ""}`, title: restartNow ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings" }) : "",
     ];
     const acts = owner ? (!canRun ? [h("span", { class: "pill" }, l.perm === "edit" ? "can edit" : "watching")]
         : l.running ? runningActions()
