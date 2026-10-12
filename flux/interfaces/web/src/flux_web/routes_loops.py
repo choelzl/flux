@@ -169,7 +169,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return {"ok": f"you left {o.name}'s {name}"}
 
     def group_loops(user: User, *, summaries: bool = True) -> list[dict[str, Any]]:
-        if not any(user.can(k) for k in ("view_others", "edit_others", "run_others", "share_others")):
+        if not any(user.can(k) for k in ("view_others", "edit_others", "run_others", "share_others", "ask_others")):
             return []
         out = []
         for member in store.users():
@@ -418,34 +418,73 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, "no such question")
         return ident
 
+    def _seen(a: dict[str, Any], user: User) -> bool:
+        """D991: a question asked by someone who may not change the loop is theirs alone to see."""
+        return not a.get("private") or a.get("by") == user.name
+
+    def _ask_of(d: Path, ident: str, user: User, editor: bool) -> dict[str, Any]:
+        """A question this user may stop or remove: any, for whoever may change the loop; else their own."""
+        a = next((x for x in asks.list(d) if x.get("id") == _ask_id(ident) and _seen(x, user)), None)
+        if a is None or not (editor or a.get("by") == user.name):
+            raise HTTPException(404 if a is None else 403, "no such question" if a is None else "not your question")
+        return a
+
     @app.get("/api/apps/{name}/asks")
     def list_asks(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
         _w, _whose, d, _run = loop_of(name, user, owner)
-        return asks.list(d)
+        return [a for a in asks.list(d) if _seen(a, user)]
 
     @app.post("/api/apps/{name}/asks")
     def ask_about(name: str, body: AskIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """An agent reads the loop (its files, its record, its log) and answers; it changes nothing."""
-        _w, whose, d, _run = loop_of(name, user, owner, edit=True, run=True)
+        w, whose, perm = access(user, owner, name)
+        if not store.can_ask(user, whose, name):
+            raise HTTPException(403, "you may not ask about this loop")
+        try:
+            d = w.app(name)
+        except WorkspaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
         if not body.question.strip():
             raise HTTPException(400, "ask something")
+        if body.parent_id is not None and any(a.get("id") == _ask_id(body.parent_id) and not _seen(a, user) for a in asks.list(d)):
+            raise HTTPException(404, "no such question")       # a reply follows a conversation its asker sees
         check_author(body.author)
         try:
             ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author),
-                               by=user.name, parent_id=_ask_id(body.parent_id) if body.parent_id is not None else None)
+                               by=user.name, parent_id=_ask_id(body.parent_id) if body.parent_id is not None else None,
+                               private=perm not in ("owner", "edit", "admin"))
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")
         return {"id": ident, "ok": "the agent is reading the loop"}
 
+    @app.get("/api/apps/{name}/asks/{ident}/agent")
+    def ask_agent(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D993: the answering agent's turn -- its thinking, commands and replies -- as Live shows one."""
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        a = next((x for x in asks.list(d) if x.get("id") == _ask_id(ident) and _seen(x, user)), None)
+        if a is None:
+            raise HTTPException(404, "no such question")
+        try:
+            got = json.loads((asks.root(d) / a["id"] / "agent.json").read_text())
+        except (OSError, ValueError):
+            got = {}
+        return {"running": bool(a.get("running")), "author": a.get("author"), **(got if isinstance(got, dict) else {})}
+
     @app.post("/api/apps/{name}/asks/{ident}/stop")
     def stop_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
-        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        _ask_of(d, ident, user, access(user, owner, name)[2] in ("owner", "edit", "admin"))
         return {"ok": asks.stop(d, _ask_id(ident))}
 
     @app.delete("/api/apps/{name}/asks/{ident}")
     def forget_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
-        _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
+        _w, _whose, d, _run = loop_of(name, user, owner)
+        editor = access(user, owner, name)[2] in ("owner", "edit", "admin")
+        a = _ask_of(d, ident, user, editor)
+        thread = a.get("thread_id") or a["id"]
+        if not editor and any((x.get("thread_id") or x["id"]) == thread and x.get("by") != user.name for x in asks.list(d)):
+            raise HTTPException(403, "this conversation is not yours alone")
         try:
             asks.forget(d, _ask_id(ident))
         except ValueError as exc:
@@ -597,6 +636,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         perm = access(user, owner, name)[2]
         return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
                 "state": runs.state(whose, name), "can_run": store.can_run(user, whose, name),
+                "can_ask": store.can_ask(user, whose, name),                                         # D991
                 "result_preferences": preferences(store, whose.name, name),
                 "can_edit": perm in ("owner", "edit", "admin"), "can_leave": user.name in store.shares(whose.name, name)}
 

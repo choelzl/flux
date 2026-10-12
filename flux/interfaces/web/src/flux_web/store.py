@@ -101,6 +101,7 @@ PERMISSIONS = {
     "edit_others": "Edit other group members' loops",
     "run_others": "Run/stop other group members' loops",
     "share_others": "Manage sharing of other group members' loops",
+    "ask_others": "Ask about other group members' loops",      # D991: an agent reads it; nothing changes
 }
 DEFAULT_PERMISSIONS = {k: k in ("create_loops", "run_loops") for k in PERMISSIONS}
 _USERS = ("SELECT u.*, g.name AS group_name, g.kind AS group_kind, g.server_access AS group_server_access "
@@ -363,7 +364,7 @@ class Store:
         group = self.same_group(user, owner)
         if shared == "edit" or (group and user.can("edit_others")):
             return "edit"
-        if shared == "watch" or (group and any(user.can(k) for k in ("view_others", "run_others", "share_others"))):
+        if shared == "watch" or (group and any(user.can(k) for k in ("view_others", "run_others", "share_others", "ask_others"))):
             return "watch"
         return None
 
@@ -371,6 +372,13 @@ class Store:
         return user.can("run_loops") and (user.id == owner.id or user.admin
                 or (self.same_group(user, owner) and user.can("run_others"))
                 or self.shares(owner.name, name).get(user.name) == "edit")
+
+    def can_ask(self, user: User, owner: User, name: str) -> bool:
+        """D991: who may ask an agent about a loop -- whoever may change and run it, or a group
+        member given Ask about other group members' loops."""
+        perm = self.loop_access(user, owner, name)
+        return (perm in ("owner", "edit", "admin") and self.can_run(user, owner, name)) \
+            or (self.same_group(user, owner) and user.can("ask_others"))
 
     def can_share(self, user: User, owner: User) -> bool:
         return user.id == owner.id or user.admin or (self.same_group(user, owner) and user.can("share_others"))

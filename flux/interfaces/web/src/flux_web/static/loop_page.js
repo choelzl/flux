@@ -5,7 +5,7 @@ import { cleanup, me, setPageRefresh } from "./state.js";
 import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, statePill, toast } from "./ui.js";
 import { liveTree, logView } from "./live.js";
 import { configureInto } from "./configure.js";
-import { agentSelect, binButton, lastSaid, markdown, startLoop, stopLoop, restartLoop } from "./loops.js";
+import { agentSelect, binButton, conversation, lastSaid, markdown, startLoop, stopLoop, restartLoop } from "./loops.js";
 import { authorTab, overview } from "./loop_overview.js";
 import { resultsView } from "./loop_results.js";
 import { timelineTab } from "./loop_timeline.js";
@@ -31,6 +31,7 @@ async function loopPage(name, owner, path = "") {
   const perm = info.perm || (info.mine ? "owner" : "admin");
   const mine = info.can_edit ?? (perm === "owner" || perm === "edit" || perm === "admin"), isOwner = perm === "owner";
   const canRun = info.can_run ?? mine;
+const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group member may ask, seen by them alone
   const canLeave = info.can_leave ?? (perm === "edit" || perm === "watch");
   let st = info.state;
   const header = h("div", {}), banner = h("div", {}), body = h("div", {});
@@ -292,7 +293,7 @@ async function loopPage(name, owner, path = "") {
   cleanup.push(() => document.removeEventListener("keydown", onKey));
   let askSeq = 0;
   async function sendAsk() {
-    if (!mine || !canRun || askBusy || askSending) return;
+    if (!canAsk || askBusy || askSending) return;
     const text = askQ.value.trim();
     if (!text) { askQ.focus(); return; }
     askSending = true;
@@ -313,7 +314,7 @@ async function loopPage(name, owner, path = "") {
     if (askBusy) askTimer = setTimeout(askView, 3000);
     const reply = list.find(a => a.id === askReply);
     if (!reply) askReply = null;
-    if (mine && canRun) askWho = askWho || await agentSelect("ask-who");
+    if (canAsk) askWho = askWho || await agentSelect("ask-who");
     if (!askOpen || show.stale() || my !== askSeq) return;
     const place = scrollState(askHistory), active = document.activeElement;
     const selection = active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : null;
@@ -331,15 +332,40 @@ async function loopPage(name, owner, path = "") {
       if ([...askWho.querySelectorAll("option")].some(o => o.value === a.author)) askWho.value = a.author;
       askView().then(() => askQ.focus());
     }
+    // D993: the answering agent's thinking, commands and replies, as Live shows an agent; followed while it answers
+    async function agentTurn(a) {
+      const box = h("div", { class: "agent-view ask-agent-view" }, skeleton(3));
+      let timer = null;
+      const draw = async () => {
+        const got = await api(`/apps/${enc(name)}/asks/${a.id}/agent${qs}`).catch(x => ({ error: x.message }));
+        if (!box.isConnected && timer !== null) return;
+        const steps = Array.isArray(got.steps) ? got.steps : [], total = Number(got["steps total"] || steps.length);
+        const think = got["thinking (live tail)"] || "", stats = [got.agent, got["tokens (reported)"], got.elapsed, got["tool calls"] ? `${String(got["tool calls"]).split("\n").length}+ tool calls` : ""].filter(Boolean);
+        box.replaceChildren(stats.length ? h("p", { class: "muted small" }, stats.join(" · ")) : "",
+          total > steps.length ? h("p", { class: "muted small" }, `${total - steps.length} earlier step(s) not shown`) : "",
+          steps.length ? conversation(steps, { key: `ask${a.id}`, offset: total - steps.length, live: !!got.running })
+            : think ? h("details", { class: "cv-step cv-think", open: true }, h("summary", {}, "Thinking"), h("pre", { class: "cv-body cv-thought" }, think))
+            : h("p", { class: "muted" }, got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands were recorded for this answer.")),
+          got.running ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), `${got.status || "working"}…`) : "",
+          got.stderr ? h("details", { class: "ask-output" }, h("summary", {}, "stderr"), h("pre", { class: "log small" }, got.stderr)) : "");
+        if (got.running) timer = setTimeout(draw, 2000);
+        else box.scrollTop = box.scrollHeight;
+      };
+      draw();
+      await dialog(`Thinking and commands · ${a.author}`, box, [["Close", null]]);
+      clearTimeout(timer); timer = -1;
+    }
     const turn = a => h("div", { class: "ask-turn", "data-ask-turn": a.id },
       h("div", { class: "ask-message ask-user" }, h("div", { class: "ask-meta" }, h("strong", {}, a.by), " · ", ago(a.started)), h("p", {}, a.question)),
       h("div", { class: "ask-message ask-agent" }, h("div", { class: "ask-meta" }, h("strong", {}, a.author), a.ended ? [" · ", dur(a.ended - a.started)] : ""),
         a.running ? h("div", { class: "row" }, h("span", { class: "pill live" }, h("i", { class: "dot" }), "Reading the loop"),
-          mine ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : "")
+          mine || a.by === me.name ? act("Stop", async () => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); askView(); }, { cls: "small" }) : "")
           : a.answer ? markdown(a.answer) : h("p", { class: "muted" }, "No answer was returned."),
+        a.author && a.author !== "model" ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-thinking", "data-ask-thinking": a.id,
+          onclick: () => agentTurn(a) }, "Thinking & commands")) : "",
         (a.log || []).length ? h("details", { class: "ask-output", "data-ask-output": a.id, open: details.get(a.id) || false }, h("summary", {}, "Activity"),
           h("pre", { class: "log small author-log", "data-ask-log": a.id }, a.log.join("\n"))) : "",
-        mine && canRun && !a.running && a.answer ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-reply", disabled: askBusy || askSending,
+        canAsk && !a.running && a.answer ? h("div", { class: "ask-turn-actions" }, h("button", { type: "button", class: "small ask-reply", disabled: askBusy || askSending,
           "data-reply-to": a.id, onclick: () => replyTo(a) }, "Reply")) : ""));
     const threads = new Map();
     for (const a of [...list].sort((a, b) => a.started - b.started || a.id.localeCompare(b.id))) {
@@ -354,10 +380,11 @@ async function loopPage(name, owner, path = "") {
       const folded = () => collapsedAsks.has(id) || (!expandedAsks.has(id) && !(i === 0 || selected || running));
       const toggle = h("button", { type: "button", class: "small ask-collapse", "data-ask-toggle": id,
         onclick: () => { const f = folded(); collapsedAsks.delete(id); expandedAsks.delete(id); (f ? expandedAsks : collapsedAsks).add(id); updateCollapse(); } });
-      const replyTop = mine && canRun && !running && last.answer ? h("button", { type: "button", class: "small ask-reply ask-reply-top", disabled: askBusy || askSending,
+      const replyTop = canAsk && !running && last.answer ? h("button", { type: "button", class: "small ask-reply ask-reply-top", disabled: askBusy || askSending,
         "data-reply-to": last.id, title: "Reply to this conversation's latest answer", onclick: () => replyTo(last) }, "Reply") : "";
-      const conversation = card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"), replyTop, toggle,
-        mine && !running ? binButton("conversation", "Remove this conversation?", "All its messages, answers and saved reply context are removed for everyone who sees this loop.",
+      const conversation = card(null, [h("div", { class: "ask-thread-head" }, h("strong", {}, "Conversation"),
+        turns.some(a => a.private) ? h("span", { class: "pill small ask-private", title: "Asked without edit rights on this loop: no one else sees it" }, "only you") : "", replyTop, toggle,
+        (mine || turns.every(a => a.by === me.name)) && !running ? binButton("conversation", "Remove this conversation?", "All its messages, answers and saved reply context are removed for everyone who sees this loop.",
           async () => { await api(`/apps/${enc(name)}/asks/${turns[0].id}${qs}`, { method: "DELETE" }); askView(); }) : ""), ...turns.map(turn)],
         { cls: `ask-card has-bin${selected ? " selected-thread" : ""}` });
       function updateCollapse() {
@@ -372,7 +399,7 @@ async function loopPage(name, owner, path = "") {
     });
     askHistory.replaceChildren(steer, ...(conversations.length ? conversations : [card(null, empty("No conversations yet."))]));
     let form = "";
-    if (mine && canRun) {
+    if (canAsk) {
       const send = act(askBusy ? "Answering…" : "Send", sendAsk, { cls: "primary ask-send", title: "Ctrl+Enter or ⌘+Enter to send" });
       send.disabled = askBusy;
       form = h("div", { class: "ask-compose" },

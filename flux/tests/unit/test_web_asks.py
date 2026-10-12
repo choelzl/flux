@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 import stat
+import sys
 import time
 
 import pytest
@@ -204,3 +205,74 @@ def test_consult_passes_previous_questions_and_answers_to_models_and_agents(tmp_
     prompt = brief("Why not #1?", loop, out, None, inline=inline)
     assert "PREVIOUS CONVERSATION" in prompt and "Design #2 has area 4" in prompt
     assert prompt.index("What is best?") < prompt.index("THE QUESTION:\nWhy not #1?")
+
+
+def test_a_group_member_may_ask_and_only_they_see_what_they_asked(server):
+    """D991: Ask about other group members' loops lets a member ask without edit rights; what they
+    ask is theirs alone to see, stop and remove; the owner's conversations stay visible to them."""
+    app, store, tmp = server
+    bob, cy = _c(app, "bob", "another long secret"), _c(app, "cy", "cy has a long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("problem.yaml", b"statement: s\n"))], headers=H)
+    folder = tmp / "data/users/bob/apps/x/runs/asks"
+    store.set_user("cy", group_id=store.user(name="bob").group_id)
+    assert cy.post("/api/apps/x/asks?owner=bob", json={"question": "q", "author": "opencode"}, headers=H).status_code == 403
+    store.set_user("cy", permissions={"ask_others": True})
+    for agent in ("opencode",):
+        store.server_set(f"agent-test:cy:{agent}", {"ok": True})
+    info = cy.get("/api/apps/x?owner=bob").json()
+    assert info["can_ask"] and not info["can_edit"] and info["perm"] == "watch"
+    owned = bob.post("/api/apps/x/asks", json={"question": "the owner's", "author": "opencode"}, headers=H).json()["id"]
+    _answered(bob, folder, owned)
+    r = cy.post("/api/apps/x/asks?owner=bob", json={"question": "cy's own", "author": "opencode"}, headers=H)
+    assert r.status_code == 200, r.text
+    mine = r.json()["id"]
+    (folder / mine / "go").write_text("")
+    for _ in range(200):
+        got = {a["id"]: a for a in cy.get("/api/apps/x/asks?owner=bob").json()}
+        if not got[mine]["running"]:
+            break
+        time.sleep(0.05)
+    assert set(got) == {owned, mine} and got[mine]["private"] and not got[owned].get("private")
+    assert [a["id"] for a in bob.get("/api/apps/x/asks").json()] == [owned], "the owner does not see it"
+    assert bob.delete(f"/api/apps/x/asks/{mine}", headers=H).status_code == 404
+    assert cy.delete(f"/api/apps/x/asks/{owned}?owner=bob", headers=H).status_code == 403, "not theirs"
+    assert cy.delete(f"/api/apps/x/asks/{mine}?owner=bob", headers=H).status_code == 200
+    assert [a["id"] for a in cy.get("/api/apps/x/asks?owner=bob").json()] == [owned]
+
+
+FAST = r'''import json, sys
+for ev in [{"type": "reasoning", "part": {"text": "the record says #2"}},
+           {"type": "tool_use", "part": {"tool": "bash", "state": {"input": {"command": "sqlite3 x.db .tables"}, "output": "t"}}},
+           {"type": "text", "part": {"text": "Design #2 is best."}}]:
+    print(json.dumps(ev), flush=True)
+'''
+
+
+def test_an_agents_answer_keeps_its_thinking_and_commands_for_the_page(tmp_path, monkeypatch, server):
+    """D993: the answering agent's turn is written beside the answer as Live's agent view reads it,
+    and the page reads it back for whoever sees the question."""
+    import json
+
+    import flux_loop.agent as agent_mod
+
+    fake = tmp_path / "fast_agent.py"
+    fake.write_text(FAST)
+    monkeypatch.setattr(agent_mod, "agent_spec", lambda _a: agent_mod.AgentSpec("fake", (sys.executable, str(fake)), None, "opencode", timeout_s=30))
+    loop, out = _loop(tmp_path), tmp_path / "ans"
+    got = consult("which?", loop, out, author="opencode")
+    turn = json.loads((out / "agent.json").read_text())
+    assert got["ok"] and turn["status"] == "done" and turn["steps total"] == len(turn["steps"]) >= 3
+    kinds = [s["k"] for s in turn["steps"]]
+    assert "think" in kinds and "text" in kinds and any("sqlite3" in json.dumps(s) for s in turn["steps"])
+    # the page: the turn of a question its reader sees, and nothing of one they do not
+    app, store, tmp = server
+    bob, cy = _c(app, "bob", "another long secret"), _c(app, "cy", "cy has a long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("problem.yaml", b"statement: s\n"))], headers=H)
+    folder = tmp / "data/users/bob/apps/x/runs/asks"
+    ident = bob.post("/api/apps/x/asks", json={"question": "q", "author": "opencode"}, headers=H).json()["id"]
+    _answered(bob, folder, ident)
+    (folder / ident / "agent.json").write_text(json.dumps(turn))
+    seen = bob.get(f"/api/apps/x/asks/{ident}/agent").json()
+    assert seen["steps"] == turn["steps"] and seen["running"] is False
+    assert cy.get(f"/api/apps/x/asks/{ident}/agent?owner=bob").status_code == 403, "not shared with cy"
+    assert bob.get("/api/apps/x/asks/20260101-000000/agent").status_code == 404

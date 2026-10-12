@@ -441,6 +441,8 @@ stay as history behind an `invalidated` mark and are no longer counted.
   - **Create loops** (create, upload, clone).
   - **Run loops and agents** (start, check, ask, author); owners can always stop their loops.
   - **View other members' loops** (in **Group loops**, secrets masked).
+  - **Ask about other members' loops** (D991): ask an agent about a group member's loop without
+    edit rights; such a question and its answers are seen by its asker only.
   - **Edit other members' loops** (not Run or Sharing).
   - **Run/stop other members' loops** (with the owner's credentials; needs Run).
   - **Manage sharing of other members' loops.**

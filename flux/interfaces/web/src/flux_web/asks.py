@@ -88,7 +88,8 @@ class Asks:
         return any(a.get("running") for a in self.list(app_dir))
 
     def start(self, *, app_dir: Path, question: str, author: str, env: dict[str, str], by: str,
-              parent_id: str | None = None) -> str:
+              parent_id: str | None = None, private: bool = False) -> str:
+        """`private` (D991): asked by someone who may not change the loop -- only they see it."""
         with self._lock:
             if not app_dir.is_dir():
                 raise ValueError("this loop has moved or been removed; reload it before asking")
@@ -125,7 +126,7 @@ class Asks:
                                     env=env, start_new_session=True)
             log.close()
             _write(d, "ask.json", json.dumps({"question": question.strip(), "author": author, "by": by,
-                                              "parent_id": parent_id, "thread_id": thread_id or d.name,
+                                              "parent_id": parent_id, "thread_id": thread_id or d.name, "private": private,
                                               "pid": proc.pid, "started": time.time(), "ended": None}))
         threading.Thread(target=lambda: self._finish(d, proc.wait()), daemon=True).start()
         return d.name
