@@ -19,7 +19,7 @@ export function liveAltTab(ctx) {
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
-  let foldDone = true, notes = {}, goals = [], chainPass = null, openBox = null;
+  let notes = {}, goals = [], chainPass = null, openBox = null;
   let boxView = null, problem = null;
   const NO_PASS = Symbol("no pass");
   let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task
@@ -99,7 +99,6 @@ export function liveAltTab(ctx) {
     const mode = ctx.curSub() || "tree";
     if (mode !== "graph") boxView = null;
     split.classList.toggle("wide", mode === "timeline" && pass === "all");   // D984: one pass fits the narrow column; all passes take the width
-    split.querySelector(".alt-fold-done").hidden = mode !== "tree";
     if (mode !== "timeline" || choice && !choice.ids.some(id => inspector.model.nodes.has(id))) choice = null;
     if (lastMode) viewPlaces.set(lastMode, place);
     panel.replaceChildren(...(loadMessage ? [empty(loadMessage)] : !rows.length ? [empty("No tasks recorded for this selection.")]
@@ -164,10 +163,10 @@ export function liveAltTab(ctx) {
     el.addEventListener("click", onclick); el.addEventListener("keydown", onkeydown);
     return el;
   }
-  // D978: a branch is folded when asked, or when it finished and ⊟ is on -- unless it holds the selected task
+  // D978: a branch is folded when asked, or when it finished (D992: always) -- unless it holds the selected task
   function isFolded(key, finished, holdsSelected) {
     if (opened.has(key)) return false;
-    return folded.has(key) || (foldDone && finished && !holdsSelected);
+    return folded.has(key) || (finished && !holdsSelected);
   }
   function toggleFold(key, now) {
     if (now) { folded.delete(key); opened.add(key); } else { opened.delete(key); folded.add(key); }
@@ -501,11 +500,8 @@ export function liveAltTab(ctx) {
       event.preventDefault(); stepBy(event.key === "ArrowUp" ? -1 : 1);
     } });
     ctx.subHolder.append(controls);
-    const foldBtn = h("button", { type: "button", class: "small alt-fold-done", title: "Fold what has finished", "aria-pressed": "true", onclick: () => {
-      foldDone = !foldDone; folded.clear(); opened.clear(); foldBtn.setAttribute("aria-pressed", String(foldDone)); foldBtn.classList.toggle("on", foldDone); render();
-    } }, "⊟");
-    foldBtn.classList.add("on");
-    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary, h("div", { class: "alt-list-tools" }, foldBtn)), panel], { cls: "alt-visual-card" }),
+    // D992: finished branches always fold (a click opens one); no switch for it
+    split = h("div", { class: "alt-split" }, card(null, [h("div", { class: "alt-list-head" }, summary), panel], { cls: "alt-visual-card" }),
       card(null, [h("div", { class: "alt-detail-actions" }, locateBtn, logLink), detailHost], { cls: "alt-inspector-card" }));
     ctx.body.replaceChildren(h("div", { class: "live-alt" }, notice, split));
     await load(validPage);

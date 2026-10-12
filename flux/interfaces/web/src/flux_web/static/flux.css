@@ -782,8 +782,6 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-task-state.failed { color: var(--bad); }
 .alt-spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--run) 25%, transparent); border-top-color: var(--run); flex-shrink: 0; box-sizing: border-box; }
 @media (prefers-reduced-motion: no-preference) { .alt-spin { animation: alt-spin .9s linear infinite; } @keyframes alt-spin { to { transform: rotate(360deg); } } }
-.alt-list-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.alt-fold-done { min-width: 28px; padding-inline: 6px; } .alt-fold-done.on { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 /* D978: the pass as a flow, the chain of passes */
 .alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
@@ -1322,3 +1320,5 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .library-view details.digest { border-top: 1px solid var(--line); padding: 6px 0; }
 .library-view details.digest > summary { cursor: pointer; overflow-wrap: anywhere; }
 .library-view pre.digest-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+/* D993: an ask's agent turn, read in a dialog as Live reads an agent */
+.ask-agent-view { width: min(860px, 86vw); max-height: 70vh; overflow: auto; }

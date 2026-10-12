@@ -180,7 +180,7 @@ Views: **Tasks**, **Log**, **Timeline**, **History**.
   critic olive, the agent pink); pick **Start** and **Current** / **All passes** / a **Pass**
   (including pass 0). **Tree:** one line per task, tinted by kind and named kind first
   (`Search · lut-chunk=4`, `Check · golden`), a spinner while it runs; the steps every pass starts
-  with fold to `Setup · N steps`, and **⊟** folds what has finished. **Graph:** the pass as a
+  with fold to `Setup · N steps`, and what has finished folds (D992). **Graph:** the pass as a
   flow (Search → Design → Check → Measure → Choose → Critic; setup and the baseline have their
   own), each box with what it is set to, ✓/✗, step bars, `×N` when it ran again; with All passes,
   the chain of passes over the chosen one's flow. **Timeline:** Live's lanes, quiet numbered pass
