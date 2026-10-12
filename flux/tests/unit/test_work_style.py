@@ -21,7 +21,7 @@ PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("too
           ("gate: the problem", ""), ("gate: admitted", ""), ("generation: build x", ""), ("generation: current", ""),
           ("build: lib", ""), ("test: gate", ""), ("simulation: screen", ""), ("evaluation", ""),
           ("template-fill: compose", ""), ("decide", ""), ("frontier", ""), ("critique: decision", ""),
-          ("DSE: batch", ""), ("plan: round", ""), ("search: tree", ""), ("Setup", ""), ("unknown thing", "")]
+          ("DSE: batch", ""), ("orchestrate: next step", ""), ("agent: claude", "orchestrate"), ("plan: round", ""), ("search: tree", ""), ("Setup", ""), ("unknown thing", "")]
 
 
 def run(js):

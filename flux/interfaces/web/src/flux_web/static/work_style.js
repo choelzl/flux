@@ -10,6 +10,8 @@ export const workLabel = kind => kind[0].toUpperCase() + kind.slice(1);
 export function kindOf(name, why = "") {
   name = String(name).toLowerCase();
   const at = name.indexOf(":"), head = (at < 0 ? name : name.slice(0, at)).trim(), rest = at < 0 ? "" : name.slice(at + 1).trim();
+  // D996: orchestrating decides what to search and design -- the Search box's, by a model or an agent
+  if (head === "orchestrate" || head === "agent" && String(why || "").trim().toLowerCase().split(/\s+/)[0] === "orchestrate") return "search";
   if (head === "agent" || head === "llm" || name.startsWith("model")) return null;    // workers inherit the work they assist
   if (head === "tool") {
     const word = String(why || "").toLowerCase().split(/\s+/).filter(Boolean)[0] || "";
@@ -25,7 +27,7 @@ export function kindOf(name, why = "") {
   if (["simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate"].includes(head)) return "measure";
   if (["generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
     "design", "oracle", "invent", "compute", "evaluation"].includes(head)) return "design";
-  if (["propose", "orchestrate", "decide", "frontier", "decision", "select"].includes(head)) return "choose";
+  if (["propose", "decide", "frontier", "decision", "select"].includes(head)) return "choose";
   if (head === "critique") return "critic";
   if (head === "dse") return "search";
   if (head === "plan" || head === "search") return head;

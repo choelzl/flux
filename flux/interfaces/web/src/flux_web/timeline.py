@@ -32,6 +32,8 @@ def kind_of(name: str, why: str = "") -> str | None:
     name = name.lower()
     head, _, rest = name.partition(":")
     head, rest = head.strip(), rest.strip()
+    if head == "orchestrate" or head == "agent" and why.lower().split()[:1] == ["orchestrate"]:
+        return "search"                                # D996: it decides what to search and design
     if head in ("agent", "llm") or name.startswith("model"):
         return None                                    # workers inherit the work they assist
     if head == "tool":
@@ -57,7 +59,7 @@ def kind_of(name: str, why: str = "") -> str | None:
     if head in ("generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
                 "design", "oracle", "invent", "compute", "evaluation"):
         return "design"
-    if head in ("propose", "orchestrate", "decide", "frontier", "decision", "select"):
+    if head in ("propose", "decide", "frontier", "decision", "select"):
         return "choose"
     if head == "critique":
         return "critic"

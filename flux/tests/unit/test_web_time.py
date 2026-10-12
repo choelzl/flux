@@ -107,7 +107,7 @@ def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
     ("generation: x", "design"), ("generate: prototype", "design"), ("repair: x", "design"), ("evaluation", "design"),
     ("generation: build x", "check"), ("build: x", "check"), ("test: gate", "check"), ("gate: x", "check"),
     ("simulation: screen x", "measure"), ("simulation: confirm x", "measure"), ("calibrate: screen", "measure"),
-    ("propose: finalists", "choose"), ("orchestrate: x", "choose"), ("decide: x", "choose"),
+    ("propose: finalists", "choose"), ("orchestrate: x", "search"), ("decide: x", "choose"),
     ("critique: decision", "critic"), ("critique: part", "critic"),
     ("agent: claude", None), ("llm: generating (model)", None), ("model: deciding", None),
 ])
