@@ -1087,6 +1087,8 @@ objectives: [{metric: timings.fast, goal: 15}]
                   if (o.method === 'POST') { window.__askNotes.push({id: 'note-1', by: 'bob', t: 1000, text: JSON.parse(o.body).text}); return json({ok: 'sent'}); }
                   return json(window.__askNotes);
                 }
+                if (path.startsWith(app + '/asks/') && path.endsWith('/agent'))
+                  return json({running: false, agent: 'opencode', steps: [{k: 'think', text: 'the record says two'}, {k: 'text', text: 'Design two is best'}], 'steps total': 2});
                 if (path === app + '/asks') {
                   if (o.method === 'POST') {
                     const body = JSON.parse(o.body); window.__askPosted.push(body);
@@ -1110,6 +1112,11 @@ objectives: [{metric: timings.fast, goal: 15}]
                 r.check("an older conversation starts folded, Reply at its top; the newest stays open (D990)", b.js(
                     'const o = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"), n = document.querySelector(`[data-ask-toggle="${arguments[1]}"]`).closest(".ask-card");'
                     ' return o.classList.contains("collapsed") && !!o.querySelector(".ask-thread-head .ask-reply-top")?.getClientRects().length && !n.classList.contains("collapsed")', other, root))
+                b.click(f'.ask-thinking[data-ask-thinking="{root}"]')       # D993
+                b.wait("document.querySelector('dialog .ask-agent-view .cv-text')", what="the agent's thinking and commands")
+                r.check("an answer's agent turn reads as Live reads an agent (D993)", b.js(
+                    "const d = document.querySelector('dialog .ask-agent-view'); return d.querySelector('.cv-think') && d.textContent.includes('Design two is best')"))
+                b.js("document.querySelector('dialog.dlg .dlg-actions button').click(); return 1")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
                 b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")

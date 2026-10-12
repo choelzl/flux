@@ -18,6 +18,32 @@ from typing import Any, Callable
 __all__ = ["consult", "snapshot", "summary"]
 
 ANSWER = "answer.md"
+AGENT = "agent.json"                 # D993: the agent's turn as Live shows one (thinking, commands, replies)
+
+
+class _Watch:
+    """The agent's turn, written to `AGENT` as it goes (at most once a second, as the turn reports)
+    and whole at its end: the fields Live's agent view reads."""
+
+    def __init__(self, path: Path) -> None:
+        self.path, self.fields = path, {}
+
+    def phase_start(self, name, why, params):
+        return name
+
+    def phase_update(self, token, name, output):
+        self.save(output)
+
+    def phase_end(self, token, name, seconds, failed, output):
+        self.save({**(output or {}), "seconds": round(seconds, 1)})
+
+    def save(self, output: Any, **more: Any) -> None:
+        if isinstance(output, dict):
+            self.fields.update({k: v for k, v in output.items() if isinstance(v, (str, int, float, bool, list))})
+        self.fields.update(more)
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text(json.dumps(self.fields))
+        tmp.replace(self.path)
 
 
 def snapshot(loop: Path, out: Path) -> Path | None:
@@ -143,7 +169,15 @@ def consult(question: str, loop: Path, out: Path, author: Any = "model", propose
         spec = agent_spec(author)
         subs = {"prompt": text, "prompt_file": str(out / "BRIEF.md"), "artifact": str(out / ANSWER), "workdir": str(out),
                 "part": "answer", "name": "answer", "python": sys.executable, "home": str(loop)}
-        turn = run_turn(spec, spec.argv, subs, workdir=out)
+        from flux_profile import add_listener, remove_listener
+
+        watch = _Watch(out / AGENT)
+        add_listener(watch)
+        try:
+            turn = run_turn(spec, spec.argv, subs, workdir=out)
+        finally:
+            remove_listener(watch)
+        watch.save(None, steps=turn.steps or [], **{"steps total": len(turn.steps or []), "status": "done" if turn.ok else "failed"})
         (out / "agent.out").write_text((turn.stdout or "")[-200000:])           # what it printed: kept to read a failure
         written = (out / ANSWER).read_text(errors="replace").strip() if (out / ANSWER).is_file() else ""
         answer = written or (turn.text or "").strip()
