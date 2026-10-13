@@ -771,7 +771,7 @@ class _Live:
         if last is not None and last["k"] == kind:
             last["text"] = (last["text"] + text)[-self.STEP_CHARS:]
             return
-        self.steps.append({"k": kind, "text": text[-self.STEP_CHARS:]})
+        self.steps.append({"k": kind, "text": text[-self.STEP_CHARS:], "at": round(__import__("time").time(), 1)})   # D1030: when
         del self.steps[:-self.STEPS_KEPT]
 
     def _codex(self, ev: dict[str, Any]) -> None:
@@ -815,7 +815,8 @@ class _Live:
 
     def _tool_step(self, name: str, args: Any, ident: str | None = None, out: Any = None, error: bool = False) -> None:
         self.transport_error = ""
-        step: dict[str, Any] = {"k": "tool", "name": name, "call": _detail(name, args), "input": self._args(args)}
+        step: dict[str, Any] = {"k": "tool", "name": name, "call": _detail(name, args), "input": self._args(args),
+                                "at": round(__import__("time").time(), 1)}                 # D1030: when it began
         if out is not None:
             step.update(out=_text_of(out)[-self.STEP_CHARS:], error=bool(error))
         self.steps.append(step)
@@ -924,7 +925,7 @@ class _Live:
                         self.thought_tokens += int(d.get("estimated_tokens") or 0)
                         last = self.steps[-1] if self.steps else None
                         if last is None or last["k"] != "think":
-                            self.steps.append({"k": "think", "text": "", "redacted": 0})
+                            self.steps.append({"k": "think", "text": "", "redacted": 0, "at": round(__import__("time").time(), 1)})
                         self.steps[-1]["redacted"] = self.steps[-1].get("redacted", 0) + int(d.get("estimated_tokens") or 0)
             elif e.get("type") == "content_block_stop" and self.words and not self.words.endswith("\n"):
                 self.words += "\n"

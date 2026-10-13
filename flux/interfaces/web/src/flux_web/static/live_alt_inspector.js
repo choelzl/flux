@@ -247,7 +247,9 @@ function criticBody(n, env) {
 
 /** Any other task: its steps (the tasks under it) with what each gave. */
 function stepsBody(n, env) {
-  return n.kids.length ? [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))))] : [];
+  // D1029: its own box's steps -- a check run inside a design's generation is the Check box's, not listed here
+  const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
+  return kids.length ? [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env))))] : [];
 }
 
 /** The inspector of a task in LiveAlt (D982). `env`: now, nodes, tools(), block(), tidy(), agent(n),

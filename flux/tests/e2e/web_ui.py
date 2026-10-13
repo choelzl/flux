@@ -952,7 +952,7 @@ def flows(r: Run) -> None:
             r.check("live prompt scrolling survives unrelated updates", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]').scrollTop === 160"))
             r.button("Live", ".scroll-fixture .dtabs")
             b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}}}); f.tree.draw(); return 1")
-            b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-step').forEach(el => el.open = true); return 1")
+            b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-work, details.cv-step').forEach(el => el.open = true); return 1")
             b.wait("(() => { const d = window.__scrollFixture.tree.detail; return [...d.querySelectorAll('details.cv-step')].every(el => el.open) && d.scrollHeight > d.clientHeight + 500; })()", what="opened thinking and tool output")
             positions = b.js("""const f = window.__scrollFixture;
               const boxes = [...f.tree.detail.querySelectorAll('pre[data-k]')];
@@ -1070,6 +1070,14 @@ def flows(r: Run) -> None:
                     b.js("const l = document.querySelector('.invalidated-list'); return !!l && l.textContent.includes('Invalidated by hand (1)') && l.textContent.includes('the bench was misconfigured') && ['Re-evaluate', 'Restore'].every(t => [...l.querySelectorAll('button')].some(x => x.textContent === t))"))
             r.check("old row-hiding preferences are ignored and every design remains visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && !document.querySelector('.hide-design, .hidden-rows')"))
             r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
+            # D1032: a label turns about the middle of its line's end, which sits on the column's right edge -- where its numbers end
+            got = b.js("""const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'), l = th.querySelector('.measurement-label'),
+                  head = th.querySelector('.measurement-heading'), [ox, oy] = getComputedStyle(l).transformOrigin.split(' ').map(parseFloat);
+                  const col = [...th.parentElement.children].indexOf(th), cell = document.querySelector('table.designs tbody tr').children[col];
+                  const cs = getComputedStyle(cell), numberEnd = cell.getBoundingClientRect().right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+                  return [Math.abs(oy - l.offsetHeight / 2) < 1 && Math.abs(ox - l.offsetWidth) < 1,
+                          Math.round(head.getBoundingClientRect().right - numberEnd), Math.round(l.offsetLeft + l.offsetWidth - head.clientWidth)];""")
+            r.check("a diagonal header's text ends where its column's numbers end", got[0] and abs(got[1]) <= 1 and abs(got[2]) <= 1, str(got))
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))
             b.click("table.designs tbody input[type=checkbox]")
             r.check("results are always compact regardless of the old preference, with no toggle", b.js("const t = document.querySelector('table.designs'), name = t.querySelector('.table-design-name'); return !document.querySelector('.compact-table') && getComputedStyle(name).maxWidth !== 'none' && t.querySelectorAll('th').length === 9 && t.getBoundingClientRect().width <= t.parentElement.clientWidth + 1"))

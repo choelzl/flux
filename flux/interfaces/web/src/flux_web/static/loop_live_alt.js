@@ -175,6 +175,9 @@ export function liveAltTab(ctx) {
   }
   // D995: a finished task that did not fail itself but holds one that did is marked "!", not ✓
   const failedUnder = () => { const s = new Set(); for (const n of inspector.model.nodes.values()) if (n.failed) for (let p = n.parent; p; p = p.parent) s.add(p.id); return s; };
+  // D1031: tries and passes are judged by how they ended -- the last one failed is ✗; earlier failed tries
+  // (a refused draft, a check that failed before one passed) are "!", not a failed pass
+  const ended = nodes => { const last = [...nodes].sort((a, b) => (a.t1 ?? a.t0) - (b.t1 ?? b.t0)).at(-1); return !!last?.failed; };
   const doneMark = (failed, partial) => h("span", { class: `alt-task-state ${failed ? "failed" : partial ? "partial" : "done"}`, "aria-hidden": "true",
     title: partial && !failed ? "a step under it failed" : null }, failed ? "✗" : partial ? "!" : "✓");
   const mark = (n, below) => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
@@ -220,7 +223,7 @@ export function liveAltTab(ctx) {
       const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
       out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, taskLabel(first)), h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`),
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) run.forEach((r, i) => line(r, depth + 1, `try ${i + 1}`));
@@ -248,11 +251,11 @@ export function liveAltTab(ctx) {
       if (pass === "all") {
         const key = `pass:${g.p ?? "setup"}`, nodes = g.rows.map(r => r.node), finished = nodes.every(n => n.t1 != null);
         const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
-        const failed = nodes.some(n => n.failed), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+        const failed = ended(nodes), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
         const name = g.p == null ? "Setup" : g.p === 0 ? "Pass 0 · baseline" : `Pass ${g.p}`;
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
           h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
-            finished ? doneMark(failed, nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+            finished ? doneMark(failed, nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
             h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
         if (collapsed) continue;
         depth = 1;
@@ -286,7 +289,8 @@ export function liveAltTab(ctx) {
     const boxes = flowBoxes(inPass, shown, running), back = repaired(boxes);
     const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" }, passes.map(p => {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
-      const st = nodes.some(n => n.t1 == null) ? "running" : nodes.some(n => n.failed) ? "failed" : "done";
+      const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
+      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) ? "failed" : "done";   // D1031
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; showPass(p); } }, p == null ? "S" : String(p));
     })) : "";
@@ -330,7 +334,7 @@ export function liveAltTab(ctx) {
       box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
       g.push(box);
       y += BH;
-      if (isOpen) {
+      if (isOpen && b.kind !== "design") {        // D1029: a design is one script, agent or model run -- no branch under it
         // the box is its runs: list what is under each, never the run itself; runs of a box that
         // ran more than once are kept apart by a thin divider
         const under = (run, n) => { for (let p = n.parent; p; p = p.parent) if (p === run) return true; return false; };

@@ -104,7 +104,7 @@ def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
     ("gate: tools", "setup"), ("gate: the problem", "setup"), ("propose: decompose", "setup"),
     ("knowledge: digest papers", "setup"), ("records: re-verify *", "setup"), ("feedback: notes", "setup"),
     ("plan: route", "plan"), ("dse: small variations", "search"),
-    ("generation: x", "design"), ("generate: prototype", "design"), ("repair: x", "design"), ("evaluation", "design"),
+    ("generation: x", "design"), ("generate: prototype", "design"), ("repair: x", "design"), ("evaluation", "measure"),
     ("generation: build x", "check"), ("build: x", "check"), ("test: gate", "check"), ("gate: x", "check"),
     ("simulation: screen x", "measure"), ("simulation: confirm x", "measure"), ("calibrate: screen", "measure"),
     ("propose: finalists", "choose"), ("orchestrate: x", "search"), ("decide: x", "choose"),

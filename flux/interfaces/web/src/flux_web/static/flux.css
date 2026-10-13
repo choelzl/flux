@@ -344,7 +344,9 @@ table.designs td { white-space: nowrap; }
   display: flex; align-items: flex-end; justify-content: flex-end;
   height: max(68px, calc(var(--metric-length) * .83ch + 26px)); }
 .measurement-label { position: absolute; right: 0; bottom: 18px; width: max-content;
-  transform: rotate(55deg); transform-origin: right bottom; text-align: right; white-space: nowrap; }
+  /* D1032: turned about the middle of its line's end -- the text ends on the column's right edge, as its numbers do
+     (about the box's corner, the line half a line above it swung ~6px past the edge) */
+  transform: rotate(55deg); transform-origin: right center; text-align: right; white-space: nowrap; }
 .result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0; min-height: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .measurement-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px;
@@ -934,6 +936,18 @@ td.bad { color: var(--bad); }
 .cv-text .md > :first-child { margin-top: 0; }
 .cv-text .md > :last-child { margin-bottom: 0; }
 .cv-step { border: 1px solid var(--line); border-radius: 6px; background: var(--soft); }
+/* D1030: the work between two answers, one dashed line until it is opened */
+.cv-work > summary { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; cursor: pointer; list-style: none; padding: 2px 0; }
+.cv-work > summary::-webkit-details-marker { display: none; }
+.cv-work > summary::before, .cv-work > summary::after { content: ""; flex: 1; border-top: 1px dashed var(--line); }
+.cv-work > summary:hover { color: var(--ink); }
+.cv-work > summary:hover::before, .cv-work > summary:hover::after { border-top-color: var(--muted); }
+.cv-work-said { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cv-work-said::before { content: "▸"; font-size: 10px; }
+.cv-work[open] .cv-work-said::before { content: "▾"; }
+.cv-work.bad .cv-work-said { color: var(--bad); }
+.cv-work.live .cv-work-said { color: var(--accent); }
+.cv-work-steps { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 2px; }
 .cv-step > summary { display: flex; align-items: baseline; gap: 8px; padding: 4px 9px; cursor: pointer; list-style: none; min-width: 0; }
 .cv-step > summary::-webkit-details-marker { display: none; }
 .cv-step > summary::before { content: "▸"; color: var(--muted); font-size: 11px; }

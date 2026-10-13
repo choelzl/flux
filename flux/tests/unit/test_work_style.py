@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("tool:gen.py", "generate x=1"),
           ("tool:fluxpreset rtl measure", "stage screen x=1"), ("tool:python3", "estimate y"),
           ("tool:fluxpreset golden", "test x"), ("tool: compile", "build all"), ("tool:yosys", ""),
-          ("knowledge: prepare p", ""), ("propose: decompose", ""), ("propose: next", ""), ("gate: tools", ""),
+          ("knowledge: prepare p", ""), ("propose: decompose", ""), ("propose: next", ""), ("propose: brief d#1", "once per part"), ("gate: tools", ""),
           ("gate: the problem", ""), ("gate: admitted", ""), ("generation: build x", ""), ("generation: current", ""),
           ("build: lib", ""), ("test: gate", ""), ("simulation: screen", ""), ("evaluation", ""),
           ("template-fill: compose", ""), ("decide", ""), ("frontier", ""), ("critique: decision", ""),
@@ -50,3 +50,20 @@ def test_a_task_bar_is_its_own_time_and_a_kind_comes_from_above():
     assert got["own"] == [[0, 1], [6, 10]], "the children's time, side by side counted once, is not the batch's"
     assert got["leaf"] == [[1, 4]] and got["agent"] == [[3, 4], [5, 6]]
     assert got["kinds"] == ["search", "check", "search", "search"], "an agent and its tools take the work they are under"
+
+
+def test_a_designs_brief_is_its_design_not_a_choice():
+    """D1029: `propose: brief` prepares the design agent's brief before generation -- it was Choose, done
+    in seconds, so the pass looked decided while its checks still ran."""
+    from flux_web.timeline import kind_of
+
+    assert kind_of("propose: brief bau#3", "once per part") == "design"
+    assert kind_of("propose: what next", "") == "choose" and kind_of("propose: finalists", "") == "choose"
+
+
+def test_the_climb_through_the_stages_is_measure_work():
+    """D1031: `evaluation` (compose, measure, cutoffs, routing) is what Measure does -- it was Design, so a pass
+    measuring its design said "Design · evaluation, running"."""
+    from flux_web.timeline import kind_of
+
+    assert kind_of("evaluation", "compose, chain, cutoffs, routing") == "measure"

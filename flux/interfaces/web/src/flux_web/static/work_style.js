@@ -24,9 +24,11 @@ export function kindOf(name, why = "") {
   if (head === "propose" && rest.startsWith("decompose") || head === "gate" && (rest.startsWith("tools") || rest.startsWith("the problem"))) return "setup";
   if (head === "build" || head === "generation" && rest.startsWith("build ")) return "check";
   if (["test", "gate", "judge", "admitted", "verify", "probe"].includes(head)) return "check";
-  if (["simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate"].includes(head)) return "measure";
+  // D1031: `evaluation` is the climb through the stages (compose, measure, cutoffs, routing) -- the Measure box's
+  if (["simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate", "evaluation"].includes(head)) return "measure";
   if (["generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
-    "design", "oracle", "invent", "compute", "evaluation"].includes(head)) return "design";
+    "design", "oracle", "invent", "compute"].includes(head)) return "design";
+  if (head === "propose" && rest.startsWith("brief")) return "design";        // D1029: the design's brief, not a choice
   if (["propose", "decide", "frontier", "decision", "select"].includes(head)) return "choose";
   if (head === "critique") return "critic";
   if (head === "dse") return "search";

@@ -359,18 +359,22 @@ function markdown(text) {
 
 /** An agent's conversation (D712): what it did, in order -- its words as text, its thinking and
     each tool call (input and output) folded, opened on a click and kept open across the redraws.
+    D1030: the work between two answers -- its thinking and commands -- is one dashed line ("5 steps ·
+    3 commands · 1m 20s"), opened on a click to its steps; the answers stay in view.
     `offset`: how many earlier steps are not in `steps` (a live row sends its latest). */
 const convOpen = new Set();
 function conversation(steps, { key = "", offset = 0, live = false, scroll = false } = {}) {
   const items = [];
   if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} hidden`));
   const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
-  steps.forEach((st, i) => {
-    const id = `${key}:${offset + i}`, last = i === steps.length - 1;
-    if (st.k === "text") { if (String(st.text || "").trim()) items.push(h("div", { class: "cv-text" }, markdown(String(st.text).trim()))); return; }
-    const det = h("details", { class: `cv-step cv-${st.k}${st.error ? " bad" : ""}` });
+  const kept = (det, id) => {
     if (convOpen.has(id)) det.open = true;
     det.addEventListener("toggle", () => { if (det.open) convOpen.add(id); else convOpen.delete(id); });
+    return det;
+  };
+  const stepOf = (st, i) => {
+    const id = `${key}:${offset + i}`, last = i === steps.length - 1;
+    const det = kept(h("details", { class: `cv-step cv-${st.k}${st.error ? " bad" : ""}` }), id);
     if (st.k === "think") {
       const t = String(st.text || "").trim();
       det.append(h("summary", {}, h("span", { class: "cv-kind" }, "Thinking"),
@@ -390,8 +394,34 @@ function conversation(steps, { key = "", offset = 0, live = false, scroll = fals
         st.out != null ? h("div", { class: "cv-io" }, h("small", {}, st.error ? "error" : "output"),
           h("pre", { class: `cv-body${st.error ? " err" : ""}`, "data-k": `${id}:output` }, String(st.out).trim() || "(nothing)")) : "");
     }
-    items.push(det);
-  });
+    return det;
+  };
+  const took = s => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`; };
+  for (let i = 0; i < steps.length;) {
+    const st = steps[i];
+    if (st.k === "text") {
+      if (String(st.text || "").trim()) items.push(h("div", { class: "cv-text" }, markdown(String(st.text).trim())));
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (j < steps.length && steps[j].k !== "text") j += 1;
+    const work = steps.slice(i, j), now = live && j === steps.length;          // the stretch it is working on
+    const cmds = work.filter(x => x.k !== "think").length, failed = work.filter(x => x.error).length;
+    const end = now ? Date.now() / 1000 : (steps[j]?.at ?? work[work.length - 1].at);
+    const secs = work[0].at != null && end != null ? end - work[0].at : null;
+    const said = [`${work.length} step${work.length === 1 ? "" : "s"}${now ? " so far" : ""}`,
+      cmds ? `${cmds} command${cmds === 1 ? "" : "s"}` : "", failed ? `${failed} failed` : "", secs != null ? took(secs) : ""].filter(Boolean).join(" · ");
+    const first = i;
+    const box = kept(h("details", { class: `cv-work${now ? " live" : ""}${failed ? " bad" : ""}` }), `${key}:w${offset + i}`);
+    // open while a step in it is open: a live tail rolls its first steps away, and with them the line's own key
+    if (work.some((_x, k) => convOpen.has(`${key}:${offset + first + k}`))) box.open = true;
+    box.append(h("summary", { title: "Its thinking and commands: click to open" },
+      h("span", { class: "cv-work-said" }, now ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : "", now ? `working · ${said}` : said)),
+      h("div", { class: "cv-work-steps" }, work.map((x, k) => stepOf(x, first + k))));
+    items.push(box);
+    i = j;
+  }
   return h("div", { class: `cv${scroll ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
 }
 

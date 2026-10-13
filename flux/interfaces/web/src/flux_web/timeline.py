@@ -54,10 +54,12 @@ def kind_of(name: str, why: str = "") -> str | None:
         return "check"
     if head in ("test", "gate", "judge", "admitted", "verify", "probe"):
         return "check"
-    if head in ("simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate"):
-        return "measure"
+    if head in ("simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate", "evaluation"):
+        return "measure"                                      # D1031: `evaluation` is the climb through the stages
     if head in ("generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
-                "design", "oracle", "invent", "compute", "evaluation"):
+                "design", "oracle", "invent", "compute"):
+        return "design"
+    if head == "propose" and rest.startswith("brief"):      # D1029: the design's brief, not a choice
         return "design"
     if head in ("propose", "decide", "frontier", "decision", "select"):
         return "choose"

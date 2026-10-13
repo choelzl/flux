@@ -98,8 +98,10 @@ def test_claude_stream_json_is_read_live_and_its_result_is_the_answer():
               {"type": "rate_limit_event"}]
     for ev in events:
         live.feed(json.dumps(ev) + "\n")
-    assert live.fields() == {"tool calls": "1. Bash", "reply (live tail)": "done\n", "steps total": 2,
-                             "steps": [{"k": "tool", "name": "Bash", "call": "Bash", "input": {}}, {"k": "text", "text": "done\n"}]}
+    got = live.fields()
+    assert all(isinstance(st.pop("at"), float) for st in got["steps"]), "each step says when it began (D1030)"
+    assert got == {"tool calls": "1. Bash", "reply (live tail)": "done\n", "steps total": 2,
+                   "steps": [{"k": "tool", "name": "Bash", "call": "Bash", "input": {}}, {"k": "text", "text": "done\n"}]}
     assert _parse("claude", "".join(json.dumps(e) + "\n" for e in events)) == ("the file is written", "s-1")
 
 

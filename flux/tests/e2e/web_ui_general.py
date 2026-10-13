@@ -390,6 +390,10 @@ def general_flows(r, watch):
                 r.check("a revision stays visible after earlier loop runs", b.js("return !!document.querySelector('.card.authoring') && document.querySelector('.author-activity').textContent.includes('agent: claude')"))
                 r.check("author status distinguishes process life, runtime and agent output age", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.author-heartbeat').textContent.includes('process is alive') && c.querySelector('.author-activity').textContent.includes('1m 30s') && c.querySelector('.author-output-age').textContent.includes('last 2s ago')"))
                 r.check("live author tools and debug stderr are shown without a failure", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-tool').textContent.includes('check.py') && c.textContent.includes('DEBUG: connection ready') && !c.querySelector('.callout.bad')"))
+                # D1030: the thinking and commands before an answer are one dashed line, opened on a click
+                r.check("the work between answers is one folded line that says what it holds",
+                        b.js("const w=document.querySelector('.authoring .cv-work'); return !!w && !w.open && /\\d+ steps?/.test(w.querySelector('summary').textContent) && /command/.test(w.querySelector('summary').textContent)"))
+                b.click(".authoring .cv-work summary")
                 b.click(".authoring .cv-think summary")
                 b.click(".authoring [data-author-section=log] summary")
                 b.click(".authoring [data-author-section=prompt] summary")
@@ -521,7 +525,7 @@ def general_flows(r, watch):
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:4,fields:{status:'working'}});return 1")
                 b.wait("document.querySelector('.alt-detail .facts')?.textContent.includes('working')", what="agent status update")
                 r.check("expanded prompt remains expanded across live updates", b.js("return document.querySelector('.alt-detail .inspector-input').open"))
-                b.js("document.querySelector('.alt-detail .cv-think').open=true;return 1")
+                b.js("document.querySelectorAll('.alt-detail .cv-work').forEach(w => w.open=true); document.querySelector('.alt-detail .cv-think').open=true;return 1")
                 b.wait("document.querySelector('.alt-detail .cv-thought')?.clientHeight>0", what="expanded LiveAlt thinking")
                 positions = b.js("""const d=document.querySelector('.alt-detail'), p=d.querySelector('[data-k=prompt]'), t=d.querySelector('.cv-thought');
                   p.scrollTop=125;t.scrollTop=175;window.__altPrompt=p;
@@ -596,16 +600,12 @@ def general_flows(r, watch):
                 r.check("changing pass clears the empty-phase inspector", b.js("return !document.querySelector('.alt-box-detail')"))
                 b.click('.alt-flow-box[data-box="design"] .alt-box')
                 r.check("a box opens its current task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-flow-box[data-box=design].sel')"))
-                r.check("a box lists the tasks under it (not itself again), named in the timeline's words; the graph has no stepper", b.js("return [...document.querySelectorAll('.alt-box-tasks .alt-task-name')].map(n=>n.textContent).join(',')==='Agent · claude' && !document.querySelector('.alt-stepper')"))
+                # D1029: a design is one script, agent or model run -- its box opens its task, with no branch under it
+                r.check("the Design box has no branch under it; the graph has no stepper",
+                        b.js("return !document.querySelector('.alt-box-tasks') && !document.querySelector('.alt-stepper')"))
                 b.click('.alt-flow-box[data-box="design"] .alt-box')
-                r.check("a second click on a box closes its list", b.js("return !document.querySelector('.alt-box-tasks')"))
                 b.js("document.querySelector('.alt-flow-box[data-box=design]').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1")
-                r.check("Enter opens a recorded box's tasks as a click does", b.js("return !!document.querySelector('.alt-box-tasks') && document.querySelector('.alt-detail').dataset.task==='4'"))
-                b.js("document.querySelector('.alt-flow-box[data-box=design]').dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));return 1")
-                r.check("Space closes a recorded box's tasks as a click does", b.js("return !document.querySelector('.alt-box-tasks')"))
-                b.click('.alt-flow-box[data-box="design"] .alt-box')
-                b.click('.alt-box-tasks [data-task="4"]')
-                r.check("a task in a box's list opens in the inspector, the list stays open", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-box-tasks [data-task=\"4\"].sel')"))
+                r.check("Enter opens a recorded box's task as a click does", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-flow-box[data-box=design].sel')"))
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate visibly highlights and focuses the selected box", b.js("return document.activeElement.matches('.alt-flow-box[data-box=design].alt-located') && document.querySelector('.alt-detail').dataset.task==='4'"))
                 if os.environ.get("FLUX_E2E_SHOTS"):

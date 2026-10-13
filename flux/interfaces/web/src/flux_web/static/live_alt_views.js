@@ -59,7 +59,8 @@ function boxState(runs) {
   if (s === "failed" || s === "interrupted") return "bad";
   if (s === "timeout") return "part";                   // D997: a time limit warns
   const failedIn = n => (n.kids || []).some(k => k.failed || failedIn(k));
-  return failedIn(last) ? "part" : "ok";                // D995: a step under it failed
+  // D995: a step under it failed; D1031: or an earlier run failed (a refused try before the one that passed)
+  return runs.some(r => r !== last && r.failed) || runs.some(failedIn) ? "part" : "ok";
 }
 function who(runs) {
   const all = runs.flatMap(r => { const out = [], st = [r]; while (st.length) { const x = st.pop(); out.push(x); st.push(...(x.kids || [])); } return out; });
