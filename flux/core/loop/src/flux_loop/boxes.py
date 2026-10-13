@@ -137,7 +137,8 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
              f"{json.dumps(schema, indent=1)}\n" + (f"\n{shelf}\n" if shelf else ""))
     prompt_file = workdir / (f"BRIEF-{sess.turns:03d}.md" if sess is not None else "BRIEF.md")
     subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(out), "workdir": str(workdir),
-            "part": box, "name": box, "python": sys.executable, "workbench": bench}
+            "part": box, "name": box, "python": sys.executable, "workbench": bench,
+            "home": home or "."}                       # D1038: an agent of one's own may name its files, as a design's does
     resume = sess.id if sess is not None and a.resume else None
     shape = json.dumps(schema, indent=1)
     message = ""

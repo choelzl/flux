@@ -318,3 +318,13 @@ def test_codex_keeps_its_own_sandbox_on_the_host_and_flux_s_container_is_its_san
     boxed = agent_spec({"preset": "codex"}).argv
     assert boxed[boxed.index("--sandbox") + 1] == "danger-full-access" and boxed[-1] == "-"
     assert "--sandbox" not in agent_spec({"preset": "claude"}).argv, "the others untouched"
+
+
+def test_an_agent_of_ones_own_may_name_the_loops_files_in_a_box(tmp_path):
+    """D1038: `{home}` in an agent's command -- a decision box's turn crashed on it (KeyError), a design's did not."""
+    (tmp_path / "home").mkdir()
+    (tmp_path / "home" / "fake_agent.py").write_text(FAKE)
+    (tmp_path / "answer.json").write_text(json.dumps({"ok": True}))
+    spec = {"command": [sys.executable, "{home}/fake_agent.py", "good", "{prompt_file}", "{artifact}", str(tmp_path / "answer.json")],
+            "timeout_s": 60}
+    assert box_turn("critique", spec, "Q?", SCHEMA, _state(tmp_path), home=str(tmp_path / "home")) == {"ok": True}

@@ -19,7 +19,7 @@ export function liveAltTab(ctx) {
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map();
-  let notes = {}, goals = [], chainPass = null, openBox = null;
+  let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
   let boxView = null, problem = null;
   const NO_PASS = Symbol("no pass");
   let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task
@@ -222,7 +222,7 @@ export function liveAltTab(ctx) {
         h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected), title: n.name + (n.why ? " · " + n.why : "") },
           mark(n, below), h("span", { class: "alt-task-name" }, label, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : ""),
           h("span", { class: "mono muted small" }, dur(secs(n))))));
-      if (!collapsed) under.forEach(k => line(k, depth + 1));
+      if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
     };
     // D1016: the same task again in a row (a design continued in its pass, D999) -- one line, ×N, its tries under it
     const again = (run, depth) => {
@@ -237,10 +237,33 @@ export function liveAltTab(ctx) {
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) run.forEach((r, i) => line(r, depth + 1, `try ${i + 1}`));
     };
+    // D1038: tries of two steps (a draft, then its check) again and again -- one line, ×N, each try's two under it
+    const pairs = (list, k) => {
+      const a = taskLabel(list[k].node), b = list[k + 1] && taskLabel(list[k + 1].node);
+      if (!b || a === b) return 0;
+      let e = k;
+      while (e + 1 < list.length && taskLabel(list[e].node) === a && taskLabel(list[e + 1].node) === b) e += 2;
+      return (e - k) / 2;
+    };
+    const againPairs = (list, k, m, depth) => {
+      const run = list.slice(k, k + 2 * m), nodes = run.map(r => r.node), first = nodes[0], key = `again:${first.id}`, finished = nodes.every(n => n.t1 != null);
+      const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
+      const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+      const tries = Array.from({ length: m }, (_, i) => [run[2 * i].node, run[2 * i + 1].node]);
+      out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
+        h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
+          finished ? doneMark(ended(tries.at(-1)), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          h("span", { class: "alt-task-name" }, taskLabel(first), h("span", { class: "muted small" }, ` · ${taskLabel(nodes[1]).replace(/^[^·]*·\s*/, "")}`)),
+          h("span", { class: "alt-again", title: `${m} tries in a row` }, `×${m}`),
+          h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+      if (!collapsed) run.forEach((r, i) => line(r, depth + 1, i % 2 ? "" : `try ${i / 2 + 1}`));
+    };
     const runs = (list, depth) => {
       for (let k = 0; k < list.length;) {
         let e = k + 1;
         while (e < list.length && taskLabel(list[e].node) === taskLabel(list[k].node) && !(kids.get(list[k].node.id) || []).length === !(kids.get(list[e].node.id) || []).length) e++;
+        const m = e === k + 1 ? pairs(list, k) : 0;
+        if (m >= 2) { againPairs(list, k, m, depth); k += 2 * m; continue; }
         again(list.slice(k, e), depth); k = e;
       }
     };
@@ -445,6 +468,7 @@ export function liveAltTab(ctx) {
           ...taskButton(n), type: "button", class: "alt-choice-task", "data-choice": String(n.id) }, h("span", {}, taskLabel(n), n.why ? h("small", { class: "muted" }, " · " + n.why) : ""), h("small", { class: "muted" }, state(n))))) : "");
   }
   async function load(validPage) {
+    chainPass = undefined;                      // D1038: a start loaded anew opens on its own latest pass
     close(); valid = validPage;
     const mine = seq, current = () => mine === seq && valid() && ctx.tab === "LiveAlt";
     abort = new AbortController(); const signal = abort.signal;

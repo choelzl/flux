@@ -39,7 +39,7 @@ TREE = """
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
     assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · screen",
-                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · decision",
+                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique of the decision",
                    "Setup · mentor", "Setup · papers"]
 
 
@@ -59,6 +59,26 @@ def test_a_design_after_a_check_is_a_repair_counted_on_the_box():
     got = run(f"""m => {{ {TREE} const again = {{id: 9, name: "tool:gen.py", why: "generate lut-chunk=4", parent: null, t0: 5, t1: 6, kids: []}};
       const b = m.flowBoxes([...rows, {{node: again}}], 6, false); return [b.find(x => x.key === "design").count, m.repaired(b)]; }}""")
     assert got == [2, True]
+
+
+def test_a_boxs_count_is_how_many_times_its_work_ran_not_how_many_tasks_it_holds():
+    """D1038: a gate of four tests is one Check; a design an evaluation composes is the measurement's;
+    a decision's own steps are one Choose; four library reads in a row are one Library."""
+    got = run("""m => {
+      const mk = (id, name, parent, t0) => ({id, name, parent, t0, t1: t0 + 1, kids: []});
+      const gen = mk(1, "generation: improve x#1", null, 0), turn = mk(2, "agent: claude", gen, 0);
+      const gate = mk(3, "test: gate", null, 2), tests = [4, 5, 6, 7].map(i => mk(i, "tool:check.py", gate, 2 + i / 10));
+      const sim = mk(8, "simulation: esl", null, 4), tool = mk(9, "tool:measure.py", sim, 4);
+      const ev = mk(10, "evaluation", null, 6), comp = mk(11, "template-fill: compose", ev, 6), climb = mk(12, "simulation: esl", ev, 7);
+      const dec = mk(13, "decide", null, 9), front = mk(14, "frontier", dec, 9), pick = mk(15, "decide", dec, 9.5), crit = mk(16, "critique: decision", dec, 9.8);
+      gen.kids = [turn]; gate.kids = tests; sim.kids = [tool]; ev.kids = [comp, climb]; dec.kids = [front, pick, crit];
+      const all = [gen, turn, gate, ...tests, sim, tool, ev, comp, climb, dec, front, pick, crit];
+      const b = m.flowBoxes(all.map(node => ({node})), 1, false);
+      const lib = [1, 2, 3, 4].map(i => mk(20 + i, "knowledge: mentor", null, i)), doc = mk(30, "gate: tools", null, 0);
+      const s = m.flowBoxes([doc, ...lib].map(node => ({node})), null, false);
+      return [Object.fromEntries(b.map(x => [x.key, x.count])), Object.fromEntries(s.map(x => [x.key, x.count])), [dec, pick, crit].map(m.taskLabel)]; }""")
+    assert got == [{"design": 1, "check": 1, "measure": 1, "choose": 1}, {"Document": 1, "Library": 1},
+                   ["Choose", "Choose · pick", "Choose · critique of the decision"]]
 
 
 def test_what_each_box_is_set_to_comes_from_the_document():

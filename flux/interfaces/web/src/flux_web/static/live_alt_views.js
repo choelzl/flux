@@ -46,6 +46,9 @@ export function taskLabel(n) {
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") return "Check";
+  // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
+  if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
+  if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest || "a design"}`;
   if (rest) return `${kind} · ${rest}`;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;
 }
@@ -84,8 +87,13 @@ function who(runs) {
 /** The boxes of a pass's flow: [{key, title, kind, state, runs, steps, who, count}]. */
 export function flowBoxes(rows, p, running) {
   const kind = passKind(p);
-  if (kind === "setup") return SETUP_BOXES.map(([title, test]) => ({ key: title, title, kind: "setup", runs: runsOf(rows, test) }))
-    .filter(b => b.runs.length).map(finish);
+  if (kind === "setup") {
+    const boxes = SETUP_BOXES.map(([title, test]) => ({ key: title, title, kind: "setup", runs: runsOf(rows, test) })).filter(b => b.runs.length);
+    const times = {};   // D1038: a box's runs side by side are one; another box's run between them makes it twice
+    let at = null;
+    for (const [n, k] of boxes.flatMap(b => b.runs.map(n => [n, b.key])).sort((a, b) => a[0].t0 - b[0].t0)) { if (k !== at) times[k] = (times[k] || 0) + 1; at = k; }
+    return boxes.map(b => ({ ...finish(b), count: times[b.key] }));
+  }
   const kinds = kind === "baseline" ? ["check", "measure"] : PASS_KINDS;
   const present = new Set(rows.map(r => phaseKind(r.node)));
   const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
@@ -93,7 +101,27 @@ export function flowBoxes(rows, p, running) {
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))) }));
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
-  return boxes.map(finish);
+  const times = stretches(rows);
+  return boxes.map(b => ({ ...finish(b), ...(times[b.key] ? { count: times[b.key] } : {}) }));
+}
+/** D1038: how many times each box's work happened in the pass -- a stretch of its own work in time,
+    broken only by another box's design, check or measure work: a gate's four tests are one Check, two
+    drafts each checked are Check ×2. A step that is bookkeeping inside other work (a frontier inside a
+    measurement, the design an evaluation composes) is that work's, not a stretch of its own. */
+const WORK = ["search", "design", "check", "measure"];
+function stretches(rows) {
+  const owner = n => { for (let p = n.parent; p; p = p.parent) { const k = phaseKind(p); if (k && k !== phaseKind(n)) return WORK.includes(k) ? k : null; } return null; };
+  const leaves = rows.map(r => r.node).filter(n => !(n.kids || []).length).sort((a, b) => a.t0 - b.t0);
+  const out = {}, inside = {};
+  for (const n of leaves) {
+    const o = owner(n), k = o === "measure" ? o : phaseKind(n);                    // a design composed inside a measurement is the measurement's
+    if (!k) continue;
+    if (o && !WORK.includes(k)) continue;
+    if (!inside[k]) out[k] = (out[k] || 0) + 1;
+    if (WORK.includes(k)) for (const w of Object.keys(inside)) inside[w] = false;   // work ends every other stretch
+    inside[k] = true;                                                               // bookkeeping ends none
+  }
+  return out;
 }
 function finish(b) {
   const st = b.done ? "ok" : boxState(b.runs);

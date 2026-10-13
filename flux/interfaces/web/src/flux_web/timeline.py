@@ -61,6 +61,8 @@ def kind_of(name: str, why: str = "") -> str | None:
         return "design"
     if head == "propose" and rest.startswith("brief"):      # D1029: the design's brief, not a choice
         return "design"
+    if head == "propose" and rest.startswith("plan"):       # D1038: the menu plan, not a choice
+        return "plan"
     if head in ("propose", "decide", "frontier", "decision", "select"):
         return "choose"
     if head == "critique":                                  # D1034: in the box of what it judges

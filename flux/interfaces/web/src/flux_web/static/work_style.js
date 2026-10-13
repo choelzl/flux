@@ -29,6 +29,7 @@ export function kindOf(name, why = "") {
   if (["generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
     "design", "oracle", "invent", "compute"].includes(head)) return "design";
   if (head === "propose" && rest.startsWith("brief")) return "design";        // D1029: the design's brief, not a choice
+  if (head === "propose" && rest.startsWith("plan")) return "plan";           // D1038: the menu plan, not a choice
   if (["propose", "decide", "frontier", "decision", "select"].includes(head)) return "choose";
   // D1034: a critique is in the box of what it judges -- the split (setup), the decision (choose), a design (check)
   if (head === "critique") return rest.startsWith("decomposition") ? "setup" : rest.startsWith("decision") ? "choose" : "check";
