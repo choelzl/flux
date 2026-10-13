@@ -11,6 +11,17 @@
 // ndf: kind=contract level=L1 layer=tile status=accepted
 // An implementation SHOULD complete a 1x8 TADD in one cycle and MAY pipeline it.
 // NDF-END: PTO-TADD-CONTRACT-003
-func InstructionContractExecute_TADD()
+readonly func InstructionContractOperandsLegal_TADD(
+    destination: TileIndex,
+    source_left: TileIndex,
+    source_right: TileIndex) => boolean
+begin
+    return TRUE;
+end;
+
+func InstructionContractExecute_TADD(
+    destination: TileIndex,
+    source_left: TileIndex,
+    source_right: TileIndex)
 begin
 end;

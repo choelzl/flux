@@ -90,6 +90,8 @@
           # cryptominisat that cannot build in the sandbox among them (see the description).
           chipTools = {
             inherit (chipPkgs) verilator sv-lang yosys iverilog pythia ndf aslref;   # ndf, aslref: a spec's clauses and its ASL (D1020, D1021)
+            # pyCircuit 6.1 (PTO-ISA): `pycircuit build` -> Verilog and a C++ model; main is mid-rewrite to ACIR (D1024)
+            pycircuit = chipPkgs.pycircuit_6;
           } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
             # OpenROAD-flow-scripts over this OpenROAD and Yosys (`orfs`, below); KLayout for its GDS
             # step, not the host's (D947)
@@ -169,6 +171,7 @@
               # System Ninja loads Nix libstdc++ via LD_LIBRARY_PATH, mixing Nix libm
               # with the host libc. Use Ninja built against the same Nix runtime.
               pkgs.ninja
+              pkgs.cmake       # `pycircuit build` configures its C++ model and Verilator projects with it (D1024)
               pkgs.ruff        # the lint CI runs: `ruff check` (pyflakes rules; honours noqa)
               pkgs.systemc     # a SystemC prototype's testbench links it (D635)
               pkgs.hyperfine   # `flux prog time` (D661)

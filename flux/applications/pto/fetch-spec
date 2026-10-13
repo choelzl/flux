@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# The PTO spec this loop is checked against, pinned, into spec/ beside this file (D1024): its ASL
+# model, its NDF clauses and the NDF tool's pinned sources (tools/ndf). Run once; with a revision,
+# to move the pin:   ./fetch-spec [REV]
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+rev=${1:-03eb383fab9311f7d76def8b46cdbd04e1e50d23}
+if [ ! -d "$here/spec/.git" ]; then
+    git clone -q https://github.com/PTO-ISA/pto-spec.git "$here/spec"
+fi
+git -C "$here/spec" fetch -q origin
+git -C "$here/spec" -c advice.detachedHead=false checkout -q "$rev"
+git -C "$here/spec" submodule update -q --init tools/ndf
+echo "spec/ is PTO-ISA/pto-spec at $(git -C "$here/spec" rev-parse --short HEAD)"

@@ -806,6 +806,16 @@
       } else F.push("  orchestrate: " + inline(dv, false));
     }
 
+    // D1022: the scope a pass works on, kept as written, under the orchestrator that picks it
+    if (kf["flow.orchestrate.scope"] !== undefined) {
+      var oi = -1;
+      F.forEach(function (line, i) { if (/^  orchestrate: /.test(line)) oi = i; });
+      var ov = boxesKept ? kb.orchestrate : toSurface("orchestrate", boxVal("orchestrate"));
+      var scoped = ov && typeof ov === "object" && !Array.isArray(ov) ? Object.assign({}, ov) : ov === undefined || ov === "default" ? {} : { by: ov };
+      scoped.scope = kf["flow.orchestrate.scope"];
+      if (oi >= 0) F[oi] = "  orchestrate: " + inline(scoped, false); else F.push("  orchestrate: " + inline(scoped, false));
+    }
+
     // test: the checks, in order
     var checks = r.checks.filter(function (c) { return c.run; });
     if (!own("flow.test")) { if (kf["flow.test"] !== undefined) F.push("  test: " + inline(kf["flow.test"], false)); }
@@ -1223,6 +1233,10 @@
       if (k === "orchestrate" && val && typeof val === "object" && "dse" in val) {
         f.dse = val.dse; val = Object.assign({}, val); delete val.dse;
       }
+      if (k === "orchestrate" && val && typeof val === "object" && !Array.isArray(val) && "scope" in val) {   // D1022
+        out.scope = val.scope; val = Object.assign({}, val); delete val.scope;
+        if (!Object.keys(val).length) continue;
+      }
       if (k === "knowledge" && val && typeof val === "object" && !Array.isArray(val) && "digest" in val) {   // D830
         val = Object.assign({}, val);
         var dg2 = val.digest; delete val.digest;
@@ -1274,7 +1288,7 @@
 
   /** D775: where a part the configurator keeps as written lives now. */
   var KEPT_AT = { gate: "flow.test", stages: "flow.measure", space: "flow.dse.space", seeds: "flow.dse.seeds",
-                  knowledge: "flow.knowledge", flow: "flow.boxes" };
+                  knowledge: "flow.knowledge", flow: "flow.boxes", scope: "flow.orchestrate.scope" };
 
   /** A kept flow part's value, from the document as written (this layout). */
   function keptValue(doc, at) {
@@ -1285,12 +1299,17 @@
     var search = isSearch(fl.orchestrate) ? fl.orchestrate : null;      // D797: the search is orchestrate's
     if (at === "flow.dse.space") return search && search.space;
     if (at === "flow.dse.seeds") return search && search.seeds;
+    if (at === "flow.orchestrate.scope") return fl.orchestrate && typeof fl.orchestrate === "object" ? fl.orchestrate.scope : undefined;
     if (at === "flow.boxes") {                      // every box's choice, without what is kept or edited apart
       out = {};
       for (k in fl) {
         if (["test", "measure"].indexOf(k) >= 0) continue;
         var v = fl[k];
         if (k === "orchestrate" && isSearch(v)) k = "dse";
+        if (k === "orchestrate" && v && typeof v === "object" && !Array.isArray(v) && "scope" in v) {   // kept apart (D1022)
+          v = Object.assign({}, v); delete v.scope;
+          if (!Object.keys(v).length) continue;
+        }
         if (k === "knowledge") {                     // its choice (off, an agent, a digest); its files apart
           if (v && typeof v === "object" && !Array.isArray(v)) {
             v = Object.assign({}, v); ["files", "sheet", "text", "library"].forEach(function (x) { delete v[x]; });
@@ -1350,6 +1369,7 @@
     if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files"; })) {
       if (kn.files) s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
     } else if (kn) keep("knowledge", "a methods sheet or inline notes, which the configurator does not edit");
+    keep("scope", "the scope each pass works on (`orchestrate.scope`: its list, brief and check), which the configurator does not edit");
 
     // parts: decompose, or names alone
     var pa = raw.parts;

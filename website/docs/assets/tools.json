@@ -735,6 +735,32 @@
   "preset": true
  },
  {
+  "id": "pto-check",
+  "role": "check",
+  "title": "The design matches the spec's ASL model",
+  "what": "Builds a pyCircuit design (pycircuit, the C++ model) and drives it with each unit's reference vectors -- the spec's own answers from ASLRef, cached per spec -- one wrong vector a line, then the count. The interface: `fluxpreset pto ops`.",
+  "run": "fluxpreset pto check {artifact} --units {units} --spec {home}/spec",
+  "params": {
+   "units": {
+    "label": "Units (mnemonics, comma-separated; all: every one)",
+    "default": "all",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "pycircuit",
+   "aslref"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [],
+  "short": "spec",
+  "preset_module": "pto",
+  "preset": true
+ },
+ {
   "id": "python-pytest",
   "role": "check",
   "title": "Run your pytest file",

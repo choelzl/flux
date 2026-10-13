@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+"""A stand-in for pto-spec's decoder generator in Flux's tests."""
+print("// decoders")

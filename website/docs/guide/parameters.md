@@ -809,13 +809,25 @@ start-up time off and fits time ~ n^k: `scaling_exponent` (about 1 linear, 2 qua
 command's own.
 `fluxpreset asl tests UNIT --spec {home}/spec` lists a PTO-style spec unit's AVS tests (the unit by id or
 mnemonic, the spec a checkout kept in the application's folder); `fluxpreset asl run UNIT --spec
-{home}/spec` runs them with ASLRef through the spec's own `scripts/run-asl-test`, each failing test a line
-then `N failing of M` (`--out FILE` writes each result as JSON; needs `aslref` on PATH or `--aslref`).
+{home}/spec` runs them with ASLRef (several units at once: `run TADD TSUB`) the way the spec's release suite
+does -- the model assembled once, the tests on `--jobs` threads (the cores; `--jobs 1`, or a spec without
+the page runner: its `scripts/run-asl-test`, test by test), each failing test a line then `N failing of M`
+(`--out FILE` writes each result as JSON; needs `aslref` on PATH or `--aslref`).
 `fluxpreset ndf list --spec {home}/spec` lists each unit with its NDF clauses by modality and its test count
 (`--classification` to narrow); `fluxpreset ndf clauses UNIT` prints the unit's clauses whole; `fluxpreset ndf
 check UNIT --results FILE` reads `asl run --out`'s results: each MUST clause failed or uncovered (no test names it
 or its unit) a line, then `N failing of M` (`--uncovered warn` lists without counting). It uses the NDF tool
-(`ndf`, in the dev shell from nixchip), building the spec's index in a temporary folder each time.
+(`ndf`, in the dev shell from nixchip), building the spec's index in a temporary folder each time;
+`fluxpreset ndf scope UNIT` lists the unit and every unit depending on it.
+`fluxpreset pto check DESIGN --units TADD --spec {home}/spec` checks a pyCircuit design against the spec's
+ASL model: the design is one combinational datapath for the spec's elementwise units with ports `op` (8,
+the unit's code from `fluxpreset pto ops`), `dtype` (5, the TileDataType's position), `a`, `b` (64) and
+`y` (64), `fault` (1); each unit's reference vectors (special and seeded random values for each type of
+8 bits or more) are the spec's answers from ASLRef, one run a unit, kept under `--cache`
+(~/.cache/flux/pto-ref) by the spec's content -- a vector the spec's model asserts on is listed by
+`fluxpreset pto ref UNIT` and not compared. Each wrong vector is a line, then `N failing of M`;
+`--dependents` adds the units depending on them, `--build-only` only builds (the gate), `--measure`
+prints `vectors_failing`, `units_passing`, `units`. Needs `pycircuit` and `aslref` (both in the dev shell).
 
 ## Flux presets
 
@@ -835,6 +847,9 @@ document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fl
 | `scaling` | `fluxpreset scaling [--start 1000\|--sizes A,B,C] [--input "gen {n}"] [--build "cc -o {out} {artifact}"] [--max-exponent K] -- CMD {n}` |
 | `repeat` | `fluxpreset repeat --n 5 [--warmup 1] -- CMD` |
 | `derive` | `fluxpreset derive --expr NAME=EXPR [--expr ...] -- CMD` |
+| `asl` | `fluxpreset asl tests\|run UNIT... --spec {home}/spec [--jobs N] [--out FILE]` |
+| `ndf` | `fluxpreset ndf list\|clauses\|scope\|check UNIT --spec {home}/spec` |
+| `pto` | `fluxpreset pto ops [--names]`; `fluxpreset pto ref UNIT...`; `fluxpreset pto check DESIGN --units UNIT... [--dependents] [--build-only\|--measure]` (`--spec {home}/spec`) |
 | `cases` | `fluxpreset cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
 | `pytest` | `fluxpreset pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
 | `ccases` | `fluxpreset ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# A stand-in for pto-spec's assembler in Flux's tests: --order ORDER --decoder DECODER --output OUTPUT
+set -euo pipefail
+order=$2 decoder=$4 output=$6
+root=$(cd "$(dirname "$0")/.." && pwd)
+{ while read -r f; do cat "$root/$f"; done < "$order"; cat "$decoder"; } > "$output"
