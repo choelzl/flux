@@ -884,7 +884,10 @@ def general_flows(r, watch):
                      {"pass": 1, "design": "core#1", "stage": "gate", "status": "refused", "metrics": {},
                       "error": "incorrect corner case", "at": "2026-10-09T10:00:00Z"},
                      {"pass": 2, "design": "core#2", "stage": "bench", "status": "ok", "metrics": {"cycles": 8},
-                      "error": "", "at": "2026-10-09T10:05:00Z"}]},
+                      "error": "", "at": "2026-10-09T10:05:00Z"},
+                     {"pass": 3, "design": "core#3", "stage": "bench", "status": "ok",
+                      "metrics": {f"sim_us.test_with_a_long_name_{i}": 1234.5678 + i for i in range(12)},
+                      "error": "first line of a long failure\n" + "x" * 3000, "at": "2026-10-09T10:09:00Z"}]},
                 {"id": "idea-future", "part": "core", "title": "Try a lookup table", "hypothesis": "Compare the area trade-off",
                  "test": "", "status": "proposed", "evaluations": []}]}
             b.js("""window.__ideasFetch = window.fetch; window.__ideasData = arguments[1];
@@ -897,7 +900,11 @@ def general_flows(r, watch):
                 r.check("Ideas is accessible before any measured design", b.js("return document.querySelector('.subtabs .on').textContent === 'Ideas' && document.querySelectorAll('.ideas-table > tbody > tr').length === 2"))
                 r.check("idea notes render literally and pending ideas stay untested", b.js("return !document.querySelector('.ideas-view img') && document.querySelector('.ideas-table').textContent.includes(arguments[0]) && document.querySelector('.ideas-table').textContent.includes('Not tested yet')", title))
                 b.click(".ideas-table details summary")
-                r.check("idea history includes failures, passes and measured numbers", b.js("return document.querySelector('details[open] .idea-evaluations').textContent.includes('incorrect corner case') && document.querySelector('details[open]').textContent.includes('cycles=8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2'"))
+                r.check("idea history includes failures, passes and measured numbers", b.js("return document.querySelector('details[open] .idea-evaluations').textContent.includes('incorrect corner case') && document.querySelector('details[open]').textContent.includes('cycles 8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2,3'"))
+                r.check("a long evaluation neither widens the notebook nor shows every number and its whole error at once (D1042)", b.js(
+                    "const w = document.querySelector('.ideas-view > .scroll-x'), row = document.querySelectorAll('.idea-evaluations tbody tr')[2];"
+                    "return w.scrollWidth <= w.clientWidth + 1 && row.querySelectorAll(':scope td > .idea-metrics > .idea-metric').length === 6"
+                    " && row.textContent.includes('+6 more') && !row.querySelector('.idea-error').open && row.getBoundingClientRect().height < 260"))
                 b.click(".raw-view")
                 b.wait("document.querySelector('dialog.fullscreen-view .raw-content')", what="raw notebook")
                 r.check("raw notebook includes full evaluation data", b.js("return JSON.parse(document.querySelector('dialog .raw-content').textContent).ideas[0].evaluations[1].metrics.cycles === 8"))
@@ -943,7 +950,7 @@ def general_flows(r, watch):
                 r.button("Refresh")
                 b.wait("document.querySelector('.ideas-table')", what="first recorded idea")
                 b.click(".ideas-table summary")
-                r.check("zero measurements display and older trials tolerate missing pass numbers", b.js("return document.querySelector('.idea-evaluations tbody tr').cells[0].textContent === '—' && document.querySelector('.idea-evaluations').textContent.includes('cycles=0')"))
+                r.check("zero measurements display and older trials tolerate missing pass numbers", b.js("return document.querySelector('.idea-evaluations tbody tr').cells[0].textContent === '—' && document.querySelector('.idea-evaluations').textContent.includes('cycles 0')"))
                 b.js("window.__ideasNavigationDeferred = true; return 1")
                 r.button("Refresh")
                 b.wait("!!window.__ideasNavigationRelease", what="delayed notebook request")
@@ -1101,6 +1108,11 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("Hidden temporarily shows ignored tests without changing preferences", b.js("return document.querySelectorAll('table.designs th.hidden-measurement').length === 1 && document.querySelectorAll('table.designs th.measurement-head').length === 5"))
                 b.click(".show-hidden-columns")
                 b.click(".dictionary-expand")
+                b.click(".show-hidden-columns")
+                r.check("D1042: Hidden shows no hidden test of a folded dictionary", b.js(
+                    "return document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false'"
+                    " && !document.querySelector('table.designs th.hidden-measurement') && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast')"))
+                b.click(".show-hidden-columns")
                 r.page("#/", "document.querySelector('#main')", "home before dictionary reload")
                 r.preferences(name)
                 b.js("localStorage.clear(); window.__dictionaryReload = true; location.reload(); return 1")

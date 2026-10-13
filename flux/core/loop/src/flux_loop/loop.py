@@ -586,13 +586,13 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     if cand is None or not _can_draft(problem, None, state):
         return None
     said, stage = _standing_said(problem, state, cand)
-    human = state.drain()                   # D1023: the notes before the pass decides; the design brief leads with them
+    state.drain()                           # D1023: the notes before the pass decides; the design brief leads with them
     menu: list[tuple[str, str]] = []
     if getattr(getattr(problem, "task", None), "scope", None) or type(problem).scope_list is not Problem.scope_list:
         with _phase("orchestrate: scope list") as out:
             menu = problem.scope_list(state)
             out["scopes"] = len(menu)
-    pick, why, scope = decide(problem, state, cand, f"{human}\n\n{said}" if human else said, menu=menu)
+    pick, why, scope = decide(problem, state, cand, said, menu=menu)     # D1042: the orchestrator's question leads with every note
     state.say(f"  direction: {pick} {cand.name}" + (f" on {scope}" if scope else "") + f" -- {why}")
     state.lessons.append(f"[direction] {pick}" + (f" on {scope}" if scope else "") + f": {why}")
     if scope:

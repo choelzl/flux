@@ -204,7 +204,9 @@ class ModelOrchestrator:
         if scope:
             props["scope"] = {"enum": list(scope)}
         schema = {"type": "object", "properties": props, "required": ["pick", *(["scope"] if scope else [])]}
-        prompt = "\n".join(["You orchestrate a design campaign: one design a pass.", *lines,
+        notes = state.notes_block()             # D1042: every operator note so far, first
+        prompt = "\n".join(["You orchestrate a design campaign: one design a pass.",
+                             *([notes, "Follow the operator's notes above when they name a direction, a scope or something to try or avoid; say in `why` how your pick answers them."] if notes else []), *lines,
                              'Reply with ONLY JSON: {"pick": "<one of ' + ', '.join(CHOICES) + '>", '
                              + ('"scope": "<one of the scopes>", ' if scope else "") + '"why": "<hypothesis and evidence>"}'])
         try:
@@ -304,11 +306,13 @@ class AgentOrchestrator:
             objectives = problem.standing(state) or {}
         except Exception:  # noqa: BLE001
             pass
+        notes = state.notes_block()
         head = ["You are the ORCHESTRATOR of a design campaign; you decide what the loop spends its next step on.",
                 f"OBJECTIVE: {objectives.get('goal', problem.name)}",
                 f"NOW: {objectives.get('now', '')}" if objectives.get("now") else "",
                 (f"THE WHOLE: {objectives.get('composed')}" if objectives.get("composed") else ""),
-                (human or ""),
+                notes or (human or ""),               # D1042: every operator note so far leads the orchestrator's question
+                "Follow the operator's notes above when they name a direction, a scope or something to try or avoid; say in `why` how your pick answers them." if notes else "",
                 "You have tools: standings() -- every part's numbers; history(part) -- what was tried for a "
                 "part and why it was refused; decisions() -- the picks already taken this campaign and their "
                 "reasons; knowledge(query) -- the method sheet and the papers. Read what you need, then answer.",

@@ -10,11 +10,22 @@ export async function ideasView(ctx) {
   const content = h("div", { class: "ideas-view" });
   const table = (labels, rows, cls) => h("div", { class: "scroll-x" }, h("table", { class: cls },
     h("thead", {}, h("tr", {}, ...labels.map(s => h("th", {}, s)))), h("tbody", {}, ...rows)));
+  // D1042: an evaluation's numbers as chips that wrap (the first six, the rest on demand), its error one
+  // line until opened -- a long reading neither widens the table nor leaves a tall gap between rows
+  const metrics = (m) => {
+    const chips = Object.entries(m || {}).map(([key, value]) => h("span", { class: "idea-metric", title: `${key} ${value}` }, `${key} ${value}`));
+    return chips.length ? h("div", { class: "idea-metrics" }, ...chips.slice(0, 6),
+      chips.length > 6 ? h("details", { class: "idea-more" }, h("summary", {}, `+${chips.length - 6} more`), h("div", { class: "idea-metrics" }, ...chips.slice(6))) : "") : "";
+  };
+  const failure = (text) => {
+    const [first, ...rest] = String(text).split("\n");
+    return rest.some(x => x.trim()) ? h("details", { class: "idea-error" }, h("summary", {}, first), h("pre", {}, rest.join("\n")))
+      : h("div", { class: "idea-error" }, first);
+  };
   const evaluations = (rows) => {
     const records = rows.map(r => h("tr", {}, h("td", {}, r.pass ?? "—"), h("td", {}, r.design),
         h("td", {}, r.stage || "—"), h("td", {}, r.status),
-        h("td", {}, Object.entries(r.metrics || {}).map(([key, value]) => `${key}=${value}`).join(", "),
-          r.error ? h("pre", {}, r.error) : "", h("small", { class: "muted" }, r.at || ""))));
+        h("td", {}, metrics(r.metrics), r.error ? failure(r.error) : "", h("small", { class: "muted" }, r.at || ""))));
     return h("details", {}, h("summary", {}, `${rows.length} evaluation${rows.length === 1 ? "" : "s"}`),
       table(["Pass", "Design", "Stage", "Outcome", "Measurements / feedback"], records, "idea-evaluations"));
   };

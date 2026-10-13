@@ -155,7 +155,7 @@ export function measurementColumns(ctx, metrics, redraw, groups = {}) {
       const visible = metrics.filter(m => {
         if (!showHidden && hidden.has(m)) return false;
         const parent = groupOf.get(m), choice = parent && selection(parent);
-        return !parent || choice.expanded || choice.selected === m || (showHidden && hidden.has(m));
+        return !parent || choice.expanded || choice.selected === m;      // D1042: folded, its hidden tests stay folded too
       });
       const seen = new Set();
       return metrics.flatMap(m => {

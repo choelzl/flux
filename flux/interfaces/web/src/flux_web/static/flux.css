@@ -1324,6 +1324,16 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .ideas-table td { white-space: normal; overflow-wrap: anywhere; min-width: 7rem; max-width: 28rem; vertical-align: top; }
 .ideas-table small, .idea-evaluations small { display: block; }
 .ideas-table p { margin: 0 0 .4rem; }
+.idea-evaluations { table-layout: fixed; width: 100%; }
+.idea-evaluations th:nth-child(1), .idea-evaluations td:nth-child(1) { width: 3.2rem; }
+.idea-evaluations th:nth-child(3), .idea-evaluations td:nth-child(3), .idea-evaluations th:nth-child(4), .idea-evaluations td:nth-child(4) { width: 5.5rem; }
+.ideas-table .idea-evaluations td { min-width: 0; max-width: none; }
+.idea-metrics { display: flex; flex-wrap: wrap; gap: 3px; }
+.idea-metric { font: 11.5px var(--mono); padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 12%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.idea-more summary, .idea-error summary { cursor: pointer; font-size: 12px; }
+.idea-error { font-size: 12px; color: var(--bad); }
+.idea-error summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idea-error pre { white-space: pre-wrap; max-height: 12rem; overflow: auto; margin: 4px 0 0; }
 .idea-evaluations pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 35rem; }
 
 /* the loop's seven tabs on a narrow phone: two rows, not three, so a page's first field stays on the

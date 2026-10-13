@@ -196,3 +196,22 @@ def test_a_note_mid_pass_leads_the_resumed_sessions_next_message(tmp_path):
     assert len(turns) >= 2 and len({t["sid"] for t in turns}) == 1, turns
     assert "keep the adder ripple-carry" not in turns[0]["text"]
     assert turns[1]["text"].startswith("HUMAN GUIDANCE") and "keep the adder ripple-carry" in turns[1]["text"][:600]
+
+
+def test_every_note_leads_the_orchestrators_question(monkeypatch):
+    """D1042: the orchestrator read only the notes drained since the last pass, after the standing
+    design's numbers; every note so far leads its question now, the model's and the agent's."""
+    from flux_loop import model
+    from flux_loop.roles import AgentOrchestrator, ModelOrchestrator
+
+    asked = []
+    monkeypatch.setattr(model, "_ask", lambda _s, prompt, _schema: asked.append(prompt) or SimpleNamespace(text='{"pick": "explore", "why": "the note"}'))
+    state = SimpleNamespace(proposer=object(), notes_block=lambda: "HUMAN GUIDANCE\n- try a carry-save tree")
+    got = ModelOrchestrator().direction(SimpleNamespace(), state, ["The standing design: d#1."])
+    assert got[0] == "explore" and asked[0].index("try a carry-save tree") < asked[0].index("The standing design")
+    assert "Follow the operator's notes above" in asked[0]
+    prob = SimpleNamespace(name="p", standing=lambda _s: {}, roles=lambda: SimpleNamespace(orchestrator=None))
+    monkeypatch.setattr("flux_loop.direction.guidance", lambda *a, **k: "")
+    AgentOrchestrator()._decide(prob, SimpleNamespace(proposer=object(), notes_block=state.notes_block, records=None,
+                                                      say=lambda _m: None), "direction", ["The standing design: d#1."], ["explore"])
+    assert "try a carry-save tree" in asked[-1] and asked[-1].index("try a carry-save tree") < asked[-1].index("The standing design")
