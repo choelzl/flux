@@ -76,6 +76,8 @@ class DraftMixin:
 
         state = attempt.state
         sg = attempt.subgoal
+        if state.out_of_time:                     # D1026: the pass gave up; no other turn in it
+            return None, state.out_of_time
         sess = self._part_session(state, sg, "generate", agent.tool)
         workdir = sess.workdir
         self._count += 1
@@ -147,6 +149,11 @@ class DraftMixin:
                                session=resume, message=message)
         self._session_turn(state, sess, turn, "generate", sg, agent.tool, path.is_file(),
                            f"exited {turn.rc}, wrote no {path.name}", message or brief, t0, probe_ctx)
+        if sess.timeouts > max(0, int(getattr(state.request, "agent_continues", 3))):
+            return None, self._out_of_time(state, sess, turn, path, agent)
+        if sess.timed_out:                        # D1026: cut off mid-design -- not judged; its session continues it
+            return None, (f"the coding agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) before it finished; "
+                          f"its session continues ({sess.timeouts} of {1 + int(getattr(state.request, 'agent_continues', 3))} turns)")
         knobs = {"task": self.task.id, "part": sg or "", "generator": f"agent:{agent.tool}"}
         meta = {"questions": [asdict(e) for e in asked]} if asked else {}
         notes = sidecar(path)
@@ -168,6 +175,24 @@ class DraftMixin:
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
 
+    def _out_of_time(self, state: LoopState, sess: Any, turn: Any, path: Path, agent: Any) -> str:
+        """D1026: the design agent ran past its time limit on its first turn and on every continue: the
+        pass gives up -- no design built from what it left -- and says what it was doing, for the
+        designs after it (the record's refusal, the lessons)."""
+        n = sess.timeouts
+        words = " ".join((turn.text or "").split())[-800:]
+        left = path.read_text(errors="replace") if path.is_file() else ""
+        why = (f"OUT OF TIME: the design agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) {n} turns in a "
+               f"row -- its first and {n - 1} continue(s) (budget.agent_continues) -- and the pass gave up without a design."
+               + (f" What it said last: {words}" if words else "")
+               + (f" It left a partial design of {len(left.splitlines())} lines ({path.name}, in its session folder"
+                  f" {path.parent}): a next design may read it, or avoid what made it slow." if left else ""))
+        state.out_of_time = why
+        sess.timed_out = False                    # nothing continues it: a next pass starts afresh
+        state.lessons.append("[out of time] " + why[:1200])
+        state.say(f"  out of time: {agent.tool} ran past {agent.timeout_s:g} s {n} times in a row; the pass gives up")
+        return why
+
     def _session_turn(self, state: LoopState, sess: Any, turn: Any, kind: str, sg: str | None, tool: str,
                       ok: bool, why: str, sent: str, t0: float, probe_ctx: str = "") -> None:
         """The session after an agent turn (D669): its id kept, the turn said and on the record,
@@ -178,6 +203,7 @@ class DraftMixin:
         sess.id = turn.session or sess.id
         sess.turns += 1
         sess.timed_out = turn.rc == 124
+        sess.timeouts = sess.timeouts + 1 if sess.timed_out else 0
         state.say(f"  {kind} {sg or self.task.id}: agent {tool}, {turn.began} session"
                   + (f" {sess.id}" if sess.id else "") + f", turn {sess.turns}, {len(sent)} chars sent")
         probes = probes_done(probe_ctx)

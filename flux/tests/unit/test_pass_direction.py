@@ -59,3 +59,34 @@ def test_a_pass_decides_its_direction_once_and_goes_on_with_it(tmp_path):
     # the fake agent writes the same digits each time: refused as a repeat, tried again -- one decision
     assert sum("direction: improve" in m for m in said) == 1, [m for m in said if "direction" in m]
     assert any("the pass goes on with" in m for m in said), said
+
+
+NEVER = SLOW.replace('''if mode == "first":
+    artifact.unlink(missing_ok=True)
+    time.sleep(30)                                   # past its time limit: stopped, nothing written
+else:
+    artifact.write_text("\\n".join(str(i) for i in range(10)) + "\\n")''', '''artifact.write_text("0\\n1\\n")                       # a partial design, then past its time limit every turn
+print(json.dumps({"type": "text", "sessionID": "ses_slow", "part": {"text": "still tiling the adder"}}), flush=True)
+time.sleep(30)''')
+
+
+def test_a_design_agent_out_of_time_on_every_continue_ends_the_pass_with_its_notes(tmp_path):
+    """D1026: continued `budget.agent_continues` times past its limit, then the pass gives up -- no
+    design built from what it left, no other turn; why, its last words and its partial file on the record."""
+    assert NEVER != SLOW
+    slow = tmp_path / "slow.py"
+    slow.write_text(NEVER)
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
+    d["flow"] = {**d.get("flow", {}), "generate": {"by": {
+        "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
+        "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
+        "output": "opencode", "timeout_s": 1}}}
+    d["budget"] = {"steps": 9, "repair_attempts": 9, "prototype": False, "agent_continues": 2}
+    task = TaskSpec.from_dict(d)
+    said: list[str] = []
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
+    assert [t["mode"] for t in _turns(tmp_path)] == ["first", "resume", "resume"], "its first turn and two continues"
+    assert out.decision is None and out.stopped.startswith("out of time"), out.stopped
+    why = " ".join(r for _n, r in out.refused)
+    assert "OUT OF TIME" in why and "still tiling the adder" in why and "partial design of 2 lines" in why, why
+    assert any(x.startswith("[out of time]") for x in out.lessons)

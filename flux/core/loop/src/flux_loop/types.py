@@ -176,6 +176,8 @@ class LoopRequest:
     repair_attempts: int = 12       # inner-loop attempts per generation
     explore_every: int = 4          # 1 in N generations starts fresh, not from best
     explore_after: int = 2          # D845: passes the decision stands before a pass explores (then in turn)
+    agent_continues: int = 3        # D1026: a design agent's session continued this many times past its time limit,
+                                    # then the pass gives up: no design, its notes on the record
     exploration_quota: float = 0.0  # minimum share of attempted improvements devoted to new approaches
     cooldown_after: int = 3         # consecutive no-builds before a subgoal yields
     structured: bool = True         # schema-constrained decoding when the proposer allows
@@ -241,6 +243,7 @@ class AgentSession:
     turns: int = 0
     schema: str = ""                       # a box's answer schema, said once per session
     timed_out: bool = False                # D999: its last turn ran past the time limit -- the next one continues it
+    timeouts: int = 0                      # D1026: its turns in a row that ran past the limit
 
 
 @dataclass
@@ -307,6 +310,8 @@ class LoopState:
     built: int = 0                  # D845: designs that passed the gate this pass
     step: int = 0
     stopped: str = ""                                    # why the step loop stopped
+    #: D1026: why the pass gave up -- a design agent ran past its time limit once and every continue
+    out_of_time: str = ""
     parts: dict[str, PartState] = field(default_factory=dict)   # per-part numbers and counters
     versions: dict[str, str] = field(default_factory=dict)     # the problem's transpiler/judge versions
     trying: tuple[str, str | None] | None = None         # (part, method) under way, for the standings

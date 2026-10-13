@@ -377,6 +377,7 @@ as missed. `goal` cannot be combined with `keep` or `balance`; a dictionary metr
 | `exploration_quota` | `0.0` | Least share (0..1) of search choices kept for exploring |
 | `explore_every` | `4` | Every Nth draft starts fresh rather than from the best |
 | `explore_after` | `2` | Stalled passes before exploring |
+| `agent_continues` | `3` | Times a design agent's session is continued past its time limit; then the pass gives up, without a design, its notes on the record |
 | `explore` | `0` | Managed by the loop each pass; a value here has no effect |
 | `cooldown_after` | `3` | Build failures in a row before a part yields |
 | `patching` | `true` | Repair with edits rather than full rewrites |

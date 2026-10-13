@@ -1131,7 +1131,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     text, session = _parse(spec.output, stdout)
     about = live.agent
     if timed_out:                                     # its session kept: a later turn may resume it
-        return Turn(False, 124, "", session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
+        # its words so far kept (D1026: what it was doing, when the pass gives up on it)
+        return Turn(False, 124, text, session, stdout=stdout, stderr=f"the agent ran past {spec.timeout_s:.0f}s and was stopped",
                     about=about, tools=len(live.tools), steps=live.kept())
     return Turn(proc.returncode == 0 and not live.transport_error, proc.returncode, text, session, stdout, "".join(err), about=about, tools=len(live.tools),
                 steps=live.kept(), transport_error=live.transport_error)
@@ -1225,7 +1226,8 @@ def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: 
 
     if session and spec.resume:
         turn = run_turn(spec, spec.resume, {**subs, "session": session, "answer": message}, workdir=workdir)
-        if (not turn.ok and not wrote()) or overflowed(turn):
+        # D1026: a resumed turn that ran past its time limit (124) was working, not lost -- the session stays
+        if (not turn.ok and not wrote() and turn.rc != 124) or overflowed(turn):
             why = "out of context" if overflowed(turn) else f"exited {turn.rc}"
             say(f"  agent {spec.tool}: session {session} could not be resumed ({why}); a fresh session starts from the brief")
             if prompt_file is not None:
