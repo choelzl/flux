@@ -63,6 +63,18 @@ class DraftMixin:
             sess = ps.sessions[kind] = AgentSession(tool, workdir)
         return sess
 
+    def _design_name(self, base: str, sg: str | None, state: Any) -> str:
+        """D1062: the name of a draft -- the pass's design of this part, a new number the first time
+        (`x#4`), then a revision of it for each repair or continuation in the pass (`x#4.2`, `x#4.3`)."""
+        ps = state.part(sg) if state is not None else None
+        if ps is None or ps.design_no is None:
+            self._count += 1
+            if ps is not None:
+                ps.design_no, ps.revision = self._count, 1
+            return f"{base}#{self._count}"
+        ps.revision += 1
+        return f"{base}#{ps.design_no}.{ps.revision}"
+
     def _agent_draft(self, attempt: Any, agent: Any):
         """A coding agent's turn (D575): brief on disk, agent run in the part's session directory,
         its questions answered by the document's policy (D585). The candidate is the file it
@@ -80,8 +92,7 @@ class DraftMixin:
             return None, state.out_of_time
         sess = self._part_session(state, sg, "generate", agent.tool)
         workdir = sess.workdir
-        self._count += 1
-        name = f"{sg or _leaf(self.task.id)}#{self._count}"
+        name = self._design_name(sg or _leaf(self.task.id), sg, state)
         safe = re.sub(r'[^A-Za-z0-9_.-]+', '_', name)
         path = workdir / f"draft-{re.sub(r'[^A-Za-z0-9_.-]+', '_', sg or _leaf(self.task.id))}{self.task.extension}"
         prior, failure = attempt.prior, attempt.failure
@@ -360,8 +371,7 @@ class DraftMixin:
         (why the last draft was refused) and `{attempt}`."""
         state = attempt.state
         workdir = Path(state.workdir or ".")
-        self._count += 1
-        name = f"{attempt.subgoal or _leaf(self.task.id)}#{self._count}"
+        name = self._design_name(attempt.subgoal or _leaf(self.task.id), attempt.subgoal, state)
         path = workdir / f"draft-{re.sub(r'[^A-Za-z0-9_.-]+', '_', name)}{self.task.extension}"
         subs = {"artifact": str(path), "workdir": str(workdir), "name": name,
                 "part": attempt.subgoal or "", "python": sys.executable, "home": self.task.home or ".",

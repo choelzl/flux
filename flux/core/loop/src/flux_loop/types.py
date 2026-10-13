@@ -267,6 +267,10 @@ class PartState:
     # D669: "generate" / "prototype" -> the agent's session, kept until the part (or its
     # prototype) passes, so repairs and send-backs continue the same conversation
     sessions: dict[str, AgentSession] = field(default_factory=dict)
+    # D1062: this pass's design of the part -- its number, and the draft it is at: one pass, one design,
+    # its repairs and continuations revisions of it (#4, #4.2, #4.3), not new designs
+    design_no: int | None = None
+    revision: int = 0
 
 
 @dataclass

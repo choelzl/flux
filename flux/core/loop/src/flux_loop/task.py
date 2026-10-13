@@ -26,6 +26,7 @@ import json
 import re
 import shutil
 import sys
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -67,6 +68,9 @@ def _count_failures(check: Any, run: Any) -> tuple[int, str]:
 
 
 # ------------------------------------------------------------------ the problem
+#: D1062: the pass a thread is drafting for, set where its brief is written -- a reply's draft is a revision of that pass's design
+_DRAFTING = threading.local()
+
 class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, PartsMixin, Problem):
     """A `Problem` from a task document alone (D430): the prompts from the statement and
     contract, the gate and the stages from its commands, the parts from its list."""
@@ -436,6 +440,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         from .novelty import tried_block
         from .direction import guidance
 
+        _DRAFTING.of = (self, state)            # D1062: the pass whose design the reply's draft names (`parse_design`)
         target = f"part {subgoal}" if subgoal else f"task {self.task.id}"
         notes = state.notes_block()             # D1023: the operator's notes lead, whatever the brief is about
         parts = [notes, (human or "") if not notes or notes not in (human or "") else (human or "").replace(notes, ""),
@@ -473,9 +478,9 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                 artifact = text
         if artifact is None:
             return None, "the reply carried no artifact"
-        self._count += 1
         meta = {k: doc[k] for k in ("why", "idea", "ideas") if isinstance(doc, dict) and k in doc}
-        return Candidate(f"{subgoal or self.task.id}#{self._count}", artifact,
+        of = getattr(_DRAFTING, "of", None)
+        return Candidate(self._design_name(subgoal or self.task.id, subgoal, of[1] if of and of[0] is self else None), artifact,
                          knobs={"task": self.task.id, "part": subgoal or ""}, subgoal=subgoal, meta=meta), ""
 
     # ---- evaluator
