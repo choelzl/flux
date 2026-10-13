@@ -5,7 +5,7 @@ import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind, ownSpans } from "./work_style.js";
-import { boxKind, candidateOf, docNotes, flowBoxes, isDraft, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
+import { boxKind, candidateOf, docNotes, flowBoxes, isDraft, triesOf, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
@@ -551,10 +551,17 @@ export function liveAltTab(ctx) {
     let y = 6;
     boxes.forEach((b, i) => {
       // a box opens its current task (a running agent first, as Following does) and lists its tasks under it
-      const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id)), task = currentTask(own);
+      const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id));
+      // D1056: what its list would hold -- a design's tries, else one run's steps or its runs; one item is no list
+      const items = b.kind === "design" ? [] : b.runs.length === 1 ? (b.runs[0].kids || []).filter(k => b.ids.has(k.id)) : b.runs;
+      const listed = b.kind === "design" ? triesOf(b.runs) : items.length;
+      // a box at work opens its current task (a running agent first, as Following does); a finished one its
+      // latest run -- one its list shows -- or, its list being one item, that item
+      const lastRun = b.runs.at(-1), lastDraft = b.kind === "design" && lastRun ? [...(lastRun.kids || [])].reverse().find(isDraft) : null;
+      const task = own.some(r => r.node.t1 == null) ? currentTask(own) : lastDraft || (listed === 1 && items.length === 1 ? items[0] : lastRun || currentTask(own));
       if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
       // a box with a list opens; D1029: a design of one run is that run -- its line opens the conversation, no list
-      const isOpen = openBox === `${shown}:${b.key}` && (b.runs.length > 1 || own.some(r => !b.runs.includes(r.node)));
+      const isOpen = openBox === `${shown}:${b.key}` && listed > 1;
       const note = notes[b.key === "record" ? "record" : b.key] || "";
       // Notes get their own bounded line: long objective names must not run into the title or pills.
       const BH = note ? (b.steps ? 52 : 44) : 34;
