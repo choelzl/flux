@@ -443,6 +443,7 @@ def general_flows(r, watch):
                       end(2, now - 23, exit=0, stdout="CHECK OK", stderr="DEBUG diagnostic"), end(1, now - 22),
                       {"ev": "mark", "name": "pass", "t": now - 21, "why": '{"n":2}'},
                       task(3, now - 20, "generation: current", **{"pass": 2}),
+                      task(5, now - 19.5, "propose: brief current", 3), end(5, now - 19.4),      # D1044: a branch, not one agent turn
                       task(4, now - 19, "agent: claude", 3, prompt="FULL live prompt\n" + "\n".join(f"Prompt line {i}" for i in range(180)), command="claude --print", stdin="The prompt above (sent on stdin)")]
             older = [task(81, 100, "validate: document"), end(81, 100.1),
                      task(82, 100.2, "knowledge: prepare"), end(82, 100.3),
@@ -505,7 +506,7 @@ def general_flows(r, watch):
                     "const n=document.querySelector('.alt-tree .alt-task-name'); n.textContent='x'.repeat(400);"
                     " const v=document.querySelector('.alt-visual'); return v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth"))
                 r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
-                r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
+                r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===3"))
                 r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent: claude')"))
                 r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
                 r.check("the inspector links directly to the complete current log", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/log')"))
@@ -562,7 +563,7 @@ def general_flows(r, watch):
                 choose("LiveAlt pass", "all")
                 r.check("all passes have clear headings and a running task count", b.js("return [...document.querySelectorAll('.alt-pass-heading .alt-task-name')].map(n=>n.textContent).join(',')==='Pass 0 · baseline,Pass 1,Pass 2' && document.querySelector('.alt-summary .running').textContent==='2 running'"))
                 r.check("D978: a finished pass is folded to its line, the pass at work open, a running task spins", b.js("return !document.querySelector('.alt-tree [data-task=\"2\"]') && !!document.querySelector('.alt-tree [data-task=\"4\"] .alt-spin') && document.querySelector('.alt-tree [data-fold=\"pass:1\"]').getAttribute('aria-expanded')==='false'"))
-                r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='Agent · claude' && t(3)==='Design · current' && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
+                r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='claude' && t(3)==='Design current' && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
                 b.click('.alt-tree [data-fold="pass:1"]')
                 # D1034: a task whose one child is its command is one line, the program its note
                 r.check("a task and its one command are one line in the tree", b.js("const t=document.querySelector('.alt-tree [data-task=\"1\"]');return !!t && t.textContent.includes('python3') && !document.querySelector('.alt-tree [data-task=\"2\"]') && !document.querySelector('.alt-tree [data-fold=\"1\"]')"))
@@ -584,7 +585,7 @@ def general_flows(r, watch):
                 r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='2'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
-                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-pill-text')].some(t=>t.textContent==='agent') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
+                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-ai-box-text')].some(t=>t.textContent==='ai') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
                 b.wait("document.querySelector('.alt-flow-box[data-box=choose] .alt-box-note')", what="Choose objective note")
                 r.check("long objective notes sit below Choose, stay inside the box, and expose their full text on hover", b.js("""const box=document.querySelector('.alt-flow-box[data-box=choose]'), note=box.querySelector('.alt-box-note');
                   const n=note.getBoundingClientRect(), t=box.querySelector('.alt-box-title').getBoundingClientRect(), r=box.querySelector('.alt-box').getBoundingClientRect();
@@ -697,15 +698,15 @@ def general_flows(r, watch):
                     stream.emit('events',{ev:'start',id:1000+i,t:t+i*.002,parent:3,name:'tool: bulk '+i,params:{command:i===0?'python3 oldest-special.py':'python3 sample.py'}});
                     stream.emit('events',{ev:'end',id:1000+i,t:t+i*.002+.001,seconds:.001,output:{exit:0}});
                   } return 1;""")
-                b.wait("document.querySelector('.alt-summary').textContent.includes('207 tasks')", what="long task journal")
-                r.check("long journals keep the timeline compact and include every task", b.js("return document.querySelectorAll('.alt-timeline [data-task]').length===207 && document.querySelector('.alt-timeline').getBoundingClientRect().height<120 && document.querySelector('.alt-detail').dataset.task==='4'"))
+                b.wait("document.querySelector('.alt-summary').textContent.includes('208 tasks')", what="long task journal")
+                r.check("long journals keep the timeline compact and include every task", b.js("return new Set([...document.querySelectorAll('.alt-timeline [data-task]')].map(e => e.dataset.task)).size===208 && document.querySelector('.alt-timeline').getBoundingClientRect().height<120 && document.querySelector('.alt-detail').dataset.task==='4'"))
                 r.button("Tree", ".subrow .subtabs")
                 r.check("long trees keep the active agent and its ancestor visible", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-tree [data-task=\"4\"]') && !!document.querySelector('.alt-tree [data-task=\"3\"]') && !document.querySelector('.alt-tree [data-task=\"1000\"]') && !!document.querySelector('.alt-more')"))
                 b.js("document.querySelector('.alt-visual').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 1")
                 r.check("navigation reveals an older task outside the tree window", b.js("return document.querySelector('.alt-detail').dataset.task==='1000' && !!document.querySelector('.alt-tree [data-task=\"1000\"].sel.alt-located')"))
                 r.button("Follow", ".alt-controls")
                 b.click('.alt-more')
-                r.check("earlier tasks can be expanded without losing the active task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelectorAll('.alt-tree [data-task]').length===207 && !document.querySelector('.alt-more')"))
+                r.check("earlier tasks can be expanded without losing the active task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelectorAll('.alt-tree [data-task]').length===208 && !document.querySelector('.alt-more')"))
                 r.button("Following", ".alt-controls")
                 r.check("pass picker offers baseline and each numbered pass", b.js("return ['0','1','2'].every(value=>Array.from(document.querySelector('[aria-label=\"LiveAlt pass\"]').options).some(option=>option.value===value))"))
                 b.js("""const s=window.__altStreams.at(-1), t=Date.now()/1000;
@@ -722,7 +723,7 @@ def general_flows(r, watch):
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
                 b.wait("document.querySelector('.alt-tree .alt-again')", what="the repeated design as one line")
                 r.check("D1016: the same task again in a row is one line, ×2, its tries under it", b.js(
-                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×2' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent.startsWith('Design')"))
+                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×2' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'improve wheel#7'"))
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
@@ -846,7 +847,7 @@ def general_flows(r, watch):
                 page("", "document.querySelector('.best-n')")
                 r.check("Decision shares the table's Relative mode", b.js("return document.querySelector('.relative-values').textContent === 'Relative' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-20%')"))
                 b.click(".relative-values")
-                page("results", "document.querySelector('table.designs') && document.querySelector('.relative-values')")   # both drawn, a loaded machine too
+                page("results", "document.querySelector('table.designs tbody td[data-label=score]') && document.querySelector('.relative-values')")   # rows and toggle drawn, a loaded machine too
                 r.check("a second press returns to Absolute without a third mode", b.js("return document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8'"))
                 page("results/graphs", "document.querySelector('svg.best-chart')")
                 r.check("new graph selections default to the chosen main metric", b.js("const card = [...document.querySelectorAll('.card')].find(c => c.querySelector('h2')?.textContent === 'Improvement by design'); return [...card.querySelectorAll('.chips button.on')].map(b => b.textContent).join() === 'score'"))

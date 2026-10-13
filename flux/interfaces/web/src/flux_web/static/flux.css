@@ -1382,3 +1382,21 @@ td.cleared s { color: var(--muted); }
 .reject-form textarea { width: 100%; box-sizing: border-box; font: inherit; }
 .reject-form .row-inline { display: flex; gap: 6px; align-items: baseline; }
 .reject-form .note { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn, #9a6200) 10%, transparent); margin: 0; }
+
+/* D1044: tree A -- a box is a tinted band (its name, what it worked on); its steps plain lines on a thin guide */
+.alt-tree-row.step { background: transparent; position: relative; }
+.alt-tree-row.step::before { content: ""; position: absolute; left: -6px; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--k, var(--line)) 30%, var(--line)); }
+.alt-tree-row.step:hover { background: color-mix(in srgb, var(--k, transparent) 9%, var(--panel)); }
+.alt-tree-row.box { margin-top: 3px; box-shadow: inset 3px 0 0 var(--k); }
+.alt-tree-row.box .alt-task-name b { font-weight: 600; }
+.alt-tree-row.wait { opacity: .5; } .alt-task-state.wait { color: var(--muted); }
+.alt-what { color: var(--muted); font-size: 12px; }
+.alt-ai-pill { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .05em; border-radius: 8px; padding: 0 6px; line-height: 16px; color: #d45eae; background: color-mix(in srgb, #d45eae 14%, var(--panel)); }
+.alt-critic-tag { flex: none; font-size: 10px; font-weight: 600; border-radius: 8px; padding: 0 6px; line-height: 16px; color: color-mix(in srgb, #97b84a 70%, var(--ink)); background: color-mix(in srgb, #97b84a 20%, var(--panel)); }
+.alt-more-tries { display: block; border: 0; background: transparent; color: var(--accent); font-size: 12px; padding: 2px 8px; margin-left: calc(min(var(--depth), 8) * 12px + 24px); cursor: pointer; text-align: left; }
+/* D1044 (G1): a graph box's list, attached under it in its colour */
+.alt-box-tasks { border: 1px solid color-mix(in srgb, var(--k) 45%, var(--line)); border-top: 0; border-left: 4px solid var(--k); border-radius: 0 0 8px 8px; padding: 3px 4px 4px;
+  background: color-mix(in srgb, var(--k) 4%, var(--panel)); box-sizing: border-box; height: 100%; overflow: hidden; }
+.alt-box-tasks .alt-tree-row.step::before { display: none; }
+.alt-box-tasks .alt-more-tries { margin-left: 24px; }
+.alt-ai-box-pill { fill: color-mix(in srgb, #d45eae 16%, var(--panel)); } .alt-ai-box-text { font: 700 9px var(--sans, sans-serif); fill: #d45eae; text-anchor: middle; letter-spacing: .05em; }

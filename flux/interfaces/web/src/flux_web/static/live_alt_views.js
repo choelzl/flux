@@ -85,7 +85,7 @@ function boxState(runs) {
 }
 function who(runs) {
   const all = runs.flatMap(r => { const out = [], st = [r]; while (st.length) { const x = st.pop(); out.push(x); st.push(...(x.kids || [])); } return out; });
-  return all.some(isAgent) ? "agent" : all.some(isModel) ? "model" : "";
+  return all.some(isAgent) || all.some(isModel) ? "ai" : "";              // D1044: an agent or a model, one pill
 }
 
 /** The boxes of a pass's flow: [{key, title, kind, state, runs, steps, who, count}]. */
