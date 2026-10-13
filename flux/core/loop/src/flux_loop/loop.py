@@ -1054,6 +1054,8 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
     with _phase(f"test: judge {tag}", why=cand.name) as out:
         verdict = _judge(problem, built, cand, sg, state)
         out["verdict"] = f"{'ADMITTED' if verdict.ok else 'refused'}, score {verdict.score:g}"
+        if not verdict.ok:
+            out["failed"] = True                        # D1046: a refused design is a failed check, not a green one
         if verdict.why:
             out["why"] = verdict.why
     state.judged += 1

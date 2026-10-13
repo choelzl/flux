@@ -488,7 +488,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                 "point": _write_point(path, cand.knobs or {}),
                 "part": subgoal or "", "python": sys.executable, "home": self.task.home or "."}
 
-    def _run(self, cmd: tuple[str, ...], subs: dict[str, str], timeout_s: float, what: str):
+    def _run(self, cmd: tuple[str, ...], subs: dict[str, str], timeout_s: float, what: str, judge: Any = None):
         from flux_loop.toolrun import run_tool
 
         if any("{params}" in t for t in cmd) and "params" not in subs:
@@ -499,7 +499,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         who = subs.get("name") or ""                   # D709: the task says which candidate
         with tool_slot(self.task.home or ".", int(self.task.budget.get("tools_at_once") or 0), what):   # D1004
             return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
-                            what=f"{what} {who}" if who and who not in what else what)
+                            what=f"{what} {who}" if who and who not in what else what, judge=judge)
 
     def _scope_run(self, which: str, state: LoopState, scope: str = "", artifact: str = "") -> Any:
         """`flow.orchestrate.scope`'s `list`, `brief` or `check` run from the pass's folder (D1022): its run, or
@@ -563,7 +563,7 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         earlier ranks worse whatever its count."""
         gate = self.task.gate
         for i, check in enumerate(gate):
-            run = self._run(check.run, subs, check.timeout_s, check.name)
+            run = self._run(check.run, subs, check.timeout_s, check.name, judge=lambda r, c=check: _count_failures(c, r)[0])
             at = f"failed at {check.name}: " if len(gate) > 1 else ""
             if run.returncode == BUILD_FAILED or (check.builds and not run.ok):
                 text = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:]

@@ -101,7 +101,8 @@ def _end(chunks: list[bytes], chars: int = TAIL_CHARS) -> str:
 
 def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
              env: Mapping[str, str] | None = None, what: str = "",
-             error: type[Exception] | None = None, stdin: str | None = None) -> ToolRun:
+             error: type[Exception] | None = None, stdin: str | None = None,
+             judge: Any = None) -> ToolRun:
     """Launch `cmd` and return its `ToolRun`. Timed as a `tool:<binary>` phase in the
     profile tree when `flux_profile` is present (the accounting cannot drift out of step
     with the code, D295); the phase carries the command and folder, the ends of its output
@@ -184,6 +185,11 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
             # a normal end leaves the group be: its leader reaped, its number could be another's
             run = ToolRun(tuple(cmd), proc.returncode, _decode(streams["stdout"]), _decode(streams["stderr"]))
             out.update(exit=run.returncode, stdout=run.stdout[-TAIL_CHARS:], stderr=run.stderr[-TAIL_CHARS:])
+            if judge is not None:                       # D1046: a check's failures, counted in its own task
+                fails = judge(run)
+                out["failing"] = fails
+                if fails:
+                    out["failed"] = True
     except FileNotFoundError as exc:
         raise exc_type(f"{label}: {cmd[0]!r} not found on PATH") from exc
     except subprocess.TimeoutExpired as exc:

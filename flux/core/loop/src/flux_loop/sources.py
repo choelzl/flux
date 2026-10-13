@@ -167,18 +167,25 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
                     brief = f"{brief}\n\n{failure}".strip()
                 say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
                 continue
-        try:
-            with _phase(f"build: {cand.name}", why=source.name):
+        # D1046: the build and the fast check are one task -- the checks it ran under it, failing when they failed
+        with _phase(f"test: fast check {cand.name}", why=source.name) as checked:
+            try:
                 built = problem.build(cand, subgoal, state)
-        except BuildError as exc:
+            except BuildError as exc:
+                built, fails, text = None, None, str(exc)
+                checked.update(failed=True, verdict="did not build", why=text[:600])
+            else:
+                fails, text = problem.fast_check(built, cand, subgoal, state)
+                checked["verdict"] = f"{fails} failing" if fails else "passed"
+                if fails:
+                    checked.update(failed=True, why=(text or "")[:600])
+        if built is None:
             from .ideas import record_failure
 
-            record_failure(state, cand, "build", str(exc))
-            failure, prior = str(exc), cand
+            record_failure(state, cand, "build", text)
+            failure, prior = text, cand
             say(f"  {source.name}: {cand.name} did not build ({failure!s:.80})")
             continue
-        with _phase(f"test: fast check {cand.name}", why=source.name):
-            fails, text = problem.fast_check(built, cand, subgoal, state)
         if not fails:
             if index:
                 say(f"  {source.name}: {cand.name} passes after {index} repair(s)")

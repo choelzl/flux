@@ -275,7 +275,7 @@ def phase(name: str, why: str = "", **params):
     output: dict = {}
     try:
         yield output
-        failed = False
+        failed = bool(output.pop("failed", False))     # D1046: a phase that ended but failed (a check that found failures)
     finally:
         secs = time.perf_counter() - t0
         with _LOCK:
