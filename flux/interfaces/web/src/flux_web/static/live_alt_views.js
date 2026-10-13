@@ -49,8 +49,8 @@ export function taskLabel(n) {
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · gate · ${c}` : "Check · gate"; }   // D1051
-  // D1050: a design's checks said one way -- its build and fast check, the gate's verdict on it
-  if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · fast check · ${rest.slice(11).trim()}`;
+  // D1050: a design's checks said one way -- its build and check, the gate's verdict on it
+  if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · ${rest.slice(11).trim()}`;      // D1054: a check, said "check"
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · gate · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
@@ -69,8 +69,21 @@ export const passShort = p => p == null ? "S" : Number.isInteger(Number(p)) ? St
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
 const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
-const PASS_KINDS = ["search", "design", "check", "measure", "choose"];      // D1034: a critique is in the box it judges
+const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];   // D1054: a pass that planned (its part) shows it      // D1034: a critique is in the box it judges
 
+/** A draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition. */
+export const isDraft = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name)))
+  || /^\s*(agent|llm|model)\b/i.test(String(c.params?.turn || c.name)));
+/** D1054: a design box's tries -- its drafts, or each run that drafted nothing of its own (a generator command) -- as the tree numbers them. */
+export const triesOf = runs => runs.reduce((t, n) => t + Math.max(1, (n.kids || []).filter(isDraft).length), 0);
+/** D1054: the box a task is drawn in. A check is the Check box's -- but a check that failed inside a
+    design sent it back: it is that design's try, and so is everything under it. */
+export function boxKind(n) {
+  const k = phaseKind(n);
+  if (k !== "check") return k;
+  for (let p = n; p; p = p.parent) if (p.failed && p.parent && phaseKind(p) === "check" && phaseKind(p.parent) === "design") return "design";
+  return k;
+}
 function runsOf(rows, test) {
   // the outermost tasks the box is about (a tool under a check is the check's); `inBox` all of them
   const inBox = new Set(rows.filter(r => test(r.node)).map(r => r.node.id));
@@ -106,15 +119,17 @@ export function flowBoxes(rows, p, running, notes = []) {
   }
   const kinds = kind === "baseline" ? ["check", "measure"] : kind === "remeasure" ? ["check", "measure", "choose"] : PASS_KINDS;
   // D1052: work done quickly is a note, not a task (D1047) -- a box whose work this pass is only notes ran, it is not missing
-  const noted = k => notes.filter(n => kindOf(n.name, n.why) === k);
-  const present = new Set([...rows.map(r => phaseKind(r.node)), ...kinds.filter(k => noted(k).length)]);
+  // D1054: only a search -- an evaluation or a decision that is a note had nothing to work on (D1053), no box
+  const noted = k => k === "search" ? notes.filter(n => kindOf(n.name, n.why) === k) : [];
+  const present = new Set([...rows.map(r => boxKind(r.node)), ...kinds.filter(k => noted(k).length)]);
   const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
-  const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass"))
+  const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "plan"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
-      runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))), notes: noted(k) }));
+      runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))), notes: noted(k) }));
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
   const times = stretches(rows);
-  return boxes.map(b => ({ ...finish(b), ...(times[b.key] ? { count: times[b.key] } : {}) }));
+  // D1054: a design counts its tries, as its list and the tree do; another box, its stretches of work
+  return boxes.map(b => ({ ...finish(b), ...(b.kind === "design" ? { count: triesOf(b.runs) } : times[b.key] ? { count: times[b.key] } : {}) }));
 }
 /** D1038: how many times each box's work happened in the pass -- a stretch of its own work in time,
     broken only by another box's design, check or measure work: a gate's four tests are one Check, two
@@ -122,11 +137,11 @@ export function flowBoxes(rows, p, running, notes = []) {
     measurement, the design an evaluation composes) is that work's, not a stretch of its own. */
 const WORK = ["search", "design", "check", "measure"];
 function stretches(rows) {
-  const owner = n => { for (let p = n.parent; p; p = p.parent) { const k = phaseKind(p); if (k && k !== phaseKind(n)) return WORK.includes(k) ? k : null; } return null; };
+  const owner = n => { for (let p = n.parent; p; p = p.parent) { const k = boxKind(p); if (k && k !== boxKind(n)) return WORK.includes(k) ? k : null; } return null; };
   const leaves = rows.map(r => r.node).filter(n => !(n.kids || []).length).sort((a, b) => a.t0 - b.t0);
   const out = {}, inside = {};
   for (const n of leaves) {
-    const o = owner(n), k = o === "measure" ? o : phaseKind(n);                    // a design composed inside a measurement is the measurement's
+    const o = owner(n), k = o === "measure" ? o : boxKind(n);                    // a design composed inside a measurement is the measurement's
     if (!k) continue;
     if (o && !WORK.includes(k)) continue;
     if (!inside[k]) out[k] = (out[k] || 0) + 1;

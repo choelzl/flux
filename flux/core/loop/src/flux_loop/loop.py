@@ -180,6 +180,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         with _phase("critique: decomposition", why=f"round {round_ + 1}", absorb=True) as out:
             c = problem.critique("decomposition", list(goals), state)
             out["verdict"] = "the division stands" if c.ok else f"SENT BACK: {c.why}"
+            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
             out["subject"] = ", ".join(str(g) for g in goals)
         if c.ok:
             break
@@ -240,12 +241,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
-        with _phase("evaluation", why="compose, chain, cutoffs, routing"):
+        with _phase("evaluation", why="compose, chain, cutoffs, routing", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
             _climb(problem, state, goals)
     from .boxes import flush_turns
 
     flush_turns(state)
-    with _phase("decide", why="frontier, decision, conclusion"):
+    with _phase("decide", why="frontier, decision, conclusion", quiet=not state.scored):   # D1053: nothing measured, nothing to choose
         out = _conclude(problem, state, goals)
     if state.ahead is not None:
         state.ahead.close()
@@ -414,7 +415,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     state.stopped = state.stopped or "nothing left to do"
                     break
                 state.step = step + 1
-                with _phase("evaluation", why="compose, chain, cutoffs, routing"):
+                with _phase("evaluation", why="compose, chain, cutoffs, routing", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
                     _climb(problem, state, goals)
                 step += 1
                 if state.depth == 0:
@@ -666,6 +667,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
             if item.scope:
                 out["scope"] = item.scope
             cand, built, reason = problem.improve(item, state)
+            out["failed"] = cand is None and len(state.rested) == rested_before   # D1054: nothing came of it (a rest is no failure)
     finally:
         # ... whose session ends with it -- unless it ran out of time: the pass's next try continues it (D999);
         # a pass on a scope keeps it to the pass's end, its scope's failures told to the same agent (D1022)
@@ -686,8 +688,9 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         state.refused.append((f"{item.candidate.name} (improve)", reason[:300]))
         _record_trial(state, item.candidate, item.subgoal, None, error=reason)
         return []
-    with _phase("test: gate", why=cand.name):
+    with _phase("test: gate", why=cand.name) as out:
         verdict = _judge(problem, built, cand, item.subgoal, state)
+        out["failed"] = not verdict.ok                 # D1053: a gate that refused the design failed
     state.judged += 1
     if not verdict.ok:
         why = problem.describe_failure(item.subgoal, verdict)
@@ -893,7 +896,7 @@ def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> 
     and the measured `state.scored`."""
     say = state.say
     admitted: list[Candidate] = []
-    with _phase("test: gate", why=f"{len(batch)} candidate(s)"):
+    with _phase("test: gate", why=f"{len(batch)} candidate(s)") as gate:
         for cand in batch:
             sg = cand.subgoal
             try:
@@ -911,6 +914,8 @@ def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> 
             why = problem.describe_failure(sg, verdict)
             state.refused.append((cand.name, why[:300]))
             _record_trial(state, cand, sg, Verdict(False, verdict.score, why, verdict.payload))
+        gate["admitted"] = f"{len(admitted)} of {len(batch)}"
+        gate["failed"] = not admitted                  # D1053: a gate that let nothing through failed
     if len(admitted) < len(batch):
         say(f"  gate: {len(admitted)} of {len(batch)} admitted; "
             f"{len(batch) - len(admitted)} refused")
@@ -1029,8 +1034,10 @@ def _draft(problem: Problem, state: LoopState, sg: str | None, method: str, huma
     `problem.generate` runs it. Safe on a worker thread (D569): it writes only its own part's
     entries of the state and the record."""
     tag = sg or problem.name
-    with _phase(f"generation: {tag}", why=method or "LLM-gen, test, repair"):
-        return problem.generate(sg, method, state, human)
+    with _phase(f"generation: {tag}", why=method or "LLM-gen, test, repair") as out:
+        got = problem.generate(sg, method, state, human)
+        out["failed"] = got[0] is None              # D1054: no design came of it -- the design failed, not "!"
+        return got
 
 
 def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg: str | None,
@@ -1063,6 +1070,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         with _phase(f"critique: {tag}", why=cand.name, absorb=True) as out:
             c = problem.critique("candidate", cand, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
+            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
             out["subject"] = f"{cand.name}: {len(cand.artifact or '')} chars of artifact, {verdict.why[:300] if verdict.why else 'gate passed'}"
         if not c.ok:
             # D1040: the gate passed and the test critic rejects it: the design FAILS, the critic's
@@ -1412,6 +1420,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         with _phase("critique: decision", why=pick.name, absorb=True) as out:
             c = problem.critique("decision", pick, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
+            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
             out["subject"] = f"{pick.name}: {pick.metrics}"
         if c.ok:
             break

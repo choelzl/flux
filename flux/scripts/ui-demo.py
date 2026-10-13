@@ -40,7 +40,7 @@ if mode == "first":
     text, artifact = Path(sys.argv[3]).read_text(), Path(sys.argv[4]); sid = f"s-{role}-{time.time_ns()}"
 else:
     sid, text, artifact = sys.argv[3], sys.argv[4], Path(sys.argv[5])
-state = Path(artifact).parent / f".demo-{role}-turns"
+state = Path(__file__).parent / f".demo-{role}-turns"     # the loop's own: each draft is new, never one already measured
 n = int(state.read_text()) + 1 if state.exists() else 1
 state.write_text(str(n))
 say = lambda kind, **x: print(json.dumps({"type": kind, "sessionID": sid, **x}), flush=True)
@@ -59,7 +59,7 @@ else:
     if role == "repair":
         fails = 2 if mode == "first" else 0
     artifact.write_text(f"design {n}\nfail={fails}\n")
-say("text", part={"text": "The design is written."})
+say("text", part={"text": ("Rejected: the adder ignores the carry-in." if bad else "No objection.") if role == "critic" else "The design is written."})
 '''
 CHECK = r'''import sys, time
 from pathlib import Path

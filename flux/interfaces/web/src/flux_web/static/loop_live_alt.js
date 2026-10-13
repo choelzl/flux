@@ -4,8 +4,8 @@ import { liveTree } from "./live.js";
 import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
-import { candidateOf, docNotes, flowBoxes, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind, ownSpans } from "./work_style.js";
+import { boxKind, candidateOf, docNotes, flowBoxes, isDraft, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
@@ -244,7 +244,7 @@ export function liveAltTab(ctx) {
       if (box) return [h("b", {}, workLabel(phaseKind(n) || "setup")), rest ? h("span", { class: "alt-what" }, ` ${rest}`) : ""];
       const parentKind = n.parent ? phaseKind(n.parent) : null, kind = phaseKind(n);
       if (!rest) return kind ? kind : full;                           // D1045: "Check" alone under Design is "check"
-      return !parentKind || !kind || parentKind === kind || /^(fast check|gate)\b/.test(rest) ? rest : `${kind} · ${rest}`;
+      return !parentKind || !kind || parentKind === kind || /^gate\b/.test(rest) ? rest : `${kind} · ${rest}`;
     };
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
@@ -342,7 +342,7 @@ export function liveAltTab(ctx) {
     // under it its tries -- a draft and the checks after it, or each run when it ran several -- else its steps
     const flat = n => [n, ...(n.kids || []).flatMap(flat)];
     // a draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition
-    const leadOf = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name))) || AI.test(String(c.params?.turn || c.name)));
+    const leadOf = isDraft;
     const triesIn = n => {
       const got = [], before = []; let cur = null;
       for (const r of kids.get(n.id) || []) {
@@ -356,8 +356,9 @@ export function liveAltTab(ctx) {
     const draftsIn = n => { const t = triesIn(n); if (t) return t; const k = (kids.get(n.id) || []).map(r => r.node); const i = k.findIndex(leadOf);
       return i >= 0 ? [{ lead: k[i], steps: k.filter((_, j) => j !== i) }] : null; };   // one draft: every other step is its
     const rest = n => { const l = taskLabel(n), at = l.indexOf(" · "); return at < 0 ? "" : l.slice(at + 3); };
-    // D1051: a check said by its own word ("fast check", "gate", a scope check), what failed in it, its tests as dots
-    const checkWord = n => { const r = rest(n); return /^(fast check|gate)\b/.test(r) ? r.split(" · ")[0] : r.split(" · ")[0] || "check"; };
+    // D1051: a check said by its own word ("check", "gate", a scope check), what failed in it, its tests as dots
+    const checkWord = n => { if (/^\s*test\s*:\s*fast check\b/i.test(String(n.name))) return "check";
+      const r = rest(n); return r.split(" · ")[0] || "check"; };
     const firstFailing = n => { const bad = (n.kids || []).find(k => k.failed); if (!bad) return "";
       const f = bad.output?.failing; return `${rest(bad).split(" · ")[0] || "a test"}${f ? ` ${f} failing` : " failed"}`; };
     const testDots = n => (n.kids || []).length > 1 ? h("span", { class: "alt-dots" }, n.kids.map(k => h("i", { class: k.failed ? "bad" : k.t1 == null ? "run" : "" }))) : "";
@@ -422,19 +423,41 @@ export function liveAltTab(ctx) {
       if (tries) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, depth + 1), depth + 1, holdsTry);
       else runs(steps, depth + 1);
     };
+    // D1054: a check that passed inside a design is the Check box's -- drawn there, out of its try; a check
+    // that failed stays the try's (it sent the design back). The graph draws them so too (`boxKind`).
+    const passedIn = n => (kids.get(n.id) || []).filter(r => phaseKind(r.node) === "check" && boxKind(r.node) === "check").map(r => r.node);
     const boxes = (list, depth) => {
+      // D1054: a search that holds the work it proposed (a sweep's point: its design, gate, measure) is the
+      // Search line alone, that work the boxes after it -- as the graph draws it
+      list = list.flatMap(r => {
+        if (phaseKind(r.node) !== "search") return [r];
+        const own = kids.get(r.node.id) || [], work = own.filter(c => ["design", "check", "measure"].includes(phaseKind(c.node)));
+        if (!work.length) return [r];
+        kids.set(r.node.id, own.filter(c => !work.includes(c)));
+        return [r, ...work];
+      });
       for (let k = 0; k < list.length;) {
         const kind = phaseKind(list[k].node) || "setup";
         let e = k + 1;
         while (e < list.length && (phaseKind(list[e].node) || "setup") === kind) e++;
-        boxLine(list.slice(k, e).map(r => r.node), depth);
+        const nodes = list.slice(k, e).map(r => r.node);
         k = e;
+        if (kind !== "design") { boxLine(nodes, depth); continue; }
+        const moved = nodes.flatMap(passedIn);
+        for (const c of moved) kids.set(c.parent.id, kids.get(c.parent.id).filter(r => r.node !== c));
+        boxLine(nodes, depth);
+        if (!moved.length) continue;
+        let f = k;                                           // the Check box after it holds them first
+        while (f < list.length && phaseKind(list[f].node) === "check") f++;
+        boxLine([...moved, ...list.slice(k, f).map(r => r.node)], depth);
+        k = f;
       }
     };
     // D1044: a graph box's list -- its tries, one flat line each, newest first, five at a time, when it ran
     // one task again and again; else each of its runs (a stage, then its evaluation); a single run, its steps
     const boxList = (runsOf, key, kind) => {
-      const own = n => { const full = taskLabel(n), at = full.indexOf(" · "); return at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full; };
+      const own = n => { const full = taskLabel(n), at = full.indexOf(" · "), r = at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full;
+        return /^\s*test\s*:\s*fast check\b/i.test(String(n.name)) ? `check · ${r}` : r; };      // D1054: a design's check, said "check"
       const base = n => taskLabel(n).replace(/[\s#]*\d+\s*$/, "");          // draft 1, draft 2: the same task again
       if (kind === "design") {                    // D1045: the same tries as the tree -- each draft and the checks after it
         const tries = runsOf.flatMap(n => draftsIn(n) || (leadOf(n) ? [{ lead: n, steps: [], run: true }] : []));
@@ -491,6 +514,11 @@ export function liveAltTab(ctx) {
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
         if (!collapsed) runs(lead, depth + 1);    // D1045: the same step again in a row is one line, ×N
       } else lead.forEach(r => line(r, depth));
+      // D1054: a search done as a note (D1052) is the pass's Search line, as it is the graph's Search box
+      const searched = g.p != null && !rest.some(r => phaseKind(r.node) === "search") ? passNotes(g.p).filter(n => kindOf(n.name, n.why) === "search") : [];
+      if (searched.length) out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS.search}` }, h("span", { class: "alt-fold-space" }),
+        h("button", { type: "button", class: "alt-task", "data-box": "search", onclick: () => showBox(g.p, "search") }, doneMark(false, false),
+          h("span", { class: "alt-task-name" }, h("b", {}, "Search"), h("span", { class: "alt-what" }, ` ${searched.map(n => String(n.name).replace(/^\s*\w+\s*:\s*/, "")).join(", ")}`)))));
       boxes(rest, depth);                       // D1045: the pass's own tasks, one line per box
       if (g.rows.some(r => r.node.t1 == null))    // D1044: in a pass at work, the boxes still to come, dimmed
         for (const b of flowBoxes(g.rows, g.p, true, passNotes(g.p)).filter(x => x.state === "wait" && !x.runs.length))
@@ -543,9 +571,11 @@ export function liveAltTab(ctx) {
         h("div", { class: "alt-box-note" }, note)));
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
+      // D1053: a box at work says so in its corner, as a finished one does -- the selection is not the running mark
+      if (b.state === "run") kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 6, class: "alt-done run" }));
       if (["ok", "bad", "part"].includes(b.state)) kids.push(sv("circle", { cx: X + BW - 2, cy: y + 2, r: 7, class: `alt-done ${b.state}` }), sv("text", { x: X + BW - 2, y: y + 5.5, class: "alt-done-mark" }, b.state === "ok" ? "✓" : b.state === "part" ? "!" : "✗"));
       const picked = boxView ? boxView.p === shown && boxView.key === b.key : b.ids.has(selected);
-      const attrs = { class: `alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key, "aria-pressed": String(picked) };
+      const attrs = { class: `alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}${b.state === "wait" ? " wait" : ""}`, "data-kind": b.kind, "data-box": b.key, "aria-pressed": String(picked) };
       // Every box follows the same activation path, including synthetic boxes such as Record.
       // Update expansion before selection redraws the graph; keyboard and mouse do the same thing.
       const box = sv("g", { ...attrs, tabindex: "0", role: "button", "aria-label": `${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : "no task recorded"}`,

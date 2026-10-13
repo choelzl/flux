@@ -793,8 +793,9 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overflow: visible; }
 .alt-flow-edge, .alt-flow-back { stroke: var(--muted); stroke-width: 1.2; fill: none; } .alt-flow-back { stroke-dasharray: 4 3; } .alt-arrow-head { fill: var(--muted); }
-.alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); stroke-width: 2.6; } .alt-box.wait { opacity: .55; }
-.alt-glow { opacity: .22; } @media (prefers-reduced-motion: no-preference) { .alt-glow { animation: alt-glow 1.4s ease-in-out infinite alternate; } @keyframes alt-glow { to { opacity: .06; } } }
+.alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); stroke-width: 2.6; } .alt-flow-box.wait { opacity: .45; }  /* D1053: a box still to come, all of it dimmed */
+.alt-glow { opacity: .22; } .alt-done.run { fill: var(--panel); stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: 9 4; transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) { .alt-done.run { animation: alt-spin-ring 1s linear infinite; } @keyframes alt-spin-ring { to { transform: rotate(360deg); } } } @media (prefers-reduced-motion: no-preference) { .alt-glow { animation: alt-glow 1.4s ease-in-out infinite alternate; } @keyframes alt-glow { to { opacity: .06; } } }
 .alt-box-title { font: 600 12px var(--sans, sans-serif); fill: var(--ink); }
 .alt-box-note { font: 10px/16px var(--mono, monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-pill-text { font: 9px var(--sans, sans-serif); fill: #fff; text-anchor: middle; } .alt-count-pill { fill: var(--line); } .alt-count-text { font: 9px var(--mono, monospace); fill: var(--ink); text-anchor: middle; }

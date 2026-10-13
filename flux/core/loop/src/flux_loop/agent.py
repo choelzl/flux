@@ -1168,6 +1168,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         live.close()                                  # D1036: its last steps on file
         row.update(live.fields())
         row["exit"] = proc.returncode
+        if timed_out:                                 # D1053: said as such -- a stopped turn is not one that ended
+            row["timed out"] = f"stopped after {spec.timeout_s:.0f}s"
     stdout = "".join(out)
     text, session = _parse(spec.output, stdout)
     about = live.agent

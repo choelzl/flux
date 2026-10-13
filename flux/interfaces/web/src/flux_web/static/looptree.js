@@ -29,7 +29,7 @@
         // D757: a tool that exited with an error failed, though its step went on
         d.failed = e.failed || (String(d.name).indexOf("tool:") === 0 && e.output && e.output.exit != null && e.output.exit !== 0);
         // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
-        d.timedOut = /^\s*agent\s*:/i.test(String(d.name)) && !!e.output && Number(e.output.exit) === 124;
+        d.timedOut = !!e.output && (!!e.output["timed out"] || /^\s*agent\s*:/i.test(String(d.name)) && Number(e.output.exit) === 124);   // D1053
         if (d.timedOut) d.failed = false;
       }
     }
