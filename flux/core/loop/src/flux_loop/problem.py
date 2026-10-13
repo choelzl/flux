@@ -754,14 +754,20 @@ class EvaluatorRole(_Role):
         """The gate: exhaustive or proof-grade where possible."""
         raise NotImplementedError(f"{self.name}: judge")
 
+    def critic(self, kind: str) -> Any | None:
+        """The critic judging `kind`, when there is one (D1040): what the loop asks before it
+        spends a critique. The default has none."""
+        return None
+
     def critique(self, kind: str, subject: Any, state: LoopState) -> Verdict:
-        """critique (D433): the adversary. `kind` is "decomposition" (subject: the part
-        names), "candidate" (subject: an admitted `Candidate`, the gate already passed)
-        or "decision" (subject: the `Scored` pick). `ok=False` with `why` sends a division
-        back to be redone, a candidate back to the writer with `why` as the failure text
-        (at most `request.critique_rounds` times: the gate is the ground truth, the critic
-        can delay, never veto), or a decision into the report's caveats. The default has
-        no critic: everything is ok."""
+        """critique (D433, D1040): the adversary, one per box it judges. `kind` is
+        "decomposition" (subject: the part names; the orchestrator's critic), "candidate" (an
+        admitted `Candidate`, the gate already passed; the test critic), "measurement" (a
+        `Scored`; the measure critic) or "decision" (the `Scored` pick; the select critic).
+        `ok=False` with `why` sends a division back to be redone; FAILS a candidate, with `why`
+        as its note, the writer refining it while the pass has steps; marks a measurement
+        rejected, its `payload["wrong"]` metrics cleared, never chosen; rejects the pick, the
+        decision made again without it. The default has no critic: everything is ok."""
         return Verdict(True, 0.0, "")
 
     def compose(self, admitted: dict[str, Candidate], state: LoopState

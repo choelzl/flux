@@ -9,7 +9,7 @@ import sqlite3
 
 import yaml
 
-from flux_loop import load_task
+from flux_loop import TaskSpec, load_task
 from flux_loop.migrate import migrate, migrate_loop
 
 #: One document in the forms of every era: the top-level gate/stages/space/seeds/knowledge
@@ -53,12 +53,22 @@ def test_every_old_form_is_brought_to_todays_and_said(tmp_path):
     assert flow["measure"] == {"bench": {"command": "python bench.py {artifact} {n}", "metrics": ["t"]}}
     assert flow["orchestrate"] == {"policy": "sweep", "space": {"n": [1, 2, 3]}}
     assert flow["select"] == {"finalists": 2} and flow["calibrate"] == "off" and flow["knowledge"] == {"text": "add carefully", "digest": "opencode"}
-    assert flow["critique"] == "off" and flow["plan"] == "model" and flow["generate"] == {"by": "claude"}
+    assert "critique" not in flow and "D1040" in codes and flow["plan"] == "model" and flow["generate"] == {"by": "claude"}
     assert not {"id", "gate", "stages", "space", "cache", "workbench", "joiner", "brief"} & set(new)
     assert new["budget"] == {"steps": 3}
     assert migrate(new) == (new, [], []), "a current document comes back as it is"
     d = _folder(tmp_path, "add", new)
     assert load_task(str(d / "problem.yaml")).id == "add"
+
+
+def test_a_critique_becomes_a_critic_on_each_box_it_judged():
+    """D1040: `flow.critique` judged the division, each design the gate passed and the decision."""
+    doc = {"statement": "s", "flow": {"orchestrate": "rules", "test": {"t": "true"}, "critique": {"by": "claude"}}}
+    new, said, _manual = migrate(doc)
+    f = new["flow"]
+    assert f["orchestrate"] == {"by": "rules", "critic": "claude"} and f["test"] == {"t": "true", "critic": "claude"}
+    assert f["select"] == {"critic": "claude"} and "critique" not in f and any(s.startswith("D1040") for s in said)
+    assert TaskSpec.from_dict({**new, "id": "x"}).critics == {b: {"agent": "claude"} for b in ("orchestrate", "test", "select")}
 
 
 def test_a_loop_folder_is_migrated_its_original_kept_and_its_record_renamed(tmp_path):

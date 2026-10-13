@@ -274,6 +274,11 @@ class Records:
         except Exception:  # noqa: BLE001
             pass
 
+    def reject(self, key: str, name: str, *, why: str, wrong: list[str], by: str) -> None:
+        """D1040: a result a critic rejected -- marked with why and by whom, shown and never chosen;
+        the values it called wrong cleared. A typed event, read back by `recall("rejected")`."""
+        self.remember("rejected", {"key": key, "name": name, "why": why, "wrong": list(wrong), "by": by})
+
     def recall(self, kind: str) -> list[dict[str, Any]]:
         """Every remembered decision of `kind`, oldest first; [] without a record."""
         if self.store is None or not self.campaign_id:

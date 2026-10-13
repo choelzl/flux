@@ -25,15 +25,17 @@ def _agents() -> tuple[str, ...]:
 
     return tuple(agent_kinds())
 #: what a document calls the boxes an agent may work (D830: never the loop's inside names, dse or extract)
-_SURFACE_DELEGABLE = ("validate", "orchestrate", "plan", "generate", "critique", "select", "knowledge (digest, lessons)")
-_DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "critique", "extract", "select", "knowledge"})
+_SURFACE_DELEGABLE = ("validate", "orchestrate", "plan", "generate", "select", "knowledge (digest, lessons)")
+_DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "extract", "select", "knowledge"})
+#: D1040: the boxes a critic judges, each its own -- the split and the direction, a design the gate
+#: passed, a stage's numbers, the pick
+CRITIC_BOXES = ("orchestrate", "test", "measure", "select")
 _AGENT_OPTS = ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow",
                "output", "resume", "name")
 #: the words each box takes on the surface, and what the loop calls them inside
 _BY_WORDS = {"validate": {"rules": "rules", "model": "llm"},
              "orchestrate": {"rules": "rules", "given": "given", "model": "llm", "tools": "agent"},
              "plan": {"off": "none", "model": "llm"},
-             "critique": {"off": "none", "model": "llm"},
              "generate": {"model": "model"},
              "select": {"objectives": "objectives"},
              "extract": {"off": "none", "mined": "mined"},
@@ -181,6 +183,27 @@ def _dse_words() -> tuple[str, ...]:
     return tuple(n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent", "model"))
 
 
+def _critics_said(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """D1040: each box's `critic:` taken out of it -- the flow without them, and the critics by box."""
+    if "critique" in raw:
+        raise TaskError("flow.critique is a critic on each box it judges: `critic: model` under orchestrate, test, "
+                        "measure or select (D1040; `flux migrate` moves it)")
+    critics: dict[str, Any] = {}
+    out = dict(raw)
+    for box, value in raw.items():
+        if not (isinstance(value, dict) and "critic" in value):
+            continue
+        if box not in CRITIC_BOXES:
+            raise TaskError(f"flow.{box}.critic: a critic judges {', '.join(CRITIC_BOXES)} (D1040)")
+        value = dict(value)
+        critics[box] = value.pop("critic")
+        if value:
+            out[box] = value
+        else:
+            out.pop(box)
+    return out, critics
+
+
 def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     """D775: each box's own settings, said under `flow`, read into the fields the loop keeps:
     `flow.test` the gate, `flow.measure` the stages (a map: a stage's name to its command or its
@@ -200,6 +223,9 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     raw = doc.get("flow")
     if not isinstance(raw, dict):
         return doc
+    raw, critics = _critics_said(raw)
+    if critics:                                            # a sub-loop's own, box by box, over its parent's
+        doc["critics"] = {**(doc.get("critics") or {} if not strict else {}), **critics}
     o = raw.get("orchestrate")
     if strict and isinstance(o, dict) and "scope" in o:   # D1022: the menu of areas a pass may work on
         o = dict(o)

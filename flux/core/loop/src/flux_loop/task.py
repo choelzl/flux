@@ -301,16 +301,24 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                     missing.append(tool)
         return missing
 
-    def critique(self, kind: str, subject: Any, state: LoopState) -> Verdict:
-        """The model as critic (D433) of a division, a gate-passed candidate, or the decision.
+    #: D1040: which box's critic judges each kind of subject
+    CRITIC_OF = {"decomposition": "orchestrate", "candidate": "test", "measurement": "measure", "decision": "select"}
 
-        The verdict is remembered, and an accepted division is remembered as the division.
-        Without `flow: {critique: llm}` and a model, or `{critique: {agent: ...}}`, everything passes."""
-        from .boxes import agent_of, box_turn
+    def critic(self, kind: str) -> dict[str, Any] | None:
+        """The critic the document puts on the box that judges `kind` (D1040), or None."""
+        return self.task.critics.get(self.CRITIC_OF.get(kind, ""))
+
+    def critique(self, kind: str, subject: Any, state: LoopState) -> Verdict:
+        """The critic of the box that judges `kind` (D1040): the orchestrator's division, a design
+        the gate passed (test), a stage's numbers (measure: `wrong` names the values it rejects), or
+        the pick (select). The verdict is remembered, and an accepted division is remembered as the
+        division. No critic on that box, or a model critic without a model: everything passes."""
+        from .boxes import box_turn
 
         t = self.task
-        agent = agent_of(t.flow, "critique")
-        if not t.critique or (state.proposer is None and agent is None):
+        c = self.critic(kind)
+        agent = (c or {}).get("agent")
+        if c is None or (state.proposer is None and agent is None):
             if kind == "decomposition" and t.decompose and not getattr(self, "_division_kept", False):
                 self._division_kept = True
                 self._remember_division(state)
@@ -329,17 +337,28 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             part = self._part(cand.subgoal)
             what = ((f"PART {part.name}: {part.statement}\n\n" if part else "")
                     + f"THE CANDIDATE, which the gate has ALREADY PASSED:\n\n{numbered}\n\n"
-                    "Object only to a DEFECT the gate cannot see: a violated constraint of the contract "
+                    "Reject it only for a DEFECT the gate cannot see: a violated constraint of the contract "
                     "or statement (a forbidden construct, a required port or behaviour missing), or a "
-                    "result the gate's vectors could miss. Comments, naming, style and claims about "
-                    "speed or depth are not defects -- the stages measure those. Passing the gate is "
-                    "not an issue.")
+                    "result the gate's vectors could miss. A rejected design FAILS, with your issues as "
+                    "its note. Comments, naming, style and claims about speed or depth are not defects -- "
+                    "the stages measure those. Passing the gate is not an issue.")
             label = cand.name
+        elif kind == "measurement":
+            got: Scored = subject
+            numbers = "\n".join(f"- {k} = {v:g}" for k, v in got.metrics.items())
+            what = (f"THE MEASUREMENT of {got.name} on stage {got.stage}:\n{numbers}\n\n"
+                    "Reject it only when a number cannot be right: impossible for this design or the "
+                    "statement, inconsistent with the others, or not what the stage measures. Name each "
+                    "metric you reject in `wrong`; a rejected result is marked and never chosen. A number "
+                    "that is merely poor is not wrong.")
+            label = f"{got.name}@{got.stage}"
         else:
             pick: Scored = subject
             metrics = ", ".join(f"{k}={v:g}" for k, v in pick.metrics.items())
             what = (f"THE DECISION: {pick.name} on stage {pick.stage} with {metrics}. "
-                    "Object only if the objectives or the statement point elsewhere.")
+                    "Reject it only if the objectives or the statement point elsewhere, or a number it "
+                    "rests on cannot be right (name that metric in `wrong`); the decision is then made "
+                    "again without it.")
             label = pick.name
         gate = t.gate.line()
         question = "\n\n".join(x for x in (
@@ -350,11 +369,13 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
             "verdict without a concrete issue is worthless, and so is an issue the gate already "
             "covers.",
             what) if x)
+        judged = kind in ("measurement", "decision")
         prompt = question + ('\n\nReply with ONLY JSON: {"ok": true|false, "issues": ["<one concrete issue each>"], '
-                             '"why": "<one line>"}')
+                             + ('"wrong": ["<metric>"], ' if judged else "") + '"why": "<one line>"}')
         schema = {"type": "object",
                   "properties": {"ok": {"type": "boolean"},
                                  "issues": {"type": "array", "items": {"type": "string"}},
+                                 **({"wrong": {"type": "array", "items": {"type": "string"}}} if judged else {}),
                                  "why": {"type": "string"}},
                   "required": ["ok"]}
         if agent is not None:
@@ -362,21 +383,24 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         else:
             try:
                 doc = _json(_ask(state, prompt, schema).text)
-            except Exception as exc:  # noqa: BLE001 -- a critic that cannot speak does not veto
+            except Exception as exc:  # noqa: BLE001 -- a critic that cannot speak does not reject
                 state.say(f"  critic did not answer ({exc!s:.80})")
                 doc = None
         issues = [str(i) for i in (doc.get("issues") or [])] if isinstance(doc, dict) else []
         ok = bool(doc.get("ok", True)) if isinstance(doc, dict) else True
+        metrics = getattr(subject, "metrics", None) or {}
+        wrong = [str(m) for m in (doc.get("wrong") or []) if str(m) in metrics] if judged and isinstance(doc, dict) else []
         if ok or not issues:
-            ok, why = True, ""
+            ok, why, wrong = True, "", []
         else:
             why = "; ".join(issues)[:600]
         if state.records is not None:
-            state.records.remember("critique", {"kind": kind, "subject": label, "ok": ok, "why": why})
+            state.records.remember("critique", {"kind": kind, "subject": label, "ok": ok, "why": why,
+                                                **({"wrong": wrong} if wrong else {})})
         if kind == "decomposition" and ok:
             self._division_kept = True
             self._remember_division(state)
-        return Verdict(ok, 0.0 if ok else 1.0, why, {"issues": issues})
+        return Verdict(ok, 0.0 if ok else 1.0, why, {"issues": issues, "wrong": wrong})
 
     # ---- generator
     def _part(self, subgoal: str | None) -> Part | None:

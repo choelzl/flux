@@ -41,7 +41,7 @@ def logged_in(home: Path) -> dict[str, bool]:
 
 def agents_used(task: Any) -> list[str]:
     """The coding agents a document hands work to -- `generate: {agent: …}`, a box's
-    `{agent: …}`, an orchestrator's `coding` agent, the papers' digest -- by preset, in the order first named."""
+    `{agent: …}`, a box's critic, an orchestrator's `coding` agent, the papers' digest -- by preset, in the order first named."""
     from .agent import agent_kinds, agent_spec
 
     found: list[str] = []
@@ -67,7 +67,8 @@ def agents_used(task: Any) -> list[str]:
             for v in node:
                 walk(v)
 
-    for part in (getattr(task, "generator", None), getattr(task, "flow", None), getattr(task, "roles", None)):
+    for part in (getattr(task, "generator", None), getattr(task, "flow", None), getattr(task, "roles", None),
+                 getattr(task, "critics", None)):                         # D1040: a box's critic
         walk(part or {})
     if getattr(task, "digest_by", None) is not None:          # D771: the papers' digest by an agent
         take(task.digest_by)

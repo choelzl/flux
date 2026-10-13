@@ -83,25 +83,29 @@ def test_the_box_s_own_rule_refuses_an_answer(tmp_path):
     assert box_turn("critique", _agent(tmp_path, "good", {"ok": False}), "Q?", SCHEMA, st, check=rule) is None
 
 
-def _doc(**flow):
-    return {"id": "boxes", "statement": "the word good",
-            "objectives": [{"metric": "m", "direction": "minimize"}], "flow": {"test": {"test": ["true"]}, **flow}}
+def _doc(critic=None, **flow):
+    return {"id": "boxes", "statement": "the word good", "objectives": [{"metric": "m", "direction": "minimize"}],
+            "flow": {"test": {"test": ["true"], **({"critic": critic} if critic is not None else {})}, **flow}}
 
 
 def test_the_loader_takes_an_agent_only_where_one_may_answer():
-    task = TaskSpec.from_dict(_doc(critique={"by": "claude"}, validate={"by": {"preset": "opencode"}}))
-    assert task.critique and task.flow["validate"] == {"agent": {"preset": "opencode"}}
+    task = TaskSpec.from_dict(_doc(critic={"by": "claude"}, validate={"by": {"preset": "opencode"}}))
+    assert task.critics == {"test": {"agent": "claude"}} and task.flow["validate"] == {"agent": {"preset": "opencode"}}
     with pytest.raises(TaskError, match="never delegated"):
         TaskSpec.from_dict(_doc(test={"by": "claude"}))
     assert TaskSpec.from_dict(_doc(plan={"by": "codex"})).budget["agent"] == ["plan"]
     with pytest.raises(TaskError, match="not a box an agent answers"):
         TaskSpec.from_dict(_doc(feedback={"by": "claude"}))
-    with pytest.raises(TaskError, match="flow.critique.by"):
-        TaskSpec.from_dict(_doc(critique={"by": "cursor"}))
+    with pytest.raises(TaskError, match="flow.test.critic.by"):
+        TaskSpec.from_dict(_doc(critic={"by": "cursor"}))
+    with pytest.raises(TaskError, match="a critic judges orchestrate, test, measure, select"):
+        TaskSpec.from_dict(_doc(plan={"by": "model", "critic": "model"}))
+    with pytest.raises(TaskError, match="flow.test.critic has no rounds"):
+        TaskSpec.from_dict(_doc(critic={"by": "model", "rounds": 2}))
     from flux_loop.document import describe_flow
 
     lines = describe_flow(task)
-    assert any(ln.startswith("critique: agent claude") for ln in lines)
+    assert "critics: test (agent claude)" in lines
     assert any(ln.startswith("validate: agent opencode") for ln in lines)
 
 
@@ -110,12 +114,12 @@ def test_the_agent_critic_objects_and_its_fallback_passes(tmp_path):
 
     cand = Candidate("c1", "module m; endmodule")
     agent = _agent(tmp_path, "good", {"ok": False, "issues": ["no carry out"], "why": "incomplete"})
-    prob = PromptProblem(TaskSpec.from_dict(_doc(critique={"by": agent})))
+    prob = PromptProblem(TaskSpec.from_dict(_doc(critic={"by": agent})))
     st = _state(tmp_path)
     v = prob.critique("candidate", cand, st)
     assert not v.ok and "no carry out" in v.why
     (tmp_path / "q").mkdir()
-    quiet = PromptProblem(TaskSpec.from_dict(_doc(critique={"by": _agent(tmp_path / "q", "fail")})))
+    quiet = PromptProblem(TaskSpec.from_dict(_doc(critic={"by": _agent(tmp_path / "q", "fail")})))
     assert quiet.critique("candidate", cand, _state(tmp_path)).ok, "a critic that fails does not veto"
 
 

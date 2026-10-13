@@ -48,7 +48,7 @@ export function taskLabel(n) {
   if (head === "test" && rest === "gate") return "Check";
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
-  if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest || "a design"}`;
+  if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}`;
   if (rest) return `${kind} · ${rest}`;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;
 }

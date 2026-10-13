@@ -81,7 +81,7 @@ class PartsMixin:
         self._division_why = str(doc.get("why") or "")[:200]
         # Remember it when it stands: at once without a critic or when answering a critique
         # (the last remembered wins on resume), otherwise on the critic's acceptance.
-        if critique is not None or not (t.critique and state.request.critique_rounds > 0):
+        if critique is not None or not (self.critic("decomposition") is not None and state.request.critique_rounds > 0):
             self._remember_division(state)
         state.say(f"decompose: {len(self.parts)} part(s): " + ", ".join(p.name for p in self.parts))
         return [p.name for p in self.parts]

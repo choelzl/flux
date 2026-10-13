@@ -499,7 +499,7 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
     assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["lessons"] == "off"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: {\"off\": true, lessons: claude}" in y and "critique: model" in y and "test: {agent" not in y
+    assert "knowledge: {\"off\": true, lessons: claude}" in y and "critic: model" in y and "critique" not in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
     p = BUILT["papers_by_agent"]
@@ -532,7 +532,8 @@ def test_the_popovers_say_what_task_check_says(tmp_path, case):
     lines = {ln.split(":", 1)[0]: ln for ln in describe_flow(t)}
     assert _paren(lines["orchestrate"]).startswith("the model picks" if case == "empty_parts" else "one design")
     for box, text in BUILT["explained"][case].items():
-        assert text == _paren(lines[box]), (box, text, lines[box])
+        said = lines["critics" if box == "critique" else box]          # D1040: the Second opinion, as each box's critic
+        assert text == _paren(said), (box, text, said)
 
 
 def test_the_estimates_say_what_task_check_says(tmp_path):

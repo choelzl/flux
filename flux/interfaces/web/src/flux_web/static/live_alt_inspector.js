@@ -292,7 +292,7 @@ function criticBody(n, env) {
   const agreed = /no objection|stands|agree|^ok/i.test(verdict);
   const m = /^([^:{]+):\s*(\{.*\})\s*$/s.exec(subject), numbers = m ? metricsOf(m[2].replace(/['"{},]/g, " ").replace(/\s*:\s*/g, "=")) : {};
   return [h("div", { class: "task-inspector" },
-    verdict ? h("div", { class: "alt-verdict" }, h("span", { class: `alt-badge ${agreed ? "ok" : "objection"}` }, agreed ? "No objection" : "Objection"), agreed ? "" : h("span", {}, verdict)) : "",
+    verdict ? h("div", { class: "alt-verdict" }, h("span", { class: `alt-badge ${agreed ? "ok" : "objection"}` }, agreed ? "No objection" : /^rejected/i.test(verdict) ? "Rejected" : "Objection"), agreed ? "" : h("span", {}, verdict)) : "",
     subject ? h("div", {}, h("div", { class: "alt-label" }, "Subject"), m ? h("div", { class: "alt-verdict" }, h("span", { class: "alt-pchip", style: `--k:${COLORS.choose}` }, m[1].trim()),
       h("span", { class: "mono muted small" }, Object.entries(numbers).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : h("div", { class: "mono" }, subject)) : "")];
 }

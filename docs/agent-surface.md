@@ -116,7 +116,7 @@ flow:
   orchestrate: claude              # the next work item, or points in `flow.orchestrate.space`
   plan:        claude              # the pass's plan, checked by check_plan
   generate:    opencode            # the artifact (D575)
-  critique:    {by: claude, timeout_s: 300}
+  test:        {build: make, critic: {by: claude, timeout_s: 300}}   # a critic on the box it judges (D1040)
   knowledge:   {lessons: claude}   # lessons mined from the record, citing its rows
   select:      claude              # among designs that tie on the objective vector
 ```
@@ -127,7 +127,7 @@ flow:
 | orchestrate | the next item from the menu, or points in the space, with reasons | on the menu; knobs and values in the space, not measured before, ≤ the batch | rules / the phase's policy |
 | plan | parts, order, method, budgets | `check_plan` | the document's order |
 | generate | the artifact | build, gate, repair | the model |
-| critique | `{ok, why}` on a division, a part or a decision | an objection is not a veto: `critique_rounds` bounds it (D433) | no critique |
+| a box's `critic` | `{ok, issues, wrong}` on the split (orchestrate), a design the checks passed (test), a stage's numbers (measure) or the pick (select) | a rejection fails the design, marks the result (its `wrong` values cleared) or drops the pick; the split is divided again (D1040) | no objection |
 | extract | lessons, each citing record rows by id | every cited row exists and says what the lesson claims | mined |
 | select | the pick among ties, with a reason | the pick passed the gate and meets every goal | the vector's pick |
 

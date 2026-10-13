@@ -177,8 +177,7 @@ def test_an_agent_is_enabled_for_a_user_by_a_passed_test(tmp_path, monkeypatch):
            "language": "python",
            "objectives": [],
            "flow": {"generate": {"by": "codex"},
-                    "critique": {"by": {"preset": "claude", "timeout_s": 60}},
-                    "test": {"test": ["true"]}}}
+                    "test": {"test": ["true"], "critic": {"by": "claude", "timeout_s": 60}}}}
     assert agents_used(TaskSpec.from_dict(doc)) == ["codex", "claude"]
     from web_agents import install
 

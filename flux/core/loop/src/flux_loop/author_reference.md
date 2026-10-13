@@ -93,10 +93,16 @@ Say only what is yours; the rest is inferred.
     for the statement, contract and parts, one line per paper, and the coding agents' briefs.
   - `select: {finalists: N}`: how many designs reach the costliest stage.
   - `orchestrate: rules|given|model|tools` (`tools`: the model with tools), `plan: model`,
-    `critique: model`, `validate: model`, `knowledge: {lessons: mined}` (lessons mined from the record, or `{lessons: claude}`),
+    `validate: model`, `knowledge: {lessons: mined}` (lessons mined from the record, or `{lessons: claude}`),
     `feedback: off` (no operator notes), `calibrate: off`.
+  - A critic is said on each box it judges (D1040): `critic: model`, an agent, or `{by: ..., rounds: n}` under
+    `orchestrate` (the split, sent back to be divided again, `rounds` times), `test` (a design the checks
+    passed: a rejection FAILS it, the critic's issues its note, the writer refines it while the pass has steps),
+    `measure` (a stage's numbers: a rejection marks the result, never chosen, and clears the values it names in
+    `wrong`; it never asks for a measurement again) or `select` (the pick: rejected, the decision is made again
+    without it, `rounds` times). `test: {build: make, critic: claude}`, `select: {by: claude, critic: model}`.
   - Every box says who works it the same way (D795): a word (`rules`, `model`, `off`, ...), an
-    agent's name (`critique: claude`), or `{by: <who>, ...}` with the box's settings and the
+    agent's name (`plan: claude`), or `{by: <who>, ...}` with the box's settings and the
     agent's options beside (`plan: {by: claude, session: pass}`, `select: {by: claude,
     finalists: 2}`, `knowledge: {digest: opencode, files: [...]}`); an agent of your own is
     `by: {command: [...], output: text}`. A coding agent answers any box but test and measure,
@@ -104,7 +110,7 @@ Say only what is yours; the rest is inferred.
     `session: pass` keeps one agent session per box for the pass
     (resumed turn after turn), `session: turn` (the default) is a fresh agent every turn. A
     generate agent's span is fixed, not set: one session per part until the part is admitted
-    (repairs and critique send-backs resume it with a short message; an improve starts fresh;
+    (repairs and a critic's rejections resume it with a short message; an improve starts fresh;
     `session` on generate is refused).
   `flow` is the only place a box is said: there is no top-level `gate:`, `stages:`, `space:`,
   `seeds:`, `knowledge:`, `roles:`, `generator:`, `critique:` or `decompose:` key.

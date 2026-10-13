@@ -159,6 +159,7 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     if len(got) != len(cands):
         raise RuntimeError(f"{problem.name}.measure_batch returned {len(got)} result(s) for "
                            f"{len(cands)} candidate(s) on {stage}; one per candidate, in order")
+    judging = problem.critic("measurement") is not None and state.request.critique_rounds > 0
     analytic: bool | frozenset[str] = (True if stage in problem.analytic_stages()
                                        else (problem.analytic_metrics() or False))
     evaluator = problem.evaluator_name(stage)
@@ -178,6 +179,8 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
         metrics = numeric_metrics(m, _metric_specs(problem, stage))
         payload = {k: v for k, v in m.items() if k not in metrics}
         scored = Scored(cand, stage, metrics, payload)
+        if judging and metrics:
+            _judged(problem, state, scored)
         if state.records is not None:
             try:
                 state.records.trial(_doc(cand, _as(problem, cand, stage, state, _grouped(_with(prov, estimate.get(id(cand))), m))),
@@ -188,6 +191,20 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
                 pass
         out.append(scored)
     return out
+
+
+def _judged(problem: Problem, state: LoopState, got: Scored) -> None:
+    """D1040: the measure critic reads a stage's numbers; a rejection marks the result (shown, never
+    chosen) and clears the values it calls wrong before the row is written. It never asks for a
+    measurement again: a stage's run is what it is."""
+    from .rejection import reject
+
+    with _phase("critique: measurement", why=f"{got.name}@{got.stage}") as out:
+        c = problem.critique("measurement", got, state)
+        out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
+        out["subject"] = f"{got.name}: {got.metrics}"
+    if not c.ok:
+        reject(state, got, c.why, list((c.payload or {}).get("wrong") or []), f"the measure critic ({got.stage})")
 
 
 def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage: str

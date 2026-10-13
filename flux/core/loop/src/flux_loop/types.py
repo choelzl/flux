@@ -306,6 +306,7 @@ class LoopState:
     search_choices: list[str] = field(default_factory=list) # attempted search moves without a persistent record
     plan: dict[str, Any] = field(default_factory=dict)   # the loop plan this pass follows (applied)
     critiqued: dict[str, int] = field(default_factory=dict)     # part -> times sent back
+    rejected: dict[str, dict[str, Any]] = field(default_factory=dict)   # D1040: design key -> a critic's rejection (why, wrong, by)
     judged: int = 0
     built: int = 0                  # D845: designs that passed the gate this pass
     step: int = 0

@@ -97,7 +97,7 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     raw = yaml.safe_load(doc.read_text())
     raw["flow"] = {**(raw.get("flow") or {}),
                    "generate": {"by": "opencode", "bin": "oc-mod", "args": ["--agent", "flux"], "timeout_s": 900},
-                   "critique": {"by": {"command": "my-critic {prompt_file}", "output": "text"}}}
+                   "select": {"critic": {"by": {"command": "my-critic {prompt_file}", "output": "text"}}}}
     doc.write_text(yaml.safe_dump(raw, sort_keys=False))
     v = views(doc)
     assert v["normal"] is not None, v["error"]
@@ -111,7 +111,8 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     again = home / "again.problem.yaml"
     again.write_text(merged(out["yaml"], v["raw"], out["kept"]))
     flow = yaml.safe_load(again.read_text())["flow"]
-    assert flow["generate"] == raw["flow"]["generate"] and flow["critique"] == raw["flow"]["critique"]
+    assert flow["generate"] == raw["flow"]["generate"] and flow["select"] == raw["flow"]["select"]
+    assert not any("critic" in (flow.get(b) or {}) for b in ("orchestrate", "test")), "only the box the document's critic judged (D1040)"
     assert load_task(str(again)).to_dict()["flow"] == v["normal"]["flow"]
 
 

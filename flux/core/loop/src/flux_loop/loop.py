@@ -14,6 +14,7 @@ from .objective import Objectives
 from .observe import _phase, _publish, _publish_mentor
 from .problem import Problem
 from .records import _record_trial, _reload, _reload_measured
+from .rejection import reject
 from .types import (BuildError, Candidate, Improve, LoopRequest, LoopResult, LoopState,
                     Scored, SubLoop, Verdict)
 
@@ -169,7 +170,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     with _phase("propose: decompose", why="the parts this pass works on") as out:
         goals: list[str] = _work(state, problem.decompose(state))
         out["parts"] = _describe_parts(goals, problem, state)
-    for round_ in range(request.critique_rounds):
+    for round_ in range(_rounds(problem, request, "decomposition")):
         if not goals:
             break
         with _phase("critique: decomposition", why=f"round {round_ + 1}") as out:
@@ -1052,19 +1053,21 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         if verdict.why:
             out["why"] = verdict.why
     state.judged += 1
-    if verdict.ok and state.critiqued.get(key, 0) < request.critique_rounds:
+    if verdict.ok and _rounds(problem, request, "candidate"):
         with _phase(f"critique: {tag}", why=cand.name) as out:
             c = problem.critique("candidate", cand, state)
-            out["verdict"] = "no objection" if c.ok else f"SENT BACK: {c.why}"
+            out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
             out["subject"] = f"{cand.name}: {len(cand.artifact or '')} chars of artifact, {verdict.why[:300] if verdict.why else 'gate passed'}"
         if not c.ok:
-            # the gate passed and the critic objects: back to the writer once more, with
-            # the objection as the failure text; the gate stays the ground truth (D433)
+            # D1040: the gate passed and the test critic rejects it: the design FAILS, the critic's
+            # issues its note on the record and in the lessons; the writer refines it while the pass
+            # has steps -- a rejected design is never admitted
             state.critiqued[key] = state.critiqued.get(key, 0) + 1
-            say(f"  critique of {cand.name}: {c.why[:200]}; refining")
-            state.lessons.append(f"[critique] {tag}: {cand.name} sent back: {c.why[:200]}")
-            state.best[key] = (0.0, cand, f"CRITIQUE (the gate passed; refine, do not restart): {c.why}")
-            _record_trial(state, cand, sg, Verdict(False, 0.0, f"critique: {c.why}", verdict.payload))
+            say(f"  critic rejected {cand.name}: {c.why[:200]}")
+            state.lessons.append(f"[critique] {tag}: {cand.name} rejected: {c.why[:200]}")
+            state.best[key] = (0.0, cand, f"REJECTED BY THE CRITIC (the gate passed; refine, do not restart): {c.why}")
+            state.refused.append((cand.name, f"critic: {c.why}"[:300]))
+            _record_trial(state, cand, sg, Verdict(False, 0.0, f"rejected by the critic: {c.why}", verdict.payload))
             return
     if verdict.ok:
         # Stamp the part on the candidate it was admitted for (D463) when the drafter did not:
@@ -1340,6 +1343,15 @@ def _select(problem: Problem, state: LoopState, pool: list, pick: Any, decided_b
     return chosen, f"{decided_by}; the agent chose {chosen.name} among {len(names)} ties: {why}"
 
 
+def _rounds(problem: Problem, request: LoopRequest, kind: str) -> int:
+    """D1040: how often the critic judging `kind` is asked -- 0 without one on its box, or with the
+    critics off (a baseline, a re-evaluation); a test or measure critic judges every design."""
+    c = problem.critic(kind)
+    if c is None or request.critique_rounds <= 0:
+        return 0
+    return int(c.get("rounds", 1)) if isinstance(c, dict) else 1
+
+
 def _note_once(state: LoopState, line: str) -> None:
     """A limit the report states once per pass, however many times the chain was climbed
     (D463)."""
@@ -1372,28 +1384,40 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         # D895: parts measured, no whole yet: no decision -- a part is not the answer
         _note_once(state, "no whole design measured yet: the parts are measured, the decision waits for their composition")
         return _result(problem, state, None, "no whole design measured yet", [], [])
+    if state.records is not None:                     # D1040: rejected in an earlier pass of this run
+        for r in state.records.recall("rejected"):
+            state.rejected.setdefault(str(r.get("key")), r)
+    rejected = [s for s in pool if s.payload.get("rejected") or s.candidate.key() in state.rejected]
+    if rejected:                        # D1040: a rejected result stays on the record, never chosen
+        pool = [s for s in pool if s not in rejected]
+        _note_once(state, f"{len(rejected)} result(s) rejected, not chosen: " + ", ".join(sorted({s.name for s in rejected}))[:300])
+        if not pool:
+            return _result(problem, state, None, "every measured design was rejected", [], [])
     with _phase("frontier", why=f"{len(pool)} on {reached}"):
         front = list(problem.frontier(pool, state))
     with _phase("decide", why=f"{len(pool)} in the pool") as out:
-        # D900: the shortfall ranking over the whole pool is the standing design -- what the search
-        # and the next pass's direction build on -- while the decision is only a design meeting
-        # every requirement with its evidence (D899); none does: no decision, the closest apart
-        standing, ranked_by = problem.decide(pool, state)
-        feasible, judged = _feasible(problem, state, pool, stages)
-        if len(feasible) == len(pool):
-            pick, decided_by = standing, ranked_by
-        elif feasible:
-            pick, decided_by = problem.decide(feasible, state)
-        else:
-            pick, decided_by = None, "no feasible design yet"
-        if pick is not None:
-            pick, decided_by = _select(problem, state, feasible, pick, decided_by)
-        closest = standing if pick is None else None
-        unmet = list(judged[closest.candidate.key()].reasons) if closest is not None and closest.candidate.key() in judged else []
-        if closest is not None:
-            decided_by = f"no feasible design yet; the closest, {closest.name}: " + ("; ".join(unmet) or ranked_by)
-        out["decision"] = pick.name if pick is not None else None        # D742: the tree's leaf says it
-        out["decided by"] = decided_by
+        pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
+    rounds = _rounds(problem, request, "decision")
+    while pick is not None and rounds > 0:
+        rounds -= 1
+        with _phase("critique: decision", why=pick.name) as out:
+            c = problem.critique("decision", pick, state)
+            out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
+            out["subject"] = f"{pick.name}: {pick.metrics}"
+        if c.ok:
+            break
+        # D1040: the select critic rejects the pick: marked rejected with why (the values it calls
+        # wrong cleared), never chosen; the decision is made again without it
+        reject(state, pick, c.why, list((c.payload or {}).get("wrong") or []), "the select critic")
+        pool = [s for s in pool if s.candidate.key() != pick.candidate.key()]
+        front = [s for s in front if s.candidate.key() != pick.candidate.key()]
+        if not pool:
+            pick, decided_by, closest, unmet = None, "every measured design was rejected", None, []
+            break
+        with _phase("decide", why=f"again, without {pick.name}") as out:
+            pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
+        if rounds == 0 and pick is not None:
+            _note_once(state, f"the critic's rounds ran out: {pick.name} stands without its review")
     if closest is not None:
         _note_once(state, f"no design meets every requirement yet; the closest, {closest.name}, does not: "
                           + ("; ".join(unmet) or ranked_by))
@@ -1416,14 +1440,6 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         state.lessons.append(f"[{pick.stage}] decision {pick.name}: "
                              + ", ".join(f"{k}={v:g}" for k, v in pick.metrics.items())
                              + f" ({decided_by})")
-        if request.critique_rounds > 0:
-            with _phase("critique: decision", why=pick.name) as out:
-                c = problem.critique("decision", pick, state)
-                out["verdict"] = "no objection" if c.ok else f"OBJECTION (travels with the report): {c.why}"
-                out["subject"] = f"{pick.name}: {pick.metrics}"
-            if not c.ok:
-                # a decision is not sent back; the objection travels with the report
-                state.not_established.append(f"the critic objects to the decision: {c.why[:300]}")
         if state.records is not None:
             try:
                 state.records.conclude({**problem.conclusion(pick, decided_by),       # D900: and the standing design
@@ -1436,6 +1452,32 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         ops.pass_ended(at_rest=state.stopped.startswith("at rest"))
     got = _result(problem, state, pick, decided_by, front, confirmed)
     return dataclasses.replace(got, closest=closest, unmet=unmet) if closest is not None else got
+
+
+def _decide(problem: Problem, state: LoopState, pool: list[Scored], stages: list[str], out: dict[str, Any]
+            ) -> tuple[Scored | None, str, Scored | None, list[str], Scored, str]:
+    """The decision over `pool`: (pick, decided by, the closest when none is feasible, what it does
+    not meet, the standing design, how it was ranked). D900: the shortfall ranking over the whole pool
+    is the standing design -- what the search and the next pass's direction build on -- while the
+    decision is only a design meeting every requirement with its evidence (D899); none does: no
+    decision, the closest apart."""
+    standing, ranked_by = problem.decide(pool, state)
+    feasible, judged = _feasible(problem, state, pool, stages)
+    if len(feasible) == len(pool):
+        pick, decided_by = standing, ranked_by
+    elif feasible:
+        pick, decided_by = problem.decide(feasible, state)
+    else:
+        pick, decided_by = None, "no feasible design yet"
+    if pick is not None:
+        pick, decided_by = _select(problem, state, feasible, pick, decided_by)
+    closest = standing if pick is None else None
+    unmet = list(judged[closest.candidate.key()].reasons) if closest is not None and closest.candidate.key() in judged else []
+    if closest is not None:
+        decided_by = f"no feasible design yet; the closest, {closest.name}: " + ("; ".join(unmet) or ranked_by)
+    out["decision"] = pick.name if pick is not None else None        # D742: the tree's leaf says it
+    out["decided by"] = decided_by
+    return pick, decided_by, closest, unmet, standing, ranked_by
 
 
 def _feasible(problem: Problem, state: LoopState, pool: list[Scored], stages: list[str]

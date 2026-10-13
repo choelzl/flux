@@ -32,8 +32,8 @@ def _parent(tmp_path: Path) -> Path:
     (home / "skills" / "s1").mkdir(parents=True)
     (home / "skills" / "s1" / "SKILL.md").write_text("---\nname: s1\ndescription: a skill\n---\nuse it\n")
     (home / "problem.yaml").write_text(
-        "statement: parent\nskills: [skills]\nflow:\n  test: 'true'\n  critique: model\n"
-        "subtasks:\n  - kid\n  - {id: inline, statement: an inline child, flow: {critique: model}}\n")
+        "statement: parent\nskills: [skills]\nflow:\n  test: 'true'\n  select: {critic: model}\n"
+        "subtasks:\n  - kid\n  - {id: inline, statement: an inline child, flow: {orchestrate: {critic: model}}}\n")
     (home / "kid" / "problem.yaml").write_text("statement: the folder child\n")
     return home
 
@@ -44,7 +44,8 @@ def test_inline_and_folder_children_read_surface_words_and_keep_the_parents_skil
     task = load_task(_parent(tmp_path))
     kid, inline = task.subtasks
     assert (kid.id, inline.id) == ("kid", "inline")
-    assert kid.critique and inline.critique, "critique: model, the surface word, in both"
+    assert kid.critics == {"select": {"model": True}}, "the parent's critic, inherited (D1040)"
+    assert inline.critics == {"select": {"model": True}, "orchestrate": {"model": True}}, "its own beside the parent's"
     assert len(kid.skills) == len(inline.skills) == 1 and Path(kid.skills[0]).name == "s1"
 
 

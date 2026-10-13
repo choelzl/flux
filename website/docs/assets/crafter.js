@@ -133,7 +133,7 @@
     test: { title: "Check it works", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
       fixed: "Configured in Check & Measure: its checks.",
       choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
-    critique: { title: "Second opinion", says: "Optionally, a critic questions the parts, each admitted part and the final choice.",
+    critique: { title: "Second opinion", says: "Optionally, a critic judges the split, each design the checks passed and the final choice: a rejected design fails with its note, a rejected pick is never chosen.",
       choices: [{ value: "off", half: "off", label: "No critic" },
                 { value: "model", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
@@ -192,7 +192,7 @@
       plan: { off: "the orchestrator picks step by step" },
       dse: { none: "the world's own search, if it has one" },
       generate: { model: "the prototype stage, transpile, repair" },
-      critique: { model: "a model adversary on the division, each admitted part and the decision" },
+      critique: { model: "a model critic on the split, each design the checks passed and the pick" },
       calibrate: { on: "between every pair of stages, on the record" },
       feedback: { human: "the operator's notes, when a terminal is attached", off: "no notes are read, reloaded or waited for" },
       knowledge: { "default": "on by default, its papers digested; `flow.knowledge: off` turns it off", none: "the library is off" },
@@ -781,7 +781,7 @@
 
     // D775: the flow, last -- who works each box, and each box's own settings beside it
     var F = [], kf = state.keptFlow || {}, said = flowSaid(state), boxesKept = !own("flow.boxes");
-    var kb = boxesKept ? (kf["flow.boxes"] || {}) : null, SPECIAL = ["dse", "knowledge", "select"];
+    var kb = boxesKept ? (kf["flow.boxes"] || {}) : null, SPECIAL = ["dse", "knowledge", "select", "critique"];
     var boxVal = function (bx) { return boxesKept ? kb[bx] : said.indexOf(bx) >= 0 ? flowObj(state, bx) : undefined; };
     (boxesKept ? Object.keys(kb) : said).forEach(function (bx) {
       if (SPECIAL.indexOf(bx) < 0) F.push("  " + q(bx) + ": " + inline(boxesKept ? boxVal(bx) : toSurface(bx, boxVal(bx)), false));
@@ -879,7 +879,26 @@
     if (typeof S === "string" || Object.keys(S).length) F.push("  select: " + inline(S, false));
     else if (sv !== undefined) F.push("  select: " + inline(boxesKept ? sv : toSurface("select", sv), false));
 
+    // D1040: a critic is said on each box it judges -- the Second opinion on the split (orchestrate),
+    // each design the checks passed (test) and the pick (select)
+    var cv = boxVal("critique"), crit = cv === undefined ? undefined : boxesKept ? cv : toSurface("critique", cv);
+    if (crit !== undefined && crit !== "off" && crit !== "none")
+      (state.criticOn || ["orchestrate", "test", "select"]).forEach(function (bx) { F = withCritic(F, bx, inline(crit, false)); });
+
     if (F.length) out += "\nflow:\n" + F.join("\n") + "\n";
+    return out;
+  }
+
+  /** D1040: the flow's lines with `critic:` under `box` -- beside a block's entries, inside an inline
+      map, a word made `{by: word, critic: ...}`; a box not said is said for it (but a test without checks). */
+  function withCritic(F, box, crit) {
+    var head = "  " + box + ":", at = -1;
+    F.forEach(function (line, i) { if (line === head || line.indexOf(head + " ") === 0) at = i; });
+    if (at < 0) return box === "test" ? F : F.concat(["  " + box + ": {critic: " + crit + "}"]);
+    var rest = F[at].slice(head.length).trim(), out = F.slice();
+    if (!rest || rest.charAt(0) === "#") out.splice(at + 1, 0, "    critic: " + crit);
+    else if (rest.charAt(0) === "{") out[at] = head + " {critic: " + crit + (rest === "{}" ? "}" : ", " + rest.slice(1));
+    else out[at] = head + " {by: " + rest + ", critic: " + crit + "}";
     return out;
   }
 
@@ -1230,10 +1249,17 @@
     for (k in doc) if (k !== "flow") out[k] = doc[k];
     var fl = doc.flow && typeof doc.flow === "object" && !Array.isArray(doc.flow) ? doc.flow : null;
     if (!fl) return out;
-    var f = {};
+    var f = {}, critic;
     for (k in fl) {
       var key = k === "orchestrate" && isSearch(fl[k]) ? "dse" : k;            // D797: a search is the orchestrator's
       var val = fl[k];
+      if (val && typeof val === "object" && !Array.isArray(val) && "critic" in val) {   // D1040: the Second opinion
+        if (critic === undefined) critic = val.critic;
+        (out._criticOn = out._criticOn || []).push(k);
+        val = Object.assign({}, val); delete val.critic;
+        if (!Object.keys(val).length) continue;
+        if (Object.keys(val).length === 1 && "by" in val && k !== "test" && k !== "measure") val = val.by;
+      }
       if (k === "orchestrate" && val && typeof val === "object" && "dse" in val) {
         f.dse = val.dse; val = Object.assign({}, val); delete val.dse;
       }
@@ -1248,6 +1274,7 @@
       }
       f[key] = ["test", "measure"].indexOf(k) >= 0 ? val : toInner(key, val);   // D795
     }
+    if (critic !== undefined) f.critique = toInner("critique", critic);
     if ("test" in f) { out.gate = f.test; delete f.test; }
     if ("measure" in f) {
       var m = f.measure || {};
@@ -1307,8 +1334,14 @@
     if (at === "flow.boxes") {                      // every box's choice, without what is kept or edited apart
       out = {};
       for (k in fl) {
-        if (["test", "measure"].indexOf(k) >= 0) continue;
         var v = fl[k];
+        if (v && typeof v === "object" && !Array.isArray(v) && "critic" in v) {   // D1040: the Second opinion, apart
+          if (out.critique === undefined) out.critique = v.critic;
+          v = Object.assign({}, v); delete v.critic;
+          if (!Object.keys(v).length) continue;
+          if (Object.keys(v).length === 1 && "by" in v) v = v.by;
+        }
+        if (["test", "measure"].indexOf(k) >= 0) continue;
         if (k === "orchestrate" && isSearch(v)) k = "dse";
         if (k === "orchestrate" && v && typeof v === "object" && !Array.isArray(v) && "scope" in v) {   // kept apart (D1022)
           v = Object.assign({}, v); delete v.scope;
@@ -1340,6 +1373,7 @@
     var asWritten = raw || {};
     raw = unlifted(raw || {}); normal = unlifted(normal) || raw;
     var s = base(), kept = [], notes = [];
+    if (raw._criticOn) s.criticOn = raw._criticOn;          // D1040: the boxes the document's critic judges
     s.keptFlow = {};
     function keep(key, why) {
       var at = KEPT_AT[key] || key;

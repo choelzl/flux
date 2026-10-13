@@ -66,7 +66,8 @@ def kind_of(name: str, why: str = "") -> str | None:
     if head in ("propose", "decide", "frontier", "decision", "select"):
         return "choose"
     if head == "critique":                                  # D1034: in the box of what it judges
-        return "setup" if rest.startswith("decomposition") else "choose" if rest.startswith("decision") else "check"
+        return ("setup" if rest.startswith("decomposition") else "choose" if rest.startswith("decision")
+                else "measure" if rest.startswith("measurement") else "check")
     if head == "dse":
         return "search"
     if head in ("plan", "search"):

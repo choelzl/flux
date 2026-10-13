@@ -53,6 +53,10 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
     return f"{n} point(s): " + " x ".join(f"{k}[{len(v)}]" for k, v in space.items())
 
 
+def _critic_name(c: dict) -> str:
+    return f"agent {_agent_name(c)}" if "agent" in c else "model"
+
+
 def _agent_name(value: dict[str, Any]) -> str:
     spec = value.get("agent")
     if isinstance(spec, str):
@@ -151,9 +155,8 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
         + f" -- registered: {', '.join(policies)}",
         f"generate: {generate}",
         "test: gate (never delegated) -- the document's commands",
-        "critique: " + (f"agent {_agent_name(flow['critique'])} (on the division, each admitted part and the decision, D640)"
-                        if isinstance(flow.get("critique"), dict) else
-                        "model (a model adversary on the division, each admitted part and the decision)" if task.critique else "off"),
+        "critics: " + ("; ".join(f"{box} ({_critic_name(c)})" for box, c in task.critics.items())
+                       or "none"),
         "stages: " + (", ".join(r.name for r in task.stages) if task.stages else "none declared (the gate decides)"),
         *[describe_stage(r, r.name in modelled) for r in task.stages],
         "calibrate: " + ("off" if task.budget.get("calibrate") is False else "on (between every pair of stages, on the record)"),

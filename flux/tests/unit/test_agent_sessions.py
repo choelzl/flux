@@ -105,14 +105,15 @@ def test_a_gate_repair_resumes_the_parts_session_with_a_short_message(tmp_path):
 def test_a_critique_send_back_resumes_the_session_and_admission_ends_it(tmp_path):
     fake = _fake(tmp_path)
     d = {"id": "digits", **json.loads(DIGITS.read_text())}
-    d["flow"] = {**d.get("flow", {}), "generate": {"by": _agent(fake, "genok")}, "critique": {"by": _agent(fake, "critic")}}
+    d["flow"] = {**d.get("flow", {}), "generate": {"by": _agent(fake, "genok")}}
+    d["flow"]["test"] = {**d["flow"]["test"], "critic": {"by": _agent(fake, "critic")}}       # D1040: the test box's critic
     d["budget"] = {"steps": 3, "repair_attempts": 1, "prototype": False, "critique_rounds": 1}
     task = TaskSpec.from_dict(d)
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=None, log=lambda _m: None)
     assert out.decision is not None, out.refused
     gen = [t for t in _turns(tmp_path) if t["role"] == "genok"]
     assert [t["mode"] for t in gen] == ["first", "resume"] and gen[1]["sid"] == gen[0]["sid"]
-    assert "CRITIQUE" in gen[1]["text"] and "the last line must be 9" in gen[1]["text"]
+    assert "REJECTED BY THE CRITIC" in gen[1]["text"] and "the last line must be 9" in gen[1]["text"]
 
 
 def test_admission_drops_the_session_so_an_improve_starts_fresh(tmp_path):
@@ -166,7 +167,7 @@ def test_generate_refuses_a_session_option():
     with pytest.raises(ValueError, match="session is one of turn, pass"):
         agent_spec({"preset": "opencode", "session": "run"})
     assert agent_spec("opencode").session == "turn" and agent_spec({"preset": "claude", "session": "pass"}).session == "pass"
-    d["flow"] = {**{"id": "digits", **json.loads(DIGITS.read_text())}["flow"], "critique": {"by": {"preset": "opencode", "session": "pass"}}}
+    d["flow"] = {**{"id": "digits", **json.loads(DIGITS.read_text())}["flow"], "select": {"critic": {"by": "opencode", "session": "pass"}}}
     task = TaskSpec.from_dict(d)
     from flux_loop.document import describe_flow
 

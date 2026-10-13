@@ -123,9 +123,9 @@ def _task(tmp_path, baseline, *, gate_exit=0, measurement_exit=0):
         "print('debug output', file=sys.stderr)\n")
     return TaskSpec.from_dict({
         "id": "baseline", "statement": "Improve the project", "language": "python", "baseline": baseline,
-        "flow": {"validate": "model", "plan": "model", "critique": "model", "select": "claude",
+        "flow": {"validate": "model", "plan": "model", "select": {"by": "claude", "critic": "model"},
                  "generate": {"command": "absent-generator-must-not-run {artifact}"},
-                 "test": {"check": {"run": "{python} {home}/check.py {home} {artifact}"}},
+                 "test": {"check": {"run": "{python} {home}/check.py {home} {artifact}"}, "critic": "model"},
                  "measure": {name: {"command": f"{{python}} {{home}}/measure.py {{home}} {name}",
                                      "metrics": ["cost"], "estimate": {"kind": "model", "margin": 0.05},
                                      "cutoff": {"metric": "cost", "below": 1}}

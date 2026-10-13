@@ -205,7 +205,7 @@ def test_flux_task_check_rejects_a_bad_document(tmp_path, capsys):
 
 
 # ---- propose: decompose (D431)
-def _decomposed_task(**extra):
+def _decomposed_task(test_critic=None, **extra):
     script = ("import sys\nwant = {'head': ['0','1','2','3','4'], 'tail': ['5','6','7','8','9']}[sys.argv[2]]\n"
               "got = [g for g in open(sys.argv[1]).read().split('\\n') if g != '']\n"
               "bad = [i for i, (g, w) in enumerate(zip(got, want)) if g != w] + list(range(min(len(got), 5), 5))\n"
@@ -216,7 +216,8 @@ def _decomposed_task(**extra):
                                "budget": {"steps": 4, "repair_attempts": 2, "prototype": False},
                                **extra,
                                "flow": {**extra.get("flow", {}),
-                                        "test": ["{python}", "-c", script, "{artifact}", "{part}"]}})
+                                        "test": (["{python}", "-c", script, "{artifact}", "{part}"] if test_critic is None else
+                                                 {"test": ["{python}", "-c", script, "{artifact}", "{part}"], "critic": test_critic})}})
     return replace(task, max_parts=3)             # D792: the loop's own bound, not a document key
 
 
@@ -271,40 +272,79 @@ def test_records_remember_and_recall_typed_decisions(tmp_path):
     assert Records(str(tmp_path / "nodir" / "x.db"), objective={"s": 1}).recall("plan") == []
 
 
-# ---- critique (D433)
-def _critic(ok: bool, *issues: str) -> str:
-    return json.dumps({"ok": ok, "issues": list(issues), "why": "critic"})
+# ---- critique (D433, D1040: a critic per box)
+def _critic(ok: bool, *issues: str, wrong=()) -> str:
+    return json.dumps({"ok": ok, "issues": list(issues), "why": "critic", **({"wrong": list(wrong)} if wrong else {})})
 
 
-def test_a_critic_sends_a_passing_candidate_back_once_then_the_gate_rules(tmp_path):
-    task = TaskSpec.from_dict({**load_task(DIGITS).to_dict(), "flow": {**load_task(DIGITS).to_dict().get("flow", {}), "critique": "model"},
-                               "budget": {"steps": 3, "repair_attempts": 2, "prototype": False}})
-    assert task.critique and TaskSpec.from_dict(task.to_dict()) == task
-    # design passes the gate; the critic objects; the patch turn carries the objection; the
-    # refined design passes and is admitted without a second critique; the next critic reply
-    # is the decision's
+def _with_critics(task, *boxes: str, **more):
+    """DIGITS with a model critic on each of `boxes` (D1040)."""
+    doc = task.to_dict()
+    flow = dict(doc.get("flow") or {})
+    for box in boxes:
+        v = flow.get(box)
+        flow[box] = {**(v if isinstance(v, dict) else {} if v is None else {"by": v}), "critic": "model"}
+    return TaskSpec.from_dict({**doc, "flow": flow, **more})
+
+
+def test_a_test_critic_fails_a_design_with_its_note_and_the_writer_refines_it(tmp_path):
+    """D1040: the critic on `test` judges a design the gate passed; a rejection FAILS it, the critic's
+    issues its note on the record and in the lessons, and the writer refines it while the pass has steps."""
+    task = _with_critics(load_task(DIGITS), "test", budget={"steps": 3, "repair_attempts": 2, "prototype": False})
+    assert TaskSpec.from_dict(task.to_dict()) == task and task.critics == {"test": {"model": True}}
     proposer = ScriptedProposer([_reply(GOOD), _critic(False, "trailing newline is not 'nothing else'"),
-                                 _patch("9\n", "9"), _critic(False, "the decision ignores width")])
+                                 _patch("9\n", "9"), _critic(True)])
     log: list[str] = []
-    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "c.db")), proposer=proposer,
-                   log=log.append)
-    assert "You are the critic" in proposer.prompts[1] and "ALREADY PASSED" in proposer.prompts[1]
-    assert "CRITIQUE (the gate passed; refine, do not restart): trailing newline" in proposer.prompts[2]
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "c.db")), proposer=proposer, log=log.append)
+    assert "You are the critic" in proposer.prompts[1] and "ALREADY PASSED" in proposer.prompts[1] and "FAILS" in proposer.prompts[1]
+    assert "REJECTED BY THE CRITIC (the gate passed; refine, do not restart): trailing newline" in proposer.prompts[2]
     assert out.decision is not None and out.decision.candidate.artifact == GOOD.rstrip("\n")
-    assert any("[critique] digits: digits#1 sent back" in ln for ln in out.lessons)
-    assert any("the critic objects to the decision: the decision ignores width" in ln for ln in out.not_established)
-    assert any("critique of digits#1" in ln for ln in log)
-    # a critic that objects forever cannot veto: after critique_rounds the gate rules (the
-    # writer answers the send-back with the same text; the last reply repeats)
-    proposer = ScriptedProposer([_reply(GOOD), _critic(False, "never good enough"), _reply(GOOD)])
-    out = run_loop(PromptProblem(task), request_for(task, db="", critique_rounds=1), proposer=proposer,
-                   log=lambda m: None)
-    assert out.decision is not None and len(out.admitted) == 1
-    assert sum("sent back" in ln for ln in out.lessons) == 1
+    assert any("[critique] digits: digits#1 rejected: trailing newline" in ln for ln in out.lessons)
+    assert any("critic rejected digits#1" in ln for ln in log)
+    # a critic that rejects every design: none is ever admitted, however often the gate passes
+    proposer = ScriptedProposer([_reply(GOOD), _critic(False, "never good enough")] * 6)
+    out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=proposer, log=lambda m: None)
+    assert out.decision is None and not out.admitted
+    assert sum("rejected: never good enough" in ln for ln in out.lessons) >= 2
+
+
+def test_a_select_critic_rejects_the_pick_and_the_decision_is_made_again_without_it(tmp_path):
+    """D1040: the critic on `select` rejects the pick -- marked rejected with why (on the record, in the
+    lessons), never chosen; the decision runs again without it. Here it was the only design."""
+    task = _with_critics(load_task(DIGITS), "select")
+    proposer = ScriptedProposer([_reply(GOOD), _critic(False, "the decision ignores width")])
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "s.db")), proposer=proposer, log=lambda m: None)
+    assert out.decision is None and out.decided_by == "every measured design was rejected"
+    assert any("rejected by the select critic: the decision ignores width" in ln for ln in out.lessons)
+    problem = PromptProblem(task)
+    r = problem.open_records(request_for(task, db=str(tmp_path / "s.db")), lambda _m: None)
+    assert [(x["name"], x["by"]) for x in r.recall("rejected")] == [("digits#1", "the select critic")]
+
+
+def test_a_measure_critic_marks_a_result_rejected_clears_the_wrong_value_and_it_is_never_chosen(tmp_path):
+    """D1040: the critic on `measure` reads a stage's numbers; a rejection marks the result (it stays on
+    the record and in the pool, shown), clears the values it calls wrong, and the design is never chosen.
+    It never asks for a measurement again."""
+    doc = load_task(DIGITS).to_dict()
+    flow = dict(doc["flow"])
+    flow["measure"] = {"bench": {"command": [sys.executable, "-c", "print('score=5'); print('cycles=1')"], "metrics": ["score", "cycles"]},
+                       "critic": "model"}
+    task = TaskSpec.from_dict({**doc, "flow": flow, "objectives": ["score"], "budget": {"steps": 1, "prototype": False}})
+    assert task.critics == {"measure": {"model": True}}
+    proposer = ScriptedProposer([_reply(GOOD), _critic(False, "1 cycle cannot hold ten lines", wrong=["cycles"])])
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "m.db")), proposer=proposer, log=lambda m: None)
+    assert "THE MEASUREMENT of digits#1 on stage bench" in proposer.prompts[1] and '"wrong"' in proposer.prompts[1]
+    assert out.decision is None and out.decided_by == "every measured design was rejected"
+    assert any("rejected by the measure critic (bench): 1 cycle cannot hold ten lines (wrong: cycles)" in ln for ln in out.lessons)
+    problem = PromptProblem(task)
+    r = problem.open_records(request_for(task, db=str(tmp_path / "m.db")), lambda _m: None)
+    assert [(x["name"], x["wrong"]) for x in r.recall("rejected")] == [("digits#1", ["cycles"])]
+    rows = [t for t in r.store.trials(r.campaign_id) if t.stage == "bench"]
+    assert rows and all("cycles" not in t.result.metrics and t.result.value_of("score") == 5 for t in rows), "the wrong value cleared"
 
 
 def test_a_critic_sends_a_division_back_and_only_the_accepted_one_is_remembered(tmp_path):
-    task = _decomposed_task(flow={"critique": "model"})
+    task = _decomposed_task(test_critic="model", flow={"orchestrate": {"critic": "model"}, "select": {"critic": "model"}})
     first = json.dumps({"parts": [{"name": "all", "statement": "everything"}], "why": "one"})
     second = json.dumps({"parts": [{"name": "head", "statement": "0-4"}, {"name": "tail", "statement": "5-9"}]})
     # one critique round: the re-division stands without a second critique; then the
@@ -330,7 +370,7 @@ def test_without_a_critic_nothing_changes(tmp_path):
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=proposer, log=lambda m: None)
     assert out.decision is not None and len(proposer.prompts) == 1
     assert not any("critique" in ln for ln in out.lessons + out.not_established)
-    task = TaskSpec.from_dict({**task.to_dict(), "flow": {**task.to_dict().get("flow", {}), "critique": "model"}})
+    task = _with_critics(task, "test", "select")
     out = run_loop(PromptProblem(task), request_for(task, db="", critique_rounds=0),
                    proposer=ScriptedProposer([_reply(GOOD)]), log=lambda m: None)
     assert out.decision is not None                            # critique_rounds=0: no critic asked
@@ -386,16 +426,16 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
     def box(lines, name):
         return next(l for l in lines if l.startswith(name + ":"))
 
-    task = TaskSpec.from_dict(_flow_doc({"orchestrate": "rules", "generate": {"catalog": ["a.txt"]},
-                                         "critique": "model", "calibrate": "off",
+    task = TaskSpec.from_dict(_flow_doc({"orchestrate": {"by": "rules", "critic": {"by": "model", "rounds": 2}}, "generate": {"catalog": ["a.txt"]},
+                                         "select": {"critic": "claude"}, "calibrate": "off",
                                          "knowledge": {"lessons": "mined"}, "feedback": "off", "test": "gate"}))
     assert task.roles == {"orchestrator": "rules", "knowledge": "mined"}
-    assert task.generator == {"catalog": ["a.txt"]} and task.critique is True
+    assert task.generator == {"catalog": ["a.txt"]} and task.critics == {"orchestrate": {"model": True, "rounds": 2}, "select": {"agent": "claude"}}
     assert task.budget["calibrate"] is False
     assert TaskSpec.from_dict(task.to_dict()) == task
     lines = describe_flow(task)
     assert box(lines, "orchestrate").startswith("orchestrate: rules") and box(lines, "generate").startswith("generate: catalog of 1")
-    assert box(lines, "critique").startswith("critique: model") and box(lines, "stages") == "stages: screen, confirm"
+    assert box(lines, "critics") == "critics: orchestrate (model); select (agent claude)" and box(lines, "stages") == "stages: screen, confirm"
     assert box(lines, "calibrate") == "calibrate: off" and box(lines, "feedback").startswith("feedback: off")
     plain = describe_flow(TaskSpec.from_dict(_flow_doc({})))
     assert box(plain, "stage confirm") == "stage confirm: its command -- estimate: none (the tool runs on every design)"

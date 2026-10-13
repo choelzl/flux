@@ -352,6 +352,28 @@ def _d1028(doc: dict[str, Any], say: Say) -> None:
 
 
 #: Each change the format went through, in order: (decision, what it does, the step).
+def _d1040(doc: dict[str, Any], say: Say) -> None:
+    """A critic per box it judges (D1040): `flow.critique` judged the division, each design the gate
+    passed and the decision -- it becomes `critic:` on orchestrate, test and select."""
+    flow = doc.get("flow")
+    if not isinstance(flow, dict) or "critique" not in flow:
+        return
+    c = flow.pop("critique")
+    if c in ("off", "none", False, None):
+        say("flow.critique: off, dropped")
+        return
+    c = _by(c)
+    if isinstance(c, dict) and set(c) == {"by"} and isinstance(c["by"], str):
+        c = c["by"]                                       # a preset or a word alone, as a document says it
+    c = "model" if c == "llm" else c
+    for box in ("orchestrate", "test", "select"):
+        v = flow.get(box)
+        if box == "test" and not isinstance(v, dict):
+            continue                                       # no gate of its own to judge after
+        flow[box] = {**(v if isinstance(v, dict) else {} if v is None else {"by": v}), "critic": c}
+    say("flow.critique: a critic on orchestrate, test and select (D1040)")
+
+
 STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D775", "each box's settings under flow", _d775),
     ("D786", "no id: the folder is the loop's id", _d786),
@@ -365,6 +387,7 @@ STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D969", "flux prog is the preset fluxpreset prog", _d969),
     ("D974", "fluxhelper is fluxpreset (helpers are presets)", _d974),
     ("D1028", "a dictionary metric's type and aggregate on its objective", _d1028),
+    ("D1040", "a critic on each box it judges", _d1040),
 ]
 
 

@@ -61,7 +61,9 @@ class TaskSpec:
     #: {"parts": [...]}}}`, ... -- one of `flux_loop.available_roles(role)` per role. The
     #: generation slot is the `generator` field above; saying it in both places is refused.
     roles: dict[str, Any] = field(default_factory=dict)
-    critique: bool = False               # flow critique: llm -- a model critic judges (D433)
+    #: D1040: a critic per box it judges (orchestrate, test, measure, select): {"model": True} or
+    #: {"agent": spec}, and `rounds` -- how often the box's emitter may answer it (orchestrate, select)
+    critics: dict[str, dict[str, Any]] = field(default_factory=dict)
     gate: Gate = field(default_factory=Gate)
     stages: tuple[Stage, ...] = ()
     objectives: tuple[Objective, ...] = ()
@@ -214,6 +216,7 @@ class TaskSpec:
                 "their own loop, not both: with both, what the parent composes is ambiguous")
         space, when, space_from = _space(doc.get("space"), base)
         scope = _scope(doc.get("scope"), bool(parts or decompose or subtasks or split or space))
+        critics = _critics(doc.get("critics"))
         seeds = _seeds(doc.get("seeds"), space)
         # the record is named by the document's id, a sub-document's by `<parent>/<child>` (D628)
         record = str(doc.get("_record") or doc.get("id") or "").strip()
@@ -373,7 +376,7 @@ class TaskSpec:
             generator=dict(generator), roles=dict(roles), flow=dict(flow),
             subtasks=tuple(subtasks), split=split,
             max_subtasks=_max_subtasks(doc.get("max_subtasks")),
-            critique=flow.get("critique") == "llm" or isinstance(flow.get("critique"), dict),
+            critics=critics,
             gate=gate, stages=tuple(stages), objectives=tuple(objectives),
             knowledge=str(knowledge),
             budget=budget, baseline=baseline, params=dict(doc.get("params") or {}), space=space, when=when, space_from=space_from, seeds=seeds, scope=scope,
@@ -412,6 +415,7 @@ class TaskSpec:
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": list(self.skills)} if self.skills else {}),
+            **({"critics": {b: dict(c) for b, c in self.critics.items()}} if self.critics else {}),
             **({"scope": {**{k: _as_said(v) for k, v in self.scope.items() if k != "timeout_s"},
                           **({"timeout_s": self.scope["timeout_s"]} if self.scope.get("timeout_s") != 120 else {})}}
                if self.scope else {}),
@@ -478,6 +482,48 @@ def _scope(raw: Any, divided: bool) -> dict[str, Any]:
     return out
 
 
+def _critics(raw: Any) -> dict[str, dict[str, Any]]:
+    """D1040: each box's critic -- `model`, an agent (a preset, or one of one's own: a rule script that
+    writes the verdict), or `{by: ..., rounds: n, ...the agent's options}`; `rounds` on the boxes whose
+    emitter answers it (orchestrate, select). Already read (an inherited parent's): as it is."""
+    from .surface import _AGENT_OPTS, CRITIC_BOXES, _who
+
+    out: dict[str, dict[str, Any]] = {}
+    for box, c in (raw or {}).items():
+        if isinstance(c, dict) and ("model" in c or "agent" in c):
+            out[box] = dict(c)
+            continue
+        if box not in CRITIC_BOXES:
+            raise TaskError(f"flow.{box}.critic: a critic judges {', '.join(CRITIC_BOXES)} (D1040)")
+        v = dict(c) if isinstance(c, dict) else {"by": c}
+        if "by" not in v:
+            raise TaskError(f"flow.{box}.critic is model, an agent, or {{by: ..., rounds: n}}, not {c!r}")
+        by, rounds = v.pop("by"), v.pop("rounds", 1)
+        if not isinstance(rounds, int) or isinstance(rounds, bool) or not 1 <= rounds <= 5:
+            raise TaskError(f"flow.{box}.critic.rounds is a whole number from 1 to 5, not {rounds!r}")
+        if rounds != 1 and box in ("test", "measure"):
+            raise TaskError(f"flow.{box}.critic has no rounds: its rejection fails the design or marks the result (D1040)")
+        opts = {k: v.pop(k) for k in list(v) if k in _AGENT_OPTS}
+        if v:
+            raise TaskError(f"flow.{box}.critic: {', '.join(sorted(v))} is not a setting of a critic or an agent's")
+        if by == "model":
+            if opts:
+                raise TaskError(f"flow.{box}.critic: {', '.join(sorted(opts))} is an agent's option, not the model's")
+            out[box] = {"model": True}
+        else:
+            from ..agent import agent_spec
+
+            spec = _who(f"{box}.critic", by, opts)
+            try:
+                agent_spec(spec)
+            except ValueError as exc:
+                raise TaskError(f"flow.{box}.critic: {exc}") from exc
+            out[box] = {"agent": spec}
+        if rounds != 1:
+            out[box]["rounds"] = rounds
+    return out
+
+
 def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     """The child's document with what it does not say taken from the parent (D455), including
     its ladder and flow (D555). A child of a named
@@ -488,7 +534,7 @@ def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     for key in _INHERITED:
         if key not in out and key in parent:
             out[key] = parent[key]
-        elif key in ("flow", "budget", "params") and isinstance(parent.get(key), dict) and isinstance(out.get(key), dict):
+        elif key in ("flow", "budget", "params", "critics") and isinstance(parent.get(key), dict) and isinstance(out.get(key), dict):
             out[key] = {**parent[key], **out[key]}
     composes = (parent.get("flow") or {}).get("generate")
     if parent.get("subtasks") and isinstance(out.get("flow"), dict) and isinstance(composes, dict) \

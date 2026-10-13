@@ -11,7 +11,7 @@ class TaskError(ValueError):
 #: deliberately absent: a child that inherited it would divide again, forever.
 _INHERITED = ("contract", "language", "gate", "stages", "objectives", "knowledge", "skills",
               "params", "budget", "space", "ladder",
-              "flow")
+              "flow", "critics")
 
 
 #: Every top-level key a problem document may say; any other is refused with the nearest
@@ -22,7 +22,7 @@ DOCUMENT_KEYS = frozenset({
     "budget", "params", "ladder",
     "skills", "baseline"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
-_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge", "scope"})
+_LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge", "scope", "critics"})
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
 _INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})

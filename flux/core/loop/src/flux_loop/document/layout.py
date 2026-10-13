@@ -145,6 +145,18 @@ def _layout(doc: Any) -> Any:
         f = out.setdefault("flow", {})
         o = f.get("orchestrate")
         f["orchestrate"] = {**(o if isinstance(o, dict) else {} if o is None else {"by": o}), "scope": doc["scope"]}
+    for box, c in (doc.get("critics") or {}).items():       # D1040: said under the box it judges
+        f = out.setdefault("flow", {})
+        v = f.get(box)
+        f[box] = {**(v if isinstance(v, dict) else {} if v is None else {"by": v}), "critic": _critic_doc(c)}
     if not out.get("flow"):
         out.pop("flow", None)
     return out
+
+
+def _critic_doc(c: dict[str, Any]) -> Any:
+    """A critic as a document says it (D1040): `model`, an agent, or `{by: ..., rounds: n}`."""
+    more = {"rounds": c["rounds"]} if c.get("rounds", 1) != 1 else {}
+    if "agent" in c:
+        return _by_doc(c["agent"], more)
+    return {"by": "model", **more} if more else "model"

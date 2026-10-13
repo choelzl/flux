@@ -1,4 +1,4 @@
-"""The flow (D542): `flow:` read, checked and folded into roles, generator and critique."""
+"""The flow (D542): `flow:` read, checked and folded into roles, generator and critics."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from .keys import TaskError
 
 # ------------------------------------------------------------------ the flow (D542)
 #: The boxes of the drawing a document may say a half for, in flow order.
-FLOW_BOXES = ("validate", "orchestrate", "plan", "dse", "generate", "test", "critique",
+FLOW_BOXES = ("validate", "orchestrate", "plan", "dse", "generate", "test",
               "calibrate", "select", "feedback", "knowledge", "extract")
-_FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "critique": ("none", "llm"), "plan": ("none", "llm"),
+_FLOW_WORDS = {"validate": ("rules", "llm"), "test": ("gate",), "plan": ("none", "llm"),
                "calibrate": ("on", "off"), "select": ("objectives",), "feedback": ("human", "none"),
                "extract": ("none", "mined")}
 #: What `flow.knowledge` may name (D648): the library is on by default; `none` turns it off.
@@ -20,7 +20,7 @@ _KNOWLEDGE_SOURCES = ("sheet", "library", "none")
 
 def _flow(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """`flow:` (D542), one key per box of the drawing naming its half, read, checked and folded
-    into the internal `roles`, `generator` and `critique` (D629: `flow` is the only place a
+    into the internal `roles`, `generator` and the critics (D629: `flow` is the only place a
     document says them)."""
     raw = doc.get("flow")
     if not raw:
