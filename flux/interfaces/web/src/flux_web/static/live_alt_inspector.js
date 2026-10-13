@@ -156,7 +156,7 @@ function chatBox(n, env, kids, more) {
     // a fresh box (another task, the first draw); a morph keeps the old one, the panel's restore keeps its place
     const live = wrap.isConnected ? box : document.querySelector(`.alt-detail[data-task="${n.id}"] .alt-chat`);
     if (!live) return;
-    const anchor = chatAnchor.get(n.id);
+    const anchor = fetching.has(n.id) ? null : chatAnchor.get(n.id);     // a page on its way: the place is kept for it
     if (anchor != null) { chatAnchor.delete(n.id); live.scrollTop = live.scrollHeight - anchor; }
     else if (wrap.isConnected && !env.place?.blocks?.get("chat")) live.scrollTop = live.scrollHeight;  // a new task opens at its newest end
     const j = live.parentElement?.querySelector(".alt-chat-jump");
@@ -171,10 +171,39 @@ function usage(f, extra) {
     .filter(([, v]) => v != null && v !== "");
   return facts.length ? h("div", { class: "facts alt-usage" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))) : "";
 }
+/** D1036: an agent turn's earlier steps, from the file it wrote -- one block per task, joined to its
+    live window: [start, upTo) of all its steps. */
+const older = new Map(), fetching = new Set();
+function earlierSteps(n, env, file, earlier, want) {
+  const have = older.get(n.id) || { start: earlier, upTo: earlier, steps: [] };
+  if (have.upTo > earlier || (have.start === have.upTo && have.upTo !== earlier)) { have.start = have.upTo = earlier; have.steps = []; }   // another file
+  const need = [];
+  if (have.upTo < earlier && have.steps.length) need.push([have.upTo, earlier - have.upTo]);    // left the live window since
+  if (have.start > earlier - want) { const from = Math.max(0, earlier - want); need.push([from, have.start - from]); }   // scrolled up for more
+  older.set(n.id, have);
+  if (need.length && env.steps && !fetching.has(n.id)) {
+    fetching.add(n.id);
+    Promise.all(need.map(([start, count]) => env.steps(file, start, count).then(got => [start, got.steps || []])))
+      .then(pages => {
+        for (const [start, rows] of pages) {
+          if (start >= have.upTo) { have.steps.push(...rows); have.upTo = start + rows.length; }
+          else { have.steps.unshift(...rows); have.start = start; }
+        }
+        if (have.start === earlier && !have.steps.length) have.upTo = earlier;
+      })
+      .catch(() => { /* the file gone: the live window only */ })
+      .finally(() => { fetching.delete(n.id); env.redraw(); });
+  }
+  return have.steps.slice(Math.max(0, have.steps.length - want));
+}
 function agentChat(n, env) {
   const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) }, p = n.params || {};
   const steps = Array.isArray(f.steps) ? f.steps : [], total = Number(f["steps total"] || steps.length);
-  const limit = chatLimit.get(n.id) || CHAT_STEP, shown = steps.slice(-limit), above = steps.length - shown.length, kept = total - steps.length;
+  const limit = chatLimit.get(n.id) || CHAT_STEP, earlier = total - steps.length, file = f["steps file"];
+  // D1036: the whole conversation -- the steps before the live window come from the turn's file as one scrolls up
+  const before = file && earlier > 0 ? earlierSteps(n, env, file, earlier, Math.max(0, limit - steps.length)) : [];
+  const all = [...before, ...steps], shown = all.slice(-limit), above = (file ? earlier - before.length : 0) + all.length - shown.length;
+  const kept = file ? 0 : earlier;
   const conv = conversation(shown, { key: `task${n.id}`, offset: total - shown.length, live: running(n) });
   conv.querySelector(":scope > p.muted.small")?.remove();                   // the chat says what is above, below
   const prompt = typeof p.prompt === "string" ? p.prompt : "";
@@ -185,7 +214,7 @@ function agentChat(n, env) {
   const now = running(n) && !conv.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";
   const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
   return [usage(f, [["model", f.agent || p.model]]),
-    h("div", { class: "agent-view" }, chatBox(n, env, [top, steps.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),
+    h("div", { class: "agent-view" }, chatBox(n, env, [top, all.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),
     out ? fold("stdout", "stdout", `${lines(out).length} line${lines(out).length === 1 ? "" : "s"}`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
     err ? fold("stderr", "stderr", `${lines(err).length} line${lines(err).length === 1 ? "" : "s"}`, h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : ""];
 }

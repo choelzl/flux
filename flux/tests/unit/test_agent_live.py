@@ -349,3 +349,22 @@ def test_an_agent_past_its_time_is_stopped_with_all_it_started(tmp_path):
     assert not turn.ok and turn.rc == 124 and time.monotonic() - t0 < 20
     left = _running(b"sleep\x00301")
     assert not left, f"left running: {left}"
+
+
+def test_every_step_of_a_turn_is_on_file_the_live_row_its_latest(tmp_path):
+    """D1036: a step older than the live window (40) goes to the turn's file, once; the rest at its end. The
+    row counts every step and says where the file is."""
+    spill = tmp_path / ".flux-steps" / "turn.jsonl"
+    live = _Live("claude", spill)
+    for i in range(100):
+        live.feed(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "id": f"t{i}",
+                                                                             "input": {"command": f"echo {i}"}}]}}) + "\n")
+    got = live.fields()
+    assert got["steps total"] == 100 and len(got["steps"]) == 40 and got["steps file"] == str(spill)
+    rows = [json.loads(x) for x in spill.read_text().splitlines()]
+    assert len(rows) == 60 and rows[0]["input"]["command"] == "echo 0" and rows[-1]["input"]["command"] == "echo 59"
+    live.close()
+    rows = [json.loads(x) for x in spill.read_text().splitlines()]
+    assert [r["input"]["command"] for r in rows] == [f"echo {i}" for i in range(100)], "each step once, in order"
+    live.close()
+    assert len(spill.read_text().splitlines()) == 100, "closing twice writes nothing twice"

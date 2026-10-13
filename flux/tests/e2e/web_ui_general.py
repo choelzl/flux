@@ -517,6 +517,21 @@ def general_flows(r, watch):
                 _t.sleep(1.5)                                   # a redraw or two while it is in Fullscreen
                 r.check("D987: an agent stays in Fullscreen across LiveAlt's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view .alt-chat') && !document.querySelector('.alt-inspector-host .alt-detail[data-task]')"))
                 b.js("[...document.querySelectorAll('dialog.fullscreen-view button')].find(x=>x.textContent==='Close').click();return 1")
+                # D1036: the whole conversation -- the steps before the live window come from the turn's file, scrolling up
+                filed = r.data / "users" / "bob" / "apps" / name / ".flux-steps" / "t.jsonl"
+                filed.parent.mkdir(parents=True, exist_ok=True)
+                filed.write_text("".join(json.dumps({"k": "text", "text": f"Filed step {i}"}) + "\n" for i in range(20)))
+                live_steps = [{"k": "text", "text": f"Live step {i}"} for i in range(38)] + [   # ending as the fixture's turn does
+                    {"k": "think", "text": "Considering a faster design\n" + "\n".join(f"Thinking line {i}" for i in range(180))},
+                    {"k": "text", "text": "Writing the second candidate"}]
+                b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:4,fields:{steps:arguments[0],'steps total':60,'steps file':arguments[1]}});return 1",
+                     live_steps, str(filed))
+                b.wait("[...document.querySelectorAll('.alt-detail .alt-chat .cv-text')].some(t=>t.textContent.includes('Live step 37'))", what="the live window")
+                r.check("earlier steps are said to be above, not in the full log", b.js("const c=document.querySelector('.alt-detail .alt-chat');return c.textContent.includes('20 earlier') && !c.textContent.includes('full log')"))
+                b.js("const c=document.querySelector('.alt-detail .alt-chat'); c.scrollTop=0; c.dispatchEvent(new Event('scroll')); return 1")
+                b.wait("[...document.querySelectorAll('.alt-detail .alt-chat .cv-text')].some(t=>t.textContent.includes('Filed step 0'))", timeout=20, what="the steps from the turn's file")
+                r.check("scrolling up shows the turn's earlier steps from its file, in order", b.js(
+                    "const t=[...document.querySelectorAll('.alt-detail .alt-chat .cv-text')].map(x=>x.textContent.trim());return t.indexOf('Filed step 19')===t.indexOf('Live step 0')-1 && t.indexOf('Filed step 0')<t.indexOf('Filed step 19')"))
                 b.wait("!document.querySelector('dialog.fullscreen-view') && document.querySelector('.alt-inspector-host .alt-detail')?.dataset.task==='4'", what="the inspector back in its place")
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)

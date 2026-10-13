@@ -1,7 +1,7 @@
 // Flux web: a loop's log and its live task tree (D889: split out of app.js).
 
 import { crafterCatalog, setCrafterCatalog } from "./state.js";
-import { NARROW, dur, empty, h, morph, skeleton, streamPill } from "./ui.js";
+import { NARROW, api, dur, empty, h, morph, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 import { viewerTools } from "./viewer.js";
 import { restoreScroll, scrollState } from "./scroll.js";
@@ -627,6 +627,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     if (unifiedDetail) {
       (same ? kids => morph(detail, kids) : kids => detail.replaceChildren(...kids))(altInspector(n, {
         now, nodes, place, goals, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
+        steps: (file, start, count) => api(`${base.replace(/^\/api/, "")}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),   // D1036
         pick: id => { if (pick) pick(id); },
         tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),
       }));

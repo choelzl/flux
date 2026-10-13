@@ -473,6 +473,32 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             got = {}
         return {"running": bool(a.get("running")), "author": a.get("author"), **(got if isinstance(got, dict) else {})}
 
+    @app.get("/api/apps/{name}/steps")
+    def agent_steps(name: str, file: str, start: int = 0, count: int = 40, owner: str | None = None,
+                    user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1036: a page of an agent turn's steps, from the file the turn wrote (`steps file`): the
+        conversation in full, where a task's live row carries its latest 40. Only a `.flux-steps` file in
+        the loop's own folder or its sandbox cache is read."""
+        from .admin import _key, cache_root
+        from .confine import Escape, open_read
+
+        _w, whose, d, _run = loop_of(name, user, owner)
+        if not file.endswith(".jsonl") or "/.flux-steps/" not in file:
+            raise HTTPException(404, "no such steps")
+        try:
+            with open_read(file, cache_root() / _key(whose.name, name), d, text=True) as fh:
+                lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+        except (OSError, Escape):
+            raise HTTPException(404, "no such steps") from None
+        start, count = max(0, start), min(max(1, count), 200)
+        rows = []
+        for ln in lines[start:start + count]:
+            try:
+                rows.append(json.loads(ln))
+            except ValueError:
+                rows.append({"k": "text", "text": "(a step that could not be read)"})
+        return {"total": len(lines), "start": start, "steps": rows}
+
     @app.post("/api/apps/{name}/asks/{ident}/stop")
     def stop_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         _w, _whose, d, _run = loop_of(name, user, owner)

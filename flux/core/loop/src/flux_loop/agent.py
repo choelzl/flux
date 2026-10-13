@@ -697,8 +697,11 @@ class _Live:
     STEPS_KEPT = 400            # the steps a turn keeps; the live row sends the last STEPS_LIVE
     STEPS_LIVE = 40
 
-    def __init__(self, output: str) -> None:
+    def __init__(self, output: str, spill: Path | None = None) -> None:
         self.output, self.tools, self.words, self.thinking, self.result = output, [], "", "", ""
+        # D1036: every step on file, so a page shows the whole conversation -- a step once it is older than
+        # the live window (no later output changes it), the rest at the turn's end; `total` counts them all
+        self.spill, self.spilled, self.total = spill, 0, 0
         self.usage = AgentUsage(output)
         # D712: what the agent did, in order -- its words, its thinking, each tool call with its
         # input and output -- so a page shows one conversation, not tails side by side
@@ -772,7 +775,7 @@ class _Live:
             last["text"] = (last["text"] + text)[-self.STEP_CHARS:]
             return
         self.steps.append({"k": kind, "text": text[-self.STEP_CHARS:], "at": round(__import__("time").time(), 1)})   # D1030: when
-        del self.steps[:-self.STEPS_KEPT]
+        self._added()
 
     def _codex(self, ev: dict[str, Any]) -> None:
         """Codex's --json events (D848): its messages, reasoning, commands with their output and exit
@@ -820,7 +823,7 @@ class _Live:
         if out is not None:
             step.update(out=_text_of(out)[-self.STEP_CHARS:], error=bool(error))
         self.steps.append(step)
-        del self.steps[:-self.STEPS_KEPT]
+        self._added()
         if ident:
             self._by_id[ident] = step
 
@@ -926,6 +929,7 @@ class _Live:
                         last = self.steps[-1] if self.steps else None
                         if last is None or last["k"] != "think":
                             self.steps.append({"k": "think", "text": "", "redacted": 0, "at": round(__import__("time").time(), 1)})
+                            self._added()
                         self.steps[-1]["redacted"] = self.steps[-1].get("redacted", 0) + int(d.get("estimated_tokens") or 0)
             elif e.get("type") == "content_block_stop" and self.words and not self.words.endswith("\n"):
                 self.words += "\n"
@@ -984,8 +988,35 @@ class _Live:
             out["reply (live tail)"] = self.words
         if self.steps:                                   # D712: the conversation, its latest steps
             out["steps"] = [_short(st) for st in self.steps[-self.STEPS_LIVE:]]
-            out["steps total"] = len(self.steps)
+            out["steps total"] = self.total
+            if self.spill is not None:                       # D1036: where the earlier ones are, as the host sees it
+                from .sandbox_paths import host_path
+
+                out["steps file"] = host_path(str(self.spill))
         return out
+
+    def _added(self) -> None:
+        self.total += 1
+        del self.steps[:-self.STEPS_KEPT]
+        self._write(self.total - self.STEPS_LIVE)
+
+    def _write(self, upto: int) -> None:
+        """The steps up to `upto` (all-steps order) on file, each once."""
+        if self.spill is None or upto <= self.spilled:
+            return
+        base = self.total - len(self.steps)                # the all-steps index of steps[0]
+        rows = [self.steps[i - base] for i in range(max(self.spilled, base), upto)]
+        try:
+            self.spill.parent.mkdir(parents=True, exist_ok=True)
+            with self.spill.open("a") as f:
+                f.write("".join(json.dumps(_short(st)) + "\n" for st in rows))
+            self.spilled = upto
+        except OSError:
+            self.spill = None                               # no file: the live window only, as before
+
+    def close(self) -> None:
+        """The turn is over: its last steps on file too."""
+        self._write(self.total)
 
     def kept(self) -> list[dict[str, Any]]:
         """The steps the turn's record keeps: every one, each text its last 4000 characters."""
@@ -1066,7 +1097,9 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         except (BrokenPipeError, OSError):
             pass
 
-    live, out = _Live(spec.output), []
+    # D1036: its steps on file beside its session folder (not in it: the agent lists its folder)
+    spill = Path(workdir).parent / ".flux-steps" / f"{Path(workdir).name}-{time.time_ns()}.jsonl"
+    live, out = _Live(spec.output, spill), []
     live.agent = _about(cmd[0], env)                  # D702: the model and version from the start (Claude Code says its own)
 
     def errors() -> None:
@@ -1132,6 +1165,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
         cleanup.close()                               # D768: what it left running, too
         for t in readers:
             t.join(timeout=5)
+        live.close()                                  # D1036: its last steps on file
         row.update(live.fields())
         row["exit"] = proc.returncode
     stdout = "".join(out)
