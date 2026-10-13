@@ -42,7 +42,7 @@ export const passKind = p => p == null ? "setup" : Number(p) === 0 ? "baseline" 
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
 const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
-const PASS_KINDS = ["search", "design", "check", "measure", "choose", "critic"];
+const PASS_KINDS = ["search", "design", "check", "measure", "choose"];      // D1034: a critique is in the box it judges
 
 function runsOf(rows, test) {
   // the outermost tasks the box is about (a tool under a check is the check's); `inBox` all of them
@@ -75,7 +75,7 @@ export function flowBoxes(rows, p, running) {
   const kinds = kind === "baseline" ? ["check", "measure"] : PASS_KINDS;
   const present = new Set(rows.map(r => phaseKind(r.node)));
   const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
-  const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "critic"))
+  const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))) }));
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
@@ -85,7 +85,8 @@ function finish(b) {
   const st = b.done ? "ok" : boxState(b.runs);
   const last = b.runs[b.runs.length - 1];
   const steps = (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && last ? leaves(last).map(n => boxState([n])) : null;
-  return { ...b, ids: b.runs.inBox || new Set(), state: st, steps: steps && steps.length > 1 ? steps : steps && b.kind !== "setup" ? steps : null, who: who(b.runs), count: b.runs.length };
+  const critic = b.runs.some(function judged(n) { return /^\s*critique\s*:/i.test(String(n.name)) || (n.kids || []).some(judged); });
+  return { ...b, ids: b.runs.inBox || new Set(), state: st, steps: steps && steps.length > 1 ? steps : steps && b.kind !== "setup" ? steps : null, who: who(b.runs), count: b.runs.length, critic };
 }
 
 /** True when a pass went back to design after a check (a repair): the flow draws the way back.

@@ -39,7 +39,7 @@ TREE = """
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
     assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · rtl measure",
-                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Critic · decision",
+                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · decision",
                    "Setup · mentor", "Setup · papers"]
 
 
@@ -96,3 +96,15 @@ def test_a_measurement_names_its_candidate_after_its_stage():
     got = run("""m => [m.candidateOf({why: "stage screen lut-chunk=4", kids: []}), m.candidateOf({why: "estimate place tree-chunk=2", kids: []}),
       m.candidateOf({why: "generate lut-chunk=4", kids: []}), m.candidateOf({why: "test lut-chunk=4", kids: []}), m.candidateOf({why: "decide", kids: []})]""")
     assert got == ["lut-chunk=4", "tree-chunk=2", "lut-chunk=4", "lut-chunk=4", ""]
+
+
+def test_a_critique_is_in_the_box_it_judges_with_a_badge_not_a_box_of_its_own():
+    """D1034: no Critic box -- a critique of a design is the Check box's, of the decision the Choose box's;
+    the box says a critic judged it."""
+    got = run(f"""m => {{ {TREE} const crit = {{id: 20, name: "critique: d#3", why: "d#3", parent: null, t0: 32, t1: 33, kids: []}};
+      const pick = {{id: 21, name: "decide: frontier", why: "", parent: null, t0: 34, t1: 35, kids: []}};
+      const judge = {{id: 22, name: "critique: decision", why: "d#3", parent: null, t0: 35, t1: 36, kids: []}};
+      const b = m.flowBoxes([...rows, {{node: crit}}, {{node: pick}}, {{node: judge}}], 6, false);
+      return b.map(x => [x.key, !!x.critic]); }}""")
+    assert ["critic", True] not in got and ["critic", False] not in got
+    assert dict(got)["check"] is True and dict(got)["choose"] is True and dict(got)["measure"] is False

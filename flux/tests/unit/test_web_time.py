@@ -108,7 +108,7 @@ def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
     ("generation: build x", "check"), ("build: x", "check"), ("test: gate", "check"), ("gate: x", "check"),
     ("simulation: screen x", "measure"), ("simulation: confirm x", "measure"), ("calibrate: screen", "measure"),
     ("propose: finalists", "choose"), ("orchestrate: x", "search"), ("decide: x", "choose"),
-    ("critique: decision", "critic"), ("critique: part", "critic"),
+    ("critique: decision", "choose"), ("critique: part", "check"), ("critique: decomposition", "setup"),
     ("agent: claude", None), ("llm: generating (model)", None), ("model: deciding", None),
 ])
 def test_timeline_categories_do_not_include_subtask_names(name, kind):

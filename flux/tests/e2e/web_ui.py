@@ -1072,12 +1072,13 @@ def flows(r: Run) -> None:
             r.check("measurement headers are angled and keep their full labels", b.js("const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'); return getComputedStyle(th.querySelector('.measurement-label')).transform !== 'none' && th.title.includes('long_measurement_name_for_latency')"))
             # D1032: a label turns about the middle of its line's end, which sits on the column's right edge -- where its numbers end
             got = b.js("""const th = document.querySelector('th[data-label=long_measurement_name_for_latency]'), l = th.querySelector('.measurement-label'),
-                  head = th.querySelector('.measurement-heading'), [ox, oy] = getComputedStyle(l).transformOrigin.split(' ').map(parseFloat);
+                  head = th.querySelector('.measurement-heading');
                   const col = [...th.parentElement.children].indexOf(th), cell = document.querySelector('table.designs tbody tr').children[col];
                   const cs = getComputedStyle(cell), numberEnd = cell.getBoundingClientRect().right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
-                  return [Math.abs(oy - l.offsetHeight / 2) < 1 && Math.abs(ox - l.offsetWidth) < 1,
-                          Math.round(head.getBoundingClientRect().right - numberEnd), Math.round(l.offsetLeft + l.offsetWidth - head.clientWidth)];""")
-            r.check("a diagonal header's text ends where its column's numbers end", got[0] and abs(got[1]) <= 1 and abs(got[2]) <= 1, str(got))
+                  const text = l.querySelector('.measurement-text') || l, range = document.createRange(); range.selectNodeContents(text);
+                  return [Math.round(range.getBoundingClientRect().right - numberEnd), Math.round(head.getBoundingClientRect().right - numberEnd)];""")
+            # D1032, D1033: the rendered text's rightmost point -- its last letter's top corner -- on the numbers' right edge
+            r.check("a diagonal header's text ends where its column's numbers end", abs(got[0]) <= 1 and abs(got[1]) <= 1, str(got))
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))
             b.click("table.designs tbody input[type=checkbox]")
             r.check("results are always compact regardless of the old preference, with no toggle", b.js("const t = document.querySelector('table.designs'), name = t.querySelector('.table-design-name'); return !document.querySelector('.compact-table') && getComputedStyle(name).maxWidth !== 'none' && t.querySelectorAll('th').length === 9 && t.getBoundingClientRect().width <= t.parentElement.clientWidth + 1"))
@@ -1266,8 +1267,9 @@ def flows(r: Run) -> None:
                timeout=60, what="full reset completed")
         r.check("reset with no keep choices clears the workbench", not (root / "workbench").exists())
         r.clean("reset loop")
-        r.api("/apps/resettable", "DELETE")
+        # leave the loop before it goes: its page's next poll would find no loop, an error the next step reads as its own
         r.page("#/app/sw", "document.querySelector('#main .tabs')", "the original loop")
+        r.api("/apps/resettable", "DELETE")
     r.step("reset loop", reset_loop)
 
     def every_tab():

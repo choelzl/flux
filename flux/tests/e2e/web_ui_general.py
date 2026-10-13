@@ -546,12 +546,14 @@ def general_flows(r, watch):
                 r.check("D978: a finished pass is folded to its line, the pass at work open, a running task spins", b.js("return !document.querySelector('.alt-tree [data-task=\"2\"]') && !!document.querySelector('.alt-tree [data-task=\"4\"] .alt-spin') && document.querySelector('.alt-tree [data-fold=\"pass:1\"]').getAttribute('aria-expanded')==='false'"))
                 r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='Agent · claude' && t(3)==='Design · current' && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
                 b.click('.alt-tree [data-fold="pass:1"]')
-                b.click('.alt-tree [data-fold="1"]')
+                # D1034: a task whose one child is its command is one line, the program its note
+                r.check("a task and its one command are one line in the tree", b.js("const t=document.querySelector('.alt-tree [data-task=\"1\"]');return !!t && t.textContent.includes('python3') && !document.querySelector('.alt-tree [data-task=\"2\"]') && !document.querySelector('.alt-tree [data-fold=\"1\"]')"))
                 r.check("LiveAlt removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find LiveAlt tasks\"], [aria-label=\"LiveAlt task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
                 b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
                 r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
-                b.click('.alt-tree [data-task="2"]')
+                b.click('.alt-tree [data-task="1"]')
+                b.click('.alt-detail [data-task="2"]')
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
@@ -716,9 +718,12 @@ def general_flows(r, watch):
                     b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
                     r.check(f"setup box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
                 b.click('.alt-chip[data-chain="7"]')
-                for key, task_id in (("design", 22), ("check", 88), ("measure", 89), ("choose", 90), ("critic", 91)):
+                # D1034: the decision's critique is the Choose box's (its latest task), the box badged; no Critic box
+                for key, task_id in (("design", 22), ("check", 88), ("measure", 89), ("choose", 91)):
                     b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
                     r.check(f"completed phase box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
+                r.check("a critique is in the box it judges, badged, with no box of its own",
+                        b.js("return !document.querySelector('.alt-flow-box[data-box=critic]') && !!document.querySelector('.alt-flow-box[data-box=choose] .alt-critic-pill') && !document.querySelector('.alt-flow-box[data-box=check] .alt-critic-pill')"))
                 r.button("Tree", ".subrow .subtabs")
                 choose("LiveAlt start", "11")
                 b.wait("document.querySelector('.alt-visual').textContent.includes('No task journal retained')", what="missing historical data")

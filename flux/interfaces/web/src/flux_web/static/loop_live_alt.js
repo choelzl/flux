@@ -193,6 +193,13 @@ export function liveAltTab(ctx) {
     // inside the design) is one line: the child's children under it, the child's name a note
     const merged = new Map();
     for (const r of rows) {
+      // D1034: a stage or check whose one child is its command (a `tool:` leaf) is one line, the program its note
+      const only = kids.get(r.node.id);
+      if (only && only.length === 1 && /^\s*tool\s*:/i.test(String(only[0].node.name)) && !(kids.get(only[0].node.id) || []).length) {
+        kids.delete(r.node.id);
+        merged.set(r.node.id, [only[0].node]);
+        continue;
+      }
       for (let k = kids.get(r.node.id); k && k.length === 1; k = kids.get(r.node.id)) {
         const c = k[0], ck = kids.get(c.node.id);
         if (!ck || !ck.length || phaseKind(c.node) !== phaseKind(r.node) || /^\s*agent\s*:/i.test(String(c.node.name))) break;
@@ -313,6 +320,8 @@ export function liveAltTab(ctx) {
         sv("text", { x: X + 14, y: y + (note || b.steps ? 15 : BH / 2 + 4), class: "alt-box-title" }, b.title));
       let right = X + BW - 10;
       if (b.who) { kids.push(sv("rect", { x: right - 40, y: y + 6, width: 40, height: 14, rx: 7, fill: AGENT_COLOR }), sv("text", { x: right - 20, y: y + 16, class: "alt-pill-text" }, b.who)); right -= 46; }
+      // D1034: a critic judged this box's work (the split, a design, the decision) -- no box of its own
+      if (b.critic) { kids.push(sv("rect", { x: right - 38, y: y + 6, width: 38, height: 14, rx: 7, fill: COLORS.critic, class: "alt-critic-pill" }), sv("text", { x: right - 19, y: y + 16, class: "alt-pill-text" }, "critic")); right -= 44; }
       if (b.count > 1) { kids.push(sv("rect", { x: right - 22, y: y + 6, width: 22, height: 14, rx: 7, class: "alt-count-pill" }), sv("text", { x: right - 11, y: y + 16, class: "alt-count-text" }, `×${b.count}`)); right -= 28; }
       if (note) kids.push(sv("foreignObject", { x: X + 14, y: y + 22, width: BW - 28, height: 16, "pointer-events": "none" },
         h("div", { class: "alt-box-note" }, note)));
@@ -334,11 +343,14 @@ export function liveAltTab(ctx) {
       box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
       g.push(box);
       y += BH;
-      if (isOpen && b.kind !== "design") {        // D1029: a design is one script, agent or model run -- no branch under it
+      // D1029, D1034: a design is one script, agent or model run -- no branch under it; a box of several
+      // drafts lists them, one flat line each
+      const drafts = b.kind === "design" ? own.filter(r => (r.node.kids || []).some(k => /^\s*(agent|llm|model|tool)\b/i.test(String(k.name)))) : [];
+      if (isOpen && (b.kind !== "design" || drafts.length > 1)) {
         // the box is its runs: list what is under each, never the run itself; runs of a box that
         // ran more than once are kept apart by a thin divider
         const under = (run, n) => { for (let p = n.parent; p; p = p.parent) if (p === run) return true; return false; };
-        const groups = b.runs.map(run => own.filter(r => under(run, r.node))).filter(gr => gr.length);
+        const groups = b.kind === "design" ? [drafts.map(r => ({ ...r, parent: null }))] : b.runs.map(run => own.filter(r => under(run, r.node))).filter(gr => gr.length);
         const rowsOf = gr => { const out = [], t = taskRows(gr, selected, out); t.roots.forEach(r => t.line(r, 0)); return out; };
         if (groups.length) {
           const list = h("div", { class: "alt-box-tasks", role: "group", "aria-label": `${b.title} tasks` },

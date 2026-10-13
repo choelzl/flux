@@ -351,12 +351,13 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
         if (!box.isConnected && timer !== null) return;
         const steps = Array.isArray(got.steps) ? got.steps : [], total = Number(got["steps total"] || steps.length);
         const think = got["thinking (live tail)"] || "", stats = [got.agent, got["tokens (reported)"], got.elapsed, got["tool calls"] ? `${String(got["tool calls"]).split("\n").length}+ tool calls` : ""].filter(Boolean);
+        const conv = steps.length ? conversation(steps, { key: `ask${a.id}`, offset: total - steps.length, live: !!got.running }) : null;
         box.replaceChildren(stats.length ? h("p", { class: "muted small" }, stats.join(" · ")) : "",
           total > steps.length ? h("p", { class: "muted small" }, `${total - steps.length} earlier step(s) not shown`) : "",
-          steps.length ? conversation(steps, { key: `ask${a.id}`, offset: total - steps.length, live: !!got.running })
+          conv ? conv
             : think ? h("details", { class: "cv-step cv-think", open: true }, h("summary", {}, "Thinking"), h("pre", { class: "cv-body cv-thought" }, think))
             : h("p", { class: "muted" }, got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands were recorded for this answer.")),
-          got.running ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), `${got.status || "working"}…`) : "",
+          got.running && !conv?.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), `${got.status || "working"}…`) : "",   // D1033: one working line
           got.stderr ? h("details", { class: "ask-output" }, h("summary", {}, "stderr"), h("pre", { class: "log small" }, got.stderr)) : "");
         if (got.running) timer = setTimeout(draw, 2000);
         else box.scrollTop = box.scrollHeight;

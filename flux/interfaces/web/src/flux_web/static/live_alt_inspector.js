@@ -174,7 +174,8 @@ function agentChat(n, env) {
   const top = above > 0 ? h("div", { class: "alt-chat-more" }, `↑ ${above} earlier — scroll up`)
     : [kept > 0 ? h("div", { class: "alt-chat-more" }, `${kept} earlier step${kept === 1 ? "" : "s"} are in the full log`) : "",
       prompt ? bubble("me", `Prompt · ${prompt.length.toLocaleString()} characters`, h("pre", { class: "val tall", "data-k": "prompt" }, prompt), "input", env) : ""];
-  const now = running(n) ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";
+  // D1033: one "working" line -- the conversation's own when it is in a stretch of work (D1030), else this one
+  const now = running(n) && !conv.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";
   const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
   return [usage(f, [["model", f.agent || p.model]]),
     h("div", { class: "agent-view" }, chatBox(n, env, [top, steps.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),

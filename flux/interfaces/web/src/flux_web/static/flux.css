@@ -344,9 +344,9 @@ table.designs td { white-space: nowrap; }
   display: flex; align-items: flex-end; justify-content: flex-end;
   height: max(68px, calc(var(--metric-length) * .83ch + 26px)); }
 .measurement-label { position: absolute; right: 0; bottom: 18px; width: max-content;
-  /* D1032: turned about the middle of its line's end -- the text ends on the column's right edge, as its numbers do
-     (about the box's corner, the line half a line above it swung ~6px past the edge) */
-  transform: rotate(55deg); transform-origin: right center; text-align: right; white-space: nowrap; }
+  /* D1032, D1033: turned about its top-right corner -- the text's rightmost point, its last letter's top, ends on the
+     column's right edge as its numbers do (about the bottom corner it swung ~10px past; about the line's middle, 7px) */
+  transform: rotate(55deg); transform-origin: right top; text-align: right; white-space: nowrap; }
 .result-table-surface .measurement-label .th-sort { position: relative; display: block; width: 100%; padding: 0; min-height: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .measurement-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px;

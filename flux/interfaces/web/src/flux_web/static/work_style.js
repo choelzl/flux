@@ -30,7 +30,8 @@ export function kindOf(name, why = "") {
     "design", "oracle", "invent", "compute"].includes(head)) return "design";
   if (head === "propose" && rest.startsWith("brief")) return "design";        // D1029: the design's brief, not a choice
   if (["propose", "decide", "frontier", "decision", "select"].includes(head)) return "choose";
-  if (head === "critique") return "critic";
+  // D1034: a critique is in the box of what it judges -- the split (setup), the decision (choose), a design (check)
+  if (head === "critique") return rest.startsWith("decomposition") ? "setup" : rest.startsWith("decision") ? "choose" : "check";
   if (head === "dse") return "search";
   if (head === "plan" || head === "search") return head;
   return null;
