@@ -51,6 +51,9 @@ class Objective:
     keep: float | None = None        # a goal relative to the best measured: keep this share of its gain
     above: float = 0.0               # ... over this value (1.0 for a speedup)
     balance: bool = False            # decided with the other balance objectives, as their knee (D658)
+    #: D1028: a dictionary metric (one number per test, `name={"t1": 3, ...}`) ranked by its `aggregate` of them
+    type: str = "number"
+    aggregate: str = ""
 
     @property
     def label(self) -> str:
@@ -67,10 +70,17 @@ class Objective:
             raise ValueError(f"objective {self.metric}: keep is a share in (0, 1], instead of a goal")
         if self.balance and (self.goal is not None or self.keep is not None):
             raise ValueError(f"objective {self.metric}: a balance objective has no goal (a goal is a limit)")
+        from .metrics import AGGREGATES
+
+        if self.type not in ("number", "dict"):
+            raise ValueError(f"objective {self.metric}: type is number or dict, not {self.type!r}")
+        if self.aggregate and (self.type != "dict" or self.aggregate not in AGGREGATES):
+            raise ValueError(f"objective {self.metric}: aggregate is a dictionary's, one of {', '.join(AGGREGATES)}"
+                             + (" (`none` ranks nothing: name a test, such as " + self.metric + ".t1)" if self.aggregate == "none" else ""))
 
     @classmethod
     def from_doc(cls, doc: Any, index: int = 0) -> "Objective":
-        """`"fmax_mhz"`, or `{metric, direction?, goal?, stage?, tie?, balance?}`; `goal` may be a
+        """`"fmax_mhz"`, or `{metric, direction?, goal?, stage?, tie?, balance?, type?, aggregate?}`; `goal` may be a
         number or `">= 800"` / `"<= 0.5"` (the comparator names the direction)."""
         if isinstance(doc, str):
             doc = {"metric": doc}
@@ -94,9 +104,11 @@ class Objective:
         stage = doc.get("stage") or ("deepest" if goal is not None else None)
         unit = str(doc.get("unit") or UNITS.get(doc["metric"], ""))
         keep = doc.get("keep")
+        kind = str(doc.get("type") or ("dict" if doc.get("aggregate") else "number"))
         return cls(doc["metric"], str(direction or "maximize"), goal, stage, float(doc.get("tie") or 0.0),
                    unit, float(doc.get("margin") or 0.0), keep=float(keep) if keep is not None else None,
-                   above=float(doc.get("above") or 0.0), balance=bool(doc.get("balance")))
+                   above=float(doc.get("above") or 0.0), balance=bool(doc.get("balance")),
+                   type=kind, aggregate=str(doc.get("aggregate") or ("mean" if kind == "dict" else "")))
 
     def to_doc(self) -> dict[str, Any]:
         """The document form, `from_doc`'s inverse (what the record keeps)."""
@@ -104,7 +116,9 @@ class Objective:
                                   "stage": self.stage, "tie": self.tie or None, "unit": self.unit or None,
                                   "margin": self.margin or None, "keep": self.keep,
                                   "above": self.above if self.keep is not None and self.above else None,
-                                  "balance": True if self.balance else None}.items()
+                                  "balance": True if self.balance else None,
+                                  "type": "dict" if self.type == "dict" else None,
+                                  "aggregate": self.aggregate if self.type == "dict" else None}.items()
                 if v is not None}
 
     def value(self, metrics: dict[str, Any] | None) -> float | None:

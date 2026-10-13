@@ -424,8 +424,9 @@
   function hasReport(stage, metric) {
     var parent = stage.metrics.find(function (m) { return m && m.type === "dict" && m.name === metric; });
     if (parent) return parent.aggregate !== "none";
-    return stage.reports.indexOf(metric) >= 0 || stage.metrics.some(function (m) {
-      return m && m.type === "dict" && metric.indexOf(m.name + ".") === 0 && metric.length > m.name.length + 1;
+    // D1028: any metric may print a dictionary -- `name.test` is one of its tests
+    return stage.reports.indexOf(metric) >= 0 || stage.reports.some(function (n) {
+      return n && metric.indexOf(n + ".") === 0 && metric.length > n.length + 1;
     });
   }
 
@@ -763,6 +764,9 @@
         if (o.goal !== undefined) p.push(["goal", o.goal === null ? "?" : o.goal]);
         if (o.balance) p.push(["balance", true]);
         if (o.unit) p.push(["unit", o.unit]);
+        var dict = dictionarySpec(state, o.metric);       // D1028: a dictionary's type and aggregate are its objective's
+        if (dict && dict.name.trim() === o.metric && (dict.aggregate || "mean") !== "none")
+          p.push(["type", "dict"], ["aggregate", dict.aggregate || "mean"]);
         out += "  - " + flowMap(p) + "\n";
       });
     }
@@ -838,7 +842,7 @@
       r.stages.forEach(function (st) {
         var L = [];
         L.push("command: " + q(st.command || "(the command)"));
-        if (st.metrics.length) L.push("metrics: " + inline(st.metrics, false));
+        if (st.metrics.length) L.push("metrics: " + inline(st.metrics.map(function (x) { return typeof x === "string" ? x : x.name; }), false));   // D1028: names
         if (st.needs.length) L.push("needs: " + flowSeq(st.needs));
         if (st.estimate) {
           var ep = [["kind", st.estimate.kind], ["margin", st.estimate.margin === null ? "?" : st.estimate.margin]];
@@ -1439,6 +1443,11 @@
     });
     if (!gateOk) { s.checks = []; keep("gate", "a failure pattern (`fail_re`)"); }
 
+    // D1028: a dictionary is said on the objective ranking it -- the stage's dictionary row, as the form keeps it
+    var dictObj = {};
+    (normal.objectives || []).forEach(function (o) {
+      if (o && o.type === "dict") dictObj[o.metric] = { name: o.metric, direction: o.direction || "minimize", unit: o.unit || "", aggregate: o.aggregate || "mean" };
+    });
     // stages: a catalog tool or a command of one's own
     var stagesOk = true;
     var rawStages = {};                          // what the document wrote: the loader adds patterns of its own
@@ -1460,8 +1469,9 @@
         }
         if (m) row = { tool: m.tool.id, name: st.name, params: paramsOf(m.tool, m.params), metrics: "", needs: "", gates: [] };
         else row = { tool: "custom-stage", name: st.name, params: { command: argv.map(shellWord).join(" ") },
-                     metrics: (st.metrics || []).filter(function (m) { return typeof m === "string" || m.type !== "dict"; }).map(function (m) { return typeof m === "string" ? m : m.name; }).join(", "),
-                     dictMetrics: (st.metrics || []).filter(function (m) { return m && m.type === "dict"; }).map(function (m) { return Object.assign({}, m); }),
+                     metrics: (st.metrics || []).filter(function (m) { return typeof m === "string" ? !dictObj[m] : m.type !== "dict"; }).map(function (m) { return typeof m === "string" ? m : m.name; }).join(", "),
+                     dictMetrics: (st.metrics || []).filter(function (m) { return typeof m === "string" ? !!dictObj[m] : m && m.type === "dict"; })
+                       .map(function (m) { return Object.assign({}, typeof m === "string" ? dictObj[m] : m); }),
                      metricSpecs: (st.metrics || []).filter(function (m) { return typeof m === "object" && m.type !== "dict"; }),
                      needs: (st.needs || []).join(", "), gates: [] };
       } else { stagesOk = false; return; }                         // measured by the world's own code
@@ -1484,7 +1494,7 @@
     (normal.objectives || []).forEach(function (o, i) {
       // what the document wrote decides; the loader fills stage, tie, margin and unit of its own
       var said = rawObjs[i] && typeof rawObjs[i] === "object" ? rawObjs[i] : {};
-      var extra = Object.keys(said).filter(function (k) { return ["metric", "direction", "goal", "balance", "unit"].indexOf(k) < 0; });
+      var extra = Object.keys(said).filter(function (k) { return ["metric", "direction", "goal", "balance", "unit", "type", "aggregate"].indexOf(k) < 0; });
       if (extra.length) objOk = false;
       var label = o.balance ? "balance" : o.goal !== undefined && o.goal !== null ? (o.direction === "minimize" ? "atmost" : "atleast")
                 : o.direction === "minimize" ? "min" : "max";

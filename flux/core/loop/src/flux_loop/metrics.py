@@ -40,7 +40,7 @@ def numeric_metrics(values: dict[str, Any], definitions: dict[str, dict[str, Any
                 if key in out:
                     raise ValueError(f"ambiguous dictionary measurement {key!r}")
                 out[key] = number
-        aggregate = (definitions or {}).get(name, {}).get("aggregate")
+        aggregate = (definitions or {}).get(name, {}).get("aggregate")   # D1028: its objective's; none, no parent number
         if aggregate in AGGREGATES and isinstance(value, dict):
             numbers = [n for v in value.values() if (n := finite_number(v)) is not None]
             if numbers:

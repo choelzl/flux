@@ -199,19 +199,20 @@ verdict is in the [check contract](#check-command).
 | Field | Default | Purpose |
 |---|---|---|
 | `command` | Required | Command string or argument list |
-| `metrics` | Required unless `metrics_re` | Names printed as `name=value`, or typed entries (below) |
+| `metrics` | Required unless `metrics_re` | The names printed as `name=value` -- a number, or a dictionary (below) |
 | `metrics_re` | Derived from `metrics` | Map of metric name to a regex with one capture group |
 | `needs` | Inferred for `fluxpreset prog count`/`size`; else empty | Programs required on PATH; a missing one skips the stage ("NOT RUN") |
 | `timeout_s` | `600` | Seconds before the stage is stopped |
 | `cutoff` | None | A gate before the next stage, or a list of gates that must all pass |
 | `estimate` | Off | Predict first, and skip designs the estimate already rules out |
 
-A typed metric is `{name, type: number|dict, direction: minimize|maximize, unit, aggregate}`.
-`type: dict` reads a whole set of named results printed as `name={"a": 1, "b": 2}`: each
-finite value becomes `name.a`, `name.b`, and `name` holds their `aggregate`: `mean`
-(default), `median`, `min`, `max`, `sum`, or `none`. Missing, `null` and non-finite values
-stay unmeasured, never zero. Metric names are unique per stage; `evaluator:` stages are gone
-and refused.
+A stage names its metrics only (D1028). A metric printed as a dictionary, `name={"a": 1, "b": 2}`
+(or inside a JSON object of metrics), is read as one: each finite value becomes `name.a`,
+`name.b`, a test each. Missing, `null` and non-finite values stay unmeasured, never zero. To rank
+by the dictionary as a whole, its objective says so: `{metric: name, type: dict, aggregate: sum,
+direction: minimize, unit: us}` -- `name` then holds the `aggregate` of its tests: `mean`
+(default), `median`, `min`, `max` or `sum`; an objective may instead rank one test,
+`{metric: name.a}`. Metric names are unique per stage; `evaluator:` stages are gone and refused.
 
 **Cutoffs** gate the next stage: `{metric: M, at: N}` keeps designs at least N,
 `{metric: M, below: N}` at most N, `{metric: M, within: F}` within the fraction F
@@ -341,7 +342,9 @@ Each entry is a metric name or a map:
 | `direction` | `maximize`, or the stage metric's | `minimize` or `maximize` |
 | `goal` | None | A limit: at most N when minimizing, at least N when maximizing; also `">= 1000"`, `"< 80"` |
 | `stage` | The deepest stage for a goal | Where the goal is judged |
-| `unit` | Known for common metrics, else the stage's | Display unit |
+| `unit` | Known for common metrics | Display unit |
+| `type` | `number` | `dict`: the metric is a dictionary of tests, ranked by `aggregate` |
+| `aggregate` | `mean` with `type: dict` | How a dictionary's tests make its number: `mean`, `median`, `min`, `max`, `sum` |
 | `tie` | `0` | Relative band within which two designs tie and the next objective decides |
 | `margin` | `0` | Extra headroom required when a goal is judged on a shallower stage |
 | `balance` | `false` | Decide by the best trade-off (the knee) of the goal-less objectives |
@@ -352,8 +355,8 @@ Each entry is a metric name or a map:
 those that meet them, the goal-less objectives decide in the order written (within `tie`,
 the next one decides). If none meets every limit, the one missing fewest, then by the
 smallest shortfall, is reported as the closest, not as a decision. An unmeasured limit counts
-as missed. `goal` cannot be combined with `keep` or `balance`; a dictionary metric with
-`aggregate: none` is chosen by its tests (`d.test`), not by its parent.
+as missed. `goal` cannot be combined with `keep` or `balance`; a dictionary metric no objective
+says `type: dict` for has no number of its own: an objective names one of its tests (`d.test`).
 
 ## Budget
 

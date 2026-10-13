@@ -215,6 +215,7 @@ s.stages.push(c.newStage(s, 'custom-stage')); s.stages[0].params.command = 'true
 s.stages[0].metrics = 'area'; s.stages[0].dictMetrics = [{name: 'timings', direction: 'minimize', unit: 'ms'}];
 s.stages[0].gates = [{metric: 'timings.fast', rule: 'below', value: '15'}];
 s.objectives.push(c.newObjective('timings.fast', 'min'));
+s.objectives.push(c.newObjective('timings', 'min'));      // D1028: the dictionary's type and aggregate are this objective's
 s.baseline = {mode: 'before', source: 'metrics', metrics: [{metric: 'timings.fast', value: '20', stage: ''}]};
 console.log(JSON.stringify({yaml: c.buildYaml(s), errors: c.check(s).filter(m => m.level === 'error')}));
 """

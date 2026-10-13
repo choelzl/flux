@@ -246,7 +246,17 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         except Exception:  # noqa: BLE001 -- the record's own order then, no cutoffs
             return []
         measure = (normal.get("flow") or {}).get("measure") or {}          # D775: a map, name -> command or settings
-        return [{"name": n, **(v if isinstance(v, dict) else {})} for n, v in measure.items()]
+        # D1028: a dictionary metric is said on its objective -- each stage that measures it gets its type and aggregate
+        dicts = {o["metric"]: {"name": o["metric"], "type": "dict", "aggregate": o.get("aggregate") or "mean",
+                               **{k: o[k] for k in ("direction", "unit") if o.get(k)}}
+                 for o in normal.get("objectives") or () if isinstance(o, dict) and o.get("type") == "dict"}
+        out = []
+        for n, v in measure.items():
+            st = {"name": n, **(v if isinstance(v, dict) else {})}
+            if dicts and isinstance(st.get("metrics"), list):
+                st["metrics"] = [dicts.get(m, m) if isinstance(m, str) else m for m in st["metrics"]]
+            out.append(st)
+        return out
 
     ctx = SimpleNamespace(store=store, runs=runs, sandbox=sandbox, secure_cookie=secure_cookie, cookie=COOKIE, authoring=authoring,
                           asks=asks, history=history, maintenance=maintenance, user_of=user_of, admin_of=admin_of, ws=ws,

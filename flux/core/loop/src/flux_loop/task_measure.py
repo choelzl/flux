@@ -317,19 +317,18 @@ def _metrics_in(spec: Any, out: str) -> dict[str, Any]:
                 if metric in data:
                     values[metric] = data[metric]
     for metric, pat in spec.metrics_re.items():
+        # D1028: a number, or a dictionary (a test's number each) -- the last one printed of a dictionary
         dictionary = definitions.get(metric, {}).get("type") == "dict"
-        matches = re.finditer(pat, out) if dictionary else [re.search(pat, out)]
-        for m in matches:
-            if m is None:
-                continue
+        found = list(re.finditer(pat, out))
+        for m in (found if dictionary else found[:1] + [x for x in found[1:] if x.group(1).lstrip().startswith("{")]):
             try:
-                values[metric] = (decoder.raw_decode(m.group(1).lstrip())[0] if dictionary
-                                  else float(m.group(1)))
-            except (ValueError, TypeError):
+                text = m.group(1).lstrip()
+                values[metric] = decoder.raw_decode(text)[0] if text.startswith("{") else float(text)
+            except (ValueError, TypeError, IndexError):
                 pass
-    got = numeric_metrics({m: v for m, v in values.items()
-                           if not isinstance(v, dict) or definitions.get(m, {}).get("type") == "dict"}, definitions)
-    groups = {m: list(v) for m, v in values.items() if isinstance(v, dict) and definitions.get(m, {}).get("type") == "dict"}
+    numbered = {m for m, s in definitions.items() if s.get("type") == "number"}
+    got = numeric_metrics({m: v for m, v in values.items() if not isinstance(v, dict) or m not in numbered}, definitions)
+    groups = {m: list(v) for m, v in values.items() if isinstance(v, dict) and m not in numbered}
     if groups:
         got["_metric_groups"] = groups
     return got

@@ -995,8 +995,9 @@ flow:
   measure:
     bench:
       command: 'true'
-      metrics: [area, {name: timings, type: dict, direction: minimize, unit: ms}]
-objectives: [{metric: timings.fast, goal: 15}]
+      metrics: [area, timings]
+objectives: [{metric: timings.fast, goal: 15, direction: minimize},
+             {metric: timings, type: dict, aggregate: mean, direction: minimize, unit: ms}]
 """)
             def design(index, numbers, baseline=False):
                 return {"name": f"{name}#{index}", "base": f"{name}#{index}", "key": str(index), "part": "", "group": "whole",

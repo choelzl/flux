@@ -39,12 +39,13 @@ class Stage:
     def reports(self, metric: str) -> bool:
         if metric in self.metric_specs and self.metric_specs[metric].get("type") == "dict":
             return self.metric_specs[metric].get("aggregate") in AGGREGATES
+        # D1028: any metric may print a dictionary -- `name.test` is one of its tests
         return metric in {*self.metrics, *self.metrics_re} or any(
-            spec.get("type") == "dict" and metric.startswith(name + ".") and len(metric) > len(name) + 1
-            for name, spec in self.metric_specs.items())
+            metric.startswith(name + ".") and len(metric) > len(name) + 1 and self.metric_specs.get(name, {}).get("type") != "number"
+            for name in {*self.metrics, *self.metric_specs})
 
     def metric_doc(self) -> list[Any]:
-        return [{"name": m, **self.metric_specs[m]} if m in self.metric_specs else m for m in self.metrics]
+        return list(self.metrics)              # D1028: names; a dictionary's type and aggregate are its objective's
 
     @property
     def cutoffs(self) -> tuple[dict[str, Any], ...]:
@@ -71,39 +72,24 @@ def _stage(i: int, doc: Any) -> Stage:
         needs.extend(_flux_program_tools(cmd))
     raw_metrics = doc.get("metrics") or ()
     if not isinstance(raw_metrics, (list, tuple)):
-        raise TaskError(f"{at}.metrics is a list of names or {{name, type: number|dict, direction, unit, aggregate}}")
-    metrics, metric_specs = [], {}
+        raise TaskError(f"{at}.metrics is a list of the metrics' names")
+    metrics: list[str] = []
+    metric_specs: dict[str, dict[str, Any]] = {}            # D1028: filled from the objectives that rank them
     for item in raw_metrics:
         if isinstance(item, dict):
-            name = item.get("name")
-            spec = {k: v for k, v in item.items() if k != "name"}
-            if set(spec) - {"type", "direction", "unit", "aggregate"} or spec.get("type", "number") not in ("number", "dict"):
-                raise TaskError(f"{at}.metrics: use {{name, type: number|dict, direction, unit, aggregate}}")
-            if "direction" in spec and spec["direction"] not in ("minimize", "maximize"):
-                raise TaskError(f"{at}.metrics: direction must be minimize or maximize")
-            if "unit" in spec and not isinstance(spec["unit"], str):
-                raise TaskError(f"{at}.metrics: unit must be text")
-            if spec.get("type") == "dict":
-                spec.setdefault("aggregate", "mean")
-            if "aggregate" in spec and (spec.get("type") != "dict" or spec["aggregate"] not in (*AGGREGATES, "none")):
-                raise TaskError(f"{at}.metrics: a dictionary aggregate is one of {', '.join(AGGREGATES)}, none")
-        else:
-            name, spec = item, None
+            name = item.get("name", "?")
+            raise TaskError(f"{at}.metrics: name the metric only ({name}); its type, aggregate, direction and unit are its "
+                            f"objective's -- objectives: [{{metric: {name}, type: dict, aggregate: sum, ...}}] (D1028)")
+        name = item
         if not isinstance(name, str) or not name.strip() or name == "_metric_groups" or name in metrics:
             raise TaskError(f"{at}.metrics: names must be non-empty and unique")
         metrics.append(name)
-        if spec is not None:
-            metric_specs[name] = spec
-    for parent, spec in metric_specs.items():
-        if spec.get("type") == "dict" and any(m.startswith(parent + ".") for m in metrics):
-            raise TaskError(f"{at}.metrics: dictionary {parent!r} already declares its submetrics; do not also declare {parent}.test")
     metrics = tuple(metrics)
     metrics_re = dict(doc.get("metrics_re") or {})
     if cmd and not metrics_re and metrics:
         # `name=value` tokens need only the `metrics:` names
         # (D580); a token starts a line or follows whitespace, so `area_um2` never reads `xarea_um2`
-        metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=" +
-                     (r"(\{[^\n]*\})" if metric_specs.get(m, {}).get("type") == "dict" else r"([-+0-9.eE]+)")
+        metrics_re = {m: rf"(?:^|(?<=\s)){re.escape(m)}=" + r"(\{[^\n]*\}|[-+0-9.eE]+)"   # D1028: a number or a dictionary
                      for m in metrics}
     for m, pat in metrics_re.items():
         try:

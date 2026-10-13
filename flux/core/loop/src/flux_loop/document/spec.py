@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sys
+import dataclasses
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -259,23 +260,16 @@ class TaskSpec:
         if len({r.name for r in stages}) != len(stages):
             raise TaskError("stage names must be unique")
         try:
-            raw_objectives = []
-            for raw in doc.get("objectives") or ():
-                item = {"metric": raw} if isinstance(raw, str) else dict(raw) if isinstance(raw, dict) else raw
-                if isinstance(item, dict):
-                    metric = item.get("metric", "")
-                    for stage in stages:
-                        for parent, spec in stage.metric_specs.items():
-                            if spec.get("type") == "dict" and metric == parent and spec.get("aggregate") == "none":
-                                raise TaskError(f"objective {parent!r}: select a named submetric, such as {parent}.test, or configure a parent aggregate")
-                            if metric == parent or (isinstance(metric, str) and spec.get("type") == "dict" and metric.startswith(parent + ".")):
-                                for key in ("direction", "unit"):
-                                    if key in spec:
-                                        item.setdefault(key, spec[key])
-                raw_objectives.append(item)
-            objectives = list(Objectives.from_doc(raw_objectives))
+            objectives = list(Objectives.from_doc(list(doc.get("objectives") or ())))
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
+        # D1028: a dictionary metric is said on its objective -- each stage that measures it keeps its
+        # type and aggregate (how a stage reads and records it), the objective's direction and unit beside
+        dicts = {o.metric: {"type": "dict", "aggregate": o.aggregate, "direction": o.direction, **({"unit": o.unit} if o.unit else {})}
+                 for o in objectives if o.type == "dict"}
+        if dicts:
+            stages = [dataclasses.replace(st, metric_specs={**st.metric_specs, **{m: s for m, s in dicts.items() if m in st.metrics}})
+                      if any(m in st.metrics for m in dicts) else st for st in stages]
         budget = dict(doc.get("budget") or {})
         if space and "pareto" in _dse_policies(flow.get("dse")) and len(objectives) < 2:
             raise TaskError(f"flow.dse: pareto needs two objectives; this document has {len(objectives)}")

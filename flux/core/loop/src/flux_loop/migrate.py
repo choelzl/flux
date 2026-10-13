@@ -315,6 +315,42 @@ def _d974(doc: dict[str, Any], say: Say) -> None:
         walk(doc["baseline"], "baseline")
 
 
+def _d1028(doc: dict[str, Any], say: Say) -> None:
+    """A dictionary metric is said on its objective (D1028): `measure.<stage>.metrics` names the metrics;
+    an entry's type, aggregate, direction and unit move onto the objective ranking that metric. One no
+    objective ranks is its name alone: a printed dictionary is read as one by itself."""
+    measure = (doc.get("flow") or {}).get("measure") if isinstance(doc.get("flow"), dict) else None
+    if not isinstance(measure, dict):
+        return
+    objectives = doc.get("objectives")
+    for stage, settings in measure.items():
+        metrics = settings.get("metrics") if isinstance(settings, dict) else None
+        if not isinstance(metrics, list) or not any(isinstance(m, dict) for m in metrics):
+            continue
+        names = []
+        for m in metrics:
+            if not isinstance(m, dict):
+                names.append(m)
+                continue
+            name = m.get("name")
+            names.append(name)
+            spec = {k: v for k, v in m.items() if k != "name" and not (k == "type" and v == "number")}
+            if spec.get("aggregate") == "none":
+                spec.pop("aggregate")
+            at = next((i for i, o in enumerate(objectives or ()) if o == name or (isinstance(o, dict) and o.get("metric") == name)), None)
+            if at is None:
+                say(f"flow.measure.{stage}.metrics: {name} by name (no objective ranks it; a dictionary it prints is read as one)")
+                continue
+            o = {"metric": name} if isinstance(objectives[at], str) else dict(objectives[at])
+            for k, v in spec.items():
+                o.setdefault(k, v)
+            if o.get("type") == "dict":
+                o.setdefault("aggregate", "mean")
+            objectives[at] = o
+            say(f"flow.measure.{stage}.metrics: {name}'s {', '.join(spec) or 'settings'} on its objective")
+        settings["metrics"] = names
+
+
 #: Each change the format went through, in order: (decision, what it does, the step).
 STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D775", "each box's settings under flow", _d775),
@@ -328,6 +364,7 @@ STEPS: list[tuple[str, str, Callable[..., None]]] = [
     ("D954", "no evaluator stages: no workload, no mined calibration", _d954),
     ("D969", "flux prog is the preset fluxpreset prog", _d969),
     ("D974", "fluxhelper is fluxpreset (helpers are presets)", _d974),
+    ("D1028", "a dictionary metric's type and aggregate on its objective", _d1028),
 ]
 
 
